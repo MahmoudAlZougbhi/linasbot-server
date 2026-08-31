@@ -161,7 +161,7 @@ describe("public marketing landing", () => {
     expect(screen.getByText("Run every customer conversation from one AI app.")).toBeInTheDocument();
     expect(screen.getByText("See what matters. Act faster.")).toBeInTheDocument();
     expect(screen.getByText("Scroll the card to explore")).toBeInTheDocument();
-    expect(screen.getAllByText("12,480 remaining").length).toBeGreaterThan(0);
+    expect(screen.getByAltText("Linas AI activity dashboard")).toBeInTheDocument();
     expect(screen.getAllByText(PUBLIC_SITE.heroTitle).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Download app" }));
     expect(screen.getByRole("menu", { name: "Download Linas AI" })).toBeInTheDocument();

@@ -45,7 +45,6 @@ export const HOW_IT_WORKS_STEPS = [
     ],
     image: LANDING_ASSETS.howItWorksScreens.dashboard,
     alt: 'Linas AI activity dashboard',
-    builtScreen: 'dashboard',
   },
   {
     n: '04',

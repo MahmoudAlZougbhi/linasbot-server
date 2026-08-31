@@ -29,24 +29,23 @@ export const LANDING_ASSETS = {
     settings: '/brand/landing/app-screens/tour/13-settings.png',
   },
   /**
-   * In-phone How it works screens — all 780×1688 (phone aspect).
-   * Real app handoffs where available; otherwise tour comps cropped to the
-   * phone interior (no bezel / mint canvas) so object-fit never zooms wrong.
+   * In-phone How it works screens — all 780×1688, sharp admin UI only.
+   * Prefer real handoffs / high-res mockups; never soft tour upscales.
    */
   howItWorksScreens: {
-    ownerCopilot: '/brand/landing/app-screens/owner-copilot.png',
-    sideMenu: '/brand/landing/app-screens/navigation.png',
+    ownerCopilot: '/brand/landing/app-screens/screens/01-owner-copilot-screen.png',
+    sideMenu: '/brand/landing/app-screens/screens/02-side-menu-screen.png',
     dashboard: '/brand/landing/app-screens/screens/03-dashboard-screen.png',
     aiSetup: '/brand/landing/app-screens/screens/04-ai-setup-screen.png',
     smartAnswers: '/brand/landing/app-screens/screens/05-smart-answers-screen.png',
     smartFollowUp: '/brand/landing/app-screens/screens/06-smart-follow-up-screen.png',
-    integrations: '/brand/landing/app-screens/integrations.png',
-    liveChat: '/brand/landing/app-screens/live-chat.png',
+    integrations: '/brand/landing/app-screens/screens/07-integrations-screen.png',
+    liveChat: '/brand/landing/app-screens/screens/08-live-chat-screen.png',
     requests: '/brand/landing/app-screens/screens/09-requests-screen.png',
     users: '/brand/landing/app-screens/screens/10-users-screen.png',
     subscription: '/brand/landing/app-screens/screens/11-subscription-screen.png',
     aiLimits: '/brand/landing/app-screens/screens/12-ai-limits-screen.png',
-    settings: '/brand/landing/app-screens/settings.png',
+    settings: '/brand/landing/app-screens/screens/13-settings-screen.png',
   },
   designScreenshots: {
     hero: '/brand/landing/screenshots/linas-landing-01-hero.jpg',
