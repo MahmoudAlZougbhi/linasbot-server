@@ -29,8 +29,9 @@ export const LANDING_ASSETS = {
     settings: '/brand/landing/app-screens/tour/13-settings.png',
   },
   /**
-   * In-phone How it works screens — real app UI only.
-   * 780×1688 handoff exports where available; tour screen crops for the rest.
+   * In-phone How it works screens — all 780×1688 (phone aspect).
+   * Real app handoffs where available; otherwise tour comps cropped to the
+   * phone interior (no bezel / mint canvas) so object-fit never zooms wrong.
    */
   howItWorksScreens: {
     ownerCopilot: '/brand/landing/app-screens/owner-copilot.png',
@@ -39,7 +40,7 @@ export const LANDING_ASSETS = {
     aiSetup: '/brand/landing/app-screens/screens/04-ai-setup-screen.png',
     smartAnswers: '/brand/landing/app-screens/screens/05-smart-answers-screen.png',
     smartFollowUp: '/brand/landing/app-screens/screens/06-smart-follow-up-screen.png',
-    integrations: '/brand/landing/app-screens/screens/07-integrations-screen.png',
+    integrations: '/brand/landing/app-screens/integrations.png',
     liveChat: '/brand/landing/app-screens/live-chat.png',
     requests: '/brand/landing/app-screens/screens/09-requests-screen.png',
     users: '/brand/landing/app-screens/screens/10-users-screen.png',
