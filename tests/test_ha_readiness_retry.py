@@ -62,7 +62,7 @@ die() {{ return 1; }}
 if assert_serving_ready_for_sha "{expected_sha}"; then
   exit 1
 fi
-test "$probe_count" = 12
-test "$sleep_count" = 11
+test "$probe_count" = 36
+test "$sleep_count" = 35
 """
     subprocess.run(["bash", "-c", script], check=True)
