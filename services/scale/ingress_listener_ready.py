@@ -44,17 +44,24 @@ def _probe_ok(status: int) -> bool:
 
 
 async def probe_local_ingress_listeners() -> dict[str, Any]:
-    """Return a readiness fragment; missing local listeners are skipped, not failed."""
+    """Return a readiness fragment; missing local listeners are skipped, not failed.
+
+    Prefer nginx :80 with X-Forwarded-Proto (DO LB path). Nested POSTs to the
+    same process on :8003 can ConnectTimeout while /api/ready holds the
+    single worker, which falsely 503s readiness under probe contention.
+    """
 
     checks: dict[str, Any] = {}
     overall = True
     targets: list[tuple[str, str, dict[str, str]]] = []
-    if _port_open(8003):
-        targets.append(("meta_direct", f"{_DIRECT}/webhook/meta-messaging", _DIRECT_HEADERS))
-        targets.append(("tiktok_direct", f"{_DIRECT}/webhook/tiktok", _DIRECT_HEADERS))
-    if _port_open(80):
+    nginx_open = _port_open(80)
+    direct_open = _port_open(8003)
+    if nginx_open:
         targets.append(("meta_nginx", f"{_NGINX_HTTP}/webhook/meta-messaging", _LB_HEADERS))
         targets.append(("tiktok_nginx", f"{_NGINX_HTTP}/webhook/tiktok", _LB_HEADERS))
+    elif direct_open:
+        targets.append(("meta_direct", f"{_DIRECT}/webhook/meta-messaging", _DIRECT_HEADERS))
+        targets.append(("tiktok_direct", f"{_DIRECT}/webhook/tiktok", _DIRECT_HEADERS))
     if not targets:
         return {"ok": True, "skipped": True, "reason": "no_local_ingress_ports"}
 

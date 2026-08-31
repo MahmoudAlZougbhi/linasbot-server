@@ -275,6 +275,8 @@ def test_ingress_probe_lb_http_uses_forwarded_proto(
     assert http_nginx
     assert all(item[1].get("X-Forwarded-Proto") == "https" for item in http_nginx)
     assert not any(item[0].startswith("https://") for item in seen)
+    # Prefer nginx LB path; skip nested :8003 self-probes when :80 is open.
+    assert not any(":8003/" in item[0] for item in seen)
 
 
 def test_ingress_probe_rejects_nginx_301(monkeypatch: pytest.MonkeyPatch) -> None:
