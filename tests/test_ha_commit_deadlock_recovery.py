@@ -48,8 +48,8 @@ def test_lb_window_is_interval_5_threshold_2() -> None:
     interval, threshold, timeout = load_lb_health_window(LB_HEALTH_CONTRACT)
     assert interval == 5
     assert threshold == 2
-    assert PUBLIC_READY_HEALTH_SLACK_SECONDS == 90
-    assert timeout == 100
+    assert PUBLIC_READY_HEALTH_SLACK_SECONDS == 10
+    assert timeout == 20
     assert timeout >= interval * threshold
 
 
@@ -108,7 +108,7 @@ def test_timeout_stays_fail_closed() -> None:
             interval=5,
             threshold=2,
         )
-    assert steps == [5] * 20
+    assert steps == [5, 5, 5, 5]
 
 
 @pytest.mark.parametrize("phase", sorted(FORWARD_COMMIT_LATER_HELPER_PHASES))

@@ -5082,6 +5082,8 @@ interval = health.get("check_interval_seconds")
 threshold = health.get("healthy_threshold")
 if type(interval) is not int or interval < 1 or type(threshold) is not int or threshold < 1:
     raise SystemExit("LB health window is invalid")
+# Peer-admit public wait needs more slack than the shared 10s contract:
+# DO LB may still be marking the newly admitted droplet healthy.
 slack = 90
 timeout = interval * threshold + slack
 deadline = time.monotonic() + timeout
