@@ -188,15 +188,19 @@
   overflow: hidden;
   border-radius: 2.15rem;
   background: #f7f9f7;
-  height: 34.5rem;
+  /* Match 780×1688 app handoffs — fixed height was a different aspect and
+     object-fit:cover zoomed/cropped mismatched tour crops. */
+  width: 100%;
+  aspect-ratio: 780 / 1688;
+  height: auto;
 }
 
 .hiw-phone-screen-shot {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: top;
+  object-fit: contain;
+  object-position: center top;
 }
 
 .hiw-phone-glow {
@@ -405,7 +409,7 @@
   }
 
   .hiw-phone-screen {
-    height: 30.5rem;
+    height: auto;
   }
 
   .hiw-copy {
