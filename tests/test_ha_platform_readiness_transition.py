@@ -394,9 +394,10 @@ def test_helper_uses_sha_aware_serving_and_later_helper_rollback_phase() -> None
     assert live_admission.index("except urllib.error.HTTPError as exc:") < live_admission.index(
         "except (urllib.error.URLError, TimeoutError, OSError) as exc:"
     )
-    assert "for attempt in 1 2 3; do" in ready_assertion
+    assert "local max_attempts=12" in ready_assertion
+    assert 'for attempt in $(seq 1 "$max_attempts"); do' in ready_assertion
     assert 'if probe_serving_ready_for_sha "$expected_sha"; then' in ready_assertion
-    assert 'test "$attempt" = 3 || sleep 1' in ready_assertion
+    assert 'test "$attempt" = "$max_attempts" || sleep 2' in ready_assertion
     assert "after bounded retry" in ready_assertion
     assert "grep -q '\"ok\"[[:space:]]*:[[:space:]]*true'" not in clear
     assert "automatic-rollback-both-nodes-drained" in later

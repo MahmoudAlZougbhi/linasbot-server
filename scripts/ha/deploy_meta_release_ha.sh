@@ -5018,15 +5018,18 @@ probe_serving_ready_for_sha() {
 assert_serving_ready_for_sha() {
   local expected_sha="$1"
   local attempt
+  local max_attempts=12
   # Admission performs an immediate second readiness proof after the node's
   # fail-closed sentinel and boot guards are removed. A single socket timeout
   # at that boundary must not turn an otherwise healthy commit into an
   # interrupted durable decision, but every failed probe still stays closed.
-  for attempt in 1 2 3; do
+  # Live /api/ready can also briefly 503 when nested ingress self-probes
+  # ConnectTimeout under single-worker contention; keep the window bounded.
+  for attempt in $(seq 1 "$max_attempts"); do
     if probe_serving_ready_for_sha "$expected_sha"; then
       return 0
     fi
-    test "$attempt" = 3 || sleep 1
+    test "$attempt" = "$max_attempts" || sleep 2
   done
   die "canonical /api/ready is not healthy for $expected_sha after bounded retry"
 }
