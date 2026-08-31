@@ -4969,7 +4969,7 @@ if mode == "tenant-gate":
     raise SystemExit(0 if tenant else 1)
 
 try:
-    with urllib.request.urlopen(url, timeout=5) as response:
+    with urllib.request.urlopen(url, timeout=15) as response:
         payload = json.load(response)
         status = int(response.status)
 except urllib.error.HTTPError as exc:
@@ -5018,18 +5018,19 @@ probe_serving_ready_for_sha() {
 assert_serving_ready_for_sha() {
   local expected_sha="$1"
   local attempt
-  local max_attempts=12
+  local max_attempts=36
   # Admission performs an immediate second readiness proof after the node's
   # fail-closed sentinel and boot guards are removed. A single socket timeout
   # at that boundary must not turn an otherwise healthy commit into an
   # interrupted durable decision, but every failed probe still stays closed.
-  # Live /api/ready can also briefly 503 when nested ingress self-probes
-  # ConnectTimeout under single-worker contention; keep the window bounded.
+  # Live /api/ready can also briefly 503/timeout when nested ingress self-probes
+  # contend with the single worker, and the post-dual-admit assert-ready pair
+  # hammers both nodes at once; keep the window bounded but wide enough.
   for attempt in $(seq 1 "$max_attempts"); do
     if probe_serving_ready_for_sha "$expected_sha"; then
       return 0
     fi
-    test "$attempt" = "$max_attempts" || sleep 2
+    test "$attempt" = "$max_attempts" || sleep 3
   done
   die "canonical /api/ready is not healthy for $expected_sha after bounded retry"
 }
