@@ -202,7 +202,19 @@ async def deliver_meta_dm(
             error_redacted="binding_not_found",
             channel_used=source_channel,
         )
-    binding = candidates[0]
+    from services.meta_dm_binding_select import select_binding_for_meta_dm
+
+    binding = select_binding_for_meta_dm(
+        candidates,
+        channel=str(candidates[0].channel),
+        registry=registry,
+    )
+    if binding is None:
+        return DeliveryResult(
+            status="failed",
+            error_redacted="binding_not_found",
+            channel_used=source_channel,
+        )
     meta_channel = str(binding.channel)
     credential = registry.get_credential(binding)
     app_config = get_meta_app_configs().get(binding.app_key)

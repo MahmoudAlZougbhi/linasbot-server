@@ -65,9 +65,10 @@ async def send_stored_meta_attachment(
     field = "comment_id" if recipient_field == "comment_id" else "id"
     payload = {
         "recipient": {field: to_id},
-        "messaging_type": "RESPONSE",
         "message": {"attachment": {"type": att_type, "payload": {"attachment_id": attachment_id}}},
     }
+    if "graph.instagram.com" not in base:
+        payload["messaging_type"] = "RESPONSE"
     try:
         sent = await adapter._post(payload)
     except RuntimeError as exc:

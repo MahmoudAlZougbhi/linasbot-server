@@ -51,7 +51,11 @@ async def _build_meta_adapter_for_live_chat_user(
     candidates = _meta_bindings_for_account(registry, tenant_id=tenant, account=account, meta_channels=(channel,))
     if not candidates:
         raise ValueError("meta_binding_not_found")
-    binding = candidates[0]
+    from services.meta_dm_binding_select import select_binding_for_meta_dm
+
+    binding = select_binding_for_meta_dm(candidates, channel=channel, registry=registry)
+    if binding is None:
+        raise ValueError("meta_binding_not_found")
     credential = registry.get_credential(binding)
     app_config = get_meta_app_configs().get(binding.app_key)
     settings = build_messaging_settings_for_binding(binding, credential=credential, app_config=app_config)

@@ -409,9 +409,11 @@ class MetaMessagingAdapter:
         for chunk in split_meta_text(text):
             payload: dict[str, Any] = {
                 "recipient": {"id": str(recipient_id)},
-                "messaging_type": "RESPONSE",
                 "message": {"text": chunk},
             }
+            # Messenger API requires messaging_type. Instagram Login Graph rejects it.
+            if "graph.instagram.com" not in self.graph_base_url:
+                payload["messaging_type"] = "RESPONSE"
             response = await self._post(payload)
             message_id = str(response.get("message_id") or "").strip()
             if not message_id:

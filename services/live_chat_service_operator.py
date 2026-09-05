@@ -198,6 +198,18 @@ class LiveChatOperatorMixin:
                     if delivery and not delivery.get("success"):
                         err = str(delivery.get("error") or "social_delivery_failed")
                         print(f"⚠️ Social operator send failed after save: {err}")
+                        if manual_meta.get("manual_mode_activated") and not manual_meta.get(
+                            "manual_mode_already_active"
+                        ):
+                            await self._undo_manual_pause_after_failed_send(
+                                conversation_id=conversation_id,
+                                user_id=user_id,
+                                operator_id=operator_id,
+                                tenant_id=tenant_id,
+                                request_id=request_id,
+                                source_channel=source_channel,
+                            )
+                            manual_meta["manual_mode_undone_after_failed_delivery"] = True
                         return {
                             "success": False,
                             "error": f"Message saved locally but delivery failed: {err}",
@@ -254,6 +266,47 @@ class LiveChatOperatorMixin:
         finally:
             if lock_ref is not None and not completed_ok:
                 await _release_operator_idempotency_lock(db, lock_ref)
+
+    async def _undo_manual_pause_after_failed_send(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str,
+        operator_id: str,
+        tenant_id: str | None,
+        request_id: str | None,
+        source_channel: str | None,
+    ) -> None:
+        """Undo a pause we just set because Meta never accepted the outbound."""
+        try:
+            from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+            from services.requests.manual_mode import resume_manual_mode
+
+            wa_cm = None
+            wa_session = None
+            try:
+                if tenant_id:
+                    wa_cm = whatsapp_session()
+                    wa_session = wa_cm.__enter__()
+            except WhatsAppDatabaseUnavailable:
+                wa_session = None
+            try:
+                await resume_manual_mode(
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    actor_user_id=operator_id,
+                    tenant_id=tenant_id,
+                    request_id=request_id,
+                    source_channel=source_channel,
+                    session=wa_session,
+                )
+                if wa_session is not None:
+                    wa_session.commit()
+            finally:
+                if wa_cm is not None:
+                    wa_cm.__exit__(None, None, None)
+        except Exception as undo_err:
+            print(f"⚠️ undo manual pause after failed social send failed: {undo_err}")
 
     async def resume_ai_conversation(
         self,
