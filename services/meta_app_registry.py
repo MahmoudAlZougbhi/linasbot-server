@@ -68,6 +68,7 @@ from services.meta_app_registry_lifecycle import MetaAppRegistryLifecycleMixin
 from services.meta_app_registry_oauth import MetaAppRegistryOAuthMixin
 from services.meta_app_registry_oauth_authorize import MetaAppRegistryOAuthAuthorizeMixin
 from services.meta_app_registry_recovery import MetaAppRegistryRecoveryMixin
+from services.meta_app_registry_session import MetaAppRegistrySessionMixin
 
 __all__ = [
     "APP_A_EXPECTED_ID",
@@ -126,6 +127,7 @@ class MetaAppRegistry(
     MetaAppRegistryOAuthAuthorizeMixin,
     MetaAppRegistryLifecycleMixin,
     MetaAppRegistryRecoveryMixin,
+    MetaAppRegistrySessionMixin,
     MetaAppRegistryDeletionMixin,
     MetaAppRegistryOAuthMixin,
 ):

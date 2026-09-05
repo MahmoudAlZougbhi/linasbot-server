@@ -99,6 +99,12 @@ async def refresh_binding_instagram_login_token(
                 except MetaBindingConflictError as exc:
                     raise MetaOAuthError("Instagram authorization changed; reconnect required") from exc
                 except (MetaOAuthError, httpx.HTTPError) as exc:
+                    from services.meta_session_invalidated import mark_if_session_invalidated
+
+                    if mark_if_session_invalidated(
+                        exc, binding_id=latest_binding.binding_id, registry=current_registry
+                    ):
+                        raise MetaOAuthError("Instagram session invalidated; reconnect required") from exc
                     last_error = type(exc).__name__
                     _runtime_logger.warning(
                         "[instagram-login] refresh_attempt_failed binding=%s attempt=%d reason=%s",

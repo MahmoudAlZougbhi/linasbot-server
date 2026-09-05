@@ -118,6 +118,8 @@ function blockerCopy(blocker: string, tr: (key: StringKey) => string): string {
     case 'token_app_mismatch':
     case 'token_profile_mismatch':
       return tr('serviceDiagnosticTokenMismatch');
+    case 'password_changed_reconnect':
+      return tr('integrationPasswordChangedReconnect');
     default:
       return tr('commentsBlockerGeneric');
   }
@@ -182,8 +184,13 @@ export function IntegrationChannelCard({
 }: Props) {
   const platform = asPlatform(row.platform);
   const tiktok = platform === 'tiktok';
+  const meta = platform === 'instagram' || platform === 'facebook';
   const status = String(row.connection_status || '');
-  const needsReconnect = tiktok && (status === 'token_expired' || status === 'permission_required' || status === 'error');
+  const passwordChanged = row.service_diagnostic === 'password_changed_reconnect';
+  const needsReconnect =
+    passwordChanged ||
+    (meta && status === 'needs_reconnect') ||
+    (tiktok && (status === 'token_expired' || status === 'permission_required' || status === 'error'));
   const showToggles =
     !soon && (platform === 'instagram' || platform === 'facebook' || tiktok) && row.connected;
   const blocker = commentsBlocker(row);
@@ -200,7 +207,13 @@ export function IntegrationChannelCard({
         ? tr('tiktokLastSyncNever')
         : '';
   const healthy = row.connected && row.connection_status !== 'error' && row.connection_status !== 'needs_reconnect';
-  const statusLabel = tiktok ? tiktokStatusLabel(status, tr) : undefined;
+  const statusLabel = passwordChanged
+    ? tr('integrationStatusPasswordChanged')
+    : tiktok
+      ? tiktokStatusLabel(status, tr)
+      : meta && status === 'needs_reconnect'
+        ? tr('integrationStatusNeedsReconnect')
+        : undefined;
 
   return (
     <IntegrationCardShell
@@ -253,10 +266,15 @@ export function IntegrationChannelCard({
           ) : null}
         </>
       ) : null}
+      {meta && passwordChanged ? (
+        <Text style={styles.blocker}>{tr('integrationPasswordChangedReconnect')}</Text>
+      ) : null}
+      {meta ? <Text style={styles.hint}>{tr('integrationPasswordChangeHint')}</Text> : null}
     </IntegrationCardShell>
   );
 }
 
 const styles = StyleSheet.create({
   blocker: { color: colors.danger, fontFamily: fonts.body, fontSize: 13 },
+  hint: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12, lineHeight: 17 },
 });

@@ -22,7 +22,7 @@ async def _build_meta_adapter_for_live_chat_user(
     *,
     tenant_id: str | None,
     user_id: str,
-) -> tuple[Any, str, str]:
+) -> tuple[Any, str, str, str]:
     from services.meta_app_registry import get_meta_app_configs, get_meta_app_registry
     from services.meta_graph_routing import build_messaging_settings_for_binding
     from services.meta_messaging import MetaMessagingAdapter, resolve_meta_send_account_id
@@ -71,7 +71,7 @@ async def _build_meta_adapter_for_live_chat_user(
         graph_api_version=settings.graph_api_version,
         graph_base_url=settings.graph_base_url,
     )
-    return adapter, sender_id, channel
+    return adapter, sender_id, channel, str(binding.binding_id)
 
 
 async def deliver_live_chat_meta_operator_media(
@@ -85,8 +85,9 @@ async def deliver_live_chat_meta_operator_media(
     if not media_bytes:
         return {"success": False, "delivered": False, "error": "missing_media_bytes"}
     adapter = None
+    binding_id = ""
     try:
-        adapter, recipient_id, channel = await _build_meta_adapter_for_live_chat_user(
+        adapter, recipient_id, channel, binding_id = await _build_meta_adapter_for_live_chat_user(
             tenant_id=tenant_id,
             user_id=user_id,
         )
@@ -121,6 +122,9 @@ async def deliver_live_chat_meta_operator_media(
     except ValueError as exc:
         return {"success": False, "delivered": False, "error": str(exc)}
     except Exception as exc:
+        from services.meta_session_invalidated import mark_if_session_invalidated
+
+        mark_if_session_invalidated(exc, binding_id=binding_id)
         return {"success": False, "delivered": False, "error": str(exc)[:180]}
     finally:
         if adapter is not None:

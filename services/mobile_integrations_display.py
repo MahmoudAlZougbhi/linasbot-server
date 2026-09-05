@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from services.channel_capability_state import _binding_connection_healthy, canonical_channel_bindings
 from services.meta_app_registry import get_meta_app_registry
+from services.meta_app_registry_session import PASSWORD_CHANGED_RECONNECT
+from services.meta_session_invalidated import latest_password_changed_binding
 
 ConnectionDisplayStatus = Literal["disconnected", "connected", "needs_reconnect", "error"]
 
@@ -57,9 +59,12 @@ def _overall_connection_status(
     *,
     connected: bool,
     accounts: list[dict[str, Any]],
+    password_changed: bool = False,
 ) -> ConnectionDisplayStatus:
     """Connected vs reconnect from the Meta binding, not from AI toggle/scope hints."""
 
+    if password_changed:
+        return "needs_reconnect"
     if not connected:
         return "disconnected"
 
@@ -83,19 +88,21 @@ def enrich_mobile_integration_row(row: dict[str, Any], *, tenant_id: str) -> dic
             cleaned.pop("account", None)
         return cleaned
 
+    registry = get_meta_app_registry()
     canonical = canonical_channel_bindings(tenant_id, platform)
-    accounts: list[dict[str, Any]] = []
-    if canonical:
-        registry = get_meta_app_registry()
-        accounts = [_binding_account_display(binding, platform, registry=registry) for binding in canonical]
+    password_binding = None if canonical else latest_password_changed_binding(tenant_id, platform, registry=registry)
+    display_bindings = list(canonical) if canonical else ([password_binding] if password_binding is not None else [])
+    accounts = [_binding_account_display(binding, platform, registry=registry) for binding in display_bindings]
 
     toggles_raw = row.get("toggles")
     toggles: dict[str, Any] = toggles_raw if isinstance(toggles_raw, dict) else {}
     connected = bool(row.get("connected"))
+    password_changed = password_binding is not None
 
     connection_status = _overall_connection_status(
         connected=connected,
         accounts=accounts,
+        password_changed=password_changed,
     )
     last_synced_at: float | None = None
     for account in accounts:
@@ -114,7 +121,9 @@ def enrich_mobile_integration_row(row: dict[str, Any], *, tenant_id: str) -> dic
         "dm_replies": bool(toggles.get("dm")),
         "comment_replies": bool(toggles.get("comments")),
     }
-    if canonical:
+    if password_changed:
+        cleaned["service_diagnostic"] = PASSWORD_CHANGED_RECONNECT
+    elif canonical:
         try:
             from services.meta_app_registry import diagnose_active_meta_binding
 

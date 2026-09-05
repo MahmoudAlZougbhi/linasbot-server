@@ -239,6 +239,9 @@ async def deliver_meta_dm(
             mid = str((data[0] or {}).get("message_id") or (data[0] or {}).get("id") or "") or None
         return DeliveryResult(status="sent", provider_message_id=mid, channel_used=source_channel)
     except Exception as exc:
+        from services.meta_session_invalidated import mark_if_session_invalidated
+
+        mark_if_session_invalidated(exc, binding_id=str(getattr(binding, "binding_id", "") or ""))
         msg = redact_delivery_error(exc)
         blocked = classify_platform_block(channel=source_channel, error_code=None, message=msg)
         # Parse code=N from MetaMessagingAdapter RuntimeError if present.
