@@ -12,6 +12,23 @@ def _empty_retrieval() -> RetrievalResult:
     return RetrievalResult(evidence=[], evidence_status="insufficient_final", rounds_used=1)
 
 
+def test_fallback_skips_honest_insufficient_final() -> None:
+    retrieval = _empty_retrieval()
+    retrieval.evidence_status = "insufficient_final"
+    pointer = SimpleNamespace(content_version_id="pub-1")
+    sections = {"knowledge": {"items": [{"id": "k1", "title": "Laser", "body": "CO2"}]}}
+    import services.customer_reply_v2.retrieval_business_fallback as fallback
+
+    original = fallback.load_published_content
+    fallback.load_published_content = lambda _tenant: (pointer, sections)  # type: ignore[assignment]
+    try:
+        out = ensure_dm_business_evidence(retrieval, tenant_id="linas", channel="facebook_dm")
+        assert out.evidence == []
+        assert out.evidence_status == "insufficient_final"
+    finally:
+        fallback.load_published_content = original
+
+
 def test_fallback_skips_when_knowledge_already_present() -> None:
     retrieval = _empty_retrieval()
     retrieval.evidence = [
@@ -64,7 +81,9 @@ def test_fallback_injects_published_knowledge() -> None:
     original = fallback.load_published_content
     fallback.load_published_content = lambda _tenant: (pointer, sections)  # type: ignore[assignment]
     try:
-        out = ensure_dm_business_evidence(_empty_retrieval(), tenant_id="linas", channel="facebook_dm")
+        empty = _empty_retrieval()
+        empty.evidence_status = "insufficient_can_retry"
+        out = ensure_dm_business_evidence(empty, tenant_id="linas", channel="facebook_dm")
         ids = [item.source_id for item in out.evidence]
         assert "knowledge:about-laser" in ids
         assert "services:hair" in ids

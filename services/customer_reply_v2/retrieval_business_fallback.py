@@ -43,6 +43,8 @@ def ensure_dm_business_evidence(
         return retrieval
     if retrieval.error and str(retrieval.error).startswith("retrieval_model_blocker:"):
         return retrieval
+    if retrieval.evidence_status == "insufficient_final":
+        return retrieval
     if _has_business_evidence(retrieval):
         return retrieval
     try:
