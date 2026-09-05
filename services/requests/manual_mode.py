@@ -247,7 +247,10 @@ async def resume_manual_mode(
     source_channel: str | None = None,
     session: Session | None = None,
 ) -> ManualModeResult:
-    """Clear manual pause (Resume AI). Idempotent. Never auto-invoked."""
+    """Clear manual pause (Resume AI). Idempotent.
+
+    Operator Resume AI, or undo a pause when the triggering outbound delivery failed.
+    """
     if not actor_user_id or not str(actor_user_id).strip():
         raise ValueError("authenticated actor_user_id required")
 

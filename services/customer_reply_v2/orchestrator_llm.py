@@ -11,6 +11,7 @@ from services.customer_reply_v2.flags import customer_answer_model_name, custome
 from services.customer_reply_v2.invocation_meter import CustomerTurnMeter, InvocationRecord
 from services.customer_reply_v2.models import AnswerLunaResult, RetrievalResult
 from services.customer_reply_v2.orchestrator_answer import finalize_answer_with_repair
+from services.customer_reply_v2.retrieval_business_fallback import ensure_dm_business_evidence
 from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
 from services.scale.ai_stage_timing import record_gap_ms, time_stage
 
@@ -60,6 +61,7 @@ async def run_dm_luna_then_tera(
     stages["luna_ms"] = float(luna_slot.get("ms") or 0.0)
     gap_started = time.perf_counter()
     retrieval = merge_faq_evidence(retrieval, faq_candidates)
+    retrieval = ensure_dm_business_evidence(retrieval, tenant_id=tenant_id, channel=channel)
     gap_ms = max(0.0, (time.perf_counter() - gap_started) * 1000.0)
     stages["luna_tera_gap_ms"] = gap_ms
     record_gap_ms("luna", "tera", gap_ms)

@@ -63,7 +63,7 @@ async def prepare_chat_response_prompt(ns: Any) -> Any:
         f"{ns.crm_customer_id if ns.crm_customer_id else '—'}\n"
         "- **Profile lock (server)**: The name, phone, and gender lines below are loaded from the live system each turn. "
         "Do **not** ask the user to repeat them when this block already shows a known name, known gender (male/female), or an existing CRM file.\n"
-        f"- **Show greeting**: {ns._show_greeting} - Reason: {ns._greeting_reason}. Use greeting ONLY when True (new user or inactive 12+ hours). Otherwise go straight to the answer. Do NOT repeat أهلاً أستاذ / أنا مروى in every message.\n"
+        f"- **Show greeting**: {ns._show_greeting} - Reason: {ns._greeting_reason}. Use greeting ONLY when True (new user or inactive 12+ hours). Never reply with greeting alone when the user asked a business question — use knowledge and files. Do NOT repeat أهلاً أستاذ / أنا مروى in every message.\n"
         f"- **Customer Name**: {ns.customer_name_context}\n"
         f"- **Customer Phone**: '{ns.customer_phone_clean}' - Use this for ALL tool calls (check_next_appointment, submit_booking_intent, create_appointment if ever used, update_appointment_date). Do NOT ask for phone number.\n"
         f"- **Gender**: '{ns.current_gender}'"

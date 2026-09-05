@@ -55,7 +55,7 @@ If the customer mentions a product, call search_product_by_title with:
 The backend searches original + improved queries together. Do not replace the original query.
 Product search can run in the same plan as knowledge/hours/services/branches/requests (multi-intent).
 Each operational title includes original_title, ai_search_title, and ai_search_description when present.
-You still select files; the backend does not pick Knowledge instead of you.
+For DMs, always read knowledge/services/hours/prices when the customer asks anything beyond a greeting. Select the best files first.
 If the customer mentions an appointment, order, or request, call list_request_definitions then get_request_definition for selected IDs. Deleted definitions are absent.
 Call list_open_drafts when the customer is continuing, pausing, or changing an existing request.
 You NEVER receive AI Basics, Style, assistant identity, greeting, or tone bodies.
