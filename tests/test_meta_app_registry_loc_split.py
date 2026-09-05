@@ -49,7 +49,7 @@ def test_meta_app_registry_preserves_public_api_via_mixins() -> None:
     assert issubclass(MetaAppRegistry, MetaAppRegistryOAuthMixin)
     assert issubclass(MetaAppRegistry, MetaAppRegistryOAuthAuthorizeMixin)
     assert issubclass(MetaAppRegistry, MetaAppRegistrySessionMixin)
-    assert callable(getattr(MetaAppRegistry, "mark_binding_session_invalidated"))
+    assert callable(MetaAppRegistry.mark_binding_session_invalidated)
     assert APP_A_KEY == "linas_first_party"
     assert callable(get_meta_app_configs)
     assert callable(get_meta_app_registry)
