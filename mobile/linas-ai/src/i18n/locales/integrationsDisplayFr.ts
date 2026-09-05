@@ -51,6 +51,11 @@ export const integrationsDisplayFr = {
   integrationStatusConnecting: 'Connexion…',
   integrationStatusPermissionRequired: 'Permission requise',
   integrationStatusTokenExpired: 'Jeton expiré',
+  integrationStatusPasswordChanged: 'Mot de passe modifié — reconnecter',
+  integrationPasswordChangedReconnect:
+    'Le mot de passe ou la session de ce compte a changé. La connexion a été coupée. Veuillez reconnecter.',
+  integrationPasswordChangeHint:
+    'Si vous changez le mot de passe de ce compte, la connexion se coupe. Reconnectez-le pour rétablir les réponses.',
   tiktokMessagingPending: 'Les DM TikTok sont en attente de l’approbation Business Messaging.',
   tiktokLastSyncNever: 'Pas encore synchronisé',
   drawerRecents: 'Récents',

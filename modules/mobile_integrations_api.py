@@ -64,6 +64,12 @@ async def mobile_integrations(request: Request) -> Any:
             )
         except Exception:
             pass
+    try:
+        from services.meta_session_invalidated import probe_tenant_meta_sessions
+
+        await probe_tenant_meta_sessions(session.tenant_id)
+    except Exception:
+        pass
     rows = list_tenant_integration_status(session.tenant_id)
     rows = _without_comment_capabilities(rows)
     rows = attach_channel_toggles(rows, tenant_id=session.tenant_id)

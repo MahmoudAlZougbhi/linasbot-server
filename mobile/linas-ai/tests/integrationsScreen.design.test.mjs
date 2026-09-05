@@ -90,6 +90,18 @@ test('3-dot sheet has refresh, disconnect, disclaimer, cancel — no Meta reconn
   assert.doesNotMatch(screen, /Reconnect/);
 });
 
+test('Instagram and Facebook cards warn that a password change disconnects', () => {
+  const card = read('features/integrations/IntegrationChannelCard.tsx');
+  const display = read('i18n/locales/integrationsDisplayEn.ts');
+  assert.match(card, /password_changed_reconnect/);
+  assert.match(card, /integrationPasswordChangeHint/);
+  assert.match(card, /integrationPasswordChangedReconnect/);
+  assert.match(card, /integrationStatusPasswordChanged/);
+  assert.match(display, /If you change this account/);
+  assert.match(display, /Please reconnect/);
+  assert.match(display, /Password changed — reconnect/);
+});
+
 test('TikTok card is shown from product list without faking a connection', () => {
   const screen = read('features/integrations/IntegrationsScreen.tsx');
   assert.match(screen, /platform === 'tiktok'/);

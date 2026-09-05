@@ -50,6 +50,11 @@ export const integrationsDisplayAr = {
   integrationStatusConnecting: 'جارٍ الربط',
   integrationStatusPermissionRequired: 'صلاحية مطلوبة',
   integrationStatusTokenExpired: 'انتهت صلاحية الرمز',
+  integrationStatusPasswordChanged: 'تغيرت كلمة المرور — أعد الربط',
+  integrationPasswordChangedReconnect:
+    'تم تغيير كلمة مرور الحساب أو جلسة تسجيل الدخول. انفصل الربط. يرجى إعادة الربط.',
+  integrationPasswordChangeHint:
+    'إذا غيّرت كلمة مرور هذا الحساب، ينفصل الربط. اربطه من جديد لاستعادة الردود.',
   tiktokMessagingPending: 'رسائل TikTok معلّقة بانتظار موافقة TikTok Business Messaging.',
   tiktokLastSyncNever: 'لم تتم المزامنة بعد',
   drawerRecents: 'الأخيرة',

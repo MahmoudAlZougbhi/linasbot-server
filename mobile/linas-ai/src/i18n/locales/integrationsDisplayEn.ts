@@ -50,6 +50,11 @@ export const integrationsDisplayEn = {
   integrationStatusConnecting: 'Connecting',
   integrationStatusPermissionRequired: 'Permission required',
   integrationStatusTokenExpired: 'Token expired',
+  integrationStatusPasswordChanged: 'Password changed — reconnect',
+  integrationPasswordChangedReconnect:
+    "This account's password or login session changed. The connection was disconnected. Please reconnect.",
+  integrationPasswordChangeHint:
+    "If you change this account's password, the connection disconnects. Connect again to restore replies.",
   tiktokMessagingPending: 'TikTok DMs are pending TikTok Business Messaging approval.',
   tiktokLastSyncNever: 'Not synced yet',
   drawerRecents: 'Recents',

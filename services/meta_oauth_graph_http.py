@@ -13,9 +13,33 @@ class MetaOAuthError(RuntimeError):
     """OAuth failure whose message never contains a secret or raw Meta response."""
 
 
+def _graph_error_code(payload: dict[str, Any] | None) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    error = payload.get("error")
+    if isinstance(error, dict) and error.get("code") is not None:
+        return str(error.get("code")).strip()
+    if payload.get("code") is not None:
+        return str(payload.get("code")).strip()
+    return ""
+
+
+def _oauth_http_error_message(response: httpx.Response, *, step: str, payload: dict[str, Any] | None = None) -> str:
+    data = payload
+    if data is None:
+        try:
+            parsed = response.json()
+        except ValueError:
+            parsed = None
+        data = parsed if isinstance(parsed, dict) else None
+    code = _graph_error_code(data)
+    suffix = f" code={code}" if code else ""
+    return f"Meta {step} failed with HTTP {response.status_code}{suffix}"
+
+
 def _safe_json(response: httpx.Response, *, step: str) -> dict[str, Any]:
     if response.status_code < 200 or response.status_code >= 300:
-        raise MetaOAuthError(f"Meta {step} failed with HTTP {response.status_code}")
+        raise MetaOAuthError(_oauth_http_error_message(response, step=step))
     try:
         payload = response.json()
     except ValueError as exc:
@@ -23,7 +47,7 @@ def _safe_json(response: httpx.Response, *, step: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise MetaOAuthError(f"Meta {step} returned an invalid response")
     if payload.get("error"):
-        raise MetaOAuthError(f"Meta {step} returned an OAuth error")
+        raise MetaOAuthError(_oauth_http_error_message(response, step=step, payload=payload))
     return cast(dict[str, Any], payload)
 
 
