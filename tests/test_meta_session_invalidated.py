@@ -93,7 +93,9 @@ def test_mark_disconnects_active_binding_for_any_tenant(registry: MetaAppRegistr
     )
     assert marked is True
 
-    latest = next(item for item in registry.list_bindings(include_inactive=True) if item.binding_id == binding.binding_id)
+    latest = next(
+        item for item in registry.list_bindings(include_inactive=True) if item.binding_id == binding.binding_id
+    )
     assert latest.status == "disconnected"
     assert latest.webhook_subscription_error == PASSWORD_CHANGED_RECONNECT
     assert latest.generation == binding.generation + 1
@@ -142,7 +144,9 @@ async def test_probe_marks_binding_on_graph_me_190(registry: MetaAppRegistry) ->
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     marked = await probe_binding_session(binding, registry=registry, client=client)
     assert marked is True
-    latest = next(item for item in registry.list_bindings(include_inactive=True) if item.binding_id == binding.binding_id)
+    latest = next(
+        item for item in registry.list_bindings(include_inactive=True) if item.binding_id == binding.binding_id
+    )
     assert latest.status == "disconnected"
     assert latest.webhook_subscription_error == PASSWORD_CHANGED_RECONNECT
 
@@ -204,6 +208,8 @@ def test_facebook_binding_can_be_marked(registry: MetaAppRegistry) -> None:
         actor_id="owner",
     )
     assert mark_if_session_invalidated(error_code=190, binding_id=binding.binding_id, registry=registry) is True
-    latest = next(item for item in registry.list_bindings(include_inactive=True) if item.binding_id == binding.binding_id)
+    latest = next(
+        item for item in registry.list_bindings(include_inactive=True) if item.binding_id == binding.binding_id
+    )
     assert latest.status == "disconnected"
     assert latest.webhook_subscription_error == PASSWORD_CHANGED_RECONNECT
