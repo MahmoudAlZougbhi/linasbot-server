@@ -8,8 +8,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from services.customer_reply_v2.flags import customer_media_context_enabled
 from services.customer_reply_v2.comment_vision_payload import MODEL_MAX_STILLS, sample_comment_stills
+from services.customer_reply_v2.flags import customer_media_context_enabled
 from services.customer_reply_v2.inbound_video import MAX_FRAMES as MAX_VIDEO_FRAMES
 from services.customer_reply_v2.models import CommentMediaContext
 from storage.persistent_storage import get_data_root
