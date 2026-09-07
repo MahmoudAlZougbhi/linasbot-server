@@ -1,5 +1,5 @@
 export const usersUiAr: Record<keyof typeof import('./usersUiEn').usersUiEn, string> = {
-  usersTitle: 'المستخدمون',
+  usersTitle: 'الفريق',
   usersSub: 'إدارة وصول الفريق',
   usersAdd: '+ إضافة مستخدم',
   usersAddTitle: 'إضافة مستخدم',

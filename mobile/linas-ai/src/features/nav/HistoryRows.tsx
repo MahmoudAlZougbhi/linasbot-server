@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppIcon } from '../../components/AppIcon';
-import { fonts, radii, spacing, useTheme } from '../../theme';
+import { fonts, radii, spacing, typography, useTheme } from '../../theme';
 import { DRAWER_TOOL_ICONS } from './moduleIcons';
 
 export type HistoryItem = { id: string; title: string };
@@ -266,11 +266,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   rowTitleDrawer: {
-    fontFamily: fonts.body,
-    fontWeight: '400',
-    fontSize: 16,
-    lineHeight: 22,
-    letterSpacing: -0.15,
+    ...typography.drawerItem,
   },
   emptyDrawer: {
     fontFamily: fonts.body,

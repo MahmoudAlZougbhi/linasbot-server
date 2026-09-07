@@ -20,7 +20,6 @@ import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStreamFooter } from './ChatStreamFooter';
 import { GuestEmptyState } from './GuestEmptyState';
 import { OwnerEmptyState } from './OwnerEmptyState';
-import { OwnerWelcomeChips, type OwnerWelcomeChip } from './OwnerWelcomeChips';
 import { ScrollToLatestFab } from './ScrollToLatestFab';
 import type { ProposedPatch } from './useChatSession';
 import type { StreamCard } from './v2/useOwnerStream';
@@ -53,8 +52,6 @@ type Props = {
   onEditProposal?: (proposalId: string) => void;
   onOpenCm: (review?: CmProposalReview) => void;
   onGuestPrompt: (prompt: string) => void;
-  showOwnerWelcomeChips?: boolean;
-  onOwnerWelcomeChip?: (chip: OwnerWelcomeChip) => void;
   seedTypewriterMessageId?: string | null;
   onSeedTypewriterDone?: () => void;
 };
@@ -83,8 +80,6 @@ export function ChatMessageList({
   onEditProposal,
   onOpenCm,
   onGuestPrompt,
-  showOwnerWelcomeChips = false,
-  onOwnerWelcomeChip,
   seedTypewriterMessageId = null,
   onSeedTypewriterDone,
 }: Props) {
@@ -252,28 +247,23 @@ export function ChatMessageList({
           );
         }}
         ListFooterComponent={
-          <>
-            <ChatStreamFooter
-              thinking={thinking}
-              thinkingLabel={thinkingLabel}
-              statusRows={statusRows}
-              liveText={liveText}
-              cards={cards}
-              proposedPatch={proposedPatch}
-              proposedCmPatchLabel={tr('proposedCmPatch')}
-              onApproveDraft={onApproveDraft}
-              onDiscardProposal={onDiscardProposal}
-              onEditProposal={onEditProposal}
-              onOpenCm={onOpenCm}
-              onRetryLast={() => {
-                const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-                if (lastUser) onRetryAssistant(lastUser.content);
-              }}
-            />
-            {showOwnerWelcomeChips && onOwnerWelcomeChip ? (
-              <OwnerWelcomeChips onPick={onOwnerWelcomeChip} />
-            ) : null}
-          </>
+          <ChatStreamFooter
+            thinking={thinking}
+            thinkingLabel={thinkingLabel}
+            statusRows={statusRows}
+            liveText={liveText}
+            cards={cards}
+            proposedPatch={proposedPatch}
+            proposedCmPatchLabel={tr('proposedCmPatch')}
+            onApproveDraft={onApproveDraft}
+            onDiscardProposal={onDiscardProposal}
+            onEditProposal={onEditProposal}
+            onOpenCm={onOpenCm}
+            onRetryLast={() => {
+              const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+              if (lastUser) onRetryAssistant(lastUser.content);
+            }}
+          />
         }
       />
       <ScrollToLatestFab

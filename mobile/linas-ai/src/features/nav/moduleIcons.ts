@@ -4,7 +4,7 @@ import type { ControlArea } from '../control/controlAreas';
 /**
  * Drawer / Control Center icons — DRW-01 handoff (thin-line grid tiles).
  * FAQ is a product module in the live app (not on the 8-tile PDF grid).
- * Team in the PDF maps to Users here.
+ * Team tile uses the users module (manage team access).
  */
 export const MODULE_ICONS: Record<ControlArea, AppIconName> = {
   dashboard: feather('grid'),

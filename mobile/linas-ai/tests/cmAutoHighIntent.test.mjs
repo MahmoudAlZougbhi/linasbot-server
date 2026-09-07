@@ -11,6 +11,7 @@ const detectSrc = path.join(root, 'src/features/chat/detectCmWorkIntent.ts');
 const modeSrc = path.join(root, 'src/features/chat/ownerChatMode.ts');
 const streamSrc = path.join(root, 'src/features/chat/ownerModeFromStream.ts');
 const screenSrc = path.join(root, 'src/features/chat/ChatScreen.tsx');
+const editSrc = path.join(root, 'src/features/chat/useProposalEditMode.ts');
 const controllerSrc = path.join(root, 'src/features/chat/useChatScreenController.ts');
 const turnSrc = path.join(root, 'src/features/chat/v2/useStreamingTurn.ts');
 
@@ -66,12 +67,14 @@ test('source wiring keeps CM auto-High + stream chip sync', () => {
   const mode = readFileSync(modeSrc, 'utf8');
   const stream = readFileSync(streamSrc, 'utf8');
   const screen = readFileSync(screenSrc, 'utf8');
+  const edit = readFileSync(editSrc, 'utf8');
   const controller = readFileSync(controllerSrc, 'utf8');
   const turn = readFileSync(turnSrc, 'utf8');
   assert.match(detect, /export function detectCmWorkIntent/);
   assert.match(mode, /resolveOwnerModeForOutgoing/);
   assert.match(stream, /suggested_owner_mode/);
-  assert.match(screen, /resolveOwnerModeForOutgoing/);
+  assert.match(edit, /resolveOwnerModeForOutgoing/);
+  assert.match(screen, /ownerSendWithMode/);
   assert.match(controller, /onOwnerModeHint/);
   assert.match(turn, /onOwnerModeHint/);
   assert.match(turn, /ownerModeFromStreamRoute/);

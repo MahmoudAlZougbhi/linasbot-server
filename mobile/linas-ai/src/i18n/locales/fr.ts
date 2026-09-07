@@ -337,6 +337,7 @@ export const fr = {
   settingsAboutLegal: 'À propos & Légal',
   navDashboard: 'Tableau de bord',
   navContentManagement: 'Configuration IA',
+  navTeam: 'Équipe',
   navLiveChat: 'Live Chat',
   navSubscription: 'Abonnement',
   navUsage: 'Usage & Crédits',

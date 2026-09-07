@@ -21,7 +21,7 @@ export const FEATURED_AI_SETUP: DrawerModule = {
  * 3×3 drawer grid order (Settings lives in footer).
  * Row 1: AI Setup · Dashboard · Follow up
  * Row 2: FAQ · Live Chat · Requests
- * Row 3: Integrations · Users · Subscription
+ * Row 3: Integrations · Team · Subscription
  */
 export const DRAWER_MODULES: DrawerModule[] = [
   { id: 'dashboard', titleKey: 'navDashboard', guestVisible: true },
@@ -30,7 +30,7 @@ export const DRAWER_MODULES: DrawerModule[] = [
   { id: 'livechat', titleKey: 'navLiveChat', guestVisible: true },
   { id: 'requests', titleKey: 'navRequests', guestVisible: true },
   { id: 'integrations', titleKey: 'integrations', guestVisible: true },
-  { id: 'users', titleKey: 'usersTitle', guestVisible: true, entitlement: 'users' },
+  { id: 'users', titleKey: 'navTeam', guestVisible: true, entitlement: 'users' },
   { id: 'subscription', titleKey: 'navSubscription', guestVisible: true },
 ];
 

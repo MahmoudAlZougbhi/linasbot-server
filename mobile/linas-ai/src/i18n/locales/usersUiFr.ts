@@ -1,5 +1,5 @@
 export const usersUiFr: Record<keyof typeof import('./usersUiEn').usersUiEn, string> = {
-  usersTitle: 'Utilisateurs',
+  usersTitle: 'Équipe',
   usersSub: 'Gérer l’accès de l’équipe',
   usersAdd: '+ Ajouter',
   usersAddTitle: 'Ajouter un utilisateur',

@@ -21,7 +21,7 @@ export type ControlItem = {
   group: 'operate' | 'account' | 'owner';
 };
 
-/** Product module order matches drawerModules (no Creative / Team alias). */
+/** Product module order matches drawerModules (Users is labeled Team). */
 export const CONTROL_ITEMS: ControlItem[] = [
   { id: 'dashboard', title: 'Dashboard / Status', subtitle: 'Workspace health & usage', group: 'operate' },
   { id: 'cm', title: 'AI Setup', subtitle: 'What your customer AI knows', group: 'operate' },
@@ -45,7 +45,7 @@ export const CONTROL_ITEMS: ControlItem[] = [
     group: 'operate',
   },
   { id: 'integrations', title: 'Integrations', subtitle: 'Instagram & Facebook', group: 'operate' },
-  { id: 'users', title: 'Users', subtitle: 'Manage team access', group: 'account' },
+  { id: 'users', title: 'Team', subtitle: 'Manage team access', group: 'account' },
   { id: 'subscription', title: 'Subscription', subtitle: 'Plans & billing', group: 'account' },
   { id: 'settings', title: 'Settings', subtitle: 'Preferences & legal', group: 'account' },
   {

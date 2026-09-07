@@ -3,7 +3,7 @@
  * Run: node --test mobile/linas-ai/tests/*.test.mjs
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -83,15 +83,13 @@ test('critical welcome/composer/auth keys exist in en/ar/fr', () => {
   }
 });
 
-test('OwnerWelcomeChips and chip data use i18n label keys', () => {
-  const chipsUi = readFileSync(join(root, 'src/features/chat/OwnerWelcomeChips.tsx'), 'utf8');
-  const chipData = readFileSync(join(root, 'src/features/chat/ownerWelcomeChipData.ts'), 'utf8');
-  assert.match(chipsUi, /useI18n/);
-  assert.match(chipsUi, /welcomeQuickStart/);
-  assert.match(chipData, /labelKey:\s*'welcomeChipLearnApp'/);
-  assert.match(chipData, /labelKey:\s*'welcomeChipSetupGuided'/);
-  assert.doesNotMatch(chipsUi, /Quick start/);
-  assert.doesNotMatch(chipData, /label:\s*'Want to learn/);
+test('Owner Copilot chat has no Quick start chips', () => {
+  const list = readFileSync(join(root, 'src/features/chat/ChatMessageList.tsx'), 'utf8');
+  const chat = readFileSync(join(root, 'src/features/chat/ChatScreen.tsx'), 'utf8');
+  assert.equal(existsSync(join(root, 'src/features/chat/OwnerWelcomeChips.tsx')), false);
+  assert.equal(existsSync(join(root, 'src/features/chat/ownerWelcomeChipData.ts')), false);
+  assert.doesNotMatch(list, /OwnerWelcomeChips|showOwnerWelcomeChips|welcomeQuickStart/);
+  assert.doesNotMatch(chat, /OwnerWelcomeChips|showOwnerWelcomeChips|onOwnerWelcomeChip/);
 });
 
 test('API client and owner stream send Accept-Language / reply_language', () => {

@@ -331,6 +331,7 @@ export const en = {
   settingsAboutLegal: 'About & Legal',
   navDashboard: 'Dashboard',
   navContentManagement: 'AI Setup',
+  navTeam: 'Team',
   navLiveChat: 'Live Chat',
   navSubscription: 'Subscription',
   navUsage: 'Usage & Credits',

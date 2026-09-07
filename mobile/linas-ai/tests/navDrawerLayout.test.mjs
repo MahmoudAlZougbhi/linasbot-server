@@ -79,6 +79,19 @@ describe('drawer layout and selected state', () => {
     assert.doesNotMatch(nav, /DrawerFooter/);
   });
 
+  it('module tiles and chat titles share drawerItem size and medium fill', () => {
+    const type = read('theme/typography.ts');
+    const grid = read('features/nav/DrawerNavGrid.tsx');
+    const rows = read('features/nav/HistoryRows.tsx');
+    const modules = read('features/nav/drawerModules.ts');
+    assert.match(type, /drawerItem:[\s\S]*?fontFamily:\s*bodyMedium/);
+    assert.match(type, /drawerItem:[\s\S]*?fontSize:\s*16/);
+    assert.match(type, /drawerItem:[\s\S]*?lineHeight:\s*22/);
+    assert.match(grid, /label:\s*\{\s*\.\.\.typography\.drawerItem,/);
+    assert.match(rows, /rowTitleDrawer:\s*\{\s*\.\.\.typography\.drawerItem,/);
+    assert.match(modules, /titleKey:\s*'navTeam'/);
+  });
+
   it('drawer body is one ScrollView; Recents is not a nested flex-1 scroller', () => {
     const recents = read('features/nav/DrawerRecents.tsx');
     const nav = read('features/nav/NavDrawer.tsx');

@@ -638,20 +638,21 @@ test('theme tokens include light and dark parity keys', () => {
   assert.match(tokens, /accent: '#008B8B'/);
 });
 
-test('chat AI replies use larger regular body; user bubble stays 16px', () => {
+test('chat AI and user bubbles keep size, medium fill like ChatGPT', () => {
   const typography = read('theme/typography.ts');
   const bubble = read('features/chat/ChatBubble.tsx');
   const aiBody = read('features/chat/AiMessageBody.tsx');
+  assert.match(typography, /chatAi:[\s\S]*?fontFamily:\s*bodyMedium/);
   assert.match(typography, /chatAi:[\s\S]*?fontSize:\s*17/);
   assert.match(typography, /chatAi:[\s\S]*?lineHeight:\s*24/);
-  assert.match(typography, /chatAi:[\s\S]*?fontWeight:\s*'400'/);
+  assert.doesNotMatch(typography, /chatAi:[\s\S]*?fontSize:\s*1[89]/);
+  assert.match(typography, /chatUser:[\s\S]*?fontFamily:\s*bodyMedium/);
   assert.match(typography, /chatUser:[\s\S]*?fontSize:\s*16/);
   assert.match(typography, /chatUser:[\s\S]*?lineHeight:\s*23/);
   assert.match(bubble, /textUser:[\s\S]*?typography\.chatUser/);
   assert.match(bubble, /textAi:[\s\S]*?typography\.chatAi/);
   assert.doesNotMatch(bubble, /textUser:[\s\S]*?fontSize:\s*1[0-5]/);
   assert.match(aiBody, /line:\s*\{[\s\S]*?typography\.chatAi/);
-  assert.doesNotMatch(aiBody, /line:\s*\{[^}]*bodyMedium/);
   assert.doesNotMatch(aiBody, /sectionTitle:[\s\S]*?fontSize:\s*1[0-5]/);
 });
 
