@@ -67,15 +67,24 @@ export const typography = {
     fontSize: 14,
     letterSpacing: 0.3,
   } satisfies TextStyle,
-  /** Chat AI reply body — slightly larger than user bubble, regular weight. */
+  /**
+   * Sidebar module tiles + chat titles — same 16px, medium fill like ChatGPT.
+   * Do not change size here without updating both DrawerNavGrid and HistoryRows.
+   */
+  drawerItem: {
+    fontFamily: bodyMedium,
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.15,
+  } satisfies TextStyle,
+  /** Owner Copilot AI reply — same 17px, medium fill (not larger). */
   chatAi: {
-    fontFamily: body,
+    fontFamily: bodyMedium,
     fontSize: 17,
     lineHeight: 24,
-    fontWeight: '400',
   } satisfies TextStyle,
   chatUser: {
-    fontFamily: body,
+    fontFamily: bodyMedium,
     fontSize: 16,
     lineHeight: 23,
   } satisfies TextStyle,

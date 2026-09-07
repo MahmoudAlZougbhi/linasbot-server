@@ -18,7 +18,6 @@ import { ChatScreenOverlays } from './ChatScreenOverlays';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStatusBanners } from './ChatStatusBanners';
 import { CreditsPausedBanner } from './CreditsPausedBanner';
-import { resolveOwnerModeForOutgoing } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
 import { buildApproveSendOpts, buildDiscardSendOpts } from './proposalBarActions';
 import { sendChatMessage } from './sendChatMessage';
@@ -159,16 +158,6 @@ export function ChatScreen({
               }
               c.scrollToBottom();
               void c.guest.send(prompt);
-            }}
-            showOwnerWelcomeChips={
-              isAuthenticated && !c.hasUserMessage && !c.turn.liveText && !c.turn.streaming
-            }
-            onOwnerWelcomeChip={(chip) => {
-              if (c.turn.creditsPaused) return;
-              const mode = resolveOwnerModeForOutgoing(chip.mode, chip.prompt);
-              c.setOwnerMode(mode);
-              c.scrollToBottom();
-              void c.turn.send(chip.prompt, { owner_mode: mode, reply_language: c.language });
             }}
             seedTypewriterMessageId={isAuthenticated ? c.owner.seedTypewriterMessageId : null}
             onSeedTypewriterDone={c.owner.clearSeedTypewriter}

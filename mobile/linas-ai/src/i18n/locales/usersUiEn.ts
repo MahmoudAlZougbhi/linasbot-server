@@ -1,5 +1,5 @@
 export const usersUiEn = {
-  usersTitle: 'Users',
+  usersTitle: 'Team',
   usersSub: 'Manage team access',
   usersAdd: '+ Add user',
   usersAddTitle: 'Add user',

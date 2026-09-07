@@ -138,8 +138,7 @@ const styles = StyleSheet.create({
     ...typography.chatAi,
   },
   bold: {
-    fontFamily: fonts.bodyMedium,
-    fontWeight: '500',
+    fontFamily: fonts.display,
   },
   sectionRow: {
     flexDirection: 'row',
@@ -149,13 +148,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sectionDash: {
-    fontFamily: fonts.bodyMedium,
-    fontWeight: '500',
+    fontFamily: fonts.display,
   },
   sectionTitle: {
     ...typography.chatAi,
-    fontFamily: fonts.bodyMedium,
-    fontWeight: '500',
+    fontFamily: fonts.display,
     flex: 1,
   },
   bulletRow: {

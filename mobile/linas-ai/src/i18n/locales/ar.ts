@@ -333,6 +333,7 @@ export const ar = {
   settingsAboutLegal: 'حول والتراخيص',
   navDashboard: 'لوحة التحكم',
   navContentManagement: 'إعداد الذكاء الاصطناعي',
+  navTeam: 'الفريق',
   navLiveChat: 'الدردشة المباشرة',
   navSubscription: 'الاشتراك',
   navUsage: 'الاستخدام والرصيد',

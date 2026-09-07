@@ -4,7 +4,7 @@ import { AppIcon } from '../../components/AppIcon';
 import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { ThemeColors } from '../../theme';
-import { fonts, radii, spacing, useTheme } from '../../theme';
+import { fonts, radii, spacing, typography, useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
 import { drawerGridModules } from './drawerModules';
 import { drawerTileBadge } from './drawerTileBadge';
@@ -131,11 +131,7 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontFamily: fonts.bodyMedium, fontSize: 10, lineHeight: 12 },
   label: {
-    fontFamily: fonts.body,
-    fontWeight: '400',
-    fontSize: 16,
-    lineHeight: 22,
-    letterSpacing: -0.15,
+    ...typography.drawerItem,
     textAlign: 'center',
   },
 });
