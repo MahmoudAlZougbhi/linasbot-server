@@ -72,3 +72,44 @@ def seed_connection(
     )
     session.commit()
     return row
+
+
+def seed_enhanced_binding(
+    session,
+    connection,
+    *,
+    status: str = "authorization_required",
+    reason_code: str = "authorization_required",
+    advertiser_token: str | None = None,
+    advertiser_id: str = "",
+    identity_id: str = "",
+    identity_type: str = "",
+    capabilities: dict | None = None,
+):
+    from datetime import UTC, datetime, timedelta
+
+    from services.tiktok_business.capabilities import empty_capabilities
+    from services.tiktok_business.repository_enhanced import TikTokEnhancedRepository
+
+    account_cred = connection.credential_id
+    repo = TikTokEnhancedRepository(session)
+    binding = repo.get_or_create_binding(tenant_id=connection.tenant_id, connection_id=connection.id)
+    if advertiser_token:
+        repo.store_advertiser_credential(
+            connection=connection,
+            access_token=advertiser_token,
+            refresh_token="ads-refresh",
+            scopes=["ads.read"],
+            access_expires_at=datetime.now(UTC) + timedelta(hours=12),
+            refresh_expires_at=datetime.now(UTC) + timedelta(days=30),
+        )
+        session.refresh(connection)
+        assert connection.credential_id == account_cred
+    binding.status = status
+    binding.reason_code = reason_code
+    binding.advertiser_id = advertiser_id
+    binding.identity_id = identity_id
+    binding.identity_type = identity_type
+    binding.capabilities = capabilities or empty_capabilities()
+    session.commit()
+    return binding

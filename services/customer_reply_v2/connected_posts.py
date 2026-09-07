@@ -103,6 +103,12 @@ def _normalize_post(raw: dict[str, Any], *, platform: str) -> dict[str, str] | N
     permalink = str(raw.get("permalink_url") or raw.get("permalink") or "").strip()
     thumb = str(raw.get("full_picture") or raw.get("thumbnail_url") or raw.get("media_url") or "").strip()
     media_type = str(raw.get("media_type") or ("post" if platform == "facebook" else "")).strip()
+    comments = raw.get("comments") if isinstance(raw.get("comments"), dict) else {}
+    summary = comments.get("summary") if isinstance(comments, dict) else {}
+    try:
+        comment_count = int(raw.get("comments_count") or (summary or {}).get("total_count") or 0)
+    except (TypeError, ValueError):
+        comment_count = 0
     return {
         "id": post_id,
         "preview": preview,
@@ -110,6 +116,7 @@ def _normalize_post(raw: dict[str, Any], *, platform: str) -> dict[str, str] | N
         "permalink": permalink,
         "thumbnail": thumb,
         "media_type": media_type,
+        "comment_count": str(comment_count),
     }
 
 
@@ -136,9 +143,9 @@ async def _graph_list_posts(
         return {"ok": False, "error": "account_id_missing", "posts": [], "allow_manual_post_id": True}
     edge = "posts" if platform == "facebook" else "media"
     fields = (
-        "id,message,created_time,full_picture,permalink_url"
+        "id,message,created_time,full_picture,permalink_url,comments.summary(true).limit(0)"
         if platform == "facebook"
-        else "id,caption,media_type,media_url,permalink,timestamp,thumbnail_url"
+        else "id,caption,media_type,media_url,permalink,timestamp,thumbnail_url,comments_count"
     )
     params = {"fields": fields, "limit": str(limit)}
     if after:
@@ -237,6 +244,7 @@ def _tiktok_connected_posts(*, tenant_id: str, connection_id: str, after: str, l
                 "permalink": row.share_url,
                 "thumbnail": row.thumbnail_url,
                 "media_type": "video",
+                "comment_count": "0",
             }
             for row in rows
         ]

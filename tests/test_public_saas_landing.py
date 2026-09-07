@@ -43,6 +43,7 @@ def test_meta_webhook_and_oauth_routes_still_registered() -> None:
     assert "/webhook" in paths
     assert "/webhook/meta-messaging" in paths
     assert "/oauth/tiktok/callback" in paths
+    assert "/oauth/tiktok/ads/callback" in paths
     assert "/webhooks/tiktok" in paths
     assert "/oauth/meta/deauthorize" in paths
     assert "/oauth/meta/data-deletion" in paths

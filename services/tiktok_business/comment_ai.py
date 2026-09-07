@@ -9,24 +9,34 @@ from db.session import whatsapp_session
 from services.cm.actions import comments_action_enabled
 from services.credit_ai_gate import ai_generation_blocked
 from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
-from services.tiktok_business.comment_context import build_tiktok_comment_context, tiktok_video_source
+from services.tiktok_business.comment_context import tiktok_video_source
 from services.tiktok_business.comment_publish import create_comment_reply
 from services.tiktok_business.errors import TikTokApiError
 from services.tiktok_business.oauth import ensure_fresh_token
+from services.tiktok_business.post_context import resolve_tiktok_post_context
 from services.tiktok_business.repository import TikTokRepository
 from services.tiktok_business.repository_content import TikTokContentRepository
 from services.tiktok_business.scopes import comments_manage_ready
-from services.tiktok_business.video_source import fetch_tiktok_video_item
 
 MAX_ATTEMPTS = 5
 
 
 def _log_usage(
-    *, tenant_id: str, comment_id: str, outcome: str, model: str = "", tokens: int = 0, cost: float = 0.0
+    *,
+    tenant_id: str,
+    comment_id: str,
+    outcome: str,
+    model: str = "",
+    tokens: int = 0,
+    cost: float = 0.0,
+    diagnostics: dict[str, Any] | None = None,
 ) -> None:
     try:
         from services.interaction_flow_logger import log_interaction
 
+        extra = {"tenant_id": tenant_id}
+        if diagnostics:
+            extra.update({k: v for k, v in diagnostics.items() if k not in {"access_token", "refresh_token"}})
         log_interaction(
             user_id=f"tiktok:{comment_id}",
             user_message="[redacted]",
@@ -39,7 +49,7 @@ def _log_usage(
             model=model or None,
             tokens=tokens or None,
             cost_usd=cost or None,
-            cm_diagnostics={"tenant_id": tenant_id},
+            cm_diagnostics=extra,
         )
     except Exception:
         pass
@@ -72,6 +82,16 @@ async def process_tiktok_comment_ai(
             session.commit()
             _log_usage(tenant_id=tenant_id, comment_id=comment_id, outcome="skipped")
             return {"skipped": True, "reason": "automation_off"}
+        from services.comments_inbox.watchlist import comment_post_allowed
+
+        watched_id = item_id or comment.video_item_id
+        if not comment_post_allowed(tenant_id, "tiktok", watched_id):
+            job.delivery_status = "skipped"
+            job.last_error = "post_not_selected"
+            content.mark_comment_ai_processed(tenant_id=tenant_id, comment_id=comment_id)
+            session.commit()
+            _log_usage(tenant_id=tenant_id, comment_id=comment_id, outcome="skipped")
+            return {"skipped": True, "reason": "post_not_selected"}
         if not comments_manage_ready(connection.granted_scopes):
             job.delivery_status = "skipped"
             job.last_error = "missing_manage_comment_scope"
@@ -87,26 +107,34 @@ async def process_tiktok_comment_ai(
         text = comment.text
         video_id = item_id or comment.video_item_id
         media = content.get_media(tenant_id=tenant_id, item_id=video_id)
-        caption = str(getattr(media, "caption", "") or "") if media else ""
-        thumbnail_url = str(getattr(media, "thumbnail_url", "") or "") if media else ""
-        video_url = tiktok_video_source(media) if media else ""
+        stored_caption = str(getattr(media, "caption", "") or "") if media else ""
+        stored_thumb = str(getattr(media, "thumbnail_url", "") or "") if media else ""
+        stored_video = tiktok_video_source(media) if media else ""
         token = await ensure_fresh_token(repo, connection)
         open_id = connection.open_id
         session.commit()
 
-    live = await fetch_tiktok_video_item(access_token=token, open_id=open_id, video_id=video_id)
-    caption = live.get("caption") or caption
-    thumbnail_url = live.get("thumbnail_url") or thumbnail_url
-    video_url = live.get("video_url") or video_url
-    comment_ctx = await build_tiktok_comment_context(
+    resolved = await resolve_tiktok_post_context(
         tenant_id=tenant_id,
+        connection_id=connection_id,
         comment_text=text,
         comment_id=comment_id,
         video_id=video_id,
-        caption=caption,
-        thumbnail_url=thumbnail_url,
-        video_url=video_url,
+        account_token=token,
+        open_id=open_id,
+        stored_caption=stored_caption,
+        stored_thumbnail=stored_thumb,
+        stored_video_url=stored_video,
     )
+    comment_ctx = dict(resolved.get("comment_context") or {})
+    caption = str(resolved.get("caption") or stored_caption or "")
+    ctx_diag = {
+        "context_level": resolved.get("context_level"),
+        "reason_code": (resolved.get("diagnostics") or {}).get("reason_code"),
+        "media_refresh_attempted": (resolved.get("diagnostics") or {}).get("media_refresh_attempted"),
+        "frame_count": comment_ctx.get("frame_count"),
+        "transcript_chars": len(str(comment_ctx.get("video_transcript") or "")),
+    }
     outcome = await run_customer_reply_v2_comment(
         tenant_id=tenant_id,
         comment_text=text,
@@ -143,6 +171,7 @@ async def process_tiktok_comment_ai(
             model=model,
             tokens=tokens,
             cost=cost,
+            diagnostics=ctx_diag,
         )
         return {"skipped": True, "reason": reason or "ai_no_reply"}
 
@@ -195,6 +224,7 @@ async def process_tiktok_comment_ai(
             model=model,
             tokens=tokens,
             cost=cost,
+            diagnostics=ctx_diag,
         )
         if exc.retryable:
             raise
@@ -210,5 +240,13 @@ async def process_tiktok_comment_ai(
         job.tiktok_reply_id = str(published.get("comment_id") or published.get("reply_id") or "")[:64]
         content.mark_comment_ai_processed(tenant_id=tenant_id, comment_id=comment_id)
         session.commit()
-    _log_usage(tenant_id=tenant_id, comment_id=comment_id, outcome="ok", model=model, tokens=tokens, cost=cost)
+    _log_usage(
+        tenant_id=tenant_id,
+        comment_id=comment_id,
+        outcome="ok",
+        model=model,
+        tokens=tokens,
+        cost=cost,
+        diagnostics=ctx_diag,
+    )
     return {"ok": True, "request_id": str(published.get("request_id") or "")}

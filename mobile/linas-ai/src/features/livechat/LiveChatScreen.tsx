@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { useI18n } from '../../i18n/LanguageContext';
 import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
+import { CommentsInbox } from './comments/CommentsInbox';
+import { CommentThreadScreen } from './comments/CommentThreadScreen';
+import { LiveChatSurfaceSwitch, type LiveChatSurface } from './comments/LiveChatSurfaceSwitch';
+import type { CommentMediaItem, CommentPlatform } from './comments/commentsInboxTypes';
 import { LiveChatInbox } from './LiveChatInbox';
 import { LiveChatThread } from './LiveChatThread';
 import type { LiveChatItem } from './liveChatTypes';
@@ -9,19 +14,16 @@ import { channelLabel, chatTitle } from './liveChatTypes';
 import { useLiveChatInbox } from './useLiveChatInbox';
 
 type Props = {
-  /** Open a specific conversation (from owner notification deep link). */
   initialOpen?: { userId: string; conversationId: string } | null;
 };
 
-/**
- * Operator Live Chat inbox — same `/api/live-chat/*` APIs as the dashboard.
- * Completely separate from owner/guest Linas AI chat.
- * Thread → inbox: re-open Live Chat from the side menu (no Back chevron).
- */
 export function LiveChatScreen({ initialOpen = null }: Props) {
+  const { tr } = useI18n();
   const inbox = useLiveChatInbox();
   const nav = useModuleNav();
+  const [surface, setSurface] = useState<LiveChatSurface>('chats');
   const [selected, setSelected] = useState<LiveChatItem | null>(null);
+  const [commentPost, setCommentPost] = useState<{ platform: CommentPlatform; post: CommentMediaItem } | null>(null);
   const [deepLinkTried, setDeepLinkTried] = useState(false);
   const focusNonceSeen = useRef(nav.areaFocusNonce);
 
@@ -29,8 +31,8 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
     if (nav.activeArea !== 'livechat') return;
     if (focusNonceSeen.current === nav.areaFocusNonce) return;
     focusNonceSeen.current = nav.areaFocusNonce;
-    // Re-tapping Live Chat in the drawer returns to inbox (keep-mounted safe).
     setSelected(null);
+    setCommentPost(null);
     inbox.reloadQuiet();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadQuiet is stable enough; avoid inbox object churn
   }, [nav.areaFocusNonce, nav.activeArea]);
@@ -44,12 +46,13 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
         c.user_id === initialOpen.userId && c.conversation_id === initialOpen.conversationId,
     );
     if (match) {
+      setSurface('chats');
       setSelected(match);
       setDeepLinkTried(true);
       return;
     }
-    // Conversation may not be on the first page — open a synthetic stub so the thread API loads.
     if (initialOpen.userId && initialOpen.conversationId) {
+      setSurface('chats');
       setSelected({
         user_id: initialOpen.userId,
         conversation_id: initialOpen.conversationId,
@@ -68,14 +71,29 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
     );
   }
 
+  if (commentPost) {
+    return (
+      <ScreenChrome
+        title={commentPost.post.caption.trim() || tr('liveCommentsUntitled')}
+        subtitle={tr('liveCommentsThreadTitle')}
+        onBack={() => setCommentPost(null)}
+      >
+        <CommentThreadScreen platform={commentPost.platform} post={commentPost.post} />
+      </ScreenChrome>
+    );
+  }
+
   return (
-    <ScreenChrome title="Live Chat" subtitle="All customer conversations">
-      <LiveChatInbox
-        inbox={inbox}
-        onOpenChat={(chat) => {
-          setSelected(chat);
-        }}
-      />
+    <ScreenChrome
+      title="Live Chat"
+      subtitle={surface === 'comments' ? tr('liveCommentsSubtitle') : 'All customer conversations'}
+    >
+      <LiveChatSurfaceSwitch value={surface} onChange={setSurface} />
+      {surface === 'comments' ? (
+        <CommentsInbox onOpenThread={(platform, post) => setCommentPost({ platform, post })} />
+      ) : (
+        <LiveChatInbox inbox={inbox} onOpenChat={(chat) => setSelected(chat)} />
+      )}
     </ScreenChrome>
   );
 }

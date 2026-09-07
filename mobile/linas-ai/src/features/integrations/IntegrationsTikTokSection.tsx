@@ -7,8 +7,9 @@ import {
   channelSubtitle,
   type IntegrationRow,
 } from './IntegrationChannelCard';
-import { disconnectTikTok, startTikTokOAuth } from './integrationsOAuth';
+import { disconnectTikTok, startTikTokEnhancedOAuth, startTikTokOAuth } from './integrationsOAuth';
 import type { IntegrationListRow } from './integrationsSchemas';
+import { TikTokEnhancedContextCard } from './TikTokEnhancedContextCard';
 
 type Row = IntegrationListRow;
 
@@ -26,6 +27,24 @@ type Props = {
   title: string;
   soon: boolean;
 };
+
+export async function connectTikTokEnhanced(args: {
+  onBusy: (platform: string | null) => void;
+  onError: (message: string | null) => void;
+  onAuthGate: () => void;
+  actionError: string;
+}): Promise<void> {
+  args.onBusy('tiktok');
+  args.onError(null);
+  try {
+    await startTikTokEnhancedOAuth();
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) args.onAuthGate();
+    else args.onError(args.actionError);
+  } finally {
+    args.onBusy(null);
+  }
+}
 
 export async function connectTikTokChannel(args: {
   onBusy: (platform: string | null) => void;
@@ -101,26 +120,42 @@ export function IntegrationsTikTokSection({
   soon,
 }: Props) {
   return (
-    <IntegrationChannelCard
-      key="tiktok"
-      row={row as IntegrationRow}
-      title={title}
-      soon={soon}
-      busy={busy}
-      busyToggleKey={busyToggleKey}
-      actionsDisabled={actionsDisabled}
-      tr={tr}
-      onToggle={onToggle}
-      onReconcileComments={() => undefined}
-      onConnect={() =>
-        void connectTikTokChannel({
-          onBusy,
-          onError,
-          onAuthGate,
-          actionError: tr('integrationsActionError'),
-        })
-      }
-      onOpenMenu={onOpenMenu}
-    />
+    <>
+      <IntegrationChannelCard
+        key="tiktok"
+        row={row as IntegrationRow}
+        title={title}
+        soon={soon}
+        busy={busy}
+        busyToggleKey={busyToggleKey}
+        actionsDisabled={actionsDisabled}
+        tr={tr}
+        onToggle={onToggle}
+        onReconcileComments={() => undefined}
+        onConnect={() =>
+          void connectTikTokChannel({
+            onBusy,
+            onError,
+            onAuthGate,
+            actionError: tr('integrationsActionError'),
+          })
+        }
+        onOpenMenu={onOpenMenu}
+      />
+      <TikTokEnhancedContextCard
+        row={row}
+        busy={busy}
+        actionsDisabled={actionsDisabled}
+        tr={tr}
+        onEnable={() =>
+          void connectTikTokEnhanced({
+            onBusy,
+            onError,
+            onAuthGate,
+            actionError: tr('integrationsActionError'),
+          })
+        }
+      />
+    </>
   );
 }

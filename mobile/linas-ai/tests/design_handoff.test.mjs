@@ -477,7 +477,8 @@ test('Live Chat inbox matches design handoff (search, All/Human, platform row)',
   const icon = read('features/livechat/PlatformChannelIcon.tsx');
   const helpers = read('features/livechat/liveChatHelpers.ts');
   const thread = read('features/livechat/LiveChatThread.tsx');
-  assert.match(screen, /subtitle="All customer conversations"/);
+  assert.match(screen, /All customer conversations/);
+  assert.match(screen, /LiveChatSurfaceSwitch/);
   assert.match(search, /borderRadius:\s*radii\.pill/);
   assert.match(search, /placeholder="Search conversations"/);
   assert.doesNotMatch(search, /feather\('filter'\)/);

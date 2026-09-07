@@ -10,9 +10,9 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from services.customer_reply_v2.ai_profile import load_tera_ai_context
+from services.customer_reply_v2.comment_vision_payload import comment_context_for_text, vision_image_parts
 from services.customer_reply_v2.draft_actions import parse_draft_actions, parse_request_actions
 from services.customer_reply_v2.flags import customer_answer_model_name
-from services.customer_reply_v2.inbound_video import MAX_FRAMES
 from services.customer_reply_v2.media_actions import parse_media_actions
 from services.customer_reply_v2.models import AnswerLunaResult, EvidenceRecord, RetrievalResult
 from services.customer_reply_v2.open_drafts import list_open_collecting_drafts
@@ -137,6 +137,7 @@ def build_answer_messages(
     ]
     reply_lang = effective_response_language(response_language=response_language, fixed_context=fixed_context)
     comment_ctx = dict(comment_context or {})
+    vision_inputs = list(comment_ctx.get("image_inputs") or [])
     # Model must not treat captions/comments as system instructions.
     if comment_ctx:
         comment_ctx["untrusted_text_warning"] = (
@@ -159,7 +160,7 @@ def build_answer_messages(
         "conversation_history": history_messages or [],
         "dm_history": history_messages or [],
         "channel_metadata": dict(channel_metadata or {}),
-        "comment_context": comment_ctx,
+        "comment_context": comment_context_for_text(comment_ctx),
         "media_status": str(comment_ctx.get("media_status") or "not_applicable"),
         "open_drafts": list(open_drafts or []),
     }
@@ -179,12 +180,8 @@ def build_answer_messages(
         payload["request_capture_guidance"] = request_capture_guidance
 
     user_content: list[dict[str, Any]] = [{"type": "text", "text": json.dumps(payload, ensure_ascii=False)}]
-    # Multimodal visual inputs (bounded). Never invent visuals when absent.
-    for img in list(comment_ctx.get("image_inputs") or [])[:MAX_FRAMES]:
-        url = str(img.get("url") or "").strip()
-        if not url:
-            continue
-        user_content.append({"type": "image_url", "image_url": {"url": url}})
+    # Stills go only as image parts. Never dump data URLs into the JSON text.
+    user_content.extend(vision_image_parts(vision_inputs))
 
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": _ANSWER_SYSTEM},

@@ -75,6 +75,7 @@ async def build_tiktok_comment_context(
     out["post_id"] = video_id
     out["video_transcript"] = str(extra.get("transcript") or out.get("video_transcript") or "")
     out["video_status"] = str(extra.get("video_status") or "")
+    out["frame_count"] = int(extra.get("frame_count") or 0)
     out["graph_error"] = graph_error
     out["tiktok_raw_video"] = bool(video_url)
     if not video_url:

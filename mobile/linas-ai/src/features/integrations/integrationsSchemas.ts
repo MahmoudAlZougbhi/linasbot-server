@@ -38,6 +38,23 @@ export const FeaturesSchema = z
   })
   .optional();
 
+export const PostContextSchema = z
+  .object({
+    level: z.enum(['basic', 'enhanced']).optional(),
+  })
+  .optional();
+
+export const EnhancedVideoContextSchema = z
+  .object({
+    label: z.string().optional(),
+    status: z.string().optional(),
+    reason_code: z.string().nullable().optional(),
+    user_message: z.string().optional(),
+    can_authorize: z.boolean().optional(),
+    last_probe_at: z.number().nullable().optional(),
+  })
+  .optional();
+
 export const RowSchema = z.object({
   platform: z.string(),
   label: z.string(),
@@ -54,6 +71,8 @@ export const RowSchema = z.object({
   account: AccountDisplaySchema.nullable().optional(),
   accounts: z.array(AccountDisplaySchema).optional(),
   features: FeaturesSchema,
+  post_context: PostContextSchema,
+  enhanced_video_context: EnhancedVideoContextSchema,
 });
 
 export const ListSchema = z.object({

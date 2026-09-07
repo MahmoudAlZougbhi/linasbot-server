@@ -256,8 +256,10 @@ def dispatch_retrieval_tool(name: str, args: dict[str, Any], ctx: ToolContext) -
         return {"ok": True, "data": {"messages": list(ctx.dm_window)}}
 
     if name == "get_comment_post_context":
+        from services.customer_reply_v2.comment_vision_payload import comment_context_for_text
+
         ctx.audit.append({"tool": name, "ok": True, "class": "comment_context"})
-        return {"ok": True, "data": dict(ctx.comment_context)}
+        return {"ok": True, "data": comment_context_for_text(ctx.comment_context)}
 
     if name in PRODUCT_TOOL_NAMES:
         return dispatch_product_tool(name, args, ctx)

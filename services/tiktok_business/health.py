@@ -15,6 +15,7 @@ def tiktok_business_readiness() -> dict[str, Any]:
         "required": False,
         "redirect_uri": tiktok_redirect_uri() if settings.configured else None,
         "comments_supported_in_code": True,
+        "enhanced_video_context_supported_in_code": True,
         "messaging_supported_in_code": True,
         "messaging_requires_tiktok_approval": True,
         "config_keys_present": tiktok_config_key_presence(),
