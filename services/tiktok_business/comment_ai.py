@@ -9,12 +9,14 @@ from db.session import whatsapp_session
 from services.cm.actions import comments_action_enabled
 from services.credit_ai_gate import ai_generation_blocked
 from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
+from services.tiktok_business.comment_context import build_tiktok_comment_context, tiktok_video_source
 from services.tiktok_business.comment_publish import create_comment_reply
 from services.tiktok_business.errors import TikTokApiError
 from services.tiktok_business.oauth import ensure_fresh_token
 from services.tiktok_business.repository import TikTokRepository
 from services.tiktok_business.repository_content import TikTokContentRepository
 from services.tiktok_business.scopes import comments_manage_ready
+from services.tiktok_business.video_source import fetch_tiktok_video_item
 
 MAX_ATTEMPTS = 5
 
@@ -84,8 +86,27 @@ async def process_tiktok_comment_ai(
             return {"skipped": True, "reason": "insufficient_credits"}
         text = comment.text
         video_id = item_id or comment.video_item_id
+        media = content.get_media(tenant_id=tenant_id, item_id=video_id)
+        caption = str(getattr(media, "caption", "") or "") if media else ""
+        thumbnail_url = str(getattr(media, "thumbnail_url", "") or "") if media else ""
+        video_url = tiktok_video_source(media) if media else ""
+        token = await ensure_fresh_token(repo, connection)
+        open_id = connection.open_id
         session.commit()
 
+    live = await fetch_tiktok_video_item(access_token=token, open_id=open_id, video_id=video_id)
+    caption = live.get("caption") or caption
+    thumbnail_url = live.get("thumbnail_url") or thumbnail_url
+    video_url = live.get("video_url") or video_url
+    comment_ctx = await build_tiktok_comment_context(
+        tenant_id=tenant_id,
+        comment_text=text,
+        comment_id=comment_id,
+        video_id=video_id,
+        caption=caption,
+        thumbnail_url=thumbnail_url,
+        video_url=video_url,
+    )
     outcome = await run_customer_reply_v2_comment(
         tenant_id=tenant_id,
         comment_text=text,
@@ -93,6 +114,9 @@ async def process_tiktok_comment_ai(
         comments_enabled=True,
         comment_id=comment_id,
         post_id=video_id,
+        caption=caption,
+        media_type="video",
+        comment_context=comment_ctx,
         provider_sender_id=comment_id,
     )
     reply_text = str(getattr(outcome, "reply", None) or "").strip()

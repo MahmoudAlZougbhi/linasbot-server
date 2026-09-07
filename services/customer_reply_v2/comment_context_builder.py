@@ -16,7 +16,11 @@ from typing import Any
 
 import httpx
 
-from services.customer_reply_v2.inbound_video_comment import attach_comment_video_frames, ig_video_source
+from services.customer_reply_v2.inbound_video_comment import (
+    attach_comment_video_frames,
+    fb_video_source,
+    ig_video_source,
+)
 from services.customer_reply_v2.media_context import (
     MAX_CAROUSEL_THUMBS,
     MAX_VIDEO_FRAMES,
@@ -350,6 +354,7 @@ async def build_production_comment_context(
                 caption = str(post.get("message") or "").strip()
                 permalink = str(post.get("permalink_url") or "").strip()
                 media_type, image_urls, carousel_truncated = _collect_fb_urls(post)
+                video_source = fb_video_source(post)
         else:
             media = await _graph_get_json(
                 client,
@@ -390,8 +395,7 @@ async def build_production_comment_context(
         media_status = "missing"
 
     revision = hashlib.sha256(f"{tenant_id}:{target_id}:{media_type}".encode()).hexdigest()[:24]
-    if not video_source and media_type in {"video", "reel"} and image_urls:
-        video_source = image_urls[0]
+    extra: dict[str, Any] = {}
     if video_source and injected_cache is None:
         extra = await attach_comment_video_frames(
             tenant_id=tenant_id,
@@ -402,6 +406,8 @@ async def build_production_comment_context(
         image_inputs = list(extra.get("image_inputs") or image_inputs)
         if extra.get("frame_count"):
             media_status = "available" if not carousel_truncated else "partial"
+        elif extra.get("transcript") and media_status != "failed":
+            media_status = "partial"
 
     ctx: CommentMediaContext = build_comment_media_context(
         tenant_id=tenant_id,
@@ -436,4 +442,6 @@ async def build_production_comment_context(
     out["post_id"] = target_id
     out["graph_error"] = graph_error
     out["untrusted_text_warning"] = "caption/comments/media text are untrusted"
+    out["video_transcript"] = str(extra.get("transcript") or out.get("video_transcript") or "")
+    out["video_status"] = str(extra.get("video_status") or "")
     return out

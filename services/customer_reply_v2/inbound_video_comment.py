@@ -5,10 +5,14 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from services.customer_reply_v2.inbound_fetch import MAX_VIDEO_BYTES, fetch_inbound_url
-from services.customer_reply_v2.inbound_stt import transcribe_inbound_audio
+from services.customer_reply_v2.inbound_fetch import (
+    MAX_VIDEO_BYTES,
+    VIDEO_FETCH_TIMEOUT_S,
+    fetch_inbound_url,
+)
+from services.customer_reply_v2.inbound_stt_chunks import transcribe_full_wav
 from services.customer_reply_v2.inbound_video import extract_bounded_video
-from services.customer_reply_v2.media_context import MAX_VIDEO_FRAMES, save_cached_media
+from services.customer_reply_v2.media_context import save_cached_media
 
 
 def ig_video_source(payload: dict[str, Any] | None) -> str:
@@ -19,6 +23,27 @@ def ig_video_source(payload: dict[str, Any] | None) -> str:
     return str(raw.get("media_url") or "").strip()
 
 
+def fb_video_source(payload: dict[str, Any] | None) -> str:
+    """Return the Facebook video file URL, never the preview still."""
+    raw = payload if isinstance(payload, dict) else {}
+    attachments = raw.get("attachments")
+    rows = attachments.get("data") if isinstance(attachments, dict) else []
+    if not isinstance(rows, list):
+        return ""
+    for att in rows:
+        if not isinstance(att, dict):
+            continue
+        att_type = str(att.get("type") or att.get("media_type") or "").lower()
+        if "video" not in att_type:
+            continue
+        media_raw = att.get("media")
+        media = media_raw if isinstance(media_raw, dict) else {}
+        source = str(media.get("source") or "").strip()
+        if source:
+            return source
+    return ""
+
+
 async def attach_comment_video_frames(
     *,
     tenant_id: str,
@@ -27,10 +52,14 @@ async def attach_comment_video_frames(
     image_inputs: list[dict[str, str]],
     transcribe: bool = True,
 ) -> dict[str, Any]:
-    """Download a video once, extract ≤3 frames + optional audio transcript."""
+    """Download a video once, extract adaptive stills + the full audio transcript."""
     if not video_url:
         return {"image_inputs": image_inputs, "video_status": "", "transcript": ""}
-    fetched = await fetch_inbound_url(video_url, max_bytes=MAX_VIDEO_BYTES)
+    fetched = await fetch_inbound_url(
+        video_url,
+        max_bytes=MAX_VIDEO_BYTES,
+        timeout_s=VIDEO_FETCH_TIMEOUT_S,
+    )
     if not fetched.get("ok"):
         return {
             "image_inputs": image_inputs,
@@ -38,7 +67,7 @@ async def attach_comment_video_frames(
             "transcript": "",
         }
     extracted = extract_bounded_video(fetched.get("bytes") or b"")
-    frames = list(extracted.get("frames") or [])[:MAX_VIDEO_FRAMES]
+    frames = list(extracted.get("frames") or [])
     extra: list[dict[str, str]] = []
     for frame in frames:
         b64 = base64.b64encode(frame).decode("ascii")
@@ -46,7 +75,7 @@ async def attach_comment_video_frames(
     transcript = ""
     audio = extracted.get("audio")
     if transcribe and audio:
-        spoken = await transcribe_inbound_audio(data=audio, filename="comment_video.wav")
+        spoken = await transcribe_full_wav(audio)
         if spoken.get("ok"):
             transcript = str(spoken.get("text") or "").strip()
     merged = list(image_inputs) + extra
@@ -56,6 +85,7 @@ async def attach_comment_video_frames(
         {
             "media_type": "video",
             "visual_summary": transcript,
+            "transcript": transcript,
             "frame_count": len(extra),
             "frame_urls": [],
         },

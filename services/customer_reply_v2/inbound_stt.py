@@ -7,7 +7,7 @@ from typing import Any
 
 from services.providers.base import provider_config
 
-MAX_AUDIO_BYTES = 15 * 1024 * 1024
+MAX_AUDIO_BYTES = 25 * 1024 * 1024
 
 
 async def transcribe_inbound_audio(*, data: bytes, filename: str = "voice.ogg") -> dict[str, Any]:

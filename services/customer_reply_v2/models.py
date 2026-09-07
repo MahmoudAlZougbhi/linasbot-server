@@ -178,6 +178,7 @@ class CommentMediaContext:
     image_urls: list[str] = field(default_factory=list)  # bounded remote URLs
     image_inputs: list[dict[str, str]] = field(default_factory=list)  # multimodal {url, kind}
     cached_visual_summary: str = ""
+    video_transcript: str = ""
     frame_count: int = 0
     uncertainty_required: bool = False
     media_revision: str = ""
