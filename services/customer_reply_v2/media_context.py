@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from services.customer_reply_v2.flags import customer_media_context_enabled
+from services.customer_reply_v2.inbound_video import MAX_FRAMES as MAX_VIDEO_FRAMES
 from services.customer_reply_v2.models import CommentMediaContext
 from storage.persistent_storage import get_data_root
 
 MAX_CAROUSEL_THUMBS = 3
-MAX_VIDEO_FRAMES = 3
 
 
 def _cache_path(tenant_id: str, media_revision: str) -> Path:
@@ -101,6 +101,7 @@ def build_comment_media_context(
 
     urls = list(image_urls or [])[:MAX_CAROUSEL_THUMBS]
     summary = str((cached or {}).get("visual_summary") or "")
+    transcript = str((cached or {}).get("transcript") or summary)
     frames = int((cached or {}).get("frame_count") or 0)
     uncertainty = False
     inputs = list(image_inputs or [])
@@ -140,8 +141,9 @@ def build_comment_media_context(
         current_author_id=current_author_id,
         current_author_name=current_author_name,
         image_urls=urls,
-        image_inputs=inputs[: MAX_CAROUSEL_THUMBS + 1],
+        image_inputs=_bounded_image_inputs(inputs),
         cached_visual_summary=summary,
+        video_transcript=transcript,
         frame_count=frames or len(inputs),
         uncertainty_required=uncertainty,
         media_revision=revision,
@@ -170,7 +172,8 @@ def seed_video_cache_for_tests(
             "caption": caption,
             "visual_summary": visual_summary,
             "frame_urls": list(frame_urls or [])[:MAX_VIDEO_FRAMES],
-            "frame_count": min(len(frame_urls or []), MAX_VIDEO_FRAMES) or (3 if visual_summary else 0),
+            "frame_count": min(len(frame_urls or []), MAX_VIDEO_FRAMES) or (12 if visual_summary else 0),
+            "transcript": visual_summary,
         },
     )
 
@@ -189,6 +192,7 @@ def media_context_to_dict(ctx: CommentMediaContext, *, for_model: bool = False) 
         "image_url_count": len(ctx.image_urls),
         "image_input_count": len(ctx.image_inputs),
         "cached_visual_summary": ctx.cached_visual_summary,
+        "video_transcript": ctx.video_transcript or ctx.cached_visual_summary,
         "frame_count": ctx.frame_count,
         "uncertainty_required": ctx.uncertainty_required,
         "media_revision": ctx.media_revision,
@@ -199,6 +203,13 @@ def media_context_to_dict(ctx: CommentMediaContext, *, for_model: bool = False) 
         "saw_visuals": ctx.saw_visuals,
     }
     if for_model:
-        # Pass multimodal inputs to Answer Tera; never dump raw secrets.
-        out["image_inputs"] = list(ctx.image_inputs)[: MAX_CAROUSEL_THUMBS + 1]
+        out["image_inputs"] = _bounded_image_inputs(list(ctx.image_inputs))
     return out
+
+
+def _bounded_image_inputs(inputs: list[dict[str, str]]) -> list[dict[str, str]]:
+    frames = [row for row in inputs if str(row.get("kind") or "") == "video_frame"]
+    stills = [row for row in inputs if str(row.get("kind") or "") != "video_frame"]
+    if frames:
+        return frames[:MAX_VIDEO_FRAMES]
+    return stills[:MAX_CAROUSEL_THUMBS]

@@ -91,6 +91,11 @@ class TikTokContentRepository:
             rows = [row for row in rows if row.item_id < after][:limit]
         return rows
 
+    def get_media(self, *, tenant_id: str, item_id: str) -> TikTokMedia | None:
+        return self.session.scalar(
+            select(TikTokMedia).where(TikTokMedia.tenant_id == tenant_id, TikTokMedia.item_id == item_id)
+        )
+
     def upsert_comment(
         self,
         *,

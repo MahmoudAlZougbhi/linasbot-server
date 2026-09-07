@@ -11,10 +11,11 @@ from services.ssrf_guard import SSRFValidationError, validate_fetch_url
 
 MAX_REDIRECTS = 3
 FETCH_TIMEOUT_S = 12.0
+VIDEO_FETCH_TIMEOUT_S = 45.0
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_FILE_BYTES = 8 * 1024 * 1024
-MAX_AUDIO_BYTES = 15 * 1024 * 1024
-MAX_VIDEO_BYTES = 12 * 1024 * 1024
+MAX_AUDIO_BYTES = 25 * 1024 * 1024
+MAX_VIDEO_BYTES = 48 * 1024 * 1024
 
 
 def max_bytes_for_kind(kind: str) -> int:
@@ -27,12 +28,12 @@ def max_bytes_for_kind(kind: str) -> int:
     return MAX_FILE_BYTES
 
 
-async def fetch_inbound_url(url: str, *, max_bytes: int) -> dict[str, Any]:
+async def fetch_inbound_url(url: str, *, max_bytes: int, timeout_s: float | None = None) -> dict[str, Any]:
     try:
         current = validate_fetch_url(url, allowed_schemes=("https",))
     except SSRFValidationError as exc:
         return {"ok": False, "error": f"ssrf_blocked:{exc}", "bytes": b"", "mime": "", "url": ""}
-    timeout = httpx.Timeout(FETCH_TIMEOUT_S)
+    timeout = httpx.Timeout(float(timeout_s) if timeout_s and timeout_s > 0 else FETCH_TIMEOUT_S)
     try:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
             for _ in range(MAX_REDIRECTS + 1):

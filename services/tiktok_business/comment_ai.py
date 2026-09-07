@@ -9,6 +9,7 @@ from db.session import whatsapp_session
 from services.cm.actions import comments_action_enabled
 from services.credit_ai_gate import ai_generation_blocked
 from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
+from services.tiktok_business.comment_context import build_tiktok_comment_context, tiktok_video_source
 from services.tiktok_business.comment_publish import create_comment_reply
 from services.tiktok_business.errors import TikTokApiError
 from services.tiktok_business.oauth import ensure_fresh_token
@@ -84,8 +85,21 @@ async def process_tiktok_comment_ai(
             return {"skipped": True, "reason": "insufficient_credits"}
         text = comment.text
         video_id = item_id or comment.video_item_id
+        media = content.get_media(tenant_id=tenant_id, item_id=video_id)
+        caption = str(getattr(media, "caption", "") or "") if media else ""
+        thumbnail_url = str(getattr(media, "thumbnail_url", "") or "") if media else ""
+        video_url = tiktok_video_source(media) if media else ""
         session.commit()
 
+    comment_ctx = await build_tiktok_comment_context(
+        tenant_id=tenant_id,
+        comment_text=text,
+        comment_id=comment_id,
+        video_id=video_id,
+        caption=caption,
+        thumbnail_url=thumbnail_url,
+        video_url=video_url,
+    )
     outcome = await run_customer_reply_v2_comment(
         tenant_id=tenant_id,
         comment_text=text,
@@ -93,6 +107,9 @@ async def process_tiktok_comment_ai(
         comments_enabled=True,
         comment_id=comment_id,
         post_id=video_id,
+        caption=caption,
+        media_type="video",
+        comment_context=comment_ctx,
         provider_sender_id=comment_id,
     )
     reply_text = str(getattr(outcome, "reply", None) or "").strip()
