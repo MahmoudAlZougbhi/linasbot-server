@@ -7,8 +7,10 @@ import type { CommentMediaItem } from './commentsInboxTypes';
 
 type Props = {
   posts: CommentMediaItem[];
-  onOpen: (post: CommentMediaItem) => void;
-  onToggleWatch: (post: CommentMediaItem) => void;
+  onOpen?: (post: CommentMediaItem) => void;
+  onToggleWatch?: (post: CommentMediaItem) => void;
+  pickIds?: string[];
+  onPick?: (post: CommentMediaItem) => void;
   kindLabel: (kind: CommentMediaItem['kind']) => string;
   refreshing?: boolean;
   onRefresh?: () => void;
@@ -21,19 +23,30 @@ function Tile({
   post,
   onOpen,
   onToggleWatch,
+  onPick,
+  picked,
   kindLabel,
   tileWidth,
 }: {
   post: CommentMediaItem;
-  onOpen: () => void;
-  onToggleWatch: () => void;
+  onOpen?: () => void;
+  onToggleWatch?: () => void;
+  onPick?: () => void;
+  picked: boolean;
   kindLabel: string;
   tileWidth: number;
 }) {
   const { colors } = useTheme();
+  const picking = Boolean(onPick);
+  const marked = picking ? picked : post.watched;
   return (
     <View style={[styles.tile, { width: tileWidth }]}>
-      <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={kindLabel} style={styles.press}>
+      <Pressable
+        onPress={onPick || onOpen}
+        accessibilityRole="button"
+        accessibilityLabel={kindLabel}
+        style={styles.press}
+      >
         {post.thumbnail ? (
           <Image source={{ uri: post.thumbnail }} style={styles.image} />
         ) : (
@@ -48,15 +61,22 @@ function Tile({
           <AppIcon icon={feather('message-circle')} size={12} color="#FFFFFF" />
           <Text style={styles.countText}>{post.comment_count}</Text>
         </View>
+        {picking ? (
+          <View style={[styles.check, marked ? styles.checkOn : styles.checkOff]}>
+            <AppIcon icon={feather(marked ? 'check' : 'plus')} size={14} color={marked ? '#FFFFFF' : '#111827'} />
+          </View>
+        ) : null}
       </Pressable>
-      <Pressable
-        onPress={onToggleWatch}
-        style={[styles.check, post.watched ? styles.checkOn : styles.checkOff]}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: post.watched }}
-      >
-        <AppIcon icon={feather(post.watched ? 'check' : 'plus')} size={14} color={post.watched ? '#FFFFFF' : '#111827'} />
-      </Pressable>
+      {!picking && onToggleWatch ? (
+        <Pressable
+          onPress={onToggleWatch}
+          style={[styles.check, marked ? styles.checkOn : styles.checkOff]}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: marked }}
+        >
+          <AppIcon icon={feather(marked ? 'check' : 'plus')} size={14} color={marked ? '#FFFFFF' : '#111827'} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -65,6 +85,8 @@ export function CommentsMediaGrid({
   posts,
   onOpen,
   onToggleWatch,
+  pickIds,
+  onPick,
   kindLabel,
   refreshing = false,
   onRefresh,
@@ -91,8 +113,10 @@ export function CommentsMediaGrid({
           post={item}
           tileWidth={tileWidth}
           kindLabel={kindLabel(item.kind)}
-          onOpen={() => onOpen(item)}
-          onToggleWatch={() => onToggleWatch(item)}
+          picked={Boolean(pickIds?.includes(item.id))}
+          onOpen={onOpen ? () => onOpen(item) : undefined}
+          onToggleWatch={onToggleWatch ? () => onToggleWatch(item) : undefined}
+          onPick={onPick ? () => onPick(item) : undefined}
         />
       )}
     />

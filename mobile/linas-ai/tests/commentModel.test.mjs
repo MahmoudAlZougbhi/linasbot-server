@@ -73,11 +73,17 @@ test('public comment resources are image/link only', () => {
 });
 
 test('choose posts persists ids and all posts clears them', () => {
-  let item = applySelectedPosts(createCommentRule('r4'), ['p1', 'p2'], { permalink: 'https://ig.me/p', caption: 'Summer' });
+  let item = applySelectedPosts(createCommentRule('r4'), [
+    { id: 'p1', platform: 'instagram', thumbnail: '', caption: 'Summer', permalink: 'https://ig.me/p', kind: 'post' },
+    { id: 'p2', platform: 'instagram', thumbnail: '', caption: '', permalink: '', kind: 'reel' },
+  ]);
   assert.deepEqual(item.post_ids, ['p1', 'p2']);
   assert.equal(item.post_id, 'p1');
+  assert.equal(item.selected_posts.length, 2);
+  assert.equal(item.channel, 'instagram');
   item = applyPostsMode(item, 'all');
   assert.deepEqual(item.post_ids, []);
+  assert.deepEqual(item.selected_posts, []);
   assert.equal(item.scope, 'all_posts');
   assert.deepEqual(parseKeywords('price, سعر, قدّي'), ['price', 'سعر', 'قدّي']);
 });

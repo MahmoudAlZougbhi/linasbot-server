@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -15,17 +15,16 @@ import { AppIcon, feather } from '../../../components/AppIcon';
 import { LinasLoadingIndicator } from '../../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { useI18n } from '../../../i18n/LanguageContext';
-import type { StringKey } from '../../../i18n';
 import { fonts } from '../../../theme';
 import { ScreenChrome } from '../../shared/ScreenChrome';
 import { asRecordList, newId } from '../cmApi';
 import type { CmProposalReview } from '../cmProposalReview';
+import { ResourceMetaModal } from '../resources/ResourceMetaModal';
 import { useCmDraft } from '../useCmDraft';
 import { CommentEditView } from './CommentEditView';
-import { CommentPostsView } from './CommentPostsView';
+import { CommentRulePostsPicker } from './CommentRulePostsPicker';
 import { CommentsListPanel } from './CommentsListPanel';
 import { CM_CANVAS, CM_TEAL } from './commentChrome';
-import { ResourceMetaModal } from '../resources/ResourceMetaModal';
 import {
   applyPostsMode,
   applyReplyIn,
@@ -37,15 +36,11 @@ import {
   parseKeywords,
   replyInOf,
   ruleToRecord,
+  selectedPostsOf,
   uniquePostIds,
   type CommentRuleItem,
 } from './commentModel';
-import {
-  fetchCommentAccounts,
-  fetchConnectedPosts,
-  type CommentAccount,
-  type ConnectedPost,
-} from './commentPostsApi';
+import type { SelectedCommentPost } from './commentPostSnapshots';
 import { useCommentMedia } from './useCommentMedia';
 
 type Props = {
@@ -54,33 +49,16 @@ type Props = {
 };
 
 type Mode = 'list' | 'edit' | 'posts';
-type ListTab = 'rules' | 'inbox';
-
-function postsErrorMessage(code: string, tr: (key: StringKey) => string): string {
-  if (code === 'graph_permission_denied' || code === 'credential_unavailable') return tr('commentsGraphDenied');
-  if (code === 'account_not_in_tenant' || code === 'account_id_missing') return tr('commentsNoAccount');
-  return tr('commentsGraphFailed');
-}
 
 export function CommentsScreen({ proposalReview, onBack }: Props) {
   const { tr } = useI18n();
   const insets = useSafeAreaInsets();
   const draft = useCmDraft('comments', proposalReview);
   const [mode, setMode] = useState<Mode>('list');
-  const [listTab, setListTab] = useState<ListTab>('rules');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [accounts, setAccounts] = useState<CommentAccount[]>([]);
-  const [posts, setPosts] = useState<ConnectedPost[]>([]);
-  const [postQuery, setPostQuery] = useState('');
-  const [postError, setPostError] = useState<string | null>(null);
-  const [postsLoading, setPostsLoading] = useState(false);
-  const [nextAfter, setNextAfter] = useState('');
-  const [allowManual, setAllowManual] = useState(true);
-  const [manualId, setManualId] = useState('');
-  const [draftSelected, setDraftSelected] = useState<string[]>([]);
-  const [accountId, setAccountId] = useState('');
+  const [picked, setPicked] = useState<SelectedCommentPost[]>([]);
 
   const items = useMemo(
     () => asRecordList(draft.payload.rules).map(parseCommentRule),
@@ -102,16 +80,6 @@ export function CommentsScreen({ proposalReview, onBack }: Props) {
   }
 
   const media = useCommentMedia(selected, patchSelected, tr);
-
-  useEffect(() => {
-    void fetchCommentAccounts()
-      .then((rows) => {
-        setAccounts(rows);
-        if (rows[0] && !accountId) setAccountId(rows[0].connected_account_id);
-      })
-      .catch(() => setAccounts([]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   function handleAdd() {
     const item = createCommentRule(newId('crule'));
@@ -162,68 +130,36 @@ export function CommentsScreen({ proposalReview, onBack }: Props) {
     ]);
   }
 
-  async function loadPosts(nextAccount: CommentAccount | undefined, after = '', append = false) {
-    if (!nextAccount) {
-      setPosts([]);
-      setPostError(tr('commentsNoAccount'));
-      setAllowManual(true);
-      return;
-    }
-    setPostsLoading(true);
-    if (!append) setPostError(null);
-    try {
-      const result = await fetchConnectedPosts({
-        platform: nextAccount.platform,
-        connectedAccountId: nextAccount.connected_account_id,
-        after,
-      });
-      setPosts((current) => (append ? [...current, ...result.posts] : result.posts));
-      setNextAfter(result.nextAfter);
-      setAllowManual(result.allowManual);
-      if (!result.ok) setPostError(postsErrorMessage(result.error, tr));
-    } catch {
-      setPosts(append ? posts : []);
-      setAllowManual(true);
-      setPostError(tr('commentsGraphFailed'));
-    } finally {
-      setPostsLoading(false);
-    }
-  }
-
   function openPostsPicker() {
     if (!selected) return;
-    const currentAccount =
-      accounts.find((row) => row.connected_account_id === (selected.connected_account_id || accountId)) || accounts[0];
-    if (currentAccount) setAccountId(currentAccount.connected_account_id);
-    setDraftSelected(uniquePostIds(selected));
-    setPostQuery('');
-    setManualId('');
+    setPicked(selectedPostsOf(selected));
     setMode('posts');
-    void loadPosts(currentAccount);
   }
 
   function confirmPosts() {
     if (!selected) return;
-    const account = accounts.find((row) => row.connected_account_id === accountId);
-    const first = posts.find((post) => post.id === draftSelected[0]);
-    patchSelected(
-      applySelectedPosts(selected, draftSelected, {
-        permalink: first?.permalink,
-        caption: first?.preview,
-        platform: account?.platform,
-        accountId: account?.connected_account_id,
-        pageId: account?.page_or_ig_account_id,
-      }),
-    );
+    patchSelected(applySelectedPosts(selected, picked));
     setMode('edit');
   }
 
   return (
     <ScreenChrome
-      title={tr('aiSetupSec_comments')}
+      title={mode === 'posts' ? tr('commentsChoosePosts') : tr('aiSetupSec_comments')}
       subtitle={mode === 'list' ? tr('commentsSubtitle') : undefined}
       onBack={mode === 'list' ? onBack : mode === 'posts' ? () => setMode('edit') : goList}
       canvasColor={CM_CANVAS}
+      headerRight={
+        mode === 'posts' && picked.length ? (
+          <Pressable
+            onPress={confirmPosts}
+            accessibilityRole="button"
+            accessibilityLabel={tr('commentsPickerSave')}
+            style={({ pressed }) => [styles.headerSave, pressed && styles.pressed]}
+          >
+            <Text style={styles.headerSaveText}>{tr('commentsPickerSave')}</Text>
+          </Pressable>
+        ) : undefined
+      }
     >
       {draft.loading ? <LinasLoadingIndicator variant="screen" /> : null}
       {draft.error ? <Text style={styles.error}>{draft.error}</Text> : null}
@@ -232,8 +168,6 @@ export function CommentsScreen({ proposalReview, onBack }: Props) {
 
       {!draft.loading && mode === 'list' ? (
         <CommentsListPanel
-          listTab={listTab}
-          onChangeTab={setListTab}
           items={visible}
           query={query}
           onQueryChange={setQuery}
@@ -302,44 +236,7 @@ export function CommentsScreen({ proposalReview, onBack }: Props) {
       ) : null}
 
       {!draft.loading && mode === 'posts' ? (
-        <ScrollView contentContainerStyle={styles.editScroll} showsVerticalScrollIndicator={false}>
-          <CommentPostsView
-            posts={posts}
-            selectedIds={draftSelected}
-            query={postQuery}
-            loading={postsLoading}
-            error={postError}
-            allowManual={allowManual}
-            manualId={manualId}
-            nextAfter={nextAfter}
-            accounts={accounts}
-            accountId={accountId}
-            onAccount={(id) => {
-              setAccountId(id);
-              const account = accounts.find((row) => row.connected_account_id === id);
-              void loadPosts(account);
-            }}
-            onQueryChange={setPostQuery}
-            onToggle={(id) =>
-              setDraftSelected((current) =>
-                current.includes(id) ? current.filter((row) => row !== id) : [...current, id],
-              )
-            }
-            onManualId={setManualId}
-            onAddManual={() => {
-              const id = manualId.trim();
-              if (!id) return;
-              setDraftSelected((current) => (current.includes(id) ? current : [...current, id]));
-              setManualId('');
-            }}
-            onLoadMore={() => {
-              const account = accounts.find((row) => row.connected_account_id === accountId);
-              void loadPosts(account, nextAfter, true);
-            }}
-            onConfirm={confirmPosts}
-            tr={tr}
-          />
-        </ScrollView>
+        <CommentRulePostsPicker selected={picked} onChange={setPicked} tr={tr} />
       ) : null}
 
       <ResourceMetaModal
@@ -389,5 +286,7 @@ const styles = StyleSheet.create({
   },
   deleteText: { color: '#DC2626', fontFamily: fonts.bodyMedium, fontSize: 15, fontWeight: '700' },
   saveBtn: { flex: 1, backgroundColor: CM_TEAL, borderRadius: 12 },
+  headerSave: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
+  headerSaveText: { color: CM_TEAL, fontFamily: fonts.bodyMedium, fontSize: 16, fontWeight: '700' },
   pressed: { opacity: 0.7 },
 });

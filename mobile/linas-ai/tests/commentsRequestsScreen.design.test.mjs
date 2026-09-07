@@ -58,18 +58,22 @@ describe('Comments screens match screenshot handoff', () => {
     assert.match(screen, /useCmDraft\('comments'/);
   });
 
-  it('choose posts loads Graph posts and keeps manual post IDs', () => {
-    const posts = read('features/cm/comments/CommentPostsView.tsx');
-    const api = read('features/cm/comments/commentPostsApi.ts');
+  it('choose posts reuses the Live Chat grid and saves from the header', () => {
+    const picker = read('features/cm/comments/CommentRulePostsPicker.tsx');
+    const selected = read('features/cm/comments/CommentSelectedPosts.tsx');
     const screen = read('features/cm/comments/CommentsScreen.tsx');
-    assert.match(posts, /commentsChooseTitle/);
-    assert.match(posts, /commentsPreviewPost/);
-    assert.match(posts, /commentsUseSelected/);
-    assert.match(posts, /commentsManualPostId/);
-    assert.match(api, /\/api\/cm\/comment-rules\/posts/);
-    assert.match(api, /\/api\/cm\/comment-rules\/accounts/);
-    assert.match(screen, /allowManual/);
-    assert.match(screen, /commentsGraphDenied/);
+    const list = read('features/cm/comments/CommentsListPanel.tsx');
+    const en = read('i18n/locales/commentsSetupEn.ts');
+    assert.match(picker, /CommentsMediaGrid/);
+    assert.match(picker, /CommentsPlatformChips/);
+    assert.match(picker, /fetchCommentMedia/);
+    assert.match(picker, /onPick/);
+    assert.match(selected, /CommentChannelIcon/);
+    assert.match(screen, /commentsPickerSave/);
+    assert.match(screen, /headerRight/);
+    assert.match(en, /commentsPickerSave: 'Save'/);
+    assert.doesNotMatch(list, /commentsInboxTab/);
+    assert.doesNotMatch(list, /CommentInboxView/);
   });
 });
 

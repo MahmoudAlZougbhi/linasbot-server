@@ -53,6 +53,8 @@ export const commentsSetupEn = {
   commentsTapToOpen: 'Tap to open',
   commentsOpen: 'Open',
   commentsSave: 'Save changes',
+  commentsPickerSave: 'Save',
+  commentsPickerHint: 'Tap one or more posts, then Save.',
   commentsDelete: 'Delete',
   commentsDeleteTitle: 'Delete this rule?',
   commentsDeleteBody: 'This removes the comment rule from AI Setup.',

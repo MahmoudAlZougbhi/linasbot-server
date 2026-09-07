@@ -55,6 +55,8 @@ export const commentsSetupAr: Record<keyof typeof commentsSetupEn, string> = {
   commentsTapToOpen: 'اضغط للفتح',
   commentsOpen: 'فتح',
   commentsSave: 'حفظ التغييرات',
+  commentsPickerSave: 'حفظ',
+  commentsPickerHint: 'كبسة على بوست أو أكثر، بعدين حفظ.',
   commentsDelete: 'حذف',
   commentsDeleteTitle: 'حذف هذه القاعدة؟',
   commentsDeleteBody: 'سيتم حذف قاعدة التعليق من إعداد الذكاء.',
