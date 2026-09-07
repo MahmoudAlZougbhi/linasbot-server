@@ -1,5 +1,10 @@
 /** Pure Comment Rule helpers (no React Native). */
 
+import { parseSelectedPosts, type SelectedCommentPost } from './commentPostSnapshots';
+
+export type { SelectedCommentPost };
+export { applySelectedPosts, selectedPostsOf } from './commentPostSnapshots';
+
 export type CommentKind = 'image' | 'video' | 'file' | 'link';
 export type CommentReplyType = 'automatic' | 'ai';
 export type CommentPostsMode = 'all' | 'choose';
@@ -32,6 +37,7 @@ export type CommentRuleItem = {
   pattern: string;
   post_id: string;
   post_ids: string[];
+  selected_posts: SelectedCommentPost[];
   platform: string;
   connected_account_id: string;
   page_or_ig_account_id: string;
@@ -128,6 +134,13 @@ export function parseCommentRule(row: Record<string, unknown>): CommentRuleItem 
     pattern: String(row.pattern || ''),
     post_id: postIds[0] || '',
     post_ids: postIds,
+    selected_posts: parseSelectedPosts(
+      row,
+      postIds,
+      String(row.platform || row.channel || ''),
+      String(row.post_caption_snapshot || ''),
+      String(row.post_permalink || ''),
+    ),
     platform: String(row.platform || ''),
     connected_account_id: String(row.connected_account_id || ''),
     page_or_ig_account_id: String(row.page_or_ig_account_id || ''),
@@ -168,6 +181,7 @@ export function ruleToRecord(item: CommentRuleItem): Record<string, unknown> {
     pattern: item.pattern,
     post_id: postIds[0] || '',
     post_ids: postIds,
+    selected_posts: item.selected_posts,
     platform: item.platform,
     connected_account_id: item.connected_account_id,
     page_or_ig_account_id: item.page_or_ig_account_id,
@@ -215,6 +229,7 @@ export function createCommentRule(id: string): CommentRuleItem {
     pattern: '',
     post_id: '',
     post_ids: [],
+    selected_posts: [],
     platform: 'instagram',
     connected_account_id: '',
     page_or_ig_account_id: '',
@@ -315,31 +330,12 @@ export function applyPostsMode(item: CommentRuleItem, mode: CommentPostsMode): C
       scope: 'all_posts',
       post_id: '',
       post_ids: [],
+      selected_posts: [],
       post_permalink: '',
       post_caption_snapshot: '',
     };
   }
   return { ...item, scope: 'specific_post' };
-}
-
-export function applySelectedPosts(
-  item: CommentRuleItem,
-  postIds: string[],
-  snapshot?: { permalink?: string; caption?: string; platform?: string; accountId?: string; pageId?: string },
-): CommentRuleItem {
-  const ids = asStringList(postIds);
-  return {
-    ...item,
-    scope: ids.length ? 'specific_post' : 'all_posts',
-    post_id: ids[0] || '',
-    post_ids: ids,
-    post_permalink: snapshot?.permalink ?? item.post_permalink,
-    post_caption_snapshot: snapshot?.caption ?? item.post_caption_snapshot,
-    platform: snapshot?.platform ?? item.platform,
-    connected_account_id: snapshot?.accountId ?? item.connected_account_id,
-    page_or_ig_account_id: snapshot?.pageId ?? item.page_or_ig_account_id,
-    channel: snapshot?.platform || item.channel,
-  };
 }
 
 export function parseKeywords(value: string): string[] {

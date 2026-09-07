@@ -29,6 +29,7 @@ from services.cm.schemas_content import (  # noqa: F401
     BranchWeeklySchedule,
     CmBaseModel,
     CommentRule,
+    CommentRuleSelectedPost,
     CommentsSection,
     GenderAudience,
     HandoffContact,

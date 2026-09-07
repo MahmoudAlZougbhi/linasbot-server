@@ -321,6 +321,17 @@ class ActionsSection(CmBaseModel):
     notes: str | None = None
 
 
+class CommentRuleSelectedPost(CmBaseModel):
+    """Owner-facing snapshot so AI Setup can show chosen posts with channel icons."""
+
+    id: str
+    platform: str = ""
+    thumbnail: str = ""
+    caption: str = ""
+    permalink: str = ""
+    kind: str = "post"
+
+
 class CommentRule(CmBaseModel):
     """Comment behavior: deterministic no-AI or AI-guidance, global or post-specific.
 
@@ -361,6 +372,7 @@ class CommentRule(CmBaseModel):
     ai_instructions: str = ""
     ai_action_mode: Literal["reply_comment", "send_dm", "reply_comment_and_dm"] = "reply_comment"
     post_ids: list[str] = Field(default_factory=list)
+    selected_posts: list[CommentRuleSelectedPost] = Field(default_factory=list)
     attachments: list[ArticleAttachment] = Field(default_factory=list)
     notes: str | None = None
     ai_search_title: str = ""

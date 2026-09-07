@@ -56,6 +56,8 @@ export const commentsSetupFr: Record<keyof typeof commentsSetupEn, string> = {
   commentsTapToOpen: 'Appuyer pour ouvrir',
   commentsOpen: 'Ouvrir',
   commentsSave: 'Enregistrer',
+  commentsPickerSave: 'Enregistrer',
+  commentsPickerHint: 'Touchez un ou plusieurs posts, puis Enregistrer.',
   commentsDelete: 'Supprimer',
   commentsDeleteTitle: 'Supprimer cette règle ?',
   commentsDeleteBody: 'Cette règle de commentaire sera retirée de Configuration IA.',

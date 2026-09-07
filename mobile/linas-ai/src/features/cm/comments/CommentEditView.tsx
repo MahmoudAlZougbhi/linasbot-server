@@ -12,10 +12,12 @@ import {
   CM_TEAL_DARK,
   CM_TEAL_PILL,
 } from './commentChrome';
+import { CommentSelectedPosts } from './CommentSelectedPosts';
 import {
   postsModeOf,
   replyInOf,
   replyTypeOf,
+  selectedPostsOf,
   type CommentAttachment,
   type CommentKind,
   type CommentPostsMode,
@@ -114,6 +116,7 @@ export function CommentEditView({
           if (mode === 'choose') onChoosePosts();
         }}
       />
+      {postsMode === 'choose' ? <CommentSelectedPosts posts={selectedPostsOf(item)} onPress={onChoosePosts} /> : null}
       <CommentSegmented
         label={tr('commentsReplyIn')}
         value={replyIn}

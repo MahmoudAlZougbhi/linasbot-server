@@ -4,11 +4,23 @@ import { AppIcon, ion } from '../../../components/AppIcon';
 import { radii, useTheme } from '../../../theme';
 import type { CommentPlatform } from './commentsInboxTypes';
 
-const CHIPS: { id: CommentPlatform; icon: ReturnType<typeof ion>; color: string; bg: string }[] = [
+export const COMMENT_CHANNEL_CHIPS: {
+  id: CommentPlatform;
+  icon: ReturnType<typeof ion>;
+  color: string;
+  bg: string;
+}[] = [
   { id: 'instagram', icon: ion('logo-instagram'), color: '#E1306C', bg: '#FCE7F3' },
   { id: 'facebook', icon: ion('logo-facebook'), color: '#1877F2', bg: '#E8F1FF' },
   { id: 'tiktok', icon: ion('logo-tiktok'), color: '#111111', bg: '#F3F4F6' },
 ];
+
+const CHIPS = COMMENT_CHANNEL_CHIPS;
+
+export function CommentChannelIcon({ platform, size = 16 }: { platform: string; size?: number }) {
+  const chip = CHIPS.find((row) => row.id === platform) || CHIPS[0];
+  return <AppIcon icon={chip.icon} size={size} color={chip.color} />;
+}
 
 type Props = {
   selected: CommentPlatform;

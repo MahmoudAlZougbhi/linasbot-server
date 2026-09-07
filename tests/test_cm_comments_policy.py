@@ -110,3 +110,29 @@ def test_comment_rule_accepts_post_ids_and_attachments() -> None:
     roundtrip = CommentRule.model_validate(dumped)
     assert roundtrip.post_ids == ["POST_A", "POST_B"]
     assert roundtrip.attachments[0].kind == "image"
+    assert roundtrip.selected_posts == []
+
+
+def test_comment_rule_accepts_selected_post_snapshots() -> None:
+    from services.cm.schemas import CommentRuleSelectedPost
+
+    rule = CommentRule(
+        id="r6",
+        name="Chosen posts",
+        post_ids=["POST_A"],
+        post_id="POST_A",
+        scope="specific_post",
+        selected_posts=[
+            CommentRuleSelectedPost(
+                id="POST_A",
+                platform="instagram",
+                thumbnail="https://cdn.example/a.jpg",
+                caption="Summer",
+                permalink="https://ig.me/p",
+                kind="reel",
+            )
+        ],
+    )
+    dumped = rule.model_dump(mode="json")
+    assert dumped["selected_posts"][0]["platform"] == "instagram"
+    assert CommentRule.model_validate(dumped).selected_posts[0].kind == "reel"
