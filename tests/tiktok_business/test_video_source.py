@@ -20,7 +20,9 @@ def test_pick_ignores_cover_and_keeps_official_mp4() -> None:
         "video_info": {"url": "https://v16-webapp.tiktok.com/video/tos/clip.mp4"},
     }
     assert pick_tiktok_video_url(row) == "https://v16-webapp.tiktok.com/video/tos/clip.mp4"
-    parsed = parse_tiktok_video_item({"item_id": "v1", "caption": "offer", "thumbnail_url": "https://tiktokcdn.com/cover.jpg"})
+    parsed = parse_tiktok_video_item(
+        {"item_id": "v1", "caption": "offer", "thumbnail_url": "https://tiktokcdn.com/cover.jpg"}
+    )
     assert parsed["video_url"] == ""
     assert parsed["caption"] == "offer"
 
