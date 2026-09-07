@@ -28,17 +28,25 @@ class SignedOAuthState:
     expires_at_unix: int
 
 
-def create_signed_state(*, tenant_id: str, actor_user_id: str, return_surface: str) -> SignedOAuthState:
+def create_signed_state(
+    *, tenant_id: str, actor_user_id: str, return_surface: str, flow: str = "account"
+) -> SignedOAuthState:
     tenant = str(tenant_id or "").strip()
     actor = str(actor_user_id or "").strip()
     surface = str(return_surface or "mobile").strip().lower()
+    kind = str(flow or "account").strip().lower()
     if not tenant or not actor:
         raise TikTokOAuthStateError("OAuth state requires tenant and initiating user")
     if surface not in {"mobile", "web"}:
         surface = "web"
+    if kind not in {"account", "advertiser"}:
+        raise TikTokOAuthStateError("OAuth state flow is invalid")
     nonce = secrets.token_urlsafe(32)
     expires_at = int(time.time()) + OAUTH_STATE_TTL_SECONDS
-    body = f"{nonce}|{tenant}|{actor}|{surface}|{expires_at}"
+    if kind == "account":
+        body = f"{nonce}|{tenant}|{actor}|{surface}|{expires_at}"
+    else:
+        body = f"{nonce}|{tenant}|{actor}|{surface}|{expires_at}|{kind}"
     state = f"{body}.{_sign(body)}"
     state_hash = hashlib.sha256(nonce.encode("utf-8")).hexdigest()
     return SignedOAuthState(nonce=nonce, state_hash=state_hash, state=state, expires_at_unix=expires_at)
@@ -50,9 +58,10 @@ def parse_signed_state(raw: str) -> dict[str, str]:
         raise TikTokOAuthStateError("OAuth state is malformed")
     body, signature = text.rsplit(".", 1)
     parts = body.split("|")
-    if len(parts) != 5:
+    if len(parts) not in {5, 6}:
         raise TikTokOAuthStateError("OAuth state is malformed")
-    nonce, tenant_id, actor_user_id, return_surface, exp_raw = parts
+    nonce, tenant_id, actor_user_id, return_surface, exp_raw = parts[:5]
+    flow = parts[5] if len(parts) == 6 else "account"
     if not hmac.compare_digest(_sign(body), signature):
         raise TikTokOAuthStateError("OAuth state signature is invalid")
     try:
@@ -63,11 +72,14 @@ def parse_signed_state(raw: str) -> dict[str, str]:
         raise TikTokOAuthStateError("OAuth state has expired")
     if return_surface not in {"mobile", "web"}:
         raise TikTokOAuthStateError("OAuth state return surface is invalid")
+    if flow not in {"account", "advertiser"}:
+        raise TikTokOAuthStateError("OAuth state flow is invalid")
     return {
         "nonce": nonce,
         "tenant_id": tenant_id,
         "actor_user_id": actor_user_id,
         "return_surface": return_surface,
+        "flow": flow,
         "state_hash": hashlib.sha256(nonce.encode("utf-8")).hexdigest(),
         "expires_at": str(expires_at),
     }

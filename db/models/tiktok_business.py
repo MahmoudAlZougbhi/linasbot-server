@@ -101,11 +101,18 @@ class TikTokConnection(Base):
 
 class TikTokCredential(Base):
     __tablename__ = "tiktok_credentials"
-    __table_args__ = (Index("ix_tt_credential_tenant", "tenant_id"),)
+    __table_args__ = (
+        Index("ix_tt_credential_tenant", "tenant_id"),
+        CheckConstraint(
+            "token_kind IN ('account_holder','advertiser')",
+            name="ck_tt_credential_token_kind",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(64), nullable=False)
     connection_id: Mapped[str] = mapped_column(ForeignKey("tiktok_connections.id"), nullable=False, index=True)
+    token_kind: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'account_holder'"))
     ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
     scopes: Mapped[list[Any]] = mapped_column(JsonType, nullable=False, server_default=text("'[]'"))
     access_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

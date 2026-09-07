@@ -128,6 +128,8 @@ async def complete_tiktok_oauth(
     *, state: str, code: str | None, error: str | None, error_description: str | None
 ) -> dict[str, Any]:
     parsed = parse_signed_state(state)
+    if parsed.get("flow") == "advertiser":
+        raise TikTokOAuthStateError("Advertiser OAuth must use the ads callback")
     tenant_id = parsed["tenant_id"]
     actor = parsed["actor_user_id"]
     surface = parsed["return_surface"]
@@ -257,9 +259,25 @@ async def disconnect_tiktok(*, tenant_id: str, actor_user_id: str) -> None:
             token = str(repo.open_tokens(connection).get("access_token") or "")
         except Exception:
             token = ""
+        ads_token = ""
+        try:
+            from services.tiktok_business.repository_enhanced import TikTokEnhancedRepository
+
+            ads_token = TikTokEnhancedRepository(session).clear_enhanced(
+                tenant_id=tenant_id, connection_id=connection.id
+            )
+        except Exception:
+            ads_token = ""
         if token:
             try:
                 await revoke_access_token(access_token=token)
+            except TikTokApiError:
+                pass
+        if ads_token:
+            try:
+                from services.tiktok_business.ads_oauth import revoke_ads_access_token
+
+                await revoke_ads_access_token(access_token=ads_token)
             except TikTokApiError:
                 pass
         repo.mark_revoked(connection, actor=actor_user_id, reason="user_disconnect")

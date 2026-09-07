@@ -26,6 +26,8 @@ CONNECT_ROUTE_MARKERS: tuple[tuple[str, str], ...] = (
     ("modules/meta_instagram_login_webhook.py", '@app.post("/webhook/instagram-login")'),
     ("modules/tiktok_business_api.py", '@app.post("/api/tiktok/connect/start")'),
     ("modules/tiktok_business_oauth.py", '@app.get("/oauth/tiktok/callback")'),
+    ("modules/tiktok_enhanced_api.py", '@app.post("/api/tiktok/enhanced/connect/start")'),
+    ("modules/tiktok_ads_oauth.py", '@app.get("/oauth/tiktok/ads/callback")'),
     ("modules/tiktok_business_webhook.py", '@app.post("/webhook/tiktok")'),
     ("modules/whatsapp_cloud_api.py", '@app.post("/api/whatsapp/cloud/connect/start")'),
     ("modules/whatsapp_cloud_api.py", '@app.get("/oauth/whatsapp/callback")'),

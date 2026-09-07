@@ -18,7 +18,7 @@ from services.tiktok_business.config import (
 from services.tiktok_business.errors import TikTokApiError, TikTokNotConfiguredError
 
 _TIMEOUT = httpx.Timeout(20.0, connect=10.0)
-_REDACT = frozenset({"access_token", "refresh_token", "client_secret", "auth_code", "code", "token"})
+_REDACT = frozenset({"access_token", "refresh_token", "client_secret", "secret", "auth_code", "code", "token"})
 
 
 def _safe_url(path: str) -> str:

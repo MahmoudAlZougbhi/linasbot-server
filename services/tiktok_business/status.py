@@ -37,6 +37,16 @@ def tiktok_integration_row(tenant_id: str) -> dict[str, Any]:
         "comments_state": _empty_state("disconnected", "connect_channel_first"),
         "dm_state": _empty_state("permission_pending", "tiktok_messaging_pending"),
         "accounts": [],
+        "post_context": {"level": "basic"},
+        "enhanced_video_context": {
+            "label": "Enhanced Video Context",
+            "status": "authorization_required",
+            "reason_code": "authorization_required",
+            "user_message": "Authorization required",
+            "can_authorize": False,
+            "capabilities": {},
+            "last_probe_at": None,
+        },
         "capabilities": {
             "dm_read": _cap(
                 level="needs_permission",
@@ -58,6 +68,9 @@ def tiktok_integration_row(tenant_id: str) -> dict[str, Any]:
         row["connectable"] = False
         row["blocker_code"] = "TIKTOK_NOT_CONFIGURED"
         row["blocker_message"] = "TikTok Business credentials are not configured on the server."
+        from services.tiktok_business.status_enhanced import enhanced_status_block
+
+        row.update(enhanced_status_block(tenant_id=tenant_id, connection=None, session=None))
         return row
     if not whatsapp_db_configured():
         row["connectable"] = False
@@ -68,6 +81,9 @@ def tiktok_integration_row(tenant_id: str) -> dict[str, Any]:
             repo = TikTokRepository(session)
             connection = repo.get_active_for_tenant(tenant_id)
             if connection is None:
+                from services.tiktok_business.status_enhanced import enhanced_status_block
+
+                row.update(enhanced_status_block(tenant_id=tenant_id, connection=None, session=session))
                 return row
             scopes = list(connection.granted_scopes or [])
             last_sync = connection.last_sync_at.timestamp() if connection.last_sync_at else None
@@ -119,6 +135,9 @@ def tiktok_integration_row(tenant_id: str) -> dict[str, Any]:
             row["capabilities"]["dm_read"]["level"] = "connected" if dm_ok else "needs_permission"
             row["capabilities"]["dm_reply"]["level"] = "connected" if dm_ok else "needs_permission"
             row["never_active_without_scopes"] = comments_read or dm_ok
+            from services.tiktok_business.status_enhanced import enhanced_status_block
+
+            row.update(enhanced_status_block(tenant_id=tenant_id, connection=connection, session=session))
     except WhatsAppDatabaseUnavailable:
         row["connectable"] = False
         row["blocker_code"] = "TIKTOK_DB_UNAVAILABLE"

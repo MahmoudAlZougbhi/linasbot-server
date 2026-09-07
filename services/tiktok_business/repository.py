@@ -162,6 +162,7 @@ class TikTokRepository:
             id=str(uuid.uuid4()),
             tenant_id=tenant_id,
             connection_id=connection.id,
+            token_kind="account_holder",
             ciphertext=seal_tiktok_tokens(
                 access_token=access_token,
                 refresh_token=refresh_token,
@@ -207,6 +208,7 @@ class TikTokRepository:
             id=str(uuid.uuid4()),
             tenant_id=connection.tenant_id,
             connection_id=connection.id,
+            token_kind="account_holder",
             ciphertext=seal_tiktok_tokens(
                 access_token=access_token,
                 refresh_token=refresh_token,

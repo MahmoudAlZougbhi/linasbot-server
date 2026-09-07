@@ -70,6 +70,7 @@ from db.models.tiktok_content import (
     TikTokMedia,
     TikTokMessage,
 )
+from db.models.tiktok_enhanced import TikTokEnhancedBinding
 from db.models.whatsapp_cloud import (
     WhatsAppAuditEvent,
     WhatsAppConnection,
@@ -136,6 +137,7 @@ __all__ = [
     "TikTokConnection",
     "TikTokConversation",
     "TikTokCredential",
+    "TikTokEnhancedBinding",
     "TikTokMedia",
     "TikTokMessage",
     "TikTokOAuthAttempt",

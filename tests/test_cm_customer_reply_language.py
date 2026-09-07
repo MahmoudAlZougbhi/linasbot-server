@@ -138,7 +138,12 @@ def test_answer_luna_sends_adaptive_video_frames() -> None:
     )
     images = [part for part in msgs[1]["content"] if part.get("type") == "image_url"]
     assert len(images) == 20
-    assert "today laser" in json.dumps(msgs[1]["content"][0])
+    text_blob = json.dumps(msgs[1]["content"][0])
+    assert "today laser" in text_blob
+    assert "data:image/jpeg;base64," not in text_blob
+    parsed = json.loads(msgs[1]["content"][0]["text"])
+    assert "image_inputs" not in parsed["comment_context"]
+    assert parsed["comment_context"]["image_inputs_omitted"] is True
 
 
 def test_detect_and_resolve_franco() -> None:
