@@ -113,7 +113,7 @@ def test_instagram_reel_keeps_media_url_for_video_extract() -> None:
 
 
 def test_video_frames_reach_the_model() -> None:
-    frames = [{"url": f"data:image/jpeg;base64,{index}", "kind": "video_frame"} for index in range(12)]
+    frames = [{"url": f"data:image/jpeg;base64,{index}", "kind": "video_frame"} for index in range(20)]
     ctx = CommentMediaContext(
         media_type="video",
         caption="cap",
@@ -121,9 +121,9 @@ def test_video_frames_reach_the_model() -> None:
         image_inputs=[{"url": "data:image/jpeg;base64,thumb", "kind": "image"}, *frames],
         media_status="available",
         saw_visuals=True,
-        frame_count=12,
+        frame_count=20,
     )
     model = media_context_to_dict(ctx, for_model=True)
-    assert len(model["image_inputs"]) == 12
+    assert len(model["image_inputs"]) == 20
     assert all(row["kind"] == "video_frame" for row in model["image_inputs"])
     assert model["video_transcript"] == "spoken line"

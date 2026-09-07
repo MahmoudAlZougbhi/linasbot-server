@@ -16,6 +16,7 @@ from services.tiktok_business.oauth import ensure_fresh_token
 from services.tiktok_business.repository import TikTokRepository
 from services.tiktok_business.repository_content import TikTokContentRepository
 from services.tiktok_business.scopes import comments_manage_ready
+from services.tiktok_business.video_source import fetch_tiktok_video_item
 
 MAX_ATTEMPTS = 5
 
@@ -89,8 +90,14 @@ async def process_tiktok_comment_ai(
         caption = str(getattr(media, "caption", "") or "") if media else ""
         thumbnail_url = str(getattr(media, "thumbnail_url", "") or "") if media else ""
         video_url = tiktok_video_source(media) if media else ""
+        token = await ensure_fresh_token(repo, connection)
+        open_id = connection.open_id
         session.commit()
 
+    live = await fetch_tiktok_video_item(access_token=token, open_id=open_id, video_id=video_id)
+    caption = live.get("caption") or caption
+    thumbnail_url = live.get("thumbnail_url") or thumbnail_url
+    video_url = live.get("video_url") or video_url
     comment_ctx = await build_tiktok_comment_context(
         tenant_id=tenant_id,
         comment_text=text,

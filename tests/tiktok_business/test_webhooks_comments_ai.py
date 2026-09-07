@@ -169,9 +169,13 @@ async def test_comment_ai_credits_and_success(tt_db, monkeypatch) -> None:
     async def _token(*_a, **_k):
         return "tok"
 
+    async def _live(**_k):
+        return {"item_id": "v1", "caption": "", "thumbnail_url": "", "share_url": "", "video_url": ""}
+
     monkeypatch.setattr("services.tiktok_business.comment_ai.run_customer_reply_v2_comment", _reply)
     monkeypatch.setattr("services.tiktok_business.comment_ai.create_comment_reply", _publish)
     monkeypatch.setattr("services.tiktok_business.comment_ai.ensure_fresh_token", _token)
+    monkeypatch.setattr("services.tiktok_business.comment_ai.fetch_tiktok_video_item", _live)
     ok = await process_tiktok_comment_ai(
         tenant_id="linas", connection_id=connection.id, comment_id="c-ok", item_id="v1"
     )
@@ -205,9 +209,13 @@ async def test_comment_ai_publish_failure(tt_db, monkeypatch) -> None:
     async def _token(*_a, **_k):
         return "tok"
 
+    async def _live(**_k):
+        return {"item_id": "v2", "caption": "", "thumbnail_url": "", "share_url": "", "video_url": ""}
+
     monkeypatch.setattr("services.tiktok_business.comment_ai.run_customer_reply_v2_comment", _reply)
     monkeypatch.setattr("services.tiktok_business.comment_ai.create_comment_reply", _publish)
     monkeypatch.setattr("services.tiktok_business.comment_ai.ensure_fresh_token", _token)
+    monkeypatch.setattr("services.tiktok_business.comment_ai.fetch_tiktok_video_item", _live)
     from services.tiktok_business.comment_ai import process_tiktok_comment_ai
 
     result = await process_tiktok_comment_ai(
@@ -242,8 +250,16 @@ async def test_comment_ai_skips_when_v2_has_no_reply(tt_db, monkeypatch) -> None
         published["called"] = True
         return {"request_id": "should-not-publish"}
 
+    async def _token(*_a, **_k):
+        return "tok"
+
+    async def _live(**_k):
+        return {"item_id": "v3", "caption": "", "thumbnail_url": "", "share_url": "", "video_url": ""}
+
     monkeypatch.setattr("services.tiktok_business.comment_ai.run_customer_reply_v2_comment", _reply)
     monkeypatch.setattr("services.tiktok_business.comment_ai.create_comment_reply", _publish)
+    monkeypatch.setattr("services.tiktok_business.comment_ai.ensure_fresh_token", _token)
+    monkeypatch.setattr("services.tiktok_business.comment_ai.fetch_tiktok_video_item", _live)
     from services.tiktok_business.comment_ai import process_tiktok_comment_ai
 
     result = await process_tiktok_comment_ai(

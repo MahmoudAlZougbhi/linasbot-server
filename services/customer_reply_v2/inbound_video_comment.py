@@ -10,8 +10,8 @@ from services.customer_reply_v2.inbound_fetch import (
     VIDEO_FETCH_TIMEOUT_S,
     fetch_inbound_url,
 )
-from services.customer_reply_v2.inbound_stt import transcribe_inbound_audio
-from services.customer_reply_v2.inbound_video import MAX_FRAMES, extract_bounded_video
+from services.customer_reply_v2.inbound_stt_chunks import transcribe_full_wav
+from services.customer_reply_v2.inbound_video import extract_bounded_video
 from services.customer_reply_v2.media_context import save_cached_media
 
 
@@ -52,7 +52,7 @@ async def attach_comment_video_frames(
     image_inputs: list[dict[str, str]],
     transcribe: bool = True,
 ) -> dict[str, Any]:
-    """Download a video once; extract duration-based stills plus the full audio transcript."""
+    """Download a video once, extract adaptive stills + the full audio transcript."""
     if not video_url:
         return {"image_inputs": image_inputs, "video_status": "", "transcript": ""}
     fetched = await fetch_inbound_url(
@@ -67,7 +67,7 @@ async def attach_comment_video_frames(
             "transcript": "",
         }
     extracted = extract_bounded_video(fetched.get("bytes") or b"")
-    frames = list(extracted.get("frames") or [])[:MAX_FRAMES]
+    frames = list(extracted.get("frames") or [])
     extra: list[dict[str, str]] = []
     for frame in frames:
         b64 = base64.b64encode(frame).decode("ascii")
@@ -75,7 +75,7 @@ async def attach_comment_video_frames(
     transcript = ""
     audio = extracted.get("audio")
     if transcribe and audio:
-        spoken = await transcribe_inbound_audio(data=audio, filename="comment_video.wav")
+        spoken = await transcribe_full_wav(audio)
         if spoken.get("ok"):
             transcript = str(spoken.get("text") or "").strip()
     merged = list(image_inputs) + extra

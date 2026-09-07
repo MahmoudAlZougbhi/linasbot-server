@@ -11,11 +11,11 @@ from services.ssrf_guard import SSRFValidationError, validate_fetch_url
 
 MAX_REDIRECTS = 3
 FETCH_TIMEOUT_S = 12.0
-VIDEO_FETCH_TIMEOUT_S = 45.0
+VIDEO_FETCH_TIMEOUT_S = 90.0
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
-MAX_VIDEO_BYTES = 48 * 1024 * 1024
+MAX_VIDEO_BYTES = 80 * 1024 * 1024
 
 
 def max_bytes_for_kind(kind: str) -> int:

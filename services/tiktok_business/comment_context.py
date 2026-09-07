@@ -1,8 +1,4 @@
-"""Build comment vision context for TikTok from stored caption + thumbnail.
-
-TikTok ``video.list`` returns caption and thumbnail, not a raw MP4. Frames and
-speech-to-text run only when a downloadable video URL is present.
-"""
+"""Build comment vision context for TikTok: caption, cover, frames, and full audio."""
 
 from __future__ import annotations
 
@@ -82,5 +78,5 @@ async def build_tiktok_comment_context(
     out["graph_error"] = graph_error
     out["tiktok_raw_video"] = bool(video_url)
     if not video_url:
-        out["video_raw_unavailable"] = "tiktok_video_list_has_no_mp4"
+        out["video_raw_unavailable"] = "tiktok_official_mp4_missing"
     return out

@@ -1,4 +1,4 @@
-"""TikTok comment context sends caption + thumbnail; raw MP4 is optional."""
+"""TikTok comment context: caption + cover, and frames/STT when an official MP4 exists."""
 
 from __future__ import annotations
 
@@ -34,5 +34,5 @@ async def test_tiktok_context_uses_caption_without_inventing_video(monkeypatch: 
     assert out["platform"] == "tiktok"
     assert out["image_input_count"] == 1
     assert out["tiktok_raw_video"] is False
-    assert out["video_raw_unavailable"] == "tiktok_video_list_has_no_mp4"
+    assert out["video_raw_unavailable"] == "tiktok_official_mp4_missing"
     assert out["video_transcript"] == ""

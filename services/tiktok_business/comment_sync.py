@@ -78,7 +78,10 @@ def enqueue_tiktok_comment_ai(*, tenant_id: str, connection_id: str, comment_id:
 async def _list_videos(*, access_token: str, open_id: str) -> dict[str, Any]:
     params: dict[str, Any] = {
         "business_id": open_id,
-        "fields": '["item_id","caption","thumbnail_url","share_url","create_time"]',
+        "fields": (
+            '["item_id","caption","thumbnail_url","share_url","embed_url",'
+            '"video_duration","create_time"]'
+        ),
         "max_count": MAX_VIDEOS_PER_SYNC,
     }
     return await tiktok_request(method="GET", path="/business/video/list/", access_token=access_token, params=params)

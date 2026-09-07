@@ -114,10 +114,10 @@ def test_answer_luna_messages_multilingual_rule() -> None:
     assert "Arabizi" in blob or "Arabic script" in blob
 
 
-def test_answer_luna_sends_twelve_video_frames() -> None:
+def test_answer_luna_sends_adaptive_video_frames() -> None:
     from services.customer_reply_v2.models import EvidenceRecord
 
-    frames = [{"url": f"data:image/jpeg;base64,{index:02d}", "kind": "video_frame"} for index in range(12)]
+    frames = [{"url": f"data:image/jpeg;base64,{index:02d}", "kind": "video_frame"} for index in range(20)]
     msgs = build_answer_messages(
         message="What is this",
         fixed_context={"ai_basics": {"advanced_instructions": "x"}, "style": {"style_body": "y"}},
@@ -137,7 +137,7 @@ def test_answer_luna_sends_twelve_video_frames() -> None:
         detected_language="en",
     )
     images = [part for part in msgs[1]["content"] if part.get("type") == "image_url"]
-    assert len(images) == 12
+    assert len(images) == 20
     assert "today laser" in json.dumps(msgs[1]["content"][0])
 
 
