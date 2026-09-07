@@ -108,7 +108,7 @@ export const commentsSetupAr: Record<keyof typeof commentsSetupEn, string> = {
   liveChatsTab: 'الدردشات',
   liveCommentsTab: 'التعليقات',
   liveCommentsSubtitle: 'اختَر المنصة، بعدين البوستات متل إنستغرام.',
-  liveCommentsSelectHint: 'كبسة على البوست للتفاصيل. علامة + لتختار أي بوست يرد عليه الذكاء.',
+  liveCommentsSelectHint: 'كبسة على البوست للتفاصيل. علامة + بتثبّتو بهاي الصفحة. قواعد الذكاء للبوستات من إعدادات الذكاء → تعليقات.',
   liveCommentsAllPosts: 'كل البوستات',
   liveCommentsChosenPosts: 'بوستات مختارة',
   liveCommentsEmpty: 'ما في بوستات',

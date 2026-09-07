@@ -7,7 +7,7 @@ import io
 import re
 from typing import Any
 
-from services.customer_reply_v2.inbound_video import MAX_FRAMES
+MODEL_MAX_STILLS = 12
 
 _DATA_URL_RE = re.compile(r"^data:(image/[\w.+-]+);base64,(.+)$", re.I | re.DOTALL)
 _MAX_EDGE_PX = 1024
@@ -71,16 +71,38 @@ def compact_data_url(url: str) -> str:
         return raw
 
 
+def sample_comment_stills(
+    image_inputs: list[dict[str, Any]] | None,
+    *,
+    max_n: int = MODEL_MAX_STILLS,
+) -> list[dict[str, Any]]:
+    """Keep first/last stills and even samples so a long reel is not start-only."""
+    rows = [row for row in list(image_inputs or []) if isinstance(row, dict)]
+    limit = max(0, int(max_n))
+    if limit <= 0 or len(rows) <= limit:
+        return rows
+    if limit == 1:
+        return rows[:1]
+    step = (len(rows) - 1) / (limit - 1)
+    picked: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for index in range(limit):
+        pos = round(index * step)
+        if pos in seen:
+            continue
+        seen.add(pos)
+        picked.append(rows[pos])
+    return picked
+
+
 def vision_image_parts(
     image_inputs: list[dict[str, Any]] | None,
     *,
-    max_n: int = MAX_FRAMES,
+    max_n: int = MODEL_MAX_STILLS,
 ) -> list[dict[str, Any]]:
     """Multimodal image_url parts only. Never embed these in the JSON text payload."""
     parts: list[dict[str, Any]] = []
-    for row in list(image_inputs or [])[: max(0, int(max_n))]:
-        if not isinstance(row, dict):
-            continue
+    for row in sample_comment_stills(image_inputs, max_n=max_n):
         url = compact_data_url(str(row.get("url") or "").strip())
         if not url:
             continue

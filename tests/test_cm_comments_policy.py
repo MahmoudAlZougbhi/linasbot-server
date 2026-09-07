@@ -136,3 +136,25 @@ def test_comment_rule_accepts_selected_post_snapshots() -> None:
     dumped = rule.model_dump(mode="json")
     assert dumped["selected_posts"][0]["platform"] == "instagram"
     assert CommentRule.model_validate(dumped).selected_posts[0].kind == "reel"
+
+
+def test_selected_posts_scope_without_post_ids() -> None:
+    from services.cm.schemas import CommentRuleSelectedPost
+
+    section = CommentsSection(
+        rules=[
+            CommentRule(
+                id="r7",
+                keywords=["price"],
+                action="ignore",
+                scope="specific_post",
+                selected_posts=[CommentRuleSelectedPost(id="IG_1", platform="instagram")],
+            )
+        ]
+    )
+    miss = evaluate_comment_rules(section, comment_text="price please", post_id="IG_OTHER")
+    assert miss.matched is False
+    assert miss.action == "reply_comment"
+    hit = evaluate_comment_rules(section, comment_text="price please", post_id="IG_1")
+    assert hit.matched is True
+    assert hit.action == "ignore"

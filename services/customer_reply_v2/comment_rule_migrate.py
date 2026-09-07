@@ -28,6 +28,15 @@ def migrate_comment_rule(raw: dict[str, Any]) -> tuple[dict[str, Any], str]:
     single = str(rule.get("post_id") or "").strip()
     if single and single not in post_ids:
         post_ids.append(single)
+    selected = rule.get("selected_posts")
+    if isinstance(selected, list):
+        for item in selected:
+            if isinstance(item, dict):
+                value = str(item.get("id") or "").strip()
+            else:
+                value = str(getattr(item, "id", "") or "").strip()
+            if value and value not in post_ids:
+                post_ids.append(value)
     if post_ids:
         rule["post_ids"] = post_ids
         rule["post_id"] = post_ids[0]

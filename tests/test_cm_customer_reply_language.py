@@ -137,7 +137,7 @@ def test_answer_luna_sends_adaptive_video_frames() -> None:
         detected_language="en",
     )
     images = [part for part in msgs[1]["content"] if part.get("type") == "image_url"]
-    assert len(images) == 20
+    assert len(images) == 12
     text_blob = json.dumps(msgs[1]["content"][0])
     assert "today laser" in text_blob
     assert "data:image/jpeg;base64," not in text_blob

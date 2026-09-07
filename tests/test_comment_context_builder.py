@@ -124,6 +124,8 @@ def test_video_frames_reach_the_model() -> None:
         frame_count=20,
     )
     model = media_context_to_dict(ctx, for_model=True)
-    assert len(model["image_inputs"]) == 20
+    assert len(model["image_inputs"]) == 12
+    assert model["image_inputs"][0]["url"].endswith("0")
+    assert model["image_inputs"][-1]["url"].endswith("19")
     assert all(row["kind"] == "video_frame" for row in model["image_inputs"])
     assert model["video_transcript"] == "spoken line"

@@ -1,4 +1,4 @@
-"""Per-tenant watchlist of posts that should receive comment AI."""
+"""Per-tenant inbox pins. AI replies are gated by published Comment Rules, not this file."""
 
 from __future__ import annotations
 
@@ -65,8 +65,8 @@ def platform_watch(tenant_id: str, platform: str) -> dict[str, Any]:
     return load_watchlist(tenant_id).get(plat) or _empty_platform()
 
 
-def comment_post_allowed(tenant_id: str, platform: str, post_id: str) -> bool:
-    """True when comment AI may run on this post. Empty/all = current behavior."""
+def comment_post_watched(tenant_id: str, platform: str, post_id: str) -> bool:
+    """True when the inbox marks this post as pinned. Does not gate AI."""
     watch = platform_watch(tenant_id, platform)
     if str(watch.get("mode") or "all") != "selected":
         return True
@@ -74,6 +74,12 @@ def comment_post_allowed(tenant_id: str, platform: str, post_id: str) -> bool:
     if not want:
         return False
     return want in {str(item) for item in (watch.get("post_ids") or [])}
+
+
+def comment_post_allowed(tenant_id: str, platform: str, post_id: str) -> bool:
+    """AI may run on every post. Live Chat pins are inbox-only; rules decide ignore."""
+    _ = (tenant_id, platform, post_id)
+    return True
 
 
 def apply_watch_patch(

@@ -25,7 +25,11 @@ from services.customer_reply_v2.flags import (
 from services.customer_reply_v2.history_format import comment_thread_records, same_history_for_agents
 from services.customer_reply_v2.invocation_meter import CustomerTurnMeter, InvocationRecord
 from services.customer_reply_v2.manifest import get_cached_manifest
-from services.customer_reply_v2.media_context import build_comment_media_context, media_context_to_dict
+from services.customer_reply_v2.media_context import (
+    build_comment_media_context,
+    comment_needs_visible_reply,
+    media_context_to_dict,
+)
 from services.customer_reply_v2.models import CustomerReplyOutcome
 from services.customer_reply_v2.observability import build_safe_trace
 from services.customer_reply_v2.orchestrator_faq import evaluate_faq_turn, faq_direct_outcome_kwargs, faq_trace_fields
@@ -309,6 +313,9 @@ async def run_customer_reply_v2_comment(
         reply_text = ""
     elif retrieval.evidence_status == "insufficient_final" and not reply_text:
         reply_text = safe_failure_reply(response_language, kind="insufficient")[:900]
+    if not reply_text and comment_needs_visible_reply(comment_text, comment_ctx):
+        reply_text = safe_failure_reply(response_language, kind="validation", public=True)[:900]
+        failed_rules = list(failed_rules) + ["public_comment_fallback"]
 
     if reply_text and retrieval.evidence and "answer_model_unavailable" not in failed_rules:
         validation_ok, failed_rules = validate_candidate(

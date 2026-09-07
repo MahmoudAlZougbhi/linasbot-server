@@ -5,7 +5,12 @@ from __future__ import annotations
 import json
 
 from services.customer_reply_v2.answer_luna import build_answer_messages
-from services.customer_reply_v2.comment_vision_payload import comment_context_for_text, strip_data_urls
+from services.customer_reply_v2.comment_vision_payload import (
+    comment_context_for_text,
+    sample_comment_stills,
+    strip_data_urls,
+    vision_image_parts,
+)
 from services.customer_reply_v2.models import EvidenceRecord
 from services.customer_reply_v2.retrieval_tools import ToolContext, dispatch_retrieval_tool
 
@@ -85,3 +90,13 @@ def test_strip_nested_data_urls() -> None:
     )
     assert "image_inputs" not in text_ctx
     assert text_ctx["image_input_count"] == 1
+
+
+def test_sample_stills_keeps_first_and_last() -> None:
+    rows = [{"url": f"u{i}", "kind": "video_frame"} for i in range(20)]
+    sampled = sample_comment_stills(rows, max_n=12)
+    assert len(sampled) == 12
+    assert sampled[0]["url"] == "u0"
+    assert sampled[-1]["url"] == "u19"
+    parts = vision_image_parts(rows)
+    assert len(parts) == 12

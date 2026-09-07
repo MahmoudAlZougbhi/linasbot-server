@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from services.customer_reply_v2.flags import customer_media_context_enabled
+from services.customer_reply_v2.comment_vision_payload import MODEL_MAX_STILLS, sample_comment_stills
 from services.customer_reply_v2.inbound_video import MAX_FRAMES as MAX_VIDEO_FRAMES
 from services.customer_reply_v2.models import CommentMediaContext
 from storage.persistent_storage import get_data_root
@@ -38,6 +39,13 @@ def save_cached_media(tenant_id: str, media_revision: str, payload: dict[str, An
     path = _cache_path(tenant_id, media_revision)
     payload = {**payload, "cached_at": time.time(), "media_revision": media_revision}
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
+def comment_needs_visible_reply(comment_text: str, comment_ctx: dict[str, Any] | None = None) -> bool:
+    """Questions / visual refs should not stay silent when Tera returns empty."""
+    _ = comment_ctx
+    text = str(comment_text or "")
+    return bool(_visual_reference(text) or "?" in text or "؟" in text)
 
 
 def _visual_reference(comment_text: str) -> bool:
@@ -211,5 +219,5 @@ def _bounded_image_inputs(inputs: list[dict[str, str]]) -> list[dict[str, str]]:
     frames = [row for row in inputs if str(row.get("kind") or "") == "video_frame"]
     stills = [row for row in inputs if str(row.get("kind") or "") != "video_frame"]
     if frames:
-        return frames[:MAX_VIDEO_FRAMES]
+        return sample_comment_stills(frames, max_n=MODEL_MAX_STILLS)
     return stills[:MAX_CAROUSEL_THUMBS]
