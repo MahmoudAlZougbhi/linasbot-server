@@ -113,7 +113,7 @@ export const commentsSetupFr: Record<keyof typeof commentsSetupEn, string> = {
   liveChatsTab: 'Discussions',
   liveCommentsTab: 'Commentaires',
   liveCommentsSubtitle: 'Choisissez une plateforme, puis les publications comme sur Instagram.',
-  liveCommentsSelectHint: 'Touchez une publication pour les détails. Le + choisit celles auxquelles l’IA répond.',
+  liveCommentsSelectHint: 'Touchez une publication pour les détails. Le + l’épingle ici. Les règles IA par post sont dans Configuration IA → Commentaires.',
   liveCommentsAllPosts: 'Toutes les publications',
   liveCommentsChosenPosts: 'Publications choisies',
   liveCommentsEmpty: 'Aucune publication',

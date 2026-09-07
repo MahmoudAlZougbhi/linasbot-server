@@ -65,6 +65,13 @@ def _wanted_post_ids(rule: CommentRule) -> list[str]:
     single = (rule.post_id or "").strip()
     if single and single not in ids:
         ids.append(single)
+    for post in getattr(rule, "selected_posts", None) or []:
+        if isinstance(post, dict):
+            value = str(post.get("id") or "").strip()
+        else:
+            value = str(getattr(post, "id", "") or "").strip()
+        if value and value not in ids:
+            ids.append(value)
     return ids
 
 

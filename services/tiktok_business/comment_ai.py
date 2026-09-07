@@ -82,16 +82,6 @@ async def process_tiktok_comment_ai(
             session.commit()
             _log_usage(tenant_id=tenant_id, comment_id=comment_id, outcome="skipped")
             return {"skipped": True, "reason": "automation_off"}
-        from services.comments_inbox.watchlist import comment_post_allowed
-
-        watched_id = item_id or comment.video_item_id
-        if not comment_post_allowed(tenant_id, "tiktok", watched_id):
-            job.delivery_status = "skipped"
-            job.last_error = "post_not_selected"
-            content.mark_comment_ai_processed(tenant_id=tenant_id, comment_id=comment_id)
-            session.commit()
-            _log_usage(tenant_id=tenant_id, comment_id=comment_id, outcome="skipped")
-            return {"skipped": True, "reason": "post_not_selected"}
         if not comments_manage_ready(connection.granted_scopes):
             job.delivery_status = "skipped"
             job.last_error = "missing_manage_comment_scope"

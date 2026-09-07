@@ -198,6 +198,32 @@ async def test_public_comment_does_not_post_model_unavailable_sentence(v2_env) -
 
 
 @pytest.mark.asyncio
+async def test_visual_question_posts_dm_invite_when_tera_is_empty(v2_env) -> None:
+    from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
+    from tests.cm_test_helpers import publish_test_content
+    from tests.customer_reply_ai_v2_helpers import _rich_sections
+
+    await publish_test_content("t_visual_q", _rich_sections())
+    out = await run_customer_reply_v2_comment(
+        tenant_id="t_visual_q",
+        comment_text="What is this",
+        detected_language="en",
+        response_language="en",
+        channel="instagram_comment",
+        scripted_retrieval=[{"final_plan": {"evidence_status": "sufficient", "selected_source_ids": []}}],
+        fixture_answer={
+            "reply_text": "",
+            "grounding_status": "insufficient",
+            "safe_failure_category": "model_unavailable",
+        },
+    )
+    assert out.reply
+    assert "DM" in str(out.reply)
+    assert "temporarily unavailable" not in str(out.reply)
+    assert "public_comment_fallback" in (out.metadata.get("failed_rules") or [])
+
+
+@pytest.mark.asyncio
 async def test_luna_fail_closed_without_responses_api(v2_env, monkeypatch: pytest.MonkeyPatch):
     from services.customer_reply_v2.retrieval_luna import _default_llm
 

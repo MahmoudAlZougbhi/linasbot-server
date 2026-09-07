@@ -68,6 +68,15 @@ def _wanted_post_ids(rule: dict[str, Any]) -> list[str]:
     single = str(rule.get("post_id") or "").strip()
     if single and single not in ids:
         ids.append(single)
+    selected = rule.get("selected_posts")
+    if isinstance(selected, list):
+        for raw in selected:
+            if isinstance(raw, dict):
+                value = str(raw.get("id") or "").strip()
+            else:
+                value = str(getattr(raw, "id", "") or "").strip()
+            if value and value not in ids:
+                ids.append(value)
     return ids
 
 

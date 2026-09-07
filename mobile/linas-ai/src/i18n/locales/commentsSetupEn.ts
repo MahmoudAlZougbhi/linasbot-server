@@ -106,7 +106,7 @@ export const commentsSetupEn = {
   liveChatsTab: 'Chats',
   liveCommentsTab: 'Comments',
   liveCommentsSubtitle: 'Choose a platform, then pick posts like Instagram.',
-  liveCommentsSelectHint: 'Tap a post for caption and details. Use + to choose which posts get AI replies.',
+  liveCommentsSelectHint: 'Tap a post for details. + pins it in this inbox. Which posts get special AI rules is in AI Setup → Comments.',
   liveCommentsAllPosts: 'All posts',
   liveCommentsChosenPosts: 'Chosen posts',
   liveCommentsEmpty: 'No posts to show',

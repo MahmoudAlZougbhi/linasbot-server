@@ -192,10 +192,6 @@ async def process_meta_comment_event(
         return CommentReplyResult(status="ignored", reason="empty_comment")
 
     post_id = str(event.get("post_id") or event.get("media_id") or "").strip()
-    from services.comments_inbox.watchlist import comment_post_allowed
-
-    if not comment_post_allowed(binding.tenant_id, binding.channel, post_id):
-        return CommentReplyResult(status="ignored", reason="post_not_selected")
     from services.cm.comment_rules import evaluate_published_comment_rules
     from services.cm.constants import tenant_uses_cm_runtime
 
