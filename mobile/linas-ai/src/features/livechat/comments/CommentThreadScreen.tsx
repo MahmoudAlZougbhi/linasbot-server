@@ -17,17 +17,23 @@ export function CommentThreadScreen({ platform, post }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [items, setItems] = useState<CommentThreadItem[]>([]);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setError('');
     void fetchCommentThreads({ platform, postId: post.id })
-      .then((rows) => {
-        if (alive) setItems(rows);
+      .then((result) => {
+        if (!alive) return;
+        setItems(result.items);
+        setError(result.error);
       })
       .catch(() => {
-        if (alive) setItems([]);
+        if (!alive) return;
+        setItems([]);
+        setError(tr('liveCommentsThreadError'));
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -35,11 +41,14 @@ export function CommentThreadScreen({ platform, post }: Props) {
     return () => {
       alive = false;
     };
-  }, [platform, post.id]);
+  }, [platform, post.id, tr]);
 
   if (loading) return <LinasLoadingIndicator variant="screen" />;
+  if (error && !items.length) {
+    return <EmptyState title={tr('liveCommentsThreadError')} body={tr('liveCommentsThreadErrorBody')} />;
+  }
   if (!items.length) {
-    return <EmptyState title={tr('liveCommentsNoReplies')} body={tr('liveCommentsNoRepliesBody')} />;
+    return <EmptyState title={tr('liveCommentsNoComments')} body={tr('liveCommentsNoCommentsBody')} />;
   }
 
   return (
@@ -50,10 +59,14 @@ export function CommentThreadScreen({ platform, post }: Props) {
             <Text style={[styles.who, { color: colors.textMuted }]}>{item.author || tr('liveCommentsCustomer')}</Text>
             <Text style={[styles.body, { color: colors.text }]}>{item.comment}</Text>
           </View>
-          <View style={[styles.bubble, styles.ai, { backgroundColor: colors.accentSoft }]}>
-            <Text style={[styles.who, { color: colors.accent }]}>{tr('liveCommentsAiReply')}</Text>
-            <Text style={[styles.body, { color: colors.text }]}>{item.ai_reply}</Text>
-          </View>
+          {item.ai_reply ? (
+            <View style={[styles.bubble, styles.ai, { backgroundColor: colors.accentSoft }]}>
+              <Text style={[styles.who, { color: colors.accent }]}>{tr('liveCommentsAiReply')}</Text>
+              <Text style={[styles.body, { color: colors.text }]}>{item.ai_reply}</Text>
+            </View>
+          ) : (
+            <Text style={[styles.wait, { color: colors.textMuted }]}>{tr('liveCommentsWaitingReply')}</Text>
+          )}
         </View>
       ))}
     </ScrollView>
@@ -68,4 +81,5 @@ const styles = StyleSheet.create({
   ai: { marginLeft: 36 },
   who: { fontFamily: fonts.bodyMedium, fontSize: 12, fontWeight: '700' },
   body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21 },
+  wait: { fontFamily: fonts.body, fontSize: 13, marginLeft: 36 },
 });

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import httpx
 
+from services.comments_inbox.thread_pairs import nested_replies, pair_comment_threads, pair_tiktok_threads
 from services.customer_reply_v2.connected_posts import list_tenant_comment_accounts
-from services.meta_app_registry import MetaCredentialError, get_meta_app_registry, get_meta_graph_api_version
-from services.meta_graph_routing import graph_api_url
+from services.meta_app_registry import MetaCredentialError, get_meta_app_registry
+from services.meta_graph_routing import graph_api_url, graph_api_version_for_binding
+
+_HYDRATE_REPLIES = 12
 
 
 def _account(tenant_id: str, platform: str) -> dict[str, str] | None:
@@ -27,28 +31,7 @@ def _tiktok_threads(*, tenant_id: str, post_id: str, limit: int) -> list[dict[st
         return []
     with whatsapp_session() as session:
         rows = TikTokContentRepository(session).list_comments_inbox(tenant_id=tenant_id, limit=200)
-    out: list[dict[str, Any]] = []
-    for row in rows:
-        if str(row.get("post_id") or "") != post_id:
-            continue
-        if str(row.get("delivery_status") or "") != "sent":
-            continue
-        reply = str(row.get("ai_reply") or "").strip()
-        if not reply:
-            continue
-        out.append(
-            {
-                "comment_id": str(row.get("comment_id") or ""),
-                "author": str(row.get("author_username") or ""),
-                "comment": str(row.get("text") or ""),
-                "ai_reply": reply,
-                "created_at": str(row.get("create_time") or ""),
-                "delivery_status": "sent",
-            }
-        )
-        if len(out) >= limit:
-            break
-    return out
+    return pair_tiktok_threads(rows, post_id=post_id, limit=limit)
 
 
 def _self_names(binding: Any) -> set[str]:
@@ -67,16 +50,55 @@ def _self_ids(binding: Any) -> set[str]:
     } - {""}
 
 
-def _is_self(row: dict[str, Any], *, names: set[str], ids: set[str]) -> bool:
-    from_candidate = row.get("from")
-    from_raw = from_candidate if isinstance(from_candidate, dict) else {}
-    username = str(row.get("username") or from_raw.get("username") or "").strip().casefold()
-    from_id = str(from_raw.get("id") or "").strip()
-    return username in names or from_id in ids
+def _graph_error(payload: Any, status_code: int) -> str:
+    err = payload.get("error") if isinstance(payload, dict) else None
+    if isinstance(err, dict) and (err.get("message") or err.get("code")):
+        return "graph_error"
+    if status_code >= 300:
+        return f"graph_http_{status_code}"
+    return ""
 
 
-def _text_of(row: dict[str, Any]) -> str:
-    return str(row.get("text") or row.get("message") or "").strip()
+def _comment_field_sets(platform: str) -> tuple[str, ...]:
+    if platform == "instagram":
+        base = "id,text,username,timestamp,parent_id"
+        return (f"{base},replies{{{base}}}", base, "id,text,username,timestamp")
+    base = "id,message,from,created_time,parent"
+    return (f"{base},comments{{id,message,from,created_time}}", base, "id,message,from,created_time")
+
+
+async def _hydrate_replies(
+    client: httpx.AsyncClient,
+    *,
+    binding: Any,
+    version: str,
+    token: str,
+    platform: str,
+    rows: list[dict[str, Any]],
+) -> None:
+    need = [row for row in rows if str(row.get("id") or "") and not nested_replies(row, platform=platform)]
+    if not need:
+        return
+    edge = "replies" if platform == "instagram" else "comments"
+    fields = _comment_field_sets(platform)[-1]
+    key = "replies" if platform == "instagram" else "comments"
+
+    async def one(row: dict[str, Any]) -> None:
+        url = graph_api_url(binding, graph_api_version=version, path=f"{row['id']}/{edge}")
+        try:
+            resp = await client.get(
+                url,
+                params={"fields": fields, "limit": "20"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            payload = resp.json() if resp.content else {}
+        except (httpx.HTTPError, ValueError):
+            return
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if isinstance(data, list):
+            row[key] = {"data": [item for item in data if isinstance(item, dict)]}
+
+    await asyncio.gather(*(one(row) for row in need[:_HYDRATE_REPLIES]))
 
 
 async def _graph_threads(
@@ -85,16 +107,16 @@ async def _graph_threads(
     platform: str,
     post_id: str,
     limit: int,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], str]:
     from services.customer_reply_v2.connected_posts import account_belongs_to_tenant
 
     account = _account(tenant_id, platform)
     if account is None:
-        return []
+        return [], "disconnected"
     if not account_belongs_to_tenant(
         tenant_id=tenant_id, platform=platform, connected_account_id=account["connected_account_id"]
     ):
-        return []
+        return [], "disconnected"
     registry = get_meta_app_registry()
     binding = None
     for item in registry.list_bindings(include_inactive=False, include_superseded=False):
@@ -103,63 +125,52 @@ async def _graph_threads(
         binding = item
         break
     if binding is None:
-        return []
+        return [], "disconnected"
     try:
         token = str(registry.get_credential(binding).access_token or "").strip()
     except MetaCredentialError:
-        return []
+        return [], "credential_unavailable"
     if not token:
-        return []
-    version = get_meta_graph_api_version()
-    fields = (
-        "id,text,username,timestamp,replies{id,text,username,timestamp}"
-        if platform == "instagram"
-        else "id,message,from,created_time,comments{id,message,from,created_time}"
-    )
+        return [], "credential_unavailable"
+    version = graph_api_version_for_binding(binding)
     url = graph_api_url(binding, graph_api_version=version, path=f"{post_id}/comments")
+    last_error = ""
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(
-                url,
-                params={"fields": fields, "limit": str(min(limit, 50))},
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            payload = resp.json() if resp.content else {}
+            for fields in _comment_field_sets(platform):
+                resp = await client.get(
+                    url,
+                    params={"fields": fields, "limit": str(min(limit, 50))},
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                payload = resp.json() if resp.content else {}
+                last_error = _graph_error(payload, resp.status_code)
+                if last_error or not isinstance(payload, dict):
+                    continue
+                raw = payload.get("data")
+                rows = [item for item in raw if isinstance(item, dict)] if isinstance(raw, list) else []
+                await _hydrate_replies(
+                    client,
+                    binding=binding,
+                    version=version,
+                    token=token,
+                    platform=platform,
+                    rows=rows,
+                )
+                return (
+                    pair_comment_threads(
+                        rows,
+                        platform=platform,
+                        media_id=post_id,
+                        names=_self_names(binding),
+                        ids=_self_ids(binding),
+                        limit=limit,
+                    ),
+                    "",
+                )
     except (httpx.HTTPError, ValueError):
-        return []
-    if resp.status_code >= 300 or not isinstance(payload, dict) or payload.get("error"):
-        return []
-    names = _self_names(binding)
-    ids = _self_ids(binding)
-    out: list[dict[str, Any]] = []
-    for raw in payload.get("data") or []:
-        if not isinstance(raw, dict) or _is_self(raw, names=names, ids=ids):
-            continue
-        nested = raw.get("replies") if platform == "instagram" else raw.get("comments")
-        replies = nested.get("data") if isinstance(nested, dict) else []
-        if not isinstance(replies, list):
-            continue
-        ai_reply = ""
-        for reply in replies:
-            if isinstance(reply, dict) and _is_self(reply, names=names, ids=ids):
-                ai_reply = _text_of(reply)
-                if ai_reply:
-                    break
-        if not ai_reply:
-            continue
-        out.append(
-            {
-                "comment_id": str(raw.get("id") or ""),
-                "author": str(raw.get("username") or (raw.get("from") or {}).get("name") or ""),
-                "comment": _text_of(raw),
-                "ai_reply": ai_reply,
-                "created_at": str(raw.get("timestamp") or raw.get("created_time") or ""),
-                "delivery_status": "sent",
-            }
-        )
-        if len(out) >= limit:
-            break
-    return out
+        return [], "graph_request_failed"
+    return [], last_error or "graph_request_failed"
 
 
 async def list_comment_threads(
@@ -172,14 +183,25 @@ async def list_comment_threads(
     plat = str(platform or "").strip().lower()
     media_id = str(post_id or "").strip()
     if plat not in {"instagram", "facebook", "tiktok"} or not media_id:
-        return {"ok": False, "status": "error", "threads": []}
+        return {"ok": False, "status": "error", "error": "invalid", "threads": []}
+    error = ""
     if plat == "tiktok":
         threads = _tiktok_threads(tenant_id=tenant_id, post_id=media_id, limit=limit)
     else:
-        threads = await _graph_threads(tenant_id=tenant_id, platform=plat, post_id=media_id, limit=limit)
+        threads, error = await _graph_threads(tenant_id=tenant_id, platform=plat, post_id=media_id, limit=limit)
+    if error and not threads:
+        return {
+            "ok": False,
+            "status": "error",
+            "error": error,
+            "threads": [],
+            "platform": plat,
+            "post_id": media_id,
+        }
     return {
         "ok": True,
         "status": "ok" if threads else "empty",
+        "error": "",
         "threads": threads,
         "platform": plat,
         "post_id": media_id,

@@ -8,7 +8,6 @@ import type { CommentMediaItem } from './commentsInboxTypes';
 type Props = {
   posts: CommentMediaItem[];
   onOpen?: (post: CommentMediaItem) => void;
-  onToggleWatch?: (post: CommentMediaItem) => void;
   pickIds?: string[];
   onPick?: (post: CommentMediaItem) => void;
   kindLabel: (kind: CommentMediaItem['kind']) => string;
@@ -22,7 +21,6 @@ type Props = {
 function Tile({
   post,
   onOpen,
-  onToggleWatch,
   onPick,
   picked,
   kindLabel,
@@ -30,7 +28,6 @@ function Tile({
 }: {
   post: CommentMediaItem;
   onOpen?: () => void;
-  onToggleWatch?: () => void;
   onPick?: () => void;
   picked: boolean;
   kindLabel: string;
@@ -38,7 +35,6 @@ function Tile({
 }) {
   const { colors } = useTheme();
   const picking = Boolean(onPick);
-  const marked = picking ? picked : post.watched;
   return (
     <View style={[styles.tile, { width: tileWidth }]}>
       <Pressable
@@ -62,21 +58,11 @@ function Tile({
           <Text style={styles.countText}>{post.comment_count}</Text>
         </View>
         {picking ? (
-          <View style={[styles.check, marked ? styles.checkOn : styles.checkOff]}>
-            <AppIcon icon={feather(marked ? 'check' : 'plus')} size={14} color={marked ? '#FFFFFF' : '#111827'} />
+          <View style={[styles.check, picked ? styles.checkOn : styles.checkOff]}>
+            <AppIcon icon={feather(picked ? 'check' : 'plus')} size={14} color={picked ? '#FFFFFF' : '#111827'} />
           </View>
         ) : null}
       </Pressable>
-      {!picking && onToggleWatch ? (
-        <Pressable
-          onPress={onToggleWatch}
-          style={[styles.check, marked ? styles.checkOn : styles.checkOff]}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: marked }}
-        >
-          <AppIcon icon={feather(marked ? 'check' : 'plus')} size={14} color={marked ? '#FFFFFF' : '#111827'} />
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -84,7 +70,6 @@ function Tile({
 export function CommentsMediaGrid({
   posts,
   onOpen,
-  onToggleWatch,
   pickIds,
   onPick,
   kindLabel,
@@ -115,7 +100,6 @@ export function CommentsMediaGrid({
           kindLabel={kindLabel(item.kind)}
           picked={Boolean(pickIds?.includes(item.id))}
           onOpen={onOpen ? () => onOpen(item) : undefined}
-          onToggleWatch={onToggleWatch ? () => onToggleWatch(item) : undefined}
           onPick={onPick ? () => onPick(item) : undefined}
         />
       )}
