@@ -73,6 +73,7 @@ def _settings_snapshot(settings: MetaMessagingSettings) -> dict[str, Any]:
         "binding_id": settings.binding_id,
         "auth_flow": settings.auth_flow,
         "graph_base_url": settings.graph_base_url,
+        "instagram_login_user_id": str(getattr(settings, "instagram_login_user_id", "") or ""),
     }
 
 

@@ -38,6 +38,7 @@ class MetaMessagingSettings:
     binding_id: str = ""
     auth_flow: str = "facebook_login"
     graph_base_url: str = "https://graph.facebook.com"
+    instagram_login_user_id: str = ""
 
 
 def get_meta_messaging_settings() -> MetaMessagingSettings:
@@ -98,6 +99,9 @@ def resolve_meta_send_account_id(
     Instagram Login uses graph.instagram.com /{ig_user_id}/messages per Meta docs.
     """
     if settings.auth_flow == "instagram_login" and str(channel or "").strip().lower() == "instagram":
+        login_user = str(getattr(settings, "instagram_login_user_id", "") or "").strip()
+        if login_user.isdigit():
+            return login_user
         return settings.instagram_account_id or str(event.get("account_id") or event.get("recipient_id") or "").strip()
     event_account = str(event.get("account_id") or event.get("recipient_id") or "").strip()
     if settings.page_id:

@@ -44,6 +44,7 @@ SAFE_META_SETTINGS_SNAPSHOT_KEYS = frozenset(
         "binding_id",
         "auth_flow",
         "graph_base_url",
+        "instagram_login_user_id",
     }
 )
 _LOCAL_LEDGER_THREAD_LOCK = threading.RLock()
