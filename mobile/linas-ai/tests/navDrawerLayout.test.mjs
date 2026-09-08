@@ -33,19 +33,15 @@ describe('drawer layout and selected state', () => {
     assert.match(nav, /case 'cm':\s*\n\s*case 'cm_section':\s*\n\s*return 'cm'/);
   });
 
-  it('Recent heading matches Linas wordmark size and font', () => {
-    const header = read('features/nav/DrawerHeader.tsx');
+  it('Recent heading matches Dashboard and AI Setup tile type', () => {
     const recents = read('features/nav/DrawerRecents.tsx');
-    const wordmark = header.match(/wordmark:\s*\{([\s\S]*?)\},/);
+    const type = read('theme/typography.ts');
     const heading = recents.match(/heading:\s*\{([\s\S]*?)\},/);
-    assert.ok(wordmark, 'Linas wordmark style missing');
     assert.ok(heading, 'Recent heading style missing');
-    assert.match(wordmark[1], /fontFamily:\s*fonts\.display/);
-    assert.match(wordmark[1], /fontSize:\s*18/);
-    assert.match(heading[1], /fontFamily:\s*fonts\.display/);
-    assert.match(heading[1], /fontSize:\s*18/);
-    assert.match(wordmark[1], /letterSpacing:\s*-0\.25/);
-    assert.match(heading[1], /letterSpacing:\s*-0\.25/);
+    assert.match(heading[1], /\.\.\.typography\.drawerItem/);
+    assert.match(type, /drawerItem:[\s\S]*?fontSize:\s*16/);
+    assert.doesNotMatch(heading[1], /fontSize:\s*18/);
+    assert.doesNotMatch(heading[1], /fonts\.display/);
   });
 
   it('Pin section sits above Recent with pin glyph on pinned rows', () => {

@@ -38,6 +38,13 @@ def graph_api_url(binding: MetaAssetBinding, *, graph_api_version: str, path: st
     return f"{base}/{version}/{normalized}"
 
 
+def graph_api_version_for_binding(binding: MetaAssetBinding) -> str:
+    if binding.auth_flow == "instagram_login":
+        return instagram_login_graph_api_version()
+    app = get_meta_app_configs().get(binding.app_key)
+    return str(getattr(app, "graph_api_version", "") or get_meta_graph_api_version())
+
+
 def required_comment_scopes_for_binding(binding: MetaAssetBinding) -> frozenset[str]:
     if binding.auth_flow == "instagram_login" and binding.channel == "instagram":
         return frozenset({"instagram_business_manage_comments"})

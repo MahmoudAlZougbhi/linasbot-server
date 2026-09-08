@@ -84,10 +84,7 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
   }
 
   return (
-    <ScreenChrome
-      title="Live Chat"
-      subtitle={surface === 'comments' ? tr('liveCommentsSubtitle') : 'All customer conversations'}
-    >
+    <ScreenChrome title="Live Chat">
       <LiveChatSurfaceSwitch value={surface} onChange={setSurface} />
       {surface === 'comments' ? (
         <CommentsInbox onOpenThread={(platform, post) => setCommentPost({ platform, post })} />

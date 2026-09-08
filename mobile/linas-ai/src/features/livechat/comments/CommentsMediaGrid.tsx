@@ -2,13 +2,12 @@ import type { ReactElement } from 'react';
 import { FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { AppIcon, feather } from '../../../components/AppIcon';
-import { fonts, useTheme } from '../../../theme';
+import { fonts, spacing, useTheme } from '../../../theme';
 import type { CommentMediaItem } from './commentsInboxTypes';
 
 type Props = {
   posts: CommentMediaItem[];
   onOpen?: (post: CommentMediaItem) => void;
-  onToggleWatch?: (post: CommentMediaItem) => void;
   pickIds?: string[];
   onPick?: (post: CommentMediaItem) => void;
   kindLabel: (kind: CommentMediaItem['kind']) => string;
@@ -19,10 +18,16 @@ type Props = {
   empty?: ReactElement | null;
 };
 
+const COLS = 3;
+const GAP = 1;
+
+function tileAspect(kind: CommentMediaItem['kind']): number {
+  return kind === 'reel' || kind === 'video' ? 1 : 4 / 5;
+}
+
 function Tile({
   post,
   onOpen,
-  onToggleWatch,
   onPick,
   picked,
   kindLabel,
@@ -30,7 +35,6 @@ function Tile({
 }: {
   post: CommentMediaItem;
   onOpen?: () => void;
-  onToggleWatch?: () => void;
   onPick?: () => void;
   picked: boolean;
   kindLabel: string;
@@ -38,17 +42,22 @@ function Tile({
 }) {
   const { colors } = useTheme();
   const picking = Boolean(onPick);
-  const marked = picking ? picked : post.watched;
   return (
-    <View style={[styles.tile, { width: tileWidth }]}>
+    <View style={[styles.tile, { width: tileWidth, aspectRatio: tileAspect(post.kind) }]}>
       <Pressable
         onPress={onPick || onOpen}
         accessibilityRole="button"
         accessibilityLabel={kindLabel}
         style={styles.press}
       >
+        <View style={styles.plate} />
         {post.thumbnail ? (
-          <Image source={{ uri: post.thumbnail }} style={styles.image} />
+          <Image
+            source={{ uri: post.thumbnail }}
+            style={styles.image}
+            resizeMode="cover"
+            fadeDuration={0}
+          />
         ) : (
           <View style={[styles.image, styles.fallback, { backgroundColor: colors.surfaceAlt }]}>
             <AppIcon icon={feather('image')} size={22} color={colors.textMuted} />
@@ -62,21 +71,11 @@ function Tile({
           <Text style={styles.countText}>{post.comment_count}</Text>
         </View>
         {picking ? (
-          <View style={[styles.check, marked ? styles.checkOn : styles.checkOff]}>
-            <AppIcon icon={feather(marked ? 'check' : 'plus')} size={14} color={marked ? '#FFFFFF' : '#111827'} />
+          <View style={[styles.check, picked ? styles.checkOn : styles.checkOff]}>
+            <AppIcon icon={feather(picked ? 'check' : 'plus')} size={14} color={picked ? '#FFFFFF' : '#111827'} />
           </View>
         ) : null}
       </Pressable>
-      {!picking && onToggleWatch ? (
-        <Pressable
-          onPress={onToggleWatch}
-          style={[styles.check, marked ? styles.checkOn : styles.checkOff]}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: marked }}
-        >
-          <AppIcon icon={feather(marked ? 'check' : 'plus')} size={14} color={marked ? '#FFFFFF' : '#111827'} />
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -84,7 +83,6 @@ function Tile({
 export function CommentsMediaGrid({
   posts,
   onOpen,
-  onToggleWatch,
   pickIds,
   onPick,
   kindLabel,
@@ -95,18 +93,19 @@ export function CommentsMediaGrid({
   empty,
 }: Props) {
   const { width } = useWindowDimensions();
-  const tileWidth = Math.floor((width - GAP * 2) / 3);
+  const tileWidth = (width - GAP * (COLS - 1)) / COLS;
   return (
     <FlatList
       data={posts}
-      numColumns={3}
+      numColumns={COLS}
       keyExtractor={(item) => item.id}
+      style={styles.bleed}
       columnWrapperStyle={posts.length ? styles.row : undefined}
       contentContainerStyle={posts.length ? styles.list : styles.empty}
       refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}
       onEndReached={onEndReached}
       onEndReachedThreshold={0.4}
-      ListHeaderComponent={header}
+      ListHeaderComponent={header ? <View style={styles.headerPad}>{header}</View> : null}
       ListEmptyComponent={empty}
       renderItem={({ item }) => (
         <Tile
@@ -115,7 +114,6 @@ export function CommentsMediaGrid({
           kindLabel={kindLabel(item.kind)}
           picked={Boolean(pickIds?.includes(item.id))}
           onOpen={onOpen ? () => onOpen(item) : undefined}
-          onToggleWatch={onToggleWatch ? () => onToggleWatch(item) : undefined}
           onPick={onPick ? () => onPick(item) : undefined}
         />
       )}
@@ -123,14 +121,15 @@ export function CommentsMediaGrid({
   );
 }
 
-const GAP = 3;
-
 const styles = StyleSheet.create({
+  bleed: { marginHorizontal: -spacing.lg },
+  headerPad: { paddingHorizontal: spacing.lg },
   list: { paddingBottom: 28 },
   empty: { flexGrow: 1 },
-  row: { gap: GAP, marginBottom: GAP },
-  tile: { aspectRatio: 1, position: 'relative' },
+  row: { gap: GAP, marginBottom: GAP, alignItems: 'flex-start' },
+  tile: { position: 'relative' },
   press: { flex: 1, overflow: 'hidden', backgroundColor: '#111827' },
+  plate: { ...StyleSheet.absoluteFill, backgroundColor: '#111827' },
   image: { width: '100%', height: '100%' },
   fallback: { alignItems: 'center', justifyContent: 'center' },
   kind: {

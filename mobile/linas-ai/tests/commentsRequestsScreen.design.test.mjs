@@ -41,7 +41,10 @@ describe('Comments screens match screenshot handoff', () => {
     const en = read('i18n/locales/commentsSetupEn.ts');
     assert.match(en, /commentsEditAi: 'Edit AI reply'/);
     assert.match(en, /commentsEditAutomatic: 'Edit automatic reply'/);
-    assert.match(en, /commentsNote: 'Note for Linas'/);
+    assert.match(en, /commentsNote: 'Note for Linas AI'/);
+    assert.match(edit, /styles\.box/);
+    assert.doesNotMatch(edit, /onToggleActive/);
+    assert.doesNotMatch(edit, /commentsActive/);
     assert.match(en, /commentsResourcesAutoHint: 'For a public comment: Image or Link/);
     assert.match(edit, /commentsTypeAutomatic/);
     assert.match(edit, /commentsChoosePosts/);

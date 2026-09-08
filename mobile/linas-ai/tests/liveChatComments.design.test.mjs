@@ -22,23 +22,31 @@ test('Live Chat has Chats / Comments switch and comment grid', () => {
   assert.match(screen, /CommentThreadScreen/);
   assert.match(inbox, /CommentsPlatformChips/);
   assert.match(inbox, /CommentsMediaGrid/);
-  assert.match(inbox, /CommentPostSheet/);
-  assert.match(grid, /numColumns=\{3\}/);
+  assert.match(inbox, /onOpenThread\(platform, post\)/);
+  assert.doesNotMatch(inbox, /CommentPostSheet/);
+  assert.doesNotMatch(inbox, /liveCommentsAllPosts/);
+  assert.doesNotMatch(inbox, /liveCommentsChosenPosts/);
+  assert.doesNotMatch(inbox, /onToggleWatch/);
+  assert.match(grid, /numColumns=\{COLS\}/);
+  assert.match(grid, /marginHorizontal: -spacing\.lg/);
+  assert.match(grid, /tileAspect/);
+  assert.match(grid, /4 \/ 5/);
+  assert.match(grid, /fadeDuration=\{0\}/);
   assert.match(grid, /comment_count/);
+  assert.doesNotMatch(grid, /onToggleWatch/);
   assert.match(chips, /id: 'instagram'/);
   assert.match(chips, /id: 'facebook'/);
   assert.match(chips, /id: 'tiktok'/);
   assert.doesNotMatch(chips, /whatsapp/);
 });
 
-test('post sheet shows caption, kind, view, and watch toggle', () => {
-  const sheet = read('features/livechat/comments/CommentPostSheet.tsx');
+test('thread shows a large post image above comments and optional Linas reply', () => {
   const thread = read('features/livechat/comments/CommentThreadScreen.tsx');
-  assert.match(sheet, /liveCommentsView/);
-  assert.match(sheet, /liveCommentsOpenThread/);
-  assert.match(sheet, /liveCommentsReplyOn/);
-  assert.match(sheet, /caption/);
+  assert.match(thread, /post.thumbnail/);
+  assert.match(thread, /aspectRatio: tall \? 4 \/ 5 : 1/);
   assert.match(thread, /liveCommentsAiReply/);
+  assert.match(thread, /liveCommentsWaitingReply/);
+  assert.match(thread, /liveCommentsNoComments/);
   assert.match(thread, /item.comment/);
   assert.match(thread, /item.ai_reply/);
 });

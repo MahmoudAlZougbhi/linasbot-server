@@ -53,6 +53,7 @@ const ThreadsSchema = z
   .object({
     success: z.boolean().optional(),
     status: z.string().optional(),
+    error: z.string().optional(),
     threads: z.array(ThreadRow).optional(),
   })
   .passthrough();
@@ -106,43 +107,25 @@ export async function fetchCommentMedia(input: {
   };
 }
 
-export async function patchCommentWatch(input: {
-  platform: CommentPlatform;
-  mode?: 'all' | 'selected';
-  postId?: string;
-  selected?: boolean;
-  knownIds?: string[];
-}): Promise<CommentWatch> {
-  const data = await apiFetch('/api/comments/watchlist', {
-    method: 'PATCH',
-    schema: z.object({ watch: WatchSchema.optional() }).passthrough(),
-    body: JSON.stringify({
-      platform: input.platform,
-      mode: input.mode,
-      post_id: input.postId,
-      selected: input.selected,
-      known_ids: input.knownIds,
-    }),
-  });
-  return asWatch(data.watch);
-}
-
 export async function fetchCommentThreads(input: {
   platform: CommentPlatform;
   postId: string;
-}): Promise<CommentThreadItem[]> {
+}): Promise<{ items: CommentThreadItem[]; error: string }> {
   const params = new URLSearchParams({ platform: input.platform, limit: '50' });
   const data = await apiFetch(`/api/comments/media/${encodeURIComponent(input.postId)}/threads?${params}`, {
     schema: ThreadsSchema,
   });
-  return (data.threads || [])
-    .map((row) => ({
-      comment_id: String(row.comment_id || ''),
-      author: String(row.author || ''),
-      comment: String(row.comment || ''),
-      ai_reply: String(row.ai_reply || ''),
-      created_at: String(row.created_at || ''),
-      delivery_status: String(row.delivery_status || ''),
-    }))
-    .filter((row) => row.comment_id || row.comment);
+  return {
+    error: String(data.status === 'error' ? data.error || 'thread_error' : ''),
+    items: (data.threads || [])
+      .map((row) => ({
+        comment_id: String(row.comment_id || ''),
+        author: String(row.author || ''),
+        comment: String(row.comment || ''),
+        ai_reply: String(row.ai_reply || ''),
+        created_at: String(row.created_at || ''),
+        delivery_status: String(row.delivery_status || ''),
+      }))
+      .filter((row) => row.comment_id || row.comment),
+  };
 }
