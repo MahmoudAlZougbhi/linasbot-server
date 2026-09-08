@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   row: { gap: GAP, marginBottom: GAP, alignItems: 'flex-start' },
   tile: { position: 'relative' },
   press: { flex: 1, overflow: 'hidden', backgroundColor: '#111827' },
-  plate: { ...StyleSheet.absoluteFillObject, backgroundColor: '#111827' },
+  plate: { ...StyleSheet.absoluteFill, backgroundColor: '#111827' },
   image: { width: '100%', height: '100%' },
   fallback: { alignItems: 'center', justifyContent: 'center' },
   kind: {

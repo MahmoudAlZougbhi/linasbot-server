@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from services.comments_inbox.thread_pairs import pair_comment_threads, pair_tiktok_threads
-from services.meta_instagram_login_config import INSTAGRAM_LOGIN_GRAPH_API_VERSION
 from services.meta_graph_routing import graph_api_version_for_binding
+from services.meta_instagram_login_config import INSTAGRAM_LOGIN_GRAPH_API_VERSION
 
 
 def test_instagram_comments_appear_without_ai_reply() -> None:
