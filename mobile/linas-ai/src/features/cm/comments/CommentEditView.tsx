@@ -1,17 +1,9 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { StringKey } from '../../../i18n';
 import { fonts } from '../../../theme';
 import { ClampedLongField } from '../ClampedLongField';
-import {
-  CM_BORDER,
-  CM_DOT,
-  CM_MUTED,
-  CM_RADIUS,
-  CM_TEAL,
-  CM_TEAL_DARK,
-  CM_TEAL_PILL,
-} from './commentChrome';
+import { CM_BORDER, CM_MUTED, CM_RADIUS, CM_TEAL, CM_TEAL_DARK } from './commentChrome';
 import { CommentSelectedPosts } from './CommentSelectedPosts';
 import {
   postsModeOf,
@@ -40,7 +32,6 @@ type Props = {
   onKeywords: (value: string) => void;
   onReplyMessage: (value: string) => void;
   onNote: (value: string) => void;
-  onToggleActive: () => void;
   onAddResource: (kind: CommentKind) => void;
   onRemoveResource: (id: string) => void;
   onReplaceResource: (att: CommentAttachment) => void;
@@ -60,7 +51,6 @@ export function CommentEditView({
   onKeywords,
   onReplyMessage,
   onNote,
-  onToggleActive,
   onAddResource,
   onRemoveResource,
   onReplaceResource,
@@ -73,27 +63,31 @@ export function CommentEditView({
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.headingRow}>
-        <Text style={styles.hero}>{tr(isAi ? 'commentsEditAi' : 'commentsEditAutomatic')}</Text>
-        <Pressable
-          onPress={onToggleActive}
-          accessibilityRole="button"
-          accessibilityLabel={item.enabled ? tr('commentsActive') : tr('commentsInactive')}
-          style={styles.pill}
-        >
-          <View style={[styles.dot, !item.enabled && styles.dotOff]} />
-          <Text style={styles.pillText}>{item.enabled ? tr('commentsActive') : tr('commentsInactive')}</Text>
-        </Pressable>
-      </View>
+      <Text style={styles.hero}>{tr(isAi ? 'commentsEditAi' : 'commentsEditAutomatic')}</Text>
 
-      <Text style={styles.label}>{tr('commentsFieldTitle')}</Text>
-      <TextInput
-        value={item.name}
-        onChangeText={onTitle}
-        style={styles.input}
-        placeholder={tr('commentsUntitled')}
-        placeholderTextColor={CM_MUTED}
-      />
+      <View style={styles.box}>
+        <Text style={styles.boxLabel}>{tr('commentsFieldTitle')}</Text>
+        <TextInput
+          value={item.name}
+          onChangeText={onTitle}
+          style={styles.input}
+          placeholder={tr('commentsUntitled')}
+          placeholderTextColor={CM_MUTED}
+        />
+        {isAi ? (
+          <ClampedLongField
+            label={tr('commentsNote')}
+            value={item.ai_instructions}
+            onChange={onNote}
+            placeholder={tr('commentsNote')}
+            placeholderTextColor={CM_MUTED}
+            hint={tr('commentsNoteHint')}
+            labelStyle={styles.label}
+            inputStyle={styles.input}
+            hintStyle={styles.hint}
+          />
+        ) : null}
+      </View>
 
       <CommentSegmented
         label={tr('commentsReplyType')}
@@ -128,21 +122,7 @@ export function CommentEditView({
         onChange={onReplyIn}
       />
 
-      {isAi ? (
-        <>
-          <ClampedLongField
-            label={tr('commentsNote')}
-            value={item.ai_instructions}
-            onChange={onNote}
-            placeholder={tr('commentsNote')}
-            placeholderTextColor={CM_MUTED}
-            hint={tr('commentsNoteHint')}
-            labelStyle={styles.label}
-            inputStyle={styles.input}
-            hintStyle={styles.hint}
-          />
-        </>
-      ) : (
+      {isAi ? null : (
         <>
           <Text style={styles.label}>{tr('commentsKeywords')}</Text>
           <TextInput
@@ -182,32 +162,27 @@ export function CommentEditView({
 
 const styles = StyleSheet.create({
   wrap: { gap: 8, paddingBottom: 16 },
-  headingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 8,
-  },
   hero: {
     color: CM_TEAL_DARK,
     fontFamily: fonts.bodyMedium,
     fontSize: 26,
     fontWeight: '700',
-    flex: 1,
+    marginBottom: 8,
   },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: CM_TEAL_PILL,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  box: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: CM_BORDER,
+    borderRadius: CM_RADIUS,
+    padding: 12,
+    gap: 8,
   },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: CM_DOT },
-  dotOff: { backgroundColor: '#F59E0B' },
-  pillText: { color: CM_TEAL, fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '600' },
+  boxLabel: {
+    color: CM_TEAL_DARK,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 15,
+    fontWeight: '700',
+  },
   label: {
     color: CM_TEAL_DARK,
     fontFamily: fonts.bodyMedium,

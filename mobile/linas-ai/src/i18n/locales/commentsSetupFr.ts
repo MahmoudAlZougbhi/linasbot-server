@@ -38,7 +38,7 @@ export const commentsSetupFr: Record<keyof typeof commentsSetupEn, string> = {
   commentsKeywords: 'Quand le commentaire contient :',
   commentsKeywordsPlaceholder: 'price, سعر, قدّي',
   commentsReplyMessage: 'Message de réponse :',
-  commentsNote: 'Note pour Linas',
+  commentsNote: 'Note pour Linas AI',
   commentsNoteHint:
     'Cette note guide Linas pour les posts sélectionnés. Sans règle, Linas répond toujours depuis vos connaissances publiées.',
   commentsResources: 'Ressources',

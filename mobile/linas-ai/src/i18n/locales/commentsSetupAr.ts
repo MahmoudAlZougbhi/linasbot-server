@@ -38,7 +38,7 @@ export const commentsSetupAr: Record<keyof typeof commentsSetupEn, string> = {
   commentsKeywords: 'عندما يحتوي التعليق:',
   commentsKeywordsPlaceholder: 'price, سعر, قدّي',
   commentsReplyMessage: 'رسالة الرد:',
-  commentsNote: 'ملاحظة لـ Linas',
+  commentsNote: 'ملاحظة لـ Linas AI',
   commentsNoteHint:
     'هذه الملاحظة توجّه Linas للمنشورات المختارة. من دون قاعدة، يرد Linas من معرفتك المنشورة.',
   commentsResources: 'الموارد',

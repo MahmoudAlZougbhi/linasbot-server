@@ -204,7 +204,6 @@ export function CommentsScreen({ proposalReview, onBack }: Props) {
                 })
               }
               onNote={(ai_instructions) => patchSelected({ ai_instructions })}
-              onToggleActive={() => patchSelected({ enabled: !selected.enabled })}
               onAddResource={(kind) => void media.addResource(kind)}
               onRemoveResource={(id) =>
                 patchSelected({ attachments: selected.attachments.filter((row) => row.id !== id) })

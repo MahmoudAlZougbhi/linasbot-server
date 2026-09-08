@@ -36,7 +36,7 @@ export const commentsSetupEn = {
   commentsKeywords: 'When comment contains:',
   commentsKeywordsPlaceholder: 'price, سعر, قدّي',
   commentsReplyMessage: 'Reply message:',
-  commentsNote: 'Note for Linas',
+  commentsNote: 'Note for Linas AI',
   commentsNoteHint:
     'This note guides Linas for the selected posts. Without a rule, Linas still replies from your published knowledge.',
   commentsResources: 'Resources',
