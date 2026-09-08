@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AppIcon, feather } from '../../../components/AppIcon';
 import { EmptyState } from '../../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../../components/LinasLoadingIndicator';
 import { useI18n } from '../../../i18n/LanguageContext';
@@ -12,6 +13,20 @@ type Props = {
   platform: CommentPlatform;
   post: CommentMediaItem;
 };
+
+function PostHero({ post }: { post: CommentMediaItem }) {
+  const { colors } = useTheme();
+  const tall = post.kind === 'reel' || post.kind === 'video';
+  const size = { aspectRatio: tall ? 4 / 5 : 1 };
+  if (!post.thumbnail) {
+    return (
+      <View style={[styles.hero, size, styles.heroFallback, { backgroundColor: colors.surfaceAlt }]}>
+        <AppIcon icon={feather('image')} size={36} color={colors.textMuted} />
+      </View>
+    );
+  }
+  return <Image source={{ uri: post.thumbnail }} style={[styles.hero, size]} accessibilityIgnoresInvertColors />;
+}
 
 export function CommentThreadScreen({ platform, post }: Props) {
   const { tr } = useI18n();
@@ -43,16 +58,16 @@ export function CommentThreadScreen({ platform, post }: Props) {
     };
   }, [platform, post.id, tr]);
 
-  if (loading) return <LinasLoadingIndicator variant="screen" />;
-  if (error && !items.length) {
-    return <EmptyState title={tr('liveCommentsThreadError')} body={tr('liveCommentsThreadErrorBody')} />;
-  }
-  if (!items.length) {
-    return <EmptyState title={tr('liveCommentsNoComments')} body={tr('liveCommentsNoCommentsBody')} />;
-  }
-
   return (
     <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+      <PostHero post={post} />
+      {loading ? <LinasLoadingIndicator variant="inline" /> : null}
+      {!loading && error && !items.length ? (
+        <EmptyState title={tr('liveCommentsThreadError')} body={tr('liveCommentsThreadErrorBody')} />
+      ) : null}
+      {!loading && !error && !items.length ? (
+        <EmptyState title={tr('liveCommentsNoComments')} body={tr('liveCommentsNoCommentsBody')} />
+      ) : null}
       {items.map((item) => (
         <View key={item.comment_id || item.comment} style={styles.block}>
           <View style={[styles.bubble, styles.customer, { backgroundColor: colors.surfaceAlt }]}>
@@ -75,6 +90,12 @@ export function CommentThreadScreen({ platform, post }: Props) {
 
 const styles = StyleSheet.create({
   list: { paddingBottom: 32, gap: 16 },
+  hero: {
+    alignSelf: 'stretch',
+    marginHorizontal: -spacing.lg,
+    backgroundColor: '#111827',
+  },
+  heroFallback: { alignItems: 'center', justifyContent: 'center' },
   block: { gap: 8 },
   bubble: { borderRadius: radii.lg, padding: spacing.md, gap: 4 },
   customer: { marginRight: 36 },

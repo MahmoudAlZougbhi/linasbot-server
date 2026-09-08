@@ -36,8 +36,10 @@ test('Live Chat has Chats / Comments switch and comment grid', () => {
   assert.doesNotMatch(chips, /whatsapp/);
 });
 
-test('thread shows comments and optional Linas reply', () => {
+test('thread shows a large post image above comments and optional Linas reply', () => {
   const thread = read('features/livechat/comments/CommentThreadScreen.tsx');
+  assert.match(thread, /post.thumbnail/);
+  assert.match(thread, /aspectRatio: tall \? 4 \/ 5 : 1/);
   assert.match(thread, /liveCommentsAiReply/);
   assert.match(thread, /liveCommentsWaitingReply/);
   assert.match(thread, /liveCommentsNoComments/);
