@@ -126,7 +126,9 @@ def registry_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegi
         "get_meta_messaging_settings",
         lambda: SimpleNamespace(enabled=True, verify_token="", app_secret=""),
     )
-    monkeypatch.setattr(meta_instagram_login_webhook, "get_meta_messaging_settings", lambda: SimpleNamespace(enabled=True))
+    monkeypatch.setattr(
+        meta_instagram_login_webhook, "get_meta_messaging_settings", lambda: SimpleNamespace(enabled=True)
+    )
     meta_messaging_webhook._message_deduper = InMemoryMessageDeduper(ttl_seconds=60)
     meta_instagram_login_webhook._message_deduper = InMemoryMessageDeduper(ttl_seconds=60)
     return registry

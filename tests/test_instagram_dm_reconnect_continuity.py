@@ -75,14 +75,16 @@ def _authorize(registry: MetaAppRegistry, *, token: str, reconnect: bool = False
     )
 
 
-def test_b_reconnect_supersedes_old_and_selects_new(
-    registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_b_reconnect_supersedes_old_and_selects_new(registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
     old = _authorize(registry, token="old-token")
     new = _authorize(registry, token="new-token", reconnect=True)
-    refreshed_old = next(item for item in registry.list_bindings(include_inactive=True) if item.binding_id == old.binding_id)
-    refreshed_new = next(item for item in registry.list_bindings(include_inactive=True) if item.binding_id == new.binding_id)
+    refreshed_old = next(
+        item for item in registry.list_bindings(include_inactive=True) if item.binding_id == old.binding_id
+    )
+    refreshed_new = next(
+        item for item in registry.list_bindings(include_inactive=True) if item.binding_id == new.binding_id
+    )
     assert refreshed_new.active is True
     assert refreshed_old.active is False
     assert refreshed_old.status in {"disconnected", "superseded", "inactive"}
@@ -295,7 +297,9 @@ def test_combine_flush_reschedules_stranded_chunks(monkeypatch: pytest.MonkeyPat
         from services.queues.combine_flush_handler import _reschedule_if_pending
         from services.queues.models import QueueJob
 
-        job = QueueJob.new(queue="high_priority", job_type="combine_flush", tenant_id="linas", payload={"user_key": "user-1"})
+        job = QueueJob.new(
+            queue="high_priority", job_type="combine_flush", tenant_id="linas", payload={"user_key": "user-1"}
+        )
         _reschedule_if_pending("user-1", job, {"tenant_id": "linas", "channel": "instagram"})
         assert scheduled == ["user-1"]
     finally:
