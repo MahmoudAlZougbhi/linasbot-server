@@ -80,6 +80,14 @@ def test_detects_graph_190_and_password_change_wording() -> None:
     )
     assert not is_meta_session_invalidated(http_status=401, error_code=10)
     assert not is_meta_session_invalidated(RuntimeError("timeout"))
+    assert not is_meta_session_invalidated(
+        MetaProviderError("Meta Send API returned HTTP 401 code=190 subcode=0", http_status=401, error_code=190),
+        require_invalidation_wording=True,
+    )
+    assert is_meta_session_invalidated(
+        error_text="The session has been invalidated because the user changed their password",
+        require_invalidation_wording=True,
+    )
 
 
 def test_mark_disconnects_active_binding_for_any_tenant(registry: MetaAppRegistry) -> None:
@@ -120,6 +128,19 @@ def test_mark_ignores_non_session_errors(registry: MetaAppRegistry) -> None:
         )
         is False
     )
+    latest = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
+    assert latest.status == "active"
+
+
+def test_send_path_190_without_wording_keeps_binding(registry: MetaAppRegistry) -> None:
+    binding = _instagram_binding(registry)
+    marked = mark_if_session_invalidated(
+        MetaProviderError("Meta Send API returned HTTP 401 code=190 subcode=0", http_status=401, error_code=190),
+        binding_id=binding.binding_id,
+        registry=registry,
+        require_invalidation_wording=True,
+    )
+    assert marked is False
     latest = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
     assert latest.status == "active"
 

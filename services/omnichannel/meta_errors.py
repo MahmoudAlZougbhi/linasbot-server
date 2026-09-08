@@ -42,6 +42,7 @@ class MetaProviderError(RuntimeError):
 def raise_from_meta_response(response: Any) -> None:
     error_code: int | str = "unknown"
     error_subcode: int | str = "unknown"
+    error_note = ""
     try:
         error_payload = response.json()
         error = error_payload.get("error") if isinstance(error_payload, dict) else None
@@ -54,10 +55,12 @@ def raise_from_meta_response(response: Any) -> None:
                 error_code = int(str(raw_code).strip())
             if isinstance(raw_subcode, int):
                 error_subcode = raw_subcode
+            error_note = " ".join(str(error.get("message") or "").split())[:160]
     except (TypeError, ValueError):
         pass
+    suffix = f" msg={error_note}" if error_note else ""
     raise MetaProviderError(
-        f"Meta Send API returned HTTP {response.status_code} code={error_code} subcode={error_subcode}",
+        f"Meta Send API returned HTTP {response.status_code} code={error_code} subcode={error_subcode}{suffix}",
         http_status=int(response.status_code),
         error_code=error_code,
         error_subcode=error_subcode,
