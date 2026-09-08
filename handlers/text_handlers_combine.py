@@ -97,9 +97,25 @@ async def schedule_combined_turn(
             tenant_id=tenant_id,
             conversation_key=conversation_key,
             due_at=due_at,
-            payload={"channel": str(user_data.get("channel") or ""), "trace_id": trace_id},
+            payload={
+                "channel": str(user_data.get("channel") or ""),
+                "trace_id": trace_id,
+                "generation": generation,
+                "binding_id": str(user_data.get("meta_binding_id") or ""),
+            },
         )
         user_data["_distributed_combine_scheduled"] = True
+        import logging
+
+        logging.getLogger("uvicorn.error").info(
+            "[meta-combine] scheduled user_key=%s generation=%s due_at=%.3f binding=%s channel=%s event_id=%s",
+            user_id[:80],
+            generation,
+            due_at,
+            str(user_data.get("meta_binding_id") or "")[:12],
+            str(user_data.get("channel") or ""),
+            event_id,
+        )
         from services.scale.conversation_session import persist_from_process
 
         persist_from_process(user_id)

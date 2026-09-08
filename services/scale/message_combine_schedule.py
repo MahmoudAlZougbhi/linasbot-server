@@ -14,7 +14,7 @@ def schedule_combine_flush(
     due_at: float,
     payload: dict[str, Any] | None = None,
 ) -> str | None:
-    """Return job id. Existing queued/processing jobs are bumped, not duplicated."""
+    """Return job id. Queued jobs are bumped; a processing job gets a follow-up."""
     from services.job_queue import job_queue
     from services.omnichannel.queues import physical_queue_for
     from services.queues.models import QueueJob
@@ -24,9 +24,16 @@ def schedule_combine_flush(
         return None
     idem = f"combine_flush:{user_key}"
     existing = backend.get_by_idempotency("high_priority", tenant_id or "unknown", idem)
-    if existing is not None and existing.status in {"queued", "processing"}:
+    if existing is not None and existing.status == "queued":
         backend.set_available_at(existing, due_at)
         return str(existing.id)
+    if existing is not None and existing.status == "processing":
+        generation = str((payload or {}).get("generation") or int(due_at * 1000))
+        idem = f"combine_flush:{user_key}:g{generation}"
+        existing = backend.get_by_idempotency("high_priority", tenant_id or "unknown", idem)
+        if existing is not None and existing.status == "queued":
+            backend.set_available_at(existing, due_at)
+            return str(existing.id)
     if existing is not None and existing.status in {"completed", "dead"}:
         backend.clear_idempotency("high_priority", tenant_id or "unknown", idem)
     body = {

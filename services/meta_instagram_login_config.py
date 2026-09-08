@@ -110,14 +110,14 @@ def instagram_login_app_secret() -> str:
 
 
 def instagram_login_webhook_signing_secret() -> str:
-    """Return the App Secret Meta uses to sign instagram object webhooks.
+    """HMAC secret for ``/webhook/instagram-login`` only.
 
-    App-level ``instagram`` webhooks are registered on Linas AI (App A). Meta
-    signs those deliveries with App A's primary app secret. The Instagram Login
-    OAuth client secret is separate and must not be used for webhook HMAC.
+    Meta signs Instagram Login app deliveries with
+    ``META_INSTAGRAM_LOGIN_APP_SECRET``. App A's Facebook secret must never
+    authenticate this callback.
     """
 
-    return get_meta_app_configs()[APP_A_KEY].app_secret
+    return instagram_login_app_secret()
 
 
 def instagram_login_config_status() -> InstagramLoginConfigStatus:
