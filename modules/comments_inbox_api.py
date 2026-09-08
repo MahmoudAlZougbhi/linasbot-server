@@ -8,8 +8,8 @@ from fastapi import Body, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from modules.api_security import require_permission
-from services.access_channels import session_can_use_channel
 from modules.core import app
+from services.access_channels import session_can_use_channel
 from services.comments_inbox.media_feed import list_comment_media
 from services.comments_inbox.threads import list_comment_threads
 from services.comments_inbox.watchlist import PLATFORMS, apply_watch_patch, platform_watch

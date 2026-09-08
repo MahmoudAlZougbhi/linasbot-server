@@ -281,7 +281,7 @@ test('cold open is branded star splash then chat (no character mash / progress b
     chat,
     /if \(loading\) \{\s*return \(\s*<GradientBackground>\s*<View style=\{styles\.center\}>/,
   );
-  assert.match(chat, /loading \? \(/);
+  assert.match(chat, /c\.loading && c\.messages\.length === 0 \? \(/);
   assert.match(login, /AuthChrome/);
   assert.match(authChrome, /LinasSparkleIcon/);
   assert.doesNotMatch(login, /linasAssets|authHero|LinasAvatar|avatarAssets/);
