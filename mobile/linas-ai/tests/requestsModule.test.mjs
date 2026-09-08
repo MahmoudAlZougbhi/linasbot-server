@@ -68,6 +68,8 @@ describe('Requests mobile module', () => {
     assert.match(home, /onEndReached/);
     assert.match(home, /RefreshControl/);
     const hook = read('features/requests/useRequestsList.ts');
+    assert.match(hook, /hasLoadedOnce/);
+    assert.match(hook, /mode === 'replace' && !hasLoadedOnceRef/);
     assert.match(hook, /fetchRequestsSetupStatus/);
     assert.match(hook, /listRequests/);
     assert.match(hook, /createdAfter:/);

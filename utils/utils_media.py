@@ -111,63 +111,11 @@ async def update_voice_message_with_transcription(
 
 
 def convert_webm_to_opus(base64_webm: str) -> tuple[str, str | None]:
-    """
-    Convert WebM audio (base64) to OGG/Opus format (base64).
-    WhatsApp requires Opus codec wrapped in OGG container (audio/ogg).
+    """Convert WebM (or other phone audio) to OGG/Opus. Filename is None if unconverted."""
+    from utils.utils_voice_convert import convert_voice_to_opus
 
-    Args:
-        base64_webm: Base64-encoded WebM audio data
-
-    Returns:
-        Tuple of (base64_ogg_data, file_name_with_ogg_extension)
-    """
-    try:
-        import base64
-        import io
-        import time
-
-        from pydub import AudioSegment
-
-        print("🔄 Converting WebM audio to Opus format...")
-
-        # Decode base64 to bytes
-        webm_bytes = base64.b64decode(base64_webm)
-        print(f"   📊 WebM size: {len(webm_bytes)} bytes")
-
-        # Load WebM audio with pydub
-        webm_audio = AudioSegment.from_file(io.BytesIO(webm_bytes), format="webm")
-        print(f"   ✅ WebM loaded: {len(webm_audio)}ms duration, {webm_audio.frame_rate}Hz sample rate")
-
-        # Export as OGG with Opus codec (WhatsApp requires Opus in OGG container)
-        ogg_buffer = io.BytesIO()
-        webm_audio.export(
-            ogg_buffer,
-            format="ogg",
-            codec="libopus",
-            bitrate="128k",
-            parameters=["-vbr", "on", "-compression_level", "10"],
-        )
-        ogg_bytes = ogg_buffer.getvalue()
-        print(f"   ✅ Converted to OGG/Opus: {len(ogg_bytes)} bytes")
-
-        # Encode back to base64
-        base64_ogg = base64.b64encode(ogg_bytes).decode("utf-8")
-
-        # Create new filename with .ogg extension (WhatsApp compatible)
-        timestamp = int(time.time())
-        file_name = f"voice_{timestamp}.ogg"
-
-        print(f"   ✅ Conversion complete! New file: {file_name}")
-        return base64_ogg, file_name
-
-    except Exception as e:
-        print(f"❌ ERROR converting WebM to Opus: {e}")
-        import traceback
-
-        traceback.print_exc()
-        print("   ⚠️ Falling back to original WebM format...")
-        # Fall back to original if conversion fails
-        return base64_webm, None
+    data, file_name, _mime = convert_voice_to_opus(base64_webm, hinted_format="webm")
+    return data, file_name
 
 
 async def upload_base64_to_firebase_storage(

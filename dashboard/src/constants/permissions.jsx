@@ -95,6 +95,48 @@ export const FEATURES = {
     path: null,
     name: 'Request Sensitive Data',
     description: 'View raw phone, email, and delivery address on requests'
+  },
+  COMMENTS: {
+    key: 'comments',
+    path: null,
+    name: 'Comments',
+    description: 'View social comment threads in Live Chat'
+  },
+  COMMENTS_MANAGE: {
+    key: 'commentsManage',
+    path: null,
+    name: 'Manage Comments',
+    description: 'Change which posts are watched for comments'
+  },
+  CHANNEL_WHATSAPP: {
+    key: 'channelWhatsapp',
+    path: null,
+    name: 'WhatsApp',
+    description: 'See WhatsApp chats'
+  },
+  CHANNEL_INSTAGRAM: {
+    key: 'channelInstagram',
+    path: null,
+    name: 'Instagram',
+    description: 'See Instagram chats and comments'
+  },
+  CHANNEL_FACEBOOK: {
+    key: 'channelFacebook',
+    path: null,
+    name: 'Messenger',
+    description: 'See Messenger chats and comments'
+  },
+  CHANNEL_TIKTOK: {
+    key: 'channelTiktok',
+    path: null,
+    name: 'TikTok',
+    description: 'See TikTok chats and comments'
+  },
+  CHANNEL_WEB: {
+    key: 'channelWeb',
+    path: null,
+    name: 'Website',
+    description: 'See website chats'
   }
 };
 
@@ -135,7 +177,14 @@ export const SYSTEM_ROLES = {
       requestsManage: true,
       requestsNotify: true,
       requestsManualChat: true,
-      requestsSensitive: true
+      requestsSensitive: true,
+      comments: true,
+      commentsManage: true,
+      channelWhatsapp: true,
+      channelInstagram: true,
+      channelFacebook: true,
+      channelTiktok: true,
+      channelWeb: true
     }
   },
   platform_owner: {
@@ -160,7 +209,14 @@ export const SYSTEM_ROLES = {
       requestsManage: true,
       requestsNotify: true,
       requestsManualChat: true,
-      requestsSensitive: true
+      requestsSensitive: true,
+      comments: true,
+      commentsManage: true,
+      channelWhatsapp: true,
+      channelInstagram: true,
+      channelFacebook: true,
+      channelTiktok: true,
+      channelWeb: true
     }
   },
   operator: {
@@ -184,7 +240,14 @@ export const SYSTEM_ROLES = {
       requestsManage: true,
       requestsNotify: true,
       requestsManualChat: true,
-      requestsSensitive: false
+      requestsSensitive: false,
+      comments: true,
+      commentsManage: true,
+      channelWhatsapp: true,
+      channelInstagram: true,
+      channelFacebook: true,
+      channelTiktok: true,
+      channelWeb: true
     }
   },
   viewer: {
@@ -208,12 +271,19 @@ export const SYSTEM_ROLES = {
       requestsManage: false,
       requestsNotify: false,
       requestsManualChat: false,
-      requestsSensitive: false
+      requestsSensitive: false,
+      comments: false,
+      commentsManage: false,
+      channelWhatsapp: true,
+      channelInstagram: true,
+      channelFacebook: true,
+      channelTiktok: true,
+      channelWeb: true
     }
   }
 };
 
-// Default permissions template (all false)
+// Empty template. Channel keys default on so older users keep seeing every channel.
 export const DEFAULT_PERMISSIONS = {
   dashboard: false,
   liveChat: false,
@@ -230,7 +300,14 @@ export const DEFAULT_PERMISSIONS = {
   requestsManage: false,
   requestsNotify: false,
   requestsManualChat: false,
-  requestsSensitive: false
+  requestsSensitive: false,
+  comments: false,
+  commentsManage: false,
+  channelWhatsapp: true,
+  channelInstagram: true,
+  channelFacebook: true,
+  channelTiktok: true,
+  channelWeb: true
 };
 
 // Permission keys array for iteration

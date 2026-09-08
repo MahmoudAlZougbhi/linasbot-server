@@ -60,6 +60,7 @@ def connection_public_view(
         health_detail=conn.health_detail,
         ai_eligible=ai_eligible,
         ai_default_enabled=bool(conn.ai_default_enabled),
+        calls_enabled=bool(getattr(conn, "calls_enabled", False)),
         history_sync_status=conn.history_sync_status,
         granted_scopes=list(conn.granted_scopes or []),
         rollout_blocked_reason=rollout_blocked_reason,

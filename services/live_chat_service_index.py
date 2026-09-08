@@ -421,7 +421,7 @@ class LiveChatIndexMixin:
             "is_user": msg.get("role") == "user",
             "content": text_value,
             "text": text_value,
-            "type": msg.get("type", "text"),
+            "type": msg.get("type") or meta.get("type") or "text",
             "handled_by": handled,
             "role": msg.get("role"),
         }

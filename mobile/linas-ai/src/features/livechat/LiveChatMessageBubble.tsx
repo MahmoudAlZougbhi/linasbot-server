@@ -1,67 +1,21 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { tokenStore } from '../../auth/tokenStore';
-import { API_BASE } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
 import { textDirectionStyle } from '../../lib/textDirection';
 import { colors, fonts, radii, spacing } from '../../theme';
+import {
+  LiveChatAuthImage,
+  LiveChatVoicePlay,
+  LiveChatVoiceUnavailable,
+  resolveMediaUrl,
+} from './LiveChatMedia';
 import type { LiveChatMessage } from './liveChatTypes';
-import { formatBubbleTime, isLikeableAiReply, messageBody } from './liveChatTypes';
+import { formatBubbleTime, isLikeableAiReply, isVoiceMessage, messageBody } from './liveChatTypes';
 
 type Props = {
   message: LiveChatMessage;
   onLike?: () => void;
 };
-
-function resolveMediaUrl(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
-  if (raw.startsWith('/')) return `${API_BASE}${raw}`;
-  return raw;
-}
-
-function needsAuth(url: string): boolean {
-  return url.startsWith(API_BASE) && url.includes('/api/media/');
-}
-
-function AuthImage({ url }: { url: string }) {
-  const [uri, setUri] = useState<string | null>(needsAuth(url) ? null : url);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    if (!needsAuth(url)) {
-      setUri(url);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const access = await tokenStore.getAccessToken();
-        const res = await fetch(url, {
-          headers: access ? { Authorization: `Bearer ${access}` } : {},
-        });
-        if (!res.ok) throw new Error('media');
-        const buf = await res.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-        const b64 = globalThis.btoa(binary);
-        const ct = res.headers.get('content-type') || 'image/jpeg';
-        if (!cancelled) setUri(`data:${ct};base64,${b64}`);
-      } catch {
-        if (!cancelled) setFailed(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
-
-  if (failed) return <Text style={styles.mediaHint}>Image unavailable</Text>;
-  if (!uri) return <ActivityIndicator color={colors.accent} />;
-  return <Image source={{ uri }} style={styles.image} resizeMode="cover" />;
-}
 
 export function LiveChatMessageBubble({ message, onLike }: Props) {
   const { tr } = useI18n();
@@ -69,7 +23,9 @@ export function LiveChatMessageBubble({ message, onLike }: Props) {
   const handled = String(message.handled_by || message.role || '').toLowerCase();
   const isOperator = !isCustomer && (handled.includes('operator') || handled.includes('human'));
   const type = String(message.type || 'text').toLowerCase();
+  const voice = isVoiceMessage(message);
   const imageUrl = resolveMediaUrl(message.image_url || (type === 'image' ? message.media_url : null));
+  const audioUrl = resolveMediaUrl(message.audio_url || (voice ? message.media_url : null));
   const body = messageBody(message);
   const dirStyle = textDirectionStyle(body);
   const time = formatBubbleTime(message.timestamp || undefined);
@@ -85,9 +41,13 @@ export function LiveChatMessageBubble({ message, onLike }: Props) {
           !isCustomer && !isOperator && styles.aiBubble,
         ]}
       >
-        {imageUrl ? <AuthImage url={imageUrl} /> : null}
-        {type === 'voice' || type === 'audio' ? (
-          <Text style={[styles.text, isOperator && styles.opText, dirStyle]}>🎤 {body}</Text>
+        {imageUrl ? <LiveChatAuthImage url={imageUrl} /> : null}
+        {voice ? (
+          audioUrl ? (
+            <LiveChatVoicePlay url={audioUrl} onAccent={isOperator} />
+          ) : (
+            <LiveChatVoiceUnavailable onAccent={isOperator} />
+          )
         ) : (
           <Text style={[styles.text, isOperator && styles.opText, dirStyle]}>{body}</Text>
         )}
@@ -113,7 +73,6 @@ export function LiveChatMessageBubble({ message, onLike }: Props) {
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: spacing.sm, maxWidth: '88%' },
-  // WhatsApp: inbound (customer) left, outbound (AI/human) right
   inWrap: { alignSelf: 'flex-start' },
   outWrap: { alignSelf: 'flex-end' },
   bubble: {
@@ -142,8 +101,6 @@ const styles = StyleSheet.create({
   opText: { color: colors.onAccent },
   meta: { color: colors.textDim, fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
   opMeta: { color: 'rgba(255,255,255,0.75)' },
-  image: { width: 220, height: 160, borderRadius: radii.sm, marginBottom: 4 },
-  mediaHint: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 },
   likeBtn: {
     alignSelf: 'flex-end',
     marginTop: 4,

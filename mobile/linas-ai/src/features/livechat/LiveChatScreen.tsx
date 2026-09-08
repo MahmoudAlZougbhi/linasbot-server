@@ -7,10 +7,12 @@ import { CommentsInbox } from './comments/CommentsInbox';
 import { CommentThreadScreen } from './comments/CommentThreadScreen';
 import { LiveChatSurfaceSwitch, type LiveChatSurface } from './comments/LiveChatSurfaceSwitch';
 import type { CommentMediaItem, CommentPlatform } from './comments/commentsInboxTypes';
+import { InboxHumanHeaderButton } from './InboxHumanHeaderButton';
 import { LiveChatInbox } from './LiveChatInbox';
 import { LiveChatThread } from './LiveChatThread';
 import type { LiveChatItem } from './liveChatTypes';
 import { channelLabel, chatTitle } from './liveChatTypes';
+import { useLiveChatAccess } from './useLiveChatAccess';
 import { useLiveChatInbox } from './useLiveChatInbox';
 
 type Props = {
@@ -19,13 +21,20 @@ type Props = {
 
 export function LiveChatScreen({ initialOpen = null }: Props) {
   const { tr } = useI18n();
-  const inbox = useLiveChatInbox();
+  const access = useLiveChatAccess();
+  const inbox = useLiveChatInbox(access.canChats);
   const nav = useModuleNav();
   const [surface, setSurface] = useState<LiveChatSurface>('chats');
   const [selected, setSelected] = useState<LiveChatItem | null>(null);
   const [commentPost, setCommentPost] = useState<{ platform: CommentPlatform; post: CommentMediaItem } | null>(null);
   const [deepLinkTried, setDeepLinkTried] = useState(false);
   const focusNonceSeen = useRef(nav.areaFocusNonce);
+
+  useEffect(() => {
+    if (access.canChats && access.canComments) return;
+    if (access.canComments) setSurface('comments');
+    else setSurface('chats');
+  }, [access.canChats, access.canComments]);
 
   useEffect(() => {
     if (nav.activeArea !== 'livechat') return;
@@ -63,6 +72,10 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
     }
   }, [initialOpen, deepLinkTried, inbox.loading, inbox.chats]);
 
+  const surfaces: LiveChatSurface[] = [];
+  if (access.canChats) surfaces.push('chats');
+  if (access.canComments) surfaces.push('comments');
+
   if (selected) {
     return (
       <ScreenChrome title={chatTitle(selected)} subtitle={channelLabel(selected)}>
@@ -84,12 +97,33 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
   }
 
   return (
-    <ScreenChrome title="Live Chat">
-      <LiveChatSurfaceSwitch value={surface} onChange={setSurface} />
-      {surface === 'comments' ? (
-        <CommentsInbox onOpenThread={(platform, post) => setCommentPost({ platform, post })} />
+    <ScreenChrome
+      title="Live Chat"
+      headerRight={
+        access.canChats ? (
+          <InboxHumanHeaderButton
+            count={inbox.waitingCount}
+            active={inbox.filter === 'waiting'}
+            onPress={() => {
+              setSurface('chats');
+              inbox.setFilter(inbox.filter === 'waiting' ? 'all' : 'waiting');
+            }}
+          />
+        ) : undefined
+      }
+    >
+      <LiveChatSurfaceSwitch value={surface} onChange={setSurface} visible={surfaces} />
+      {surface === 'comments' && access.canComments ? (
+        <CommentsInbox
+          allowedChannels={access.allowedChannels}
+          onOpenThread={(platform, post) => setCommentPost({ platform, post })}
+        />
       ) : (
-        <LiveChatInbox inbox={inbox} onOpenChat={(chat) => setSelected(chat)} />
+        <LiveChatInbox
+          inbox={inbox}
+          allowedChannels={access.allowedChannels}
+          onOpenChat={(chat) => setSelected(chat)}
+        />
       )}
     </ScreenChrome>
   );

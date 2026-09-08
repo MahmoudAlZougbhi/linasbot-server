@@ -8,37 +8,9 @@ import {
   sendOperatorMessage,
   takeoverConversation,
 } from './liveChatApi';
+import { mergeThreadMessages } from './liveChatThreadMerge';
 import type { LiveChatItem, LiveChatMessage } from './liveChatTypes';
-import { isSocialChannelUser, messageKey } from './liveChatTypes';
-
-function mergeChronological(prev: LiveChatMessage[], incoming: LiveChatMessage[]): LiveChatMessage[] {
-  if (!prev.length) return incoming;
-  if (!incoming.length) return prev;
-  const seen = new Set(prev.map((m, i) => messageKey(m, i)));
-  const extras: LiveChatMessage[] = [];
-  for (let i = 0; i < incoming.length; i++) {
-    const m = incoming[i];
-    const key = messageKey(m, i);
-    if (!seen.has(key)) {
-      // Also match by timestamp+content when message_id missing on one side.
-      const loose = `${m.timestamp}|${m.content || m.text}|${m.is_user ? 1 : 0}`;
-      const exists = prev.some(
-        (p) => `${p.timestamp}|${p.content || p.text}|${p.is_user ? 1 : 0}` === loose,
-      );
-      if (!exists) extras.push(m);
-    }
-  }
-  if (!extras.length) {
-    // Prefer server copy for overlapping recent window (delivery updates).
-    const oldestIncoming = incoming[0]?.timestamp;
-    if (!oldestIncoming) return prev;
-    const keepOlder = prev.filter((p) => String(p.timestamp || '') < String(oldestIncoming));
-    return [...keepOlder, ...incoming];
-  }
-  const merged = [...prev, ...extras];
-  merged.sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
-  return merged;
-}
+import { isSocialChannelUser } from './liveChatTypes';
 
 export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () => void) {
   const [messages, setMessages] = useState<LiveChatMessage[]>([]);
@@ -66,7 +38,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         });
         if (!data.success) throw new Error(data.error || 'Failed to load thread');
         const next = data.messages || [];
-        setMessages((prev) => (mode === 'poll' ? mergeChronological(prev, next) : next));
+        setMessages((prev) => (mode === 'poll' ? mergeThreadMessages(prev, next) : next));
         if (mode === 'initial') {
           setHasMore(Boolean(data.has_more) || next.length >= 50);
         }
@@ -203,7 +175,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         message_id: `local-${Date.now()}`,
       });
     },
-    sendMedia: async (base64: string, type: 'voice' | 'image') => {
+    sendMedia: async (base64: string, type: 'voice' | 'image', mime?: string) => {
       if (!chat || !base64) return false;
       const label = type === 'voice' ? '[Voice Message from Operator]' : '[Image Message from Operator]';
       return dispatchOperatorSend(base64, type, {
@@ -215,6 +187,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         role: 'operator',
         handled_by: 'human',
         message_id: `local-${Date.now()}`,
+        audio_url: type === 'voice' ? `data:${mime || 'audio/mp4'};base64,${base64}` : undefined,
       });
     },
   };

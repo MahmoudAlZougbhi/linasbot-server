@@ -24,23 +24,14 @@ async def send_operator_voice_message(
     manual_meta: dict[str, Any],
 ) -> dict[str, Any]:
     from utils.utils import save_conversation_message_to_firestore
+    from utils.utils_voice_convert import prepare_operator_voice_upload
 
     print(f"🎙️ Operator {operator_id} recorded voice message for ...{str(user_id)[-4:]}")
-    audio_data_to_upload: str | bytes = message
-    upload_file_name = f"voice_{user_id}_{int(__import__('time').time())}.webm"
-    upload_file_type = "audio/webm"
-
-    try:
-        from utils.utils import convert_webm_to_opus
-
-        opus_data, opus_file_name = convert_webm_to_opus(message)
-        if opus_file_name:
-            audio_data_to_upload = opus_data
-            upload_file_name = opus_file_name
-            upload_file_type = "audio/ogg"
-            print("✅ Voice converted to OGG/Opus")
-    except Exception as e:
-        print(f"⚠️ WebM to Opus conversion failed: {e}")
+    prepared = prepare_operator_voice_upload(message, user_id=user_id)
+    audio_data_to_upload: str | bytes = prepared["payload"]
+    upload_file_name = prepared["filename"]
+    upload_file_type = prepared["mime"]
+    print(f"🎙️ Voice upload as {upload_file_type} ({upload_file_name})")
 
     storage_url = None
     try:

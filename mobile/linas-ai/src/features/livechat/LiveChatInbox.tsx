@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import {
   FlatList,
   RefreshControl,
@@ -11,18 +12,19 @@ import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { fonts, spacing, useTheme } from '../../theme';
 import { ConversationRow } from './ConversationRow';
 import { InboxChannelChips } from './InboxChannelChips';
-import { InboxFilterPills } from './InboxFilterPills';
 import { InboxSearchBar } from './InboxSearchBar';
+import type { AccessChannelId } from '../users/usersAccess';
 import type { LiveChatItem } from './liveChatTypes';
-import { matchesChannelFilter } from './liveChatTypes';
+import { matchesAllowedChannels, matchesChannelFilter } from './liveChatTypes';
 import { useLiveChatInbox } from './useLiveChatInbox';
 
 type Props = {
   onOpenChat: (chat: LiveChatItem) => void;
   inbox: ReturnType<typeof useLiveChatInbox>;
+  allowedChannels?: AccessChannelId[] | null;
 };
 
-export function LiveChatInbox({ onOpenChat, inbox }: Props) {
+export function LiveChatInbox({ onOpenChat, inbox, allowedChannels = null }: Props) {
   const { colors: theme } = useTheme();
   const {
     chats,
@@ -35,7 +37,6 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
     search,
     setSearch,
     filter,
-    setFilter,
     channel,
     setChannel,
     hasMore,
@@ -43,6 +44,13 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
     loadMore,
     indexRebuild,
   } = inbox;
+
+  useEffect(() => {
+    if (!allowedChannels) return;
+    if (channel !== 'all' && !allowedChannels.includes(channel)) {
+      setChannel(allowedChannels[0] ?? 'all');
+    }
+  }, [allowedChannels, channel, setChannel]);
 
   if (errorKind === 'forbidden') {
     return (
@@ -67,26 +75,31 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
     );
   }
 
-  const visibleChats = chats.filter((item) => matchesChannelFilter(item, channel));
+  const visibleChats = chats
+    .filter((item) => matchesAllowedChannels(item, allowedChannels))
+    .filter((item) => matchesChannelFilter(item, channel));
   const emptyTitle =
-    channel === 'tiktok'
-      ? 'No TikTok conversations'
-      : indexRebuild
-        ? 'Inbox index is empty'
-        : 'No conversations yet';
+    filter === 'waiting'
+      ? 'No one waiting for a human'
+      : channel === 'tiktok'
+        ? 'No TikTok conversations'
+        : indexRebuild
+          ? 'Inbox index is empty'
+          : 'No conversations yet';
   const emptyBody =
-    channel === 'tiktok'
-      ? 'TikTok threads appear here when TikTok is connected. None are created as placeholders.'
-      : indexRebuild
-        ? 'Customer threads appear after the live chat index is rebuilt. Pull to refresh. This screen does not invent conversations.'
-        : 'When customers message on WhatsApp, Instagram, or Messenger, they appear here. Pull to refresh.';
+    filter === 'waiting'
+      ? 'Customers who ask for a human appear here. Tap the person icon again to see every chat.'
+      : channel === 'tiktok'
+        ? 'TikTok threads appear here when TikTok is connected. None are created as placeholders.'
+        : indexRebuild
+          ? 'Customer threads appear after the live chat index is rebuilt. Pull to refresh. This screen does not invent conversations.'
+          : 'When customers message on WhatsApp, Instagram, or Messenger, they appear here. Pull to refresh.';
 
   return (
     <View style={styles.flex}>
       <View style={styles.toolbar}>
         <InboxSearchBar value={search} onChange={setSearch} />
-        <InboxChannelChips selected={channel} onSelect={setChannel} />
-        <InboxFilterPills selected={filter} onSelect={setFilter} />
+        <InboxChannelChips selected={channel} onSelect={setChannel} allowed={allowedChannels} />
         {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
       </View>
       <View style={styles.listWrap}>
@@ -108,8 +121,12 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
               <LinasLoadingIndicator variant="inline" style={styles.footer} />
             ) : null
           }
-          renderItem={({ item }) => (
-            <ConversationRow item={item} onPress={() => onOpenChat(item)} />
+          renderItem={({ item, index }) => (
+            <ConversationRow
+              item={item}
+              onPress={() => onOpenChat(item)}
+              showDivider={index < visibleChats.length - 1}
+            />
           )}
         />
       </View>

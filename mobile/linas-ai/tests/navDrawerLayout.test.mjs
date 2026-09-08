@@ -33,15 +33,16 @@ describe('drawer layout and selected state', () => {
     assert.match(nav, /case 'cm':\s*\n\s*case 'cm_section':\s*\n\s*return 'cm'/);
   });
 
-  it('Recent heading matches Dashboard and AI Setup tile type', () => {
+  it('Chats heading matches the Live Chat screen title size', () => {
     const recents = read('features/nav/DrawerRecents.tsx');
+    const chrome = read('features/shared/ScreenChrome.tsx');
     const type = read('theme/typography.ts');
     const heading = recents.match(/heading:\s*\{([\s\S]*?)\},/);
-    assert.ok(heading, 'Recent heading style missing');
-    assert.match(heading[1], /\.\.\.typography\.drawerItem/);
-    assert.match(type, /drawerItem:[\s\S]*?fontSize:\s*16/);
-    assert.doesNotMatch(heading[1], /fontSize:\s*18/);
-    assert.doesNotMatch(heading[1], /fonts\.display/);
+    assert.ok(heading, 'Chats heading style missing');
+    assert.match(heading[1], /\.\.\.typography\.title/);
+    assert.match(type, /title:[\s\S]*?fontSize:\s*26/);
+    assert.match(chrome, /: typography\.title/);
+    assert.doesNotMatch(heading[1], /typography\.drawerItem/);
   });
 
   it('Pin section sits above Recent with pin glyph on pinned rows', () => {

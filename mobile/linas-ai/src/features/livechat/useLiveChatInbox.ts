@@ -6,15 +6,25 @@ import {
   type InboxFilter,
   type ChannelFilter,
   type LiveChatItem,
+  type UnifiedChats,
+  normalizeStatus,
 } from './liveChatTypes';
+
+function waitingCountFromResponse(data: UnifiedChats, filter: InboxFilter, rows: LiveChatItem[]): number {
+  const fromCounters = data.counters?.waiting;
+  if (typeof fromCounters === 'number' && fromCounters >= 0) return fromCounters;
+  if (filter === 'waiting' && typeof data.total === 'number') return data.total;
+  return rows.filter((chat) => normalizeStatus(chat) === 'waiting_human').length;
+}
 
 const POLL_MS = 20_000;
 const PAGE_SIZE = 30;
 
-export function useLiveChatInbox() {
+export function useLiveChatInbox(enabled = true) {
   const [chats, setChats] = useState<LiveChatItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +36,7 @@ export function useLiveChatInbox() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [indexRebuild, setIndexRebuild] = useState(false);
+  const [waitingCount, setWaitingCount] = useState(0);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const requestIdRef = useRef(0);
@@ -45,7 +56,7 @@ export function useLiveChatInbox() {
   const load = useCallback(
     async (mode: 'initial' | 'refresh' | 'poll' = 'initial') => {
       const requestId = ++requestIdRef.current;
-      if (mode === 'initial') setLoading(true);
+      if (mode === 'initial' && !hasLoadedOnceRef.current) setLoading(true);
       if (mode === 'refresh') setRefreshing(true);
       try {
         const data = await fetchUnifiedChats({
@@ -76,6 +87,7 @@ export function useLiveChatInbox() {
           setNextCursor(cursor);
         }
         setTotal(typeof data.total === 'number' ? data.total : rows.length);
+        setWaitingCount(waitingCountFromResponse(data, filter, rows));
         setIndexRebuild(rebuild);
         setError(null);
         setErrorKind(null);
@@ -95,6 +107,7 @@ export function useLiveChatInbox() {
         }
       } finally {
         if (requestId === requestIdRef.current) {
+          hasLoadedOnceRef.current = true;
           setLoading(false);
           setHasLoadedOnce(true);
           setRefreshing(false);
@@ -145,14 +158,21 @@ export function useLiveChatInbox() {
   }, [debouncedSearch, filter, channel]);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      hasLoadedOnceRef.current = true;
+      setHasLoadedOnce(true);
+      return;
+    }
     void setOperatorAvailable();
     void load('initial');
-  }, [load]);
+  }, [load, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const id = setInterval(() => void load('poll'), POLL_MS);
     return () => clearInterval(id);
-  }, [load]);
+  }, [load, enabled]);
 
   return {
     chats,
@@ -170,6 +190,7 @@ export function useLiveChatInbox() {
     setChannel,
     hasMore,
     total,
+    waitingCount,
     indexRebuild,
     refresh: () => void load('refresh'),
     loadMore,

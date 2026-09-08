@@ -66,14 +66,20 @@ describe('whatsapp cloud mobile return + card', () => {
     assert.match(hook, /waConnectBrowserUnavailable|waConnectConfigMissing/);
   });
 
-  it('ops panel exposes App Review surfaces', () => {
-    const ops = read('features/integrations/WhatsAppCloudOpsPanel.tsx');
-    assert.match(ops, /sendWhatsAppTestMessage/);
-    assert.match(ops, /appReviewTest/);
-    assert.match(ops, /!appReviewTest/);
-    assert.match(ops, /createWhatsAppTemplate/);
-    assert.match(ops, /resumeWhatsAppConversation/);
-    assert.match(ops, /pauseWhatsAppConversation/);
+  it('WhatsApp card has Messages and Call toggles, not App Review test tools', () => {
+    const card = read('features/integrations/WhatsAppCloudCard.tsx');
+    const api = read('features/integrations/whatsappCloudApi.ts');
+    const hook = read('features/integrations/useWhatsAppIntegrations.ts');
+    assert.match(card, /integrationToggleWhatsAppCall/);
+    assert.match(card, /showCalls=/);
+    assert.match(card, /calls_enabled/);
+    assert.match(api, /calls\/enable/);
+    assert.match(api, /setWhatsAppCallsEnabled/);
+    assert.match(hook, /setWhatsAppCalls/);
+    assert.doesNotMatch(card, /WhatsAppCloudOpsPanel/);
+    assert.doesNotMatch(card, /sendWhatsAppTestMessage/);
+    assert.doesNotMatch(card, /waSendTestMessage/);
+    assert.doesNotMatch(api, /test-message/);
   });
 
   it('Owner Portal grants pilot without hardcoded tenant', () => {

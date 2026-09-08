@@ -9,6 +9,7 @@ import {
 } from './cmProposalReview';
 import { getCmDraft, putCmDraft } from './cmApi';
 import { isDraftDirty, stableSerialize } from './cmDraftDirty';
+import { peekCmDraftCache, writeCmDraftCache } from './cmDraftCache';
 import { prepareCmDraftPayload } from './prepareCmDraftPayload';
 
 type SectionDraft = {
@@ -23,19 +24,37 @@ export function useCmMultiDraft(
   proposalReview?: CmProposalReview | null,
 ) {
   const { tr } = useI18n();
-  const [loading, setLoading] = useState(true);
+  const cachedAll = sections.every((s) => peekCmDraftCache(s));
+  const [loading, setLoading] = useState(!cachedAll);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, SectionDraft>>({});
+  const [drafts, setDrafts] = useState<Record<string, SectionDraft>>(() => {
+    const next: Record<string, SectionDraft> = {};
+    for (const section of sections) {
+      const hit = peekCmDraftCache(section);
+      if (!hit) return {};
+      next[section] = { payload: hit.payload, etag: hit.etag, dirty: false };
+    }
+    return next;
+  });
   const [proposalActive, setProposalActive] = useState(false);
   const saveLock = useRef(false);
-  const baselines = useRef<Record<string, string>>({});
+  const baselines = useRef<Record<string, string>>(
+    cachedAll
+      ? Object.fromEntries(
+          sections.map((section) => {
+            const hit = peekCmDraftCache(section);
+            return [section, hit ? stableSerialize(hit.payload) : ''];
+          }),
+        )
+      : {},
+  );
   const sectionKey = sections.join(',');
 
   const load = useCallback(async () => {
     const names = sectionKey.split(',').filter(Boolean);
-    setLoading(true);
+    if (!names.every((s) => peekCmDraftCache(s))) setLoading(true);
     setError(null);
     setConflict(null);
     try {
@@ -63,6 +82,7 @@ export function useCmMultiDraft(
         }
         baselines.current[section] = stableSerialize(payload);
         next[section] = { payload, etag: draft.etag, dirty: overlay };
+        writeCmDraftCache(section, { etag: draft.etag, payload });
       });
       setDrafts(next);
       setProposalActive(overlay);

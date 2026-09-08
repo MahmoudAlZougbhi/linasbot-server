@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon, feather } from '../../components/AppIcon';
 import { fonts, radii, spacing, useTheme } from '../../theme';
@@ -14,17 +17,30 @@ import { useLiveChatOperatorMedia } from './useLiveChatOperatorMedia';
 
 type Props = {
   onSend: (text: string) => Promise<boolean>;
-  onSendMedia?: (base64: string, type: 'voice' | 'image') => Promise<boolean>;
+  onSendMedia?: (base64: string, type: 'voice' | 'image', mime?: string) => Promise<boolean>;
   busy: boolean;
   disabled?: boolean;
 };
 
 export function LiveChatComposer({ onSend, onSendMedia, busy, disabled }: Props) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const media = useLiveChatOperatorMedia();
   const blocked = disabled || busy || media.isRecordingVoice;
   const canSend = !blocked && draft.trim().length > 0;
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvt, () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener(hideEvt, () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const submit = async () => {
     const text = draft.trim();
@@ -43,15 +59,15 @@ export function LiveChatComposer({ onSend, onSendMedia, busy, disabled }: Props)
   const toggleVoice = async () => {
     if (disabled || busy || !onSendMedia) return;
     if (media.isRecordingVoice) {
-      const base64 = await media.stopVoiceRecording();
-      if (base64) await onSendMedia(base64, 'voice');
+      const clip = await media.stopVoiceRecording();
+      if (clip) await onSendMedia(clip.base64, 'voice', clip.mime);
       return;
     }
     await media.startVoiceRecording();
   };
 
   return (
-    <View>
+    <View style={{ paddingBottom: keyboardOpen ? 8 : Math.max(insets.bottom, 12) }}>
       {media.mediaError ? (
         <Text style={[styles.hint, { color: colors.danger }]}>{media.mediaError}</Text>
       ) : null}

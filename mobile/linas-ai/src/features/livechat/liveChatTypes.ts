@@ -111,6 +111,12 @@ export const UnifiedChatsSchema = z
     source: optionalText,
     index_empty: optionalBool,
     requires_index_rebuild: optionalBool,
+    counters: z
+      .object({ waiting: optionalNum })
+      .passthrough()
+      .optional()
+      .nullable()
+      .catch(undefined),
   })
   .passthrough();
 

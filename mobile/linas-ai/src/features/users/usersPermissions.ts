@@ -18,6 +18,13 @@ export const PERMISSION_KEYS = [
   'requestsNotify',
   'requestsManualChat',
   'requestsSensitive',
+  'comments',
+  'commentsManage',
+  'channelWhatsapp',
+  'channelInstagram',
+  'channelFacebook',
+  'channelTiktok',
+  'channelWeb',
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -30,6 +37,14 @@ export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 
 export const ACCOUNT_STATUSES = ['active', 'inactive', 'suspended'] as const;
 export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
+
+const CHANNEL_DEFAULTS = {
+  channelWhatsapp: true,
+  channelInstagram: true,
+  channelFacebook: true,
+  channelTiktok: true,
+  channelWeb: true,
+} as const;
 
 export const DEFAULT_PERMISSIONS: PermissionMap = {
   dashboard: false,
@@ -48,6 +63,9 @@ export const DEFAULT_PERMISSIONS: PermissionMap = {
   requestsNotify: false,
   requestsManualChat: false,
   requestsSensitive: false,
+  comments: false,
+  commentsManage: false,
+  ...CHANNEL_DEFAULTS,
 };
 
 export const ROLE_PERMISSIONS: Record<AssignableRole, PermissionMap> = {
@@ -68,6 +86,9 @@ export const ROLE_PERMISSIONS: Record<AssignableRole, PermissionMap> = {
     requestsNotify: true,
     requestsManualChat: true,
     requestsSensitive: true,
+    comments: true,
+    commentsManage: true,
+    ...CHANNEL_DEFAULTS,
   },
   operator: {
     dashboard: true,
@@ -86,6 +107,9 @@ export const ROLE_PERMISSIONS: Record<AssignableRole, PermissionMap> = {
     requestsNotify: true,
     requestsManualChat: true,
     requestsSensitive: false,
+    comments: true,
+    commentsManage: true,
+    ...CHANNEL_DEFAULTS,
   },
   viewer: {
     dashboard: true,
@@ -104,6 +128,9 @@ export const ROLE_PERMISSIONS: Record<AssignableRole, PermissionMap> = {
     requestsNotify: false,
     requestsManualChat: false,
     requestsSensitive: false,
+    comments: false,
+    commentsManage: false,
+    ...CHANNEL_DEFAULTS,
   },
 };
 

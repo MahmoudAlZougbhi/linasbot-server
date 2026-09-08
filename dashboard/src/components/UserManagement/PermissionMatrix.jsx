@@ -89,6 +89,55 @@ const PERMISSION_CONFIG = [
     description: 'Read-only observability logs',
     icon: ClockIcon,
     color: 'slate'
+  },
+  {
+    key: 'comments',
+    name: 'Comments',
+    description: 'View social comment threads',
+    icon: ChatBubbleLeftRightIcon,
+    color: 'green'
+  },
+  {
+    key: 'commentsManage',
+    name: 'Manage Comments',
+    description: 'Change watched posts for comments',
+    icon: ChatBubbleLeftRightIcon,
+    color: 'amber'
+  },
+  {
+    key: 'channelWhatsapp',
+    name: 'WhatsApp',
+    description: 'See WhatsApp chats',
+    icon: ChatBubbleLeftRightIcon,
+    color: 'green'
+  },
+  {
+    key: 'channelInstagram',
+    name: 'Instagram',
+    description: 'See Instagram chats and comments',
+    icon: ChatBubbleLeftRightIcon,
+    color: 'red'
+  },
+  {
+    key: 'channelFacebook',
+    name: 'Messenger',
+    description: 'See Messenger chats and comments',
+    icon: ChatBubbleLeftRightIcon,
+    color: 'blue'
+  },
+  {
+    key: 'channelTiktok',
+    name: 'TikTok',
+    description: 'See TikTok chats and comments',
+    icon: ChatBubbleLeftRightIcon,
+    color: 'slate'
+  },
+  {
+    key: 'channelWeb',
+    name: 'Website',
+    description: 'See website chats',
+    icon: ChatBubbleLeftRightIcon,
+    color: 'cyan'
   }
 ];
 

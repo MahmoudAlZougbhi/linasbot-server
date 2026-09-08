@@ -8,6 +8,7 @@ from typing import Any
 
 from services.billing_backend import billing_uses_postgres
 from services.credit_ai_gate import remaining_credits, upgrade_plan_allowed
+from services.credit_buckets import split_credit_remaining
 from services.credit_ledger_service import credit_ledger_service
 from services.entitlements_service import (
     get_tenant_entitlement_public,
@@ -80,7 +81,10 @@ def _plan_and_credits(tenant_id: str) -> dict[str, Any]:
     limit = included + extra
     if limit <= 0:
         limit = available + reserved
-    used = max(0, limit - available - reserved) if limit > 0 else 0
+    buckets = split_credit_remaining(
+        included=included, purchased=extra, available=available, reserved=reserved
+    )
+    used = buckets["credits_used"]
     catalog = PLAN_CATALOG.get(plan_id)
     display_name = catalog.display_name if catalog else (plan_id if plan_id != "none" else None)
 
@@ -98,6 +102,8 @@ def _plan_and_credits(tenant_id: str) -> dict[str, Any]:
             "current_period_end_ts": public.get("current_period_end"),
             "included_credits": included,
             "purchased_or_promotional_credits": extra,
+            "membership_credits_remaining": buckets["membership_credits_remaining"],
+            "purchased_credits_remaining": buckets["purchased_credits_remaining"],
             "reserved_credits": reserved,
             "available_credits": available,
             "total_available_credits": available,

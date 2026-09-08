@@ -14,6 +14,8 @@ test('requests list matches inbox screenshot chrome', () => {
   const summary = read('features/requests/RequestSummaryCards.tsx');
   const screen = read('features/requests/RequestsScreen.tsx');
   assert.match(home, /RequestSummaryCards/);
+  assert.match(home, /list\.loading && !list\.hasLoadedOnce/);
+  assert.doesNotMatch(home, /list\.loading && !list\.refreshing/);
   assert.match(home, /RequestSearchBar/);
   assert.match(home, /RequestFilterSheet/);
   assert.match(home, /All platforms/);
@@ -24,6 +26,9 @@ test('requests list matches inbox screenshot chrome', () => {
   assert.match(summary, /Done/);
   assert.match(summary, /countWrap/);
   assert.match(summary, /borderRadius: 22/);
+  assert.match(summary, /android_ripple/);
+  assert.match(summary, /pressed \? 0\.86/);
+  assert.match(summary, /active \? colors\.accentSoft/);
   assert.match(screen, /reqSubtitle/);
   assert.doesNotMatch(screen, /titleColor=\{colors\.accent\}/);
   assert.doesNotMatch(screen, /iconColor=\{colors\.accent\}/);
@@ -55,6 +60,9 @@ test('filter sheet has platforms date assignee reset and show count', () => {
   assert.match(sheet, /accentSoft/);
   assert.match(sheet, /tiktok/);
   assert.match(sheet, /reqFilterAll/);
+  assert.match(sheet, /reqChannelWeb/);
+  assert.match(sheet, /platformChipLabel/);
+  assert.doesNotMatch(sheet, /return 'Facebook'/);
   assert.doesNotMatch(sheet, /feather\('globe'\)/);
   const cal = read('features/requests/RequestDatePicker.tsx');
   assert.match(cal, /feather\('calendar'\)/);

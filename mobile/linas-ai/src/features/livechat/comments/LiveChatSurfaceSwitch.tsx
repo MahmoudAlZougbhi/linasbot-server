@@ -8,17 +8,20 @@ export type LiveChatSurface = 'chats' | 'comments';
 type Props = {
   value: LiveChatSurface;
   onChange: (value: LiveChatSurface) => void;
+  visible?: LiveChatSurface[];
 };
 
-export function LiveChatSurfaceSwitch({ value, onChange }: Props) {
+export function LiveChatSurfaceSwitch({ value, onChange, visible }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
+  const tabs = visible ?? (['chats', 'comments'] as const);
+  if (tabs.length <= 1) return null;
   return (
     <View
       style={[styles.row, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
       accessibilityRole="tablist"
     >
-      {(['chats', 'comments'] as const).map((id) => {
+      {tabs.map((id) => {
         const on = value === id;
         return (
           <Pressable

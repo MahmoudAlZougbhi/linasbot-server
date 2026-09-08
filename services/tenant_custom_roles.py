@@ -15,13 +15,28 @@ _RESERVED = frozenset({"admin", "operator", "viewer", "platform_owner", "owner"}
 _COLLECTION = "tenant_custom_roles"
 
 
+_CHANNEL_KEYS = (
+    "channelWhatsapp",
+    "channelInstagram",
+    "channelFacebook",
+    "channelTiktok",
+    "channelWeb",
+)
+
+
 def _normalize_permissions(raw: dict[str, Any] | None) -> dict[str, bool]:
     out = {key: False for key in PERMISSION_KEYS}
-    if not raw:
-        return out
-    for key, value in raw.items():
+    source = raw if isinstance(raw, dict) else {}
+    for key, value in source.items():
         if key in PERMISSION_KEYS:
             out[key] = bool(value)
+    for key in _CHANNEL_KEYS:
+        if key not in source:
+            out[key] = True
+    if "comments" not in source:
+        out["comments"] = bool(out.get("liveChat"))
+    if "commentsManage" not in source:
+        out["commentsManage"] = bool(out.get("comments"))
     return out
 
 

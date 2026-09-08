@@ -56,6 +56,7 @@ export function SmartFollowUpStepsCard({ steps, disabled, onChange }: Props) {
                 disabled={stepDisabled}
                 flex={0.82}
                 accessibilityLabel={tr('sfuDelayMinutes')}
+                sheetHint={tr('sfuDelaySheetHint')}
                 onChange={(raw) => {
                   const delay_minutes = Math.max(1, parseInt(raw, 10) || 1);
                   onChange({ ...step, delay_minutes });
@@ -68,6 +69,7 @@ export function SmartFollowUpStepsCard({ steps, disabled, onChange }: Props) {
                 disabled={stepDisabled}
                 flex={1.28}
                 accessibilityLabel={tr('sfuGoal')}
+                sheetHint={tr('sfuGoalSheetHint')}
                 onChange={(goal) => onChange({ ...step, goal: goal as SmartFollowUpStep['goal'] })}
               />
 

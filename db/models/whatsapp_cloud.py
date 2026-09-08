@@ -134,6 +134,7 @@ class WhatsAppConnection(Base):
     health_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'unknown'"))
     health_detail: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ai_default_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    calls_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     history_sync_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'pending'"))
     previous_connection_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     superseded_by_connection_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

@@ -58,12 +58,14 @@ test('screen loaders use LinasLoadingIndicator on feature surfaces', () => {
   }
 });
 
-test('integrations gates content until first load and web chat are ready', () => {
+test('integrations gates content until first load; web chat can arrive after', () => {
   const integrations = read('features/integrations/IntegrationsScreen.tsx');
   assert.match(integrations, /showInitialLoader/);
   assert.match(integrations, /hasLoadedOnce/);
   assert.match(integrations, /webChatReady/);
   assert.match(integrations, /headerRefreshing/);
+  assert.match(integrations, /showInitialLoader = !hasLoadedOnce/);
+  assert.doesNotMatch(integrations, /showInitialLoader = !hasLoadedOnce \|\| !webChatReady/);
 });
 
 test('dashboard hides content until ready state', () => {

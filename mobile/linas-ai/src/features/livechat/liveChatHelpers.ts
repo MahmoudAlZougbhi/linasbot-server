@@ -37,6 +37,12 @@ export function matchesChannelFilter(item: LiveChatItem, filter: ChannelFilter):
   return chatChannel(item) === filter;
 }
 
+export function matchesAllowedChannels(item: LiveChatItem, allowed: ChatChannel[] | null): boolean {
+  if (!allowed) return true;
+  if (allowed.length === 0) return false;
+  return allowed.includes(chatChannel(item));
+}
+
 export function channelLabel(item: LiveChatItem): string {
   const ch = chatChannel(item);
   if (ch === 'instagram') return 'Instagram';
@@ -64,18 +70,37 @@ export function assigneeLabel(item: LiveChatItem): string {
   return 'AI';
 }
 
+function rawMessageText(msg: LiveChatMessage): string {
+  return String(msg.content || msg.text || '').trim();
+}
+
+function isVoicePlaceholder(text: string): boolean {
+  const t = text.toLowerCase();
+  return !t || /^\[?voice (message|send)/i.test(t) || t.includes('voice message from operator');
+}
+
+export function isVoiceMessage(msg: LiveChatMessage): boolean {
+  const t = String(msg.type || '').toLowerCase();
+  if (t === 'voice' || t === 'audio') return true;
+  if (msg.audio_url) return true;
+  return isVoicePlaceholder(rawMessageText(msg)) && /voice/i.test(rawMessageText(msg));
+}
+
 export function messageBody(msg: LiveChatMessage): string {
   const t = String(msg.type || 'text').toLowerCase();
-  if (t === 'voice' || t === 'audio') return msg.content || msg.text || 'Voice message';
+  if (t === 'voice' || t === 'audio' || isVoiceMessage(msg)) {
+    const raw = rawMessageText(msg);
+    return isVoicePlaceholder(raw) ? 'Voice message' : raw || 'Voice message';
+  }
   if (t === 'image') return msg.content || msg.text || 'Image';
-  return String(msg.content || msg.text || '').trim() || '(empty)';
+  return rawMessageText(msg) || '(empty)';
 }
 
 /** Web parity: Like only on AI text replies (not bot/FAQ, not media). */
 export function isLikeableAiReply(msg: LiveChatMessage): boolean {
   if (msg.is_user) return false;
   const type = String(msg.type || 'text').toLowerCase();
-  if (type === 'voice' || type === 'audio' || type === 'image') return false;
+  if (type === 'voice' || type === 'audio' || type === 'image' || isVoiceMessage(msg)) return false;
   return String(msg.handled_by || '').toLowerCase() === 'ai';
 }
 

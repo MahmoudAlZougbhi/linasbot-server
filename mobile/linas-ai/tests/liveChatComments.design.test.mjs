@@ -18,9 +18,12 @@ test('Live Chat has Chats / Comments switch and comment grid', () => {
   const grid = read('features/livechat/comments/CommentsMediaGrid.tsx');
   const chips = read('features/livechat/comments/CommentsPlatformChips.tsx');
   assert.match(screen, /LiveChatSurfaceSwitch/);
+  assert.match(screen, /useLiveChatAccess/);
   assert.match(screen, /CommentsInbox/);
   assert.match(screen, /CommentThreadScreen/);
   assert.match(inbox, /CommentsPlatformChips/);
+  assert.match(inbox, /allowedChannels/);
+  assert.match(chips, /allowedCommentPlatforms/);
   assert.match(inbox, /CommentsMediaGrid/);
   assert.match(inbox, /onOpenThread\(platform, post\)/);
   assert.doesNotMatch(inbox, /CommentPostSheet/);

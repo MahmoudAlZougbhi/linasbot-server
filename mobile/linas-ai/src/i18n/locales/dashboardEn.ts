@@ -20,6 +20,8 @@ export const dashboardEn = {
   dashUpgrade: 'Upgrade',
   dashCredits: 'Credits',
   dashRemaining: 'remaining',
+  dashCreditsMembership: 'Membership',
+  dashCreditsBought: 'Bought',
   dashUsedOf: 'used of',
   dashRenews: 'Renews',
   dashBuyCredits: 'Buy credits',

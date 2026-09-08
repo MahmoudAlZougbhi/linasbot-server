@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -50,6 +50,7 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
   const nav = useModuleNav();
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [roles, setRoles] = useState<TenantRole[]>([]);
@@ -67,7 +68,7 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
   const [authGate, setAuthGate] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!hasLoadedOnceRef.current) setLoading(true);
     setError(null);
     try {
       const access = await tokenStore.getAccessToken();
@@ -110,6 +111,7 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
         setUsers([]);
       }
     } finally {
+      hasLoadedOnceRef.current = true;
       setLoading(false);
       setHasLoadedOnce(true);
     }

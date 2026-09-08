@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -76,6 +76,7 @@ export function SmartFollowUpScreen() {
   const nav = useModuleNav();
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const [businessHoursOnly, setBusinessHoursOnly] = useState(true);
   const [channels, setChannels] = useState<FollowUpChannelsEnabled>(DEFAULT_CHANNELS_ENABLED);
   const [steps, setSteps] = useState<SmartFollowUpStep[]>(defaultSteps);
@@ -93,22 +94,25 @@ export function SmartFollowUpScreen() {
   }, []);
 
   const reload = useCallback(async () => {
-    setLoad({ kind: 'loading' });
+    if (!hasLoadedOnceRef.current) setLoad({ kind: 'loading' });
     setError(null);
     setNotice(null);
     try {
       const data = await fetchSmartFollowUpSettings();
       applySettings(data);
       setLoad({ kind: 'ready', data });
+      hasLoadedOnceRef.current = true;
       setHasLoadedOnce(true);
     } catch (err) {
       if (isNetworkFailure(err)) {
         setLoad({ kind: 'offline' });
+        hasLoadedOnceRef.current = true;
         setHasLoadedOnce(true);
         return;
       }
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
         setLoad({ kind: 'forbidden' });
+        hasLoadedOnceRef.current = true;
         setHasLoadedOnce(true);
         return;
       }
@@ -116,6 +120,7 @@ export function SmartFollowUpScreen() {
         kind: 'error',
         message: err instanceof Error ? err.message : tr('sfuLoadError'),
       });
+      hasLoadedOnceRef.current = true;
       setHasLoadedOnce(true);
     }
   }, [applySettings, tr]);

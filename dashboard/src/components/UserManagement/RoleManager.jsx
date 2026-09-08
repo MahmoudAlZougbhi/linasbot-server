@@ -19,6 +19,18 @@ const PERMISSION_LABELS = {
   contentManagers: 'AI Setup',
   contentPublish: 'Content Publish',
   activityFlow: 'Interaction Logs',
+  requests: 'Requests',
+  requestsManage: 'Manage Requests',
+  requestsNotify: 'Request Notifications',
+  requestsManualChat: 'Request Manual Chat',
+  requestsSensitive: 'Request Sensitive Data',
+  comments: 'Comments',
+  commentsManage: 'Manage Comments',
+  channelWhatsapp: 'WhatsApp',
+  channelInstagram: 'Instagram',
+  channelFacebook: 'Messenger',
+  channelTiktok: 'TikTok',
+  channelWeb: 'Website',
 };
 
 /** @param {{ role: RoleData }} props */

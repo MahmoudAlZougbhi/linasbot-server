@@ -22,6 +22,23 @@ async function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
+export type OperatorVoiceClip = { base64: string; mime: string };
+
+function extensionForUri(uri: string): string {
+  const match = /\.([a-z0-9]+)(?:\?|$)/i.exec(uri);
+  return match?.[1]?.toLowerCase() ?? 'm4a';
+}
+
+function mimeForVoiceExtension(ext: string): string {
+  if (ext === 'webm') return 'audio/webm';
+  if (ext === 'ogg' || ext === 'oga') return 'audio/ogg';
+  if (ext === 'mp3') return 'audio/mpeg';
+  if (ext === 'wav') return 'audio/wav';
+  if (ext === 'caf') return 'audio/x-caf';
+  if (ext === '3gp' || ext === '3gpp') return 'audio/3gpp';
+  return 'audio/mp4';
+}
+
 async function uriToBase64(uri: string): Promise<string> {
   return readAsStringAsync(uri, { encoding: 'base64' });
 }
@@ -90,7 +107,7 @@ export function useLiveChatOperatorMedia() {
     }
   }
 
-  async function stopVoiceRecording(): Promise<string | null> {
+  async function stopVoiceRecording(): Promise<OperatorVoiceClip | null> {
     if (voicePhase !== 'recording') return null;
     busyRef.current = true;
     setMediaError(null);
@@ -106,7 +123,8 @@ export function useLiveChatOperatorMedia() {
         if (uri) {
           const info = await getInfoAsync(uri);
           if (info.exists && !info.isDirectory) {
-            return uriToBase64(uri);
+            const base64 = await uriToBase64(uri);
+            return { base64, mime: mimeForVoiceExtension(extensionForUri(uri)) };
           }
         }
         await sleep(60);

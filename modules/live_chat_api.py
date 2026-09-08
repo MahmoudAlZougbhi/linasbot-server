@@ -22,6 +22,7 @@ from modules.live_chat_api_helpers import (  # noqa: F401
     _log_sse,
     _run_endpoint,
     broadcast_sse_event,
+    require_chat_channel,
     resolve_takeover_assignee,
 )
 from modules.models import (
@@ -86,6 +87,7 @@ async def live_chat_events(request: Request) -> Any:
 
 @app.get("/api/live-chat/unified-chats")
 async def get_unified_chats(
+    http_request: Request,
     search: str = Query(default="", description="Search by name or phone"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=30, ge=1, le=100),
@@ -106,14 +108,24 @@ async def get_unified_chats(
     effective_page = int(cursor) if (cursor and cursor.isdigit()) else page
 
     async def _handler() -> Any:
-        return await live_chat_service.get_unified_chats(
+        from modules.api_security import require_session
+        from services.access_channels import effective_inbox_channel, filter_chats_for_session
+
+        session = require_session(http_request)
+        inbox_channel = effective_inbox_channel(session, channel)
+        if inbox_channel is None:
+            return {"success": True, "chats": [], "total": 0, "has_more": False}
+        result = await live_chat_service.get_unified_chats(
             search=search,
             page=effective_page,
             page_size=page_size,
             filter_state=filter,
             cursor=None if (cursor and cursor.isdigit()) else cursor,
-            channel=channel,
+            channel=inbox_channel,
         )
+        if not isinstance(result, dict):
+            return result
+        return filter_chats_for_session(session, result)
 
     fallback = {"success": False, "chats": [], "total": 0, "has_more": False, "error": "request_failed"}
     return await _run_endpoint(_handler, fallback=fallback)
@@ -215,9 +227,7 @@ async def takeover_conversation(request: TakeoverRequest, http_request: Request)
     """Operator takes over a conversation"""
 
     async def _handler() -> Any:
-        from modules.api_security import require_session
-
-        session = require_session(http_request)
+        session = require_chat_channel(http_request, request.user_id)
         operator_id, operator_name = resolve_takeover_assignee(session, request.operator_id)
         result = await live_chat_service.takeover_conversation(
             conversation_id=request.conversation_id,
@@ -239,9 +249,7 @@ async def release_conversation(request: ReleaseRequest, http_request: Request) -
     """Release conversation back to bot (explicit Resume AI — clears server pause)."""
 
     async def _handler() -> Any:
-        from modules.api_security import require_session
-
-        session = require_session(http_request)
+        session = require_chat_channel(http_request, request.user_id)
         # Same server-authoritative clear as /resume-ai so WA Cloud epoch cannot stay HUMAN_PAUSED.
         result = await live_chat_service.resume_ai_conversation(
             conversation_id=request.conversation_id,
@@ -261,9 +269,7 @@ async def resume_ai_conversation(request: ResumeAiRequest, http_request: Request
     """Explicit Resume AI — clears server-authoritative manual pause."""
 
     async def _handler() -> Any:
-        from modules.api_security import require_session
-
-        session = require_session(http_request)
+        session = require_chat_channel(http_request, request.user_id)
         result = await live_chat_service.resume_ai_conversation(
             conversation_id=request.conversation_id,
             user_id=request.user_id,
@@ -284,9 +290,7 @@ async def mark_conversation_read(request: MarkConversationReadRequest, http_requ
     """Mark conversation as read when operator opens it. Persists unread_count=0 in Firestore."""
 
     async def _handler() -> Any:
-        from modules.api_security import require_session
-
-        require_session(http_request)
+        require_chat_channel(http_request, request.user_id)
         return await live_chat_service.mark_conversation_read(
             user_id=request.user_id,
             conversation_id=request.conversation_id,
@@ -300,9 +304,7 @@ async def send_operator_message(request: SendOperatorMessageRequest, http_reques
     """Send message from operator to customer"""
 
     async def _handler() -> Any:
-        from modules.api_security import require_session
-
-        session = require_session(http_request)
+        session = require_chat_channel(http_request, request.user_id)
         adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
         return await live_chat_service.send_operator_message(
             conversation_id=request.conversation_id,
@@ -369,6 +371,7 @@ async def get_faq_match_context(
 async def get_conversation_details(
     user_id: str,
     conversation_id: str,
+    http_request: Request,
     days: int = Query(default=0, description="Return only last N days (0=all)"),
     before: str = Query(default=None, description="Load messages older than this ISO timestamp (Load More)"),
     day_window: int = Query(
@@ -386,6 +389,7 @@ async def get_conversation_details(
     )
 
     async def _handler() -> Any:
+        require_chat_channel(http_request, user_id)
         return await live_chat_service.get_conversation_details(
             user_id=user_id,
             conversation_id=conversation_id,
@@ -418,9 +422,7 @@ async def edit_message(request: EditMessageRequest, http_request: Request) -> An
     """Edit a bot message's content (e.g. after operator dislike). Updates Firestore and broadcasts."""
 
     async def _handler() -> Any:
-        from modules.api_security import require_session
-
-        require_session(http_request)
+        require_chat_channel(http_request, request.user_id)
         return await live_chat_service.update_message_content(
             user_id=request.user_id,
             conversation_id=request.conversation_id,
@@ -434,9 +436,6 @@ async def edit_message(request: EditMessageRequest, http_request: Request) -> An
 @app.post("/api/live-chat/end-conversation")
 async def end_conversation(request: dict, http_request: Request) -> Any:
     """Mark conversation as resolved/ended"""
-    from modules.api_security import require_session
-
-    session = require_session(http_request)
     conversation_id = request.get("conversation_id")
     user_id = request.get("user_id")
 
@@ -445,6 +444,7 @@ async def end_conversation(request: dict, http_request: Request) -> Any:
             "success": False,
             "error": "Missing required fields: conversation_id, user_id",
         }
+    session = require_chat_channel(http_request, str(user_id))
 
     async def _handler() -> Any:
         # Clear server pause (Firestore + WA Cloud epoch) before resolving so AI is not stuck paused.

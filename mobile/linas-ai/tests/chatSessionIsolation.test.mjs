@@ -50,6 +50,7 @@ describe('chat session isolation', () => {
   it('owner bootstrap opens a new chat instead of restoring last thread', () => {
     const session = read('features/chat/useChatSession.ts');
     assert.match(session, /createOwnerConversation/);
+    assert.match(session, /Promise\.all\(/);
     assert.doesNotMatch(session, /preferFresh/);
     assert.doesNotMatch(session, /listed\.conversations\.find/);
     assert.match(session, /mergeListedHistory\(prev, listedHistoryEntries\(listed\.conversations\)\)/);
@@ -65,6 +66,16 @@ describe('chat session isolation', () => {
     assert.match(session, /appendOptimisticUser/);
     const append = session.slice(session.indexOf('function appendOptimisticUser'));
     assert.match(append.slice(0, 500), /upsertStartedHistoryEntry/);
+  });
+
+  it('does not blank the thread while a conversation is already on screen', () => {
+    const chat = read('features/chat/ChatScreen.tsx');
+    const session = read('features/chat/useChatSession.ts');
+    const controller = read('features/chat/useChatScreenController.ts');
+    assert.match(chat, /c\.loading && c\.messages\.length === 0/);
+    assert.match(session, /Promise\.all\(/);
+    assert.match(controller, /sessionReady = isAuthenticated && Boolean\(owner\.conversationId\)/);
+    assert.doesNotMatch(controller, /turn\.streaming \|\| owner\.loading/);
   });
 
   it('guest hook clears transcript when auth takes over', () => {

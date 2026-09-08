@@ -97,7 +97,7 @@ export function ChatScreen({
           }}
         />
 
-        {c.loading ? (
+        {c.loading && c.messages.length === 0 ? (
           <View style={styles.center} accessibilityLabel="Loading conversation">
             <LinasLoadingIndicator variant="screen" />
           </View>

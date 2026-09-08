@@ -467,11 +467,11 @@ test('composer bar matches design handoff (pill, grow, placeholders)', () => {
   assert.match(styles, /actionRow/);
 });
 
-test('Live Chat inbox matches design handoff (search, All/Human, platform row)', () => {
+test('Live Chat inbox matches design handoff (search, header human, platform row)', () => {
   const screen = read('features/livechat/LiveChatScreen.tsx');
   const inbox = read('features/livechat/LiveChatInbox.tsx');
   const search = read('features/livechat/InboxSearchBar.tsx');
-  const pills = read('features/livechat/InboxFilterPills.tsx');
+  const human = read('features/livechat/InboxHumanHeaderButton.tsx');
   const chips = read('features/livechat/InboxChannelChips.tsx');
   const row = read('features/livechat/ConversationRow.tsx');
   const icon = read('features/livechat/PlatformChannelIcon.tsx');
@@ -480,15 +480,13 @@ test('Live Chat inbox matches design handoff (search, All/Human, platform row)',
   assert.match(screen, /title="Live Chat"/);
   assert.doesNotMatch(screen, /All customer conversations/);
   assert.match(screen, /LiveChatSurfaceSwitch/);
+  assert.match(screen, /InboxHumanHeaderButton/);
   assert.match(search, /borderRadius:\s*radii\.pill/);
   assert.match(search, /placeholder="Search conversations"/);
   assert.doesNotMatch(search, /feather\('filter'\)/);
-  assert.match(pills, /label:\s*'All'/);
-  assert.match(pills, /label:\s*'Human'/);
-  assert.match(pills, /id:\s*'with_operator'/);
-  assert.match(pills, /colors\.accentSoft/);
-  assert.match(pills, /active \? colors\.text : colors\.textMuted/);
-  assert.doesNotMatch(pills, /Waiting|Closed/);
+  assert.doesNotMatch(inbox, /InboxFilterPills/);
+  assert.match(human, /feather\('user'\)/);
+  assert.match(human, /Show conversations waiting for a human/);
   assert.match(chips, /id: 'whatsapp'/);
   assert.match(chips, /id: 'instagram'/);
   assert.match(chips, /id: 'facebook'/);
@@ -676,6 +674,8 @@ test('Subscription current plan matches design handoff', () => {
   assert.match(chrome, /HeaderMenuButton/);
   assert.match(hero, /subCurrentPlanKicker/);
   assert.match(hero, /subAvailableCredits/);
+  assert.match(hero, /subCreditsMembership/);
+  assert.match(hero, /subCreditsBought/);
   assert.match(hero, /subBuyCredits/);
   assert.match(current, /subWhatIncludes/);
   assert.match(current, /SmartAnswersInfo/);
@@ -754,7 +754,12 @@ test('Dashboard sections match design handoff', () => {
   assert.match(header, /chevron-down/);
   assert.doesNotMatch(header, /fontWeight:\s*'700'/);
   assert.match(plan, /dashPlanTitle/);
+  assert.match(plan, /dashCreditsMembership/);
+  assert.match(plan, /dashCreditsBought/);
+  assert.match(plan, /splitRow/);
   assert.match(plan, /dashBuyCredits/);
+  assert.match(en, /dashCreditsMembership: 'Membership'/);
+  assert.match(en, /dashCreditsBought: 'Bought'/);
   assert.match(plan, /DASH_MINT/);
   assert.match(plan, /buyBtn/);
   assert.match(grid, /dashTotalActivity/);

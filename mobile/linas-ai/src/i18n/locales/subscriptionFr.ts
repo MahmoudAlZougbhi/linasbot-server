@@ -121,6 +121,8 @@ export const subscriptionFr = {
   subCurrentSubtitle: 'Votre forfait actuel',
   subCurrentPlanKicker: 'FORFAIT ACTUEL',
   subAvailableCredits: 'Crédits disponibles',
+  subCreditsMembership: 'Abonnement',
+  subCreditsBought: 'Achetés',
   subChooseCreditPack: 'Choisissez un pack de crédits',
   subBuyCreditsCta: 'Acheter {n} crédits • {price}',
   subPurchasedNoExpire: 'Les crédits achetés n’expirent pas.',

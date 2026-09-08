@@ -69,7 +69,15 @@ test('add user screen has login card, access grid, generate password', () => {
   assert.match(password, /eye-off/);
   assert.match(grid, /usersView/);
   assert.match(grid, /usersManage/);
+  assert.match(grid, /adjustsFontSizeToFit/);
+  assert.match(grid, /UserChannelAccess/);
   assert.match(grid, /colors\.accent/);
+  const channels = read('features/users/UserChannelAccess.tsx');
+  assert.match(channels, /usersChannels/);
+  assert.match(channels, /ACCESS_CHANNELS/);
+  assert.match(channels, /adjustsFontSizeToFit/);
+  assert.match(ui, /usersAccessComments: 'Comments'/);
+  assert.match(ui, /Which channels this person can see/);
   assert.match(ui, /Create login and choose access/);
   assert.match(ui, /They can change it after login/);
   assert.match(ui, /Choose what this user can view or manage/);

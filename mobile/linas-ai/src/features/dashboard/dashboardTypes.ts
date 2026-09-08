@@ -76,6 +76,8 @@ export const TenantDashboardSchema = z.object({
       current_period_end: z.string().nullable().optional(),
       included_credits: z.number().optional(),
       purchased_or_promotional_credits: z.number().optional(),
+      membership_credits_remaining: z.number().optional(),
+      purchased_credits_remaining: z.number().optional(),
       reserved_credits: z.number().optional(),
       available_credits: z.number().optional(),
       total_available_credits: z.number().optional(),

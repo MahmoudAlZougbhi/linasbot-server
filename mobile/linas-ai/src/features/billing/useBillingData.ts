@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { z } from 'zod';
 
 import { apiFetch } from '../../api/client';
+import { splitCreditRemaining } from '../dashboard/creditSplit';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { BillingPeriod } from './appleProductIds';
 import { isPlanId, type PlanId } from './planCatalog';
@@ -26,6 +27,8 @@ export type BillingEntitlementState = {
   includedCredits: number | null;
   purchasedCredits: number | null;
   creditBalance: number | null;
+  membershipRemaining: number | null;
+  boughtRemaining: number | null;
   pendingDowngrade: PendingDowngrade | null;
   raw: string;
 };
@@ -41,6 +44,8 @@ export function useBillingEntitlement() {
     includedCredits: null,
     purchasedCredits: null,
     creditBalance: null,
+    membershipRemaining: null,
+    boughtRemaining: null,
     pendingDowngrade: null,
     raw: '',
   });
@@ -65,12 +70,35 @@ export function useBillingEntitlement() {
             ? entitlement.extra_credits
             : null;
       let creditBalance: number | null = null;
+      let membershipRemaining: number | null = null;
+      let boughtRemaining: number | null = null;
       try {
         const res = await apiFetch('/api/mobile/usage', { schema: UsageSchema });
-        const bal = (res as Record<string, unknown>).credit_balance;
+        const usage = res as Record<string, unknown>;
+        const bal = usage.credit_balance;
         creditBalance = typeof bal === 'number' ? bal : null;
+        membershipRemaining =
+          typeof usage.membership_credits_remaining === 'number'
+            ? usage.membership_credits_remaining
+            : null;
+        boughtRemaining =
+          typeof usage.purchased_credits_remaining === 'number'
+            ? usage.purchased_credits_remaining
+            : null;
       } catch {
         creditBalance = null;
+      }
+      if (
+        (membershipRemaining == null || boughtRemaining == null) &&
+        creditBalance != null
+      ) {
+        const split = splitCreditRemaining({
+          included: typeof entitlement.included_credits === 'number' ? entitlement.included_credits : 0,
+          purchased,
+          available: creditBalance,
+        });
+        membershipRemaining = membershipRemaining ?? split.membership;
+        boughtRemaining = boughtRemaining ?? split.bought;
       }
       const pendingDowngrade = parsePendingDowngrade(entitlement.pending_downgrade);
       setState({
@@ -88,6 +116,8 @@ export function useBillingEntitlement() {
             : null,
         purchasedCredits: purchased,
         creditBalance,
+        membershipRemaining,
+        boughtRemaining,
         pendingDowngrade,
         raw: __DEV__ ? JSON.stringify(data, null, 2) : '',
       });
@@ -101,6 +131,8 @@ export function useBillingEntitlement() {
         includedCredits: null,
         purchasedCredits: null,
         creditBalance: null,
+        membershipRemaining: null,
+        boughtRemaining: null,
         pendingDowngrade: null,
         raw: '',
       });

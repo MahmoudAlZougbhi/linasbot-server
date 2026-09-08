@@ -64,7 +64,7 @@ export const requestsFr = {
   reqChannelInstagram: 'Instagram',
   reqChannelFacebook: 'Facebook',
   reqChannelWhatsApp: 'WhatsApp',
-  reqChannelWeb: 'Site web',
+  reqChannelWeb: 'Chat web',
   reqChannelCommentDm: 'Commentaire → DM',
   reqUnassigned: 'Non assigné',
   reqNotifyFailed: 'Notification échouée',

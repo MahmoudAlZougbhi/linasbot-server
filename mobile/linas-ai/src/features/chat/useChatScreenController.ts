@@ -91,8 +91,8 @@ export function useChatScreenController(
 
   const loading = isAuthenticated ? owner.loading : guest.loading;
   const messages = isAuthenticated ? owner.messages : guest.messages;
-  const sessionReady = isAuthenticated && !owner.loading && Boolean(owner.conversationId);
-  const sending = isAuthenticated ? turn.streaming || owner.loading : guest.sending;
+  const sessionReady = isAuthenticated && Boolean(owner.conversationId);
+  const sending = isAuthenticated ? turn.streaming : guest.sending;
   const error = isAuthenticated ? owner.error : guest.error;
   const listKey = isAuthenticated ? owner.conversationId || 'owner' : guest.guestId || 'guest';
   const hasUserMessage = messages.some((m) => m.role === 'user');

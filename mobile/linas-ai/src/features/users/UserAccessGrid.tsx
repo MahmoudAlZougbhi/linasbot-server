@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppIcon, feather } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts } from '../../theme';
+import { UserChannelAccess } from './UserChannelAccess';
 import {
   ACCESS_SCREENS,
   accessManageChecked,
@@ -25,8 +26,12 @@ export function UserAccessGrid({ permissions, onChange, disabled }: Props) {
       <View style={styles.head}>
         <Text style={styles.section}>{tr('usersAppAccess')}</Text>
         <View style={styles.cols}>
-          <Text style={styles.col}>{tr('usersView')}</Text>
-          <Text style={styles.col}>{tr('usersManage')}</Text>
+          <Text style={styles.col} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
+            {tr('usersView')}
+          </Text>
+          <Text style={styles.col} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
+            {tr('usersManage')}
+          </Text>
         </View>
       </View>
       <Text style={styles.sub}>{tr('usersAppAccessSub')}</Text>
@@ -51,6 +56,7 @@ export function UserAccessGrid({ permissions, onChange, disabled }: Props) {
           </View>
         );
       })}
+      <UserChannelAccess permissions={permissions} onChange={onChange} disabled={disabled} />
     </View>
   );
 }
@@ -78,12 +84,12 @@ function CheckBox({
 }
 
 const styles = StyleSheet.create({
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  section: { fontFamily: fonts.bodyMedium, fontSize: 17, fontWeight: '700', color: colors.text },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  section: { flex: 1, minWidth: 0, fontFamily: fonts.bodyMedium, fontSize: 17, fontWeight: '700', color: colors.text },
   sub: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted, marginTop: 4, marginBottom: 10 },
-  cols: { flexDirection: 'row', width: 108, justifyContent: 'space-between', paddingRight: 2 },
+  cols: { flexDirection: 'row', width: 128, flexShrink: 0, justifyContent: 'space-between' },
   col: {
-    width: 44,
+    flex: 1,
     textAlign: 'center',
     fontFamily: fonts.bodyMedium,
     fontSize: 12,

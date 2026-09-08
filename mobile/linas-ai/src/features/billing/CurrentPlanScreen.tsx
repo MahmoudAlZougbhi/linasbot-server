@@ -18,6 +18,8 @@ type Props = {
   priceLabel: string;
   renewsLabel: string;
   creditBalance: number | null;
+  membershipRemaining: number | null;
+  boughtRemaining: number | null;
   pendingDowngrade: PendingDowngrade | null;
   locale: string;
   tr: (key: StringKey) => string;
@@ -34,6 +36,8 @@ export function CurrentPlanScreen({
   priceLabel,
   renewsLabel,
   creditBalance,
+  membershipRemaining,
+  boughtRemaining,
   pendingDowngrade,
   locale,
   tr,
@@ -78,6 +82,14 @@ export function CurrentPlanScreen({
           renewsLabel={renewsLabel}
           availableLabel={available}
           includedEachMonth={includedEachMonth}
+          membershipLabel={
+            membershipRemaining != null
+              ? membershipRemaining.toLocaleString(locale)
+              : tr('subCreditsMissing')
+          }
+          boughtLabel={
+            boughtRemaining != null ? boughtRemaining.toLocaleString(locale) : tr('subCreditsMissing')
+          }
           tr={tr}
           onBuyCredits={onBuyCredits}
         />
