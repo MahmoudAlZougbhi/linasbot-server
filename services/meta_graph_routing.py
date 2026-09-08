@@ -75,6 +75,19 @@ def credential_has_publish_scopes(
     return required_publish_scopes_for_binding(binding).issubset(credential.scopes)
 
 
+def instagram_login_send_account_id(
+    *,
+    credential: MetaBindingCredential,
+    binding: MetaAssetBinding,
+) -> str:
+    """Graph /me id for Instagram Login Send API; keep IGSID on the binding."""
+
+    login_user = str(credential.authorized_meta_user_id or "").strip()
+    if login_user.isdigit():
+        return login_user
+    return str(binding.instagram_account_id or binding.asset_id or "").strip()
+
+
 def build_messaging_settings_for_binding(
     binding: MetaAssetBinding,
     *,
@@ -98,6 +111,10 @@ def build_messaging_settings_for_binding(
             binding_id=binding.binding_id,
             auth_flow=binding.auth_flow,
             graph_base_url=META_INSTAGRAM_GRAPH_BASE_URL,
+            instagram_login_user_id=instagram_login_send_account_id(
+                credential=credential,
+                binding=binding,
+            ),
         )
     graph_api_version = resolved_app.graph_api_version or get_meta_graph_api_version()
     return MetaMessagingSettings(
