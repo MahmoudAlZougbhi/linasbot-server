@@ -82,8 +82,11 @@ test('thread restores WhatsApp handoff, assign, and composer', () => {
   assert.match(hook, /takeoverConversation\(chat!, assignToUserId\)/);
   assert.match(hook, /dispatchOperatorSend/);
   assert.match(hook, /mergeThreadMessages/);
+  assert.match(hook, /sendingRef/);
+  assert.match(hook, /requestIdRef/);
   assert.match(hook, /audio_url: type === 'voice'/);
   assert.doesNotMatch(hook, /sendText:[\s\S]*setBusy\(true\)/);
+  assert.match(thread, /thread\.busy \|\| thread\.sending/);
   assert.doesNotMatch(hook, /WhatsApp-only for now/);
   const bubble = read('features/livechat/LiveChatMessageBubble.tsx');
   const media = read('features/livechat/LiveChatMedia.tsx');

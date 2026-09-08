@@ -150,7 +150,13 @@ export function formatBubbleTime(value: string | null | undefined): string {
 }
 
 export function messageKey(msg: LiveChatMessage, index = 0): string {
+  const client = String(msg.client_send_id || '').trim();
+  if (client) return client;
   return msg.message_id || `${msg.timestamp || 't'}|${msg.is_user ? 'u' : 'a'}|${index}`;
+}
+
+export function clientSendId(): string {
+  return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function idempotencyKey(prefix: string): string {

@@ -144,6 +144,7 @@ export const LiveChatMessageSchema = z
     handled_by: z.string().optional().nullable(),
     role: z.string().optional().nullable(),
     message_id: z.string().optional().nullable(),
+    client_send_id: z.string().optional().nullable(),
     audio_url: z.string().optional().nullable(),
     image_url: z.string().optional().nullable(),
     media_url: z.string().optional().nullable(),

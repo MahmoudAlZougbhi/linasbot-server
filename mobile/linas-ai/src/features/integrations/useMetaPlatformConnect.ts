@@ -8,8 +8,11 @@ import {
   metaOAuthFailureReasonFromApiBody,
 } from '../../app/integrationsDeepLink';
 import { shouldApplyMetaSessionFeedback } from './integrationsFeedback';
+import {
+  resolveConnectedRow,
+  shouldRetryInstagramConnect,
+} from './metaConnectFlow';
 import type { IntegrationsLoadResult } from './useIntegrationsLoad';
-import type { IntegrationListRow } from './integrationsSchemas';
 
 type Args = {
   tr: (key: StringKey) => string;
@@ -37,17 +40,15 @@ export function useMetaPlatformConnect({
       setError(null);
       setNotice(null);
       try {
-        const session = await startMetaOAuth(platform);
-        let loaded = await load();
-        if (!loaded.ok) return;
-        let row = findRow(loaded.rows, platform);
-        if (!row?.connected) {
-          await new Promise((resolve) => setTimeout(resolve, 600));
-          loaded = await load();
-          if (!loaded.ok) return;
-          row = findRow(loaded.rows, platform);
+        let session = await startMetaOAuth(platform, { instagramForceReauth: false });
+        let resolved = await resolveConnectedRow(load, platform);
+        if (!resolved.ok) return;
+        if (shouldRetryInstagramConnect(platform, session.outcome, Boolean(resolved.row?.connected))) {
+          session = await startMetaOAuth(platform, { instagramForceReauth: true });
+          resolved = await resolveConnectedRow(load, platform);
+          if (!resolved.ok) return;
         }
-        if (row?.connected) {
+        if (resolved.row?.connected) {
           setNotice(tr('metaOAuthSuccess'));
           setError(null);
           return;
@@ -84,8 +85,4 @@ export function useMetaPlatformConnect({
   );
 
   return { connectPlatform };
-}
-
-function findRow(rows: IntegrationListRow[], platform: string) {
-  return rows.find((item) => item.platform === platform);
 }

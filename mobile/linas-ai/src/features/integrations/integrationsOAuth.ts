@@ -7,6 +7,9 @@ import {
   metaAuthSessionOutcome,
   type MetaAuthSessionResult,
 } from '../../app/integrationsDeepLink';
+import { withInstagramMobileReauth } from './metaConnectFlow';
+
+export { withInstagramMobileReauth };
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -57,20 +60,15 @@ function assertHttpsAuthorizationUrl(url: string): void {
   }
 }
 
-/** Meta's mobile Instagram Login fix; no-op for Facebook authorize URLs. */
-export function withInstagramMobileReauth(url: string): string {
-  const parsed = new URL(url);
-  if (parsed.hostname !== 'www.instagram.com') return url;
-  if (!parsed.searchParams.has('force_reauth')) {
-    parsed.searchParams.set('force_reauth', 'true');
-  }
-  return parsed.toString();
-}
-
 export type MetaOAuthSessionResult = MetaAuthSessionResult;
+
+export type StartMetaOAuthOptions = {
+  instagramForceReauth?: boolean;
+};
 
 export async function startMetaOAuth(
   platform: 'instagram' | 'facebook',
+  options: StartMetaOAuthOptions = {},
 ): Promise<MetaOAuthSessionResult> {
   const path =
     platform === 'instagram'
@@ -87,7 +85,10 @@ export async function startMetaOAuth(
   });
   const authorizationUrl =
     platform === 'instagram'
-      ? withInstagramMobileReauth(started.authorization_url)
+      ? withInstagramMobileReauth(
+          started.authorization_url,
+          options.instagramForceReauth !== false,
+        )
       : started.authorization_url;
   assertHttpsAuthorizationUrl(authorizationUrl);
 

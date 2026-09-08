@@ -8,6 +8,7 @@ import {
   sendOperatorMessage,
   takeoverConversation,
 } from './liveChatApi';
+import { clientSendId } from './liveChatHelpers';
 import { mergeThreadMessages } from './liveChatThreadMerge';
 import type { LiveChatItem, LiveChatMessage } from './liveChatTypes';
 import { isSocialChannelUser } from './liveChatTypes';
@@ -20,13 +21,17 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [localStatus, setLocalStatus] = useState(chat?.status ?? 'bot');
+  const [sending, setSending] = useState(false);
   const loadingMoreRef = useRef(false);
+  const sendingRef = useRef(false);
+  const requestIdRef = useRef(0);
 
   const social = chat ? isSocialChannelUser(chat.user_id, chat.channel) : false;
 
   const load = useCallback(
     async (mode: 'initial' | 'poll' = 'initial') => {
       if (!chat) return;
+      const requestId = ++requestIdRef.current;
       if (mode === 'initial') {
         setLoading(true);
         setError(null);
@@ -36,6 +41,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
           days: 1,
           limit: 50,
         });
+        if (requestId !== requestIdRef.current) return;
         if (!data.success) throw new Error(data.error || 'Failed to load thread');
         const next = data.messages || [];
         setMessages((prev) => (mode === 'poll' ? mergeThreadMessages(prev, next) : next));
@@ -48,12 +54,13 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         }
         if (mode === 'initial') setError(null);
       } catch (err) {
+        if (requestId !== requestIdRef.current) return;
         if (mode === 'initial') {
           setError(err instanceof Error ? err.message : 'Could not load messages.');
           setMessages([]);
         }
       } finally {
-        if (mode === 'initial') setLoading(false);
+        if (mode === 'initial' && requestId === requestIdRef.current) setLoading(false);
       }
     },
     [chat],
@@ -130,7 +137,9 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     messageType: 'text' | 'voice' | 'image',
     optimistic: LiveChatMessage,
   ) {
-    if (!chat || !payload) return false;
+    if (!chat || !payload || sendingRef.current) return false;
+    sendingRef.current = true;
+    setSending(true);
     setError(null);
     appendOptimisticOperatorMessage(optimistic);
     void (async () => {
@@ -140,7 +149,14 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         await load('poll');
         onChatUpdated?.();
       } catch (err) {
+        const dropped = optimistic.client_send_id || optimistic.message_id;
+        setMessages((prev) =>
+          prev.filter((msg) => (msg.client_send_id || msg.message_id) !== dropped),
+        );
         setError(err instanceof Error ? err.message : 'Send failed.');
+      } finally {
+        sendingRef.current = false;
+        setSending(false);
       }
     })();
     return true;
@@ -151,6 +167,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     loading,
     loadingMore,
     busy,
+    sending,
     error,
     hasMore,
     social,
@@ -165,6 +182,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     sendText: async (text: string) => {
       if (!chat || !text.trim()) return false;
       const trimmed = text.trim();
+      const sendId = clientSendId();
       return dispatchOperatorSend(trimmed, 'text', {
         timestamp: new Date().toISOString(),
         is_user: false,
@@ -172,12 +190,14 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         text: trimmed,
         role: 'operator',
         handled_by: 'human',
-        message_id: `local-${Date.now()}`,
+        message_id: sendId,
+        client_send_id: sendId,
       });
     },
     sendMedia: async (base64: string, type: 'voice' | 'image', mime?: string) => {
       if (!chat || !base64) return false;
       const label = type === 'voice' ? '[Voice Message from Operator]' : '[Image Message from Operator]';
+      const sendId = clientSendId();
       return dispatchOperatorSend(base64, type, {
         timestamp: new Date().toISOString(),
         is_user: false,
@@ -186,7 +206,8 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         type,
         role: 'operator',
         handled_by: 'human',
-        message_id: `local-${Date.now()}`,
+        message_id: sendId,
+        client_send_id: sendId,
         audio_url: type === 'voice' ? `data:${mime || 'audio/mp4'};base64,${base64}` : undefined,
       });
     },
