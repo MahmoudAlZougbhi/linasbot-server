@@ -154,6 +154,47 @@ test('in-flight optimistic voice stays until the server echo arrives', () => {
   assert.equal(acked[1].audio_url, 'https://cdn/voice.m4a');
 });
 
+test('poll keeps a newer echo and a stable client_send_id across the remount', () => {
+  const older = {
+    message_id: 'msg_old',
+    timestamp: '2026-09-08T08:00:00.000Z',
+    is_user: true,
+    content: 'hi',
+  };
+  const local = {
+    message_id: 'local-keep',
+    client_send_id: 'local-keep',
+    timestamp: '2026-09-08T08:07:04.000Z',
+    is_user: false,
+    content: 'hello',
+    text: 'hello',
+  };
+  const echo = {
+    message_id: 'msg_new',
+    timestamp: '2026-09-08T08:07:04.200Z',
+    is_user: false,
+    content: 'hello',
+    text: 'hello',
+  };
+  const acked = mergeThreadMessages([older, local], [older, echo]);
+  assert.equal(acked[1].client_send_id, 'local-keep');
+  assert.equal(acked[1].client_send_id, local.client_send_id);
+
+  const stale = mergeThreadMessages(acked, [older]);
+  assert.deepEqual(
+    stale.map((m) => m.message_id),
+    ['msg_old', 'msg_new'],
+  );
+});
+
+test('thread hook ignores stale polls and locks in-flight sends', () => {
+  const hook = read('features/livechat/useLiveChatThread.ts');
+  assert.match(hook, /requestIdRef/);
+  assert.match(hook, /if \(requestId !== requestIdRef\.current\) return/);
+  assert.match(hook, /sendingRef/);
+  assert.match(hook, /if \(!chat \|\| !payload \|\| sendingRef\.current\) return false/);
+});
+
 test('drawer history refresh ignores out-of-order list responses', () => {
   const history = read('features/nav/useModuleDrawerHistory.ts');
   assert.match(history, /requestIdRef/);

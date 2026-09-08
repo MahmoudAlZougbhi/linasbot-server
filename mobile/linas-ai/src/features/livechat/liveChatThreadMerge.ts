@@ -30,6 +30,10 @@ export function isOperatorEcho(local: LiveChatMessage, server: LiveChatMessage):
   return timestampsClose(local.timestamp, server.timestamp);
 }
 
+function clientSendKey(msg: LiveChatMessage): string {
+  return String(msg.client_send_id || (isLocalMessage(msg) ? messageId(msg) : '') || '');
+}
+
 function dedupeThreadMessages(rows: LiveChatMessage[]): LiveChatMessage[] {
   const seen = new Set<string>();
   const out: LiveChatMessage[] = [];
@@ -48,7 +52,7 @@ function dedupeThreadMessages(rows: LiveChatMessage[]): LiveChatMessage[] {
 
 /**
  * Poll merge: keep older pages, replace optimistic locals with the server echo,
- * and never flash a second copy of the message just sent.
+ * keep sends newer than a stale poll window, and never flash a second copy.
  */
 export function mergeThreadMessages(
   prev: LiveChatMessage[],
@@ -62,27 +66,38 @@ export function mergeThreadMessages(
   );
   const claimed = new Set<number>();
   const keptLocals: LiveChatMessage[] = [];
+  const echoClientIds = new Map<number, string>();
 
   for (const prior of prev) {
     if (!isLocalMessage(prior)) continue;
     const match = incoming.findIndex((msg, index) => !claimed.has(index) && isOperatorEcho(prior, msg));
     if (match >= 0) {
       claimed.add(match);
+      const clientId = clientSendKey(prior);
+      if (clientId) echoClientIds.set(match, clientId);
     } else {
       keptLocals.push(prior);
     }
   }
 
+  const incomingWithKeys = incoming.map((msg, index) => {
+    const clientId = echoClientIds.get(index);
+    return clientId ? { ...msg, client_send_id: clientId } : msg;
+  });
+
   const oldestIncoming = incoming[0]?.timestamp;
-  const older = prev.filter((prior) => {
+  const newestIncoming = incoming[incoming.length - 1]?.timestamp;
+  const leftover = prev.filter((prior) => {
     if (isLocalMessage(prior)) return false;
     const id = messageId(prior);
     if (id && incomingIds.has(id)) return false;
-    if (!oldestIncoming) return false;
-    return String(prior.timestamp || '') < String(oldestIncoming);
+    const ts = String(prior.timestamp || '');
+    if (oldestIncoming && ts < String(oldestIncoming)) return true;
+    if (newestIncoming && ts > String(newestIncoming)) return true;
+    return false;
   });
 
-  const merged = [...older, ...incoming, ...keptLocals];
+  const merged = [...leftover, ...incomingWithKeys, ...keptLocals];
   merged.sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
   return dedupeThreadMessages(merged);
 }

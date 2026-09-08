@@ -11,6 +11,10 @@ import {
   parseIntegrationsDeepLink,
 } from '../src/app/integrationsDeepLink.ts';
 import {
+  shouldRetryInstagramConnect,
+  withInstagramMobileReauth,
+} from '../src/features/integrations/metaConnectFlow.ts';
+import {
   errorAfterIntegrationLoadFailure,
   errorAfterIntegrationLoadSuccess,
   shouldApplyMetaSessionFeedback,
@@ -37,9 +41,11 @@ describe('meta oauth mobile return surface', () => {
   it('opens Meta OAuth in an in-app auth session, not the Instagram app', () => {
     const oauth = read('features/integrations/integrationsOAuth.ts');
     const connect = read('features/integrations/useMetaPlatformConnect.ts');
+    const flow = read('features/integrations/metaConnectFlow.ts');
     assert.match(oauth, /openAuthSessionAsync/);
     assert.match(oauth, /withInstagramMobileReauth/);
-    assert.match(oauth, /force_reauth/);
+    assert.match(oauth, /instagramForceReauth/);
+    assert.match(flow, /force_reauth/);
     assert.match(oauth, /MetaOAuthConnectError/);
     assert.match(oauth, /metaAuthSessionOutcome/);
     assert.match(connect, /MetaOAuthConnectError/);
@@ -92,8 +98,11 @@ describe('meta oauth mobile return surface', () => {
     const connect = read('features/integrations/useMetaPlatformConnect.ts');
     const load = read('features/integrations/useIntegrationsLoad.ts');
     assert.match(screen, /useMetaPlatformConnect/);
-    assert.match(connect, /const session = await startMetaOAuth\(platform\)/);
-    assert.match(connect, /await load\(\)/);
+    assert.match(connect, /startMetaOAuth\(platform/);
+    assert.match(connect, /shouldRetryInstagramConnect/);
+    assert.match(connect, /resolveConnectedRow/);
+    assert.match(connect, /instagramForceReauth:\s*false/);
+    assert.match(connect, /instagramForceReauth:\s*true/);
     assert.match(connect, /row\?\.connected/);
     assert.match(connect, /metaOAuthSuccess/);
     assert.match(load, /return \{ ok: true, rows: data\.integrations \}/);
@@ -307,6 +316,19 @@ describe('meta oauth mobile return surface', () => {
     assert.match(load, /errorAfterIntegrationLoadSuccess/);
     assert.match(load, /errorAfterIntegrationLoadFailure/);
     assert.match(connect, /shouldApplyMetaSessionFeedback/);
+  });
+
+  it('retries Instagram once after a first-session dismiss, not Facebook', () => {
+    const ig = 'https://www.instagram.com/oauth/authorize?client_id=1&force_reauth=true';
+    const first = new URL(withInstagramMobileReauth(ig, false));
+    const retry = new URL(withInstagramMobileReauth(ig, true));
+    assert.equal(first.searchParams.get('force_reauth'), null);
+    assert.equal(retry.searchParams.get('force_reauth'), 'true');
+    assert.equal(shouldRetryInstagramConnect('instagram', 'cancelled', false), true);
+    assert.equal(shouldRetryInstagramConnect('instagram', 'incomplete', false), true);
+    assert.equal(shouldRetryInstagramConnect('instagram', 'failed', false), false);
+    assert.equal(shouldRetryInstagramConnect('instagram', 'cancelled', true), false);
+    assert.equal(shouldRetryInstagramConnect('facebook', 'cancelled', false), false);
   });
 
   it('AppShell routes integrations deep link and IntegrationsScreen refetches', () => {
