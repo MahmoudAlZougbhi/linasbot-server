@@ -9,14 +9,18 @@ def comment_text(row: dict[str, Any]) -> str:
     return str(row.get("text") or row.get("message") or "").strip()
 
 
+def comment_from_raw(row: dict[str, Any]) -> dict[str, Any]:
+    raw = row.get("from")
+    return raw if isinstance(raw, dict) else {}
+
+
 def comment_author(row: dict[str, Any]) -> str:
-    from_raw = row.get("from") if isinstance(row.get("from"), dict) else {}
+    from_raw = comment_from_raw(row)
     return str(row.get("username") or from_raw.get("username") or from_raw.get("name") or "").strip()
 
 
 def comment_from_id(row: dict[str, Any]) -> str:
-    from_raw = row.get("from") if isinstance(row.get("from"), dict) else {}
-    return str(from_raw.get("id") or "").strip()
+    return str(comment_from_raw(row).get("id") or "").strip()
 
 
 def is_self_comment(row: dict[str, Any], *, names: set[str], ids: set[str]) -> bool:
