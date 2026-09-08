@@ -54,69 +54,15 @@ async def _settle_failed_event_claim(rec: Any, *, terminal: bool, claim_handle: 
         )
 
 
-def _same_binding_identity(left: MetaAssetBinding, right: MetaAssetBinding) -> bool:
-    return (
-        left.tenant_id == right.tenant_id
-        and left.channel == right.channel
-        and left.asset_id == right.asset_id
-        and left.app_key == right.app_key
-        and left.auth_flow == right.auth_flow
-    )
-
-
 def _resolve_active_registry_binding(
     data: dict[str, Any],
     binding_data: dict[str, Any],
 ) -> MetaAssetBinding:
     """Follow an authenticated binding's replacement chain without crossing assets."""
 
-    from services.meta_app_registry import get_meta_app_registry
+    from services.meta_live_binding import resolve_live_outbound_binding
 
-    binding_id = str(binding_data.get("binding_id") or data.get("binding_id") or "").strip()
-    if not binding_id or binding_id == "legacy-single-app":
-        raise PermanentJobError("meta binding identifier is unavailable")
-    registry = get_meta_app_registry()
-    all_bindings = registry.list_bindings(include_inactive=True, include_superseded=True)
-    original = next((item for item in all_bindings if item.binding_id == binding_id), None)
-    if original is None:
-        raise PermanentJobError("meta binding is unavailable")
-
-    expected_identity = (
-        str(binding_data.get("tenant_id") or data.get("tenant_id") or "").strip(),
-        str(binding_data.get("channel") or data.get("channel") or "").strip(),
-        str(binding_data.get("asset_id") or "").strip(),
-        str(binding_data.get("app_key") or data.get("app_key") or "").strip(),
-        str(binding_data.get("auth_flow") or data.get("auth_flow") or "").strip(),
-    )
-    actual_identity = (
-        original.tenant_id,
-        original.channel,
-        original.asset_id,
-        original.app_key,
-        original.auth_flow,
-    )
-    if any(not value for value in expected_identity) or actual_identity != expected_identity:
-        raise PermanentJobError("meta binding snapshot identity is invalid")
-
-    by_id = {item.binding_id: item for item in all_bindings if _same_binding_identity(item, original)}
-    connected: dict[str, MetaAssetBinding] = {}
-    pending = [original]
-    while pending:
-        current = pending.pop()
-        if current.binding_id in connected:
-            continue
-        connected[current.binding_id] = current
-        if current.previous_binding_id and current.previous_binding_id in by_id:
-            pending.append(by_id[current.previous_binding_id])
-        pending.extend(
-            item
-            for item in by_id.values()
-            if item.previous_binding_id == current.binding_id and item.binding_id not in connected
-        )
-    active = [item for item in connected.values() if item.active]
-    if len(active) != 1:
-        raise PermanentJobError("meta binding has no unique active replacement")
-    return active[0]
+    return resolve_live_outbound_binding(data, binding_data)
 
 
 def _settings_from_snapshot(

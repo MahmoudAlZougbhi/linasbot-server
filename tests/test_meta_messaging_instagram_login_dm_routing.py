@@ -1,4 +1,4 @@
-"""The App A callback accepts page-linked Instagram, never Direct Instagram Login."""
+"""The App A callback routes instagram objects to Instagram Login only."""
 
 from __future__ import annotations
 
@@ -181,25 +181,25 @@ async def _post_ig_dm(account_id: str, *, mid: str, monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
-async def test_instagram_object_rejects_instagram_login_binding_on_app_a_callback(
+async def test_instagram_object_accepts_instagram_login_binding_on_app_a_callback(
     registry_env: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _authorize_instagram_login(registry_env)
     result = await _post_ig_dm(PROD_IG_ID, mid="ig-login-mid", monkeypatch=monkeypatch)
-    assert result["json"]["accepted"] == 0
-    assert result["processed"] == []
+    assert result["json"]["accepted"] == 1
+    assert result["processed"] == ["instagram_login"]
 
 
 @pytest.mark.asyncio
-async def test_instagram_object_accepts_facebook_login_legacy_binding(
+async def test_instagram_object_rejects_facebook_login_legacy_binding(
     registry_env: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _authorize_facebook_login_ig(registry_env)
     result = await _post_ig_dm(PROD_IG_ID, mid="ig-fb-login-mid", monkeypatch=monkeypatch)
-    assert result["json"]["accepted"] == 1
-    assert result["processed"] == ["facebook_login"]
+    assert result["json"]["accepted"] == 0
+    assert result["processed"] == []
 
 
 @pytest.mark.asyncio

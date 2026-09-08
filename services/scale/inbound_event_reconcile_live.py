@@ -6,6 +6,29 @@ from typing import Any
 
 from services.scale.inbound_event_store import InboundEventRecord, mark_inbound_state
 
+_PROVEN_OUTBOUND = frozenset(
+    {
+        "delivered",
+        "sent",
+        "simulated",
+        "skipped",
+        "duplicate_suppressed",
+        "blocked_quota",
+        "no_text",
+        "permanent_block",
+    }
+)
+_UNSENT_OUTBOUND = frozenset(
+    {
+        "",
+        "combine_scheduled",
+        "combine_superseded",
+        "unknown",
+        "queued",
+        "processing",
+    }
+)
+
 
 def ingress_idempotency_key(event_id: str) -> str:
     return f"meta_inbound:{event_id}"
@@ -60,6 +83,14 @@ def action_if_ingress_job_already_owns(rec: InboundEventRecord) -> dict[str, Any
             "status": status,
         }
     if status == "completed":
+        outbound = str(getattr(rec, "outbound_status", "") or "").strip().lower()
+        if outbound in _UNSENT_OUTBOUND or outbound not in _PROVEN_OUTBOUND:
+            return {
+                "event_id": rec.event_id,
+                "action": "await_combine_or_delivery",
+                "job_id": job_id,
+                "outbound_status": outbound or "unknown",
+            }
         mark_inbound_state(
             rec.event_id,
             state="completed",

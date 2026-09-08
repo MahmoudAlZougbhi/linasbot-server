@@ -240,8 +240,8 @@ def test_facebook_login_binding_ready_for_dm_when_no_direct_login(registry: Meta
     assert binding_ready_for_dm(binding, credential) is True
 
 
-def test_main_callback_is_facebook_login_only_for_every_object() -> None:
-    assert registry_auth_flow_for_webhook_object("instagram") == "facebook_login"
+def test_main_callback_routes_by_payload_object() -> None:
+    assert registry_auth_flow_for_webhook_object("instagram") == "instagram_login"
     assert registry_auth_flow_for_webhook_object("page") == "facebook_login"
 
 
@@ -265,7 +265,7 @@ def _instagram_dm_payload(account_id: str, *, mid: str = "mid-1") -> dict:
 
 
 @pytest.mark.asyncio
-async def test_main_callback_filter_rejects_instagram_login_binding(registry: MetaAppRegistry) -> None:
+async def test_main_callback_filter_accepts_instagram_login_binding(registry: MetaAppRegistry) -> None:
     from services.meta_app_registry import get_meta_app_configs
 
     _instagram_binding(registry, auth_flow="instagram_login")
@@ -275,11 +275,12 @@ async def test_main_callback_filter_rejects_instagram_login_binding(registry: Me
         registry=registry,
         auth_flow=registry_auth_flow_for_webhook_object("instagram"),
     )
-    assert routed == []
+    assert len(routed) == 1
+    assert routed[0].binding.auth_flow == "instagram_login"
 
 
 @pytest.mark.asyncio
-async def test_main_callback_filter_accepts_facebook_login_legacy_binding(registry: MetaAppRegistry) -> None:
+async def test_main_callback_filter_rejects_facebook_login_legacy_instagram(registry: MetaAppRegistry) -> None:
     from services.meta_app_registry import get_meta_app_configs
 
     _instagram_binding(registry, auth_flow="facebook_login")
@@ -289,8 +290,7 @@ async def test_main_callback_filter_accepts_facebook_login_legacy_binding(regist
         registry=registry,
         auth_flow=registry_auth_flow_for_webhook_object("instagram"),
     )
-    assert len(routed) == 1
-    assert routed[0].binding.auth_flow == "facebook_login"
+    assert routed == []
 
 
 @pytest.mark.asyncio

@@ -116,14 +116,34 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
     # secret is a readiness failure; a missing/wrong request signature is 401.
     registry_enabled = meta_multi_app_registry_enabled()
     signed_app = None
+    signature_header = request.headers.get("X-Hub-Signature-256")
+    from services.meta_webhook_signature_diag import log_webhook_signature_result
+
     if registry_enabled:
-        signed_app = identify_signed_meta_app(raw_body, request.headers.get("X-Hub-Signature-256"))
+        signed_app = identify_signed_meta_app(raw_body, signature_header)
+        log_webhook_signature_result(
+            endpoint="/webhook/meta-messaging",
+            selector="identify_signed_meta_app",
+            configured_app=str(getattr(signed_app, "app_id", "") or getattr(signed_app, "key", "") or "app_a_or_app_b"),
+            ok=signed_app is not None,
+            reason="ok" if signed_app is not None else "hmac_mismatch_or_ambiguous",
+            signature_header=signature_header,
+        )
         if signed_app is None:
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
     else:
         if not settings.app_secret:
             raise HTTPException(status_code=503, detail="Meta App Secret is not configured")
-        if not verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"), settings.app_secret):
+        signature_ok = verify_meta_signature(raw_body, signature_header, settings.app_secret)
+        log_webhook_signature_result(
+            endpoint="/webhook/meta-messaging",
+            selector="legacy_app_secret",
+            configured_app="legacy_single_app",
+            ok=signature_ok,
+            reason="ok" if signature_ok else "hmac_mismatch_or_missing",
+            signature_header=signature_header,
+        )
+        if not signature_ok:
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     if not settings.enabled:
@@ -219,9 +239,8 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
     resolved_comment_events: list[ResolvedMetaCommentEvent] = []
     raw_comment_changes = count_raw_comment_changes(payload)
     if registry_enabled and signed_app is not None and signed_app.key == APP_A_KEY:
-        # Only App-A/Facebook-Login events may land here, including any retained
-        # legacy linked-Instagram object. Direct Instagram Login uses its own
-        # callback, secret, and app-scoped identifiers.
+        # App A HMAC already passed. Route comments by payload object: page stays
+        # Facebook Login; instagram uses the active Instagram Login binding only.
         comment_auth_flow = registry_auth_flow_for_webhook_object(payload_object)
         resolved_comment_events = resolve_registry_comment_events(
             payload,

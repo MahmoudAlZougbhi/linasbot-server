@@ -283,11 +283,43 @@ async def test_receiving_app_and_asset_binding_route_exactly_once(
 
 
 @pytest.mark.asyncio
-async def test_instagram_object_routes_only_linked_instagram_binding(
+async def test_instagram_object_routes_only_instagram_login_binding(
     configured_registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     processed: list[str] = []
+    ig_id = "17841413184256533"
+    staged = configured_registry.authorize_oauth_asset(
+        tenant_id="linas",
+        channel="instagram",
+        asset_id=ig_id,
+        page_id="",
+        instagram_account_id=ig_id,
+        app_key=APP_A_KEY,
+        credential=MetaBindingCredential(
+            access_token="ig-login-token",
+            token_app_id="1035856539045307",
+            token_profile_id=ig_id,
+            scopes=(
+                "instagram_business_basic",
+                "instagram_business_manage_messages",
+                "instagram_business_manage_comments",
+            ),
+            auth_flow="instagram_login",
+        ),
+        actor_id="owner",
+        status="testing",
+        auth_flow="instagram_login",
+        webhook_subscription_status="ready",
+        webhook_subscribed_fields=("messages", "messaging_postbacks"),
+        create_new_binding=True,
+    )
+    configured_registry.activate_staged_binding(
+        staged.binding_id,
+        actor_id="owner",
+        expected_generation=staged.generation,
+        replace_existing=True,
+    )
 
     async def claim(*_args: Any, **_kwargs: Any) -> bool:
         return True
@@ -295,8 +327,8 @@ async def test_instagram_object_routes_only_linked_instagram_binding(
     async def finish(*_args: Any, **_kwargs: Any) -> None:
         return None
 
-    async def process(event: dict[str, Any], _settings: Any, **_kwargs: Any) -> dict[str, str]:
-        processed.append(str(event["channel"]))
+    async def process(event: dict[str, Any], settings: Any, **_kwargs: Any) -> dict[str, str]:
+        processed.append(f"{event['channel']}:{event.get('meta_auth_flow')}:{settings.page_access_token}")
         return {"delivery": "delivered"}
 
     monkeypatch.setattr("services.durable_event_claim.try_claim_event", claim)
@@ -326,15 +358,15 @@ async def test_instagram_object_routes_only_linked_instagram_binding(
     await asyncio.sleep(0)
     await asyncio.sleep(0)
     assert json.loads(response.body)["accepted"] == 1
-    assert processed == ["instagram"]
+    assert processed == ["instagram:instagram_login:ig-login-token"]
 
 
 @pytest.mark.asyncio
-async def test_instagram_comment_on_app_a_callback_does_not_cross_into_instagram_login_binding(
+async def test_instagram_comment_on_app_a_callback_uses_instagram_login_binding(
     configured_registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """App-A signed events must never cross into the dedicated IG trust domain."""
+    """After App A HMAC, object=instagram comments use Instagram Login only."""
     from services.meta_app_registry import MetaBindingCredential
     from services.meta_comment_replies import CommentReplyResult
     from services.meta_instagram_login_subscription import COMMENTS_SUBSCRIPTION_FIELD
@@ -380,7 +412,7 @@ async def test_instagram_comment_on_app_a_callback_does_not_cross_into_instagram
     async def finish(*_args: Any, **_kwargs: Any) -> None:
         return None
 
-    async def process_comment(resolved: Any) -> CommentReplyResult:
+    async def process_comment(resolved: Any, **_kwargs: Any) -> CommentReplyResult:
         processed.append(str(resolved.binding.auth_flow))
         return CommentReplyResult(status="sent", reply_id="r1")
 
@@ -417,8 +449,8 @@ async def test_instagram_comment_on_app_a_callback_does_not_cross_into_instagram
     await asyncio.sleep(0)
     data = json.loads(response.body)
     assert data["accepted"] == 0
-    assert data["comments_accepted"] == 0
-    assert processed == []
+    assert data["comments_accepted"] == 1
+    assert processed == ["instagram_login"]
 
 
 @pytest.mark.asyncio

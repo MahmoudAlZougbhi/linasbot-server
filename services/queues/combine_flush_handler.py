@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections import deque
 from typing import Any
 
 from services.queues.handlers import JobNotReady, PermanentJobError
 from services.queues.models import QueueJob
+
+_runtime_logger = logging.getLogger("uvicorn.error")
 
 
 async def handle_combine_flush(job: QueueJob) -> dict[str, Any]:
@@ -24,6 +27,7 @@ async def handle_combine_flush(job: QueueJob) -> dict[str, Any]:
     if chunks is None:
         raise JobNotReady("combine_not_due")
     if not chunks:
+        _reschedule_if_pending(user_key, job, load_context(user_key))
         return {"skipped": True, "reason": "empty_buffer"}
     context = load_context(user_key)
     texts = [str(item.get("text") or "") for item in chunks if str(item.get("text") or "").strip()]
@@ -41,6 +45,7 @@ async def handle_combine_flush(job: QueueJob) -> dict[str, Any]:
     outcome = await _run_ai_turn(user_key, texts, context, event_ids, chunks, trace_id=trace_id)
     if event_ids:
         _mark_inbound_batch(event_ids, outcome)
+    _reschedule_if_pending(user_key, job, context)
     return {"ok": True, "chunks": len(chunks), "event_ids": event_ids, "outcome": outcome}
 
 
@@ -178,6 +183,7 @@ async def _meta_send_pair(
     rec = get_inbound_event(event_id) if event_id else None
     if rec is None:
         raise RuntimeError("combine_flush_inbound_missing")
+    scheduled_binding_id = str(context.get("binding_id") or rec.binding_snapshot.get("binding_id") or "")
     settings = _settings_from_snapshot(rec.settings_snapshot, rec.binding_snapshot)
     sender_id = str(context.get("sender_id") or rec.payload.get("sender_id") or "")
     account_id = resolve_meta_send_account_id(channel, rec.payload, settings)
@@ -189,7 +195,15 @@ async def _meta_send_pair(
         graph_base_url=settings.graph_base_url,
     )
     user_data["_combine_adapter_close"] = adapter.close
-    binding_id = str(context.get("binding_id") or rec.binding_snapshot.get("binding_id") or "")
+    binding_id = str(getattr(settings, "binding_id", "") or scheduled_binding_id)
+    _runtime_logger.info(
+        "[meta-combine] send_binding_resolved user_key=%s scheduled=%s live=%s channel=%s event_id=%s",
+        user_key[:80],
+        scheduled_binding_id[:12],
+        binding_id[:12],
+        channel,
+        event_id,
+    )
 
     async def send_message(
         _namespaced_id: str,
@@ -260,3 +274,29 @@ def _mark_inbound_batch(event_ids: list[str], outcome: dict[str, Any]) -> None:
                 )
         except Exception:
             continue
+
+
+def _reschedule_if_pending(user_key: str, job: QueueJob, context: dict[str, Any]) -> None:
+    from services.scale.message_combine_schedule import schedule_combine_flush
+    from services.scale.message_combine_store import current_due, peek_pending
+
+    pending = peek_pending(user_key)
+    if not pending:
+        return
+    due_at = current_due(user_key) or time.time()
+    tenant_id = str(context.get("tenant_id") or job.tenant_id or "")
+    conversation_key = str(context.get("conversation_key") or (job.payload or {}).get("_conversation_key") or user_key)
+    job_id = schedule_combine_flush(
+        user_key=user_key,
+        tenant_id=tenant_id,
+        conversation_key=conversation_key,
+        due_at=due_at,
+        payload={"channel": str(context.get("channel") or ""), "trace_id": str(context.get("trace_id") or "")},
+    )
+    _runtime_logger.info(
+        "[meta-combine] rescheduled_pending user_key=%s pending=%d due_at=%.3f job_id=%s",
+        user_key[:80],
+        len(pending),
+        due_at,
+        job_id or "none",
+    )

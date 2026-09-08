@@ -73,7 +73,20 @@ async def receive_instagram_login_webhook(request: Request) -> Any:
         raise HTTPException(status_code=503, detail="Meta registry is not enabled")
     if not instagram_login_config_status().configured:
         raise HTTPException(status_code=503, detail="Instagram Login is not configured")
-    if not verify_instagram_login_webhook_signature(raw_body, request.headers.get("X-Hub-Signature-256")):
+    signature_header = request.headers.get("X-Hub-Signature-256")
+    from services.meta_instagram_login_config import instagram_login_app_id
+    from services.meta_webhook_signature_diag import log_webhook_signature_result
+
+    signature_ok = verify_instagram_login_webhook_signature(raw_body, signature_header)
+    log_webhook_signature_result(
+        endpoint="/webhook/instagram-login",
+        selector="instagram_login_app_secret",
+        configured_app=instagram_login_app_id() or "instagram_login",
+        ok=signature_ok,
+        reason="ok" if signature_ok else "hmac_mismatch_or_missing",
+        signature_header=signature_header,
+    )
+    if not signature_ok:
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     if not settings.enabled:
@@ -140,13 +153,22 @@ async def receive_instagram_login_webhook(request: Request) -> Any:
     comment_accepted = comment_counts.accepted
     comment_duplicates = comment_counts.duplicates
 
+    auth_flows = sorted({str(item.binding.auth_flow) for item in resolved_events})
+    binding_ids = sorted({str(item.binding.binding_id)[:12] for item in resolved_events})
+    statuses = sorted({str(item.binding.status) for item in resolved_events})
+    tenants = sorted({str(item.binding.tenant_id) for item in resolved_events})
     _runtime_logger.info(
-        "[instagram-login] webhook_authenticated object=%s parsed=%d accepted=%d duplicates=%d comments=%d",
+        "[instagram-login] webhook_authenticated object=%s parsed=%d accepted=%d duplicates=%d "
+        "comments=%d tenant=%s binding=%s auth_flow=%s status=%s",
         payload_object,
         len(resolved_events),
         accepted,
         duplicates,
         comment_accepted,
+        ",".join(tenants) or "none",
+        ",".join(binding_ids) or "none",
+        ",".join(auth_flows) or "none",
+        ",".join(statuses) or "none",
     )
     return JSONResponse(
         {

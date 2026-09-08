@@ -48,6 +48,7 @@ def test_live_queued_ingress_job_skips_requeue(monkeypatch: pytest.MonkeyPatch) 
 
 def test_completed_ingress_job_catchup_marks_ledger(monkeypatch: pytest.MonkeyPatch) -> None:
     rec = _record()
+    rec.outbound_status = "delivered"
     monkeypatch.setattr(
         "services.scale.inbound_event_reconcile_live.lookup_ingress_job",
         lambda _rec: SimpleNamespace(id="job-done", status="completed"),
@@ -64,6 +65,28 @@ def test_completed_ingress_job_catchup_marks_ledger(monkeypatch: pytest.MonkeyPa
         "job_id": "job-done",
     }
     assert marks == [{"state": "completed", "last_error": "reconcile_catchup_redis_completed"}]
+
+
+def test_completed_ingress_job_does_not_catchup_combine_scheduled(monkeypatch: pytest.MonkeyPatch) -> None:
+    rec = _record()
+    rec.outbound_status = "combine_scheduled"
+    monkeypatch.setattr(
+        "services.scale.inbound_event_reconcile_live.lookup_ingress_job",
+        lambda _rec: SimpleNamespace(id="job-done", status="completed"),
+    )
+    marks: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        "services.scale.inbound_event_reconcile_live.mark_inbound_state",
+        lambda *_args, **kwargs: marks.append(kwargs),
+    )
+
+    assert action_if_ingress_job_already_owns(rec) == {  # type: ignore[arg-type]
+        "event_id": rec.event_id,
+        "action": "await_combine_or_delivery",
+        "job_id": "job-done",
+        "outbound_status": "combine_scheduled",
+    }
+    assert marks == []
 
 
 def test_requeue_one_does_not_claim_when_ingress_job_live(monkeypatch: pytest.MonkeyPatch) -> None:

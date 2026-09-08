@@ -117,13 +117,14 @@ async def _prepare_binding(
 
 
 def registry_auth_flow_for_webhook_object(payload_object: str) -> AuthFlow:
-    """Keep the App A-signed callback inside the Facebook Login trust domain.
+    """Route by payload object after the callback has already verified HMAC.
 
-    Direct Instagram Login has a different App ID, App Secret, webhook callback,
-    and app-scoped sender IDs. Its events must use ``/webhook/instagram-login``;
-    selecting a direct credential for an App A-signed event can misroute replies.
+    Callback URL chooses the signing secret. ``object`` chooses the platform
+    binding. Instagram never falls back to a superseded facebook_login asset.
     """
-    del payload_object
+
+    if str(payload_object or "").strip().lower() == "instagram":
+        return "instagram_login"
     return "facebook_login"
 
 

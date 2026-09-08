@@ -97,6 +97,22 @@ async def process_inline_meta_dm(
             ),
         )
         delivery = str((outcome or {}).get("delivery") or "unknown")
+        if delivery in {"combine_scheduled", "combine_superseded"} or bool((outcome or {}).get("deferred")):
+            mark_inbound_state(event_id, state="queued", outbound_status=delivery)
+            await complete_event_claim(
+                GLOBAL_DM_CLAIM_NAMESPACE,
+                global_key,
+                firestore_collection="meta_social_dm_global_claims",
+                claim_handle=claim_handle,
+            )
+            _runtime_logger.info(
+                "%s combine_deferred event_id=%s delivery=%s binding=%s",
+                log_prefix,
+                event_id,
+                delivery,
+                resolved.binding.binding_id[:12],
+            )
+            return
         if not meta_social_outcome_requires_retry(outcome):
             mark_dm_completed(
                 event_id,
