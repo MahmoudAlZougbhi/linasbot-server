@@ -10,7 +10,7 @@ from services.meta_graph_routing import (
     build_messaging_settings_for_binding,
     instagram_login_send_account_id,
 )
-from services.meta_messaging import MetaMessagingSettings, resolve_meta_send_account_id
+from services.meta_messaging import MetaMessagingAdapter, MetaMessagingSettings, resolve_meta_send_account_id
 
 IGSID = "17841413184256533"
 LOGIN_USER_ID = "17841400001112223"
@@ -74,6 +74,58 @@ def test_resolve_send_account_keeps_igsid_when_login_user_missing() -> None:
     )
     event = {"account_id": IGSID, "recipient_id": IGSID}
     assert resolve_meta_send_account_id("instagram", event, settings) == IGSID
+
+
+def test_production_shaped_ig_login_messages_url_uses_me_id_not_igsid() -> None:
+    """Live linas shape: webhook IGSID != Graph /me id. Send must use /me."""
+
+    settings = MetaMessagingSettings(
+        enabled=True,
+        app_secret="secret",
+        page_id="",
+        page_access_token="token",
+        instagram_account_id=IGSID,
+        verify_token="verify",
+        graph_api_version="v26.0",
+        auth_flow="instagram_login",
+        graph_base_url="https://graph.instagram.com",
+        instagram_login_user_id=LOGIN_USER_ID,
+    )
+    account_id = resolve_meta_send_account_id("instagram", {"account_id": IGSID, "recipient_id": IGSID}, settings)
+    adapter = MetaMessagingAdapter(
+        access_token="token",
+        account_id=account_id,
+        channel="instagram",
+        graph_api_version="v26.0",
+        graph_base_url="https://graph.instagram.com",
+    )
+    assert adapter.messages_url == f"https://graph.instagram.com/v26.0/{LOGIN_USER_ID}/messages"
+    assert IGSID not in adapter.messages_url
+
+
+def test_facebook_dm_messages_url_stays_on_page_id() -> None:
+    settings = MetaMessagingSettings(
+        enabled=True,
+        app_secret="secret",
+        page_id="378696005334409",
+        page_access_token="token",
+        instagram_account_id=IGSID,
+        verify_token="verify",
+        graph_api_version="v24.0",
+        auth_flow="facebook_login",
+        graph_base_url="https://graph.facebook.com",
+        instagram_login_user_id=LOGIN_USER_ID,
+    )
+    account_id = resolve_meta_send_account_id("facebook", {"account_id": "378696005334409"}, settings)
+    adapter = MetaMessagingAdapter(
+        access_token="token",
+        account_id=account_id,
+        channel="facebook",
+        graph_api_version="v24.0",
+        graph_base_url="https://graph.facebook.com",
+    )
+    assert adapter.messages_url == "https://graph.facebook.com/v24.0/378696005334409/messages"
+    assert LOGIN_USER_ID not in adapter.messages_url
 
 
 def test_facebook_login_instagram_still_sends_via_page_id() -> None:
