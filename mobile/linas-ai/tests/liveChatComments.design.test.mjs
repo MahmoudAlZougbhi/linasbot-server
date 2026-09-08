@@ -27,7 +27,11 @@ test('Live Chat has Chats / Comments switch and comment grid', () => {
   assert.doesNotMatch(inbox, /liveCommentsAllPosts/);
   assert.doesNotMatch(inbox, /liveCommentsChosenPosts/);
   assert.doesNotMatch(inbox, /onToggleWatch/);
-  assert.match(grid, /numColumns=\{3\}/);
+  assert.match(grid, /numColumns=\{COLS\}/);
+  assert.match(grid, /marginHorizontal: -spacing\.lg/);
+  assert.match(grid, /tileAspect/);
+  assert.match(grid, /4 \/ 5/);
+  assert.match(grid, /fadeDuration=\{0\}/);
   assert.match(grid, /comment_count/);
   assert.doesNotMatch(grid, /onToggleWatch/);
   assert.match(chips, /id: 'instagram'/);
