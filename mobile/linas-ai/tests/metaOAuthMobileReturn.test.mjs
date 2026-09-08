@@ -11,6 +11,10 @@ import {
   parseIntegrationsDeepLink,
 } from '../src/app/integrationsDeepLink.ts';
 import {
+  INSTAGRAM_CONNECT_POLL_DELAYS_MS,
+  INSTAGRAM_CONNECT_RETRY_PAUSE_MS,
+  META_CONNECT_POLL_DELAYS_MS,
+  connectPollDelaysMs,
   shouldRetryInstagramConnect,
   withInstagramMobileReauth,
 } from '../src/features/integrations/metaConnectFlow.ts';
@@ -101,6 +105,8 @@ describe('meta oauth mobile return surface', () => {
     assert.match(connect, /startMetaOAuth\(platform/);
     assert.match(connect, /shouldRetryInstagramConnect/);
     assert.match(connect, /resolveConnectedRow/);
+    assert.match(connect, /connectPollDelaysMs/);
+    assert.match(connect, /INSTAGRAM_CONNECT_RETRY_PAUSE_MS/);
     assert.match(connect, /instagramForceReauth:\s*false/);
     assert.match(connect, /instagramForceReauth:\s*true/);
     assert.match(connect, /row\?\.connected/);
@@ -329,6 +335,11 @@ describe('meta oauth mobile return surface', () => {
     assert.equal(shouldRetryInstagramConnect('instagram', 'failed', false), false);
     assert.equal(shouldRetryInstagramConnect('instagram', 'cancelled', true), false);
     assert.equal(shouldRetryInstagramConnect('facebook', 'cancelled', false), false);
+    assert.deepEqual([...connectPollDelaysMs('instagram')], [...INSTAGRAM_CONNECT_POLL_DELAYS_MS]);
+    assert.deepEqual([...connectPollDelaysMs('facebook')], [...META_CONNECT_POLL_DELAYS_MS]);
+    assert.ok(INSTAGRAM_CONNECT_POLL_DELAYS_MS.reduce((sum, ms) => sum + ms, 0) >= 8000);
+    assert.ok(INSTAGRAM_CONNECT_RETRY_PAUSE_MS >= 500);
+    assert.ok(META_CONNECT_POLL_DELAYS_MS.reduce((sum, ms) => sum + ms, 0) < 4000);
   });
 
   it('AppShell routes integrations deep link and IntegrationsScreen refetches', () => {

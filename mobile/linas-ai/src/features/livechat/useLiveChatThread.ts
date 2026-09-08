@@ -9,7 +9,7 @@ import {
   takeoverConversation,
 } from './liveChatApi';
 import { clientSendId } from './liveChatHelpers';
-import { mergeThreadMessages } from './liveChatThreadMerge';
+import { hasPendingOperatorSend, mergeThreadMessages } from './liveChatThreadMerge';
 import type { LiveChatItem, LiveChatMessage } from './liveChatTypes';
 import { isSocialChannelUser } from './liveChatTypes';
 
@@ -44,7 +44,9 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         if (requestId !== requestIdRef.current) return;
         if (!data.success) throw new Error(data.error || 'Failed to load thread');
         const next = data.messages || [];
-        setMessages((prev) => (mode === 'poll' ? mergeThreadMessages(prev, next) : next));
+        setMessages((prev) =>
+          mode === 'poll' || prev.length ? mergeThreadMessages(prev, next) : next,
+        );
         if (mode === 'initial') {
           setHasMore(Boolean(data.has_more) || next.length >= 50);
         }
@@ -57,7 +59,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         if (requestId !== requestIdRef.current) return;
         if (mode === 'initial') {
           setError(err instanceof Error ? err.message : 'Could not load messages.');
-          setMessages([]);
+          setMessages((prev) => (hasPendingOperatorSend(prev) ? prev : []));
         }
       } finally {
         if (mode === 'initial' && requestId === requestIdRef.current) setLoading(false);
@@ -132,7 +134,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     setMessages((prev) => [...prev, partial]);
   }
 
-  function dispatchOperatorSend(
+  async function dispatchOperatorSend(
     payload: string,
     messageType: 'text' | 'voice' | 'image',
     optimistic: LiveChatMessage,
@@ -142,24 +144,23 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     setSending(true);
     setError(null);
     appendOptimisticOperatorMessage(optimistic);
-    void (async () => {
-      try {
-        const result = await sendOperatorMessage(chat, payload, messageType);
-        if (!result.success) throw new Error(result.error || 'Send failed');
-        await load('poll');
-        onChatUpdated?.();
-      } catch (err) {
-        const dropped = optimistic.client_send_id || optimistic.message_id;
-        setMessages((prev) =>
-          prev.filter((msg) => (msg.client_send_id || msg.message_id) !== dropped),
-        );
-        setError(err instanceof Error ? err.message : 'Send failed.');
-      } finally {
-        sendingRef.current = false;
-        setSending(false);
-      }
-    })();
-    return true;
+    try {
+      const result = await sendOperatorMessage(chat, payload, messageType);
+      if (!result.success) throw new Error(result.error || 'Send failed');
+      await load('poll');
+      onChatUpdated?.();
+      return true;
+    } catch (err) {
+      const dropped = optimistic.client_send_id || optimistic.message_id;
+      setMessages((prev) =>
+        prev.filter((msg) => (msg.client_send_id || msg.message_id) !== dropped),
+      );
+      setError(err instanceof Error ? err.message : 'Send failed.');
+      return false;
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
   }
 
   return {

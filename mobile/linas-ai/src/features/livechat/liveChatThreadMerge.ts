@@ -11,8 +11,18 @@ function isLocalMessage(msg: LiveChatMessage): boolean {
   return messageId(msg).startsWith(LOCAL_PREFIX);
 }
 
+export function hasPendingOperatorSend(rows: LiveChatMessage[]): boolean {
+  return rows.some((msg) => isLocalMessage(msg));
+}
+
+function preservedClientSendId(msg: LiveChatMessage): string {
+  const client = String(msg.client_send_id || '').trim();
+  if (client) return client;
+  return isLocalMessage(msg) ? messageId(msg) : '';
+}
+
 function messageBody(msg: LiveChatMessage): string {
-  return String(msg.content || msg.text || '');
+  return String(msg.content || msg.text || '').trim();
 }
 
 function timestampsClose(a?: string | null, b?: string | null): boolean {
@@ -58,7 +68,7 @@ export function mergeThreadMessages(
   prev: LiveChatMessage[],
   incoming: LiveChatMessage[],
 ): LiveChatMessage[] {
-  if (!prev.length) return incoming;
+  if (!prev.length) return dedupeThreadMessages(incoming);
   if (!incoming.length) return prev;
 
   const incomingIds = new Set(
@@ -80,8 +90,15 @@ export function mergeThreadMessages(
     }
   }
 
+  const prevClientById = new Map<string, string>();
+  for (const prior of prev) {
+    const id = messageId(prior);
+    const clientId = preservedClientSendId(prior);
+    if (id && !id.startsWith(LOCAL_PREFIX) && clientId) prevClientById.set(id, clientId);
+  }
+
   const incomingWithKeys = incoming.map((msg, index) => {
-    const clientId = echoClientIds.get(index);
+    const clientId = echoClientIds.get(index) || prevClientById.get(messageId(msg));
     return clientId ? { ...msg, client_send_id: clientId } : msg;
   });
 
@@ -91,6 +108,7 @@ export function mergeThreadMessages(
     if (isLocalMessage(prior)) return false;
     const id = messageId(prior);
     if (id && incomingIds.has(id)) return false;
+    if (preservedClientSendId(prior)) return true;
     const ts = String(prior.timestamp || '');
     if (oldestIncoming && ts < String(oldestIncoming)) return true;
     if (newestIncoming && ts > String(newestIncoming)) return true;

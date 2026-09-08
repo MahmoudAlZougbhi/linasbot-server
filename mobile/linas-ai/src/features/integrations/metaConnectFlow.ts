@@ -14,8 +14,20 @@ export function withInstagramMobileReauth(url: string, forceReauth = true): stri
   return parsed.toString();
 }
 
-/** First-time Instagram Login often finishes after the auth sheet closes. */
+/** Facebook Login usually lands before the auth sheet closes. */
 export const META_CONNECT_POLL_DELAYS_MS = [600, 1200] as const;
+
+/**
+ * First Instagram Login often finishes after Safari closes on the account page.
+ * Keep polling long enough for the callback to persist before a force_reauth retry.
+ */
+export const INSTAGRAM_CONNECT_POLL_DELAYS_MS = [1000, 2000, 3000, 4000] as const;
+
+export const INSTAGRAM_CONNECT_RETRY_PAUSE_MS = 800;
+
+export function connectPollDelaysMs(platform: 'instagram' | 'facebook'): readonly number[] {
+  return platform === 'instagram' ? INSTAGRAM_CONNECT_POLL_DELAYS_MS : META_CONNECT_POLL_DELAYS_MS;
+}
 
 export function findIntegrationRow(rows: IntegrationListRow[], platform: string) {
   return rows.find((item) => item.platform === platform);

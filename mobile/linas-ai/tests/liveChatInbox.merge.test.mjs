@@ -12,7 +12,10 @@ import {
   appendInboxPage,
   mergeInboxPollPage,
 } from '../src/features/livechat/inboxListMerge.ts';
-import { mergeThreadMessages } from '../src/features/livechat/liveChatThreadMerge.ts';
+import {
+  hasPendingOperatorSend,
+  mergeThreadMessages,
+} from '../src/features/livechat/liveChatThreadMerge.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...p) => readFileSync(join(root, 'src', ...p), 'utf8');
@@ -187,12 +190,88 @@ test('poll keeps a newer echo and a stable client_send_id across the remount', (
   );
 });
 
+test('stale poll that misses an acked send keeps the bubble and client_send_id', () => {
+  const older = {
+    message_id: 'msg_old',
+    timestamp: '2026-09-08T08:00:00.000Z',
+    is_user: true,
+    content: 'hi',
+  };
+  const newerCustomer = {
+    message_id: 'msg_later',
+    timestamp: '2026-09-08T08:07:10.000Z',
+    is_user: true,
+    content: 'ok',
+  };
+  const acked = {
+    message_id: 'msg_new',
+    client_send_id: 'local-keep',
+    timestamp: '2026-09-08T08:07:04.200Z',
+    is_user: false,
+    content: 'hello',
+    text: 'hello',
+  };
+  const stale = mergeThreadMessages([older, acked], [older, newerCustomer]);
+  assert.deepEqual(
+    stale.map((m) => m.message_id),
+    ['msg_old', 'msg_new', 'msg_later'],
+  );
+  assert.equal(stale[1].client_send_id, 'local-keep');
+
+  const again = mergeThreadMessages(stale, [older, acked, newerCustomer]);
+  assert.deepEqual(
+    again.map((m) => m.message_id),
+    ['msg_old', 'msg_new', 'msg_later'],
+  );
+  assert.equal(again[1].client_send_id, 'local-keep');
+});
+
+test('poll without echo keeps the in-flight optimistic send', () => {
+  const older = {
+    message_id: 'msg_old',
+    timestamp: '2026-09-08T08:00:00.000Z',
+    is_user: true,
+    content: 'hi',
+  };
+  const local = {
+    message_id: 'local-pending',
+    client_send_id: 'local-pending',
+    timestamp: '2026-09-08T08:07:04.000Z',
+    is_user: false,
+    content: 'hello',
+    text: 'hello',
+  };
+  const pending = mergeThreadMessages([older, local], [older]);
+  assert.equal(hasPendingOperatorSend(pending), true);
+  assert.equal(pending[1].message_id, 'local-pending');
+});
+
+test('duplicate webhook rows collapse to one bubble', () => {
+  const echo = {
+    message_id: 'msg_new',
+    timestamp: '2026-09-08T08:07:01.400Z',
+    is_user: false,
+    content: 'hello',
+    text: 'hello',
+  };
+  const merged = mergeThreadMessages([], [echo, { ...echo }]);
+  assert.deepEqual(
+    merged.map((m) => m.message_id),
+    ['msg_new'],
+  );
+});
+
 test('thread hook ignores stale polls and locks in-flight sends', () => {
   const hook = read('features/livechat/useLiveChatThread.ts');
+  const thread = read('features/livechat/LiveChatThread.tsx');
   assert.match(hook, /requestIdRef/);
   assert.match(hook, /if \(requestId !== requestIdRef\.current\) return/);
   assert.match(hook, /sendingRef/);
+  assert.match(hook, /hasPendingOperatorSend/);
+  assert.match(hook, /async function dispatchOperatorSend/);
+  assert.match(hook, /mode === 'poll' \|\| prev.length/);
   assert.match(hook, /if \(!chat \|\| !payload \|\| sendingRef\.current\) return false/);
+  assert.match(thread, /thread\.loading && !thread\.messages\.length/);
 });
 
 test('drawer history refresh ignores out-of-order list responses', () => {
