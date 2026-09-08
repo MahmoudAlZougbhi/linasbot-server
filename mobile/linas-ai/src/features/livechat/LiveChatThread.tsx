@@ -138,7 +138,7 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
       <LiveChatComposer
         onSend={(text) => thread.sendText(text)}
         onSendMedia={(base64, type, mime) => thread.sendMedia(base64, type, mime)}
-        busy={thread.busy || thread.sending}
+        busy={thread.busy || thread.sending || (thread.loading && !thread.messages.length)}
       />
 
       <LiveChatAssignSheet

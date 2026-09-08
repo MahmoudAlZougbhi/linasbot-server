@@ -9,8 +9,11 @@ import {
 } from '../../app/integrationsDeepLink';
 import { shouldApplyMetaSessionFeedback } from './integrationsFeedback';
 import {
+  INSTAGRAM_CONNECT_RETRY_PAUSE_MS,
+  connectPollDelaysMs,
   resolveConnectedRow,
   shouldRetryInstagramConnect,
+  sleepMs,
 } from './metaConnectFlow';
 import type { IntegrationsLoadResult } from './useIntegrationsLoad';
 
@@ -40,12 +43,14 @@ export function useMetaPlatformConnect({
       setError(null);
       setNotice(null);
       try {
+        const delays = connectPollDelaysMs(platform);
         let session = await startMetaOAuth(platform, { instagramForceReauth: false });
-        let resolved = await resolveConnectedRow(load, platform);
+        let resolved = await resolveConnectedRow(load, platform, delays);
         if (!resolved.ok) return;
         if (shouldRetryInstagramConnect(platform, session.outcome, Boolean(resolved.row?.connected))) {
+          await sleepMs(INSTAGRAM_CONNECT_RETRY_PAUSE_MS);
           session = await startMetaOAuth(platform, { instagramForceReauth: true });
-          resolved = await resolveConnectedRow(load, platform);
+          resolved = await resolveConnectedRow(load, platform, delays);
           if (!resolved.ok) return;
         }
         if (resolved.row?.connected) {
