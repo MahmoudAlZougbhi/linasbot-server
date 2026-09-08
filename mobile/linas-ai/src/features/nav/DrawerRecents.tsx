@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
-import { fonts, spacing, useTheme } from '../../theme';
+import { spacing, typography, useTheme } from '../../theme';
 import { HistoryRows, type HistoryItem } from './HistoryRows';
 import { NEW_CHAT_ICON } from './moduleIcons';
 
@@ -83,9 +83,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   heading: {
-    fontFamily: fonts.display,
-    fontSize: 18,
-    letterSpacing: -0.25,
+    ...typography.drawerItem,
   },
   newChatHit: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
 });
