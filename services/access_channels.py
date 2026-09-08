@@ -61,9 +61,7 @@ def filter_chats_for_session(session: SessionRecord, payload: dict[str, Any]) ->
     if allowed is None:
         return payload
     chats = [
-        row
-        for row in (payload.get("chats") or [])
-        if resolve_live_chat_channel(row.get("user_id"), row) in allowed
+        row for row in (payload.get("chats") or []) if resolve_live_chat_channel(row.get("user_id"), row) in allowed
     ]
     next_payload = dict(payload)
     next_payload["chats"] = chats

@@ -81,9 +81,7 @@ def _plan_and_credits(tenant_id: str) -> dict[str, Any]:
     limit = included + extra
     if limit <= 0:
         limit = available + reserved
-    buckets = split_credit_remaining(
-        included=included, purchased=extra, available=available, reserved=reserved
-    )
+    buckets = split_credit_remaining(included=included, purchased=extra, available=available, reserved=reserved)
     used = buckets["credits_used"]
     catalog = PLAN_CATALOG.get(plan_id)
     display_name = catalog.display_name if catalog else (plan_id if plan_id != "none" else None)
