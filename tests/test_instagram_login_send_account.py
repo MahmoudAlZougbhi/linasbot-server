@@ -34,13 +34,13 @@ def _binding() -> SimpleNamespace:
 
 
 def test_instagram_login_send_account_prefers_authorized_user_id() -> None:
-    assert (
-        instagram_login_send_account_id(credential=_credential(), binding=_binding()) == LOGIN_USER_ID
-    )
+    assert instagram_login_send_account_id(credential=_credential(), binding=_binding()) == LOGIN_USER_ID
 
 
 def test_instagram_login_send_account_falls_back_to_igsid() -> None:
-    assert instagram_login_send_account_id(credential=_credential(authorized_meta_user_id=""), binding=_binding()) == IGSID
+    assert (
+        instagram_login_send_account_id(credential=_credential(authorized_meta_user_id=""), binding=_binding()) == IGSID
+    )
 
 
 def test_resolve_send_account_uses_login_user_id_not_igsid() -> None:
