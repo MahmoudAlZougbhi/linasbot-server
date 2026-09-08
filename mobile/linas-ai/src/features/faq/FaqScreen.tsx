@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ApiError } from '../../api/client';
@@ -38,6 +38,7 @@ export function FaqScreen({ proposalReview }: Props) {
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<FaqGroup[]>([]);
@@ -55,7 +56,7 @@ export function FaqScreen({ proposalReview }: Props) {
   const [pendingLangSave, setPendingLangSave] = useState<string[] | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!hasLoadedOnceRef.current) setLoading(true);
     setError(null);
     try {
       const data = await listFaq({ q: query.trim() || undefined });
@@ -73,6 +74,7 @@ export function FaqScreen({ proposalReview }: Props) {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : tr('faqLoadError'));
     } finally {
+      hasLoadedOnceRef.current = true;
       setLoading(false);
       setHasLoadedOnce(true);
     }

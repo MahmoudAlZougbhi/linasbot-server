@@ -6,18 +6,22 @@ import { LinasLoadingIndicator } from '../../../components/LinasLoadingIndicator
 import { useI18n } from '../../../i18n/LanguageContext';
 import { fonts, useTheme } from '../../../theme';
 import { CommentsMediaGrid } from './CommentsMediaGrid';
-import { CommentsPlatformChips } from './CommentsPlatformChips';
+import { allowedCommentPlatforms, CommentsPlatformChips } from './CommentsPlatformChips';
 import { fetchCommentMedia } from './commentsInboxApi';
 import type { CommentMediaItem, CommentPlatform } from './commentsInboxTypes';
 
 type Props = {
   onOpenThread: (platform: CommentPlatform, post: CommentMediaItem) => void;
+  allowedChannels?: string[] | null;
 };
 
-export function CommentsInbox({ onOpenThread }: Props) {
+export function CommentsInbox({ onOpenThread, allowedChannels = null }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
-  const [platform, setPlatform] = useState<CommentPlatform>('instagram');
+  const allowedKey = allowedChannels ? allowedChannels.join(',') : '*';
+  const [platform, setPlatform] = useState<CommentPlatform>(
+    () => allowedCommentPlatforms(allowedChannels)[0] || 'instagram',
+  );
   const [posts, setPosts] = useState<CommentMediaItem[]>([]);
   const [nextAfter, setNextAfter] = useState('');
   const [accountName, setAccountName] = useState('');
@@ -45,10 +49,23 @@ export function CommentsInbox({ onOpenThread }: Props) {
   );
 
   useEffect(() => {
+    const next = allowedCommentPlatforms(allowedChannels);
+    if (next.length && !next.includes(platform)) {
+      setPlatform(next[0]);
+    }
+  }, [allowedKey, allowedChannels, platform]);
+
+  useEffect(() => {
+    const next = allowedCommentPlatforms(allowedChannels);
+    if (!next.length) {
+      setStatus('empty');
+      setPosts([]);
+      return;
+    }
     setStatus('loading');
     setPosts([]);
     void load();
-  }, [load]);
+  }, [load, allowedKey, allowedChannels]);
 
   async function refresh() {
     setRefreshing(true);
@@ -82,7 +99,7 @@ export function CommentsInbox({ onOpenThread }: Props) {
         onOpen={(post) => onOpenThread(platform, post)}
         header={
           <View>
-            <CommentsPlatformChips selected={platform} onSelect={setPlatform} />
+            <CommentsPlatformChips selected={platform} onSelect={setPlatform} allowed={allowedChannels} />
             <Text style={[styles.hint, { color: colors.textMuted }]}>{tr('liveCommentsSelectHint')}</Text>
             {accountName ? <Text style={[styles.account, { color: colors.text }]}>{accountName}</Text> : null}
             {error && status !== 'disconnected' ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}

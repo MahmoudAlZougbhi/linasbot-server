@@ -17,11 +17,15 @@ const CHIPS: { id: ChannelFilter; label: string }[] = [
 type Props = {
   selected: ChannelFilter;
   onSelect: (id: ChannelFilter) => void;
+  allowed?: ChatChannel[] | null;
 };
 
-export function InboxChannelChips({ selected, onSelect }: Props) {
+export function InboxChannelChips({ selected, onSelect, allowed }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
+  const chips = CHIPS.filter(
+    (chip) => chip.id === 'all' || !allowed || allowed.includes(chip.id as ChatChannel),
+  );
   return (
     <View style={styles.wrap}>
       <ScrollView
@@ -33,7 +37,7 @@ export function InboxChannelChips({ selected, onSelect }: Props) {
         contentContainerStyle={styles.row}
         accessibilityRole="tablist"
       >
-        {CHIPS.map((chip) => {
+        {chips.map((chip) => {
           const active = selected === chip.id;
           return (
             <Pressable

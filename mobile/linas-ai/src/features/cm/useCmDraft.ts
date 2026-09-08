@@ -9,24 +9,26 @@ import {
 } from './cmProposalReview';
 import { getCmDraft, putCmDraft } from './cmApi';
 import { isDraftDirty, stableSerialize } from './cmDraftDirty';
+import { peekCmDraftCache, writeCmDraftCache } from './cmDraftCache';
 import { prepareCmDraftPayload } from './prepareCmDraftPayload';
 
 export function useCmDraft(section: string, proposalReview?: CmProposalReview | null) {
   const { tr } = useI18n();
-  const [loading, setLoading] = useState(true);
+  const cached = peekCmDraftCache(section);
+  const [loading, setLoading] = useState(!cached);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
-  const [etag, setEtag] = useState<string | null>(null);
-  const [payload, setPayloadState] = useState<Record<string, unknown>>({});
+  const [etag, setEtag] = useState<string | null>(cached?.etag ?? null);
+  const [payload, setPayloadState] = useState<Record<string, unknown>>(cached?.payload ?? {});
   const [dirty, setDirty] = useState(false);
   const [proposalActive, setProposalActive] = useState(false);
   const saveLock = useRef(false);
-  const baselineRef = useRef('');
-  const payloadRef = useRef<Record<string, unknown>>({});
+  const baselineRef = useRef(cached ? stableSerialize(cached.payload) : '');
+  const payloadRef = useRef<Record<string, unknown>>(cached?.payload ?? {});
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!peekCmDraftCache(section)) setLoading(true);
     setError(null);
     setConflict(null);
     try {
@@ -54,6 +56,7 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
       setPayloadState(next);
       setEtag(draft.etag);
       baselineRef.current = stableSerialize(next);
+      writeCmDraftCache(section, { etag: draft.etag, payload: next });
       setDirty(overlay);
       setProposalActive(overlay);
     } catch (err) {
@@ -128,6 +131,7 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
       setPayloadState(saved);
       setEtag(draft.etag);
       baselineRef.current = stableSerialize(saved);
+      writeCmDraftCache(section, { etag: draft.etag, payload: saved });
       setDirty(false);
       setProposalActive(false);
       return true;

@@ -121,6 +121,8 @@ export const subscriptionAr = {
   subCurrentSubtitle: 'خطتك الحالية',
   subCurrentPlanKicker: 'الخطة الحالية',
   subAvailableCredits: 'الرصيد المتاح',
+  subCreditsMembership: 'العضوية',
+  subCreditsBought: 'مشترى',
   subChooseCreditPack: 'اختار باقة رصيد',
   subBuyCreditsCta: 'شراء {n} رصيد • {price}',
   subPurchasedNoExpire: 'الرصيد المشترى لا ينتهي.',

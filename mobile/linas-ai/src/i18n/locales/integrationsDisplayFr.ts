@@ -44,6 +44,7 @@ export const integrationsDisplayFr = {
   integrationFeatureOn: 'Activé',
   integrationFeatureOff: 'Désactivé',
   integrationToggleMessages: 'Messages',
+  integrationToggleWhatsAppCall: 'Appel WhatsApp',
   integrationRefreshStatus: 'Actualiser le statut',
   integrationDisconnectAccount: 'Déconnecter le compte',
   integrationDisconnectHint: 'Les réponses IA s’arrêtent jusqu’à la reconnexion.',
@@ -69,7 +70,7 @@ export const integrationsDisplayFr = {
   tiktokEnhancedError: 'Erreur',
   tiktokEnhancedBasic: 'Contexte du post : basique',
   tiktokEnhancedLevel: 'Contexte du post : amélioré',
-  drawerRecents: 'Récents',
+  drawerRecents: 'Discussions',
   drawerPin: 'Épinglés',
   appUpdateForceTitle: 'Mise à jour requise',
   appUpdateForceBody:

@@ -106,7 +106,7 @@ def test_unified_chats_api_declares_channel_query() -> None:
 
     src = Path("modules/live_chat_api.py").read_text(encoding="utf-8")
     assert 'channel: str = Query(default="all"' in src
-    assert "channel=channel" in src
+    assert "channel=inbox_channel" in src
     unified = Path("services/live_chat_service_unified.py").read_text(encoding="utf-8")
     assert "wanted_channel" in unified
     assert '"channel": row_channel' in unified

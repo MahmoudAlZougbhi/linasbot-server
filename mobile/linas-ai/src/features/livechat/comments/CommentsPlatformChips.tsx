@@ -25,13 +25,22 @@ export function CommentChannelIcon({ platform, size = 16 }: { platform: string; 
 type Props = {
   selected: CommentPlatform;
   onSelect: (id: CommentPlatform) => void;
+  allowed?: string[] | null;
 };
 
-export function CommentsPlatformChips({ selected, onSelect }: Props) {
+export function allowedCommentPlatforms(allowed?: string[] | null): CommentPlatform[] {
+  const ids = CHIPS.map((chip) => chip.id);
+  if (!allowed) return ids;
+  return ids.filter((id) => allowed.includes(id));
+}
+
+export function CommentsPlatformChips({ selected, onSelect, allowed }: Props) {
   const { colors } = useTheme();
+  const chips = CHIPS.filter((chip) => !allowed || allowed.includes(chip.id));
+  if (chips.length === 0) return null;
   return (
     <View style={styles.row} accessibilityRole="tablist">
-      {CHIPS.map((chip) => {
+      {chips.map((chip) => {
         const on = selected === chip.id;
         return (
           <Pressable

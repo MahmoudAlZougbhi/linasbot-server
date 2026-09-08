@@ -11,6 +11,7 @@ import {
 export type AccessScreenId =
   | 'dashboard'
   | 'liveChat'
+  | 'comments'
   | 'requests'
   | 'aiSetup'
   | 'smartAnswers'
@@ -30,12 +31,13 @@ export type AccessScreen = {
 };
 
 /**
- * View/Manage rows → existing RBAC keys (no new permission flags).
- * Screens that share keys stay in sync by design.
+ * View/Manage rows → RBAC keys. Comments is independent of Live Chat.
+ * Channel chips live in ACCESS_CHANNELS (same permissions dict).
  */
 export const ACCESS_SCREENS: AccessScreen[] = [
   { id: 'dashboard', labelKey: 'usersAccessDashboard', view: ['dashboard'], manage: ['analytics'], summary: true },
   { id: 'liveChat', labelKey: 'usersAccessLiveChat', view: ['liveChat'], manage: ['liveChat'], summary: true },
+  { id: 'comments', labelKey: 'usersAccessComments', view: ['comments'], manage: ['commentsManage'], summary: true },
   {
     id: 'requests',
     labelKey: 'usersAccessRequests',
@@ -135,6 +137,30 @@ export function generateTempPassword(): string {
     for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
   }
   return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+}
+
+export type AccessChannelId = 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'web';
+
+export const ACCESS_CHANNELS: { id: AccessChannelId; key: PermissionKey; labelKey: StringKey }[] = [
+  { id: 'whatsapp', key: 'channelWhatsapp', labelKey: 'usersChannelWhatsapp' },
+  { id: 'instagram', key: 'channelInstagram', labelKey: 'usersChannelInstagram' },
+  { id: 'facebook', key: 'channelFacebook', labelKey: 'usersChannelFacebook' },
+  { id: 'tiktok', key: 'channelTiktok', labelKey: 'usersChannelTiktok' },
+  { id: 'web', key: 'channelWeb', labelKey: 'usersChannelWeb' },
+];
+
+export function showsChannelPicker(perms: PermissionMap): boolean {
+  return ACCESS_SCREENS.some(
+    (screen) => (screen.id === 'liveChat' || screen.id === 'comments') && accessViewChecked(screen, perms),
+  );
+}
+
+export function toggleAccessChannel(perms: PermissionMap, key: PermissionKey, value: boolean): PermissionMap {
+  return { ...perms, [key]: value };
+}
+
+export function allowedAccessChannels(perms: PermissionMap): AccessChannelId[] {
+  return ACCESS_CHANNELS.filter((row) => perms[row.key]).map((row) => row.id);
 }
 
 export function mapsEqual(a: PermissionMap, b: PermissionMap): boolean {

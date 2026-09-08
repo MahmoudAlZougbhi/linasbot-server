@@ -23,7 +23,7 @@ export function useGuestChatSession(enabled = true) {
   const { language, tr } = useI18n();
   const [guestId, setGuestId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(enabled);
+  const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gated, setGated] = useState(false);
@@ -35,17 +35,16 @@ export function useGuestChatSession(enabled = true) {
       clearGuestState(setGuestId, setMessages, setGated, setGateText);
       return;
     }
-    setLoading(true);
     setError(null);
     try {
       const id = await getOrCreateGuestSessionId();
       setGuestId(id);
+      setLoading(false);
       const session = await ensureGuestSession(id, language);
       setMessages(session.messages);
       setGated(Boolean(session.limit_reached));
     } catch {
       setError('retry');
-    } finally {
       setLoading(false);
     }
   }, [enabled, language]);

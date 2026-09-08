@@ -41,6 +41,7 @@ test('connected cards use 3-dot menu, Messages/Comments toggles, and healthy foo
   assert.doesNotMatch(toggles, /integrationConnectedFeatures/);
   assert.doesNotMatch(toggles, /integrationFeatureOn/);
   assert.match(display, /integrationToggleMessages: 'Messages'/);
+  assert.match(display, /integrationToggleWhatsAppCall: 'WhatsApp Call'/);
   assert.match(display, /Connection healthy/);
 });
 
@@ -54,7 +55,10 @@ test('channel Messages/Comments toggles are app-owned and do not intercept provi
   assert.doesNotMatch(screen, /tiktok_messaging_pending/);
   assert.match(card, /showMetaCapabilityHints = false/);
   assert.match(wa, /ai_default_enabled/);
+  assert.match(wa, /calls_enabled/);
+  assert.match(wa, /integrationToggleWhatsAppCall/);
   assert.doesNotMatch(wa, /ai_eligible &&/);
+  assert.doesNotMatch(wa, /WhatsAppCloudOpsPanel|sendWhatsAppTestMessage|waSendTestMessage/);
   assert.match(web, /saveWebChatSettings/);
   assert.match(web, /showComments=\{false\}/);
 });
@@ -110,7 +114,7 @@ test('TikTok card is shown from product list without faking a connection', () =>
   assert.doesNotMatch(screen, /connected:\s*true.*tiktok/);
 });
 
-test('initial load shows unified Linas loader until integrations and web chat are ready', () => {
+test('initial load shows unified Linas loader until integrations are ready', () => {
   const screen = read('features/integrations/IntegrationsScreen.tsx');
   const loadHook = read('features/integrations/useIntegrationsLoad.ts');
   const web = read('features/integrations/WebChatCard.tsx');

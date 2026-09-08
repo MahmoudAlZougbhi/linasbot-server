@@ -270,6 +270,8 @@ def test_max_plan_hides_upgrade_action(ledger_env: EntitlementsStore) -> None:
     assert section["plan_id"] == "max"
     assert section["actions"]["upgrade_plan"] is False
     assert section["actions"]["buy_credits"] is True
+    assert "membership_credits_remaining" in section
+    assert "purchased_credits_remaining" in section
 
 
 def test_no_subscription_status(ledger_env: EntitlementsStore, monkeypatch: pytest.MonkeyPatch) -> None:

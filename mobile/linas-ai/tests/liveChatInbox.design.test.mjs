@@ -12,14 +12,24 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const src = (...p) => join(root, 'src', ...p);
 const read = (...p) => readFileSync(src(...p), 'utf8');
 
-test('inbox is a flat list with All/Human filters and no section headers', () => {
+test('inbox is a flat list with channel chips and no section headers', () => {
   const hook = read('features/livechat/useLiveChatInbox.ts');
   const inbox = read('features/livechat/LiveChatInbox.tsx');
+  const screen = read('features/livechat/LiveChatScreen.tsx');
+  const human = read('features/livechat/InboxHumanHeaderButton.tsx');
   assert.doesNotMatch(hook, /Waiting for human|With operator|AI handling/);
   assert.doesNotMatch(inbox, /section\.title|kind === 'header'/);
   assert.match(inbox, /InboxSearchBar/);
   assert.match(inbox, /InboxChannelChips/);
-  assert.match(inbox, /InboxFilterPills/);
+  assert.match(inbox, /allowedChannels/);
+  assert.match(inbox, /matchesAllowedChannels/);
+  assert.doesNotMatch(inbox, /InboxFilterPills/);
+  assert.match(screen, /InboxHumanHeaderButton/);
+  assert.match(screen, /useLiveChatAccess/);
+  assert.match(screen, /headerRight/);
+  assert.match(human, /feather\('user'\)/);
+  assert.match(hook, /waitingCount/);
+  assert.match(hook, /setFilter/);
   assert.match(inbox, /<FlatList/);
   assert.match(inbox, /data=\{visibleChats\}/);
   assert.match(inbox, /styles\.toolbar/);
@@ -38,11 +48,18 @@ test('inbox is a flat list with All/Human filters and no section headers', () =>
 
 test('row layout is icon / name+preview / time+badge+assignee', () => {
   const row = read('features/livechat/ConversationRow.tsx');
+  const divider = read('features/livechat/InboxRowDivider.tsx');
+  const inbox = read('features/livechat/LiveChatInbox.tsx');
   assert.match(row, /styles\.middle/);
   assert.match(row, /styles\.meta/);
   assert.match(row, /badgeSpacer/);
   assert.match(row, /assigneeLabel\(item\)/);
   assert.match(row, /chatChannel\(item\)/);
+  assert.match(row, /InboxRowDivider/);
+  assert.doesNotMatch(row, /borderBottomWidth/);
+  assert.match(divider, /EDGE_INSET/);
+  assert.match(divider, /fadeIn/);
+  assert.match(inbox, /showDivider=\{index < visibleChats\.length - 1\}/);
   assert.doesNotMatch(row, /chatAvatarLetter/);
 });
 
@@ -54,6 +71,9 @@ test('thread restores WhatsApp handoff, assign, and composer', () => {
   assert.match(thread, /LiveChatComposer/);
   assert.match(thread, /onSendMedia/);
   assert.match(composer, /onSendMedia/);
+  assert.match(composer, /useSafeAreaInsets/);
+  assert.match(composer, /Math.max\(insets.bottom, 12\)/);
+  assert.match(thread, /insets.top \+ 68/);
   assert.match(composer, /feather\('image'\)/);
   assert.match(composer, /feather\('mic'\)/);
   assert.match(thread, /LiveChatAssignSheet/);
@@ -61,6 +81,14 @@ test('thread restores WhatsApp handoff, assign, and composer', () => {
   assert.match(api, /assignToUserId/);
   assert.match(hook, /takeoverConversation\(chat!, assignToUserId\)/);
   assert.match(hook, /dispatchOperatorSend/);
+  assert.match(hook, /mergeThreadMessages/);
+  assert.match(hook, /audio_url: type === 'voice'/);
   assert.doesNotMatch(hook, /sendText:[\s\S]*setBusy\(true\)/);
   assert.doesNotMatch(hook, /WhatsApp-only for now/);
+  const bubble = read('features/livechat/LiveChatMessageBubble.tsx');
+  const media = read('features/livechat/LiveChatMedia.tsx');
+  assert.match(bubble, /LiveChatVoicePlay/);
+  assert.doesNotMatch(bubble, /🎤 \{body\}/);
+  assert.match(media, /useAudioPlayer/);
+  assert.match(media, /Play voice message/);
 });

@@ -49,6 +49,7 @@ class ConnectionPublicView:
     health_detail: str | None
     ai_eligible: bool
     ai_default_enabled: bool
+    calls_enabled: bool
     history_sync_status: str
     granted_scopes: list[str]
     rollout_blocked_reason: str | None = None
@@ -69,6 +70,7 @@ class ConnectionPublicView:
             "health_detail": self.health_detail,
             "ai_eligible": self.ai_eligible,
             "ai_default_enabled": self.ai_default_enabled,
+            "calls_enabled": self.calls_enabled,
             "history_sync_status": self.history_sync_status,
             "granted_scopes": list(self.granted_scopes),
             "rollout_blocked_reason": self.rollout_blocked_reason,

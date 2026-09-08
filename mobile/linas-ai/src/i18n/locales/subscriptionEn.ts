@@ -121,6 +121,8 @@ export const subscriptionEn = {
   subCurrentSubtitle: 'Your current plan',
   subCurrentPlanKicker: 'CURRENT PLAN',
   subAvailableCredits: 'Available credits',
+  subCreditsMembership: 'Membership',
+  subCreditsBought: 'Bought',
   subChooseCreditPack: 'Choose a credit pack',
   subBuyCreditsCta: 'Buy {n} credits • {price}',
   subPurchasedNoExpire: 'Purchased credits do not expire.',

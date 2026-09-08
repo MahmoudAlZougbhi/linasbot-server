@@ -13,6 +13,7 @@ import {
 } from '../dashboardChrome';
 import { isHighestPlan, isPlanId } from '../../billing/planCatalog';
 import { planNameColor } from '../../billing/planColors';
+import { splitCreditRemaining } from '../creditSplit';
 import { formatCount, formatRenewDate } from '../dashboardFormat';
 import type { TenantDashboard } from '../dashboardTypes';
 
@@ -47,6 +48,14 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
   const available = plan.available_credits ?? 0;
   const limit = plan.credits_limit ?? 0;
   const used = plan.credits_consumed_period_estimate ?? Math.max(0, limit - available);
+  const split = splitCreditRemaining({
+    included: plan.included_credits,
+    purchased: plan.purchased_or_promotional_credits,
+    available,
+    reserved: plan.reserved_credits,
+  });
+  const membership = plan.membership_credits_remaining ?? split.membership;
+  const bought = plan.purchased_credits_remaining ?? split.bought;
   const ratio =
     typeof plan.usage_progress_ratio === 'number'
       ? Math.max(0, Math.min(1, plan.usage_progress_ratio))
@@ -83,6 +92,16 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
       <View style={styles.creditsRow}>
         <Text style={styles.creditsBig}>{formatCount(available)}</Text>
         <Text style={styles.remaining}> {tr('dashRemaining')}</Text>
+      </View>
+      <View style={styles.splitRow}>
+        <View style={styles.splitBox}>
+          <Text style={styles.splitLabel}>{tr('dashCreditsMembership')}</Text>
+          <Text style={styles.splitValue}>{formatCount(membership)}</Text>
+        </View>
+        <View style={styles.splitBox}>
+          <Text style={styles.splitLabel}>{tr('dashCreditsBought')}</Text>
+          <Text style={styles.splitValue}>{formatCount(bought)}</Text>
+        </View>
       </View>
       <Text style={styles.usedLine}>
         {formatCount(used)} {tr('dashUsedOf')} {formatCount(limit)}
@@ -150,6 +169,17 @@ const styles = StyleSheet.create({
   creditsRow: { flexDirection: 'row', alignItems: 'baseline' },
   creditsBig: { color: '#FFFFFF', fontFamily: fonts.bodyMedium, fontSize: 34, fontWeight: '700' },
   remaining: { color: 'rgba(255,255,255,0.85)', fontFamily: fonts.body, fontSize: 14 },
+  splitRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  splitBox: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: DASH_BTN_RADIUS,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 2,
+  },
+  splitLabel: { color: DASH_MINT_SOFT, fontFamily: fonts.body, fontSize: 12 },
+  splitValue: { color: '#FFFFFF', fontFamily: fonts.bodyMedium, fontSize: 18, fontWeight: '700' },
   usedLine: { color: DASH_MINT_SOFT, fontFamily: fonts.body, fontSize: 13 },
   track: {
     height: DASH_BAR_HEIGHT,

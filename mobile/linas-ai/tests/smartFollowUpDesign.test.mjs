@@ -68,6 +68,11 @@ test('Follow-up steps card matches screenshot structure', () => {
   assert.doesNotMatch(steps, /sfuAiWritesBody/);
   assert.match(dropdown, /chevron-down/);
   assert.match(dropdown, /flex = 1/);
+  assert.match(dropdown, /sheetHint/);
+  assert.match(steps, /sfuDelaySheetHint/);
+  assert.match(steps, /sfuGoalSheetHint/);
+  assert.match(en, /After this time, Linas writes to the customer again/);
+  assert.match(en, /How Linas should sound in that follow-up/);
 });
 
 test('Smart Follow-Up channels grid includes supported platforms', () => {

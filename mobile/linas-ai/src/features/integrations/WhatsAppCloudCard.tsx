@@ -4,9 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { ApiError } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts } from '../../theme';
-import { ChannelCapabilityToggles } from './ChannelCapabilityToggles';
+import { ChannelCapabilityToggles, type ChannelToggleKey } from './ChannelCapabilityToggles';
 import { IntegrationCardShell } from './IntegrationCardShell';
-import { WhatsAppCloudOpsPanel } from './WhatsAppCloudOpsPanel';
 import { WhatsAppCoexistenceConfirm } from './WhatsAppCoexistenceConfirm';
 import {
   isWhatsAppAppReviewTest,
@@ -25,14 +24,13 @@ export { fetchWhatsAppCloudStatus, startWhatsAppCloudConnect, WhatsAppConnectErr
 type Props = {
   status: WhatsAppCloudStatus | null;
   busy?: boolean;
-  onRefresh: () => void;
+  busyKey?: ChannelToggleKey | null;
   onConnect: () => void;
   onOpenMenu?: () => void;
   onEnableAi?: (connectionId: string) => void;
   onDisableAi?: (connectionId: string) => void;
-  onBusyChange?: (busy: boolean) => void;
-  onError?: (message: string | null) => void;
-  onNotice?: (message: string) => void;
+  onEnableCalls?: (connectionId: string) => void;
+  onDisableCalls?: (connectionId: string) => void;
 };
 
 export function whatsappCardSubtitle(status: WhatsAppCloudStatus | null, fallback: string): string {
@@ -45,13 +43,13 @@ export function whatsappCardSubtitle(status: WhatsAppCloudStatus | null, fallbac
 export function WhatsAppCloudCard({
   status,
   busy,
+  busyKey = null,
   onConnect,
   onOpenMenu,
   onEnableAi,
   onDisableAi,
-  onBusyChange,
-  onError,
-  onNotice,
+  onEnableCalls,
+  onDisableCalls,
 }: Props) {
   const { tr } = useI18n();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -67,6 +65,8 @@ export function WhatsAppCloudCard({
   const subtitle = whatsappCardSubtitle(status, tr('integrationWhatsAppHandle'));
   const healthy = connected;
   const aiOn = Boolean(conn?.ai_default_enabled);
+  const callsOn = Boolean(conn?.calls_enabled);
+  const showToggles = Boolean(connected && conn?.connection_id && onEnableAi && onDisableAi);
 
   return (
     <View accessibilityRole="summary" style={styles.wrap}>
@@ -117,30 +117,27 @@ export function WhatsAppCloudCard({
         ) : null}
         {status?.blocker_code && !awaitingMeta ? <Text style={styles.warn}>{status.blocker_code}</Text> : null}
         {conn?.rollout_blocked_reason ? <Text style={styles.warn}>{conn.rollout_blocked_reason}</Text> : null}
-        {connected && conn?.connection_id && onEnableAi && onDisableAi ? (
+        {showToggles && conn?.connection_id ? (
           <ChannelCapabilityToggles
-            toggles={{ dm: aiOn, comments: false }}
-            busyKey={busy ? 'dm' : null}
+            toggles={{ dm: aiOn, comments: false, calls: callsOn }}
+            busyKey={busy ? busyKey || 'dm' : null}
             showComments={false}
+            showCalls={Boolean(onEnableCalls && onDisableCalls)}
             messagesLabel={tr('integrationToggleMessages')}
             commentsLabel={tr('toggleComments')}
-            onToggle={(_key, value) => {
-              if (value) onEnableAi(conn.connection_id);
-              else onDisableAi(conn.connection_id);
+            callsLabel={tr('integrationToggleWhatsAppCall')}
+            onToggle={(key, value) => {
+              if (key === 'calls') {
+                if (value) onEnableCalls?.(conn.connection_id);
+                else onDisableCalls?.(conn.connection_id);
+                return;
+              }
+              if (value) onEnableAi?.(conn.connection_id);
+              else onDisableAi?.(conn.connection_id);
             }}
           />
         ) : null}
       </IntegrationCardShell>
-      {connected && conn?.connection_id ? (
-        <WhatsAppCloudOpsPanel
-          connectionId={conn.connection_id}
-          connectionSource={conn.connection_source}
-          busy={busy}
-          onBusyChange={onBusyChange}
-          onError={onError}
-          onNotice={onNotice}
-        />
-      ) : null}
     </View>
   );
 }

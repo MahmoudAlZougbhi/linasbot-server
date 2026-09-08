@@ -6,6 +6,7 @@ import { ModalScrim } from '../../components/ModalScrim';
 
 import { AppIcon, feather } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
+import type { StringKey } from '../../i18n/locales/en';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { PlatformChannelIcon } from '../livechat/PlatformChannelIcon';
 import type { ChatChannel } from '../livechat/liveChatTypes';
@@ -107,11 +108,7 @@ export function RequestFilterSheet({ visible, applied, staff, search, onClose, o
                     <PlatformChannelIcon channel={p.channel as ChatChannel} size={22} />
                   ) : null}
                   <Text style={[styles.chipLabel, { color: colors.text }]}>
-                    {p.id === 'all'
-                      ? tr('reqFilterAll')
-                      : p.channel === 'facebook'
-                        ? 'Facebook'
-                        : labelFor(p.channel)}
+                    {p.id === 'all' ? tr('reqFilterAll') : platformChipLabel(p.channel, tr)}
                   </Text>
                   {selected ? (
                     <AppIcon icon={feather('check')} size={14} color={colors.accent} />
@@ -178,11 +175,12 @@ export function RequestFilterSheet({ visible, applied, staff, search, onClose, o
   );
 }
 
-function labelFor(channel: string): string {
-  if (channel === 'whatsapp') return 'WhatsApp';
-  if (channel === 'instagram') return 'Instagram';
-  if (channel === 'tiktok') return 'TikTok';
-  return 'Facebook';
+function platformChipLabel(channel: string, tr: (key: StringKey) => string): string {
+  if (channel === 'whatsapp') return tr('reqChannelWhatsApp');
+  if (channel === 'instagram') return tr('reqChannelInstagram');
+  if (channel === 'facebook') return tr('reqChannelFacebook');
+  if (channel === 'tiktok') return tr('reqChannelTikTok');
+  return tr('reqChannelWeb');
 }
 
 const styles = StyleSheet.create({

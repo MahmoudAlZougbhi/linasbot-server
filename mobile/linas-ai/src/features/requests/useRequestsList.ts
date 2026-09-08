@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { tokenStore } from '../../auth/tokenStore';
 import type { PublicUser } from '../../api/types';
@@ -29,6 +29,7 @@ export type RequestsListState = {
   counts: Record<string, number>;
   matched: number;
   loading: boolean;
+  hasLoadedOnce: boolean;
   refreshing: boolean;
   loadingMore: boolean;
   error: string | null;
@@ -61,6 +62,8 @@ export function useRequestsList(enabled: boolean): RequestsListState {
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +131,7 @@ export function useRequestsList(enabled: boolean): RequestsListState {
         setRefreshing(false);
         return;
       }
-      if (mode === 'replace') setLoading(true);
+      if (mode === 'replace' && !hasLoadedOnceRef.current) setLoading(true);
       if (mode === 'append') setLoadingMore(true);
       if (mode === 'quiet') setRefreshing(true);
       setError(null);
@@ -157,6 +160,8 @@ export function useRequestsList(enabled: boolean): RequestsListState {
         setErrorKind(kind);
         setError(kind);
       } finally {
+        hasLoadedOnceRef.current = true;
+        setHasLoadedOnce(true);
         setLoading(false);
         setRefreshing(false);
         setLoadingMore(false);
@@ -175,6 +180,7 @@ export function useRequestsList(enabled: boolean): RequestsListState {
     counts,
     matched,
     loading,
+    hasLoadedOnce,
     refreshing,
     loadingMore,
     error,

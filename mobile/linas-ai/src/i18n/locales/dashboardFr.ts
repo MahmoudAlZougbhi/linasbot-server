@@ -20,6 +20,8 @@ export const dashboardFr = {
   dashUpgrade: 'Mettre à niveau',
   dashCredits: 'Crédits',
   dashRemaining: 'restants',
+  dashCreditsMembership: 'Abonnement',
+  dashCreditsBought: 'Achetés',
   dashUsedOf: 'utilisés sur',
   dashRenews: 'Renouvellement',
   dashBuyCredits: 'Acheter des crédits',

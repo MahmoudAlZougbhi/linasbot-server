@@ -13,6 +13,8 @@ type Props = {
   renewsLabel: string;
   availableLabel: string;
   includedEachMonth: string;
+  membershipLabel: string;
+  boughtLabel: string;
   tr: (key: StringKey) => string;
   onBuyCredits: () => void;
 };
@@ -24,6 +26,8 @@ export function CurrentPlanHeroCard({
   renewsLabel,
   availableLabel,
   includedEachMonth,
+  membershipLabel,
+  boughtLabel,
   tr,
   onBuyCredits,
 }: Props) {
@@ -56,6 +60,12 @@ export function CurrentPlanHeroCard({
             {tr('subAvailableCredits')}
           </Text>
           <Text style={[styles.creditsValue, { color: colors.text }]}>{availableLabel}</Text>
+          <Text style={[styles.split, { color: colors.text }]}>
+            {tr('subCreditsMembership')} {membershipLabel}
+          </Text>
+          <Text style={[styles.split, { color: colors.text }]}>
+            {tr('subCreditsBought')} {boughtLabel}
+          </Text>
           <Text style={[styles.creditsHint, { color: colors.textMuted }]}>{includedEachMonth}</Text>
         </View>
         <Pressable
@@ -116,6 +126,7 @@ const styles = StyleSheet.create({
   creditsMeta: { flex: 1, gap: 2 },
   creditsKicker: { fontFamily: fonts.body, fontSize: 12 },
   creditsValue: { fontFamily: fonts.display, fontSize: 26, fontWeight: '700' },
+  split: { fontFamily: fonts.bodyMedium, fontSize: 13 },
   creditsHint: { fontFamily: fonts.body, fontSize: 12 },
   buy: {
     borderWidth: 1.5,

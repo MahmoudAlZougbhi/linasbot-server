@@ -34,6 +34,15 @@ async def broadcast_sse_event(event_type: str, data: dict) -> None:
     await live_chat_sse_broadcaster.publish(event_type, data)
 
 
+def require_chat_channel(http_request: Any, user_id: str) -> Any:
+    from modules.api_security import require_session
+    from services.access_channels import require_session_channel
+
+    session = require_session(http_request)
+    require_session_channel(session, user_id)
+    return session
+
+
 def resolve_takeover_assignee(session: Any, requested_operator_id: str | None) -> tuple[str, str | None]:
     """Session is the actor; requested_operator_id may assign another same-tenant staff member."""
     from fastapi import HTTPException

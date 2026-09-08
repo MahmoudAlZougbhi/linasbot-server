@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fonts, useTheme } from '../../theme';
+import { InboxRowDivider } from './InboxRowDivider';
 import { PlatformChannelIcon } from './PlatformChannelIcon';
 import {
   type LiveChatItem,
@@ -15,9 +16,10 @@ import {
 type Props = {
   item: LiveChatItem;
   onPress: () => void;
+  showDivider?: boolean;
 };
 
-export function ConversationRow({ item, onPress }: Props) {
+export function ConversationRow({ item, onPress, showDivider = true }: Props) {
   const { colors } = useTheme();
   const unread = item.unread_count ?? 0;
   const time = formatInboxTime(chatLastAt(item));
@@ -26,35 +28,37 @@ export function ConversationRow({ item, onPress }: Props) {
 
   return (
     <Pressable
-      style={[styles.row, { borderBottomColor: colors.borderSoft }]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={chatTitle(item)}
     >
-      <PlatformChannelIcon channel={chatChannel(item)} />
-      <View style={styles.middle}>
-        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-          {chatTitle(item)}
-        </Text>
-        <Text style={[styles.preview, { color: colors.textMuted }]} numberOfLines={1}>
-          {chatPreview(item)}
-        </Text>
+      <View style={styles.row}>
+        <PlatformChannelIcon channel={chatChannel(item)} />
+        <View style={styles.middle}>
+          <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+            {chatTitle(item)}
+          </Text>
+          <Text style={[styles.preview, { color: colors.textMuted }]} numberOfLines={1}>
+            {chatPreview(item)}
+          </Text>
+        </View>
+        <View style={styles.meta}>
+          {time ? (
+            <Text style={[styles.time, { color: colors.textDim }]}>{time}</Text>
+          ) : null}
+          {badge ? (
+            <View style={[styles.badge, { backgroundColor: colors.accentDeep }]}>
+              <Text style={[styles.badgeText, { color: colors.onAccent }]}>{badge}</Text>
+            </View>
+          ) : (
+            <View style={styles.badgeSpacer} />
+          )}
+          <Text style={[styles.assignee, { color: colors.textDim }]} numberOfLines={1}>
+            {assignee}
+          </Text>
+        </View>
       </View>
-      <View style={styles.meta}>
-        {time ? (
-          <Text style={[styles.time, { color: colors.textDim }]}>{time}</Text>
-        ) : null}
-        {badge ? (
-          <View style={[styles.badge, { backgroundColor: colors.accentDeep }]}>
-            <Text style={[styles.badgeText, { color: colors.onAccent }]}>{badge}</Text>
-          </View>
-        ) : (
-          <View style={styles.badgeSpacer} />
-        )}
-        <Text style={[styles.assignee, { color: colors.textDim }]} numberOfLines={1}>
-          {assignee}
-        </Text>
-      </View>
+      {showDivider ? <InboxRowDivider color={colors.textDim} /> : null}
     </Pressable>
   );
 }
@@ -65,7 +69,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   middle: { flex: 1, minWidth: 0, gap: 4, justifyContent: 'center' },
   name: { fontFamily: fonts.bodyMedium, fontSize: 16, fontWeight: '700' },

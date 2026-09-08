@@ -5,6 +5,7 @@ import type { StringKey } from '../../i18n/locales/en';
 import { colors, fonts } from '../../theme';
 import {
   ChannelCapabilityToggles,
+  type ChannelToggleKey,
   type ChannelToggles,
 } from './ChannelCapabilityToggles';
 import { IntegrationCardShell } from './IntegrationCardShell';
@@ -64,10 +65,10 @@ type Props = {
   title: string;
   soon: boolean;
   busy: boolean;
-  busyToggleKey: 'dm' | 'comments' | null;
+  busyToggleKey: ChannelToggleKey | null;
   actionsDisabled: boolean;
   tr: (key: StringKey) => string;
-  onToggle: (key: 'dm' | 'comments', value: boolean) => void;
+  onToggle: (key: ChannelToggleKey, value: boolean) => void;
   onReconcileComments: () => void;
   onConnect: () => void;
   onOpenMenu: () => void;

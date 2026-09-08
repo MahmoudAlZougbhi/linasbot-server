@@ -2,13 +2,14 @@ import { useCallback, useState } from 'react';
 
 import { ApiError } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
+import type { ChannelToggleKey } from './ChannelCapabilityToggles';
 import {
   fetchWhatsAppCloudStatus,
   startWhatsAppCloudConnect,
   WhatsAppConnectError,
   type WhatsAppCloudStatus,
 } from './WhatsAppCloudCard';
-import { disconnectWhatsAppCloud, setWhatsAppAiEnabled } from './whatsappCloudApi';
+import { disconnectWhatsAppCloud, setWhatsAppAiEnabled, setWhatsAppCallsEnabled } from './whatsappCloudApi';
 
 type Opts = {
   onAuthGate: () => void;
@@ -20,6 +21,7 @@ export function useWhatsAppIntegrations({ onAuthGate, onError }: Opts) {
   const { tr } = useI18n();
   const [waStatus, setWaStatus] = useState<WhatsAppCloudStatus | null>(null);
   const [waBusy, setWaBusy] = useState(false);
+  const [waBusyKey, setWaBusyKey] = useState<ChannelToggleKey | null>(null);
 
   const refreshWhatsApp = useCallback(async () => {
     try {
@@ -81,6 +83,7 @@ export function useWhatsAppIntegrations({ onAuthGate, onError }: Opts) {
   async function setWhatsAppAi(connectionId: string, enabled: boolean, after?: () => Promise<unknown>) {
     if (waBusy) return;
     setWaBusy(true);
+    setWaBusyKey('dm');
     try {
       await setWhatsAppAiEnabled(connectionId, enabled);
       await after?.();
@@ -89,17 +92,36 @@ export function useWhatsAppIntegrations({ onAuthGate, onError }: Opts) {
       else onError(tr('integrationsActionError'));
     } finally {
       setWaBusy(false);
+      setWaBusyKey(null);
+    }
+  }
+
+  async function setWhatsAppCalls(connectionId: string, enabled: boolean, after?: () => Promise<unknown>) {
+    if (waBusy) return;
+    setWaBusy(true);
+    setWaBusyKey('calls');
+    try {
+      await setWhatsAppCallsEnabled(connectionId, enabled);
+      await after?.();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) onAuthGate();
+      else onError(tr('integrationsActionError'));
+    } finally {
+      setWaBusy(false);
+      setWaBusyKey(null);
     }
   }
 
   return {
     waStatus,
     waBusy,
+    waBusyKey,
     setWaBusy,
     setWaStatus,
     refreshWhatsApp,
     connectWhatsApp,
     disconnectWhatsApp,
     setWhatsAppAi,
+    setWhatsAppCalls,
   };
 }

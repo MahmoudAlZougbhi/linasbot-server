@@ -58,7 +58,7 @@ export function useChatSession(enabled = true) {
   const [title, setTitle] = useState('Linas AI');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [loading, setLoading] = useState(enabled);
+  const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [sending, setSending] = useState(false);
@@ -91,15 +91,18 @@ export function useChatSession(enabled = true) {
       setProposedPatch(null);
       return;
     }
-    setLoading(true);
+    const blocking = !conversationIdRef.current && messagesRef.current.length === 0;
+    if (blocking) setLoading(true);
     setError(null);
     const listRequestId = ++listRequestIdRef.current;
     try {
-      const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
+      const [listed, created] = await Promise.all([
+        apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema }),
+        createOwnerConversation(),
+      ]);
       if (listRequestId === listRequestIdRef.current) {
         setHistory((prev) => mergeListedHistory(prev, listedHistoryEntries(listed.conversations)));
       }
-      const created = await createOwnerConversation();
       setConversationId(created.conversation.id);
       setTitle(created.conversation.title);
       setMessages(created.conversation.messages);

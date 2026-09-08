@@ -125,6 +125,7 @@ def test_full_business_number_is_tenant_status_only(wa_db):
     assert "display_phone_number" not in public
     assert public["display_phone_last4"] == "1113"
     assert public["connection_source"] == "embedded_signup"
+    assert public["calls_enabled"] is False
     assert "secret-token" not in json.dumps(public)
 
     tenant_status = tenant_connection_status_payload(wa_db, conn, tenant_id="tenant_a")

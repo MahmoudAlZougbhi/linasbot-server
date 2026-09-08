@@ -68,6 +68,13 @@ PERMISSION_KEYS = {
     "requestsNotify",
     "requestsManualChat",
     "requestsSensitive",
+    "comments",
+    "commentsManage",
+    "channelWhatsapp",
+    "channelInstagram",
+    "channelFacebook",
+    "channelTiktok",
+    "channelWeb",
 }
 
 SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
@@ -91,6 +98,13 @@ SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
         "requestsNotify": True,
         "requestsManualChat": True,
         "requestsSensitive": False,
+        "comments": True,
+        "commentsManage": True,
+        "channelWhatsapp": True,
+        "channelInstagram": True,
+        "channelFacebook": True,
+        "channelTiktok": True,
+        "channelWeb": True,
     },
     "viewer": {
         "dashboard": True,
@@ -109,6 +123,13 @@ SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
         "requestsNotify": False,
         "requestsManualChat": False,
         "requestsSensitive": False,
+        "comments": False,
+        "commentsManage": False,
+        "channelWhatsapp": True,
+        "channelInstagram": True,
+        "channelFacebook": True,
+        "channelTiktok": True,
+        "channelWeb": True,
     },
 }
 
@@ -137,6 +158,8 @@ def resolve_permissions(role: str, custom: dict[str, bool] | None) -> dict[str, 
         for k, v in custom.items():
             if k in PERMISSION_KEYS:
                 base[k] = bool(v)
+    for key in PERMISSION_KEYS:
+        base.setdefault(key, False)
     return base
 
 
@@ -216,6 +239,10 @@ def required_permission_for(method: str, path: str) -> str | None:
         return "activityFlow"
     if p.startswith("/api/live-chat") or p.startswith("/api/chat-history"):
         return "liveChat"
+    if p.startswith("/api/comments"):
+        if method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+            return "commentsManage"
+        return "comments"
     if p.startswith("/api/requests"):
         return "requests"
     if p.startswith("/api/owner-notifications"):

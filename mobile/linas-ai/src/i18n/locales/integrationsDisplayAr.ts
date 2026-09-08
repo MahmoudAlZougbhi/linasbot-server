@@ -43,6 +43,7 @@ export const integrationsDisplayAr = {
   integrationFeatureOn: 'مفعّل',
   integrationFeatureOff: 'معطّل',
   integrationToggleMessages: 'الرسائل',
+  integrationToggleWhatsAppCall: 'مكالمة واتساب',
   integrationRefreshStatus: 'تحديث الحالة',
   integrationDisconnectAccount: 'فصل الحساب',
   integrationDisconnectHint: 'تتوقف ردود الذكاء الاصطناعي حتى تعيد الربط.',
@@ -68,7 +69,7 @@ export const integrationsDisplayAr = {
   tiktokEnhancedError: 'خطأ',
   tiktokEnhancedBasic: 'سياق المنشور: أساسي',
   tiktokEnhancedLevel: 'سياق المنشور: محسّن',
-  drawerRecents: 'الأخيرة',
+  drawerRecents: 'الدردشات',
   drawerPin: 'مثبّت',
   appUpdateForceTitle: 'التحديث مطلوب',
   appUpdateForceBody:

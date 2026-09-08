@@ -43,6 +43,7 @@ export const integrationsDisplayEn = {
   integrationFeatureOn: 'On',
   integrationFeatureOff: 'Off',
   integrationToggleMessages: 'Messages',
+  integrationToggleWhatsAppCall: 'WhatsApp Call',
   integrationRefreshStatus: 'Refresh status',
   integrationDisconnectAccount: 'Disconnect account',
   integrationDisconnectHint: 'AI replies stop until you reconnect.',
@@ -68,7 +69,7 @@ export const integrationsDisplayEn = {
   tiktokEnhancedError: 'Error',
   tiktokEnhancedBasic: 'Post context: Basic',
   tiktokEnhancedLevel: 'Post context: Enhanced',
-  drawerRecents: 'Recents',
+  drawerRecents: 'Chats',
   drawerPin: 'Pin',
   appUpdateForceTitle: 'Update required',
   appUpdateForceBody:

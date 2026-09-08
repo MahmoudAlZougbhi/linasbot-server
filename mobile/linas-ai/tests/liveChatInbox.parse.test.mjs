@@ -8,7 +8,9 @@ import test from 'node:test';
 import {
   UnifiedChatsSchema,
   chatChannel,
+  isVoiceMessage,
   matchesChannelFilter,
+  messageBody,
   parseConversationDetailsResponse,
   parseLiveChatItems,
   parseUnifiedChatsResponse,
@@ -127,6 +129,24 @@ test('parseConversationDetailsResponse keeps numeric timestamps and is_user flag
   assert.equal(parsed.messages[0].timestamp, '1692000000000');
   assert.equal(parsed.messages[0].is_user, true);
   assert.equal(parsed.messages[1].is_user, true);
+});
+
+test('voice placeholders become a playable voice message', () => {
+  const labeled = { type: 'voice', content: '[Voice Message from Operator]' };
+  const leftover = { type: 'text', text: '[Voice Message from Operator]', audio_url: 'https://cdn/a.m4a' };
+  assert.equal(messageBody(labeled), 'Voice message');
+  assert.equal(isVoiceMessage(labeled), true);
+  assert.equal(isVoiceMessage(leftover), true);
+  assert.equal(isVoiceMessage({ type: 'text', content: 'hello' }), false);
+});
+
+test('unified chats keep the waiting-human counter', () => {
+  const parsed = parseUnifiedChatsResponse({
+    success: true,
+    chats: [],
+    counters: { all: 12, waiting: 3, with_operator: 1 },
+  });
+  assert.equal(parsed.counters?.waiting, 3);
 });
 
 test('parseUnifiedChatsResponse treats index rebuild as non-fatal empty', () => {

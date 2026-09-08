@@ -173,6 +173,7 @@ class WhatsAppCloudRepository(WhatsAppCloudRepositoryRuntimeMixin):
             granted_scopes=list(scopes),
             previous_connection_id=previous_connection_id,
             ai_default_enabled=False,
+            calls_enabled=False,
             history_sync_status="pending",
         )
         self.session.add(conn)

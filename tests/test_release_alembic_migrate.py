@@ -31,7 +31,7 @@ from tests.web_chat_acceptance_support import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_ID = "20260907_tiktok_enhanced"
+HEAD_ID = "20260908_wa_calls_enabled"
 
 
 @pytest.fixture()

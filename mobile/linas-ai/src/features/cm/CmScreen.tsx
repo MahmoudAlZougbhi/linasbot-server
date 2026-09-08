@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { ApiError } from '../../api/client';
@@ -33,6 +33,7 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const [hydrated, setHydrated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<CmMeta | null>(null);
@@ -43,7 +44,7 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
   const [filter, setFilter] = useState<AiSetupFilter>('all');
 
   const reload = useCallback(async () => {
-    setLoading(true);
+    if (!hasLoadedOnceRef.current) setLoading(true);
     try {
       const [metaRes, prog, productsRes] = await Promise.all([
         fetchCmMeta(),
@@ -60,6 +61,7 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
     } catch {
       setError(tr('aiSetupLoadError'));
     } finally {
+      hasLoadedOnceRef.current = true;
       setLoading(false);
       setHasLoadedOnce(true);
     }

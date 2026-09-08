@@ -96,7 +96,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     metaResultSequence,
   });
   const headerRefreshing = loading && hasLoadedOnce;
-  const showInitialLoader = !hasLoadedOnce || !webChatReady;
+  const showInitialLoader = !hasLoadedOnce;
 
   async function connectTikTok() {
     await connectTikTokChannel({
@@ -266,7 +266,10 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
             busyToggleKey={busyToggle?.platform === row.platform ? busyToggle.key : null}
             actionsDisabled={busyPlatform !== null || busyToggle !== null}
             tr={tr}
-            onToggle={(key, value) => void setToggle(row, key, value)}
+            onToggle={(key, value) => {
+              if (key === 'calls') return;
+              void setToggle(row, key, value);
+            }}
             onReconcileComments={() => void reconcileComments(row)}
             onConnect={() =>
               void connectPlatform(row.platform === 'facebook' ? 'facebook' : 'instagram')
@@ -277,7 +280,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
         <WhatsAppCloudCard
           status={wa.waStatus}
           busy={wa.waBusy}
-          onRefresh={() => void load()}
+          busyKey={wa.waBusyKey}
           onConnect={() => void wa.connectWhatsApp()}
           onOpenMenu={() =>
             setSheet({
@@ -289,9 +292,8 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
           }
           onEnableAi={(id) => void wa.setWhatsAppAi(id, true, load)}
           onDisableAi={(id) => void wa.setWhatsAppAi(id, false, load)}
-          onBusyChange={wa.setWaBusy}
-          onError={setError}
-          onNotice={setNotice}
+          onEnableCalls={(id) => void wa.setWhatsAppCalls(id, true, load)}
+          onDisableCalls={(id) => void wa.setWhatsAppCalls(id, false, load)}
         />
         <WebChatCard onError={setError} onNotice={setNotice} />
         {tiktokRow ? (
@@ -303,7 +305,10 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
             busyToggleKey={busyToggle?.platform === 'tiktok' ? busyToggle.key : null}
             actionsDisabled={busyPlatform !== null || busyToggle !== null}
             tr={tr}
-            onToggle={(key, value) => void setToggle(tiktokRow, key, value)}
+            onToggle={(key, value) => {
+              if (key === 'calls') return;
+              void setToggle(tiktokRow, key, value);
+            }}
             onBusy={setBusyPlatform}
             onError={setError}
             onAuthGate={() => setAuthGate(true)}

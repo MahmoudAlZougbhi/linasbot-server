@@ -58,6 +58,8 @@ def test_create_role_persists_permissions(monkeypatch: pytest.MonkeyPatch) -> No
     assert role["permissions"]["dashboard"] is True
     assert role["permissions"]["liveChat"] is True
     assert role["permissions"]["requests"] is True
+    assert role["permissions"]["comments"] is True
+    assert role["permissions"]["channelWhatsapp"] is True
     assert "unknown" not in role["permissions"]
     assert saved["roles"][0]["id"] == "manager"
 

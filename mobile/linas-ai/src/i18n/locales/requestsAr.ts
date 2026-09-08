@@ -63,7 +63,7 @@ export const requestsAr = {
   reqChannelInstagram: 'إنستغرام',
   reqChannelFacebook: 'فيسبوك',
   reqChannelWhatsApp: 'واتساب',
-  reqChannelWeb: 'الموقع',
+  reqChannelWeb: 'دردشة الموقع',
   reqChannelCommentDm: 'تعليق ← رسالة',
   reqUnassigned: 'غير مكلف',
   reqNotifyFailed: 'فشل الإشعار',

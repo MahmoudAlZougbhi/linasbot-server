@@ -135,7 +135,7 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup, onOpenLiveChat }: Pr
     });
   }
 
-  if (list.loading && !list.refreshing) {
+  if (list.loading && !list.hasLoadedOnce) {
     return (
       <View style={styles.center}>
         <LinasLoadingIndicator variant="screen" />

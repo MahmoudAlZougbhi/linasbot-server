@@ -21,6 +21,10 @@ const perms = readFileSync(
 test('access screens map onto existing RBAC keys', () => {
   assert.match(access, /id: 'dashboard'[\s\S]*view: \['dashboard'\][\s\S]*manage: \['analytics'\]/);
   assert.match(access, /id: 'liveChat'[\s\S]*view: \['liveChat'\][\s\S]*manage: \['liveChat'\]/);
+  assert.match(access, /id: 'comments'[\s\S]*view: \['comments'\][\s\S]*manage: \['commentsManage'\]/);
+  assert.match(access, /channelWhatsapp/);
+  assert.match(access, /channelInstagram/);
+  assert.match(access, /showsChannelPicker/);
   assert.match(access, /id: 'requests'[\s\S]*view: \['requests'\]/);
   assert.match(access, /manage: \['requestsManage', 'requestsNotify', 'requestsManualChat'\]/);
   assert.match(access, /id: 'aiSetup'[\s\S]*view: \['contentManagers'\][\s\S]*manage: \['contentPublish'\]/);
@@ -41,4 +45,7 @@ test('role templates still match backend system roles', () => {
   assert.match(perms, /viewer: \{/);
   assert.match(perms, /isAssignableRole/);
   assert.match(perms, /permissionsFromRecord/);
+  assert.match(perms, /commentsManage/);
+  assert.match(perms, /channelWhatsapp/);
+  assert.match(perms, /CHANNEL_DEFAULTS/);
 });

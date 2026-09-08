@@ -16,10 +16,10 @@ type Row = IntegrationListRow;
 type Props = {
   row: Row;
   busy: boolean;
-  busyToggleKey: 'dm' | 'comments' | null;
+  busyToggleKey: 'dm' | 'comments' | 'calls' | null;
   actionsDisabled: boolean;
   tr: (key: StringKey) => string;
-  onToggle: (key: 'dm' | 'comments', value: boolean) => void;
+  onToggle: (key: 'dm' | 'comments' | 'calls', value: boolean) => void;
   onOpenMenu: () => void;
   onBusy: (platform: string | null) => void;
   onError: (message: string | null) => void;

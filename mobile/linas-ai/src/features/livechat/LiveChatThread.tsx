@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
@@ -36,6 +37,7 @@ type Props = {
 
 export function LiveChatThread({ chat, onChatUpdated }: Props) {
   const { tr } = useI18n();
+  const insets = useSafeAreaInsets();
   const thread = useLiveChatThread(chat, onChatUpdated);
   const [assignOpen, setAssignOpen] = useState(false);
   const [likeTarget, setLikeTarget] = useState<LiveChatMessage | null>(null);
@@ -71,7 +73,7 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={88}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 68 : 0}
     >
       <LiveChatThreadActions
         chat={chat}
@@ -135,7 +137,7 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
 
       <LiveChatComposer
         onSend={(text) => thread.sendText(text)}
-        onSendMedia={(base64, type) => thread.sendMedia(base64, type)}
+        onSendMedia={(base64, type, mime) => thread.sendMedia(base64, type, mime)}
         busy={thread.busy}
       />
 

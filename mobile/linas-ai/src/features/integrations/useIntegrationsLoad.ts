@@ -33,6 +33,7 @@ export function useIntegrationsLoad({
 }: Args) {
   const [loading, setLoading] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [rows, setRows] = useState<IntegrationListRow[]>([]);
   const [webChatReady, setWebChatReady] = useState(hasWebChatCardSnapshot);
@@ -40,7 +41,7 @@ export function useIntegrationsLoad({
   const metaResultSequence = useRef(0);
 
   const load = useCallback(async (): Promise<IntegrationsLoadResult> => {
-    setLoading(true);
+    if (!hasLoadedOnceRef.current) setLoading(true);
     try {
       const access = await tokenStore.getAccessToken();
       if (!access) {
@@ -76,6 +77,7 @@ export function useIntegrationsLoad({
       setWebChatReady(true);
       return { ok: false, rows: [] };
     } finally {
+      hasLoadedOnceRef.current = true;
       setLoading(false);
       setHasLoadedOnce(true);
     }

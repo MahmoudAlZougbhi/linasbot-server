@@ -2,19 +2,24 @@ import { ActivityIndicator, StyleSheet, Switch, Text, View } from 'react-native'
 
 import { colors, fonts } from '../../theme';
 
+export type ChannelToggleKey = 'dm' | 'comments' | 'calls';
+
 export type ChannelToggles = {
   dm: boolean;
   comments: boolean;
+  calls?: boolean;
 };
 
 type Props = {
   toggles: ChannelToggles;
-  busyKey: 'dm' | 'comments' | null;
+  busyKey: ChannelToggleKey | null;
   disabled?: boolean;
   showComments?: boolean;
+  showCalls?: boolean;
   messagesLabel: string;
   commentsLabel: string;
-  onToggle: (key: 'dm' | 'comments', value: boolean) => void;
+  callsLabel?: string;
+  onToggle: (key: ChannelToggleKey, value: boolean) => void;
 };
 
 export function ChannelCapabilityToggles({
@@ -22,8 +27,10 @@ export function ChannelCapabilityToggles({
   busyKey,
   disabled,
   showComments = true,
+  showCalls = false,
   messagesLabel,
   commentsLabel,
+  callsLabel = '',
   onToggle,
 }: Props) {
   return (
@@ -42,6 +49,15 @@ export function ChannelCapabilityToggles({
           busy={busyKey === 'comments'}
           disabled={disabled || busyKey !== null}
           onValueChange={(v) => onToggle('comments', v)}
+        />
+      ) : null}
+      {showCalls ? (
+        <ToggleRow
+          label={callsLabel}
+          value={Boolean(toggles.calls)}
+          busy={busyKey === 'calls'}
+          disabled={disabled || busyKey !== null}
+          onValueChange={(v) => onToggle('calls', v)}
         />
       ) : null}
     </View>

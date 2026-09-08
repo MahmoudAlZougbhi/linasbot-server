@@ -251,6 +251,7 @@ async def mobile_usage(request: Request) -> Any:
 
     session = require_session(request)
     from services.credit_ai_gate import remaining_credits
+    from services.credit_buckets import split_credit_remaining
     from services.entitlements_service import entitlements_store
     from services.plan_economics import PLAN_PRICES_USD, recommend_allowance
 
@@ -266,7 +267,13 @@ async def mobile_usage(request: Request) -> Any:
         limit = int(recommend_allowance(ent.plan_id).included_credits)
     if limit <= 0:
         limit = available + reserved
-    used = max(0, limit - available - reserved)
+    buckets = split_credit_remaining(
+        included=int(ent.included_credits),
+        purchased=int(ent.extra_credits),
+        available=available,
+        reserved=reserved,
+    )
+    used = buckets["credits_used"]
     allowance = recommend_allowance(ent.plan_id) if ent.plan_id in PLAN_PRICES_USD else None
     return {
         "success": True,
@@ -279,6 +286,8 @@ async def mobile_usage(request: Request) -> Any:
         "reserved_credits": reserved,
         "included_credits": int(ent.included_credits),
         "extra_credits": int(ent.extra_credits),
+        "membership_credits_remaining": buckets["membership_credits_remaining"],
+        "purchased_credits_remaining": buckets["purchased_credits_remaining"],
         "included_dm_replies": int(allowance.included_dm_replies) if allowance else None,
         "included_owner_messages": int(allowance.included_owner_messages) if allowance else None,
         "included_images": int(allowance.included_images) if allowance else None,

@@ -20,6 +20,8 @@ export const dashboardAr = {
   dashUpgrade: 'ترقية',
   dashCredits: 'الرصيد',
   dashRemaining: 'متبقٍ',
+  dashCreditsMembership: 'العضوية',
+  dashCreditsBought: 'مشترى',
   dashUsedOf: 'مستخدم من',
   dashRenews: 'يتجدد',
   dashBuyCredits: 'شراء رصيد',

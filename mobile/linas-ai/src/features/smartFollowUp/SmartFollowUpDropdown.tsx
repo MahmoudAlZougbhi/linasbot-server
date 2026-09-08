@@ -17,6 +17,7 @@ type Props = {
   disabled?: boolean;
   flex?: number;
   accessibilityLabel: string;
+  sheetHint?: string;
 };
 
 export function SmartFollowUpDropdown({
@@ -26,6 +27,7 @@ export function SmartFollowUpDropdown({
   disabled,
   flex = 1,
   accessibilityLabel,
+  sheetHint,
 }: Props) {
   const { colors } = useTheme();
   const [open, setOpen] = useState(false);
@@ -62,6 +64,9 @@ export function SmartFollowUpDropdown({
             onPress={(e) => e.stopPropagation()}
           >
             <Text style={[styles.sheetTitle, { color: colors.text }]}>{accessibilityLabel}</Text>
+            {sheetHint ? (
+              <Text style={[styles.sheetHint, { color: colors.textMuted }]}>{sheetHint}</Text>
+            ) : null}
             <ScrollView>
               {options.map((opt) => {
                 const on = opt.value === value;
@@ -114,6 +119,12 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontFamily: fonts.bodyMedium,
     fontSize: 16,
+    marginBottom: 4,
+  },
+  sheetHint: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    lineHeight: 18,
     marginBottom: spacing.sm,
   },
   row: {
