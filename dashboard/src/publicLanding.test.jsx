@@ -4,7 +4,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { PUBLIC_PATHS, PUBLIC_SITE } from "./constants/publicSite";
 import { PublicLandingLocaleProvider } from "./contexts/PublicLandingLocaleContext";
 import Landing from "./pages/public/Landing";
-import NotFound from "./pages/NotFound";
 
 vi.mock("./contexts/AuthContext", () => ({
   useAuth: () => ({
@@ -206,16 +205,15 @@ describe("public marketing landing", () => {
     });
   });
 
-  it("redirects /analytics to /app dashboard home", () => {
+  it("redirects /analytics to get-app like other obsolete operator paths", () => {
     render(
       <MemoryRouter initialEntries={["/analytics"]}>
         <Routes>
-          <Route path="/app" element={<div>dashboard-app</div>} />
-          <Route path="/analytics" element={<Navigate to="/app" replace />} />
-          <Route path="*" element={<NotFound />} />
+          <Route path="/" element={<div>landing-home</div>} />
+          <Route path="/analytics" element={<Navigate to="/#get-app" replace />} />
         </Routes>
       </MemoryRouter>
     );
-    expect(screen.getByText("dashboard-app")).toBeInTheDocument();
+    expect(screen.getByText("landing-home")).toBeInTheDocument();
   });
 });

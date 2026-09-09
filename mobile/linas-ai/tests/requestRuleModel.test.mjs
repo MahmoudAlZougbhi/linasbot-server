@@ -16,6 +16,13 @@ import {
   ruleToRecord,
 } from '../src/features/cm/requestRules/requestRuleModel.ts';
 
+test('HUMAN request type maps to live chat', () => {
+  const item = parseRequestRule({ id: 'h1', type: 'HUMAN', name: 'Staff' });
+  assert.equal(item.type, 'HUMAN');
+  assert.equal(destinationFromType('HUMAN'), 'live_chat');
+  assert.equal(destinationFromType('ORDER'), 'order');
+});
+
 test('parseRequestRule defaults type and search', () => {
   const item = parseRequestRule({ id: 'r1', name: 'Laser appointment', notes: 'Collect name and phone' });
   assert.equal(item.type, 'APPOINTMENT');

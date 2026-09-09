@@ -133,8 +133,8 @@ async def create_checkout(body: CheckoutRequest, request: Request) -> Any:
             input_tokens=pack.input_tokens,
             output_tokens=pack.output_tokens,
             amount_usd=pack.sell_price_usd,
-            success_url=f"{base}/wallet?checkout=success",
-            cancel_url=f"{base}/wallet?checkout=cancel",
+            success_url=f"{base}/#get-app",
+            cancel_url=f"{base}/#get-app",
             customer_email=session.email,
         )
     except Exception as exc:

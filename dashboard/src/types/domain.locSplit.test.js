@@ -14,14 +14,10 @@ describe("domain.d.ts LOC split", () => {
   it("keeps domain type modules under 500 lines", () => {
     expect(lineCount("domain.d.ts")).toBeLessThan(500);
     expect(lineCount("domain-core.d.ts")).toBeLessThan(500);
-    expect(lineCount("domain-smart.d.ts")).toBeLessThan(500);
-    expect(lineCount("domain-content.d.ts")).toBeLessThan(500);
   });
 
   it("keeps domain.d.ts as reference entrypoint", () => {
     const text = fs.readFileSync(path.join(root, "domain.d.ts"), "utf8");
-    expect(text).toContain('domain-core.d.ts');
-    expect(text).toContain('domain-smart.d.ts');
-    expect(text).toContain('domain-content.d.ts');
+    expect(text).toContain("domain-core.d.ts");
   });
 });

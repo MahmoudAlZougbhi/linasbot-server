@@ -151,9 +151,8 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": "Propose a typed CM section patch for owner confirmation (does not "
             "write until approved). Blocked for DONE/filled sections unless "
             "force_edit=true after the owner explicitly asks to change them. "
-            "For languages: never patch response_language_map (fixed sabtin map: "
-            "EN→EN, AR→AR, FR→FR, Franco→AR); only supported_languages / default_language "
-            "and behavior notes are editable.",
+            "Never patch the languages section — owners have no Languages setting; "
+            "customer reply language is automatic (Franco → Arabic script).",
             "parameters": {
                 "type": "object",
                 "properties": {

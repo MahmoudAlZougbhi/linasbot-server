@@ -274,8 +274,8 @@ CAPABILITIES: tuple[Capability, ...] = (
         status="available",
         help_steps=(
             "Open Settings from Control Center for app UI language and display name.",
-            "Customer reply language for DMs/comments is AI Setup → Languages only "
-            "(enable/disable + default). The Franco→Arabic (and EN/AR/FR identity) map is fixed.",
+            "Customer reply language is automatic: detect the customer's language and "
+            "reply in it. Franco/Arabizi is answered in Arabic script. No Languages tile.",
         ),
         tools=("read_profile", "update_profile"),
         keywords=("settings", "language", "profile", "address me", "app language", "ui language"),

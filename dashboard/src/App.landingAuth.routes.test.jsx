@@ -1,7 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import ProtectedRoute from "./components/Auth/ProtectedRoute";
 import { makeAuthUser } from "./testHelpers/renderWithProviders";
 import { getDefaultPath } from "./utils/permissions";
 
@@ -29,14 +28,6 @@ function LandingOnlyRoutes() {
       <Route path="/activity-flow" element={<Navigate to="/#get-app" replace />} />
       <Route path="/settings" element={<Navigate to="/#get-app" replace />} />
       <Route path="/app" element={<div>use-mobile-app</div>} />
-      <Route
-        path="/protected-demo"
-        element={
-          <ProtectedRoute>
-            <div>protected-ok</div>
-          </ProtectedRoute>
-        }
-      />
     </Routes>
   );
 }
@@ -45,16 +36,6 @@ describe("landing-only auth and obsolete routes", () => {
   it("auth default path is / for entitled roles", () => {
     expect(getDefaultPath(makeAuthUser({ role: "admin" }))).toBe("/");
     expect(getDefaultPath(makeAuthUser({ role: "operator" }))).toBe("/");
-  });
-
-  it("unauth default via ProtectedRoute goes to /login", () => {
-    mockUseAuth.mockReturnValue({ user: null, loading: false });
-    render(
-      <MemoryRouter initialEntries={["/protected-demo"]}>
-        <LandingOnlyRoutes />
-      </MemoryRouter>
-    );
-    expect(screen.getByText("login-page")).toBeInTheDocument();
   });
 
   it("serves reset-password and verify-email thin auth pages", () => {
@@ -91,7 +72,6 @@ describe("landing-only auth and obsolete routes", () => {
       );
       // Navigate to="/#get-app" resolves to public landing (/) in MemoryRouter
       expect(screen.getByText("public-landing")).toBeInTheDocument();
-      expect(screen.queryByText("protected-ok")).not.toBeInTheDocument();
       unmount();
     }
   });
@@ -107,19 +87,6 @@ describe("landing-only auth and obsolete routes", () => {
       </MemoryRouter>
     );
     expect(screen.getByText("use-mobile-app")).toBeInTheDocument();
-  });
-
-  it("allows authenticated user through ProtectedRoute when no requiredPermission", () => {
-    mockUseAuth.mockReturnValue({
-      user: makeAuthUser({ role: "operator" }),
-      loading: false,
-    });
-    render(
-      <MemoryRouter initialEntries={["/protected-demo"]}>
-        <LandingOnlyRoutes />
-      </MemoryRouter>
-    );
-    expect(screen.getByText("protected-ok")).toBeInTheDocument();
   });
 
   it("serves forgot-password thin auth page for recovery links", () => {

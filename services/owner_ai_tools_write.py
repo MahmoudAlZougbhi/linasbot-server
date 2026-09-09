@@ -41,8 +41,8 @@ async def tool_update_profile(
     if "preferred_language" in safe or "preferredLanguage" in safe:
         data["note"] = (
             "preferred_language is owner chat/app preference only. "
-            "Customer DM/comment reply language comes from AI Setup → Languages "
-            "and cannot be changed via profile or Settings."
+            "Customer reply language is automatic (detect and reply in the customer's language; "
+            "Franco → Arabic script) and cannot be changed via profile or Settings."
         )
     return ToolResult(ok=True, name="update_profile", data=data)
 
@@ -63,25 +63,20 @@ async def tool_propose_cm_patch(
 
     sec = (section or "").strip().replace("-", "_")
     safe_patch = dict(patch) if isinstance(patch, dict) else {}
-    map_locked_note: str | None = None
-    if sec == "languages" and "response_language_map" in safe_patch:
-        safe_patch.pop("response_language_map", None)
-        map_locked_note = (
-            "response_language_map is FIXED (sabtin) and cannot be changed: "
-            "English→English, Arabic→Arabic, French→French, Franco→Arabic. "
-            "Owners may still enable/disable supported_languages and set default_language."
+    if sec == "languages":
+        return ToolResult(
+            ok=False,
+            name="propose_cm_patch",
+            data={
+                "section": sec,
+                "blocked_reason": "languages_not_owner_configurable",
+                "hint": (
+                    "There is no owner Languages setting. Customer replies auto-detect "
+                    "language; Franco/Arabizi is answered in Arabic script."
+                ),
+            },
+            error="languages_not_owner_configurable",
         )
-        if not safe_patch:
-            return ToolResult(
-                ok=False,
-                name="propose_cm_patch",
-                data={
-                    "section": sec,
-                    "blocked_reason": "response_language_map_locked",
-                    "hint": map_locked_note,
-                },
-                error="response_language_map_locked",
-            )
 
     if sec and not force_edit:
         summary = progress_summary(tenant_id, create_missing=False)
@@ -109,8 +104,6 @@ async def tool_propose_cm_patch(
             pass
 
     data = propose_cm_patch(tenant_id=tenant_id, user_id=user_id, section=section, patch=safe_patch)
-    if map_locked_note:
-        data = {**data, "note": map_locked_note, "stripped_fields": ["response_language_map"]}
     return ToolResult(
         ok=True,
         name="propose_cm_patch",

@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
-  MASCOT_SPEECH,
   applyPublicLandingLocaleToDocument,
   readPublicLandingLocale,
   storePublicLandingLocale,
@@ -9,7 +8,7 @@ import {
 /** @typedef {import('../constants/publicLandingLocale').PublicLandingLocale} PublicLandingLocale */
 
 const PublicLandingLocaleContext = createContext(
-  /** @type {{ locale: PublicLandingLocale; setLocale: (next: PublicLandingLocale) => void; mascotSpeech: typeof MASCOT_SPEECH.en } | undefined} */ (
+  /** @type {{ locale: PublicLandingLocale; setLocale: (next: PublicLandingLocale) => void } | undefined} */ (
     undefined
   ),
 );
@@ -34,7 +33,6 @@ export function PublicLandingLocaleProvider({ children }) {
     () => ({
       locale,
       setLocale,
-      mascotSpeech: MASCOT_SPEECH[locale],
     }),
     [locale],
   );

@@ -141,7 +141,6 @@ async def extract_sections_from_dump(*, text: str, reply_style: str = "") -> dic
         sec: default_section_payload(sec)
         for sec in (
             "ai_basics",
-            "languages",
             "style",
             "dynamic_messages",
             "services",

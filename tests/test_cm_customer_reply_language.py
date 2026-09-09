@@ -65,7 +65,7 @@ def test_tenant_supported_languages_do_not_force_arabic_replies() -> None:
     )
 
 
-def test_unknown_detected_uses_default_language() -> None:
+def test_unknown_detected_uses_system_default_not_tenant() -> None:
     policy = LanguagePolicy(
         supported_languages=("en", "fr"),
         default_language="en",
@@ -76,12 +76,15 @@ def test_unknown_detected_uses_default_language() -> None:
             detected_language="",
             policy=policy,
         )
-        == "en"
+        == "ar"
     )
 
 
 def test_public_summary_multilingual() -> None:
     summary = language_policy_public_summary(None)
+    assert summary["source"] == "system_global"
+    assert summary["editable"] == []
+    assert summary["owner_or_customer_override"] is False
     assert summary["customer_reply_multilingual"] is True
     assert summary["customer_reply_limited_by_supported_languages"] is False
     assert summary["arabizi_reply_policy"] == "understand_only_reply_arabic_script"

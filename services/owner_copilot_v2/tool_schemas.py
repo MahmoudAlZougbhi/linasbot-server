@@ -169,7 +169,7 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": (
                 "Update owner profile fields (display_name, preferred_language, gender, form_of_address). "
                 "preferred_language is owner chat/app preference only — it does NOT change "
-                "customer DM/comment reply language (that is AI Setup → Languages)."
+                "customer DM/comment reply language (automatic detect + reply; Franco → Arabic script)."
             ),
             "parameters": {
                 "type": "object",

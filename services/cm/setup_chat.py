@@ -61,7 +61,11 @@ SECTION_MODELS: dict[str, type[CmBaseModel]] = {
 }
 
 # Interview order for guided setup (Sources/Publish are UI hubs, not draft sections).
-SETUP_SECTION_ORDER: tuple[str, ...] = tuple(s for s in CM_SECTIONS if s in SECTION_MODELS)
+# languages is system-global — owners never configure reply languages.
+_SKIP_OWNER_SETUP: frozenset[str] = frozenset({"languages"})
+SETUP_SECTION_ORDER: tuple[str, ...] = tuple(
+    s for s in CM_SECTIONS if s in SECTION_MODELS and s not in _SKIP_OWNER_SETUP
+)
 
 INTRO_MESSAGE = (
     "أنا مساعد إعداد الـAI الخاص بعملك. سأساعدك على تجهيز إعدادات الذكاء الاصطناعي "
@@ -73,7 +77,10 @@ SECTION_PROMPTS: dict[str, str] = {
         "لنبدأ بهوية الـAI. ما اسم عملك؟ وما الاسم الذي تريد أن يستخدمه المساعد؟ "
         "صف باختصار دور الـAI وما يساعد العملاء به."
     ),
-    "languages": "ما اللغات التي تريد دعمها (عربي، إنجليزي، فرنسي، فرانكو)؟ وما اللغة الافتراضية؟",
+    "languages": (
+        "لا يوجد إعداد لغات لصاحب الحساب. الـAI يفهم لغة العميل ويرد بها تلقائياً. "
+        "فرانكو يُفهم كعربي ويُرد عليه بالحروف العربية."
+    ),
     "style": "كيف تريد أسلوب الرد: رسمي أم ودي؟ قصير أم مفصّل؟ هل تستخدم إيموجي؟",
     "dynamic_messages": "هل تريد رسالة ترحيب خاصة؟ اكتب نص الترحيب إن وجد، أو قل تخطي.",
     "services": "ما الخدمات أو المنتجات التي تقدّمها؟ اذكرها سطراً بسطر إن أمكن.",
@@ -269,8 +276,9 @@ async def interpret_and_patch(
     assert_tenant_can_use_ai(tenant_id)
     state = load_setup_state(tenant_id, user_id)
     current = (section or state.get("current_section") or SETUP_SECTION_ORDER[0]).strip().replace("-", "_")
-    if current not in SECTION_MODELS:
-        current = SETUP_SECTION_ORDER[0]
+    if current not in SETUP_SECTION_ORDER:
+        completed = set(state.get("completed_sections") or [])
+        current = next((name for name in SETUP_SECTION_ORDER if name not in completed), SETUP_SECTION_ORDER[0])
 
     patch = _heuristic_patch(current, message)
     llm_meta: dict[str, Any] = {"used_llm": False}
