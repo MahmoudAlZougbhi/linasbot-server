@@ -311,13 +311,7 @@ export const AuthProvider = ({ children }) => {
   };
 
 
-  const {
-    getUsers,
-    createUser,
-    updateUser,
-    deleteUser,
-    refreshUser,
-  } = createAuthUserManagement({ user, setUser });
+  const { refreshUser } = createAuthUserManagement({ user, setUser });
 
   const value = {
     user,
@@ -326,11 +320,6 @@ export const AuthProvider = ({ children }) => {
     logout,
     changePassword,
     loading,
-    // User management
-    getUsers,
-    createUser,
-    updateUser,
-    deleteUser,
     refreshUser
   };
 

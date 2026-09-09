@@ -2,7 +2,6 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { makeAuthUser } from "./testHelpers/renderWithProviders";
-import { getDefaultPath } from "./utils/permissions";
 
 const mockUseAuth = vi.fn();
 vi.mock("./contexts/AuthContext", () => ({
@@ -33,11 +32,6 @@ function LandingOnlyRoutes() {
 }
 
 describe("landing-only auth and obsolete routes", () => {
-  it("auth default path is / for entitled roles", () => {
-    expect(getDefaultPath(makeAuthUser({ role: "admin" }))).toBe("/");
-    expect(getDefaultPath(makeAuthUser({ role: "operator" }))).toBe("/");
-  });
-
   it("serves reset-password and verify-email thin auth pages", () => {
     mockUseAuth.mockReturnValue({ user: null, loading: false });
     const { unmount } = render(

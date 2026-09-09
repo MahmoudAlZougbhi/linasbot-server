@@ -1,9 +1,8 @@
 """
 Live Chat API module: Live chat management endpoints
-Handles conversation takeover, operator management, and real-time communication.
-Includes SSE (Server-Sent Events) for real-time dashboard updates.
+Handles conversation takeover, operator management, and inbox polling.
 
-Helpers/SSE: live_chat_api_helpers; status/debug: live_chat_api_debug (LOC split).
+Helpers: live_chat_api_helpers; status/debug: live_chat_api_debug (LOC split).
 """
 
 from __future__ import annotations
@@ -12,14 +11,12 @@ import logging
 from typing import Any
 
 from fastapi import Query, Request
-from fastapi.responses import StreamingResponse
 
 # Register status/debug/rebuild routes.
 from modules import live_chat_api_debug  # noqa: E402, F401
-from modules.core import app, cors_allow_origins
+from modules.core import app
 from modules.live_chat_api_helpers import (  # noqa: F401
     _error_response,
-    _log_sse,
     _run_endpoint,
     broadcast_sse_event,
     require_chat_channel,
@@ -35,54 +32,9 @@ from modules.models import (
     TakeoverRequest,
 )
 from services.live_chat_service import live_chat_service
-from services.live_chat_sse_broadcaster import live_chat_sse_broadcaster
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
 _log = logging.getLogger(__name__)
-
-
-def _sse_response_headers(request: Request) -> dict[str, str]:
-    """SSE headers: reflect Origin only when it matches app CORS allowlist (never *)."""
-    headers = {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",
-        "Vary": "Origin",
-    }
-    origin = (request.headers.get("origin") or "").strip()
-    if origin and origin in cors_allow_origins():
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-    return headers
-
-
-# ============================================================
-# SSE (Server-Sent Events) for Real-Time Updates
-# ============================================================
-# No initial payload - frontend fetches via direct API for faster load.
-# SSE used only for real-time: new_message, new_conversation, heartbeat.
-
-
-@app.get("/api/live-chat/events")
-async def live_chat_events(request: Request) -> Any:
-    """
-    SSE endpoint for real-time live chat updates.
-    Dashboard connects here instead of polling.
-
-    Events:
-    - connected: Initial connection established
-    - conversations: Full conversation list update
-    - new_message: New message in a conversation
-    - new_conversation: New conversation created
-    - heartbeat: Keep-alive ping every 30s
-    """
-    _log_sse("client_connect")
-    return StreamingResponse(
-        live_chat_sse_broadcaster.stream(request),
-        media_type="text/event-stream",
-        headers=_sse_response_headers(request),
-    )
 
 
 @app.get("/api/live-chat/unified-chats")

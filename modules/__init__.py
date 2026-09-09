@@ -13,6 +13,5 @@ __all__ = [
     "whatsapp_adapters",
     "dashboard_api",
     "qa_api",
-    "feedback_api",
     "live_chat_api",
 ]

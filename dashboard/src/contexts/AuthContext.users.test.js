@@ -2,62 +2,46 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAuthUserManagement } from "./AuthContext.users";
 import { makeAuthUser } from "../testHelpers/renderWithProviders";
 
-describe("createAuthUserManagement userManagement gate", () => {
+describe("createAuthUserManagement refreshUser", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
-        json: async () => ({ success: true, users: [], user: { id: "2" } }),
+        json: async () => ({
+          success: true,
+          user: {
+            id: "1",
+            email: "a@test.com",
+            role: "platform_owner",
+            tenantId: "linas",
+            status: "active",
+          },
+        }),
       }))
     );
   });
 
-  it("denies admin without userManagement resolvedPermission", async () => {
-    const api = createAuthUserManagement({
-      user: makeAuthUser({
-        id: "1",
-        role: "admin",
-        resolvedPermissions: { userManagement: false },
-      }),
-      setUser: vi.fn(),
-    });
-
-    await expect(api.createUser({ email: "a@test.com", password: "x" })).rejects.toThrow(
-      /Permission denied/
-    );
-    await expect(api.updateUser("2", { name: "x" })).rejects.toThrow(/Permission denied/);
-    await expect(api.deleteUser("2")).rejects.toThrow(/Permission denied/);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it("allows when userManagement is resolved true", async () => {
-    const api = createAuthUserManagement({
-      user: makeAuthUser({
-        id: "1",
-        role: "admin",
-        resolvedPermissions: { userManagement: true },
-      }),
-      setUser: vi.fn(),
-    });
-
-    await expect(api.createUser({ email: "a@test.com", password: "x" })).resolves.toEqual({
-      id: "2",
-    });
-    expect(fetch).toHaveBeenCalled();
-  });
-
-  it("allows platform_owner without relying on admin role bypass", async () => {
+  it("refreshes the signed-in user from /api/auth/session", async () => {
+    const setUser = vi.fn();
     const api = createAuthUserManagement({
       user: makeAuthUser({
         id: "1",
         role: "platform_owner",
-        resolvedPermissions: { userManagement: false },
+        tenantId: "linas",
       }),
-      setUser: vi.fn(),
+      setUser,
     });
 
-    await expect(api.createUser({ email: "a@test.com", password: "x" })).resolves.toEqual({
-      id: "2",
-    });
+    await api.refreshUser();
+    expect(fetch).toHaveBeenCalled();
+    expect(setUser).toHaveBeenCalled();
+  });
+
+  it("does nothing when there is no signed-in user", async () => {
+    const setUser = vi.fn();
+    const api = createAuthUserManagement({ user: null, setUser });
+    await api.refreshUser();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(setUser).not.toHaveBeenCalled();
   });
 });

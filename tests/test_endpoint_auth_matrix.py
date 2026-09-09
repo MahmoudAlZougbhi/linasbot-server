@@ -22,7 +22,6 @@ from services.dashboard_session_service import CSRF_COOKIE_NAME, CSRF_HEADER_NAM
 ENDPOINT_AUTH_COUNTS: dict[str, int] = {}
 
 _ROUTE_MODULES = (
-    "modules.analytics_api",
     "modules.auth_api",
     "modules.auth_email_change_api",
     "modules.resend_webhook_api",
@@ -36,7 +35,6 @@ _ROUTE_MODULES = (
     "modules.web_chat_api",
     "modules.entitlements_api",
     "modules.creative_api",
-    "modules.schedule_api",
     "modules.platform_api",
     "modules.mobile_integrations_api",
     "modules.mobile_app_version_api",
@@ -55,11 +53,8 @@ _ROUTE_MODULES = (
     "modules.local_qa_api",
     "modules.content_files_api",
     "modules.qa_api",
-    "modules.feedback_api",
     "modules.instructions_api",
     "modules.flow_api",
-    "modules.training_files_api",
-    "modules.chat_history_api",
     "modules.webhook_handlers",
     "modules.meta_connections_api",
     "modules.meta_messaging_webhook",
@@ -233,15 +228,10 @@ class TestRouteInventory:
             ("POST", "/api/web-chat/heartbeat"),
             ("GET", "/api/web-chat/sdk-docs"),
         }
-        assert counts["total_api_routes"] >= 229
+        assert counts["total_api_routes"] >= 200
         assert counts["public"] >= 26
-        assert counts["protected"] >= 208
+        assert counts["protected"] >= 170
         assert expected_public.issubset(public_set)
-        # When only the matrix module set is loaded, public set must match exactly.
-        if counts["total_api_routes"] in {229, 230, 231}:
-            assert expected_public.issubset(public_set)
-            assert counts["public"] >= 26
-            assert counts["protected"] >= 208
         assert ("POST", "/api/auth/request-email-change") in set(auth_matrix["protected"])
         assert ("POST", "/api/webhooks/resend") in public_set
         assert ("POST", "/api/auth/confirm-email-change") in public_set

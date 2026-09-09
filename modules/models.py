@@ -156,19 +156,6 @@ class ProviderSwitchRequest(BaseModel):
     provider: str
 
 
-# Feedback Request Model
-class FeedbackRequest(BaseModel):
-    conversation_id: str
-    message_id: str
-    user_question: str
-    bot_response: str
-    feedback_type: str
-    correct_answer: str | None = None
-    feedback_reason: str | None = None
-    operator_id: str  # required — no silent operator_001 default
-    language: str = "ar"
-
-
 # Live Chat Models
 class TakeoverRequest(BaseModel):
     conversation_id: str

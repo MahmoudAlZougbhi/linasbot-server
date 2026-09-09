@@ -32,7 +32,6 @@ def _session(*, tenant_id: str = "linas", role: str = "admin") -> SessionRecord:
 def test_disabled_api_path_matcher() -> None:
     assert is_disabled_api_path("/api/live-chat/unified-chats") is False
     assert is_disabled_api_path("/api/flow/events") is False
-    assert is_disabled_api_path("/api/chat-history/foo") is False
     assert is_disabled_api_path("/api/media/audio") is False
     assert is_disabled_api_path("/api/smart-messaging/campaigns") is True
     assert is_disabled_api_path("/api/test/foo") is True
