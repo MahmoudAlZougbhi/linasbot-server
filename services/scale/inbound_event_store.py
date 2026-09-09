@@ -6,272 +6,64 @@ accepted Meta (and similar) events until a terminal outcome is recorded.
 
 from __future__ import annotations
 
-import fcntl
-import hashlib
 import json
-import os
-import threading
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
+from services.scale.inbound_event_store_local import (
+    _atomic_json_put,
+    _file_get,
+    _file_list_active,
+    _file_put,
+    _path_for,
+    _store_dir,
+    iter_local_inbound_event_documents,
+    local_inbound_event_ledger_lock,
+    replace_local_inbound_event_document,
+)
+from services.scale.inbound_event_store_models import (
+    ACTIVE_STATES,
+    SAFE_META_SETTINGS_SNAPSHOT_KEYS,
+    TERMINAL_STATES,
+    EventKind,
+    EventState,
+    InboundEventRecord,
+    InboundEventStateTransitionError,
+    InboundEventStoreUnavailableError,
+    sanitize_meta_settings_snapshot,
+    stable_event_id,
+)
 from storage.persistent_storage import LOGS_DIR, ensure_dirs
 
-EventKind = Literal["meta_dm", "meta_comment"]
-EventState = Literal[
-    "accepted",
-    "queued",
-    "processing",
-    "completed",
-    "failed",
-    "dead_letter",
-]
-
-TERMINAL_STATES = frozenset({"completed", "dead_letter"})
-ACTIVE_STATES = frozenset({"accepted", "queued", "processing", "failed"})
-SAFE_META_SETTINGS_SNAPSHOT_KEYS = frozenset(
-    {
-        "enabled",
-        "page_id",
-        "instagram_account_id",
-        "graph_api_version",
-        "app_id",
-        "app_key",
-        "tenant_id",
-        "binding_id",
-        "auth_flow",
-        "graph_base_url",
-        "instagram_login_user_id",
-    }
+_ = (
+    LOGS_DIR,
+    _atomic_json_put,
+    _path_for,
+    ensure_dirs,
 )
-_LOCAL_LEDGER_THREAD_LOCK = threading.RLock()
-_LOCAL_LEDGER_LOCK_STATE = threading.local()
 
-
-class InboundEventStoreUnavailableError(RuntimeError):
-    """Raised when the configured shared ledger cannot be read safely."""
-
-
-class InboundEventStateTransitionError(RuntimeError):
-    """Raised when an authoritative inbound state cannot be proven."""
-
-
-def sanitize_meta_settings_snapshot(data: object) -> dict[str, Any]:
-    """Retain non-secret routing metadata and drop all other snapshot fields."""
-
-    raw = data if isinstance(data, dict) else {}
-    return {
-        str(key): value
-        for key, value in raw.items()
-        if str(key) in SAFE_META_SETTINGS_SNAPSHOT_KEYS
-        and (isinstance(value, (str, bool, int, float)) or value is None)
-    }
-
-
-@dataclass
-class InboundEventRecord:
-    event_id: str
-    kind: EventKind
-    tenant_id: str
-    claim_namespace: str
-    claim_key: str
-    state: EventState
-    created_at: float
-    updated_at: float
-    payload: dict[str, Any] = field(default_factory=dict)
-    settings_snapshot: dict[str, Any] = field(default_factory=dict)
-    binding_snapshot: dict[str, Any] = field(default_factory=dict)
-    conversation_key: str = ""
-    queue_job_id: str | None = None
-    attempts: int = 0
-    last_error: str | None = None
-    outbound_status: str | None = None
-    ai_output_persisted: bool = False
-    revision: int = 0
-
-    def to_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["settings_snapshot"] = sanitize_meta_settings_snapshot(self.settings_snapshot)
-        return payload
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> InboundEventRecord:
-        return cls(
-            event_id=str(data["event_id"]),
-            kind=str(data.get("kind") or "meta_dm"),  # type: ignore[arg-type]
-            tenant_id=str(data.get("tenant_id") or ""),
-            claim_namespace=str(data.get("claim_namespace") or ""),
-            claim_key=str(data.get("claim_key") or ""),
-            state=str(data.get("state") or "accepted"),  # type: ignore[arg-type]
-            created_at=float(data.get("created_at") or time.time()),
-            updated_at=float(data.get("updated_at") or time.time()),
-            payload=dict(data.get("payload") or {}),
-            settings_snapshot=sanitize_meta_settings_snapshot(data.get("settings_snapshot")),
-            binding_snapshot=dict(data.get("binding_snapshot") or {}),
-            conversation_key=str(data.get("conversation_key") or ""),
-            queue_job_id=data.get("queue_job_id"),
-            attempts=int(data.get("attempts") or 0),
-            last_error=data.get("last_error"),
-            outbound_status=data.get("outbound_status"),
-            ai_output_persisted=bool(data.get("ai_output_persisted")),
-            revision=int(data.get("revision") or 0),
-        )
-
-
-def stable_event_id(kind: str, claim_key: str) -> str:
-    digest = hashlib.sha256(f"{kind}\0{claim_key}".encode()).hexdigest()
-    return f"ibe_{digest[:40]}"
-
-
-def _store_dir() -> Path:
-    ensure_dirs()
-    d = Path(LOGS_DIR) / "inbound_events"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def _path_for(event_id: str) -> Path:
-    return _store_dir() / f"{event_id}.json"
-
-
-@contextmanager
-def local_inbound_event_ledger_lock() -> Iterator[None]:
-    """Hold the process/thread-shared exclusive lock for local ledger mutation."""
-
-    with _LOCAL_LEDGER_THREAD_LOCK:
-        depth = int(getattr(_LOCAL_LEDGER_LOCK_STATE, "depth", 0))
-        if depth:
-            _LOCAL_LEDGER_LOCK_STATE.depth = depth + 1
-            try:
-                yield
-            finally:
-                _LOCAL_LEDGER_LOCK_STATE.depth = depth
-            return
-
-        lock_path = _store_dir() / ".ledger.lock"
-        fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
-        locked = False
-        try:
-            os.fchmod(fd, 0o600)
-            fcntl.flock(fd, fcntl.LOCK_EX)
-            locked = True
-            _LOCAL_LEDGER_LOCK_STATE.depth = 1
-            yield
-        finally:
-            _LOCAL_LEDGER_LOCK_STATE.depth = 0
-            if locked:
-                fcntl.flock(fd, fcntl.LOCK_UN)
-            os.close(fd)
-
-
-def _file_put(record: InboundEventRecord) -> None:
-    path = _path_for(record.event_id)
-    with local_inbound_event_ledger_lock():
-        document = record.to_dict()
-        binding_id = str(
-            record.binding_snapshot.get("binding_id") or record.settings_snapshot.get("binding_id") or ""
-        ).strip()
-        if binding_id:
-            from services.meta_inbound_deletion_fence import local_binding_deletion_is_fenced
-            from services.meta_inbound_retention import redacted_inbound_event_tombstone
-
-            if local_binding_deletion_is_fenced(binding_id):
-                document = redacted_inbound_event_tombstone(
-                    document,
-                    reason="authorization_data_deletion",
-                    now=time.time(),
-                )
-        _atomic_json_put(path, document)
-
-
-def _atomic_json_put(path: Path, data: dict[str, Any]) -> None:
-    """Replace one ledger file atomically with owner-only permissions."""
-
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
-    payload = json.dumps(data, separators=(",", ":"), sort_keys=True)
-    try:
-        fd = os.open(str(tmp), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(payload)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(str(tmp), str(path))
-    finally:
-        try:
-            tmp.unlink()
-        except FileNotFoundError:
-            pass
-
-
-def iter_local_inbound_event_documents() -> Iterator[tuple[Path, dict[str, Any]]]:
-    """Yield parseable mappings; hold the public ledger lock for write batches."""
-
-    for path in _store_dir().glob("ibe_*.json"):
-        try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if isinstance(raw, dict):
-            yield path, raw
-
-
-def replace_local_inbound_event_document(path: Path, data: dict[str, Any]) -> None:
-    """Atomically replace one existing ledger document inside the owned store."""
-
-    with local_inbound_event_ledger_lock():
-        root = _store_dir().resolve()
-        target = path.resolve()
-        if target.parent != root or not target.name.startswith("ibe_") or target.suffix != ".json":
-            raise ValueError("Refusing to replace a path outside the inbound-event ledger")
-        if not target.is_file():
-            raise FileNotFoundError("Inbound-event ledger document is unavailable")
-        document = data
-        binding_snapshot = data.get("binding_snapshot")
-        settings_snapshot = data.get("settings_snapshot")
-        binding = binding_snapshot if isinstance(binding_snapshot, dict) else {}
-        settings = settings_snapshot if isinstance(settings_snapshot, dict) else {}
-        binding_id = str(binding.get("binding_id") or settings.get("binding_id") or "").strip()
-        if binding_id:
-            from services.meta_inbound_deletion_fence import local_binding_deletion_is_fenced
-            from services.meta_inbound_retention import redacted_inbound_event_tombstone
-
-            if local_binding_deletion_is_fenced(binding_id):
-                document = redacted_inbound_event_tombstone(
-                    data,
-                    reason="authorization_data_deletion",
-                    now=time.time(),
-                )
-        _atomic_json_put(target, document)
-
-
-def _file_get(event_id: str) -> InboundEventRecord | None:
-    path = _path_for(event_id)
-    if not path.is_file():
-        return None
-    try:
-        return InboundEventRecord.from_dict(json.loads(path.read_text(encoding="utf-8")))
-    except Exception:
-        return None
-
-
-def _file_list_active(*, older_than_seconds: float = 0.0) -> list[InboundEventRecord]:
-    cutoff = time.time() - max(0.0, older_than_seconds)
-    out: list[InboundEventRecord] = []
-    root = _store_dir()
-    for path in root.glob("ibe_*.json"):
-        try:
-            rec = InboundEventRecord.from_dict(json.loads(path.read_text(encoding="utf-8")))
-        except Exception:
-            continue
-        if rec.state not in ACTIVE_STATES:
-            continue
-        if rec.updated_at > cutoff:
-            continue
-        out.append(rec)
-    return out
+__all__ = [
+    "ACTIVE_STATES",
+    "EventKind",
+    "EventState",
+    "InboundEventRecord",
+    "InboundEventStateTransitionError",
+    "InboundEventStoreUnavailableError",
+    "SAFE_META_SETTINGS_SNAPSHOT_KEYS",
+    "TERMINAL_STATES",
+    "accountability_stats",
+    "create_inbound_event",
+    "get_inbound_event",
+    "iter_local_inbound_event_documents",
+    "list_active_inbound_events",
+    "local_inbound_event_ledger_lock",
+    "mark_inbound_state",
+    "put_inbound_event",
+    "replace_local_inbound_event_document",
+    "sanitize_meta_settings_snapshot",
+    "sanitize_persisted_meta_credentials",
+    "stable_event_id",
+]
 
 
 def _firestore_inbound_collection(db: Any) -> Any:
