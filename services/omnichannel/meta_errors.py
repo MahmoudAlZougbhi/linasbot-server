@@ -18,12 +18,14 @@ class MetaProviderError(RuntimeError):
         http_status: int,
         error_code: int | str = "unknown",
         error_subcode: int | str = "unknown",
+        error_message: str = "",
         headers: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.http_status = int(http_status)
         self.error_code = error_code
         self.error_subcode = error_subcode
+        self.error_message = str(error_message or "")
         self.retry_after_seconds = parse_retry_after_seconds(headers)
         self.usage = parse_meta_usage(headers)
 
@@ -42,6 +44,7 @@ class MetaProviderError(RuntimeError):
 def raise_from_meta_response(response: Any) -> None:
     error_code: int | str = "unknown"
     error_subcode: int | str = "unknown"
+    error_note = ""
     try:
         error_payload = response.json()
         error = error_payload.get("error") if isinstance(error_payload, dict) else None
@@ -54,6 +57,7 @@ def raise_from_meta_response(response: Any) -> None:
                 error_code = int(str(raw_code).strip())
             if isinstance(raw_subcode, int):
                 error_subcode = raw_subcode
+            error_note = " ".join(str(error.get("message") or "").split())[:160]
     except (TypeError, ValueError):
         pass
     raise MetaProviderError(
@@ -61,6 +65,7 @@ def raise_from_meta_response(response: Any) -> None:
         http_status=int(response.status_code),
         error_code=error_code,
         error_subcode=error_subcode,
+        error_message=error_note,
         headers=getattr(response, "headers", None),
     )
 

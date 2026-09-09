@@ -124,7 +124,7 @@ async def deliver_live_chat_meta_operator_media(
     except Exception as exc:
         from services.meta_session_invalidated import mark_if_session_invalidated
 
-        mark_if_session_invalidated(exc, binding_id=binding_id)
+        mark_if_session_invalidated(exc, binding_id=binding_id, require_invalidation_wording=True)
         return {"success": False, "delivered": False, "error": str(exc)[:180]}
     finally:
         if adapter is not None:

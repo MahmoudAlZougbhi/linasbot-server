@@ -31,13 +31,20 @@ def is_meta_session_invalidated(
     http_status: int | None = None,
     error_code: Any = None,
     error_text: str = "",
+    require_invalidation_wording: bool = False,
 ) -> bool:
-    """True when Meta invalidated the token (password change or security session reset)."""
+    """True when Meta invalidated the token (password change or security session reset).
+
+    Bare Graph 190 is enough for GET /me probes. Send-path 190 must include
+    invalidation wording — a 190 on POST /messages is often a stale or
+    mismatched token, not a password change.
+    """
 
     text = str(error_text or "")
     code = _as_code(error_code)
     if error is not None:
-        text = f"{text} {error}".strip()
+        extra = str(getattr(error, "error_message", "") or "")
+        text = f"{text} {error} {extra}".strip()
         if http_status is None:
             raw_status = getattr(error, "http_status", None)
             if isinstance(raw_status, int):
@@ -48,10 +55,13 @@ def is_meta_session_invalidated(
             match = _CODE_RE.search(str(error))
             if match:
                 code = match.group(1)
+    low = text.lower()
+    wording = any(marker in low for marker in _SESSION_MARKERS)
+    if require_invalidation_wording:
+        return wording
     if code == "190":
         return True
-    low = text.lower()
-    if any(marker in low for marker in _SESSION_MARKERS):
+    if wording:
         return True
     _ = http_status
     return False
@@ -65,6 +75,7 @@ def mark_if_session_invalidated(
     http_status: int | None = None,
     error_code: Any = None,
     error_text: str = "",
+    require_invalidation_wording: bool = False,
 ) -> bool:
     """Disconnect the binding when the error is a Meta session invalidation. Never logs tokens."""
 
@@ -73,6 +84,7 @@ def mark_if_session_invalidated(
         http_status=http_status,
         error_code=error_code,
         error_text=error_text,
+        require_invalidation_wording=require_invalidation_wording,
     ):
         return False
     bid = str(binding_id or "").strip()

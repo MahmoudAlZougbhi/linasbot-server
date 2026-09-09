@@ -1332,7 +1332,11 @@ async def execute_guarded_meta_send(
             from services.meta_session_invalidated import mark_if_session_invalidated
             from services.omnichannel.meta_errors import finish_status_for_send_exception
 
-            mark_if_session_invalidated(exc, binding_id=str(decision.binding_id or binding_id or ""))
+            mark_if_session_invalidated(
+                exc,
+                binding_id=str(decision.binding_id or binding_id or ""),
+                require_invalidation_wording=True,
+            )
             status, safe_reason = finish_status_for_send_exception(exc)
             try:
                 await asyncio.shield(
