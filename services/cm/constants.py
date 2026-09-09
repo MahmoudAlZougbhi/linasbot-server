@@ -53,24 +53,18 @@ INITIAL_RESTRICTED_LABELS: Final[dict[str, dict[str, str]]] = {
 
 
 def cm_emergency_force_legacy() -> bool:
-    """Ops kill switch: force legacy paths for ALL tenants (default off)."""
-    return os.getenv("CM_EMERGENCY_FORCE_LEGACY", "false").strip().lower() in {"1", "true", "yes"}
+    """Retired. Classic GPT is gone; this flag no longer switches the customer engine."""
+    return False
+
+
+def cm_runtime_mode() -> str:
+    """Diagnostic label. Customer AI is published-CM V2 or unpublished — never classic GPT."""
+    return "published"
 
 
 def cm_emergency_disable_publish() -> bool:
     """Ops kill switch: block publish/rollback for ALL tenants (default off)."""
     return os.getenv("CM_EMERGENCY_DISABLE_PUBLISH", "false").strip().lower() in {"1", "true", "yes"}
-
-
-def cm_runtime_mode() -> str:
-    """Deprecated global diagnostic label.
-
-    Business content SoT is per-tenant published CM (see ``tenant_uses_cm_runtime``).
-    Returns ``legacy`` only when the emergency force-legacy switch is on.
-    """
-    if cm_emergency_force_legacy():
-        return "legacy"
-    return "published"
 
 
 def cm_publish_enabled() -> bool:
@@ -147,32 +141,16 @@ def tenant_has_published_cm(tenant_id: str | None) -> bool:
 
 
 def tenant_uses_cm_runtime(tenant_id: str | None) -> bool:
-    """Per-tenant SoT: published CM drives customer AI when present."""
-    if cm_emergency_force_legacy():
-        return False
+    """Per-tenant SoT: published CM drives Customer Reply V2 when present."""
     return tenant_has_published_cm(tenant_id)
 
 
 def cm_disable_linas_legacy_bridge() -> bool:
-    """Post-migration kill switch: refuse linas legacy bridge even without published CM.
-
-    Set ``CM_DISABLE_LINAS_LEGACY_BRIDGE=true`` only after Linas production publish is verified.
-    Default false keeps the temporary bridge until cutover.
-    """
-    return os.getenv("CM_DISABLE_LINAS_LEGACY_BRIDGE", "false").strip().lower() in {"1", "true", "yes"}
+    """Classic GPT bridge is gone. Kept as a durable env-file contract (always on)."""
+    return True
 
 
 def tenant_allows_legacy_bridge(tenant_id: str | None) -> bool:
-    """Temporary: only ``linas`` without published CM may use legacy until Wave 6 migration.
-
-    After Linas is on published CM, set ``CM_DISABLE_LINAS_LEGACY_BRIDGE`` (or publish Linas)
-    so this returns False and the bridge becomes dead code pending removal.
-    """
-    if cm_emergency_force_legacy():
-        return True
-    if cm_disable_linas_legacy_bridge():
-        return False
-    tid = (tenant_id or "").strip() or DEFAULT_TENANT_ID
-    if tid != "linas":
-        return False
-    return not tenant_has_published_cm(tid)
+    """Classic GPT / phases 3–12 are removed. Unpublished tenants get the unpublished message."""
+    _ = tenant_id
+    return False

@@ -75,7 +75,7 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
     # ===== CM AI CONTROL PLANE — per-tenant published runtime =====
     # Published CM is the SoT when this tenant has an active published version.
     # New tenants without publish get an honest unpublished message (never Marwa/Linas).
-    # Temporary legacy bridge: only ``linas`` without published content (removed in Wave 6).
+    # No classic GPT fallback. Unpublished tenants get the unpublished message.
     from services.cm.constants import (
         DEFAULT_TENANT_ID,
         UNPUBLISHED_AI_MESSAGE,

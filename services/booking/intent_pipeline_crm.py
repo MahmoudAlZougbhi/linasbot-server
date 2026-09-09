@@ -107,7 +107,7 @@ async def legacy_create_appointment_tool_output(
     user_input: str,
 ) -> dict[str, Any]:
     """
-    Internal/legacy path: after chat_response_service preprocessing, run the same CRM create + response
+    Internal CRM create path: run the same CRM create + response
     shape as submit_booking_intent (success + api_response wrapper, or validation_error on CRM reject).
     """
     from services.product_features import boc_booking_enabled, boc_disabled_response

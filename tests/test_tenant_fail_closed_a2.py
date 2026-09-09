@@ -203,37 +203,7 @@ def test_capability_gates_reject_missing_tenant(tenant_id: str | None) -> None:
         human_handoff_enabled(tenant_id)  # type: ignore[arg-type]
 
 
-def test_chat_runtime_prompt_refuses_missing_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
-    import config
-    from services import chat_response_runtime_prompt as runtime
-
-    # Locate the wallet-gate block by invoking the helper pattern inline.
-    # Use a minimal namespace mimicking the prepaid-wallet gate section.
-    ns = SimpleNamespace(user_id="wa:runtime-missing-tenant")
-    config.user_data_whatsapp[ns.user_id] = {}
-
-    called = {"ai": False}
-
-    def _assert_ai(_tenant: str) -> None:
-        called["ai"] = True
-
-    monkeypatch.setattr(
-        "services.token_metering.assert_tenant_can_use_ai",
-        _assert_ai,
-    )
-
-    # Exercise the same fail-closed branch as the runtime module.
-    ud = config.user_data_whatsapp.get(ns.user_id) or {}
-    tenant = str(ud.get("tenant_id") or ud.get("tenantId") or "").strip()
-    assert not tenant
-    result = {
-        "action": "reply",
-        "source": "tenant_required",
-    }
-    assert result["source"] == "tenant_required"
-    assert called["ai"] is False
-
-    # Also confirm module source no longer collapses to linas.
-    src = Path(runtime.__file__).read_text(encoding="utf-8")
+def test_customer_v2_orchestrator_does_not_collapse_missing_tenant_to_linas() -> None:
+    src = Path("services/customer_reply_v2/orchestrator.py").read_text(encoding="utf-8")
     assert 'or "linas"' not in src
-    assert "tenant_required" in src
+    assert "tenant_id: str" in src

@@ -12,7 +12,9 @@ from typing import Any
 
 import config
 from services.api_integrations import get_customer_appointments, get_customer_by_phone
-from services.chat_response_service import _extract_customer_appointments_list
+from services.customer_appointment_helpers import (
+    extract_customer_appointments_list as _extract_customer_appointments_list,
+)
 from services.live_chat_service import live_chat_service
 from services.message_logs_service import message_logs_service
 from services.service_template_mapping_service import service_template_mapping_service

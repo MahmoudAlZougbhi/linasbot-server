@@ -16,7 +16,6 @@ from handlers.training_handlers import exit_training_mode as original_exit_train
 from handlers.training_handlers import handle_training_input
 from handlers.training_handlers import start_training_mode as original_start_training_mode
 from services.api_integrations import check_customer_gender, create_customer, get_customer_by_phone, log_report_event
-from services.chat_response_service import get_bot_chat_response
 from services.gender_recognition_service import get_gender_from_gpt
 from services.local_qa_service import local_qa_service
 from services.qa_database_service import get_qa_response
@@ -66,7 +65,6 @@ __all__ = [
     "get_last_bot_message_for_gpt_context",
     "get_canonical_user_id_and_phone",
     "get_gender_from_gpt",
-    "get_bot_chat_response",
     "log_report_event",
     "check_customer_gender",
     "get_customer_by_phone",

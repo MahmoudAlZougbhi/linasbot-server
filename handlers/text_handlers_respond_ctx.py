@@ -23,7 +23,6 @@ def _lazy_bindings() -> dict[str, Any]:
         _user_explicitly_requests_human_agent,
     )
     from services.api_integrations import log_report_event
-    from services.chat_response_service import get_bot_chat_response
     from services.conversation_router import (
         ASK_CLARIFICATION_TEMPLATES,
         FALLBACK_TEMPLATES,
@@ -74,7 +73,6 @@ def _lazy_bindings() -> dict[str, Any]:
         "_user_explicitly_requests_human_agent": _user_explicitly_requests_human_agent,
         "count_tokens": count_tokens,
         "detect_reschedule_intent": detect_reschedule_intent,
-        "get_bot_chat_response": get_bot_chat_response,
         "get_canonical_user_id_and_phone": get_canonical_user_id_and_phone,
         "get_conversation_context_for_gpt": get_conversation_context_for_gpt,
         "get_conversation_last_ai_response_at": get_conversation_last_ai_response_at,
