@@ -43,7 +43,8 @@ def is_meta_session_invalidated(
     text = str(error_text or "")
     code = _as_code(error_code)
     if error is not None:
-        text = f"{text} {error}".strip()
+        extra = str(getattr(error, "error_message", "") or "")
+        text = f"{text} {error} {extra}".strip()
         if http_status is None:
             raw_status = getattr(error, "http_status", None)
             if isinstance(raw_status, int):

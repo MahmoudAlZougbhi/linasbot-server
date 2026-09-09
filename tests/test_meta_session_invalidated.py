@@ -88,6 +88,14 @@ def test_detects_graph_190_and_password_change_wording() -> None:
         error_text="The session has been invalidated because the user changed their password",
         require_invalidation_wording=True,
     )
+    send_err = MetaProviderError(
+        "Meta Send API returned HTTP 401 code=190 subcode=0",
+        http_status=401,
+        error_code=190,
+        error_message="The session has been invalidated because the user changed their password",
+    )
+    assert "invalidated" not in str(send_err)
+    assert is_meta_session_invalidated(send_err, require_invalidation_wording=True)
 
 
 def test_mark_disconnects_active_binding_for_any_tenant(registry: MetaAppRegistry) -> None:
