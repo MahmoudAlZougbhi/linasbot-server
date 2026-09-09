@@ -20,7 +20,7 @@ This guide sets up a **local environment that behaves like production**: same ex
    - **Sending safety** (pick one):
      - **Option 1 (recommended):** `ENABLE_SENDING=true` and set `LOCAL_ALLOWED_WHATSAPP_NUMBERS` to a comma-separated list of test/sandbox numbers. Only those numbers receive real messages.
      - **Option 2:** `ENABLE_SENDING=false` – no real sends; every outbound message is logged as “would send” to `data/dry_run_messages.jsonl` and shown in the dashboard as “Would send”.
-   - Fill in your **WhatsApp provider** vars (e.g. MontyMobile) so the app can run; with `ENABLE_SENDING=false` or non-allowed numbers, messages are dry-run only.
+   - Fill in your **WhatsApp Cloud** vars so the app can run; with `ENABLE_SENDING=false` or non-allowed numbers, messages are dry-run only.
 
 ---
 

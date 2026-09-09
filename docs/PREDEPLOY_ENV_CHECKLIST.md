@@ -8,7 +8,7 @@ Do **not** paste secret values into tickets, chat, commits, or logs. Mark each i
 |----------|---------|-----------------|
 | `DASHBOARD_AUTH_SECRET` | Session cookie HMAC signing | Must be set; long random; **never** generate per-process restart |
 | `ENVIRONMENT` / `ENV` | `production` / `prod` | Enables fail-closed auth + readiness checks |
-| `MONTYMOBILE_API_KEY` | WhatsApp outbound via MontyMobile | Required when provider is montymobile |
+| `WHATSAPP_API_TOKEN` | WhatsApp Cloud outbound | Required for Meta Cloud template/session send |
 | `OPENAI_API_KEY` | LLM | Required; readiness checks presence only |
 
 ## First admin (empty DB)
@@ -34,7 +34,7 @@ No known/default passwords. Existing dashboard users keep hashes; `passwordEpoch
 | Variable / config | Notes |
 |-------------------|-------|
 | Meta App webhook verify token + app secret | Signature verification must remain enabled |
-| WhatsApp / MontyMobile webhook auth | Inbound path authenticated as implemented |
+| WhatsApp Cloud webhook auth | Inbound path authenticated as implemented |
 | WhatsApp inbound AI | **Must remain disabled** (product contract) |
 
 ## Readiness

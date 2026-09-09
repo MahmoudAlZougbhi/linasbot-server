@@ -21,8 +21,8 @@ async def deliver_scheduled_smart_whatsapp(
     When the template exists in Cloud templates config, send via Meta Graph API;
     otherwise fail closed (freeform session text is not allowed for scheduled/campaign sends).
     """
-    from services.montymobile_template_service import montymobile_template_service
     from services.whatsapp_adapters.safe_send_adapter import _log_dry_run, _should_dry_run
+    from services.whatsapp_cloud_template_service import whatsapp_cloud_template_service
 
     if _should_dry_run(phone):
         _log_dry_run(
@@ -33,7 +33,7 @@ async def deliver_scheduled_smart_whatsapp(
         return {"success": True, "dry_run": True}
 
     canonical = normalize_template_id(template_id)
-    tpl_meta = montymobile_template_service.get_template_info(canonical)
+    tpl_meta = whatsapp_cloud_template_service.get_template_info(canonical)
     if tpl_meta:
         params: dict[str, str] = {}
         for k, v in (placeholders or {}).items():
@@ -41,7 +41,7 @@ async def deliver_scheduled_smart_whatsapp(
                 continue
             params[str(k)] = str(v)
         lang = (language or "ar").strip()[:8] or "ar"
-        return await montymobile_template_service.send_template_message(
+        return await whatsapp_cloud_template_service.send_template_message(
             template_id=canonical,
             phone_number=phone,
             language=lang,

@@ -1,4 +1,4 @@
-"""MontyMobile template payload builder mixin (LOC split)."""
+"""WhatsApp Cloud template payload builder mixin (LOC split)."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from services.smart_messaging_catalog import normalize_template_id
 from utils.phone_utils import normalize_phone
 
 
-class MontyMobileTemplatePayloadMixin:
-    """Build Monty WhatsApp template payloads (header/body/recipient)."""
+class WhatsAppCloudTemplatePayloadMixin:
+    """Build Meta Cloud WhatsApp template payloads (header/body/recipient)."""
 
     _describe_template_resolution: Any
     _outbound_template_name: Any
@@ -30,7 +30,7 @@ class MontyMobileTemplatePayloadMixin:
         api_config.templates_are_text_only is True (body-only / text-only templates),
         unless api_config.send_empty_header_component is True — then we send
         {"type": "header", "parameters": []} for Meta templates with a fixed header
-        and zero variable slots (Monty: "Header required" vs "0 parameters" mismatch).
+        and zero variable slots (Meta: "Header required" vs "0 parameters" mismatch).
         """
         api_cfg = self.api_config or {}
         send_empty = bool(api_cfg.get("send_empty_header_component", False))
@@ -68,10 +68,10 @@ class MontyMobileTemplatePayloadMixin:
             try:
                 from services.message_preview_service import message_preview_service
 
-                # Includes env MONTY_/WHATSAPP_*, sidecar, dashboard JSON, default_header_component file
+                # Includes env WHATSAPP_*, sidecar, dashboard JSON, default_header_component file
                 image_link = message_preview_service.get_template_header_image_url()
             except Exception as ex:
-                print(f"❌ Monty template header: could not read header image URL settings: {ex}")
+                print(f"❌ Cloud template header: could not read header image URL settings: {ex}")
                 raise
 
         # IMAGE header: empty format + URL means "use default branded header for this template"
@@ -87,7 +87,7 @@ class MontyMobileTemplatePayloadMixin:
             if fmt in ("image", "img", "picture"):
                 print(
                     f"⚠️ Template '{template.get('name')}' expects IMAGE header but no URL — set "
-                    f"template.header.image_link, MONTY_TEMPLATE_HEADER_IMAGE_URL, or "
+                    f"template.header.image_link, WHATSAPP_TEMPLATE_HEADER_IMAGE_URL, or "
                     f"api_config.default_header_component.link"
                 )
 
@@ -136,11 +136,11 @@ class MontyMobileTemplatePayloadMixin:
 
         if len(param_specs) > n_body > 0:
             _log = f"template_lang body specs len={len(param_specs)} > parameters_count={n_body}; trimming"
-            print(f"⚠️ Monty template body: {_log}")
+            print(f"⚠️ Cloud template body: {_log}")
             param_specs = param_specs[:n_body]
         elif n_body > len(param_specs):
             print(
-                f"⚠️ Monty template body: parameters_count={n_body} but only {len(param_specs)} "
+                f"⚠️ Cloud template body: parameters_count={n_body} but only {len(param_specs)} "
                 f'named slot(s) in JSON — padding with positional keys "1".."{n_body}" / empty strings'
             )
 
@@ -156,12 +156,8 @@ class MontyMobileTemplatePayloadMixin:
 
         return [{"type": "text", "text": t} for t in texts]
 
-    def _normalize_recipient_for_monty_template(self, raw: str | None) -> str | None:
-        """
-        Monty send-whatsapp often requires a consistent MSISDN (digits, country code, no '+').
-        Raw dashboard input may include spaces, missing country code, or '+' — normalize so
-        delivery matches session sends and WhatsApp routing.
-        """
+    def _normalize_recipient_for_template(self, raw: str | None) -> str | None:
+        """Normalize recipient to digits with country code (no '+') for Meta Cloud."""
         if raw is None:
             return None
         s = str(raw).strip()
@@ -207,13 +203,13 @@ class MontyMobileTemplatePayloadMixin:
 
         canonical_template_id = normalize_template_id(template_id)
 
-        to_digits = self._normalize_recipient_for_monty_template(phone_number)
+        to_digits = self._normalize_recipient_for_template(phone_number)
         if not to_digits:
             print(
-                f"❌ Invalid or unsupported phone for Monty template: ***{str(phone_number)[-4:] if phone_number else ''}"
+                f"❌ Invalid or unsupported phone for Cloud template: ***{str(phone_number)[-4:] if phone_number else ''}"
             )
             return None
-        print(f"   phone_number (Monty 'to') last4: ***{str(to_digits)[-4:] if to_digits else ''}")
+        print(f"   phone_number (Cloud 'to') last4: ***{str(to_digits)[-4:] if to_digits else ''}")
 
         if not self.templates:
             print("❌ WhatsApp Cloud templates not loaded")
@@ -239,8 +235,7 @@ class MontyMobileTemplatePayloadMixin:
         )
         template_lang = template["languages"][language]
 
-        # Body variables: count must match Meta {{1}}..{{n}} exactly (Monty HTTP 500:
-        # "Number of body variables is invalid" if count is wrong or body component missing).
+        # Body variables: count must match Meta {{1}}..{{n}} exactly.
         lookup = parameters if isinstance(parameters, dict) else {}
         param_values = self._build_body_component_parameters(template_lang, lookup)
 
@@ -249,7 +244,6 @@ class MontyMobileTemplatePayloadMixin:
         outbound_name = self._outbound_template_name(template, canonical_template_id)
 
         # Meta Cloud payload core (messaging_product added by send_template_message).
-        # Do not attach Monty source/apiId — those fields are legacy-only.
         payload: dict[str, Any] = {
             "to": to_digits,
             "type": "template",

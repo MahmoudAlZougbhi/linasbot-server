@@ -417,7 +417,7 @@ async def start_command_whatsapp(user_whatsapp_id: str, user_name: str) -> None:
         config.user_data_whatsapp[user_whatsapp_id]["user_preferred_lang"], config.WELCOME_MESSAGES["ar"]
     )
 
-    # Use current provider's adapter (MontyMobile/Meta/etc.) - not hardcoded Meta
+    # Use the current Meta Cloud adapter.
     current_provider = WhatsAppFactory.get_current_provider()
     adapter = WhatsAppFactory.get_adapter(current_provider)
     await adapter.send_text_message(user_whatsapp_id, initial_message)

@@ -120,6 +120,6 @@
   },
   "notes": {
     "transport": "Meta Cloud API (WHATSAPP_API_TOKEN + WHATSAPP_PHONE_NUMBER_ID)",
-    "migrated_from": "montymobile_templates.json — Monty HTTP credentials removed"
+    "transport_note": "Cloud-only; no BSP credentials in this file"
   }
 }

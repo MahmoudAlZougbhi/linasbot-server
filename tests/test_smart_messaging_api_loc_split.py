@@ -22,7 +22,7 @@ def test_smart_messaging_api_modules_under_500_lines() -> None:
 
 def test_smart_messaging_api_preserves_public_api() -> None:
     from modules.smart_messaging_api_store import _build_template_record, _migrate_templates
-    from modules.smart_messaging_api_templates import _monty_whatsapp_language_code
+    from modules.smart_messaging_api_templates import _whatsapp_template_language_code
 
     api = Path("modules/smart_messaging_api.py").read_text(encoding="utf-8")
     assert "from modules import smart_messaging_api_templates" in api
@@ -30,6 +30,6 @@ def test_smart_messaging_api_preserves_public_api() -> None:
     assert "from modules.smart_messaging_api_store import" in api
     assert callable(_build_template_record)
     assert callable(_migrate_templates)
-    assert _monty_whatsapp_language_code("franco") == "ar"
+    assert _whatsapp_template_language_code("franco") == "ar"
     rec = _build_template_record("reminder_24h", {"ar": "x"})
     assert rec["ar"] == "x"

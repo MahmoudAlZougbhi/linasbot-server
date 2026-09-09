@@ -24,7 +24,7 @@ WEBHOOK_DEDUP_WINDOW_SECONDS = (
 )
 
 # Some providers deliver the same user text twice with different message ids; message_id dedupe misses that.
-# MontyMobile / retries can arrive >5s apart — keep a generous window so we do not run GPT twice for one user tap.
+# Provider retries can arrive >5s apart — keep a generous window so we do not run GPT twice for one user tap.
 WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS = 45.0
 WEBHOOK_TEXT_BODYFP_MAX_CHARS = 4000
 _webhook_bodyfp_cache: dict[str, float] = {}

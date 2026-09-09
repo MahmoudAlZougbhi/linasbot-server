@@ -84,7 +84,7 @@ class SafeSendAdapter(WhatsAppAdapter):
         if hasattr(self._real, "close") and callable(self._real.close):
             await self._real.close()
 
-    #  methods (MontyMobile, etc.)
+    #  methods (Meta Cloud)
     async def send_audio_message(
         self, to_number: str, audio_url: str, audio_base64: str | None = None
     ) -> dict[str, Any]:

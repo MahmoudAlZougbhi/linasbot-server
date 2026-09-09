@@ -130,7 +130,6 @@ try:
                             "OPENAI",
                             "DASHBOARD_AUTH",
                             "AUTH_SESSION",
-                            "MONTY",
                             "META_",
                             "ENVIRONMENT",
                             "ENV",
@@ -177,7 +176,7 @@ dash_ok = report("DASHBOARD_AUTH_SECRET", min_len=32, strong=True)
 auth_alias_ok = report("AUTH_SESSION_SECRET", min_len=32, strong=True)
 required = [
     dash_ok or auth_alias_ok,
-    report("MONTYMOBILE_API_KEY", min_len=8),
+    report("WHATSAPP_API_TOKEN", min_len=8),
     report("OPENAI_API_KEY", min_len=20),
     report("META_APP_SECRET", min_len=8),
     report("META_PAGE_ACCESS_TOKEN", min_len=20),

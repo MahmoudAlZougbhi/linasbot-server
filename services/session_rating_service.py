@@ -1,6 +1,6 @@
 """
 Post-booking session rating: prompt user on WhatsApp (numbered 1–5) and log analytics.
-Uses the same adapter as the rest of the bot (MontyMobile send_button_message falls back to text).
+Uses the same Meta Cloud adapter as the rest of the bot.
 """
 
 from __future__ import annotations

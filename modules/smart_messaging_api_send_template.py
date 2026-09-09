@@ -15,8 +15,8 @@ from services.smart_messaging_catalog import normalize_template_id
 async def send_test_template_message(request_data: dict[str, Any]) -> Any:
     """Send a test message using Meta Cloud WhatsApp template"""
     try:
-        from services.montymobile_template_service import montymobile_template_service
         from services.user_persistence_service import user_persistence
+        from services.whatsapp_cloud_template_service import whatsapp_cloud_template_service
 
         template_id = normalize_template_id(request_data.get("template_id", "").strip())
         phone_number = request_data.get("phone_number", "").strip()
@@ -49,13 +49,13 @@ async def send_test_template_message(request_data: dict[str, Any]) -> Any:
         language = _whatsapp_template_language_code(user_language)
 
         # Get template info to know which parameters it needs
-        template_info = montymobile_template_service.get_template_info(template_id)
+        template_info = whatsapp_cloud_template_service.get_template_info(template_id)
 
         if not template_info:
             return {"success": False, "error": f"Template '{template_id}' not found"}
 
         # Body variable names + count (must match Cloud template service / Meta {{1}}..{{n}})
-        effective_lang = montymobile_template_service.resolve_whatsapp_language_for_template(
+        effective_lang = whatsapp_cloud_template_service.resolve_whatsapp_language_for_template(
             template_info, language, template_id_for_log=template_id
         )
         langs = template_info.get("languages") or {}
@@ -156,7 +156,7 @@ async def send_test_template_message(request_data: dict[str, Any]) -> Any:
             f"(user_lang={user_language} source={language_source} wa_lang={language})"
         )
 
-        if not montymobile_template_service.templates_are_text_only():
+        if not whatsapp_cloud_template_service.templates_are_text_only():
             from services.message_preview_service import message_preview_service
 
             _hdr_req = (
@@ -178,7 +178,7 @@ async def send_test_template_message(request_data: dict[str, Any]) -> Any:
             print("📋 Template send: templates_are_text_only — skipping header_image injection for test send")
 
         # Send template message
-        result = await montymobile_template_service.send_template_message(
+        result = await whatsapp_cloud_template_service.send_template_message(
             template_id=template_id,
             phone_number=phone_number,
             language=effective_lang,
@@ -254,9 +254,9 @@ async def send_test_template_message(request_data: dict[str, Any]) -> Any:
                         metadata={
                             "source": "smart_message",
                             "type": template_id,
-                            "monty_message_id": mid,
+                            "cloud_message_id": mid,
                             "template_language": effective_lang,
-                            "recipient_to_monty": result.get("recipient_to_monty"),
+                            "recipient_msisdn": result.get("recipient_msisdn"),
                             "transport": result.get("transport") or "meta_cloud",
                             "test_send": True,
                             "test_correlation_id": _test_correlation_id,

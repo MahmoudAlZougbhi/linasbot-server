@@ -35,17 +35,6 @@ async def startup_event() -> None:
         raise
 
     try:
-        from services.whatsapp_cloud.legacy_isolation import assert_no_monty_cloud_dual_bind
-
-        assert_no_monty_cloud_dual_bind()
-    except RuntimeError as exc:
-        # Fail closed when dual-bind detected.
-        print(f"❌ WHATSAPP LEGACY/CLOUD CONFLICT: {exc}")
-        raise
-    except Exception as exc:
-        print(f"⚠️ WhatsApp legacy isolation check skipped: {type(exc).__name__}")
-
-    try:
         print("=" * 60)
         print("🚀 INITIALIZING WHATSAPP PROVIDER")
         print("=" * 60)

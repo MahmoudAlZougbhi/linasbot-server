@@ -14,7 +14,6 @@ from modules.core import app
 
 # Register FAQ correction routes; re-export handlers.
 from modules.local_qa_api_faq import (  # noqa: E402, F401
-    faq_create_from_livechat,
     faq_update_answer,
 )
 from modules.local_qa_api_helpers import (  # noqa: F401

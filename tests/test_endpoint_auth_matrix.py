@@ -52,7 +52,6 @@ _ROUTE_MODULES = (
     "modules.smart_messaging_api",
     "modules.local_qa_api",
     "modules.content_files_api",
-    "modules.qa_api",
     "modules.instructions_api",
     "modules.flow_api",
     "modules.webhook_handlers",

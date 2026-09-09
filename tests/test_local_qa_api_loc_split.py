@@ -29,4 +29,3 @@ def test_local_qa_api_preserves_public_helpers() -> None:
     assert local_qa_api.build_qa_entry is build_qa_entry
     assert callable(local_qa_api.create_local_qa_pair)
     assert callable(local_qa_api.faq_update_answer)
-    assert callable(local_qa_api.faq_create_from_livechat)

@@ -24,7 +24,7 @@ from modules.smart_messaging_api_store import (  # noqa: F401
     _template_store_lock,
 )
 from modules.smart_messaging_api_templates import (  # noqa: F401
-    _monty_whatsapp_language_code,
+    _whatsapp_template_language_code,
     delete_message_template,
     get_message_templates,
     smart_messaging_resolve_user_language,

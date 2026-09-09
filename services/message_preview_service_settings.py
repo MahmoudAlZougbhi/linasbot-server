@@ -127,7 +127,6 @@ class MessagePreviewSettingsMixin:
     def _whatsapp_cloud_templates_config_path(self) -> str:
         envp = (
             os.getenv("WHATSAPP_CLOUD_TEMPLATES_CONFIG_PATH", "").strip()
-            or os.getenv("MONTYMOBILE_TEMPLATES_CONFIG_PATH", "").strip()
         )
         if envp:
             return envp
@@ -170,7 +169,6 @@ class MessagePreviewSettingsMixin:
             "has_resolved_url": bool(resolved),
             "resolved_url_length": len(resolved),
             "resolved_url_prefix": (resolved[:32] + "…") if len(resolved) > 32 else resolved,
-            "env_MONTY_TEMPLATE_HEADER_IMAGE_URL_set": bool(os.getenv("MONTY_TEMPLATE_HEADER_IMAGE_URL", "").strip()),
             "env_WHATSAPP_TEMPLATE_HEADER_IMAGE_URL_set": bool(
                 os.getenv("WHATSAPP_TEMPLATE_HEADER_IMAGE_URL", "").strip()
             ),
@@ -190,7 +188,7 @@ class MessagePreviewSettingsMixin:
         Public HTTPS image URL for WhatsApp template headers.
         Order: env → sidecar → dashboard JSON → cloud templates default → raw smartMessaging case-insensitive.
         """
-        for envk in ("MONTY_TEMPLATE_HEADER_IMAGE_URL", "WHATSAPP_TEMPLATE_HEADER_IMAGE_URL"):
+        for envk in ("WHATSAPP_TEMPLATE_HEADER_IMAGE_URL",):
             v = os.getenv(envk, "").strip()
             if v:
                 return v

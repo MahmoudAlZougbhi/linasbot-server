@@ -2,7 +2,7 @@
 
 ## Nginx config for linasaibot.com
 
-The host nginx must proxy `/api/*` and `/webhook` to the backend (port 8003) for login, API calls, and WhatsApp webhooks (MontyMobile) to work.
+The host nginx must proxy `/api/*` and `/webhook` to the backend (port 8003) for login, API calls, and WhatsApp Cloud webhooks to work.
 
 ### Option A: Full config (fresh install)
 

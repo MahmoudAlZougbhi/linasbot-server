@@ -93,4 +93,4 @@ flowchart TD
 | 7 | `services/chat_response_service.py` → `services/dynamic_retrieval_service.py` | tool `retrieve_relevant_knowledge` → `select_files_llm()` → يرجع المحتوى للـ GPT |
 | 8 | `services/chat_response_service.py` | `get_bot_chat_response()` استدعاء ثاني مع tool result |
 | 9 | `handlers/text_handlers_respond.py` | تنفيذ `action` → `send_message_func()` + `save_conversation_message_to_firestore()` |
-| 10 | Adapter (MontyMobile/Dialog360/…) | `adapter.send_text_message()` → WhatsApp |
+| 10 | Adapter (Meta Cloud) | `adapter.send_text_message()` → WhatsApp |

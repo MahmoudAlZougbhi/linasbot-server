@@ -168,15 +168,6 @@ class TestLiveChatFaqWriteAuthz:
         response = client.post("/api/faq/update-answer", json={"faq_id": 1, "new_answer_text": "x"})
         assert response.status_code == 401
 
-    def test_faq_create_forbidden_for_viewer(self, client: TestClient) -> None:
-        _clear_client_auth(client)
-        _set_session(client, role="viewer", user_id="lc-faq-viewer", tenant_id="linas")
-        response = client.post(
-            "/api/faq/create-from-livechat",
-            json={"question_text": "q", "answer_text": "a", "question_language": "en"},
-        )
-        assert response.status_code == 403
-
     def test_faq_update_rejects_other_tenant_row(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         _clear_client_auth(client)
         _set_session(client, role="operator", user_id="lc-faq-op", tenant_id="tenant_a")
@@ -206,45 +197,3 @@ class TestLiveChatFaqWriteAuthz:
         assert response.status_code == 403
         assert "another tenant" in (response.json().get("detail") or "").lower()
         assert writes == []
-
-    def test_faq_create_from_livechat_passes_session_tenant(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        _clear_client_auth(client)
-        _set_session(client, role="operator", user_id="lc-faq-create", tenant_id="tenant_a")
-
-        seen: dict[str, Any] = {}
-
-        async def _create(**kwargs: Any) -> dict[str, Any]:
-            seen.update(kwargs)
-            return {
-                "success": True,
-                "qa_group_id": "qa_a",
-                "created_entries": [{"language": "en"}],
-                "count_created": 4,
-                "duplicates": [],
-            }
-
-        monkeypatch.setattr(
-            "services.cm.faq_integration.create_faq_pair_from_livechat",
-            _create,
-        )
-        monkeypatch.setattr(
-            "services.faq_entitlements.assert_can_create_faq",
-            lambda tenant_id: {"faq_enabled": True},
-        )
-
-        response = client.post(
-            "/api/faq/create-from-livechat",
-            json={
-                "question_text": "How much?",
-                "answer_text": "Twenty dollars",
-                "question_language": "en",
-                "tenant_id": "tenant_evil",
-            },
-        )
-        assert response.status_code == 200
-        body = response.json()
-        assert body.get("success") is True
-        assert body.get("tenant_id") == "tenant_a"
-        assert seen.get("tenant_id") == "tenant_a"

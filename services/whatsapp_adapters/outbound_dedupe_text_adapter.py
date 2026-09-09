@@ -22,7 +22,7 @@ from .outbound_text_dedupe import (
 
 
 class DedupeOutboundTextAdapter(WhatsAppAdapter):
-    """Process-wide text dedupe in front of Meta, Qiscus, MontyMobile, 360dialog, etc."""
+    """Process-wide text dedupe in front of Meta Cloud outbound."""
 
     def __init__(self, inner: WhatsAppAdapter) -> None:
         super().__init__(getattr(inner, "api_token", ""), getattr(inner, "phone_number_id", None))

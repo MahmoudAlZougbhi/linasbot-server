@@ -123,7 +123,7 @@ async def upload_base64_to_firebase_storage(
 ) -> str | None:
     """
     Uploads base64 media to Firebase Storage and returns a public download URL.
-    Firebase URLs are on Google's CDN and accessible by external services like MontyMobile.
+    Firebase URLs are on Google's CDN and accessible to Meta Cloud media fetch.
 
     Args:
         base64_data: The base64-encoded file data

@@ -156,10 +156,6 @@ def _whatsapp_template_language_code(saved_lang: str) -> str:
     return "ar"
 
 
-# Backward-compatible alias
-_monty_whatsapp_language_code = _whatsapp_template_language_code
-
-
 @app.get("/api/smart-messaging/user-language")
 async def smart_messaging_resolve_user_language(phone: str) -> Any:
     """Resolve saved user language from phone (runtime memory / same keys as the bot)."""

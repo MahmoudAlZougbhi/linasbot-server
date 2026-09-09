@@ -1,11 +1,4 @@
-"""
-WhatsApp Cloud template message service.
-
-Sends approved WhatsApp template messages via Meta Graph API.
-Legacy MontyMobile HTTP transport is disabled (Decision #9 — Meta Cloud-only).
-
-Payload mixin: montymobile_template_service_payload (LOC split; Cloud payload shape).
-"""
+"""WhatsApp Cloud template message service (Meta Graph API only)."""
 
 from __future__ import annotations
 
@@ -15,8 +8,8 @@ from typing import Any, cast
 
 import httpx
 
-from services.montymobile_template_service_payload import MontyMobileTemplatePayloadMixin
 from services.smart_messaging_catalog import normalize_template_id
+from services.whatsapp_cloud_template_service_payload import WhatsAppCloudTemplatePayloadMixin
 
 # Internal IDs that map to a different key under config/templates (and thus a different Meta `name`).
 _LEGACY_TEMPLATE_CONFIG_KEYS: dict[str, str] = {
@@ -32,13 +25,12 @@ _CLOUD_TEMPLATES_REL = ("config", "whatsapp_cloud_templates.json")
 _GRAPH_VERSION = (os.getenv("WHATSAPP_GRAPH_API_VERSION") or "v19.0").strip() or "v19.0"
 
 
-class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
-    """Template send via Meta Cloud (legacy class name retained for callers/tests)."""
+class WhatsAppCloudTemplateService(WhatsAppCloudTemplatePayloadMixin):
+    """Send approved WhatsApp templates via Meta Cloud."""
 
     def __init__(self) -> None:
         config_path = os.path.join(os.path.dirname(__file__), "..", *_CLOUD_TEMPLATES_REL)
-        # One-time migration: if Cloud file missing but legacy Monty JSON present, do not load Monty
-        # credentials — fail closed on empty templates instead of Monty HTTP.
+        # Fail closed on empty templates if the Cloud config file is missing.
         try:
             if not os.path.exists(config_path):
                 print(f"❌ WhatsApp Cloud templates config not found at: {config_path}")
@@ -113,9 +105,6 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
     def _outbound_template_name(self, template: dict[str, Any], canonical_id: str) -> str:
         env_key = "WHATSAPP_META_NAME_" + canonical_id.upper().replace("-", "_")
         env_override = os.getenv(env_key, "").strip()
-        if not env_override:
-            # Legacy env alias still honored during migration
-            env_override = os.getenv("MONTY_META_NAME_" + canonical_id.upper().replace("-", "_"), "").strip()
         if env_override:
             print(f"   Outbound template name from env={env_override!r}")
             return env_override
@@ -147,9 +136,9 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
     async def send_template_message(
         self, template_id: str, phone_number: str, language: str = "ar", parameters: dict[str, str | None] | None = None
     ) -> dict:
-        """Send a template message via Meta WhatsApp Cloud API (no Monty HTTP)."""
+        """Send a template message via Meta WhatsApp Cloud API."""
         try:
-            if not self._normalize_recipient_for_monty_template(phone_number):
+            if not self._normalize_recipient_for_template(phone_number):
                 return {
                     "success": False,
                     "error": (
@@ -164,7 +153,7 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
                     "success": False,
                     "error": (
                         "Meta Cloud template send refused: WHATSAPP_API_TOKEN and "
-                        "WHATSAPP_PHONE_NUMBER_ID are required (MontyMobile HTTP disabled)."
+                        "WHATSAPP_PHONE_NUMBER_ID are required."
                     ),
                 }
             api_token, phone_number_id = creds
@@ -191,14 +180,14 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
                     "error": (
                         "WhatsApp template requires a HEADER (image). No header image URL was found. "
                         "Set Dashboard Smart Messaging template header image URL, or env "
-                        "WHATSAPP_TEMPLATE_HEADER_IMAGE_URL / MONTY_TEMPLATE_HEADER_IMAGE_URL."
+                        "WHATSAPP_TEMPLATE_HEADER_IMAGE_URL."
                     ),
                 }
 
             canon = normalize_template_id(template_id)
             self._log_outbound_template_payload(template_id, canon, payload)
 
-            # Meta Cloud body (never Monty source/apiId fields)
+            # Meta Cloud body
             cloud_body = {
                 "messaging_product": "whatsapp",
                 "to": payload.get("to"),
@@ -258,7 +247,7 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
                     "message_id": message_id,
                     "template_id": template_id,
                     "phone_number": phone_number,
-                    "recipient_to_monty": payload.get("to"),  # legacy key kept for UI/metadata
+                    "recipient_msisdn": payload.get("to"),
                     "language": language,
                     "response": response_data,
                     "transport": "meta_cloud",
@@ -295,5 +284,4 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
         return cast(bool, template.get("status") == "APPROVED")
 
 
-# Global instance (name retained for callers)
-montymobile_template_service = MontyMobileTemplateService()
+whatsapp_cloud_template_service = WhatsAppCloudTemplateService()

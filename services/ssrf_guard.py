@@ -17,9 +17,6 @@ DEFAULT_ALLOWED_HOST_SUFFIXES: frozenset[str] = frozenset(
         "scontent.xx.fbcdn.net",
         "fbcdn.net",
         "cdninstagram.com",
-        "montymobile.com",
-        "whatsapp-notification.montymobile.com",
-        "omni-apis.montymobile.com",
     }
 )
 

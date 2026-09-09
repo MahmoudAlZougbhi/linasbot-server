@@ -82,7 +82,7 @@ class WhatsAppReferral(FlexibleBaseModel):
 class WhatsAppMessage(FlexibleBaseModel):
     from_: str = Field(alias="from")
     id: str
-    timestamp: str | None = None  # Made optional - MontyMobile doesn't always send it
+    timestamp: str | None = None
     type: str
     text: WhatsAppText | None = None
     image: WhatsAppImage | None = None
@@ -149,7 +149,7 @@ class TestImageRequest(BaseModel):
 class TestVoiceRequest(BaseModel):
     phone: str
     voice_text: str = ""  # Simulated transcription text
-    provider: str = "montymobile"
+    provider: str = "meta"
 
 
 class ProviderSwitchRequest(BaseModel):

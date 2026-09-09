@@ -97,11 +97,11 @@ async def get_integration_status() -> Any:
                 "notes": "First-party App A plus staged Tech Provider App B; inbound DMs only",
             },
             {
-                "name": "WhatsApp provider (outbound handoff / CRM)",
-                "service": "MontyMobile / Dialog / Cloud",
+                "name": "WhatsApp Cloud (outbound)",
+                "service": "Meta Cloud API",
                 "configured": _env_configured(
-                    "MONTYMOBILE_API_KEY",
-                    "DIALOG360_API_KEY",
+                    "WHATSAPP_API_TOKEN",
+                    "WHATSAPP_PHONE_NUMBER_ID",
                     "WHATSAPP_TOKEN",
                     "META_WHATSAPP_TOKEN",
                 ),

@@ -119,7 +119,7 @@ Confirm: Integrations → WhatsApp shows **Connect** (not “Awaiting Meta App R
    - URL: `https://www.linasaibot.com/webhook/whatsapp-cloud`
    - Fields: `messages`, `smb_message_echoes`, `history`, `smb_app_state_sync`, `message_template_status_update`, `account_update`, `phone_number_quality_update`
 4. **Do not** reuse Facebook Login for Business config `1021840664011530` for WhatsApp.
-5. **Monty overlap:** `MONTYMOBILE_SOURCE_NUMBER` must stay **disjoint** from the Cloud-bound number.
+5. **Cloud-only:** WhatsApp outbound uses Meta Cloud only. Do not configure a second BSP for the same number.
 
 ---
 
