@@ -1,6 +1,6 @@
 /** Pure request-rule helpers (CM requests_appointments + request graphs). */
 
-export type RequestRuleType = 'APPOINTMENT' | 'ORDER' | 'OTHER';
+export type RequestRuleType = 'APPOINTMENT' | 'ORDER' | 'OTHER' | 'HUMAN';
 
 export type RequestRuleItem = {
   id: string;
@@ -21,7 +21,7 @@ export type RequestGraphRow = {
   required_information: RequestField[];
 };
 
-const TYPES: RequestRuleType[] = ['APPOINTMENT', 'ORDER', 'OTHER'];
+const TYPES: RequestRuleType[] = ['APPOINTMENT', 'ORDER', 'OTHER', 'HUMAN'];
 
 function asFields(value: unknown): RequestField[] {
   if (!Array.isArray(value)) return [];
@@ -72,6 +72,7 @@ export function matchesRequestQuery(item: RequestRuleItem, query: string): boole
 export function destinationFromType(type: RequestRuleType): string {
   if (type === 'APPOINTMENT') return 'appointment';
   if (type === 'ORDER') return 'order';
+  if (type === 'HUMAN') return 'live_chat';
   return 'general';
 }
 
@@ -100,8 +101,13 @@ export function collectsPhrase(graph: RequestGraphRow | undefined, empty: string
 
 export function typeLabelKey(
   type: RequestRuleType,
-): 'aiSetupRequestTypeAppointment' | 'aiSetupRequestTypeOrder' | 'aiSetupRequestTypeOther' {
+):
+  | 'aiSetupRequestTypeAppointment'
+  | 'aiSetupRequestTypeOrder'
+  | 'aiSetupRequestTypeOther'
+  | 'aiSetupRequestTypeHuman' {
   if (type === 'ORDER') return 'aiSetupRequestTypeOrder';
   if (type === 'OTHER') return 'aiSetupRequestTypeOther';
+  if (type === 'HUMAN') return 'aiSetupRequestTypeHuman';
   return 'aiSetupRequestTypeAppointment';
 }

@@ -64,8 +64,8 @@ CAPABILITIES: tuple[Capability, ...] = (
             "(critique, duplicates, unclear, improvements, suspicious) — not only the named topic.",
             "Use inspect_cm_guide / cm_fill_plan to walk remaining gaps one section at a time (skip DONE).",
             "Approve draft proposals, validate, then publish when ready (confirmation required).",
-            "Languages: owners can enable/disable supported languages and set the default; "
-            "the answer map is fixed (sabtin) — EN→EN, AR→AR, FR→FR, Franco→AR — cannot be changed.",
+            "Languages: there is no owner Languages setting. The customer AI auto-detects "
+            "the customer's language and replies in it. Franco/Arabizi is answered in Arabic script.",
         ),
         tools=(
             "inspect_cm_guide",

@@ -63,6 +63,8 @@ def destination_from_type(raw: str) -> str:
         return "appointment"
     if value in {"ORDER", "ORDERS"}:
         return "order"
+    if value in {"HUMAN", "HANDOFF", "LIVE_CHAT"}:
+        return "live_chat"
     return "general"
 
 

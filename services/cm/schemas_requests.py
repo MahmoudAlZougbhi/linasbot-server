@@ -11,7 +11,7 @@ from pydantic import Field, field_validator
 
 from services.cm.schemas_content import ArticleAttachment, CmBaseModel, LocalizedLabels
 
-RequestTypeCode = Literal["ORDER", "APPOINTMENT", "OTHER"]
+RequestTypeCode = Literal["ORDER", "APPOINTMENT", "OTHER", "HUMAN"]
 NotificationLanguage = Literal["auto", "ar", "en", "fr", "franco"]
 FieldValidationKind = Literal[
     "",
@@ -112,8 +112,8 @@ class RequestsAppointmentsSection(CmBaseModel):
     @field_validator("type_labels")
     @classmethod
     def _type_label_keys(cls, value: dict[str, LocalizedLabels]) -> dict[str, LocalizedLabels]:
-        allowed = {"ORDER", "APPOINTMENT", "OTHER"}
+        allowed = {"ORDER", "APPOINTMENT", "OTHER", "HUMAN"}
         bad = sorted(k for k in value if k not in allowed)
         if bad:
-            raise ValueError(f"type_labels keys must be ORDER|APPOINTMENT|OTHER; got {bad}")
+            raise ValueError(f"type_labels keys must be ORDER|APPOINTMENT|OTHER|HUMAN; got {bad}")
         return value

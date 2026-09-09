@@ -57,6 +57,7 @@ export function RequestRuleEditView({
           { id: 'APPOINTMENT', label: tr('aiSetupRequestTypeAppointment') },
           { id: 'ORDER', label: tr('aiSetupRequestTypeOrder') },
           { id: 'OTHER', label: tr('aiSetupRequestTypeOther') },
+          { id: 'HUMAN', label: tr('aiSetupRequestTypeHuman') },
         ]}
         onChange={onType}
       />

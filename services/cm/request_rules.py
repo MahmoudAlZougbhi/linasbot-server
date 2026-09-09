@@ -14,6 +14,7 @@ _TYPE_DEFAULT_TITLES: dict[str, str] = {
     "ORDER": "Order",
     "APPOINTMENT": "Appointment",
     "OTHER": "Other",
+    "HUMAN": "Human",
 }
 
 _BUILTIN_FIELD_IDS: tuple[str, ...] = (

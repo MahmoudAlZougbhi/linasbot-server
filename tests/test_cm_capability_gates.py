@@ -93,3 +93,41 @@ def test_human_handoff_enabled_falls_back_to_actions_toggle(monkeypatch: pytest.
 
     monkeypatch.setattr("services.cm.capability_gates.load_published_content", _load)
     assert human_handoff_enabled("linas") is False
+
+
+def test_human_handoff_follows_published_human_request_rule(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("services.cm.capability_gates.tenant_uses_cm_runtime", lambda _tid: True)
+
+    class _Pointer:
+        content_version_id = "v_test"
+        index_version_id = "idx_test"
+
+    def _load(_tid: str):
+        return _Pointer(), {
+            "ai_limits": {"human_handoff_enabled": False},
+            "requests_appointments": {
+                "rules": [{"id": "h1", "type": "HUMAN", "name": "Staff", "enabled": True}],
+            },
+        }
+
+    monkeypatch.setattr("services.cm.capability_gates.load_published_content", _load)
+    assert human_handoff_enabled("linas") is True
+
+
+def test_disabled_human_request_rule_blocks_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("services.cm.capability_gates.tenant_uses_cm_runtime", lambda _tid: True)
+
+    class _Pointer:
+        content_version_id = "v_test"
+        index_version_id = "idx_test"
+
+    def _load(_tid: str):
+        return _Pointer(), {
+            "ai_limits": {"human_handoff_enabled": True},
+            "requests_appointments": {
+                "rules": [{"id": "h1", "type": "HUMAN", "name": "Staff", "enabled": False}],
+            },
+        }
+
+    monkeypatch.setattr("services.cm.capability_gates.load_published_content", _load)
+    assert human_handoff_enabled("linas") is False

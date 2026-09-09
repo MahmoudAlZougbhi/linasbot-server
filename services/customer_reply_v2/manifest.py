@@ -33,7 +33,7 @@ SECTION_DESCRIPTIONS: dict[str, str] = {
     "ai_limits": "AI usage and behavior limits.",
     "off_days": "Closed days and holiday schedules.",
     "opening_hours": "Named opening-hour calendars.",
-    "requests_appointments": "Customer request rules: appointment, order, or other (title + note).",
+    "requests_appointments": "Customer request rules: appointment, product, other, or human (title + note).",
 }
 
 _CACHE: dict[str, tuple[float, str, list[ManifestSection]]] = {}

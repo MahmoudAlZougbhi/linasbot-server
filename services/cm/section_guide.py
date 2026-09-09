@@ -25,19 +25,16 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
     "languages": {
         "title": "Languages",
         "purpose": (
-            "Content/knowledge language organization and default fallback — NOT customer reply language control. "
-            "Customer-facing AI replies are multilingual by default (auto-detect, reply in user's language). "
-            "Smart Q&A translation languages are configured on the Smart Q&A screen."
+            "Internal content language defaults only. There is no owner Languages tile. "
+            "Customer AI auto-detects every supported language and replies in that language. "
+            "Franco/Arabizi is understood as Arabic and answered in Arabic script."
         ),
-        "why": "Default language and behavior notes still matter for content organization and unknown-language fallback.",
-        "what_to_fill": ["supported_languages", "default_language"],
-        "useful": (
-            "mixed_language_behavior, unknown_language_behavior. "
-            "supported_languages does NOT limit customer DM/comment reply languages."
-        ),
-        "app_path": "AI Setup → Languages",
+        "why": "Owners do not pick reply languages. FAQ translation targets stay on Smart Q&A.",
+        "what_to_fill": [],
+        "useful": "Do not tell the owner to enable Arabic/English/French for the customer AI.",
+        "app_path": "Not shown in AI Setup. Reply language is global.",
         "fixed_fields": ["response_language_map", "customer_reply_multilingual"],
-        "editable_fields": ["supported_languages", "default_language"],
+        "editable_fields": [],
     },
     "style": {
         "title": "Style & Tone",
@@ -186,10 +183,13 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
     "requests_appointments": {
         "title": "Requests & Appointments",
         "title_ar": "الطلبات والمواعيد",
-        "purpose": ("Optional customer Orders / Appointment requests / Other capture via simple request rules."),
-        "why": "Lets owners collect structured requests without forced wa.me booking handoff.",
+        "purpose": (
+            "Optional customer Appointment / Product / Other / Human rules. "
+            "Human rules are the owner control for Live Chat / human transfer."
+        ),
+        "why": "Lets owners collect structured requests and allow human transfer from one Requests screen.",
         "what_to_fill": [
-            "rules[] with type (ORDER | APPOINTMENT | OTHER), title (name), and custom note",
+            "rules[] with type (ORDER | APPOINTMENT | OTHER | HUMAN), title (name), and custom note",
         ],
         "useful": "Leave empty until ready; unpublished or no rules keeps AI capture inactive.",
         "app_path": "AI Setup → Requests",
