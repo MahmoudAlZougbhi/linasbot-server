@@ -50,6 +50,31 @@ def normalize_request_rule_item(raw: dict[str, Any]) -> dict[str, Any]:
     item["name"] = title
     notes = _text(item.get("notes"))
     item["notes"] = notes or None
+    scope = _text(item.get("scope")).lower()
+    allowed_scopes = {
+        "general",
+        "all_services",
+        "specific_service",
+        "all_products",
+        "specific_product",
+        "handoff",
+    }
+    if scope not in allowed_scopes:
+        scope = "handoff" if type_raw == "HUMAN" else "general"
+    item["scope"] = scope
+    raw_ids = item.get("entity_ids") or []
+    item["entity_ids"] = [str(x).strip() for x in raw_ids if str(x).strip()] if isinstance(raw_ids, list) else []
+    trigger = _text(item.get("trigger")).lower()
+    item["trigger"] = trigger if trigger in {"inquiry", "action"} else "inquiry"
+    try:
+        item["priority"] = int(item.get("priority") or 0)
+    except (TypeError, ValueError):
+        item["priority"] = 0
+    item["confirmation_required"] = bool(item.get("confirmation_required"))
+    raw_fields = item.get("required_fields") or []
+    item["required_fields"] = (
+        [str(x).strip() for x in raw_fields if str(x).strip()] if isinstance(raw_fields, list) else []
+    )
     return item
 
 

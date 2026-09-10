@@ -25,13 +25,6 @@ GOAL_PROMPTS: dict[str, str] = {
     ),
 }
 
-_CHANNEL_LABELS = {
-    "whatsapp_cloud": "WhatsApp",
-    "instagram_dm": "Instagram DM",
-    "facebook_messenger": "Facebook Messenger",
-}
-
-
 async def generate_followup_text(
     *,
     tenant_id: str,
@@ -44,11 +37,6 @@ async def generate_followup_text(
     user_id: str = "",
 ) -> str:
     normalized = normalize_followup_channel(channel)
-    prompt = GOAL_PROMPTS.get(goal) or GOAL_PROMPTS["gentle_check_in"]
-    label = _CHANNEL_LABELS.get(normalized, "DM")
-    message = (
-        f"[Smart Follow-Up / {goal}]\n{prompt}\nRespond with only the {label} message text to send to the customer."
-    )
     cr_channel = normalized
     if normalized == "whatsapp_cloud":
         cr_channel = "whatsapp_dm"
@@ -59,7 +47,7 @@ async def generate_followup_text(
 
     outcome = await run_customer_reply_v2_dm(
         tenant_id=tenant_id,
-        message=message,
+        message="",
         detected_language="",
         response_language="",
         channel=cr_channel,
@@ -69,6 +57,7 @@ async def generate_followup_text(
         user_id=user_id or customer_sender_id,
         conversation_id=conversation_id,
         apply_customer_usage_limits=False,
+        followup_goal=goal,
     )
     reply_text = str(
         getattr(outcome, "reply", None) or getattr(outcome, "answer", None) or getattr(outcome, "text", None) or ""

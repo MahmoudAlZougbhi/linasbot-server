@@ -237,6 +237,13 @@ async def publish_draft_sections(
 
     sync_request_graphs_after_publish(tenant_id=tid, sections=sections)
 
+    try:
+        from services.customer_ai.search.index_job import index_published_tenant
+
+        await index_published_tenant(tid, revision=content_version_id)
+    except Exception:
+        pass
+
     return PublishResult(
         tenant_id=tid,
         content_version_id=content_version_id,

@@ -10,6 +10,8 @@ Do **not** paste secret values into tickets, chat, commits, or logs. Mark each i
 | `ENVIRONMENT` / `ENV` | `production` / `prod` | Enables fail-closed auth + readiness checks |
 | `WHATSAPP_API_TOKEN` | WhatsApp Cloud outbound | Required for Meta Cloud template/session send |
 | `OPENAI_API_KEY` | LLM | Required; readiness checks presence only |
+| `VOYAGE_API_KEY` | Customer Brain embed/rerank | Required before enabling Customer Brain semantic search; never reuse the OpenAI key |
+| `CUSTOMER_BRAIN_ENABLED` | Customer Brain runtime | Default off. Do not enable for live customers until the acceptance gate passes |
 
 ## First admin (empty DB)
 

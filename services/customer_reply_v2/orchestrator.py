@@ -1,4 +1,4 @@
-"""Customer DM reply facade. Luna/Terra are gone; inbound still saves via callers."""
+"""Customer DM reply facade. Delegates to Customer Brain when enabled."""
 
 from __future__ import annotations
 
@@ -38,30 +38,36 @@ async def run_customer_reply_v2_dm(
     fixture_answer: dict[str, Any] | None = None,
     now_ts: float | None = None,
     apply_customer_usage_limits: bool = True,
+    followup_goal: str = "",
 ) -> CustomerReplyOutcome:
-    """Stable entry point for all DM channels. New engine will replace this body."""
-    _ = (
-        tenant_id,
-        message,
-        detected_language,
-        response_language,
-        channel,
-        asset_id,
-        provider_sender_id,
-        provider_display_name,
-        user_id,
-        conversation_id,
-        reply_to_message_id,
-        message_id,
-        attachment_types,
-        inbound_media,
-        injected_history,
-        scripted_retrieval,
-        fixture_answer,
-        now_ts,
-        apply_customer_usage_limits,
+    """Stable entry point for all DM channels."""
+    from services.customer_ai.flags import customer_brain_enabled
+    from services.customer_ai.runtime import run_customer_ai_dm
+
+    if not customer_brain_enabled():
+        return _removed_outcome()
+    return await run_customer_ai_dm(
+        tenant_id=tenant_id,
+        message=message,
+        detected_language=detected_language,
+        response_language=response_language,
+        channel=channel,
+        asset_id=asset_id,
+        provider_sender_id=provider_sender_id,
+        provider_display_name=provider_display_name,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        reply_to_message_id=reply_to_message_id,
+        message_id=message_id,
+        attachment_types=attachment_types,
+        inbound_media=inbound_media,
+        injected_history=injected_history,
+        scripted_retrieval=scripted_retrieval,
+        fixture_answer=fixture_answer,
+        now_ts=now_ts,
+        apply_customer_usage_limits=apply_customer_usage_limits,
+        followup_goal=followup_goal,
     )
-    return _removed_outcome()
 
 
 async def run_customer_reply_v2_comment(

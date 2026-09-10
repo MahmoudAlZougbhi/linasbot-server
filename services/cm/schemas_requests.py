@@ -61,14 +61,31 @@ class RequestAssignmentDefaults(CmBaseModel):
     auto_assign: bool = False
 
 
+RequestRuleScope = Literal[
+    "general",
+    "all_services",
+    "specific_service",
+    "all_products",
+    "specific_product",
+    "handoff",
+]
+RequestRuleTrigger = Literal["inquiry", "action"]
+
+
 class RequestRule(CmBaseModel):
-    """Owner-facing request rule — type, title, and custom note."""
+    """Owner-facing request rule — type, title, scope, and custom note."""
 
     id: str
     type: RequestTypeCode = "APPOINTMENT"
     name: str = ""
     notes: str | None = None
     enabled: bool = True
+    scope: RequestRuleScope = "general"
+    entity_ids: list[str] = Field(default_factory=list)
+    trigger: RequestRuleTrigger = "inquiry"
+    priority: int = 0
+    confirmation_required: bool = False
+    required_fields: list[str] = Field(default_factory=list)
     attachments: list[ArticleAttachment] = Field(default_factory=list)
     ai_search_title: str = ""
     ai_search_description: str = ""

@@ -263,6 +263,7 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
               onTitle={(name) => patchSelected({ name })}
               onType={(type) => patchSelected({ type })}
               onNote={(notes) => patchSelected({ notes })}
+              onPatch={patchSelected}
               onPreview={() => void handlePreview()}
               tr={tr}
             />

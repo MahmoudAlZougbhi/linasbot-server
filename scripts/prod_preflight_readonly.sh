@@ -185,6 +185,8 @@ required = [
     report("META_WEBHOOK_VERIFY_TOKEN", min_len=8),
     report("META_APP_ID", min_len=3),
 ]
+# Present for later Customer Brain enablement; missing Voyage must not fail current production.
+report("VOYAGE_API_KEY", min_len=20)
 
 firebase_json_candidates = []
 for root in (

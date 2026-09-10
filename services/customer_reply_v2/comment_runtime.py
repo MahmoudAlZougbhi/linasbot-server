@@ -1,4 +1,4 @@
-"""Customer comment reply facade. Auto-reply is off until the new engine lands."""
+"""Customer comment reply facade. Delegates to Customer Brain when enabled."""
 
 from __future__ import annotations
 
@@ -30,34 +30,38 @@ async def run_customer_reply_v2_comment(
     comment_id: str = "",
     post_id: str = "",
 ) -> CustomerReplyOutcome:
-    _ = (
-        tenant_id,
-        comment_text,
-        detected_language,
-        response_language,
-        channel,
-        asset_id,
-        provider_sender_id,
-        provider_display_name,
-        caption,
-        media_type,
-        parent_comment,
-        image_urls,
-        media_id,
-        comments_enabled,
-        comment_context,
-        scripted_retrieval,
-        fixture_answer,
-        injected_media_cache,
-        comment_id,
-        post_id,
-    )
+    from services.customer_ai.flags import customer_brain_enabled
+    from services.customer_ai.runtime import run_customer_ai_comment
+
     if not comments_enabled:
         return CustomerReplyOutcome(stop=True, reason="comments_toggle_off", reply=None)
-    return CustomerReplyOutcome(
-        stop=True,
-        reply=None,
-        reason=ENGINE_REMOVED,
-        evidence_status="policy_stop",
-        metadata={"ai_called": False, "cost_status": "none", "customer_engine": "removed"},
+    if not customer_brain_enabled():
+        return CustomerReplyOutcome(
+            stop=True,
+            reply=None,
+            reason=ENGINE_REMOVED,
+            evidence_status="policy_stop",
+            metadata={"ai_called": False, "cost_status": "none", "customer_engine": "removed"},
+        )
+    return await run_customer_ai_comment(
+        tenant_id=tenant_id,
+        comment_text=comment_text,
+        detected_language=detected_language,
+        response_language=response_language,
+        channel=channel,
+        asset_id=asset_id,
+        provider_sender_id=provider_sender_id,
+        provider_display_name=provider_display_name,
+        caption=caption,
+        media_type=media_type,
+        parent_comment=parent_comment,
+        image_urls=image_urls,
+        media_id=media_id,
+        comments_enabled=comments_enabled,
+        comment_context=comment_context,
+        scripted_retrieval=scripted_retrieval,
+        fixture_answer=fixture_answer,
+        injected_media_cache=injected_media_cache,
+        comment_id=comment_id,
+        post_id=post_id,
     )

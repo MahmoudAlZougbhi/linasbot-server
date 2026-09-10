@@ -30,6 +30,20 @@ test('parseRequestRule defaults type and search', () => {
   assert.equal(matchesRequestQuery(item, 'laser'), true);
   assert.equal(matchesRequestQuery(item, 'order'), false);
   assert.equal(ruleToRecord(createRequestRule('r2')).enabled, true);
+  const scoped = parseRequestRule({
+    id: 'p1',
+    type: 'ORDER',
+    name: 'Serum',
+    scope: 'specific_product',
+    entity_ids: ['prod-1'],
+    trigger: 'action',
+    confirmation_required: true,
+  });
+  assert.equal(scoped.scope, 'specific_product');
+  assert.deepEqual(scoped.entityIds, ['prod-1']);
+  assert.equal(scoped.trigger, 'action');
+  assert.equal(scoped.confirmationRequired, true);
+  assert.equal(ruleToRecord(scoped).scope, 'specific_product');
   const spaced = ruleToRecord({
     ...createRequestRule('r3'),
     notes: 'Collect name and phone ',
