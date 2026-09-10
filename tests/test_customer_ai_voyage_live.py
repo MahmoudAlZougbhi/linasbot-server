@@ -27,14 +27,23 @@ def _require_key() -> None:
         pytest.skip("VOYAGE_API_KEY not configured")
 
 
+def _skip_rate_limit(exc: VoyageContractError) -> None:
+    if "429" in str(exc):
+        pytest.skip("Voyage rate-limited after earlier live calls")
+    raise exc
+
+
 @pytest.mark.asyncio
 async def test_live_entity_embed_dims_and_franco_query() -> None:
     _require_key()
-    docs = await embed_texts(
-        ENTITY_DOCUMENT,
-        ["Laser hair removal service", "Botox injection service"],
-    )
-    query = await embed_texts(ENTITY_QUERY, ["بدي شيل شعر الإيدين"])
+    try:
+        docs = await embed_texts(
+            ENTITY_DOCUMENT,
+            ["Laser hair removal service", "Botox injection service"],
+        )
+        query = await embed_texts(ENTITY_QUERY, ["بدي شيل شعر الإيدين"])
+    except VoyageContractError as exc:
+        _skip_rate_limit(exc)
     assert compatible(ENTITY_DOCUMENT, ENTITY_QUERY)
     assert len(docs.vectors) == 2
     assert len(docs.vectors[0]) == 1024
@@ -47,15 +56,18 @@ async def test_live_entity_embed_dims_and_franco_query() -> None:
 @pytest.mark.asyncio
 async def test_live_contextual_knowledge_groups() -> None:
     _require_key()
-    groups = await embed_contextual_groups(
-        KNOWLEDGE_DOCUMENT,
-        [
+    try:
+        groups = await embed_contextual_groups(
+            KNOWLEDGE_DOCUMENT,
             [
-                "Aftercare booklet",
-                "Do not wash the treated area for 24 hours after laser.",
-            ]
-        ],
-    )
+                [
+                    "Aftercare booklet",
+                    "Do not wash the treated area for 24 hours after laser.",
+                ]
+            ],
+        )
+    except VoyageContractError as exc:
+        _skip_rate_limit(exc)
     assert len(groups) == 1
     assert len(groups[0].vectors) == 2
     assert len(groups[0].vectors[0]) == 1024
@@ -65,12 +77,15 @@ async def test_live_contextual_knowledge_groups() -> None:
 @pytest.mark.asyncio
 async def test_live_rerank_25_orders_relevant_first() -> None:
     _require_key()
-    hits = await rerank_texts(
-        query="hair removal price",
-        documents=["Laser hair removal 80 USD", "Opening hours Monday to Saturday", "Botox filler notes"],
-        model=RERANK_MODEL,
-        top_k=3,
-    )
+    try:
+        hits = await rerank_texts(
+            query="hair removal price",
+            documents=["Laser hair removal 80 USD", "Opening hours Monday to Saturday", "Botox filler notes"],
+            model=RERANK_MODEL,
+            top_k=3,
+        )
+    except VoyageContractError as exc:
+        _skip_rate_limit(exc)
     assert hits
     assert hits[0].index == 0
     assert hits[0].score > hits[-1].score
@@ -101,8 +116,6 @@ async def test_live_hybrid_picks_catalog_service() -> None:
     try:
         hits = await search_hybrid(cards_from_sections(sections), "بدي hair removal", families={"services"}, limit=3)
     except VoyageContractError as exc:
-        if "429" in str(exc):
-            pytest.skip("Voyage rate-limited after earlier live calls")
-        raise
+        _skip_rate_limit(exc)
     assert hits
     assert hits[0].card.item_id == "services:hair"

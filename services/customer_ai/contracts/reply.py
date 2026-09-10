@@ -18,6 +18,8 @@ class OutboundMessage(BaseModel):
     protected: bool = False
     resource_ids: list[str] = Field(default_factory=list)
     component_id: str = ""
+    idempotency_key: str = ""
+    depends_on: list[str] = Field(default_factory=list)
 
 
 class FinalReplyEnvelope(BaseModel):

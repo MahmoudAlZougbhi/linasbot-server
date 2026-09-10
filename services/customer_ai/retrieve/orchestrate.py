@@ -13,6 +13,7 @@ from services.customer_ai.retrieve.cards import TitleCard, load_published_cards
 from services.customer_ai.retrieve.expand import expand_ranked
 from services.customer_ai.retrieve.hybrid import HybridHit, search_hybrid
 from services.customer_ai.retrieve.lexical import search_cards
+from services.customer_ai.retrieve.rerank import rerank_hits
 from services.customer_ai.retrieve.products import cards_from_products, load_product_cards
 from services.cm.version_store import PublishedVersionError, load_published_content
 
@@ -47,6 +48,7 @@ async def retrieve_cards(
         return EvidenceBundle(outcome="provider_not_configured")
     try:
         hits: list[HybridHit] = await search_hybrid(scoped, query, families=families, limit=_cap())
+        hits = await rerank_hits(query, hits)
     except VoyageNotConfiguredError:
         return EvidenceBundle(outcome="provider_not_configured")
     except VoyageContractError:

@@ -6,6 +6,7 @@ from services.cm.comment_rules import evaluate_comment_rules, load_published_com
 from services.customer_ai.comment_normalize import normalize_comment_mode
 from services.customer_ai.contracts.enums import CommentMode
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.customer_ai.policies.privacy import claims_private_send, public_comment_safe
 
 
 def winning_comment_mode(
@@ -40,7 +41,13 @@ def winning_comment_mode(
     return mode, decision
 
 
-def deterministic_comment_result(mode: CommentMode, decision: object) -> TurnResult | None:
+def deterministic_comment_result(
+    mode: CommentMode,
+    decision: object,
+    *,
+    event_id: str = "",
+    dm_receipt_ok: bool = False,
+) -> TurnResult | None:
     public = str(getattr(decision, "reply_text", "") or "")
     private = str(getattr(decision, "dm_text", "") or "")
     rule_id = str(getattr(decision, "rule_id", "") or "")
@@ -52,10 +59,30 @@ def deterministic_comment_result(mode: CommentMode, decision: object) -> TurnRes
             extra=extra,
         )
     messages: list[OutboundMessage] = []
-    if mode in {"static_comment", "static_both"} and public:
-        messages.append(OutboundMessage(destination="comment", text=public, protected=True, component_id="public"))
+    key_base = f"comment:{event_id or rule_id}"
     if mode in {"static_dm", "static_both"} and private:
-        messages.append(OutboundMessage(destination="dm", text=private, protected=True, component_id="private"))
+        messages.append(
+            OutboundMessage(
+                destination="dm",
+                text=private,
+                protected=True,
+                component_id="private",
+                idempotency_key=f"{key_base}:private",
+            )
+        )
+    if mode in {"static_comment", "static_both"} and public:
+        safe_public = public_comment_safe(public, dm_receipt_ok=dm_receipt_ok)
+        depends = ["private"] if mode == "static_both" and claims_private_send(public) else []
+        messages.append(
+            OutboundMessage(
+                destination="comment",
+                text=safe_public,
+                protected=True,
+                component_id="public",
+                idempotency_key=f"{key_base}:public",
+                depends_on=depends,
+            )
+        )
     if mode.startswith("static"):
         if not messages:
             return TurnResult(

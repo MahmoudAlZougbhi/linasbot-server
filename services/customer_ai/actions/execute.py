@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.customer_ai.contracts.actions import ActionProposalSet, ActionReceipt, ActionReceiptSet
-from services.customer_ai.contracts.turn import CustomerTurn
+from services.customer_ai.actions.drafts import apply_draft_update, cancel_request_or_draft
 from services.customer_ai.actions.handoff import escalate_to_human
 from services.customer_ai.actions.requests import persist_request
+from services.customer_ai.actions.resources import send_resource
+from services.customer_ai.contracts.actions import ActionProposalSet, ActionReceipt, ActionReceiptSet
+from services.customer_ai.contracts.turn import CustomerTurn
 
 
 async def execute_actions(
@@ -31,6 +33,31 @@ async def execute_actions(
                     proposal=proposal,
                     user_id=turn.customer_id,
                     conversation_id=turn.conversation_id,
+                )
+            )
+            continue
+        if proposal.action_type == "send_resource":
+            receipts.append(send_resource(tenant_id=turn.tenant_id, proposal=proposal, session=session))
+            continue
+        if proposal.action_type == "update_draft":
+            receipts.append(
+                apply_draft_update(
+                    proposal=proposal,
+                    current_revision=turn.state.draft_revision,
+                    previous_fields=dict(proposal.fields.get("previous_fields") or {}),
+                    session=session,
+                    tenant_id=turn.tenant_id,
+                    actor_user_id=turn.customer_id or "customer_ai",
+                )
+            )
+            continue
+        if proposal.action_type == "cancel_request":
+            receipts.append(
+                cancel_request_or_draft(
+                    proposal=proposal,
+                    session=session,
+                    tenant_id=turn.tenant_id,
+                    actor_user_id=turn.customer_id or "customer_ai",
                 )
             )
             continue

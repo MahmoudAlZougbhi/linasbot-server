@@ -68,6 +68,7 @@ class ProductsService:
         self.session.expire(row, ["images", "links"])
         refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
         assert refreshed is not None
+        self._invalidate_customer_ai_products(tenant_id)
         return product_to_dict(refreshed)
 
     def update_product(self, *, tenant_id: str, product_id: str, body: ProductWriteBody) -> dict[str, Any]:
@@ -100,6 +101,7 @@ class ProductsService:
         self.session.expire(row, ["images", "links"])
         refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
         assert refreshed is not None
+        self._invalidate_customer_ai_products(tenant_id)
         return product_to_dict(refreshed)
 
     def delete_product(self, *, tenant_id: str, product_id: str) -> list[str]:
@@ -110,6 +112,7 @@ class ProductsService:
         remove_product_from_index(self.session, tenant_id=tenant_id, product_id=product_id)
         clear_context_for_product(self.session, tenant_id=tenant_id, product_id=product_id)
         clear_reply_for_product(self.session, tenant_id=tenant_id, product_id=product_id)
+        self._invalidate_customer_ai_products(tenant_id)
         return media_ids
 
     def preview_csv(self, *, csv_text: str) -> dict[str, Any]:
@@ -211,6 +214,14 @@ class ProductsService:
                 product_image_id=product_image_id,
                 media_id=media_id,
             )
+
+    def _invalidate_customer_ai_products(self, tenant_id: str) -> None:
+        try:
+            from services.customer_ai.search.invalidate import notify_product_change
+
+            notify_product_change(self.session, tenant_id)
+        except Exception:
+            return
 
     def _validate_images(self, *, tenant_id: str, images: list[Any]) -> None:
         if len(images) > MAX_IMAGES:

@@ -11,6 +11,7 @@ from services.customer_ai.providers.spaces import ENTITY_DOCUMENT
 from services.customer_ai.providers.voyage_client import VoyageContractError, embed_texts
 from services.customer_ai.retrieve.cards import TitleCard, load_published_cards
 from services.customer_ai.retrieve.products import load_product_cards
+from services.customer_ai.search.store import activate_pointer, write_documents
 
 log = logging.getLogger("customer_ai.index")
 
@@ -50,7 +51,32 @@ async def embed_card_batch(cards: list[TitleCard]) -> list[list[float]]:
     return vectors.vectors
 
 
-async def index_published_tenant(tenant_id: str, *, revision: str) -> dict[str, Any]:
+def _persist_index(session: Any | None, rows: list[dict[str, Any]], vectors: list[list[float]], *, tenant_id: str, revision: str) -> dict[str, Any]:
+    written = write_documents(session, rows, vectors)
+    if not written.get("ok"):
+        return {"ready": False, "reason": written.get("reason") or "index_not_ready", "count": len(rows)}
+    pointer = activate_pointer(
+        session,
+        tenant_id=tenant_id,
+        space_id=ENTITY_DOCUMENT.space_id,
+        source_family="entities",
+        version=revision or "unpublished",
+        count=len(rows),
+        source_revision=revision,
+    )
+    if not pointer.get("ok") and session is not None:
+        return {"ready": False, "reason": pointer.get("reason") or "index_not_ready", "count": len(rows)}
+    backend = str(written.get("backend") or "memory")
+    ready = backend == "pgvector"
+    return {
+        "ready": ready,
+        "reason": "ok" if ready else "index_not_ready",
+        "count": len(rows),
+        "store": backend,
+    }
+
+
+async def index_published_tenant(tenant_id: str, *, revision: str, session: Any | None = None) -> dict[str, Any]:
     tid = (tenant_id or "").strip()
     if not tid:
         return {"ready": False, "reason": "unpublished", "count": 0}
@@ -66,4 +92,14 @@ async def index_published_tenant(tenant_id: str, *, revision: str) -> dict[str, 
         return {"ready": False, "reason": "provider_error", "count": len(rows)}
     if len(vectors) != len(rows):
         return {"ready": False, "reason": "provider_error", "count": len(rows)}
-    return {"ready": True, "reason": "ok", "count": len(rows), "store": "published_snapshot"}
+    if session is not None:
+        return _persist_index(session, rows, vectors, tenant_id=tid, revision=revision)
+    try:
+        from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+
+        with whatsapp_session(require=True) as db:
+            return _persist_index(db, rows, vectors, tenant_id=tid, revision=revision)
+    except WhatsAppDatabaseUnavailable:
+        return {"ready": False, "reason": "index_not_ready", "count": len(rows), "store": "unavailable"}
+    except Exception:
+        return {"ready": False, "reason": "index_not_ready", "count": len(rows), "store": "unavailable"}

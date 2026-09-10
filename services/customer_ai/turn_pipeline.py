@@ -9,6 +9,7 @@ from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMes
 from services.customer_ai.contracts.turn import CustomerTurn
 from services.customer_ai.coverage import coverage_ok
 from services.customer_ai.faq_exact import find_published_exact_faq
+from services.customer_ai.faq_freshness import faq_static_allowed
 from services.customer_ai.generate.reply import generate_grounded_reply, openai_configured
 from services.customer_ai.greeting import evaluate_greeting
 from services.customer_ai.identity import load_identity_bundle
@@ -24,7 +25,7 @@ def _faq_result(turn: CustomerTurn, message: str, channel: str) -> TurnResult | 
     if turn.invocation_kind == "followup" or not message.strip():
         return None
     faq = find_published_exact_faq(turn.tenant_id, message)
-    if not faq:
+    if not faq or not faq_static_allowed(faq.answer, tenant_id=turn.tenant_id):
         return None
     destination = _destination(channel)
     messages: list[OutboundMessage] = []
@@ -130,6 +131,12 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
         destination=_destination(channel),
     )
     if envelope is None or not envelope.messages:
+        if turn.invocation_kind == "followup":
+            return TurnResult(
+                stop_reason="ok",
+                envelope=FinalReplyEnvelope(decision="no_reply"),
+                extra={"phase": "followup_no_reply", "plan": plan.model_dump()},
+            )
         return TurnResult(
             stop_reason="failed_closed",
             envelope=FinalReplyEnvelope(decision="clarify"),

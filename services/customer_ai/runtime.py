@@ -6,6 +6,7 @@ from typing import Any
 
 from services.customer_ai.contracts.reply import TurnResult
 from services.customer_ai.contracts.turn import CustomerTurn, MediaView
+from services.customer_ai.control import apply_live_control
 from services.customer_ai.flags import customer_brain_enabled
 from services.customer_ai.gates import evaluate_gates
 from services.customer_ai.comments.pipeline import deterministic_comment_result, winning_comment_mode
@@ -103,7 +104,8 @@ async def run_customer_ai_dm(
         message_id=message_id,
         followup_goal=followup_goal or str(_kwargs.get("followup_goal") or ""),
     )
-    gate = evaluate_gates(turn, apply_credits=apply_customer_usage_limits)
+    turn = apply_live_control(turn)
+    gate = evaluate_gates(turn, apply_credits=apply_customer_usage_limits, message=message)
     if not gate.allow:
         return _outcome(TurnResult(stop_reason=gate.reason, extra={"gate": gate.detail}))
     return _outcome(await run_dm_after_gates(turn, message=message, channel=channel))
@@ -131,7 +133,7 @@ async def run_customer_ai_comment(
         channel=channel,
     )
     if mode and decision is not None:
-        static = deterministic_comment_result(mode, decision)
+        static = deterministic_comment_result(mode, decision, event_id=comment_id)
         if static is not None:
             return _outcome(static)
     from services.customer_ai.history import build_history_snapshot
@@ -150,7 +152,8 @@ async def run_customer_ai_comment(
         ),
         extra={"comment_mode": mode or "", "winning_rule": getattr(decision, "rule_id", "")},
     )
-    gate = evaluate_gates(turn)
+    turn = apply_live_control(turn)
+    gate = evaluate_gates(turn, message=comment_text)
     if not gate.allow:
         return _outcome(TurnResult(stop_reason=gate.reason, extra={"gate": gate.detail}))
     return _outcome(await run_dm_after_gates(turn, message=comment_text, channel=channel))

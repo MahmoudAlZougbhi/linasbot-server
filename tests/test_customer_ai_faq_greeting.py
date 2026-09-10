@@ -98,14 +98,14 @@ async def test_flag_on_exact_faq_is_deterministic(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("CUSTOMER_BRAIN_ENABLED", "true")
     monkeypatch.setattr(
         "services.customer_ai.runtime.evaluate_gates",
-        lambda turn, apply_credits=True: GateDecision(True, "ok"),
+        lambda turn, apply_credits=True, message="": GateDecision(True, "ok"),
     )
     monkeypatch.setattr(
         "services.customer_ai.turn_pipeline.find_published_exact_faq",
-        lambda _tid, _msg: FaqExactHit("faq1", "en", "hours?", "10-8 daily", 1),
+        lambda _tid, _msg: FaqExactHit("faq1", "en", "hours?", "We reply within one business day.", 1),
     )
     out = await run_customer_reply_v2_dm(tenant_id="t1", message="hours?")
     assert out.stop is False
-    assert out.reply == "10-8 daily"
+    assert out.reply == "We reply within one business day."
     assert out.metadata.get("ai_called") is False
     assert out.metadata.get("path") == "faq_exact"

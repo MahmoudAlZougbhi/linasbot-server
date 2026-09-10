@@ -210,6 +210,21 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             sfu.maybe_complete_sequence(job.sequence_id)
             return {"job_id": job_id, "status": "skipped", "reason": reason}
 
+        from services.customer_ai.control import live_handoff_active
+        from services.customer_ai.followup.revalidate import revalidate_followup_send
+
+        recheck = revalidate_followup_send(
+            takeover=live_handoff_active(user_id=conv.user_id or conv.social_sender_id)
+            or str(conv.control_state or "") == "HUMAN_PAUSED",
+            rule_permits=sequence is not None and str(getattr(sequence, "status", "") or "") == "active",
+            window_valid=ok,
+        )
+        if not recheck.allow:
+            _release(tenant_id, reservation_id)
+            sfu.mark_job_terminal(job, status="skipped", reason=recheck.reason)
+            sfu.maybe_complete_sequence(job.sequence_id)
+            return {"job_id": job_id, "status": "skipped", "reason": recheck.reason}
+
         job.status = "sending"
         session.flush()
         send_result = await adapter.send_followup(
