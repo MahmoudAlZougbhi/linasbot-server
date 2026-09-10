@@ -48,7 +48,6 @@ _ROUTE_MODULES = (
     "modules.dashboard_api",
     "modules.live_chat_api",
     "modules.media_api",
-    "modules.settings_api",
     "modules.local_qa_api",
     "modules.content_files_api",
     "modules.instructions_api",
@@ -56,7 +55,6 @@ _ROUTE_MODULES = (
     "modules.webhook_handlers",
     "modules.meta_connections_api",
     "modules.meta_messaging_webhook",
-    "modules.meta_social_posts_api",
     "modules.wallet_api",
     "modules.plans_api",
     "modules.public_landing_stats_api",
@@ -186,7 +184,7 @@ class TestRouteInventory:
         # +meta reconnect endpoint for first-party bindings.
         # +guest-ai session/messages (prefix-public, rate-limited).
         # +owner-notifications inbox/read/device-token + mobile STT (protected).
-        # +public plans catalog GET /api/public/plans + protected GET /api/billing/catalog.
+        # +public plans catalog GET /api/public/plans.
         # +Resend webhook + email-change confirm (public) + request-email-change (protected).
         #
         # Absolute totals can grow when other suites import main (singleton app). Assert the
@@ -203,7 +201,6 @@ class TestRouteInventory:
             ("POST", "/api/auth/verify-email"),
             ("POST", "/api/auth/resend-verification"),
             ("POST", "/api/auth/confirm-email-change"),
-            ("GET", "/api/billing/packages"),
             ("GET", "/api/public/plans"),
             ("GET", "/api/public/app-version"),
             ("POST", "/api/public/app-version/check"),
@@ -226,18 +223,17 @@ class TestRouteInventory:
             ("POST", "/api/web-chat/heartbeat"),
             ("GET", "/api/web-chat/sdk-docs"),
         }
-        assert counts["total_api_routes"] >= 150
+        assert counts["total_api_routes"] >= 120
         assert counts["public"] >= 26
-        assert counts["protected"] >= 120
+        assert counts["protected"] >= 90
         assert expected_public.issubset(public_set)
         assert ("POST", "/api/auth/request-email-change") in set(auth_matrix["protected"])
         assert ("POST", "/api/webhooks/resend") in public_set
         assert ("POST", "/api/auth/confirm-email-change") in public_set
         assert ("POST", "/api/auth/logout") not in public_set
         assert ("POST", "/api/auth/bootstrap-admin") not in public_set
-        assert ("GET", "/api/billing/wallet") not in public_set
-        assert ("GET", "/api/billing/wallet/analytics") not in public_set
-        assert ("GET", "/api/settings/ai-limits") not in public_set
+        assert ("GET", "/api/platform/analytics") not in public_set
+        assert ("GET", "/api/entitlements/me") not in public_set
 
     def test_public_allowlist_matches_api_security(self, auth_matrix: dict[str, Any]) -> None:
         discovered_public = set(auth_matrix["public"])
@@ -357,44 +353,6 @@ class TestDebugAndSimulationEndpoints:
     def test_debug_webhook_status_requires_auth(self, client: TestClient) -> None:
         _clear_client_auth(client)
         response = client.get("/api/debug/webhook-status")
-        assert response.status_code == 401
-
-
-class TestLiveChatDebugElevation:
-    def _set_operator_session(self, client: TestClient, *, with_csrf_header: bool = False) -> str:
-        rec = session_service.create_session(
-            user_id="matrix-operator",
-            email="matrix-operator@example.com",
-            role="operator",
-            permissions=None,
-            tenant_id="linas",
-        )
-        client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
-        client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
-        if with_csrf_header:
-            client.headers[CSRF_HEADER_NAME] = rec.csrf_token
-        else:
-            client.headers.pop(CSRF_HEADER_NAME, None)
-        return rec.csrf_token
-
-    def test_debug_firestore_forbidden_for_operator(self, client: TestClient) -> None:
-        _clear_client_auth(client)
-        self._set_operator_session(client)
-        response = client.get("/api/live-chat/debug-firestore")
-        assert response.status_code == 403
-
-    def test_rebuild_index_forbidden_for_operator(self, client: TestClient) -> None:
-        _clear_client_auth(client)
-        csrf = self._set_operator_session(client, with_csrf_header=True)
-        response = client.post(
-            "/api/live-chat/rebuild-index",
-            headers={CSRF_HEADER_NAME: csrf},
-        )
-        assert response.status_code == 403
-
-    def test_debug_firestore_unauthenticated_401(self, client: TestClient) -> None:
-        _clear_client_auth(client)
-        response = client.get("/api/live-chat/debug-firestore")
         assert response.status_code == 401
 
 

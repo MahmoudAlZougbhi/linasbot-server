@@ -180,7 +180,6 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("POST", "/api/auth/verify-email"),
     ("POST", "/api/auth/resend-verification"),
     ("POST", "/api/auth/confirm-email-change"),
-    ("GET", "/api/billing/packages"),
     ("GET", "/api/public/plans"),
     ("GET", "/api/public/app-version"),
     ("POST", "/api/public/app-version/check"),
@@ -231,7 +230,7 @@ def required_permission_for(method: str, path: str) -> str | None:
     if p.startswith("/api/auth/"):
         return None  # authenticated self-service (session/me/change-password/logout)
     if p.startswith("/api/billing/"):
-        return None  # session-scoped wallet; admin-credit checks role/tenant internally
+        return None  # session-scoped billing webhooks / remaining wallet surfaces
 
     if p.startswith("/api/analytics") or p == "/api/stats":
         return "analytics"

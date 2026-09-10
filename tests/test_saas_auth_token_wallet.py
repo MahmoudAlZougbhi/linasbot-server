@@ -44,7 +44,6 @@ def test_auth_email_routes_are_public() -> None:
     assert is_public_api("POST", "/api/auth/verify-email")
     assert is_public_api("POST", "/api/auth/resend-verification")
     assert is_public_api("POST", "/api/auth/confirm-email-change")
-    assert is_public_api("GET", "/api/billing/packages")
     assert is_public_api("GET", "/api/public/plans")
     assert is_public_api("GET", "/api/public/landing-stats")
     assert is_public_api("POST", "/api/billing/stripe/webhook")
@@ -205,92 +204,6 @@ def test_credit_ledger_includes_actor_tenant_amount_before_after(wallet_svc: Tok
     assert latest["input_remaining_after"] == 140
     assert latest["output_remaining_after"] == 60
     assert latest["balance_after"] == 200
-
-
-def test_admin_credit_cross_tenant_platform_owner_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    from fastapi import HTTPException
-
-    from modules.wallet_api import _admin_credit_allowed, assert_admin_credit_target_allowed
-
-    monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "linas")
-    monkeypatch.setenv("TOKEN_WALLET_ADMIN_CREDIT_TENANT_IDS", "linas")
-
-    assert _admin_credit_allowed("linas", "platform_owner") is True
-    assert _admin_credit_allowed("linas", "admin") is True
-    assert _admin_credit_allowed("acme", "admin") is False
-    assert _admin_credit_allowed("acme", "viewer") is False
-
-    # Unlimited/allowlisted admin may credit own tenant only.
-    assert_admin_credit_target_allowed(
-        session_tenant="linas",
-        session_role="admin",
-        target_tenant="linas",
-    )
-    with pytest.raises(HTTPException) as cross:
-        assert_admin_credit_target_allowed(
-            session_tenant="linas",
-            session_role="admin",
-            target_tenant="acme",
-        )
-    assert cross.value.status_code == 403
-    assert "Cross-tenant" in str(cross.value.detail)
-
-    # platform_owner may credit any tenant.
-    assert_admin_credit_target_allowed(
-        session_tenant="linas",
-        session_role="platform_owner",
-        target_tenant="acme",
-    )
-
-
-@pytest.mark.asyncio
-async def test_admin_credit_audit_and_file_idempotency(
-    wallet_svc: TokenWalletService,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import modules.wallet_api as wallet_api
-    import services.admin_credit_idempotency as admin_idem
-    from services.dashboard_session_service import SessionRecord
-
-    monkeypatch.setattr(wallet_api, "token_wallet_service", wallet_svc)
-    monkeypatch.setattr(admin_idem, "_IDEMP_DIR", tmp_path / "admin_credit_idem")
-
-    session = SessionRecord(
-        session_id="s1",
-        user_id="owner-1",
-        email="owner@example.com",
-        role="platform_owner",
-        permissions=None,
-        tenant_id="linas",
-        csrf_token="csrf",
-        created_at=0.0,
-        expires_at=9_999_999_999.0,
-    )
-    monkeypatch.setattr(wallet_api, "require_permission", lambda _req, _perm: session)
-
-    body = wallet_api.AdminCreditRequest(
-        tenant_id="acme",
-        input_tokens=80,
-        output_tokens=20,
-        amount_usd=2.0,
-        reason="promo",
-        idempotency_key="idem-key-abc123",
-    )
-    first = await wallet_api.admin_credit(body, request=None)  # type: ignore[arg-type]
-    assert first["success"] is True
-    assert first["duplicate"] is False
-    assert first["audit"]["actor"] == "owner-1"
-    assert first["audit"]["tenant_id"] == "acme"
-    assert first["audit"]["amount_usd"] == 2.0
-    assert first["audit"]["reason"] == "promo"
-    assert first["audit"]["before"]["balance_tokens"] == 0
-    assert first["audit"]["after"]["balance_tokens"] == 100
-    assert wallet_svc.get_wallet("acme").balance_tokens == 100
-
-    second = await wallet_api.admin_credit(body, request=None)  # type: ignore[arg-type]
-    assert second["duplicate"] is True
-    assert wallet_svc.get_wallet("acme").balance_tokens == 100
 
 
 def test_cors_production_drops_http_linasaibot_keeps_localhost() -> None:

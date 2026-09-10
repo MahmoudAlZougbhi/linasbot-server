@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -168,37 +167,3 @@ class TestPermissionMatrixWave3:
             assert "chatHistory" not in perms
             assert "contentManagers" in perms
             assert "activityFlow" in perms
-
-
-class TestIntegrationsStatus:
-    def test_integrations_redacted_and_auth_required(self):
-        os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-a-real-key")
-        from fastapi.testclient import TestClient
-
-        import modules.settings_api  # noqa: F401
-        from modules.core import app
-        from services.dashboard_session_service import (
-            CSRF_COOKIE_NAME,
-            SESSION_COOKIE_NAME,
-            session_service,
-        )
-
-        client = TestClient(app)
-        denied = client.get("/api/settings/integrations")
-        assert denied.status_code == 401
-
-        rec = session_service.create_session(
-            user_id="admin1", email="admin@example.com", role="admin", permissions=None, tenant_id="linas"
-        )
-        client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
-        client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
-        ok = client.get("/api/settings/integrations")
-        assert ok.status_code == 200
-        body = ok.json()
-        assert body.get("success") is True
-        blob = json.dumps(body)
-        assert "sk-" not in blob.lower() or "sk-test" not in blob  # no live secrets
-        for item in body.get("integrations") or []:
-            assert "key" not in item
-            assert "configured" in item
-            assert isinstance(item["configured"], bool)

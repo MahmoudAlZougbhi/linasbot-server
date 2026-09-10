@@ -2,7 +2,7 @@
 Live Chat API module: Live chat management endpoints
 Handles conversation takeover, operator management, and inbox polling.
 
-Helpers: live_chat_api_helpers; status/debug: live_chat_api_debug (LOC split).
+Helpers: live_chat_api_helpers (LOC split).
 """
 
 from __future__ import annotations
@@ -12,8 +12,6 @@ from typing import Any
 
 from fastapi import Query, Request
 
-# Register status/debug/rebuild routes.
-from modules import live_chat_api_debug  # noqa: E402, F401
 from modules.core import app
 from modules.live_chat_api_helpers import (  # noqa: F401
     _run_endpoint,

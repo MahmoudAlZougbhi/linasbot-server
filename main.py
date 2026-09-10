@@ -64,7 +64,6 @@ import modules.meta_compliance  # noqa: E402, F401
 import modules.meta_connections_api  # noqa: E402, F401
 import modules.meta_instagram_login_webhook  # noqa: E402, F401
 import modules.meta_messaging_webhook  # noqa: E402, F401
-import modules.meta_social_posts_api  # noqa: E402, F401
 import modules.mobile_app_version_api  # noqa: E402, F401
 import modules.mobile_auth_api  # noqa: E402, F401
 import modules.mobile_dashboard_api  # noqa: E402, F401
@@ -84,7 +83,6 @@ import modules.queue_api  # noqa: E402, F401
 import modules.requests_api  # noqa: E402, F401
 import modules.resend_webhook_api  # noqa: E402, F401
 import modules.scale_api  # noqa: E402, F401
-import modules.settings_api  # noqa: E402, F401
 import modules.store_iap_api  # noqa: E402, F401
 import modules.tiktok_ads_oauth  # noqa: E402, F401
 import modules.tiktok_business_api  # noqa: E402, F401

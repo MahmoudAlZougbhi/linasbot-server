@@ -222,7 +222,6 @@ def client():
     import modules.dashboard_api  # noqa: F401
     import modules.live_chat_api  # noqa: F401
     import modules.media_api  # noqa: F401
-    import modules.settings_api  # noqa: F401
     from modules.core import app
 
     return TestClient(app)
@@ -232,7 +231,6 @@ class TestAPIAuthEnforcement:
     def test_protected_get_without_cookie_401(self, client):
         for path in [
             "/api/auth/users",
-            "/api/settings",
             "/api/smart-messaging/counts",
             "/api/live-chat/unified-chats",
             "/api/flow/logs",

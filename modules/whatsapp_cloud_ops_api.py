@@ -101,38 +101,6 @@ async def whatsapp_list_conversations(connection_id: str, request: Request) -> A
         return {"success": True, "conversations": [conversation_public_view(c) for c in rows]}
 
 
-@app.post("/api/whatsapp/cloud/conversations/{conversation_id}/pause")
-async def whatsapp_pause_conversation(conversation_id: str, request: Request) -> Any:
-    session = _require_wa_manager(request)
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        conv = repo.get_tenant_conversation(tenant_id=session.tenant_id, conversation_id=conversation_id)
-        if conv is None:
-            raise HTTPException(status_code=404, detail="conversation_not_found")
-        repo.pause_conversation(conv, reason="operator_pause", actor_user_id=_actor_id(session))
-        from services.whatsapp_cloud.smart_followup.hooks import cancel_conversation_followups
-
-        cancel_conversation_followups(
-            db,
-            tenant_id=session.tenant_id,
-            conversation_id=conv.id,
-            reason="conversation_paused",
-        )
-        return {"success": True, "conversation": conversation_public_view(conv)}
-
-
-@app.post("/api/whatsapp/cloud/conversations/{conversation_id}/resume")
-async def whatsapp_resume_conversation(conversation_id: str, request: Request) -> Any:
-    session = _require_wa_manager(request)
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        conv = repo.get_tenant_conversation(tenant_id=session.tenant_id, conversation_id=conversation_id)
-        if conv is None:
-            raise HTTPException(status_code=404, detail="conversation_not_found")
-        repo.resume_conversation(conv, actor_user_id=_actor_id(session))
-        return {"success": True, "conversation": conversation_public_view(conv)}
-
-
 @app.post("/api/whatsapp/cloud/connections/{connection_id}/test-message")
 async def whatsapp_send_test_message(
     connection_id: str, request: Request, body: dict[str, Any] = Body(default={})

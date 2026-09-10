@@ -1,36 +1,11 @@
-"""Unit tests for CM capability gates and Firebase readiness alignment."""
+"""Unit tests for CM capability gates."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from modules.settings_api import _firebase_credentials_configured
 from services.cm.capability_gates import human_handoff_enabled, image_analysis_enabled, voice_processing_enabled
 from services.cm.schemas import AiLimitsSection
-
-
-def test_firebase_credentials_configured_uses_data_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    key = tmp_path / "firebase_data.json"
-    key.write_text("{}", encoding="utf-8")
-    monkeypatch.delenv("FIRESTORE_SERVICE_ACCOUNT_KEY_PATH", raising=False)
-    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
-    monkeypatch.delenv("FIREBASE_CREDENTIALS_PATH", raising=False)
-    monkeypatch.chdir(tmp_path)
-    # Relative data/ path used by Live Chat init.
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    (data_dir / "firebase_data.json").write_text("{}", encoding="utf-8")
-    assert _firebase_credentials_configured() is True
-
-
-def test_firebase_credentials_configured_uses_env_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    key = tmp_path / "sa.json"
-    key.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("FIRESTORE_SERVICE_ACCOUNT_KEY_PATH", str(key))
-    monkeypatch.chdir(tmp_path)
-    assert _firebase_credentials_configured() is True
 
 
 def test_capability_gates_read_published_ai_limits(monkeypatch: pytest.MonkeyPatch) -> None:

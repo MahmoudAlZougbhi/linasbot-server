@@ -14,7 +14,6 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests, whatsapp_session  # noqa: E402
-from services.customer_reply_v2.retrieval_tools import ToolContext, dispatch_retrieval_tool  # noqa: E402
 from services.products.active_context import get_active_product, set_active_product  # noqa: E402
 from services.products.availability import normalize_availability  # noqa: E402
 from services.products.image_fingerprint import compute_average_phash, sha256_hex  # noqa: E402
@@ -24,7 +23,7 @@ from services.products.reply_to_map import record_sent_product_message, resolve_
 from services.products.schemas import ProductWriteBody  # noqa: E402
 from services.products.search import search_product_by_title  # noqa: E402
 from services.products.service import ProductsService  # noqa: E402
-from services.products.xlsx_import import parse_xlsx_bytes  # noqa: E402
+from services.products.xlsx_import import build_xlsx_template_bytes, parse_xlsx_bytes  # noqa: E402
 
 
 @pytest.fixture()
@@ -189,11 +188,10 @@ def test_xlsx_template_and_preview(products_env: Path) -> None:
 
     client = TestClient(app)
     headers = _auth_headers("tenant-xlsx")
-    template = client.get("/api/mobile/products/import/template.xlsx", headers=headers)
-    assert template.status_code == 200
-    rows = parse_xlsx_bytes(template.content)
+    template_bytes = build_xlsx_template_bytes()
+    rows = parse_xlsx_bytes(template_bytes)
     assert any(row.get("name") == "Rose Lipstick" for row in rows)
-    encoded = base64.b64encode(template.content).decode("ascii")
+    encoded = base64.b64encode(template_bytes).decode("ascii")
     preview = client.post(
         "/api/mobile/products/import/xlsx/preview",
         headers=headers,
@@ -236,31 +234,6 @@ def test_hard_delete_clears_context_and_reply(products_env: Path) -> None:
             )
             is None
         )
-
-
-def test_crv2_active_context_tool(products_env: Path) -> None:
-    with whatsapp_session(require=True) as session:
-        svc = ProductsService(session)
-        product = svc.create_product(
-            tenant_id="tenant-tool-ctx",
-            body=ProductWriteBody(description="test product", name="Tool Context Hat", sizes=[], colors=[], links=[]),
-        )
-        set_active_product(
-            session,
-            tenant_id="tenant-tool-ctx",
-            conversation_id="conv-tool",
-            product_id=product["id"],
-            source="url_match",
-        )
-    ctx = ToolContext(
-        tenant_id="tenant-tool-ctx",
-        published_revision="rev",
-        channel="instagram_dm",
-        conversation_id="conv-tool",
-    )
-    out = dispatch_retrieval_tool("get_active_product_context", {}, ctx)
-    assert out["ok"] is True
-    assert out["data"]["product"]["name"] == "Tool Context Hat"
 
 
 def test_image_fingerprint_helpers() -> None:

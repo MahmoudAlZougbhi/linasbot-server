@@ -108,58 +108,6 @@ class MetaSocialPublishScopeTests(unittest.TestCase):
         self.assertTrue(binding_ready_for_publish(binding, registry.get_credential.return_value))
 
 
-class MetaSocialPostsApiTests(unittest.IsolatedAsyncioTestCase):
-    async def test_publish_requires_confirmation(self) -> None:
-        from modules import meta_social_posts_api
-
-        class Session:
-            tenant_id = "tenant-a"
-            user_id = "user-1"
-            email = "user-1"
-
-        request = mock.Mock()
-        with mock.patch.object(meta_social_posts_api, "require_permission", return_value=Session()):
-            from fastapi import HTTPException
-
-            with self.assertRaises(HTTPException) as ctx:
-                await meta_social_posts_api.publish_social_post(
-                    request,
-                    {"preview_token": "bad", "confirmed": False},
-                )
-            self.assertEqual(ctx.exception.status_code, 400)
-
-    async def test_workspace_isolation_on_publish(self) -> None:
-        from modules import meta_social_posts_api
-
-        os.environ["META_APP_A_SECRET"] = "unit-test-secret-for-social-posts"
-        _, token = build_preview(
-            tenant_id="tenant-a",
-            actor_id="user-1",
-            facebook_binding_id="fb-1",
-            instagram_binding_id="",
-            caption="Hello",
-            media_id="",
-            publish_facebook=True,
-            publish_instagram=False,
-        )
-
-        class Session:
-            tenant_id = "tenant-b"
-            user_id = "user-1"
-            email = "user-1"
-
-        request = mock.Mock()
-        with mock.patch.object(meta_social_posts_api, "require_permission", return_value=Session()):
-            from fastapi import HTTPException
-
-            with self.assertRaises(HTTPException) as ctx:
-                await meta_social_posts_api.publish_social_post(
-                    request,
-                    {"preview_token": token, "confirmed": True},
-                )
-            self.assertEqual(ctx.exception.status_code, 403)
-
-
 class MetaSocialMediaStoreTests(unittest.TestCase):
     def test_save_and_resolve_media(self) -> None:
         os.environ["META_APP_A_SECRET"] = "unit-test-secret-for-social-posts"

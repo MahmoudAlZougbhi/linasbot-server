@@ -15,9 +15,8 @@ def _session(role: str = "operator", permissions: dict | None = None):
 
 def test_comments_routes_use_view_and_manage_keys() -> None:
     assert required_permission_for("GET", "/api/comments/media") == "comments"
-    assert required_permission_for("GET", "/api/comments/watchlist") == "comments"
     assert required_permission_for("GET", "/api/comments/media/123/threads") == "comments"
-    assert required_permission_for("PATCH", "/api/comments/watchlist") == "commentsManage"
+    assert required_permission_for("PATCH", "/api/comments/media") == "commentsManage"
 
 
 def test_operator_defaults_include_comments_and_channels() -> None:

@@ -104,24 +104,16 @@ def test_landing_pricing_has_no_profit_copy() -> None:
 
 def test_settings_wallet_removed_and_ai_limits_in_cm() -> None:
     root = Path(__file__).resolve().parents[1]
-    settings = root / "dashboard" / "src" / "pages" / "Settings.jsx"
-    cm_limits = root / "dashboard" / "src" / "pages" / "content-managers" / "CmAiLimitsPage.jsx"
-    text = settings.read_text(encoding="utf-8")
-    # Token Wallet lives in the sidebar nav, not inside Settings tabs.
-    assert "id: 'wallet'" not in text
-    assert "Token Wallet" not in text
-    assert "id: 'api'" not in text
-    assert "Human Takeover" not in text
-    assert "System language" in text
-    # AI Limits live in AI Setup (not Settings tabs) for SaaS self-service.
-    assert "ai-limits" not in text
-    assert "AiLimitsPanel" not in text
-    assert cm_limits.is_file()
-    limits_text = cm_limits.read_text(encoding="utf-8")
-    assert "ai_limits" in limits_text
-    assert "text_words_per_message" in limits_text
-    assert "photos_per_message" in limits_text
-    assert "voice_minutes_per_day" in limits_text
+    dashboard_src = root / "dashboard" / "src"
+    # Web Settings / CM pages are gone; leftover wallet/settings HTTP must not be called.
+    assert not (dashboard_src / "pages" / "Settings.jsx").is_file()
+    texts: list[str] = []
+    for pattern in ("*.js", "*.jsx"):
+        texts.extend(p.read_text(encoding="utf-8") for p in dashboard_src.rglob(pattern) if p.is_file())
+    blob = "\n".join(texts)
+    assert "/api/billing/wallet" not in blob
+    assert "/api/billing/packages" not in blob
+    assert "/api/settings" not in blob
 
 
 def test_dual_balance_credit_debit(wallet_svc: TokenWalletService) -> None:

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import Request
-
 from modules.core import app
 from services.membership.plan_catalog import catalog_snapshot, public_plan_matrix, topup_pack_matrix
 
@@ -62,11 +60,3 @@ async def public_plans() -> Any:
             "Credits purchased separately do not expire."
         ),
     }
-
-
-@app.get("/api/billing/catalog")
-async def billing_catalog(request: Request) -> Any:
-    """Authenticated catalog mirror (same public fields; store mapping status separate)."""
-    _ = request
-    pub = await public_plans()
-    return pub
