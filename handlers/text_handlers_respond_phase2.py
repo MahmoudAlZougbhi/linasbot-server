@@ -111,7 +111,7 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
         }
         if user_data.get("_dashboard_test_simulation"):
             user_data["_dashboard_cm_diagnostics"] = cm_diag
-        if cm_metadata.get("reason") == "insufficient_credits":
+        if cm_metadata.get("reason") in {"insufficient_credits", "engine_removed"}:
             return _PHASE_HALT
         active_product_id = str(cm_metadata.get("active_product_id") or "").strip()
         if active_product_id:

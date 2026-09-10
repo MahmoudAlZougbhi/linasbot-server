@@ -239,6 +239,7 @@ async def _handle_published_cm_runtime(
     failure, returns a safe closed failure reply with an explicit blocker.
     """
     from services.cm.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
+    from services.customer_reply_v2.models import ENGINE_REMOVED
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
     from services.dynamic_messages_service import get_dynamic_message
 
@@ -280,9 +281,9 @@ async def _handle_published_cm_runtime(
         }
 
     reply = (v2_outcome.reply or "").strip()
-    if v2_outcome.reason == "insufficient_credits":
+    if v2_outcome.reason in {"insufficient_credits", ENGINE_REMOVED}:
         return "", {
-            "reason": "insufficient_credits",
+            "reason": v2_outcome.reason,
             "customer_reply_ai_v2": True,
             "classic_fallback": False,
             "v2_evidence_status": v2_outcome.evidence_status,
@@ -292,7 +293,7 @@ async def _handle_published_cm_runtime(
             "pipeline_decisions": [
                 {
                     "step": "customer_reply_v2",
-                    "decision": "insufficient_credits",
+                    "decision": v2_outcome.reason,
                     "ai_called": False,
                 },
             ],

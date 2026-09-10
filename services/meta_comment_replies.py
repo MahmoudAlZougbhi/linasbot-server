@@ -350,35 +350,13 @@ async def process_meta_comment_event(
         ):
             reply_text: str | None = rule_decision.reply_text.strip()[:900]
         else:
-            from services.cm.constants import tenant_uses_cm_runtime
-            from services.customer_reply_v2.comment_context_builder import build_production_comment_context
-
-            comment_ctx: dict[str, Any] | None = None
-            if tenant_uses_cm_runtime(binding.tenant_id) and not simulation:
-                comment_ctx = await build_production_comment_context(
-                    client=client,
-                    binding=binding,
-                    token=token,
-                    graph_api_version=graph_version,
-                    tenant_id=binding.tenant_id,
-                    comment_text=comment_text,
-                    comment_id=comment_id,
-                    media_id=str(event.get("media_id") or "").strip(),
-                    post_id=str(event.get("post_id") or "").strip(),
-                    parent_id=str(event.get("parent_id") or "").strip(),
-                    comments_policy={
-                        "policy_text": (rule_decision.policy_text if rule_decision else "") or "",
-                        "rule_id": (rule_decision.rule_id if rule_decision else "") or "",
-                    },
-                    asset_instructions=reply_setting.instructions or "",
-                )
             reply_text = await _generate_comment_reply_text(
                 tenant_id=binding.tenant_id,
                 comment_text=comment_text,
                 instructions=reply_setting.instructions,
                 channel=binding.channel,
                 policy_text=(rule_decision.policy_text if rule_decision else ""),
-                comment_context=comment_ctx,
+                comment_context=None,
                 asset_id=binding.asset_id,
                 provider_sender_id=str(event.get("author_id") or "").strip(),
                 provider_display_name=str(event.get("author_name") or "").strip(),

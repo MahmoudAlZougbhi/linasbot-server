@@ -369,6 +369,32 @@ async def process_web_chat_message(
             inbound_media=inbound_media,
             attachment_types=attachment_types,
         )
+        if not reply_text:
+            try:
+                user_result = await persist_web_chat_message(
+                    user_id=user_id,
+                    role="user",
+                    text=text,
+                    conversation_id=conversation_id,
+                    metadata={
+                        "channel": CHANNEL_ID,
+                        "source": SOURCE_CHANNEL_WEB_CHAT,
+                        "widget_key": widget.widget_key,
+                        "tenant_id": tid,
+                        "source_message_id": (
+                            f"user:{conversation_id}:{hashlib.sha256(text.encode()).hexdigest()[:16]}"
+                        ),
+                    },
+                )
+                if user_result.outcome not in {PersistOutcome.CREATED, PersistOutcome.DUPLICATE}:
+                    raise PersistFailure("firestore_unavailable", "User message projection did not commit.")
+            except PersistFailure as exc:
+                raise WebChatError("persist_failed", exc.message, status_code=503) from exc
+            try:
+                advance_operation(runtime, OperationState.COMPLETE, result={"reply_text": "", "engine": "removed"})
+            except Exception:
+                pass
+            return ""
 
     turn_result = {"reply_text": reply_text, "conversation_id": conversation_id, "operation_key": operation_key}
     past_reply_ready = bool(

@@ -152,7 +152,10 @@ async def _generate_canonical(
             post_id=str(payload.get("post_id") or payload.get("item_id") or ""),
             provider_sender_id=str(payload.get("author_id") or ""),
         )
-        return str(getattr(outcome, "reply", None) or "").strip(), None, None
+        reply = str(getattr(outcome, "reply", None) or "").strip()
+        if not reply:
+            return "", None, str(getattr(outcome, "reason", "") or "engine_removed")
+        return reply, None, None
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 
     outcome = await run_customer_reply_v2_dm(
@@ -161,6 +164,6 @@ async def _generate_canonical(
         channel=channel,
         provider_sender_id=str(payload.get("sender_id") or payload.get("customer_wa_id") or ""),
     )
-    if getattr(outcome, "stop", False):
-        return "", None, "ai_stop"
+    if getattr(outcome, "stop", False) or not str(getattr(outcome, "reply", None) or "").strip():
+        return "", None, str(getattr(outcome, "reason", "") or "ai_stop")
     return str(getattr(outcome, "reply", None) or "").strip(), None, None

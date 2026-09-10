@@ -68,6 +68,9 @@ async def generate_web_chat_reply_text(
             raise WebChatError("ai_reply_limit", customer_reply_limit_message(reply_precheck), status_code=429)
         if word_notice and reply_text:
             reply_text = f"{word_notice}\n\n{reply_text}"
+        if reason == "engine_removed":
+            fenced_failure_release(runtime, credit)
+            return ""
     except WebChatError:
         fenced_failure_release(runtime, credit)
         raise
@@ -79,5 +82,5 @@ async def generate_web_chat_reply_text(
 
     if not reply_text:
         fenced_failure_release(runtime, credit)
-        raise WebChatError("empty_reply", "Could not generate a reply right now.", status_code=503)
+        return ""
     return reply_text

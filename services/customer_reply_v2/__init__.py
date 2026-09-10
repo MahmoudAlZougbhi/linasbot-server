@@ -1,4 +1,4 @@
-"""Customer Reply AI V2 — Retrieval Luna + Answer Tera for IG/FB DMs and comments."""
+"""Customer reply facade — inbound surfaces stay; Luna/Terra generation is removed."""
 
 from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
 from services.customer_reply_v2.flags import (

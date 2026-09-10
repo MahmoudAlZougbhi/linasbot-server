@@ -82,20 +82,11 @@ def test_clinic_tenants_are_not_linas_exempt(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.asyncio
 async def test_channel_orchestrator_does_not_generate_at_zero(
-    ledger_env: CreditLedgerService, monkeypatch: pytest.MonkeyPatch
+    ledger_env: CreditLedgerService,
 ) -> None:
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 
     _drain(ledger_env, "clinic", "drain-orch")
-
-    async def _must_not_faq(**_kwargs):  # noqa: ANN001
-        raise AssertionError("FAQ must not reply at 0 credits")
-
-    async def _must_not_answer(**_kwargs):  # noqa: ANN001
-        raise AssertionError("Answer Luna must not run at 0 credits")
-
-    monkeypatch.setattr("services.customer_reply_v2.faq_fast_path.try_faq_fast_path", _must_not_faq)
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator_llm.run_answer_luna", _must_not_answer)
 
     out = await run_customer_reply_v2_dm(
         tenant_id="clinic",
@@ -103,7 +94,7 @@ async def test_channel_orchestrator_does_not_generate_at_zero(
         detected_language="en",
         response_language="en",
     )
-    assert out.reason == "insufficient_credits"
+    assert out.reason == "engine_removed"
     assert out.reply is None
     assert out.metadata.get("ai_called") is False
 
@@ -118,7 +109,7 @@ async def test_comment_orchestrator_does_not_generate_at_zero(ledger_env: Credit
         comment_text="Nice!",
         comments_enabled=True,
     )
-    assert out.reason == "insufficient_credits"
+    assert out.reason == "engine_removed"
     assert out.reply is None
 
 

@@ -1,4 +1,4 @@
-"""Media, inbound, and resource live-cert scenarios."""
+"""Media and inbound live-cert scenarios. Generation is stubbed until the new engine lands."""
 
 from __future__ import annotations
 
@@ -6,67 +6,18 @@ from pathlib import Path
 from typing import Any
 
 from _live_cert.bootstrap import TENANT_ID
-from _live_cert.calls import dm, has_price, record, trace
-
-WOMEN_PHOTOS = "ابعتلي صور laser hair removal للنساء"
+from _live_cert.calls import dm, record, trace
 
 
 async def run_media_scenarios(*, product: dict[str, Any], assets: Path, api_key: str) -> None:
     from openai import AsyncOpenAI
 
-    from services.cm.version_store import load_published_content
     from services.customer_reply_v2.inbound_extract import extract_inbound_file
     from services.customer_reply_v2.inbound_stt import transcribe_inbound_audio
     from services.customer_reply_v2.inbound_video import extract_bounded_video, ffmpeg_available
-    from services.customer_reply_v2.media_actions import resolve_media_actions
-    from services.customer_reply_v2.retrieval_tools import ToolContext, dispatch_retrieval_tool
     from services.ssrf_guard import SSRFValidationError, validate_fetch_url
 
-    pointer, _sections = load_published_content(TENANT_ID)
-    ctx = ToolContext(tenant_id=TENANT_ID, published_revision=pointer.content_version_id, channel="instagram_dm")
-    img_out = dispatch_retrieval_tool(
-        "find_product_by_image", {"image_media_id": product["image_media_id"], "top_k": 8}, ctx
-    )
-    record(
-        "inbound_product_image_tool",
-        "REAL OPENAI" if (img_out.get("data") or {}).get("vision_used") else "REAL DATABASE/RETRIEVAL",
-        ok=bool((img_out.get("data") or {}).get("matches") or img_out.get("ok")),
-        reason=str((img_out.get("data") or {}).get("resolver") or img_out.get("error")),
-        trace={"tool": img_out},
-    )
-    named = dispatch_retrieval_tool(
-        "find_product_by_image",
-        {"image_media_id": product["image_media_id"], "product_name": "After Care Cream", "top_k": 8},
-        ctx,
-    )
-    record(
-        "inbound_product_image_then_name",
-        "REAL DATABASE/RETRIEVAL",
-        ok=(named.get("data") or {}).get("resolver") == "name_first",
-        reason=str((named.get("data") or {}).get("resolver")),
-        trace={"tool": named},
-    )
-
-    burger = dispatch_retrieval_tool(
-        "find_product_by_image", {"image_media_id": product["burger_media_id"], "top_k": 8}, ctx
-    )
-    tattoo = dispatch_retrieval_tool(
-        "find_product_by_image", {"image_media_id": product["tattoo_media_id"], "top_k": 8}, ctx
-    )
-    burger_ids = [
-        str(m.get("id") or m.get("product_id") or "") for m in ((burger.get("data") or {}).get("matches") or [])
-    ]
-    tattoo_ids = [
-        str(m.get("id") or m.get("product_id") or "") for m in ((tattoo.get("data") or {}).get("matches") or [])
-    ]
-    record(
-        "burger_vs_tattoo_images",
-        "REAL OPENAI" if (burger.get("data") or {}).get("vision_used") else "REAL DATABASE/RETRIEVAL",
-        ok=bool(burger_ids) and burger_ids[:1] != tattoo_ids[:1],
-        burger_ids=burger_ids[:3],
-        tattoo_ids=tattoo_ids[:3],
-    )
-
+    _ = TENANT_ID, product
     out = await dm(
         "شو هيدا؟",
         conversation_id="c_in_img",
@@ -77,11 +28,11 @@ async def run_media_scenarios(*, product: dict[str, Any], assets: Path, api_key:
     tr = trace(out, message="شو هيدا؟", channel="instagram_dm")
     record(
         "inbound_image_wired_to_v2",
-        "REAL OPENAI",
-        ok=tr["luna_called"] and tr["faq_direct"] is not True,
+        "ENGINE REMOVED",
+        ok=out.reason == "engine_removed" and out.reply is None,
         reason=out.reason,
         trace=tr,
-        note="image_media_id passed into V2; Meta social path no longer collapses to generic text.",
+        note="Inbound still persists. Auto-reply is off until the new engine lands.",
     )
 
     try:
@@ -94,22 +45,13 @@ async def run_media_scenarios(*, product: dict[str, Any], assets: Path, api_key:
         audio_path.write_bytes(raw)
         stt = await transcribe_inbound_audio(data=audio_path.read_bytes(), filename="full_body_price.mp3")
         transcript = str(stt.get("text") or "").strip()
-        out = await dm(
-            transcript or "مرحبا، بدي أعرف سعر Full Body.",
-            conversation_id="c_voice",
-            provider_sender_id="u_voice",
-            inbound_media={"attachment_types": ["audio"], "transcript": transcript},
-            attachment_types=["audio"],
-        )
-        tr = trace(out, message=transcript, channel="instagram_dm")
         record(
             "voice_stt_then_v2",
             "REAL OPENAI",
-            ok=bool(stt.get("ok")) and bool(transcript) and (has_price(out.reply) or tr["luna_called"]),
-            reason=out.reason,
-            trace=tr,
+            ok=bool(stt.get("ok")) and bool(transcript),
             transcript=transcript[:200],
             stt_model=stt.get("model"),
+            note="STT ingest only. Customer reply generation is removed.",
         )
     except Exception as exc:
         record(
@@ -163,89 +105,3 @@ async def run_media_scenarios(*, product: dict[str, Any], assets: Path, api_key:
         ssrf_ok = True
         ssrf_err = "SSRFValidationError"
     record("inbound_link_ssrf", "REAL DATABASE/RETRIEVAL", ok=ssrf_ok, error=ssrf_err)
-
-    out = await dm(WOMEN_PHOTOS, conversation_id="c_women", provider_sender_id="u_women")
-    tr = trace(out, message=WOMEN_PHOTOS, channel="instagram_dm")
-    selected = " ".join(str(x) for x in tr["selected_source_ids"])
-    delivery = tr["resource_delivery"] or {}
-    refs = [str(x.get("resource_ref") or "") for x in (delivery.get("items") or [])]
-    women_ref = ((product.get("attachments") or {}).get("laser_women") or [{}])[0].get("id")
-    service_ref = ((product.get("attachments") or {}).get("laser_service") or [{}])[0].get("id")
-    record(
-        "women_laser_photos",
-        "REAL OPENAI",
-        ok=tr["luna_called"] and tr["tera_called"] and (women_ref in refs or "svc_laser_women" in selected),
-        reason=out.reason,
-        selected_source_ids=tr["selected_source_ids"],
-        resource_refs=refs,
-        claimed_sent=tr["claimed_sent"],
-        luna_recommended_tera_effort=tr["luna_recommended_tera_effort"],
-        answer_effective=tr["answer_effective"],
-        note="Luna sees resource counts only. Tera send_resource is validated; claimed_sent stays false until channel send.",
-        reply=(out.reply or "")[:240],
-    )
-    record(
-        "women_vs_service_files",
-        "REAL OPENAI",
-        ok=service_ref not in refs,
-        service_ref=service_ref,
-        women_ref=women_ref,
-        resource_refs=refs,
-    )
-
-    out = await dm("ابعتلي صور After Care Cream", conversation_id="c_media", provider_sender_id="u_media")
-    tr = trace(out, message="ابعتلي صور After Care Cream", channel="instagram_dm")
-    media_delivery = tr["media_delivery"] or {}
-    body = out.reply or ""
-    record(
-        "product_image_outbound",
-        "REAL OPENAI",
-        ok=bool(tr["media_actions"] or media_delivery.get("items") or "cream" in body.lower() or "كريم" in body),
-        reason=out.reason,
-        media_delivery_ok=media_delivery.get("ok"),
-        claimed_sent=False,
-        note="Meta Graph send not executed. media_actions/plan only.",
-    )
-
-    video = resolve_media_actions(
-        tenant_id=TENANT_ID,
-        actions=[
-            {
-                "product_id": product["product"]["id"],
-                "media_type": "videos",
-                "max_items": 1,
-                "order": "configured_order",
-            }
-        ],
-        channel_capabilities={"max_media_items": 10},
-    )
-    record(
-        "product_video_outbound",
-        "REAL DATABASE/RETRIEVAL",
-        ok=bool(video.get("ok")) and bool(video.get("items")),
-        result=video,
-        claimed_sent=False,
-        note="Stored product video MIME is sent where the channel supports video. No Meta Graph send in this cert.",
-    )
-
-    out = await dm("عطيني لينك After Care Cream", conversation_id="c_link", provider_sender_id="u_link")
-    tr = trace(out, message="عطيني لينك After Care Cream", channel="instagram_dm")
-    record(
-        "link_outbound",
-        "REAL OPENAI",
-        ok="example.com" in (out.reply or "") or "http" in (out.reply or "").lower() or tr["luna_called"],
-        reason=out.reason,
-        reply=(out.reply or "")[:180],
-    )
-
-    out = await dm("ابعتلي ملف After Care", conversation_id="c_file_out", provider_sender_id="u_file_out")
-    tr = trace(out, message="ابعتلي ملف After Care", channel="instagram_dm")
-    file_delivery = tr["resource_delivery"] or {}
-    record(
-        "file_outbound",
-        "REAL OPENAI",
-        ok=tr["luna_called"] and tr["claimed_sent"] is False,
-        reason=out.reason,
-        resource_delivery=file_delivery,
-        note="AI Setup file send is planned via resource_actions; never claimed_sent before channel success.",
-    )

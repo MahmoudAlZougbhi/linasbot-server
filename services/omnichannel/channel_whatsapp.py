@@ -20,11 +20,11 @@ async def generate_whatsapp_reply(*, tenant_id: str, payload: dict[str, Any]) ->
         channel="whatsapp",
         provider_sender_id=str(payload.get("customer_wa_id") or ""),
     )
-    if getattr(outcome, "stop", False):
-        return "", None, "ai_stop"
+    if getattr(outcome, "stop", False) or not str(getattr(outcome, "reply", None) or "").strip():
+        return "", None, str(getattr(outcome, "reason", "") or "ai_stop")
     text = str(getattr(outcome, "reply", None) or "").strip()
     reservation = str(payload.get("credit_reservation_id") or "") or None
-    return text, reservation, None if text else "empty_reply"
+    return text, reservation, None
 
 
 async def deliver_whatsapp(snapshot: dict[str, Any]) -> dict[str, Any]:

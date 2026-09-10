@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from services.cm.language_policy import (
     detect_and_resolve_customer_languages,
     ensure_customer_languages,
@@ -12,7 +10,6 @@ from services.cm.language_policy import (
     resolve_customer_response_language,
 )
 from services.cm.schemas import LanguagePolicy
-from services.customer_reply_v2.answer_luna import build_answer_messages, effective_response_language
 
 
 def test_frozen_policy_defaults() -> None:
@@ -91,62 +88,8 @@ def test_public_summary_multilingual() -> None:
 
 
 def test_effective_response_language_never_arabizi() -> None:
-    assert effective_response_language(response_language="franco", fixed_context={}) == "ar"
-    assert effective_response_language(response_language="en", fixed_context={}) == "en"
-
-
-def test_answer_luna_messages_multilingual_rule() -> None:
-    from services.customer_reply_v2.models import EvidenceRecord
-
-    msgs = build_answer_messages(
-        message="bonjour",
-        fixed_context={"ai_basics": {"advanced_instructions": "x"}, "style": {"style_body": "y"}},
-        evidence=[EvidenceRecord("services:s1", "services", "S", "body", "v1")],
-        evidence_status="sufficient",
-        customer_profile={},
-        history_messages=[],
-        comment_context=None,
-        channel="instagram_dm",
-        published_revision="v1",
-        response_language="fr",
-        detected_language="fr",
-    )
-    blob = json.dumps(msgs, ensure_ascii=False)
-    assert "response_language" in blob
-    assert "fr" in blob
-    assert "Arabizi" in blob or "Arabic script" in blob
-
-
-def test_answer_luna_sends_adaptive_video_frames() -> None:
-    from services.customer_reply_v2.models import EvidenceRecord
-
-    frames = [{"url": f"data:image/jpeg;base64,{index:02d}", "kind": "video_frame"} for index in range(20)]
-    msgs = build_answer_messages(
-        message="What is this",
-        fixed_context={"ai_basics": {"advanced_instructions": "x"}, "style": {"style_body": "y"}},
-        evidence=[EvidenceRecord("services:s1", "services", "S", "body", "v1")],
-        evidence_status="sufficient",
-        customer_profile={},
-        history_messages=[],
-        comment_context={
-            "caption": "offer",
-            "video_transcript": "today laser",
-            "media_status": "available",
-            "image_inputs": frames,
-        },
-        channel="instagram_comment",
-        published_revision="v1",
-        response_language="en",
-        detected_language="en",
-    )
-    images = [part for part in msgs[1]["content"] if part.get("type") == "image_url"]
-    assert len(images) == 12
-    text_blob = json.dumps(msgs[1]["content"][0])
-    assert "today laser" in text_blob
-    assert "data:image/jpeg;base64," not in text_blob
-    parsed = json.loads(msgs[1]["content"][0]["text"])
-    assert "image_inputs" not in parsed["comment_context"]
-    assert parsed["comment_context"]["image_inputs_omitted"] is True
+    assert resolve_customer_response_language(tenant_id=None, detected_language="franco") == "ar"
+    assert resolve_customer_response_language(tenant_id=None, detected_language="en") == "en"
 
 
 def test_detect_and_resolve_franco() -> None:

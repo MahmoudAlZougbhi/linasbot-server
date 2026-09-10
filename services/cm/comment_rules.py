@@ -12,7 +12,6 @@ from typing import Any, Literal
 
 from services.cm.schemas import CommentRule, CommentsSection
 from services.cm.version_store import PublishedVersionError, load_published_content
-from services.customer_reply_v2.flags import customer_ai_v10_runtime_enabled
 
 CommentAction = Literal["reply_comment", "reply_dm", "ignore", "reply_comment_and_dm"]
 
@@ -160,16 +159,6 @@ def _legacy_evaluate(
     )
 
 
-def _action_from_engine(action: str) -> CommentAction:
-    if action in {"ignore"}:
-        return "ignore"
-    if action in {"send_dm_static", "reply_dm", "send_dm"}:
-        return "reply_dm"
-    if action in {"reply_comment_and_dm_static", "reply_comment_and_dm"}:
-        return "reply_comment_and_dm"
-    return "reply_comment"
-
-
 def evaluate_comment_rules(
     section: CommentsSection | None,
     *,
@@ -178,52 +167,9 @@ def evaluate_comment_rules(
     post_id: str = "",
     account_id: str = "",
 ) -> CommentRuleDecision:
-    """Post-specific + higher priority wins when V10 is on. Else first list match."""
-    if not customer_ai_v10_runtime_enabled():
-        return _legacy_evaluate(section, comment_text=comment_text, channel=channel, post_id=post_id)
-    from services.customer_reply_v2.comment_rule_engine import evaluate_comment_engine
-
-    payload = (section or CommentsSection()).model_dump(mode="json")
-    engine = evaluate_comment_engine(
-        payload,
-        comment_text=comment_text,
-        channel=channel,
-        post_id=post_id,
-        account_id=account_id,
-    )
-    if engine.rule_mode == "ai_guidance":
-        return CommentRuleDecision(
-            action="reply_comment",
-            reply_text="",
-            rule_id=engine.rule_id,
-            reason=engine.reason,
-            policy_text=engine.policy_text,
-            matched=True,
-            rule_mode="ai_guidance",
-            rule_revision=engine.rule_revision,
-            trigger_matched=engine.trigger_matched,
-            scope=engine.scope,
-            dm_text="",
-            ai_guidance_rules=tuple(engine.ai_guidance_rules),
-            conflict_event=engine.conflict_event,
-            attachments=tuple(engine.attachments or []),
-        )
-    return CommentRuleDecision(
-        action=_action_from_engine(engine.action),
-        reply_text=engine.reply_text,
-        rule_id=engine.rule_id,
-        reason=engine.reason,
-        policy_text=engine.policy_text,
-        matched=engine.matched,
-        rule_mode=engine.rule_mode,
-        rule_revision=engine.rule_revision,
-        trigger_matched=engine.trigger_matched,
-        scope=engine.scope,
-        dm_text=engine.dm_text,
-        ai_guidance_rules=tuple(engine.ai_guidance_rules),
-        conflict_event=engine.conflict_event,
-        attachments=tuple(engine.attachments or []),
-    )
+    """First list-order match. AI-guidance comment engine is removed until the new engine lands."""
+    _ = account_id
+    return _legacy_evaluate(section, comment_text=comment_text, channel=channel, post_id=post_id)
 
 
 def evaluate_published_comment_rules(

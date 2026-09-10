@@ -414,7 +414,7 @@ class SocialCanonicalAiPathTests(unittest.TestCase):
         from pathlib import Path
 
         features = Path("services/product_features.py").read_text(encoding="utf-8")
-        policy = Path("services/customer_reply_v2/policy.py").read_text(encoding="utf-8")
+        orchestrator = Path("services/customer_reply_v2/orchestrator.py").read_text(encoding="utf-8")
         for blocked_tool in (
             "submit_booking_intent",
             "create_appointment",
@@ -423,8 +423,10 @@ class SocialCanonicalAiPathTests(unittest.TestCase):
             "get_customer_by_phone",
         ):
             self.assertIn(blocked_tool, features)
+            self.assertNotIn(blocked_tool, orchestrator)
         self.assertIn("LEGACY_BOOKING_TOOL_NAMES", features)
-        self.assertIn("skip_forced_booking_wa_me", policy)
+        self.assertFalse(Path("services/customer_reply_v2/policy.py").exists())
+        self.assertIn("ENGINE_REMOVED", orchestrator)
 
 
 if __name__ == "__main__":
