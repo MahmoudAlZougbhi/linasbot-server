@@ -1,4 +1,4 @@
-"""LOC split: dashboard_api health vs lab leftovers under 500 lines."""
+"""LOC split: dashboard_api health under 500 lines; lab HTTP leftovers removed."""
 
 from __future__ import annotations
 
@@ -22,20 +22,13 @@ def test_dashboard_api_modules_under_500_lines() -> None:
     assert _line_count("modules/dashboard_api_helpers.py") < 500
     assert _line_count("modules/dashboard_api_health.py") < 500
     assert _line_count("modules/channel_health_api.py") < 500
-    assert _line_count("modules/dashboard_api_lab_message.py") < 500
-    assert _line_count("modules/dashboard_api_lab_voice.py") < 500
-    assert _line_count("modules/dashboard_api_lab_upload.py") < 500
+    assert not Path("modules/dashboard_api_lab_message.py").exists()
+    assert not Path("modules/dashboard_api_lab_voice.py").exists()
+    assert not Path("modules/dashboard_api_lab_upload.py").exists()
 
 
 def test_dashboard_api_preserves_helper_exports_and_route_modules() -> None:
-    from modules import (
-        channel_health_api,
-        dashboard_api,
-        dashboard_api_health,
-        dashboard_api_lab_message,
-        dashboard_api_lab_upload,
-        dashboard_api_lab_voice,
-    )
+    from modules import channel_health_api, dashboard_api, dashboard_api_health
 
     assert dashboard_api._refuse_disabled_lab_endpoint is _refuse_disabled_lab_endpoint
     assert callable(dashboard_api.restore_user_state_from_firestore)
@@ -48,6 +41,3 @@ def test_dashboard_api_preserves_helper_exports_and_route_modules() -> None:
     assert callable(channel_health_api.channel_health)
     assert "whatsapp_cloud_credentials" in Path("modules/dashboard_api_health.py").read_text(encoding="utf-8")
     assert "montymobile_api_key" not in Path("modules/dashboard_api_health.py").read_text(encoding="utf-8")
-    assert callable(dashboard_api_lab_message.test_message)
-    assert callable(dashboard_api_lab_voice.test_voice)
-    assert callable(dashboard_api_lab_upload.test_voice_upload)

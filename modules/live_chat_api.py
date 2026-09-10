@@ -16,18 +16,15 @@ from fastapi import Query, Request
 from modules import live_chat_api_debug  # noqa: E402, F401
 from modules.core import app
 from modules.live_chat_api_helpers import (  # noqa: F401
-    _error_response,
     _run_endpoint,
     broadcast_sse_event,
     require_chat_channel,
     resolve_takeover_assignee,
 )
 from modules.models import (
-    EditMessageRequest,
     MarkConversationReadRequest,
     OperatorStatusRequest,
     ReleaseRequest,
-    ResumeAiRequest,
     SendOperatorMessageRequest,
     TakeoverRequest,
 )
@@ -83,97 +80,6 @@ async def get_unified_chats(
     return await _run_endpoint(_handler, fallback=fallback)
 
 
-@app.get("/api/live-chat/chats-by-template-send-log")
-async def get_chats_by_template_send_log(
-    template_id: str = Query(..., description="Smart Messaging template id"),
-    date_from: str = Query(default="", description="Optional YYYY-MM-DD (UTC) start of sent_at range"),
-    date_to: str = Query(default="", description="Optional YYYY-MM-DD (UTC) end of sent_at range"),
-    scan_limit: int = Query(default=0, ge=0, le=20000),
-) -> Any:
-    """
-    List live_chat_index conversations for customers who have a message_logs row
-    for this template (successful sends). Scans newest index rows first (see scan_limit / env).
-    """
-
-    async def _handler() -> Any:
-        lim = int(scan_limit) if scan_limit else None
-        return await live_chat_service.get_chats_by_template_send_log(
-            template_id=template_id,
-            date_from=date_from.strip() or None,
-            date_to=date_to.strip() or None,
-            scan_limit=lim,
-        )
-
-    return await _run_endpoint(_handler, fallback={"success": False, "chats": [], "error": "request_failed"})
-
-
-@app.get("/api/live-chat/active-conversations")
-async def get_active_conversations(
-    search: str = Query(default="", description="Search by client name or phone"),
-) -> Any:
-    """Get active conversations with optional client search."""
-
-    async def _handler() -> Any:
-        unified = await live_chat_service.get_unified_chats(
-            search=search or "",
-            page=1,
-            page_size=200,
-        )
-        if not unified.get("success"):
-            return {
-                "success": False,
-                "conversations": [],
-                "total": 0,
-                "search": search,
-                "source": unified.get("source"),
-                "error": unified.get("error") or "live_chat_unavailable",
-            }
-
-        conversations = [
-            {
-                "conversation_id": c.get("conversation_id"),
-                "user_id": c.get("user_id"),
-                "user_name": c.get("user_name"),
-                "user_phone": c.get("user_phone") or c.get("phone_number"),
-                "phone_clean": c.get("phone_clean"),
-                "last_message": c.get("last_message_text")
-                or ((c.get("last_message") or {}).get("content") if isinstance(c.get("last_message"), dict) else ""),
-                "last_activity": c.get("last_activity") or c.get("last_message_at"),
-                "status": c.get("status") or "bot",
-                "conversation_state": c.get("conversation_state"),
-                "operator_id": c.get("operator_id"),
-                "unread_count": c.get("unread_count", 0),
-                "is_new_customer": c.get("is_new_customer", False),
-            }
-            for c in unified.get("chats", [])
-        ]
-        return {
-            "success": True,
-            "conversations": conversations,
-            "total": len(conversations),
-            "search": search,
-            "source": unified.get("source"),
-        }
-
-    return await _run_endpoint(_handler)
-
-
-@app.get("/api/live-chat/waiting-queue")
-async def get_waiting_queue() -> Any:
-    """Get conversations waiting for human intervention"""
-    _log.info("live_chat_api.get_waiting_queue")
-
-    async def _handler() -> Any:
-        queue = await live_chat_service.get_waiting_queue()
-        return {
-            "success": True,
-            "queue": queue,
-            "total": len(queue),
-        }
-
-    return await _run_endpoint(_handler)
-
-
 @app.post("/api/live-chat/takeover")
 async def takeover_conversation(request: TakeoverRequest, http_request: Request) -> Any:
     """Operator takes over a conversation"""
@@ -208,27 +114,6 @@ async def release_conversation(request: ReleaseRequest, http_request: Request) -
             user_id=request.user_id,
             operator_id=session.user_id,
             tenant_id=getattr(session, "tenant_id", None),
-        )
-        if result.get("success"):
-            await broadcast_sse_event("conversations", {"trigger_refresh": True})
-        return result
-
-    return await _run_endpoint(_handler)
-
-
-@app.post("/api/live-chat/resume-ai")
-async def resume_ai_conversation(request: ResumeAiRequest, http_request: Request) -> Any:
-    """Explicit Resume AI — clears server-authoritative manual pause."""
-
-    async def _handler() -> Any:
-        session = require_chat_channel(http_request, request.user_id)
-        result = await live_chat_service.resume_ai_conversation(
-            conversation_id=request.conversation_id,
-            user_id=request.user_id,
-            operator_id=session.user_id,
-            tenant_id=getattr(session, "tenant_id", None),
-            request_id=request.request_id,
-            source_channel=request.source_channel,
         )
         if result.get("success"):
             await broadcast_sse_event("conversations", {"trigger_refresh": True})
@@ -291,34 +176,6 @@ async def update_operator_status(request: OperatorStatusRequest, http_request: R
     return await _run_endpoint(_handler)
 
 
-@app.get("/api/live-chat/metrics")
-async def get_live_chat_metrics() -> Any:
-    """Get real-time live chat metrics"""
-
-    async def _handler() -> Any:
-        return await live_chat_service.get_metrics()
-
-    return await _run_endpoint(_handler)
-
-
-@app.get("/api/live-chat/faq-match-context")
-async def get_faq_match_context(
-    user_id: str = Query(..., description="User ID"),
-    conversation_id: str = Query(..., description="Conversation ID"),
-    message_id: str = Query(..., description="Message ID"),
-) -> Any:
-    """Get FAQ match metadata and current FAQ entry for a message (for FAQ correction modal)."""
-
-    async def _handler() -> Any:
-        return await live_chat_service.get_faq_match_context(
-            user_id=user_id,
-            conversation_id=conversation_id,
-            message_id=message_id,
-        )
-
-    return await _run_endpoint(_handler)
-
-
 @app.get("/api/live-chat/conversation/{user_id}/{conversation_id}")
 async def get_conversation_details(
     user_id: str,
@@ -349,37 +206,6 @@ async def get_conversation_details(
             before=before,
             day_window=day_window,
             max_messages=limit,
-        )
-
-    return await _run_endpoint(_handler)
-
-
-@app.get("/api/live-chat/client/{user_id}/conversations")
-async def get_client_all_conversations(user_id: str) -> Any:
-    """Get all conversations for a specific client (for expanded view)"""
-
-    async def _handler() -> Any:
-        conversations = await live_chat_service.get_client_conversations(user_id)
-        return {
-            "success": True,
-            "conversations": conversations,
-            "total": len(conversations),
-        }
-
-    return await _run_endpoint(_handler)
-
-
-@app.post("/api/live-chat/edit-message")
-async def edit_message(request: EditMessageRequest, http_request: Request) -> Any:
-    """Edit a bot message's content (e.g. after operator dislike). Updates Firestore and broadcasts."""
-
-    async def _handler() -> Any:
-        require_chat_channel(http_request, request.user_id)
-        return await live_chat_service.update_message_content(
-            user_id=request.user_id,
-            conversation_id=request.conversation_id,
-            message_id=request.message_id,
-            new_content=request.new_content,
         )
 
     return await _run_endpoint(_handler)

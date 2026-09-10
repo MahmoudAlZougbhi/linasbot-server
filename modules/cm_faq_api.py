@@ -69,18 +69,6 @@ async def cm_list_faq(
     }
 
 
-@app.get("/api/cm/faq/duplicates")
-async def cm_faq_duplicates(
-    request: Request,
-    question: str = Query(...),
-    language: str = Query(default="ar"),
-) -> Any:
-    session = require_permission(request, "contentManagers")
-    tenant_id = _session_tenant(session)
-    hits = find_duplicate_faq_groups(question=question, language=language, tenant_id=tenant_id)
-    return {"success": True, "data": hits, "count": len(hits)}
-
-
 @app.post("/api/cm/faq")
 async def cm_create_faq(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
     session = require_permission(request, "contentManagers")

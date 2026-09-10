@@ -1,8 +1,7 @@
 """
 AI Setup control-plane API.
 
-Draft CRUD with ETag concurrency, validate, publish (hard-403 when disabled),
-versions/rollback stubs, and safe Testing Lab preview packets.
+Draft CRUD with ETag concurrency and publish/unpublish (hard-403 when disabled).
 All storage operations use the authenticated session tenant — never a client-supplied tenant id.
 """
 
@@ -16,18 +15,10 @@ from fastapi.responses import JSONResponse
 from modules.api_security import require_permission, require_session
 from modules.core import app
 from services.cm.constants import CM_SECTIONS, PUBLISH_DISABLED_MESSAGE, cm_faq_canonical, cm_runtime_mode
-from services.cm.preview_packet import build_preview_packet, list_versions
 from services.cm.provenance_headers import sanitize_section_payload
-from services.cm.publish import (
-    PublishBlockedError,
-    RollbackTargetError,
-    publish_draft,
-    publish_faq_only,
-    rollback_to_version,
-)
+from services.cm.publish import PublishBlockedError, publish_draft, publish_faq_only
 from services.cm.publish_gate import PublishDisabledError, ensure_publish_enabled, publish_status
 from services.cm.storage import ConflictError, UnknownSectionError, get_draft, put_draft
-from services.cm.validation import validate_cm
 from services.dashboard_session_service import SessionRecord
 from services.search_metadata.errors import (
     METADATA_PREPARATION_CODE,
@@ -215,25 +206,6 @@ async def cm_put_draft(
     )
 
 
-@app.post("/api/cm/validate")
-async def cm_validate(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
-    session = require_permission(request, "contentManagers")
-    tenant_id = _session_tenant(session)
-    section = body.get("section")
-    payload = body.get("payload")
-    if payload is None and isinstance(body.get("data"), dict):
-        payload = body.get("data")
-    try:
-        result = validate_cm(
-            section=str(section) if section else None,
-            payload=payload if isinstance(payload, dict) else None,
-            tenant_id=tenant_id,
-        )
-    except UnknownSectionError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"success": True, **result}
-
-
 @app.post("/api/cm/publish")
 async def cm_publish(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
     session = require_permission(request, "contentPublish")
@@ -302,127 +274,3 @@ async def cm_unpublish(request: Request) -> Any:
         "live": False,
         "previous_pointer": previous.model_dump(mode="json") if previous is not None else None,
     }
-
-
-@app.get("/api/cm/versions")
-async def cm_list_versions(request: Request) -> Any:
-    session = require_permission(request, "contentManagers")
-    tenant_id = _session_tenant(session)
-    versions = list_versions(tenant_id)
-    return {"success": True, "data": versions, "count": len(versions)}
-
-
-@app.post("/api/cm/versions/{version_id}/rollback")
-async def cm_rollback(version_id: str, request: Request) -> Any:
-    session = require_permission(request, "contentPublish")
-    tenant_id = _session_tenant(session)
-    try:
-        ensure_publish_enabled()
-    except PublishDisabledError as exc:
-        return _publish_disabled_response(exc.message)
-
-    try:
-        result = rollback_to_version(content_version_id=version_id, tenant_id=tenant_id)
-    except RollbackTargetError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {
-        "success": True,
-        "content_version_id": result.content_version_id,
-        "index_version_id": result.index_version_id,
-        "pointer": result.pointer,
-        "previous_pointer": result.previous_pointer,
-    }
-
-
-@app.post("/api/cm/preview-packet")
-async def cm_preview_packet(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
-    session = require_permission(request, "contentManagers")
-    tenant_id = _session_tenant(session)
-    source = str(body.get("source") or "draft")
-    try:
-        packet = build_preview_packet(source=source, tenant_id=tenant_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"success": True, "data": packet}
-
-
-@app.post("/api/cm/pricing/quote")
-async def cm_pricing_quote(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
-    """Deterministic Price Calculator Preview (draft or published). Never invents amounts."""
-    session = require_permission(request, "contentManagers")
-    from typing import cast
-
-    from services.cm.pricing.engine import compute_quote
-    from services.cm.pricing.schemas import AudienceScope, PricingContext, QuoteRequestLine
-    from services.cm.pricing.section import (
-        normalize_prices_section,
-        section_catalog_items,
-        section_discount_rules,
-        section_price_entries,
-    )
-    from services.cm.storage import get_draft
-    from services.cm.version_store import load_published_content
-
-    tenant_id = _session_tenant(session)
-    # Never accept cross-tenant ids from the request body.
-    if body.get("tenant_id") and str(body.get("tenant_id")).strip() not in {"", tenant_id}:
-        raise HTTPException(status_code=403, detail="tenant_id not authorized for this session")
-    source = str(body.get("source") or "draft").strip().lower()
-    content_version_id = None
-    if source == "published":
-        pointer, sections = load_published_content(tenant_id)
-        prices_payload = sections.get("prices") or {}
-        content_version_id = pointer.content_version_id
-    else:
-        prices_payload = dict(get_draft("prices", tenant_id=tenant_id, create_default=True).payload)
-
-    section = normalize_prices_section(prices_payload)
-    raw_lines: list[Any] = list(body["lines"]) if isinstance(body.get("lines"), list) else []
-    request_lines: list[QuoteRequestLine] = []
-    for raw in raw_lines:
-        if not isinstance(raw, dict):
-            continue
-        request_lines.append(
-            QuoteRequestLine(
-                catalog_item_id=str(raw.get("catalog_item_id") or ""),
-                variant_id=str(raw["variant_id"]) if raw.get("variant_id") else None,
-                quantity=float(raw.get("quantity") or 1),
-            )
-        )
-    if not request_lines:
-        raise HTTPException(status_code=400, detail="lines required")
-    audience_raw = str(body.get("audience") or "any").strip().lower()
-    audience = audience_raw if audience_raw in {"men", "women", "general", "any"} else "any"
-    try:
-        quote = compute_quote(
-            catalog_items=section_catalog_items(section),
-            price_entries=section_price_entries(section),
-            discount_rules=section_discount_rules(section),
-            request_lines=request_lines,
-            context=PricingContext(
-                tenant_id=tenant_id,
-                branch_id=str(body["branch_id"]) if body.get("branch_id") else None,
-                audience=cast(AudienceScope, audience),
-                content_version_id=content_version_id,
-                currency=str(body["currency"]) if body.get("currency") else None,
-            ),
-        )
-    except ValueError as exc:
-        return JSONResponse(
-            status_code=422,
-            content={"success": False, "error": "QUOTE_INCOMPLETE", "message": str(exc)},
-        )
-    return {"success": True, "data": quote.model_dump(mode="json")}
-
-
-@app.get("/api/cm/sources/inventory")
-async def cm_sources_inventory(request: Request) -> Any:
-    """Metadata-only inventory of CM drafts, article provenance, and staged legacy files."""
-    session = require_permission(request, "contentManagers")
-    tenant_id = _session_tenant(session)
-    from services.cm.source_inventory import build_source_inventory, write_inventory_report
-
-    report = build_source_inventory(tenant_id=tenant_id)
-    write_inventory_report(report)
-    # Never include file bodies — report is metadata only.
-    return {"success": True, "data": report}

@@ -43,7 +43,6 @@ import modules.auth_api  # noqa: E402, F401
 import modules.auth_email_change_api  # noqa: E402, F401
 import modules.auth_users_roles_api  # noqa: E402, F401
 import modules.cm_api  # noqa: E402, F401
-import modules.cm_comment_rules_api  # noqa: E402, F401
 import modules.cm_faq_api  # noqa: E402, F401
 import modules.cm_media_api  # noqa: E402, F401
 import modules.cm_request_graphs_api  # noqa: E402, F401
@@ -86,13 +85,11 @@ import modules.requests_api  # noqa: E402, F401
 import modules.resend_webhook_api  # noqa: E402, F401
 import modules.scale_api  # noqa: E402, F401
 import modules.settings_api  # noqa: E402, F401
-import modules.smart_messaging_api  # noqa: E402, F401
 import modules.store_iap_api  # noqa: E402, F401
 import modules.tiktok_ads_oauth  # noqa: E402, F401
 import modules.tiktok_business_api  # noqa: E402, F401
 import modules.tiktok_business_oauth  # noqa: E402, F401
 import modules.tiktok_business_webhook  # noqa: E402, F401
-import modules.tiktok_comments_api  # noqa: E402, F401
 import modules.tiktok_enhanced_api  # noqa: E402, F401
 import modules.wallet_api  # noqa: E402, F401
 import modules.web_chat_api  # noqa: E402, F401

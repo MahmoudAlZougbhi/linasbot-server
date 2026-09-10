@@ -13,7 +13,6 @@ from services.dashboard_session_service import CSRF_COOKIE_NAME, CSRF_HEADER_NAM
 
 _ROUTE_MODULES = (
     "modules.cm_faq_api",
-    "modules.local_qa_api_faq",
 )
 
 
@@ -159,41 +158,3 @@ class TestCmFaqWriteAuthz:
         assert response.status_code == 200
         assert response.json().get("success") is True
         assert seen.get("tenant_id") == "tenant_b"
-
-
-@pytest.mark.usefixtures("enable_faq_plan")
-class TestLiveChatFaqWriteAuthz:
-    def test_faq_update_answer_unauthenticated_401(self, client: TestClient) -> None:
-        _clear_client_auth(client)
-        response = client.post("/api/faq/update-answer", json={"faq_id": 1, "new_answer_text": "x"})
-        assert response.status_code == 401
-
-    def test_faq_update_rejects_other_tenant_row(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-        _clear_client_auth(client)
-        _set_session(client, role="operator", user_id="lc-faq-op", tenant_id="tenant_a")
-
-        foreign_row = {
-            "question": "q",
-            "answer": "a",
-            "language": "en",
-            "qa_group_id": "qa_foreign",
-            "tenant_id": "tenant_b",
-        }
-        monkeypatch.setattr("modules.local_qa_api_faq.read_qa_pairs", lambda: [foreign_row])
-        monkeypatch.setattr(
-            "services.cm.faq_integration.get_cm_faq_group",
-            lambda **kwargs: None,
-        )
-        writes: list[Any] = []
-        monkeypatch.setattr(
-            "modules.local_qa_api_faq.write_qa_pairs",
-            lambda pairs: writes.append(pairs) or True,
-        )
-
-        response = client.post(
-            "/api/faq/update-answer",
-            json={"faq_id": 1, "new_answer_text": "stolen answer"},
-        )
-        assert response.status_code == 403
-        assert "another tenant" in (response.json().get("detail") or "").lower()
-        assert writes == []

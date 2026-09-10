@@ -31,15 +31,6 @@ async def list_owner_notifications(
     }
 
 
-@app.get("/api/owner-notifications/unread-count")
-async def owner_notifications_unread_count(request: Request) -> Any:
-    session = require_permission(request, "liveChat")
-    return {
-        "success": True,
-        "unread_count": owner_alert_store.unread_count(tenant_id=session.tenant_id),
-    }
-
-
 @app.post("/api/owner-notifications/{notification_id}/read")
 async def mark_owner_notification_read(notification_id: str, request: Request) -> Any:
     session = require_permission(request, "liveChat")

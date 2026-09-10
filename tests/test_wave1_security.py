@@ -108,8 +108,8 @@ class TestRBACHelpers:
         assert is_public_api("POST", "/api/auth/register")
         assert not is_public_api("POST", "/api/auth/logout")
         assert not is_public_api("POST", "/api/auth/bootstrap-admin")
-        assert not is_public_api("GET", "/api/live-chat/metrics")
-        assert required_permission_for("GET", "/api/live-chat/metrics") == "liveChat"
+        assert not is_public_api("GET", "/api/live-chat/unified-chats")
+        assert required_permission_for("GET", "/api/live-chat/unified-chats") == "liveChat"
         assert required_permission_for("POST", "/api/smart-messaging/toggle") == "smartMessaging"
         assert required_permission_for("GET", "/api/content-files/knowledge/list") == "contentManagers"
         assert resolve_permissions("admin", None)["userManagement"] is True
@@ -223,7 +223,6 @@ def client():
     import modules.live_chat_api  # noqa: F401
     import modules.media_api  # noqa: F401
     import modules.settings_api  # noqa: F401
-    import modules.smart_messaging_api  # noqa: F401
     from modules.core import app
 
     return TestClient(app)
@@ -235,7 +234,7 @@ class TestAPIAuthEnforcement:
             "/api/auth/users",
             "/api/settings",
             "/api/smart-messaging/counts",
-            "/api/live-chat/metrics",
+            "/api/live-chat/unified-chats",
             "/api/flow/logs",
             "/api/debug/webhook-status",
         ]:
