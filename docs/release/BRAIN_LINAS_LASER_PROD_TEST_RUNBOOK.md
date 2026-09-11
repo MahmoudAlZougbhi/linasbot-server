@@ -25,8 +25,12 @@ Helper: `services.customer_ai.flags.assert_safe_brain_cutover()` →
 ## 0) Before deploy
 
 - [ ] Confirm live prod SHA is recorded (should match rollback tag if prod was on `main` @ `0f23bcf1`).
-- [ ] Confirm Voyage + OpenAI keys available on nodes (do not commit).
-- [ ] Keep `MESSAGE_BILLING_CUTOVER=false` for this test window.
+- [ ] **Secrets:** do **not** paste new API keys. Use existing GitHub Actions secrets:
+  - `OPENAI_API_KEY` (present)
+  - `VOYAGE_API_KEY` (present)
+  - `CUSTOMER_BRAIN_ENABLED` (present — leave `false` for first smoke deploy)
+  - Add/set `LINAS_CUSTOMER_AI_LAB` if missing (needed for Owner Lab)
+  - Keep `MESSAGE_BILLING_CUTOVER` unset/`false` (compose default)
 - [ ] Keep `EMERGENCY_LEGACY_REPLY_ENABLED=false`.
 - [ ] Linas Laser: AI Setup sections published (or publish once after deploy).
 - [ ] Run `assert_safe_brain_cutover()` mentally: Brain off ⇒ rollback tag required for AI.
@@ -60,24 +64,24 @@ Before real-customer Brain:
 
 ## 4) Enable for Linas Laser live AI test
 
-On production env only after steps 1–3:
+On production env only after steps 1–3. **Flip flags via GitHub Secrets → approved prod env apply** (or node `.env` apply scripts). Never invent/paste OpenAI or Voyage key material — secrets already exist in the repo.
 
-```text
-CUSTOMER_BRAIN_ENABLED=true
-LINAS_CUSTOMER_AI_LAB=true
-CUSTOMER_BRAIN_TENANT_ALLOWLIST=linas
-EMERGENCY_LEGACY_REPLY_ENABLED=false
-OPENAI_API_KEY=...
-VOYAGE_API_KEY=...
-MESSAGE_BILLING_CUTOVER=false
-```
+| Flag / secret | Action after smoke |
+| --- | --- |
+| `CUSTOMER_BRAIN_ENABLED` | set GitHub secret / prod env → `true` |
+| `LINAS_CUSTOMER_AI_LAB` | set GitHub secret / prod env → `true` (create secret if missing) |
+| `CUSTOMER_BRAIN_TENANT_ALLOWLIST` | optional; code default includes `linas` |
+| `EMERGENCY_LEGACY_REPLY_ENABLED` | leave unset/`false` |
+| `OPENAI_API_KEY` | **already in GitHub Secrets** — sync to nodes if needed; do not re-enter |
+| `VOYAGE_API_KEY` | **already in GitHub Secrets** — sync to nodes if needed; do not re-enter |
+| `MESSAGE_BILLING_CUTOVER` | leave `false` for this window |
 
-- [ ] Owner Portal → **Message flow**: open a live turn and confirm stages (receive → plan → search → evidence → reply → cost).
-- [ ] Owner Portal → Brain lab: turn on tenant `lab` (capture-only).
-- [ ] Owner Portal → Brain lab → **Run fixture evals** and **Run verification exercises** (confirmation copy, index readiness, retrieval; no live billing).
-- [ ] Offline golden pack (optional on node): `python3.11 -c "from services.customer_ai.evals.golden_pack_linas import run_golden_pack_linas; print(run_golden_pack_linas())"`
-- [ ] Owner Portal → Costs: pending events appear for lab / Linas Laser tenant_id.
-- [ ] Force reindex for Linas Laser after publish (confirm `brain_index_status.ready` or Owner force-reindex recovery).
+Then:
+
+- [ ] Publish Linas Laser CM + force-reindex (Knowledge is chunked for search on index).
+- [ ] Owner Portal → **Message flow**: stages receive → plan → search → evidence → reply → cost.
+- [ ] Owner Portal → Brain lab: tenant `lab` + verification exercises (no live billing).
+- [ ] Owner Portal → Costs: pending provider events for lab / Linas Laser.
 - [ ] Live channel smoke on Linas Laser only: WA / IG / FB / TikTok / Web as connected.
 - [ ] Empty Brain stops must **not** show fake validation-failed success (`ai_called` stays false; pipeline `brain_no_reply` vs `ai_generated`).
 
