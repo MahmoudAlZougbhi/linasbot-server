@@ -55,7 +55,6 @@ class PublishResult:
     # Best-effort Brain Voyage index after CM publish. None = not attempted.
     # ready=False is retryable via the same automatic job / optional Owner retry.
     brain_index_status: dict[str, Any] | None = None
-    brain_index_status: dict[str, Any] | None = None
 
 
 def _normalize_tenant(tenant_id: str | None) -> str:

@@ -6,11 +6,12 @@ import logging
 from typing import Any
 
 from services.cm.version_store import read_published_pointer
+from services.job_queue import QueueName
 
 log = logging.getLogger("customer_ai.index_schedule")
 
 JOB_TYPE = "customer_ai_index"
-QUEUE_NAME = "expensive"
+QUEUE_NAME: QueueName = "expensive"
 
 
 def uses_index_worker() -> bool:

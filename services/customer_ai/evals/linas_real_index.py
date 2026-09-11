@@ -190,7 +190,8 @@ async def run_real_linas_index() -> dict[str, Any]:
                 count=int((candidate.get("entity") or {}).get("count") or 0),
                 source_revision=revision,
             )
-            ctx = candidate.get("contextual") if isinstance(candidate.get("contextual"), dict) else {}
+            raw_ctx = candidate.get("contextual")
+            ctx: dict[str, Any] = raw_ctx if isinstance(raw_ctx, dict) else {}
             ctx_ptr = activate_pointer(
                 session,
                 tenant_id=tid,
