@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 from services.customer_ai.flags import voyage_configured
+from services.customer_ai.normalize import normalize_search_text
 from services.customer_ai.providers.config import rerank_model
 from services.customer_ai.providers.voyage_client import rerank_texts
 from services.customer_ai.retrieve.hybrid import HybridHit
@@ -15,18 +16,18 @@ def rerank_enabled() -> bool:
     return raw not in {"0", "false", "off", "no"}
 
 
-def should_rerank(hits: list[HybridHit]) -> bool:
+def should_rerank(hits: list[HybridHit], query: str = "") -> bool:
     if not rerank_enabled() or len(hits) <= 1:
         return False
-    top = hits[0]
-    if top.lexical_score >= 0.85 and all(item.card.item_id != top.card.item_id or i == 0 for i, item in enumerate(hits[:1])):
-        if top.lexical_score >= 0.99:
-            return False
+    # BM25 scores are unbounded, so exact lookups are detected by surface equality, not a threshold.
+    needle = normalize_search_text(query)
+    if needle and hits[0].card.search_text == needle:
+        return False
     return True
 
 
 async def rerank_hits(query: str, hits: list[HybridHit], *, tenant_id: str = "") -> list[HybridHit]:
-    if not hits or not should_rerank(hits) or not voyage_configured():
+    if not hits or not should_rerank(hits, query) or not voyage_configured():
         return hits
     documents = [item.card.search_text for item in hits]
     try:

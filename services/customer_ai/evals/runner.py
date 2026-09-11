@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from services.customer_ai.evals.contract_cases import run_contract_cases
@@ -11,6 +12,7 @@ from services.customer_ai.evals.fixtures import (
     product_retailer_corpus,
     service_appointment_corpus,
 )
+from services.customer_ai.evals.golden_pack_linas import run_golden_pack_linas
 from services.customer_ai.planner.heuristic import plan_message
 from services.customer_ai.retrieve.expand import expand_ranked
 from services.customer_ai.retrieve.cards import cards_from_sections
@@ -44,7 +46,18 @@ def _queries(sections: dict[str, Any]) -> list[str]:
     return queries
 
 
+def _metric_hooks(*, latency_ms: float, case_count: int) -> dict[str, Any]:
+    """Latency/cost metric hooks (stubs OK until live metering lands)."""
+    return {
+        "latency_ms": round(latency_ms, 3),
+        "cost_usd_stub": 0.0,
+        "live_spend": False,
+        "cases_per_second": round(case_count / (latency_ms / 1000.0), 3) if latency_ms > 0 else None,
+    }
+
+
 def run_fixture_corpus() -> dict[str, Any]:
+    started = time.perf_counter()
     cases: list[dict[str, Any]] = []
     for name, sections in all_corpora().items():
         cards = cards_from_sections(sections)
@@ -63,10 +76,15 @@ def run_fixture_corpus() -> dict[str, Any]:
                 }
             )
     contract = run_contract_cases()
+    golden = run_golden_pack_linas()
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
+    total_cases = len(cases) + int(contract.get("case_count") or 0) + int(golden.get("case_count") or 0)
     return {
-        "ok": bool(contract.get("ok")),
+        "ok": bool(contract.get("ok")) and bool(golden.get("ok")),
         "live_spend": False,
-        "case_count": len(cases) + int(contract.get("case_count") or 0),
+        "case_count": total_cases,
         "cases": cases,
         "contract_cases": contract.get("cases") or [],
+        "golden_pack_linas": golden,
+        "metrics": _metric_hooks(latency_ms=elapsed_ms, case_count=total_cases),
     }

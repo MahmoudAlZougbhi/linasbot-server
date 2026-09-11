@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from modules.api_security import require_platform_owner
 from modules.core import app
 from services.customer_ai.evals.runner import run_fixture_corpus
-from services.customer_ai.test_lab import lab_enabled, run_lab_turn
+from services.customer_ai.test_lab import lab_enabled, run_lab_turn, run_lab_verification_exercises
 from services.membership.message_policy import classify_turn, message_units_for
 
 
@@ -73,3 +73,14 @@ async def platform_customer_ai_lab_evals(request: Request) -> Any:
     if not lab_enabled():
         raise HTTPException(status_code=404, detail="lab_disabled")
     return {"success": True, **run_fixture_corpus()}
+
+
+@app.get("/api/platform/customer-ai-lab/exercises")
+async def platform_customer_ai_lab_exercises(request: Request, tenant_id: str = "lab") -> Any:
+    require_platform_owner(request)
+    if not lab_enabled():
+        raise HTTPException(status_code=404, detail="lab_disabled")
+    tid = (tenant_id or "lab").strip() or "lab"
+    if not tid.startswith("lab_") and tid != "lab":
+        raise HTTPException(status_code=400, detail="lab_tenant_required")
+    return {"success": True, **run_lab_verification_exercises(tenant_id=tid)}

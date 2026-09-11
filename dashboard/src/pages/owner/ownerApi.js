@@ -59,6 +59,9 @@ export const ownerApi = {
   labTurn: (body) =>
     request('/api/platform/customer-ai-lab/turn', { method: 'POST', body: JSON.stringify(body) }),
   labEvals: () => request('/api/platform/customer-ai-lab/evals'),
+  /** @param {string} [tenantId] */
+  labExercises: (tenantId = 'lab') =>
+    request(`/api/platform/customer-ai-lab/exercises?tenant_id=${encodeURIComponent(tenantId || 'lab')}`),
   /** @param {{ generated?: boolean, faq_used?: boolean, followup_sent?: boolean }} body */
   labClassify: (body) =>
     request('/api/platform/customer-ai-lab/classify', { method: 'POST', body: JSON.stringify(body) }),

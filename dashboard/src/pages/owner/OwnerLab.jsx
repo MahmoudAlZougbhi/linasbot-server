@@ -19,6 +19,7 @@ export default function OwnerLab() {
   const [message, setMessage] = useState('');
   const [turn, setTurn] = useState(/** @type {any} */ (null));
   const [evals, setEvals] = useState(/** @type {any} */ (null));
+  const [exercises, setExercises] = useState(/** @type {any} */ (null));
   const [index, setIndex] = useState(/** @type {any} */ (null));
   const [classify, setClassify] = useState(/** @type {any} */ (null));
   const [generated, setGenerated] = useState(false);
@@ -63,6 +64,15 @@ export default function OwnerLab() {
     }
   }
 
+  async function runExercises() {
+    setError('');
+    try {
+      setExercises(await ownerApi.labExercises(tenantId.trim() || 'lab'));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
   async function runClassify() {
     setError('');
     try {
@@ -92,9 +102,10 @@ export default function OwnerLab() {
       <header>
         <h2 className="text-2xl font-semibold">Customer Brain lab</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Capture-only. Requires LINAS_CUSTOMER_AI_LAB=true and CUSTOMER_BRAIN_ENABLED=true on staging,
-          plus a lab / lab_* tenant. No live channel send. Force reindex needs published CM content.
-          Conversation, channel, and inbound id are for confirmation and request-source checks.
+          Capture-only verification lab. Requires LINAS_CUSTOMER_AI_LAB=true and CUSTOMER_BRAIN_ENABLED=true on
+          staging, plus a lab / lab_* tenant. No live channel send or real-customer billing. Force reindex needs
+          published CM content. Use verification exercises for confirmation copy, index readiness, and retrieval
+          outcomes without billing customers.
         </p>
       </header>
       {error ? (
@@ -152,6 +163,13 @@ export default function OwnerLab() {
           <button type="button" onClick={() => void runEvals()} className="rounded border border-slate-600 px-3 py-2">
             Run fixture evals
           </button>
+          <button
+            type="button"
+            onClick={() => void runExercises()}
+            className="rounded border border-slate-600 px-3 py-2"
+          >
+            Run verification exercises
+          </button>
           <button type="button" onClick={() => void runReindex()} className="rounded border border-slate-600 px-3 py-2">
             Force reindex
           </button>
@@ -184,6 +202,11 @@ export default function OwnerLab() {
       {evals ? (
         <pre className="overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-300">
           {JSON.stringify(evals, null, 2)}
+        </pre>
+      ) : null}
+      {exercises ? (
+        <pre className="overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-300">
+          {JSON.stringify(exercises, null, 2)}
         </pre>
       ) : null}
       {index ? (

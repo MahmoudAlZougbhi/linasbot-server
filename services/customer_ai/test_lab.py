@@ -79,6 +79,9 @@ async def run_lab_turn(
             "outbound_messages": meta.get("outbound_messages") or [],
             "receipts": list(meta.get("receipts") or []),
             "pending_actions": list(meta.get("pending_actions") or []),
+            "retrieval_outcome": meta.get("retrieval_outcome"),
+            "used_evidence_ids": list(meta.get("used_evidence_ids") or []),
+            "awaiting_confirmation": bool(meta.get("awaiting_confirmation")),
             "live_send": False,
         }
     finally:
@@ -102,3 +105,55 @@ def lab_operation_id(tenant_id: str, conversation_id: str, message_id: str) -> s
         event_ids=[message_id],
     )
     return operation_id_for_turn(turn)
+
+
+def run_lab_verification_exercises(*, tenant_id: str = "lab") -> dict[str, Any]:
+    """Offline lab checks: confirmation copy, index readiness, retrieval outcomes.
+
+    Does not bill real customers (no live send; readiness/eval only).
+    """
+    from services.customer_ai.evals.runner import run_fixture_corpus
+    from services.customer_ai.search.readiness import search_readiness
+    from services.customer_ai.templates import brain_template
+
+    readiness = search_readiness()
+    confirm_en = brain_template("confirm_request", "en")
+    confirm_ar = brain_template("confirm_request", "ar")
+    evals = run_fixture_corpus()
+    exercises = [
+        {
+            "id": "confirmation_copy",
+            "ok": bool(confirm_en.strip()) and bool(confirm_ar.strip()) and confirm_en != confirm_ar,
+            "detail": {"en": confirm_en, "ar": confirm_ar},
+        },
+        {
+            "id": "index_readiness_typed",
+            "ok": isinstance(getattr(readiness, "ready", None), bool)
+            and bool(getattr(readiness, "reason", "") or readiness.ready),
+            "detail": {
+                "ready": bool(getattr(readiness, "ready", False)),
+                "reason": str(getattr(readiness, "reason", "") or ""),
+            },
+        },
+        {
+            "id": "retrieval_eval_suite",
+            "ok": bool(evals.get("ok")),
+            "detail": {
+                "case_count": evals.get("case_count"),
+                "golden_ok": (evals.get("golden_pack_linas") or {}).get("ok"),
+                "metrics": evals.get("metrics"),
+            },
+        },
+        {
+            "id": "no_live_billing",
+            "ok": evals.get("live_spend") is False,
+            "detail": {"tenant_id": tenant_id, "live_send": False},
+        },
+    ]
+    return {
+        "ok": all(bool(item.get("ok")) for item in exercises),
+        "tenant_id": tenant_id,
+        "live_send": False,
+        "exercises": exercises,
+        "evals": evals,
+    }

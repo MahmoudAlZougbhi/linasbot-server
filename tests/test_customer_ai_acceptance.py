@@ -22,6 +22,38 @@ def test_coverage_detects_planner_omission() -> None:
     assert coverage_ok("بدي سعر الليزر وساعات الفرع", plan, {"t1": "answered"}) is False
 
 
+def _answered_plan() -> tuple[str, PlannerPlan, dict[str, str]]:
+    from services.customer_ai.planner.heuristic import plan_message
+
+    original = "what is the laser price?"
+    plan = plan_message(original)
+    return original, plan, {task.id: "answered" for task in plan.tasks}
+
+
+def test_coverage_requires_the_envelope_to_carry_the_answer() -> None:
+    original, plan, dispositions = _answered_plan()
+    assert coverage_ok(original, plan, dispositions, reply_text="Laser is 99 USD", decision="reply") is True
+    # "answered" with nothing to send is a silent drop.
+    assert coverage_ok(original, plan, dispositions, reply_text="", decision="reply") is False
+    assert coverage_ok(original, plan, dispositions, reply_text="   ", decision="reply") is False
+
+
+def test_coverage_rejects_answered_dispositions_on_a_non_answer_decision() -> None:
+    original, plan, dispositions = _answered_plan()
+    assert coverage_ok(original, plan, dispositions, reply_text="What service?", decision="clarify") is False
+    assert coverage_ok(original, plan, dispositions, reply_text="", decision="no_reply") is False
+
+
+def test_coverage_rejects_empty_content_decisions() -> None:
+    from services.customer_ai.coverage import delivery_ok
+
+    assert delivery_ok({"t1": "pending_delivery"}, reply_text="", decision="clarify") is False
+    assert delivery_ok({"t1": "pending_delivery"}, reply_text="", decision="no_reply") is False
+    assert delivery_ok({"t1": "pending_delivery"}, reply_text="Sending it now", decision="reply") is True
+    # Dispositions that never owed the customer text stay valid without a decision.
+    assert delivery_ok({"t1": "policy_suppressed"}, reply_text="", decision="") is True
+
+
 def test_confirmation_tied_to_revision() -> None:
     assert (
         confirmation_valid(
