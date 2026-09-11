@@ -163,8 +163,11 @@ jobs:
               "chmod 0600 /run/linasbot-voyage.env; chown root:root /run/linasbot-voyage.env"
             ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
               "root@${PEER_HOST}" \
-              "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true LINAS_PRODUCTION_MUTATION_LOCK_FD=9; set -a; . /run/linasbot-voyage.env; set +a; bash -s" <<'STAGEEOF'
+              "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true; set -a; . /run/linasbot-voyage.env; set +a; bash -s" <<'STAGEEOF'
             set -euo pipefail
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            export LINAS_PRODUCTION_MUTATION_LOCK_FD=9
             REPO_DIR=/opt/linasbot
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
               --expected-sha "$EXPECTED_RELEASE_SHA" --verify-stage-authority
