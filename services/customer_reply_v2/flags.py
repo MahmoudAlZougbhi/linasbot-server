@@ -1,4 +1,4 @@
-"""Customer-engine flags. Luna/Terra runtime is removed; Sol owner path is unchanged."""
+"""Deprecated customer-engine flag stubs. Brain uses providers.config — do not revive Luna/Terra."""
 
 from __future__ import annotations
 
@@ -10,16 +10,24 @@ def customer_ai_v10_runtime_enabled() -> bool:
 
 
 def customer_semantic_retrieval_enabled() -> bool:
+    """Legacy flag name kept for imports; always False. Brain Voyage retrieve is separate."""
     return False
 
 
 def flags_snapshot() -> dict[str, Any]:
-    return {"customer_engine": "removed", "v10": False}
+    return {
+        "customer_engine": "brain_or_removed",
+        "v10": False,
+        "semantic_retrieval_legacy": False,
+        "note": "Luna/Terra generative engines removed; Customer Brain is the only reply engine when enabled.",
+    }
 
 
 def customer_answer_model_name() -> str:
-    return "gpt-5.6-terra"
+    """Deprecated stub — use services.customer_ai.providers.config.answer_model."""
+    return "customer_brain_answer"
 
 
 def customer_retrieval_model_name() -> str:
-    return "gpt-5.6-luna"
+    """Deprecated stub — Brain uses Voyage entity spaces, not Luna."""
+    return "customer_brain_voyage_entity"

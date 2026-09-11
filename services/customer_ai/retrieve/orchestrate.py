@@ -69,6 +69,23 @@ async def retrieve_cards(
 
 
 async def retrieve_published(ctx: RetrieveContext) -> EvidenceBundle:
+    if ctx.tenant_id:
+        from services.customer_ai.search.product_freshness import product_questions_blocked
+
+        fams = set(ctx.families) if ctx.families is not None else None
+        blocked = product_questions_blocked(ctx.tenant_id, fams)
+        if blocked:
+            return EvidenceBundle(outcome="product_index_stale")
+        from services.customer_ai.search.readiness import resolve_search_readiness
+
+        status = resolve_search_readiness(ctx.tenant_id)
+        if not status.ready:
+            reason = (
+                status.reason
+                if status.reason in {"provider_not_configured", "index_not_ready"}
+                else "index_not_ready"
+            )
+            return EvidenceBundle(outcome=reason)  # type: ignore[arg-type]
     sections = ctx.sections
     revision = ctx.revision
     cards = list(ctx.cards or [])

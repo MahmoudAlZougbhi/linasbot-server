@@ -176,6 +176,35 @@ def rollback_pointer(
     return {"ok": True, "pointer": rolled}
 
 
+def tenant_pointer_ready(session: Any | None, tenant_id: str) -> bool:
+    """True when at least one index pointer for the tenant is ready."""
+    tid = (tenant_id or "").strip()
+    if not tid:
+        return False
+    for row in _POINTERS.values():
+        if isinstance(row, dict) and row.get("tenant_id") == tid and bool(row.get("ready")):
+            return True
+    if session is None:
+        return False
+    try:
+        from sqlalchemy import text
+
+        row = session.execute(
+            text(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM customer_ai_index_pointers
+                    WHERE tenant_id = :tenant_id AND ready = true
+                )
+                """
+            ),
+            {"tenant_id": tid},
+        ).scalar()
+        return bool(row)
+    except Exception:
+        return False
+
+
 def mark_pointer_not_ready(
     session: Any | None,
     *,
@@ -203,6 +232,32 @@ def mark_pointer_not_ready(
         )
     except Exception:
         return
+
+
+def get_source_pointer_ready(tenant_id: str, family: str) -> dict[str, Any] | None:
+    """Public pointer snapshot for a tenant/source_family. None if no pointer known."""
+    tid = (tenant_id or "").strip()
+    fam = (family or "").strip()
+    if not tid or not fam:
+        return None
+    matches = [
+        row
+        for row in _POINTERS.values()
+        if isinstance(row, dict) and row.get("tenant_id") == tid and row.get("source_family") == fam
+    ]
+    if not matches:
+        return None
+    # Prefer a not-ready row when any exist (fail-closed for stale products).
+    chosen = next((row for row in matches if row.get("ready") is False), matches[0])
+    return {
+        "tenant_id": tid,
+        "source_family": fam,
+        "ready": bool(chosen.get("ready")),
+        "reason": str(chosen.get("reason") or ""),
+        "active_version": str(chosen.get("active_version") or ""),
+        "source_revision": str(chosen.get("source_revision") or ""),
+        "record_count": int(chosen.get("record_count") or 0),
+    }
 
 
 def _write_memory(rows: list[dict[str, Any]], vectors: list[list[float]]) -> dict[str, Any]:

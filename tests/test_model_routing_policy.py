@@ -343,7 +343,6 @@ def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.Mo
 
     from services.cm.answer_generation import DEFAULT_CM_ANSWER_MODEL, cm_answer_model
     from services.customer_reply_v2.flags import customer_answer_model_name, customer_retrieval_model_name
-    from services.model_policy import MODEL_CUSTOMER_LUNA
     from services.owner_ai_model_router import router_config
     from services.providers.base import provider_config
 
@@ -354,8 +353,9 @@ def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.Mo
     assert router_config()["owner_help"]["model"] == MODEL_OWNER_SOL
     assert DEFAULT_CM_ANSWER_MODEL == MODEL_CUSTOMER_TERRA
     assert cm_answer_model() == MODEL_CUSTOMER_TERRA
-    assert customer_answer_model_name() == MODEL_CUSTOMER_TERRA
-    assert customer_retrieval_model_name() == MODEL_CUSTOMER_LUNA
+    # Brain stubs — not Luna/Terra engine names.
+    assert customer_answer_model_name() == "customer_brain_answer"
+    assert customer_retrieval_model_name() == "customer_brain_voyage_entity"
 
 
 def test_no_active_social_getter_returns_forbidden_models(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -363,10 +363,12 @@ def test_no_active_social_getter_returns_forbidden_models(monkeypatch: pytest.Mo
     monkeypatch.setenv("LINAS_CM_ANSWER_MODEL", "gpt-5.6-sol")
     from services.cm.answer_generation import cm_answer_model
     from services.customer_reply_v2.flags import customer_answer_model_name, customer_retrieval_model_name
-    from services.model_policy import MODEL_CUSTOMER_LUNA
 
-    # Answer getters must not honor luna/sol env overrides (hardcoded Terra).
-    assert customer_answer_model_name() == MODEL_CUSTOMER_TERRA
+    # Deprecated stubs stay on Brain names; CM answer stays Terra (not luna/sol env).
+    assert customer_answer_model_name() == "customer_brain_answer"
     assert cm_answer_model() == MODEL_CUSTOMER_TERRA
-    # Retrieval is Luna regardless of answer env override.
-    assert customer_retrieval_model_name() == MODEL_CUSTOMER_LUNA
+    assert customer_retrieval_model_name() == "customer_brain_voyage_entity"
+    assert "luna" not in customer_retrieval_model_name().lower()
+    assert "luna" not in customer_answer_model_name().lower()
+    assert "terra" not in customer_answer_model_name().lower()
+    assert "terra" not in customer_retrieval_model_name().lower()

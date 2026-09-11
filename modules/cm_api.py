@@ -315,6 +315,7 @@ async def cm_publish(request: Request, body: dict[str, Any] = Body(default={})) 
         "manifest": result.manifest,
         "pointer": result.pointer,
         "previous_pointer": result.previous_pointer,
+        "brain_index_status": result.brain_index_status,
     }
 
 

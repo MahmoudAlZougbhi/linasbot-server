@@ -1,39 +1,19 @@
-"""Retrieval view: original user title + AI search title + short AI description."""
+"""DEAD Luna naming shim — title view helpers only. Prefer title_fields.
+
+Customer Brain does not use a Luna generative retrieval engine. This module
+keeps import paths for search-metadata title fields.
+"""
 
 from __future__ import annotations
 
-from typing import Any
+from services.search_metadata.title_fields import (  # noqa: F401
+    original_title_of,
+    retrieval_title_fields,
+)
+
+DEAD_LUNA_ENGINE = True
 
 
-def _label_of(labels: Any) -> str:
-    if isinstance(labels, dict):
-        return str(labels.get("en") or labels.get("ar") or labels.get("fr") or "").strip()
-    return str(getattr(labels, "en", "") or getattr(labels, "ar", "") or "").strip()
-
-
-def original_title_of(raw: dict[str, Any]) -> str:
-    title = str(raw.get("title") or raw.get("name") or "").strip()
-    if title:
-        return title
-    labeled = _label_of(raw.get("labels"))
-    if labeled:
-        return labeled
-    reason = str(raw.get("reason") or "").strip()
-    if reason:
-        return reason
-    return str(raw.get("id") or raw.get("qa_group_id") or "").strip()
-
-
-def luna_title_fields(raw: dict[str, Any]) -> dict[str, str]:
-    """Fields Luna sees at customer-message time. Empty AI fields stay empty (legacy fallback)."""
-    original = original_title_of(raw)
-    ai_title = str(raw.get("ai_search_title") or "").strip()
-    ai_desc = str(raw.get("ai_search_description") or "").strip()
-    notes_snip = str(raw.get("notes") or raw.get("short_introduction") or "")[:240]
-    return {
-        "original_title": original,
-        "title": original,
-        "ai_search_title": ai_title,
-        "ai_search_description": ai_desc,
-        "description": ai_desc or notes_snip,
-    }
+def luna_title_fields(raw: dict) -> dict[str, str]:
+    """Deprecated alias for retrieval_title_fields."""
+    return retrieval_title_fields(raw)

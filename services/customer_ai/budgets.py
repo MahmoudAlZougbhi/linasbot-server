@@ -13,6 +13,7 @@ class TurnBudgets:
     rerank_cap_per_task: int = 40
     evidence_chunks_before_expand: int = 6
     extra_retrieval_rounds: int = 1
+    # Kept at 1 (honest). P1 generate/reply must consume this for one grounding repair.
     repair_attempts: int = 1
     embedding_dimensions: int = 1024
 

@@ -8,8 +8,7 @@ from services.customer_ai.contracts.evidence import EvidenceBundle
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.customer_ai.contracts.turn import CustomerTurn
 from services.customer_ai.coverage import coverage_ok
-from services.customer_ai.faq_exact import find_published_exact_faq
-from services.customer_ai.faq_freshness import faq_static_allowed
+from services.customer_ai.faq_turn import exact_faq_result, semantic_faq_result
 from services.customer_ai.generate.reply import generate_grounded_reply, openai_configured
 from services.customer_ai.greeting import evaluate_greeting
 from services.customer_ai.identity import load_identity_bundle
@@ -19,6 +18,7 @@ from services.customer_ai.actions.pending import attach_confirmation, try_confir
 from services.customer_ai.billing import operation_id_for_turn, reserve_generative
 from services.customer_ai.conversation_store import remember_turn
 from services.customer_ai.stage_timeline import StageTimer, evidence_preview, stamp
+from services.customer_ai.templates import brain_template
 
 
 def _flow_extra(extra: dict | None, *rows: tuple[str, str, dict | None]) -> dict:
@@ -30,6 +30,10 @@ def _flow_extra(extra: dict | None, *rows: tuple[str, str, dict | None]) -> dict
 
 def _destination(channel: str) -> str:
     return "web_chat" if "web" in (channel or "") else "dm"
+
+
+def _response_language(turn: CustomerTurn) -> str:
+    return str((turn.extra or {}).get("response_language") or "").strip()
 
 
 def inbound_task_text(turn: CustomerTurn, message: str) -> str:
@@ -68,80 +72,19 @@ def _apply_greeting(
     return envelope.model_copy(update={"messages": [greeting, *list(envelope.messages)]})
 
 
-def _faq_envelope(turn: CustomerTurn, message: str, channel: str, *, text: str, extra: dict) -> TurnResult:
-    destination = _destination(channel)
-    envelope = _apply_greeting(
-        turn,
-        message,
-        channel,
-        FinalReplyEnvelope(
-            decision="deterministic",
-            messages=[OutboundMessage(destination=destination, text=text, protected=True)],
-            used_evidence_ids=list(extra.get("used_evidence_ids") or []),
-            dispositions={"faq": "answered"},
-        ),
-    )
-    return TurnResult(stop_reason="ok", envelope=envelope, extra=extra)
-
-
-def _exact_faq_result(turn: CustomerTurn, message: str, channel: str) -> TurnResult | None:
-    if turn.invocation_kind == "followup" or not message.strip():
-        return None
-    faq = find_published_exact_faq(turn.tenant_id, message)
-    if not faq or not faq_static_allowed(faq.answer, tenant_id=turn.tenant_id):
-        return None
-    return _faq_envelope(
-        turn,
-        message,
-        channel,
-        text=faq.answer,
-        extra={
-            "path": "faq_exact",
-            "faq_id": faq.faq_id,
-            "faq_revision": faq.revision,
-            "response_class": "faq_only",
-            "used_evidence_ids": [f"faq:{faq.faq_id}"],
-        },
-    )
-
-
-async def _semantic_faq_result(turn: CustomerTurn, message: str, channel: str) -> TurnResult | None:
-    if turn.invocation_kind == "followup" or not message.strip():
-        return None
-    try:
-        from services.cm.version_store import load_published_content
-        from services.customer_ai.faq_semantic import semantic_faq_bundle
-
-        _pointer, sections = load_published_content(turn.tenant_id)
-        bundle = await semantic_faq_bundle(sections, message, tenant_id=turn.tenant_id)
-    except Exception:
-        return None
-    if bundle.outcome != "found" or len(bundle.items) != 1:
-        return None
-    item = bundle.items[0]
-    if not faq_static_allowed(item.text, tenant_id=turn.tenant_id):
-        return None
-    return _faq_envelope(
-        turn,
-        message,
-        channel,
-        text=item.text,
-        extra={
-            "path": "faq_semantic",
-            "faq_id": item.source_id,
-            "response_class": "faq_only",
-            "used_evidence_ids": [item.evidence_id],
-        },
-    )
-
-
 def _families(plan_families: list[SourceFamily]) -> set[SourceFamily] | None:
     cleaned = {item for item in plan_families if item != "none"}
     return cleaned or None
 
 
 def _stop_from_outcome(outcome: str) -> StopReason:
-    if outcome in {"provider_not_configured", "index_not_ready", "unpublished", "context_overflow"}:
+    if outcome in {
+        "provider_not_configured",
+        "index_not_ready",
+        "product_index_stale",
+        "unpublished",
+        "context_overflow",
+    }:
         return outcome  # type: ignore[return-value]
     if outcome == "source_unpublished":
         return "unpublished"
@@ -180,6 +123,14 @@ def _history_blob(turn: CustomerTurn) -> str:
     return "\n".join(f"{item.role}: {item.text}" for item in turn.history.messages)
 
 
+def _exact_faq_result(turn: CustomerTurn, message: str, channel: str) -> TurnResult | None:
+    return exact_faq_result(turn, message, channel, apply_greeting=_apply_greeting)
+
+
+async def _semantic_faq_result(turn: CustomerTurn, message: str, channel: str) -> TurnResult | None:
+    return await semantic_faq_result(turn, message, channel, apply_greeting=_apply_greeting)
+
+
 async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) -> TurnResult:
     flow_base = _flow_extra(
         None,
@@ -203,6 +154,30 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
                 )
             }
         )
+    from services.customer_ai.visual import visual_retrieval_decision
+
+    visual = visual_retrieval_decision(
+        has_authorized_asset_id=bool(turn.media.inbound_link),
+        requires_visual_reading=bool(turn.media.image_media_id),
+    )
+    if visual.reason == "disabled" and turn.media.image_media_id:
+        lang = _response_language(turn)
+        return TurnResult(
+            stop_reason="ok",
+            envelope=FinalReplyEnvelope(
+                decision="clarify",
+                messages=[
+                    OutboundMessage(
+                        destination=_destination(channel),
+                        text=brain_template("visual_disabled", lang),
+                    )
+                ],
+            ),
+            extra=_flow_extra(
+                {"phase": "visual", "visual": visual.reason, **flow_base},
+                ("visual", "Image present but visual reading is disabled", {"reason": visual.reason}),
+            ),
+        )
     faq = _exact_faq_result(turn, message, channel) or await _semantic_faq_result(turn, message, channel)
     if faq:
         return faq.model_copy(
@@ -217,12 +192,6 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
                 )
             }
         )
-    from services.customer_ai.visual import visual_retrieval_decision
-
-    visual = visual_retrieval_decision(
-        has_authorized_asset_id=bool(turn.media.inbound_link),
-        requires_visual_reading=bool(turn.media.image_media_id),
-    )
     task_text = inbound_task_text(turn, message)
     plan_timer = StageTimer()
     plan = await plan_turn(
@@ -242,6 +211,7 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
             },
         ),
     )
+    lang = _response_language(turn)
     if any(task.type == "human_request" for task in plan.tasks):
         from services.customer_ai.actions.execute import execute_actions
 
@@ -252,7 +222,7 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
             envelope=FinalReplyEnvelope(
                 decision="handoff_ack" if ok else "no_reply",
                 messages=[
-                    OutboundMessage(destination=_destination(channel), text="A teammate will continue from here.")
+                    OutboundMessage(destination=_destination(channel), text=brain_template("handoff", lang))
                 ]
                 if ok
                 else [],
@@ -273,7 +243,7 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
                 messages=[
                     OutboundMessage(
                         destination=_destination(channel),
-                        text="I can help with that. Please confirm the details so I can submit the request.",
+                        text=brain_template("confirm_request", lang),
                     )
                 ],
             ),
@@ -447,7 +417,14 @@ async def _generate_after_reserve(
             envelope=FinalReplyEnvelope(decision="clarify"),
             extra={"phase": "generate", "plan": plan.model_dump(), "receipts": list(resource_receipts or [])},
         )
-    if not coverage_ok(task_text, plan, envelope.dispositions):
+    reply_text = "\n".join(item.text for item in envelope.messages if (item.text or "").strip())
+    if not coverage_ok(
+        task_text,
+        plan,
+        envelope.dispositions,
+        reply_text=reply_text,
+        decision=envelope.decision,
+    ):
         return TurnResult(
             stop_reason="failed_closed",
             envelope=FinalReplyEnvelope(decision="clarify", used_evidence_ids=envelope.used_evidence_ids),
@@ -464,7 +441,7 @@ async def _generate_after_reserve(
         "visual": visual.reason,
         "faq_used": bool(faq_items),
         "faq_id": faq_items[0].source_id if faq_items else "",
-        "used_evidence_ids": [item.evidence_id for item in bundle.items],
+        "used_evidence_ids": list(envelope.used_evidence_ids),
         "receipts": list(resource_receipts or []),
     }
     return TurnResult(
