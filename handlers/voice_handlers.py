@@ -21,6 +21,7 @@ import config
 from handlers.text_handlers import handle_message as handle_text_message_from_voice
 from handlers.training_handlers import handle_training_input
 from services.analytics_events import analytics  # 📊 ANALYTICS
+from services.customer_reply_v2.inbound_media import mark_inbound_attachment
 from services.llm_core_service import client as openai_client  # Assuming this is correct
 from services.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
 from utils.utils import (
@@ -240,17 +241,27 @@ async def handle_voice_message(
             "status": "success",
         }
 
-        # 📊 ANALYTICS: Log voice message from user
+        # Analytics stays unpriced. Owner Costs journals pending STT without invented USD.
         audio_duration_seconds = len(audio) / 1000.0  # pydub duration is in milliseconds
-        whisper_cost = (audio_duration_seconds / 60) * 0.006  # Whisper pricing: $0.006 per minute
+        from services.membership.provider_expense import record_pending_provider
+
+        record_pending_provider(
+            event_id=f"stt:{tenant_id}:{source_message_id or user_id[-8:]}",
+            tenant_id=tenant_id,
+            category="stt",
+            feature="inbound_media",
+            provider="openai",
+            model="gpt-4o-transcribe",
+            operation_id=str(source_message_id or "voice"),
+        )
 
         analytics.log_message(
             source="user",
             msg_type="voice",
             user_id=user_id,
             language=user_data.get("user_preferred_lang", "ar"),
-            tokens=0,  # Whisper doesn't report tokens
-            cost_usd=whisper_cost,
+            tokens=0,
+            cost_usd=0.0,
             model="gpt-4o-transcribe",
             response_time_ms=(time.time() - start_time) * 1000,
             message_length=len(user_text_input),
@@ -279,6 +290,7 @@ async def handle_voice_message(
         else:
             print("⚠️ Skipping update - missing current_conversation_id or audio_url")
 
+        mark_inbound_attachment(user_data, "audio", transcript=user_text_input)
         # ✅ FIXED: Pass skip_firestore_save flag to prevent double-saving in text_handlers
         # The voice message is already saved and updated above
         await handle_text_message_from_voice(

@@ -1,4 +1,4 @@
-"""LOC split: local_qa_api helpers/FAQ under 500 lines; public imports preserved."""
+"""LOC split: local_qa helpers under 500 lines; HTTP CRUD is gone."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def _line_count(rel: str) -> int:
 def test_local_qa_api_modules_under_500_lines() -> None:
     assert _line_count("modules/local_qa_api.py") < 500
     assert _line_count("modules/local_qa_api_helpers.py") < 500
-    assert _line_count("modules/local_qa_api_faq.py") < 500
+    assert not Path("modules/local_qa_api_faq.py").exists()
 
 
 def test_local_qa_api_preserves_public_helpers() -> None:
@@ -28,5 +28,3 @@ def test_local_qa_api_preserves_public_helpers() -> None:
     assert local_qa_api.create_local_qa_pair_internal is create_local_qa_pair_internal
     assert local_qa_api.build_qa_entry is build_qa_entry
     assert callable(local_qa_api.create_local_qa_pair)
-    assert callable(local_qa_api.faq_update_answer)
-    assert callable(local_qa_api.faq_create_from_livechat)

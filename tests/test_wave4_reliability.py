@@ -136,7 +136,7 @@ class TestTemplateRequired:
             adapter = MagicMock()
             adapter.send_text_message = MagicMock()
             with patch(
-                "services.montymobile_template_service.montymobile_template_service.get_template_info",
+                "services.whatsapp_cloud_template_service.whatsapp_cloud_template_service.get_template_info",
                 return_value=None,
             ):
                 with patch(

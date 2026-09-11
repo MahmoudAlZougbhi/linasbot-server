@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ownerApi } from './ownerApi';
 
 /** @param {{ tenantId: string; onClose: () => void }} props */
@@ -78,7 +79,7 @@ export default function OwnerUsers() {
       <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
           <thead className="bg-slate-900 text-slate-400">
-            <tr>{['Subscriber', 'Plan', 'Seats / roles', 'Credits', 'Actions'].map((label) => <th key={label} className="px-4 py-3">{label}</th>)}</tr>
+            <tr>{['Subscriber', 'Plan', 'Seats / roles', 'Catalog / credits', 'Actions'].map((label) => <th key={label} className="px-4 py-3">{label}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-slate-800 bg-slate-950">
             {subscribers.map((subscriber) => (
@@ -90,10 +91,25 @@ export default function OwnerUsers() {
                 </td>
                 <td className="px-4 py-4"><p>{subscriber.subscription}</p><p className="text-xs text-slate-500">{subscriber.membership}</p></td>
                 <td className="px-4 py-4"><p>{subscriber.seats_created}</p><p className="text-xs text-slate-500">{subscriber.roles.join(', ')}</p></td>
-                <td className="px-4 py-4"><p>{subscriber.credits_used} used</p><p className="text-xs text-slate-500">{subscriber.credits_remaining} remaining</p></td>
+                <td className="px-4 py-4">
+                  <p>
+                    {subscriber.intended_included_messages == null
+                      ? 'Included messages unconfigured'
+                      : `${Number(subscriber.intended_included_messages).toLocaleString()} included / month`}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {subscriber.credits_used} leftover credits used · {subscriber.credits_remaining} leftover
+                  </p>
+                </td>
                 <td className="px-4 py-4">
                   <div className="flex flex-wrap gap-2">
                     <button type="button" onClick={() => setLogsTenant(subscriber.tenant_id)} className="rounded bg-teal-500 px-2 py-1 text-slate-950">Interaction Logs</button>
+                    <Link
+                      to={`/owner/costs?tenant=${encodeURIComponent(subscriber.tenant_id)}`}
+                      className="rounded border border-slate-600 px-2 py-1 text-slate-200 hover:border-teal-600"
+                    >
+                      View costs
+                    </Link>
                     {subscriber.users.filter((user) => user.role !== 'platform_owner').map((user) => (
                       <span key={user.id} className="flex gap-1">
                         <select

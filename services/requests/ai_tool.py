@@ -119,11 +119,13 @@ def build_context_from_user_data(
         # WhatsApp cloud path often has empty social channel marker.
         if str(ud.get("phone_number") or "").strip() and not str(ud.get("social_sender_id") or "").strip():
             source = "whatsapp_cloud"
-    if not source and not public:
+    if not source and public:
+        source = "comment_linked_dm"
+    if not source:
         return None
     return AiToolContext(
         tenant_id=tenant_id,
-        source_channel=source or "instagram_dm",
+        source_channel=source,
         conversation_id=str(ud.get("current_conversation_id") or ud.get("conversation_id") or "") or None,
         source_account_id=str(ud.get("meta_account_id") or ud.get("source_account_id") or "") or None,
         external_customer_id=str(

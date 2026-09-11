@@ -184,8 +184,6 @@ e8d6e65 test(requests): expand security and correctness coverage
 | Phase 12 freeze verification | [`docs/release/FINAL_FREEZE_VERIFICATION.md`](./FINAL_FREEZE_VERIFICATION.md) |
 | Independent PR review | [`docs/release/FINAL_INDEPENDENT_PR_REVIEW.md`](./FINAL_INDEPENDENT_PR_REVIEW.md) |
 | Problems & fixes (0 open C/H/M) | [`docs/release/FINAL_PROBLEMS_AND_FIXES.md`](./FINAL_PROBLEMS_AND_FIXES.md) |
-| File-by-file review log | [`docs/release/FINAL_FILE_BY_FILE_REVIEW_LOG.md`](./FINAL_FILE_BY_FILE_REVIEW_LOG.md) |
-| File inventory CSV | [`docs/release/FINAL_FILE_BY_FILE_INVENTORY.csv`](./FINAL_FILE_BY_FILE_INVENTORY.csv) |
 | **PR #240** | https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240 |
 | Freeze CI run | https://github.com/MahmoudAlZougbhi/linasbot-server/actions/runs/31602974014 |
 | Requests design | `docs/requests/REQUESTS_SYSTEM_DESIGN.md` |

@@ -13,7 +13,7 @@ else:
     payload["message_id"] = f"msg_{utc_now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 ```
 
-- **User messages from webhook:** `source_message_id` from WhatsApp provider (Meta/MontyMobile/Qiscus) → used as `message_id`.
+- **User messages from webhook:** `source_message_id` from WhatsApp Cloud → used as `message_id`.
 - **AI/Operator messages:** `msg_{YYYYMMDDHHMMSS}_{uuid4_hex_8chars}` (e.g. `msg_20260301143022_a1b2c3d4`).
 
 ---

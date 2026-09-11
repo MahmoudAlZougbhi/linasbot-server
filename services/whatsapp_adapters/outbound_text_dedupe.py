@@ -120,7 +120,7 @@ async def should_skip_outbound_text(resolved_recipient: str, message: str) -> bo
     """
     Call before HTTP. Returns True if this send should be skipped (duplicate or in-flight).
 
-    resolved_recipient: already room→phone resolved when applicable (e.g. MontyMobile _get_phone_from_room_id).
+    resolved_recipient: already room→phone resolved when applicable.
     """
     rn = _normalize_recipient(resolved_recipient)
     k = _cache_key(rn, message)

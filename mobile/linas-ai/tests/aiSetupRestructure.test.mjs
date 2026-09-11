@@ -97,6 +97,7 @@ describe('AI Setup hub restructure', () => {
       assert.match(src, /aiSetupRequestNote/);
       assert.match(src, /servicesAddPriceOption/);
       assert.match(src, /aiSetupMetadataSaveError/);
+      assert.match(src, /aiSetupDailyEditLimit/);
       assert.match(src, /servicesTitle: 'Services'|servicesTitle: 'الخدمات'/);
     }
   });

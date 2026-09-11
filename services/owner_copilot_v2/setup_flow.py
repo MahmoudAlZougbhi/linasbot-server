@@ -6,7 +6,6 @@ from services.owner_ai_tools_base import ToolResult
 
 SETUP_SECTIONS: tuple[str, ...] = (
     "basics",
-    "languages",
     "tone",
     "greetings",
     "services",
@@ -14,11 +13,10 @@ SETUP_SECTIONS: tuple[str, ...] = (
     "prices",
     "knowledge",
     "faq",
-    "handoff",
+    "requests",
     "restricted",
     "sources",
     "allowed_actions",
-    "ai_limits",
     "off_days",
     "integrations",
     "review_publish",
@@ -28,7 +26,6 @@ SETUP_SECTIONS: tuple[str, ...] = (
 def _section_prompt(section: str, *, language: str = "en") -> str:
     prompts = {
         "basics": "Let's set business basics (name, category). What is your business name and category?",
-        "languages": "Which languages should the customer AI use? (Arabic, English, French, …)",
         "tone": "Which reply tone should customers hear?",
         "greetings": "What greeting should customers get on first contact?",
         "services": "List your main services or products.",
@@ -36,11 +33,10 @@ def _section_prompt(section: str, *, language: str = "en") -> str:
         "prices": "Share prices/offers, or upload a price-list photo.",
         "knowledge": "Any core business knowledge the AI must know?",
         "faq": "Common questions and answers to save as Smart Q&A?",
-        "handoff": "When should the AI hand off to a human?",
+        "requests": "Any appointment, product, or human-transfer request rules to add?",
         "restricted": "Any topics the AI must refuse?",
         "sources": "Files/links to use as sources?",
         "allowed_actions": "Which AI actions are allowed for customers?",
-        "ai_limits": "Any AI usage limits to enforce?",
         "off_days": "Off days or holidays?",
         "integrations": "Connect Instagram/Facebook when ready (Integrations screen).",
         "review_publish": "Review, validate, then publish when ready (separate confirmation).",

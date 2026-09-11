@@ -40,13 +40,26 @@ async def mobile_web_chat_update(request: Request, body: WebChatSettingsBody = B
             status_code=403,
             content={"success": False, "error": exc.code, "message": str(exc)},
         )
-    widget = web_chat_store.update_widget(
-        session.tenant_id,
-        site_url=body.site_url,
-        enabled=body.enabled,
-        integration_mode=body.integration_mode,
-        appearance=body.appearance,
-    )
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
+    disable = body.enabled is False
+    try:
+        with guarded_edit(
+            tenant_id=session.tenant_id,
+            kind="safety:web-chat-disable" if disable else "web-chat:settings",
+            payload=body.model_dump(),
+            safety=disable,
+        ):
+            widget = web_chat_store.update_widget(
+                session.tenant_id,
+                site_url=body.site_url,
+                enabled=body.enabled,
+                integration_mode=body.integration_mode,
+                appearance=body.appearance,
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     return {"success": True, "web_chat": mobile_web_chat_payload(session.tenant_id, widget)}
 
 
@@ -62,7 +75,15 @@ async def mobile_web_chat_rotate_key(request: Request) -> Any:
             status_code=403,
             content={"success": False, "error": exc.code, "message": str(exc)},
         )
-    widget = web_chat_store.rotate_widget_key(session.tenant_id)
+    from services.membership.edit_http import guarded_edit
+
+    with guarded_edit(
+        tenant_id=session.tenant_id,
+        kind="safety:web-chat-rotate",
+        payload={"action": "rotate_widget_key"},
+        safety=True,
+    ):
+        widget = web_chat_store.rotate_widget_key(session.tenant_id)
     return {"success": True, "web_chat": mobile_web_chat_payload(session.tenant_id, widget)}
 
 

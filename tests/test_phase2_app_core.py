@@ -111,8 +111,8 @@ def test_platform_owner_suspend_audit(tmp_path) -> None:
     assert not svc.is_suspended("bad")
 
 
-def test_platform_metrics_requires_platform_owner(monkeypatch) -> None:
-    """Normal tenants must not reach global revenue/cost/queue admin surfaces."""
+def test_platform_analytics_requires_platform_owner(monkeypatch) -> None:
+    """Normal tenants must not reach platform-owner analytics."""
     from fastapi.testclient import TestClient
 
     monkeypatch.setenv("ENVIRONMENT", "test")
@@ -122,5 +122,5 @@ def test_platform_metrics_requires_platform_owner(monkeypatch) -> None:
     from modules.core import app
 
     client = TestClient(app)
-    r = client.get("/api/platform/metrics")
+    r = client.get("/api/platform/analytics")
     assert r.status_code == 401

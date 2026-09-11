@@ -81,7 +81,7 @@ test('add user screen has login card, access grid, generate password', () => {
   assert.match(ui, /Create login and choose access/);
   assert.match(ui, /They can change it after login/);
   assert.match(ui, /Choose what this user can view or manage/);
-  assert.match(ui, /Subscription & Credits/);
+  assert.match(ui, /Subscription & Messages/);
   assert.match(ui, /Smart Follow-Up/);
 });
 

@@ -176,7 +176,7 @@ Restore plan: `pg_restore --clean --if-exists -d "$PGDUMP_URI" "$SNAP_DIR/linas_
 
 ### Prod env checklist (names only — present on host)
 
-Required security present per preflight: `ENVIRONMENT=production`, `DASHBOARD_AUTH_SECRET`, `OPENAI_API_KEY`, `MONTYMOBILE_API_KEY`, Meta App A / page / IG / webhook verify token set, firebase file present.  
+Required security present per preflight: `ENVIRONMENT=production`, `DASHBOARD_AUTH_SECRET`, `OPENAI_API_KEY`, `WHATSAPP_API_TOKEN`, Meta App A / page / IG / webhook verify token set, firebase file present.  
 Still needed before Redis-backed rate limits: reachable `RATE_LIMIT_REDIS_URL` / `REDIS_URL`.  
 Do **not** set `LINASLASER_BOC_BOOKING_ENABLED=true`.
 

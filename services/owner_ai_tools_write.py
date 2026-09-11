@@ -41,8 +41,8 @@ async def tool_update_profile(
     if "preferred_language" in safe or "preferredLanguage" in safe:
         data["note"] = (
             "preferred_language is owner chat/app preference only. "
-            "Customer DM/comment reply language comes from AI Setup → Languages "
-            "and cannot be changed via profile or Settings."
+            "Customer reply language is automatic (detect and reply in the customer's language; "
+            "Franco → Arabic script) and cannot be changed via profile or Settings."
         )
     return ToolResult(ok=True, name="update_profile", data=data)
 
@@ -63,25 +63,20 @@ async def tool_propose_cm_patch(
 
     sec = (section or "").strip().replace("-", "_")
     safe_patch = dict(patch) if isinstance(patch, dict) else {}
-    map_locked_note: str | None = None
-    if sec == "languages" and "response_language_map" in safe_patch:
-        safe_patch.pop("response_language_map", None)
-        map_locked_note = (
-            "response_language_map is FIXED (sabtin) and cannot be changed: "
-            "English→English, Arabic→Arabic, French→French, Franco→Arabic. "
-            "Owners may still enable/disable supported_languages and set default_language."
+    if sec == "languages":
+        return ToolResult(
+            ok=False,
+            name="propose_cm_patch",
+            data={
+                "section": sec,
+                "blocked_reason": "languages_not_owner_configurable",
+                "hint": (
+                    "There is no owner Languages setting. Customer replies auto-detect "
+                    "language; Franco/Arabizi is answered in Arabic script."
+                ),
+            },
+            error="languages_not_owner_configurable",
         )
-        if not safe_patch:
-            return ToolResult(
-                ok=False,
-                name="propose_cm_patch",
-                data={
-                    "section": sec,
-                    "blocked_reason": "response_language_map_locked",
-                    "hint": map_locked_note,
-                },
-                error="response_language_map_locked",
-            )
 
     if sec and not force_edit:
         summary = progress_summary(tenant_id, create_missing=False)
@@ -109,8 +104,6 @@ async def tool_propose_cm_patch(
             pass
 
     data = propose_cm_patch(tenant_id=tenant_id, user_id=user_id, section=section, patch=safe_patch)
-    if map_locked_note:
-        data = {**data, "note": map_locked_note, "stripped_fields": ["response_language_map"]}
     return ToolResult(
         ok=True,
         name="propose_cm_patch",
@@ -140,6 +133,7 @@ async def tool_approve_cm_patch(
             confirmation_token=f"approve_cm_patch:{proposal_id}",
             error="Confirmation required",
         )
+    from services.membership.daily_edits import DailyEditLimitError
     from services.owner_ai_cm_approval import approve_cm_patch_and_activate
 
     # Approve → validate → save Draft → publish Live (section overlay or first full publish).
@@ -151,6 +145,13 @@ async def tool_approve_cm_patch(
             proposal_id=proposal_id,
             delete_ids=delete_ids,
             actor_id=user_id,
+        )
+    except DailyEditLimitError as exc:
+        return ToolResult(
+            ok=False,
+            name="approve_cm_patch",
+            data={"proposal_id": proposal_id, "reset_at": exc.decision.reset_at},
+            error=exc.code,
         )
     except PermissionError as exc:
         return ToolResult(
@@ -187,8 +188,25 @@ async def tool_publish_cm(*, tenant_id: str, role: str, confirmed: bool) -> Tool
             confirmation_token="publish_cm",
             error="Confirmation required before publish",
         )
-    from services.cm.publish import publish_draft
+    from time import time_ns
 
-    result = await publish_draft(tenant_id=tenant_id)
+    from services.cm.publish import publish_draft
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit
+
+    try:
+        with guarded_edit(
+            tenant_id=tenant_id,
+            kind="cm:publish:all",
+            payload={"source": "owner_copilot", "nonce": time_ns()},
+        ):
+            result = await publish_draft(tenant_id=tenant_id)
+    except DailyEditLimitError as exc:
+        return ToolResult(
+            ok=False,
+            name="publish_cm",
+            data={"reset_at": exc.decision.reset_at},
+            error=exc.code,
+        )
     data = result if isinstance(result, dict) else {"result": str(result)}
     return ToolResult(ok=True, name="publish_cm", data=data)

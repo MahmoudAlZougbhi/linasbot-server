@@ -35,7 +35,7 @@ class OwnerTurnResult:
 
 _INTENT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(what can you do|capabilities|help|ماذا تستطيع|aide)\b", re.I), "help"),
-    (re.compile(r"\b(usage|credits|wallet|how much|الاستخدام|crédits)\b", re.I), "read_usage"),
+    (re.compile(r"\b(usage|credits|messages|wallet|how much|الاستخدام|الرسائل|crédits)\b", re.I), "read_usage"),
     (re.compile(r"\b(subscription|plan|billing|الاشتراك|abonnement)\b", re.I), "read_subscription"),
     (
         re.compile(

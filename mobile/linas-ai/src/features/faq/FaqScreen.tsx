@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ApiError } from '../../api/client';
+import { faqWriteErrorMessage } from './faqWriteError';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, spacing } from '../../theme';
@@ -112,11 +113,7 @@ export function FaqScreen({ proposalReview }: Props) {
       setTimeout(() => setSavedFlash(false), 2500);
       await load();
     } catch (err) {
-      if (err instanceof ApiError && (err.status === 402 || err.status === 403)) {
-        setError(tr('faqQuotaUpgrade'));
-      } else {
-        setError(err instanceof ApiError ? err.message : tr('faqCreateError'));
-      }
+      setError(faqWriteErrorMessage(err, tr));
     } finally {
       setSaving(false);
     }
@@ -132,7 +129,7 @@ export function FaqScreen({ proposalReview }: Props) {
       setPendingLangSave(null);
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tr('faqCreateError'));
+      setError(faqWriteErrorMessage(err, tr));
     } finally {
       setSaving(false);
     }
@@ -175,7 +172,7 @@ export function FaqScreen({ proposalReview }: Props) {
                 return load();
               })
               .catch((err) => {
-                setError(err instanceof ApiError ? err.message : tr('faqCreateError'));
+                setError(faqWriteErrorMessage(err, tr));
               })
               .finally(() => setSaving(false));
           },
@@ -197,7 +194,7 @@ export function FaqScreen({ proposalReview }: Props) {
       setTimeout(() => setSavedFlash(false), 2000);
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tr('faqCreateError'));
+      setError(faqWriteErrorMessage(err, tr));
     } finally {
       setSaving(false);
     }
@@ -211,7 +208,7 @@ export function FaqScreen({ proposalReview }: Props) {
       await regenerateFaq(selected.qa_group_id);
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tr('faqCreateError'));
+      setError(faqWriteErrorMessage(err, tr));
     } finally {
       setSaving(false);
     }
@@ -226,7 +223,7 @@ export function FaqScreen({ proposalReview }: Props) {
       setMode('list');
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tr('faqCreateError'));
+      setError(faqWriteErrorMessage(err, tr));
     } finally {
       setSaving(false);
     }

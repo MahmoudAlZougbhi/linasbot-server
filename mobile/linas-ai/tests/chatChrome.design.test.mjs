@@ -139,7 +139,7 @@ test('model chip maps chat/work to existing 5.6 LIN Low/High ids', () => {
   assert.match(en, /linEffortHigh:\s*'High'/);
   assert.match(en, /linEffortFast:\s*'Fast'/);
   assert.match(en, /linEffortHighSub:\s*'More powerful'/);
-  assert.match(en, /linEffortCostsMore:\s*'Uses more credits'/);
+  assert.match(en, /linEffortCostsMore:\s*'Uses more messages'/);
 });
 
 test('chat thread starts high; sparkle slightly larger than Linas name; send is sparkle teal', () => {

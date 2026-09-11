@@ -1,4 +1,4 @@
-"""LOC split: live_chat_service mixins under 500 lines; Qiscus adapter preserved."""
+"""LOC split: live_chat_service mixins under 500 lines; public exports preserved."""
 
 from __future__ import annotations
 
@@ -28,9 +28,3 @@ def test_live_chat_service_preserves_public_api() -> None:
         "send_operator_message",
     ):
         assert callable(getattr(live_chat_service, name))
-
-
-def test_live_chat_operator_keeps_qiscus_adapter() -> None:
-    src = Path("services/live_chat_service_operator.py").read_text(encoding="utf-8")
-    assert "Qiscus" in src
-    assert "send_operator_message" in src

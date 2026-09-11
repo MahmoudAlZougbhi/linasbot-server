@@ -102,6 +102,7 @@ export function BillingScreen({ openChoosePlan = false }: Props) {
   );
 
   const priceFor = (id: PlanId) => {
+    if (period === 'yearly') return tr('subPriceUnavailable');
     const hit = store.storePrices[id];
     if (hit?.available && hit.localizedPrice) return hit.localizedPrice;
     return formatUsd(PLAN_CATALOG[id].catalogPriceUsd);
@@ -166,13 +167,18 @@ export function BillingScreen({ openChoosePlan = false }: Props) {
           statusLabel={tr(statusLabelKey(status))}
           priceLabel={`${priceFor(planId)} ${periodSuffix}`}
           renewsLabel={renewsLabel}
-          creditBalance={entitlement.creditBalance}
-          membershipRemaining={entitlement.membershipRemaining}
-          boughtRemaining={entitlement.boughtRemaining}
+          messageBillingActive={entitlement.messageBillingActive}
+          includedMessages={entitlement.includedMessages}
+          availableMessages={entitlement.availableMessages}
+          includedRemaining={entitlement.includedRemaining}
+          purchasedMessages={entitlement.purchasedMessages}
           pendingDowngrade={entitlement.pendingDowngrade}
           locale={locale}
           tr={tr}
-          onBuyCredits={() => setCreditsOpen(true)}
+          onBuyCredits={() => {
+            if (entitlement.messageBillingActive) return;
+            setCreditsOpen(true);
+          }}
           onUpgrade={() => {
             setBrowseMode('upgrade');
             setSelected(PLAN_ORDER.find((id) => planRank(id) > planRank(planId)) ?? planId);
@@ -211,7 +217,10 @@ export function BillingScreen({ openChoosePlan = false }: Props) {
           locale={locale}
           tr={tr}
           onSelect={setSelected}
-          onPeriod={setPeriod}
+          onPeriod={(next) => {
+            if (next === 'yearly') return;
+            setPeriod(next);
+          }}
           onChoose={() => {
             if (browseMode === 'downgrade') {
               setDowngradeConfirmOpen(true);
@@ -223,11 +232,12 @@ export function BillingScreen({ openChoosePlan = false }: Props) {
       )}
 
       <BuyCreditsSheet
-        visible={creditsOpen}
+        visible={creditsOpen && !entitlement.messageBillingActive}
         prices={store.creditPrices}
         purchasing={purchasing}
         locale={locale}
         tr={tr}
+        messageBillingActive={entitlement.messageBillingActive}
         onClose={() => setCreditsOpen(false)}
         onBuy={(credits: CreditPackId) =>
           void runPurchase(() => purchaseCredits(credits), 'subCreditsPurchaseSuccess')

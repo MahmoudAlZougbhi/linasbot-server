@@ -95,11 +95,15 @@ class PlatformOwnerService:
                     continue
         active = [t for t in tenants if t.get("status") in {"active", "trial", "grace"}]
         plan_mix: dict[str, int] = {}
-        mrr = 0.0
+        plan_ids: list[str] = []
         for t in active:
             plan = str(t.get("plan_id") or "none")
             plan_mix[plan] = plan_mix.get(plan, 0) + 1
-            mrr += float(PLAN_PRICES_USD.get(plan, 0.0))
+            plan_ids.append(plan)
+        from services.membership.catalog_revenue import revenue_pair
+
+        revenue = revenue_pair(plan_ids)
+        mrr = float(revenue["live_checkout_mrr_usd"])
         faq_analytics: dict[str, Any] = {}
         try:
             from services.faq_metrics import platform_owner_faq_analytics
@@ -113,6 +117,9 @@ class PlatformOwnerService:
             "canceled": len([t for t in tenants if t.get("status") == "canceled"]),
             "mrr_usd": round(mrr, 2),
             "arr_estimate_usd": round(mrr * 12, 2),
+            "intended_message_mrr_usd": revenue["intended_message_mrr_usd"],
+            "intended_message_arr_usd": round(float(revenue["intended_message_mrr_usd"]) * 12, 2),
+            "catalog_revenue_note": revenue["note"],
             "plan_mix": plan_mix,
             "suspended_tenants": sorted(self._suspended),
             "faq_smart_answers": faq_analytics,
@@ -121,6 +128,7 @@ class PlatformOwnerService:
     def tenant_detail(self, tenant_id: str) -> dict[str, Any]:
         from services.credit_ledger_service import credit_ledger_service
         from services.integration_capabilities import list_tenant_integration_status
+        from services.membership.catalog_revenue import intended_price_usd
 
         ent = entitlements_store.get(tenant_id)
         return {
@@ -136,6 +144,7 @@ class PlatformOwnerService:
             "credit_balance": credit_ledger_service.get_balance(tenant_id),
             "integrations": list_tenant_integration_status(tenant_id),
             "estimated_revenue_usd": PLAN_PRICES_USD.get(ent.plan_id, 0.0),
+            "intended_message_revenue_usd": intended_price_usd(ent.plan_id),
         }
 
 

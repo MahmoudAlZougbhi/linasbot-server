@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
-import { ApiError } from '../../api/client';
 import type { StringKey } from '../../i18n';
+import { mediaUploadErrorMessage } from '../cm/mediaUploadError';
 import { newId } from '../cm/cmApi';
 import { runCmMediaUpload } from '../cm/cmMediaAttach';
 import { pickKnowledgeFile, pickKnowledgeImage, pickKnowledgeVideo } from '../cm/knowledge/knowledgePick';
@@ -39,15 +39,11 @@ export function useFaqMedia(
   const [promptError, setPromptError] = useState<string | null>(null);
 
   function failMessage(err: unknown): string {
-    const detail =
-      err instanceof ApiError && err.body && typeof err.body === 'object' && 'detail' in err.body
-        ? JSON.stringify((err.body as { detail: unknown }).detail)
-        : err instanceof Error
-          ? err.message
-          : '';
-    if (detail.includes('file_too_large')) return tr('commentsVideoTooLarge');
-    if (detail.includes('unsupported_mime')) return tr('commentsUnsupported');
-    return tr('commentsUploadFailed');
+    return mediaUploadErrorMessage(err, tr, {
+      tooLarge: 'commentsVideoTooLarge',
+      unsupported: 'commentsUnsupported',
+      fallback: 'commentsUploadFailed',
+    });
   }
 
   async function attachPicked(

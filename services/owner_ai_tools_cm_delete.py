@@ -33,7 +33,6 @@ AVAILABLE_SECTIONS = frozenset({"services", "branches"})
 FIELD_SECTIONS = frozenset(
     {
         "ai_basics",
-        "languages",
         "style",
         "philosophy",
         "handoff",

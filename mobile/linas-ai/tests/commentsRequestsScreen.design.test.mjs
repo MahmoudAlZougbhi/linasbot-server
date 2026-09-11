@@ -104,11 +104,16 @@ describe('Requests screens match screenshot handoff', () => {
     assert.match(edit, /requestRulesEditTitle/);
     assert.match(edit, /aiSetupRequestTypeAppointment/);
     assert.match(screen, /useCmDraft\('requests_appointments'/);
+    assert.match(screen, /isDailyEditLimitError/);
+    assert.match(screen, /aiSetupDailyEditLimit/);
     assert.match(screen, /publishRequestGraph/);
     assert.match(screen, /listRequestGraphs/);
     assert.match(screen, /draft\.dirty/);
     assert.match(screen, /rulesPayload/);
+    assert.match(screen, /draft_payload: nextPayload/);
+    assert.match(screen, /if_match: draft.etag/);
     assert.match(api, /\/api\/cm\/request-graphs\/publish/);
+    assert.match(api, /draft_payload/);
     assert.match(api, /REQUEST_GRAPHS_UNMIGRATED/);
     assert.doesNotMatch(screen, /enabled_types/);
   });

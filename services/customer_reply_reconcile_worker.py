@@ -38,6 +38,20 @@ def get_reconcile_metrics() -> dict[str, int]:
     return dict(_METRICS)
 
 
+def _release_unsent_message_hold(candidate: ReconcileCandidate, turn: Any) -> None:
+    from services.customer_ai.billing import settle_after_send
+
+    inbound = "" if candidate.inbound_event_id.startswith("orphan:") else candidate.inbound_event_id
+    extra = str(getattr(turn, "external_inbound_id", "") or "")
+    settle_after_send(
+        tenant_id=str(getattr(turn, "tenant_id", "") or ""),
+        operation_id=extra or inbound or (candidate.logical_reply_id or ""),
+        accepted=False,
+        channel=str(getattr(turn, "channel", "") or ""),
+        extra_ids=(candidate.logical_reply_id or "", inbound, extra),
+    )
+
+
 def reset_reconcile_metrics() -> None:
     for key in _METRICS:
         _METRICS[key] = 0
@@ -181,6 +195,7 @@ async def _execute_candidate(candidate: ReconcileCandidate) -> dict[str, Any]:
                 from services.ai_reply_credit_gate import release_on_ai_failure
 
                 release_on_ai_failure(candidate.logical_reply_id)
+                _release_unsent_message_hold(candidate, turn)
             else:
                 mark_state(candidate.logical_reply_id, "AI_RETRY_REQUIRED", last_error="reconcile_requeue_ai")
 

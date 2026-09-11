@@ -171,15 +171,31 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
                 f"[ai-turn] trace_id={trace} image claim=SKIPPED(no_inbound_mids) — "
                 f"add TRACE or check provider message ids"
             )
-        await _process_and_respond(
-            user_id=user_id,
-            user_name=user_name,
-            user_input_to_process="[صورة]",
-            user_data=user_data,
-            send_message_func=adapter_send_message,
-            send_action_func=send_whatsapp_typing_indicator,
-            user_image_base64=base64_image,
-            user_image_format=image_format,
+        if source_message_id:
+            user_data["_source_message_id"] = source_message_id
+        elif mids:
+            user_data["_source_message_id"] = str(mids[-1])
+        elif image_id:
+            user_data["_source_message_id"] = str(image_id)
+        from services.customer_reply_v2.inbound_media import store_inbound_image_base64
+
+        store_inbound_image_base64(user_data, b64=str(base64_image or ""))
+        from services.ai_reply_delivery import wrap_tracked_send
+        from services.ai_reply_turn_runtime import run_reserved_customer_turn
+
+        tracked_send = wrap_tracked_send(adapter_send_message, user_data)
+        await run_reserved_customer_turn(
+            user_data,
+            lambda: _process_and_respond(
+                user_id=user_id,
+                user_name=user_name,
+                user_input_to_process="[صورة]",
+                user_data=user_data,
+                send_message_func=tracked_send,
+                send_action_func=send_whatsapp_typing_indicator,
+                user_image_base64=base64_image,
+                user_image_format=image_format,
+            ),
         )
 
     except Exception as e:

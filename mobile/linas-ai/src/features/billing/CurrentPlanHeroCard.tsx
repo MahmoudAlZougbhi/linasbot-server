@@ -17,6 +17,7 @@ type Props = {
   boughtLabel: string;
   tr: (key: StringKey) => string;
   onBuyCredits: () => void;
+  messageBillingActive?: boolean;
 };
 
 export function CurrentPlanHeroCard({
@@ -30,6 +31,7 @@ export function CurrentPlanHeroCard({
   boughtLabel,
   tr,
   onBuyCredits,
+  messageBillingActive = false,
 }: Props) {
   const { colors, resolved } = useTheme();
   const nameColor = planNameColor(planId, resolved);
@@ -68,6 +70,7 @@ export function CurrentPlanHeroCard({
           </Text>
           <Text style={[styles.creditsHint, { color: colors.textMuted }]}>{includedEachMonth}</Text>
         </View>
+        {messageBillingActive ? null : (
         <Pressable
           onPress={onBuyCredits}
           accessibilityRole="button"
@@ -77,8 +80,11 @@ export function CurrentPlanHeroCard({
             { borderColor: planAccent, opacity: pressed ? 0.7 : 1 },
           ]}
         >
-          <Text style={[styles.buyText, { color: planAccent }]}>{tr('subBuyCredits')}</Text>
+          <Text style={[styles.buyText, { color: planAccent }]}>
+            {tr('subBuyCredits')}
+          </Text>
         </Pressable>
+        )}
       </View>
     </View>
   );

@@ -14,8 +14,13 @@ type Props = {
 
 function toneFor(state: string): 'ok' | 'warn' | 'soon' | 'neutral' {
   if (state === 'active') return 'ok';
-  if (state === 'credits_low' || state === 'setup_needed') return 'warn';
-  if (state === 'credits_depleted' || state === 'suspended' || state === 'subscription_issue') {
+  if (state === 'credits_low' || state === 'leftover_credits_low' || state === 'setup_needed') return 'warn';
+  if (
+    state === 'credits_depleted' ||
+    state === 'leftover_credits_depleted' ||
+    state === 'suspended' ||
+    state === 'subscription_issue'
+  ) {
     return 'warn';
   }
   if (state === 'connection_issue' || state === 'temporarily_unavailable') return 'soon';

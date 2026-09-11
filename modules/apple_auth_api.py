@@ -291,13 +291,21 @@ async def mobile_account_delete(request: Request) -> Any:
             authorization_code = (str(raw.get("authorization_code") or "")).strip() or None
     except Exception:
         authorization_code = None
-    # Revoke Apple tokens before soft-delete; durable outbox if HTTP fails.
-    revoke_on_account_delete(user_id=user_id, authorization_code=authorization_code)
-    unlink_all_apple_for_user(user_id)
-    mobile_refresh_token_service.revoke_all_for_user(user_id)
-    session_service.revoke_all_for_user(user_id)
-    try:
-        user_service.mark_self_service_deleted(user_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    from services.membership.edit_http import guarded_edit
+
+    with guarded_edit(
+        tenant_id=str(getattr(session, "tenant_id", "") or ""),
+        kind="privacy:delete",
+        payload={"user_id": user_id},
+        safety=True,
+    ):
+        # Revoke Apple tokens before soft-delete; durable outbox if HTTP fails.
+        revoke_on_account_delete(user_id=user_id, authorization_code=authorization_code)
+        unlink_all_apple_for_user(user_id)
+        mobile_refresh_token_service.revoke_all_for_user(user_id)
+        session_service.revoke_all_for_user(user_id)
+        try:
+            user_service.mark_self_service_deleted(user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"success": True, "deleted": True}

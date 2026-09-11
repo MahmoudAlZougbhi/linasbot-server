@@ -25,19 +25,16 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
     "languages": {
         "title": "Languages",
         "purpose": (
-            "Content/knowledge language organization and default fallback — NOT customer reply language control. "
-            "Customer-facing AI replies are multilingual by default (auto-detect, reply in user's language). "
-            "Smart Q&A translation languages are configured on the Smart Q&A screen."
+            "Internal content language defaults only. There is no owner Languages tile. "
+            "Customer AI auto-detects every supported language and replies in that language. "
+            "Franco/Arabizi is understood as Arabic and answered in Arabic script."
         ),
-        "why": "Default language and behavior notes still matter for content organization and unknown-language fallback.",
-        "what_to_fill": ["supported_languages", "default_language"],
-        "useful": (
-            "mixed_language_behavior, unknown_language_behavior. "
-            "supported_languages does NOT limit customer DM/comment reply languages."
-        ),
-        "app_path": "AI Setup → Languages",
+        "why": "Owners do not pick reply languages. FAQ translation targets stay on Smart Q&A.",
+        "what_to_fill": [],
+        "useful": "Do not tell the owner to enable Arabic/English/French for the customer AI.",
+        "app_path": "Not shown in AI Setup. Reply language is global.",
         "fixed_fields": ["response_language_map", "customer_reply_multilingual"],
-        "editable_fields": ["supported_languages", "default_language"],
+        "editable_fields": [],
     },
     "style": {
         "title": "Style & Tone",
@@ -45,7 +42,7 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "why": "Keeps every customer reply on-brand.",
         "what_to_fill": ["tone", "formality", "response_length", "style_body"],
         "useful": "do_list / dont_list, example_replies, emoji_level.",
-        "app_path": "AI Setup → Style & Tone",
+        "app_path": "AI Setup → AI Basics → Style",
     },
     "dynamic_messages": {
         "title": "Greetings",
@@ -59,12 +56,12 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "app_path": "AI Setup → AI Basics → Greetings",
     },
     "services": {
-        "title": "Services",
-        "purpose": "Structured catalog of what the business offers.",
-        "why": "Prices, FAQ, care, and answers hang off real service names — not guesses.",
-        "what_to_fill": ["items[] with id + labels (ar/en/fr)"],
-        "useful": "audience, category, aliases, availability.",
-        "app_path": "AI Setup → Services",
+        "title": "Services (legacy catalog)",
+        "purpose": "Internal legacy service names. The owner Services tile writes the prices catalog.",
+        "why": "Kept for published snapshots that still have old service rows.",
+        "what_to_fill": [],
+        "useful": "Owners add services under AI Setup → Services (prices section).",
+        "app_path": "Not a hub tile. Use AI Setup → Services (prices).",
     },
     "branches": {
         "title": "Locations & hours",
@@ -84,15 +81,15 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "why": "Customers ask when you are open; weak hours cause wrong open/closed answers.",
         "what_to_fill": ["items[] schedules with open/close or closed per day"],
         "useful": "Multiple named calendars per audience or branch.",
-        "app_path": "AI Setup → Opening Hours",
+        "app_path": "AI Setup → Locations & hours (hours tab; also used at reply time)",
     },
     "prices": {
-        "title": "Prices",
+        "title": "Services",
         "purpose": "Catalog, price entries, discounts — what the AI may quote.",
         "why": "Without prices the AI must refuse or hand off instead of inventing numbers.",
         "what_to_fill": ["catalog / price_entries / items", "or clear policy_text"],
         "useful": "discount_rules, packages, currency notes.",
-        "app_path": "AI Setup → Prices",
+        "app_path": "AI Setup → Services",
     },
     "care": {
         "title": "Care / Instructions",
@@ -115,19 +112,19 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "purpose": "Smart Q&A — ready-made linked Q&A (ar/en/fr/franco) for repeated customer questions.",
         "why": (
             "Matching questions (same text or meaning) reply from FAQ before a full AI generation — "
-            "saves AI credits. Highest-precision answers; production FAQ lives here."
+            "uses 0 AI messages. Highest-precision answers; production FAQ lives here."
         ),
         "what_to_fill": ["items[] with at least one language question + answer"],
         "useful": "Full four-language variants, tags, review status, plan quota.",
         "app_path": "Smart Q&A (or AI Setup → FAQ)",
     },
     "handoff": {
-        "title": "Human Handoff",
-        "purpose": "When and how to send the customer to a human.",
-        "why": "Without a real contact destination the AI cannot escalate safely.",
-        "what_to_fill": ["contacts[] with destination_type + destination_value"],
-        "useful": "matrix rows, policy_text, branch/gender routing.",
-        "app_path": "AI Setup → Human Handoff",
+        "title": "Human Handoff contacts",
+        "purpose": "Internal contact destinations used after a Requests HUMAN rule transfers to Live Chat.",
+        "why": "Owner control for whether to transfer is AI Setup → Requests (HUMAN rule).",
+        "what_to_fill": [],
+        "useful": "contacts[] remain for published snapshots; do not ask the owner to fill a Handoff tile.",
+        "app_path": "AI Setup → Requests (HUMAN type). No separate Handoff tile.",
     },
     "restricted": {
         "title": "Restricted / Unsupported",
@@ -158,22 +155,15 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
             "optional post_id when a rule applies to one post only",
         ],
         "useful": "policy_text for AI when no rule matches; default_action reply_comment.",
-        "app_path": "Content Management → Comments",
+        "app_path": "AI Setup → Comments",
     },
     "ai_limits": {
         "title": "Customer AI Limits",
-        "purpose": "Per-customer text, photo, and voice caps across connected channels.",
-        "why": "Protects credits so one customer cannot burn the owner's AI budget.",
-        "what_to_fill": [
-            "text_words_per_message",
-            "text_replies_per_day/week/month",
-            "photos_per_message",
-            "image_per_day/week/month",
-            "voice_minutes_per_message",
-            "voice_minutes_per_day/week/month",
-        ],
-        "useful": "Save applies immediately to customer replies on WhatsApp, Instagram, and Messenger.",
-        "app_path": "Settings → Customer AI Limits (mobile)",
+        "purpose": "Retired owner surface. Customer allowance is now plan AI messages.",
+        "why": "Credit-protection limits are no longer an owner feature.",
+        "what_to_fill": [],
+        "useful": "Backend safety defaults may still apply. Owners manage capacity from Subscription.",
+        "app_path": "Subscription (mobile) — Customer AI Limits was removed",
     },
     "off_days": {
         "title": "Off Days",
@@ -181,15 +171,18 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "why": "So the AI does not book or promise availability on closed days.",
         "what_to_fill": ["timezone", "rules[] weekly/date/range"],
         "useful": "reason text per rule.",
-        "app_path": "AI Setup → Off Days",
+        "app_path": "AI Setup → Locations & hours",
     },
     "requests_appointments": {
         "title": "Requests & Appointments",
         "title_ar": "الطلبات والمواعيد",
-        "purpose": ("Optional customer Orders / Appointment requests / Other capture via simple request rules."),
-        "why": "Lets owners collect structured requests without forced wa.me booking handoff.",
+        "purpose": (
+            "Optional customer Appointment / Product / Other / Human rules. "
+            "Human rules are the owner control for Live Chat / human transfer."
+        ),
+        "why": "Lets owners collect structured requests and allow human transfer from one Requests screen.",
         "what_to_fill": [
-            "rules[] with type (ORDER | APPOINTMENT | OTHER), title (name), and custom note",
+            "rules[] with type (ORDER | APPOINTMENT | OTHER | HUMAN), title (name), and custom note",
         ],
         "useful": "Leave empty until ready; unpublished or no rules keeps AI capture inactive.",
         "app_path": "AI Setup → Requests",

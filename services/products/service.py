@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -39,7 +40,7 @@ class ProductsService:
         return product_to_dict(row)
 
     def create_product(
-        self, *, tenant_id: str, body: ProductWriteBody, require_description: bool = True
+        self, *, tenant_id: str, body: ProductWriteBody, require_description: bool = True, count_edit: bool = True
     ) -> dict[str, Any]:
         if require_description and not (body.description or "").strip():
             raise ProductsError(
@@ -48,27 +49,40 @@ class ProductsService:
                 http_status=400,
             )
         self._validate_images(tenant_id=tenant_id, images=body.images)
+        from services.membership.free_slots import SlotLimitError, assert_can_add_product
+
+        try:
+            assert_can_add_product(tenant_id, self.repo.count_products(tenant_id=tenant_id))
+        except SlotLimitError as exc:
+            raise ProductsError(code=exc.code, message=str(exc), http_status=402) from exc
         fields = self._product_fields(body)
-        staging = self._staging_product(fields, product_id="new")
-        self._refresh_search_metadata(staging)
-        fields.update(self._search_meta_fields(staging))
-        row = self.repo.create_product(tenant_id=tenant_id, fields=fields)
-        self.repo.replace_images(
-            tenant_id=tenant_id,
-            product_id=row.id,
-            images=[img.model_dump() for img in body.images],
-        )
-        self.repo.replace_links(
-            tenant_id=tenant_id,
-            product_id=row.id,
-            links=[link.model_dump() for link in body.links],
-        )
-        self._sync_image_index(tenant_id=tenant_id, product_id=row.id, images=body.images)
-        self.session.flush()
-        self.session.expire(row, ["images", "links"])
-        refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
-        assert refreshed is not None
-        return product_to_dict(refreshed)
+        edit_op = self._begin_daily_edit(tenant_id, "product:create", fields) if count_edit else ""
+        try:
+            staging = self._staging_product(fields, product_id="new")
+            self._refresh_search_metadata(staging)
+            fields.update(self._search_meta_fields(staging))
+            row = self.repo.create_product(tenant_id=tenant_id, fields=fields)
+            self.repo.replace_images(
+                tenant_id=tenant_id,
+                product_id=row.id,
+                images=[img.model_dump() for img in body.images],
+            )
+            self.repo.replace_links(
+                tenant_id=tenant_id,
+                product_id=row.id,
+                links=[link.model_dump() for link in body.links],
+            )
+            self._sync_image_index(tenant_id=tenant_id, product_id=row.id, images=body.images)
+            self.session.flush()
+            self.session.expire(row, ["images", "links"])
+            refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
+            assert refreshed is not None
+            self._invalidate_customer_ai_products(tenant_id)
+            self._finish_daily_edit(tenant_id, edit_op, commit=True)
+            return product_to_dict(refreshed)
+        except Exception:
+            self._finish_daily_edit(tenant_id, edit_op, commit=False)
+            raise
 
     def update_product(self, *, tenant_id: str, product_id: str, body: ProductWriteBody) -> dict[str, Any]:
         row = self.repo.get_product(tenant_id=tenant_id, product_id=product_id)
@@ -79,38 +93,52 @@ class ProductsService:
         previous = product_content_payload(row)
         self._validate_images(tenant_id=tenant_id, images=body.images)
         fields = self._product_fields(body, existing=row)
-        staging = self._staging_product(fields, product_id=row.id)
-        generated = self._refresh_search_metadata(staging, previous=previous)
-        if generated:
-            fields.update(self._search_meta_fields(staging))
-        remove_product_from_index(self.session, tenant_id=tenant_id, product_id=product_id)
-        self.repo.update_product(row, fields=fields)
-        self.repo.replace_images(
-            tenant_id=tenant_id,
-            product_id=row.id,
-            images=[img.model_dump() for img in body.images],
-        )
-        self.repo.replace_links(
-            tenant_id=tenant_id,
-            product_id=row.id,
-            links=[link.model_dump() for link in body.links],
-        )
-        self._sync_image_index(tenant_id=tenant_id, product_id=row.id, images=body.images)
-        self.session.flush()
-        self.session.expire(row, ["images", "links"])
-        refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
-        assert refreshed is not None
-        return product_to_dict(refreshed)
+        edit_op = self._begin_daily_edit(tenant_id, "product:update", {"id": product_id, **fields})
+        try:
+            staging = self._staging_product(fields, product_id=row.id)
+            generated = self._refresh_search_metadata(staging, previous=previous)
+            if generated:
+                fields.update(self._search_meta_fields(staging))
+            remove_product_from_index(self.session, tenant_id=tenant_id, product_id=product_id)
+            self.repo.update_product(row, fields=fields)
+            self.repo.replace_images(
+                tenant_id=tenant_id,
+                product_id=row.id,
+                images=[img.model_dump() for img in body.images],
+            )
+            self.repo.replace_links(
+                tenant_id=tenant_id,
+                product_id=row.id,
+                links=[link.model_dump() for link in body.links],
+            )
+            self._sync_image_index(tenant_id=tenant_id, product_id=row.id, images=body.images)
+            self.session.flush()
+            self.session.expire(row, ["images", "links"])
+            refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
+            assert refreshed is not None
+            self._invalidate_customer_ai_products(tenant_id)
+            self._finish_daily_edit(tenant_id, edit_op, commit=True)
+            return product_to_dict(refreshed)
+        except Exception:
+            self._finish_daily_edit(tenant_id, edit_op, commit=False)
+            raise
 
     def delete_product(self, *, tenant_id: str, product_id: str) -> list[str]:
         row = self.repo.get_product(tenant_id=tenant_id, product_id=product_id)
         if row is None:
             raise ProductsError(code="NOT_FOUND", message="product_not_found", http_status=404)
-        media_ids = self.repo.delete_product(row)
-        remove_product_from_index(self.session, tenant_id=tenant_id, product_id=product_id)
-        clear_context_for_product(self.session, tenant_id=tenant_id, product_id=product_id)
-        clear_reply_for_product(self.session, tenant_id=tenant_id, product_id=product_id)
-        return media_ids
+        edit_op = self._begin_daily_edit(tenant_id, "product:delete", {"id": product_id})
+        try:
+            media_ids = self.repo.delete_product(row)
+            remove_product_from_index(self.session, tenant_id=tenant_id, product_id=product_id)
+            clear_context_for_product(self.session, tenant_id=tenant_id, product_id=product_id)
+            clear_reply_for_product(self.session, tenant_id=tenant_id, product_id=product_id)
+            self._invalidate_customer_ai_products(tenant_id)
+            self._finish_daily_edit(tenant_id, edit_op, commit=True)
+            return media_ids
+        except Exception:
+            self._finish_daily_edit(tenant_id, edit_op, commit=False)
+            raise
 
     def preview_csv(self, *, csv_text: str) -> dict[str, Any]:
         from services.products.import_service import ProductsImportError, preview_csv_rows
@@ -123,7 +151,7 @@ class ProductsService:
     def import_csv(self, *, tenant_id: str, csv_text: str) -> dict[str, Any]:
         from services.products.import_service import import_csv_rows
 
-        return import_csv_rows(self, tenant_id=tenant_id, csv_text=csv_text)
+        return self._run_import(lambda: import_csv_rows(self, tenant_id=tenant_id, csv_text=csv_text))
 
     def preview_xlsx(self, *, content: bytes) -> dict[str, Any]:
         from services.products.import_service import ProductsImportError, preview_xlsx_rows
@@ -136,7 +164,21 @@ class ProductsService:
     def import_xlsx(self, *, tenant_id: str, content: bytes) -> dict[str, Any]:
         from services.products.import_service import import_xlsx_rows
 
-        return import_xlsx_rows(self, tenant_id=tenant_id, content=content)
+        return self._run_import(lambda: import_xlsx_rows(self, tenant_id=tenant_id, content=content))
+
+    def _run_import(self, fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+        from services.membership.daily_edits import DailyEditLimitError
+        from services.membership.processing_budgets import ProcessingBudgetError
+        from services.products.import_service import ProductsImportError
+
+        try:
+            return fn()
+        except ProductsImportError as exc:
+            raise ProductsError(code=exc.code, message=exc.message, http_status=exc.http_status) from exc
+        except DailyEditLimitError as exc:
+            raise ProductsError(code=exc.code, message=exc.code, http_status=429) from exc
+        except ProcessingBudgetError as exc:
+            raise ProductsError(code=exc.code, message=exc.code, http_status=429) from exc
 
     def _product_fields(self, body: ProductWriteBody, *, existing: Any | None = None) -> dict[str, Any]:
         from services.products.schemas import normalize_product_name
@@ -211,6 +253,39 @@ class ProductsService:
                 product_image_id=product_image_id,
                 media_id=media_id,
             )
+
+    def _begin_daily_edit(self, tenant_id: str, kind: str, payload: object) -> str:
+        from services.membership.daily_edits import (
+            DailyEditLimitError,
+            operation_id,
+            payload_hash,
+            reserve_edit,
+        )
+
+        op = operation_id(tenant_id=tenant_id, kind=kind, payload_hash=payload_hash(payload))
+        try:
+            reserve_edit(tenant_id=tenant_id, operation_id=op)
+        except DailyEditLimitError as exc:
+            raise ProductsError(code=exc.code, message=exc.code, http_status=429) from exc
+        return op
+
+    def _finish_daily_edit(self, tenant_id: str, operation_id: str, *, commit: bool) -> None:
+        if not operation_id:
+            return
+        from services.membership.daily_edits import commit_edit, release_edit
+
+        if commit:
+            commit_edit(tenant_id=tenant_id, operation_id=operation_id)
+            return
+        release_edit(tenant_id=tenant_id, operation_id=operation_id)
+
+    def _invalidate_customer_ai_products(self, tenant_id: str) -> None:
+        try:
+            from services.customer_ai.search.invalidate import notify_product_change
+
+            notify_product_change(self.session, tenant_id)
+        except Exception:
+            return
 
     def _validate_images(self, *, tenant_id: str, images: list[Any]) -> None:
         if len(images) > MAX_IMAGES:

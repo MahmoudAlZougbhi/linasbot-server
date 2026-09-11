@@ -2,9 +2,7 @@
 WhatsApp Adapter Factory
 Creates and manages WhatsApp adapters.
 
-Runtime transport is Meta Cloud only. Legacy MontyMobile / Qiscus / 360dialog
-adapter modules may remain on disk for archive, but must not be selected as
-default or fallback transport.
+Runtime transport is Meta Cloud only. Legacy BSP names are refused.
 """
 
 from __future__ import annotations
@@ -57,11 +55,10 @@ def _refuse_unsupported_provider(provider: str) -> None:
         raise ValueError(
             f"WhatsApp provider {provider!r} is unsupported. "
             "Runtime transport is Meta Cloud only (WHATSAPP_PROVIDER=meta). "
-            "MontyMobile / Qiscus / 360dialog are not available as runtime fallback."
+            "Legacy WhatsApp BSPs are not available as runtime fallback."
         )
     raise ValueError(
-        f"Unknown WhatsApp provider: {provider!r}. "
-        "Supported: meta (Cloud). Legacy montymobile/qiscus/360dialog are disabled."
+        f"Unknown WhatsApp provider: {provider!r}. Supported: meta (Cloud). Legacy BSP names are disabled."
     )
 
 
@@ -108,11 +105,6 @@ class WhatsAppFactory:
     def _create_qiscus_adapter(cls) -> WhatsAppAdapter:
         """Archived: Qiscus is not a runtime transport."""
         raise ValueError("Qiscus WhatsApp provider is unsupported. Runtime transport is Meta Cloud only.")
-
-    @classmethod
-    def _create_montymobile_adapter(cls) -> WhatsAppAdapter:
-        """Archived: MontyMobile is not a runtime transport."""
-        raise ValueError("MontyMobile WhatsApp provider is unsupported. Runtime transport is Meta Cloud only.")
 
     @classmethod
     def switch_provider(cls, provider: str) -> WhatsAppAdapter:

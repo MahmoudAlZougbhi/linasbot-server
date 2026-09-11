@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any, cast
 
 import config
+from services.ai_reply_turn_runtime import settle_after_outbound, settle_reserved_credits
+from services.customer_ai.history_ids import conversation_id_from_user_data, message_id_for_brain
 from services.customer_reply_v2.inbound_media import inbound_payload_from_user_data as _inbound_from_user_data
 
 _PHASE_HALT = "_PHASE_HALT"
@@ -42,6 +44,7 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
             user_data.get("phone_number"),
             metadata={"handled_by": "ai", "source": "out_of_scope_guard"},
         )
+        settle_after_outbound(user_data, reply=out_of_scope_reply)
         log_interaction(
             user_id,
             user_input_to_process,
@@ -75,7 +78,7 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
     # ===== CM AI CONTROL PLANE — per-tenant published runtime =====
     # Published CM is the SoT when this tenant has an active published version.
     # New tenants without publish get an honest unpublished message (never Marwa/Linas).
-    # Temporary legacy bridge: only ``linas`` without published content (removed in Wave 6).
+    # No classic GPT fallback. Unpublished tenants get the unpublished message.
     from services.cm.constants import (
         DEFAULT_TENANT_ID,
         UNPUBLISHED_AI_MESSAGE,
@@ -91,12 +94,16 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
             detected_language=current_preferred_lang,
             response_language=response_language,
             user_id=str(user_id or ""),
-            conversation_id=str(user_data.get("conversation_id") or user_data.get("active_conversation_id") or ""),
+            conversation_id=conversation_id_from_user_data(
+                user_data,
+                fallback=str(current_conversation_id or user_id or ""),
+            ),
             channel=str(user_data.get("channel") or user_data.get("platform") or ""),
             asset_id=str(user_data.get("asset_id") or user_data.get("page_id") or ""),
             provider_display_name=str(user_data.get("display_name") or user_data.get("name") or ""),
-            inbound_media=_inbound_from_user_data(user_data),
+            inbound_media=_inbound_from_user_data(user_data, has_image=bool(user_image_base64)),
             attachment_types=list(user_data.get("inbound_attachment_types") or []),
+            message_id=message_id_for_brain(user_data),
         )
         # Safe diagnostic view for Testing Lab + Interaction Logs (IDs/titles only).
         cm_diag = {
@@ -111,7 +118,8 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
         }
         if user_data.get("_dashboard_test_simulation"):
             user_data["_dashboard_cm_diagnostics"] = cm_diag
-        if cm_metadata.get("reason") == "insufficient_credits":
+        if cm_metadata.get("reason") in {"insufficient_credits", "insufficient_messages", "engine_removed"}:
+            settle_reserved_credits(user_data)
             return _PHASE_HALT
         active_product_id = str(cm_metadata.get("active_product_id") or "").strip()
         if active_product_id:
@@ -158,6 +166,7 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
             },
         ]
         await send_message_func(user_id, cm_reply)
+        settle_after_outbound(user_data, reply=cm_reply or "", flow_meta=cm_metadata)
         await save_conversation_message_to_firestore(
             user_id,
             "ai",
@@ -207,6 +216,7 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
             lang_key = "en" if lang_key == "en" else ("ar" if lang_key in {"ar", "franco"} else "en")
         unpublished_reply = UNPUBLISHED_AI_MESSAGE.get(lang_key) or UNPUBLISHED_AI_MESSAGE["en"]
         await send_message_func(user_id, unpublished_reply)
+        settle_after_outbound(user_data, reply=unpublished_reply)
         await save_conversation_message_to_firestore(
             user_id,
             "ai",

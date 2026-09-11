@@ -82,7 +82,7 @@ class WhatsAppReferral(FlexibleBaseModel):
 class WhatsAppMessage(FlexibleBaseModel):
     from_: str = Field(alias="from")
     id: str
-    timestamp: str | None = None  # Made optional - MontyMobile doesn't always send it
+    timestamp: str | None = None
     type: str
     text: WhatsAppText | None = None
     image: WhatsAppImage | None = None
@@ -149,24 +149,11 @@ class TestImageRequest(BaseModel):
 class TestVoiceRequest(BaseModel):
     phone: str
     voice_text: str = ""  # Simulated transcription text
-    provider: str = "montymobile"
+    provider: str = "meta"
 
 
 class ProviderSwitchRequest(BaseModel):
     provider: str
-
-
-# Feedback Request Model
-class FeedbackRequest(BaseModel):
-    conversation_id: str
-    message_id: str
-    user_question: str
-    bot_response: str
-    feedback_type: str
-    correct_answer: str | None = None
-    feedback_reason: str | None = None
-    operator_id: str  # required — no silent operator_001 default
-    language: str = "ar"
 
 
 # Live Chat Models

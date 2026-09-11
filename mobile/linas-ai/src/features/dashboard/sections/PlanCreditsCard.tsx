@@ -28,25 +28,27 @@ export function PlanCreditsCard({ plan, onManageSubscription, onBuyCredits, onUp
   if (plan.availability === 'error' || plan.availability === 'unavailable') {
     return (
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Plan and credits</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Plan and messages</Text>
         <Text style={{ color: colors.danger, fontFamily: fonts.body }}>
-          {plan.message || 'Credit data unavailable'}
+          {plan.message || 'Message data unavailable'}
         </Text>
       </View>
     );
   }
 
-  const available = plan.available_credits;
-  const included = plan.included_credits;
+  const billingActive = Boolean(plan.message_billing_active);
+  const available = billingActive ? plan.available_messages : null;
+  const included = plan.included_messages ?? plan.intended_included_messages;
   const showUpgrade = !isHighestPlan(plan.plan_id);
+  const showLeftoverBuy = !billingActive && plan.actions?.buy_credits !== false;
   const ratio =
-    typeof plan.usage_progress_ratio === 'number'
+    billingActive && typeof plan.usage_progress_ratio === 'number'
       ? Math.max(0, Math.min(1, plan.usage_progress_ratio))
       : null;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text style={[styles.title, { color: colors.text }]}>Plan and credits</Text>
+      <Text style={[styles.title, { color: colors.text }]}>Plan and messages</Text>
       <Text style={{ color: colors.textMuted, fontFamily: fonts.body, marginBottom: 8 }}>
         {plan.plan_name || (plan.has_subscription ? plan.plan_id : 'No subscription')}
         {plan.subscription_status ? ` · ${plan.subscription_status}` : ''}
@@ -59,35 +61,40 @@ export function PlanCreditsCard({ plan, onManageSubscription, onBuyCredits, onUp
       <View style={styles.grid}>
         <Metric
           label="Available"
-          value={available == null ? 'Unavailable' : available.toLocaleString()}
+          value={available == null ? 'Not active yet' : available.toLocaleString()}
         />
         <Metric
-          label="Included remaining basis"
+          label="Included / month"
           value={included == null ? 'Unavailable' : included.toLocaleString()}
         />
         <Metric
-          label="Purchased / promo"
+          label="Purchased"
           value={
-            plan.purchased_or_promotional_credits == null
-              ? 'Unavailable'
-              : plan.purchased_or_promotional_credits.toLocaleString()
+            billingActive && plan.purchased_messages != null
+              ? plan.purchased_messages.toLocaleString()
+              : 'Not active yet'
           }
         />
         <Metric
           label="Reserved"
           value={
-            plan.reserved_credits == null ? 'Unavailable' : plan.reserved_credits.toLocaleString()
-          }
-        />
-        <Metric
-          label="Used (period estimate)"
-          value={
-            plan.credits_consumed_period_estimate == null
-              ? 'Unavailable'
-              : plan.credits_consumed_period_estimate.toLocaleString()
+            billingActive && plan.reserved_messages != null
+              ? plan.reserved_messages.toLocaleString()
+              : 'Not active yet'
           }
         />
       </View>
+      {plan.message_usage_note ? (
+        <Text style={{ color: colors.textDim, fontFamily: fonts.body, fontSize: 12, marginTop: 8 }}>
+          {plan.message_usage_note}
+        </Text>
+      ) : null}
+      {plan.ai_setup_edits ? (
+        <Text style={{ color: colors.textDim, fontFamily: fonts.body, fontSize: 12, marginTop: 8 }}>
+          AI Setup edits {plan.ai_setup_edits.used}/{plan.ai_setup_edits.limit} today
+          {plan.ai_setup_edits.reset_at ? ` · resets ${plan.ai_setup_edits.reset_at}` : ''}
+        </Text>
+      ) : null}
       {ratio != null ? (
         <View style={[styles.track, { backgroundColor: colors.progressTrack }]}>
           <View
@@ -108,9 +115,11 @@ export function PlanCreditsCard({ plan, onManageSubscription, onBuyCredits, onUp
             <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>Upgrade plan</Text>
           </Pressable>
         ) : null}
-        <Pressable onPress={onBuyCredits} accessibilityRole="button">
-          <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>Buy credits</Text>
-        </Pressable>
+        {showLeftoverBuy ? (
+          <Pressable onPress={onBuyCredits} accessibilityRole="button">
+            <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>Add leftover credits</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );

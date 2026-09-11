@@ -6,6 +6,8 @@ import {
   pickDocumentAttachment,
   pickImageAttachment,
 } from '../../chat/v2/pickAttachment';
+import { isDailyEditLimitError } from '../../../api/client';
+import { useI18n } from '../../../i18n/LanguageContext';
 import { asRecordList, newId } from '../cmApi';
 import { runCmMediaUpload } from '../cmMediaAttach';
 import { cmFormStyles } from '../cmFormStyles';
@@ -42,6 +44,7 @@ function asAttachments(value: unknown): AttachmentRow[] {
 }
 
 export function ArticlesEditor({ section, payload, onChange }: Props) {
+  const { tr } = useI18n();
   const items = asRecordList(payload.items);
   const [selectedId, setSelectedId] = useState<string | null>(
     items[0] ? String(items[0].id) : null,
@@ -90,7 +93,12 @@ export function ArticlesEditor({ section, payload, onChange }: Props) {
     if (!selected || !picked) return;
     await runCmMediaUpload({
       picked,
-      failMessage: (err) => (err instanceof Error ? err.message : 'Upload failed'),
+      failMessage: (err) =>
+        isDailyEditLimitError(err)
+          ? tr('aiSetupDailyEditLimit')
+          : err instanceof Error
+            ? err.message
+            : 'Upload failed',
       setUploading,
       setUploadError,
       onSuccess: (uploaded, file) => {

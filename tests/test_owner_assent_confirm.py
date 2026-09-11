@@ -88,3 +88,4 @@ def test_system_prompt_mentions_natural_assent() -> None:
     assert "ok" in SYSTEM_V2
     assert "موافق" in SYSTEM_V2
     assert "magic word" in SYSTEM_V2
+    assert "leftover credits are credits, not Messages remaining" in SYSTEM_V2

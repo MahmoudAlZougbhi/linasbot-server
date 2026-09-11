@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppIcon, feather } from '../../components/AppIcon';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
+import { isDailyEditLimitError } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
@@ -60,11 +61,11 @@ export function ProductsScreen({ onBack, onAdd, onImport, onOpenDetails }: Props
       const updated = await updateProductAvailability(product, next);
       setProducts((rows) => rows.map((row) => (row.id === product.id ? updated : row)));
       setError(null);
-    } catch {
+    } catch (err) {
       setProducts((rows) =>
         rows.map((row) => (row.id === product.id ? { ...row, availability: prev } : row)),
       );
-      setError(tr('productsSaveError'));
+      setError(tr(isDailyEditLimitError(err) ? 'aiSetupDailyEditLimit' : 'productsSaveError'));
     } finally {
       setTogglingId(null);
     }

@@ -10,6 +10,8 @@ import {
   isGraphPublished,
   type RequestGraphRow,
   type RequestRuleItem,
+  type RequestRuleScope,
+  type RequestRuleTrigger,
   type RequestRuleType,
 } from './requestRuleModel';
 
@@ -20,6 +22,7 @@ type Props = {
   onTitle: (value: string) => void;
   onType: (value: RequestRuleType) => void;
   onNote: (value: string) => void;
+  onPatch: (patch: Partial<RequestRuleItem>) => void;
   onPreview: () => void;
   tr: (key: StringKey) => string;
 };
@@ -31,6 +34,7 @@ export function RequestRuleEditView({
   onTitle,
   onType,
   onNote,
+  onPatch,
   onPreview,
   tr,
 }: Props) {
@@ -57,9 +61,58 @@ export function RequestRuleEditView({
           { id: 'APPOINTMENT', label: tr('aiSetupRequestTypeAppointment') },
           { id: 'ORDER', label: tr('aiSetupRequestTypeOrder') },
           { id: 'OTHER', label: tr('aiSetupRequestTypeOther') },
+          { id: 'HUMAN', label: tr('aiSetupRequestTypeHuman') },
         ]}
         onChange={onType}
       />
+
+      <CommentSegmented
+        label={tr('requestRulesScope')}
+        value={item.scope}
+        options={[
+          { id: 'general', label: tr('requestRulesScopeGeneral') },
+          { id: 'all_services', label: tr('requestRulesScopeAllServices') },
+          { id: 'specific_service', label: tr('requestRulesScopeService') },
+          { id: 'all_products', label: tr('requestRulesScopeAllProducts') },
+          { id: 'specific_product', label: tr('requestRulesScopeProduct') },
+          { id: 'handoff', label: tr('requestRulesScopeHandoff') },
+        ]}
+        onChange={(scope) => onPatch({ scope: scope as RequestRuleScope })}
+      />
+      {item.scope === 'specific_service' || item.scope === 'specific_product' ? (
+        <>
+          <Text style={styles.label}>{tr('requestRulesEntityIds')}</Text>
+          <TextInput
+            value={item.entityIds.join(', ')}
+            onChangeText={(value) =>
+              onPatch({
+                entityIds: value.split(',').map((part) => part.trim()).filter(Boolean),
+              })
+            }
+            style={styles.input}
+            placeholder={tr('requestRulesEntityIdsHint')}
+            placeholderTextColor={RQ_MUTED}
+          />
+        </>
+      ) : null}
+      <CommentSegmented
+        label={tr('requestRulesTrigger')}
+        value={item.trigger}
+        options={[
+          { id: 'inquiry', label: tr('requestRulesTriggerInquiry') },
+          { id: 'action', label: tr('requestRulesTriggerAction') },
+        ]}
+        onChange={(trigger) => onPatch({ trigger: trigger as RequestRuleTrigger })}
+      />
+      <Pressable
+        onPress={() => onPatch({ confirmationRequired: !item.confirmationRequired })}
+        accessibilityRole="button"
+        style={styles.previewBtn}
+      >
+        <Text style={styles.previewText}>
+          {item.confirmationRequired ? tr('requestRulesConfirmOn') : tr('requestRulesConfirmOff')}
+        </Text>
+      </Pressable>
 
       <Text style={styles.label}>{tr('aiSetupRequestTitle')}</Text>
       <TextInput

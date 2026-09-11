@@ -45,10 +45,6 @@ interface AuthContextValue {
   }) => Promise<AuthUser>;
   logout: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
-  getUsers: () => Promise<unknown>;
-  createUser: (userData: Record<string, unknown>) => Promise<unknown>;
-  updateUser: (userId: string, updates: Record<string, unknown>) => Promise<unknown>;
-  deleteUser: (userId: string) => Promise<boolean>;
   refreshUser: () => Promise<void>;
   [key: string]: unknown;
 }

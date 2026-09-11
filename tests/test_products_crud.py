@@ -267,3 +267,31 @@ def test_service_rejects_unknown_media(products_env: Path) -> None:
                 ),
             )
     assert exc.value.code == "INVALID_MEDIA"
+
+
+def test_product_media_upload_consumes_daily_edit(products_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from modules.core import app
+    from services.membership.daily_edits import reset_daily_edits_for_tests, set_platform_baseline, status
+
+    monkeypatch.setenv("LINAS_MESSAGE_STORE", "memory")
+    reset_daily_edits_for_tests()
+    try:
+        set_platform_baseline(1)
+        client = TestClient(app)
+        headers = _auth_headers("tenant-media-edit")
+        first = client.post(
+            "/api/mobile/products/media",
+            headers=headers,
+            files={"file": ("shirt.jpg", b"\xff\xd8\xff\xd9", "image/jpeg")},
+        )
+        assert first.status_code == 200, first.text
+        assert status("tenant-media-edit").used == 1
+        blocked = client.post(
+            "/api/mobile/products/media",
+            headers=headers,
+            files={"file": ("other.jpg", b"\xff\xd8\xff\xd9", "image/jpeg")},
+        )
+        assert blocked.status_code == 429
+        assert blocked.json().get("error") == "AI_SETUP_DAILY_LIMIT"
+    finally:
+        reset_daily_edits_for_tests()

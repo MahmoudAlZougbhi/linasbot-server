@@ -1,3 +1,4 @@
+import { LITE_INCLUDED_MESSAGES } from '../../constants/landingPlansCopy';
 import LinasStar from './LinasStar';
 import { HERO_CHANNELS } from './HeroChannelRow';
 import { CalendarGlyph, ChatGlyph, CommentGlyph, DocGlyph } from './HowItWorksIcons';
@@ -59,15 +60,15 @@ export default function HowItWorksDashboardScreen() {
         <span className="text-[8px] text-[#9AA39F]">▾</span>
       </div>
       <div className="hiw-dash-card mt-2.5">
-        <p className="text-[10px] font-medium text-white/70">Credits</p>
-        <p className="mt-0.5 text-[1.45rem] font-semibold tracking-tight">12,480 remaining</p>
+        <p className="text-[10px] font-medium text-white/70">Messages</p>
+        <p className="mt-0.5 text-[1.45rem] font-semibold tracking-tight">{LITE_INCLUDED_MESSAGES} included / month</p>
         <div className="hiw-dash-bar mt-2.5">
           <span />
         </div>
-        <p className="mt-1.5 text-[9px] text-white/65">7,520 used of 20,000</p>
+        <p className="mt-1.5 text-[9px] text-white/65">Remaining hidden until message billing is on</p>
         <div className="mt-2 flex items-center justify-between">
           <span className="text-[9px] text-white/65">Renews Sep 13</span>
-          <span className="rounded-full border border-white/40 px-2.5 py-0.5 text-[9px] font-semibold">Buy credits</span>
+          <span className="rounded-full border border-white/40 px-2.5 py-0.5 text-[9px] font-semibold">See plans</span>
         </div>
       </div>
       <p className="mt-2.5 text-[10px] font-semibold">Overview</p>

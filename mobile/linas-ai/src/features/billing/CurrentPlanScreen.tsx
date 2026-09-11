@@ -17,9 +17,11 @@ type Props = {
   statusLabel: string;
   priceLabel: string;
   renewsLabel: string;
-  creditBalance: number | null;
-  membershipRemaining: number | null;
-  boughtRemaining: number | null;
+  messageBillingActive: boolean;
+  includedMessages: number | null;
+  availableMessages: number | null;
+  includedRemaining: number | null;
+  purchasedMessages: number | null;
   pendingDowngrade: PendingDowngrade | null;
   locale: string;
   tr: (key: StringKey) => string;
@@ -35,9 +37,11 @@ export function CurrentPlanScreen({
   statusLabel,
   priceLabel,
   renewsLabel,
-  creditBalance,
-  membershipRemaining,
-  boughtRemaining,
+  messageBillingActive,
+  includedMessages,
+  availableMessages,
+  includedRemaining,
+  purchasedMessages,
   pendingDowngrade,
   locale,
   tr,
@@ -51,14 +55,14 @@ export function CurrentPlanScreen({
   const insets = useSafeAreaInsets();
   const plan = PLAN_CATALOG[planId];
   const ents = entitlementsForPlan(plan);
+  const pending = tr('subMessagesPending');
+  const monthly =
+    includedMessages != null ? includedMessages.toLocaleString(locale) : pending;
   const available =
-    creditBalance != null && Number.isFinite(creditBalance)
-      ? creditBalance.toLocaleString(locale)
-      : tr('subCreditsMissing');
-  const includedEachMonth = tr('subIncludedEachMonth').replace(
-    '{n}',
-    plan.includedCredits.toLocaleString(locale),
-  );
+    messageBillingActive && availableMessages != null
+      ? availableMessages.toLocaleString(locale)
+      : pending;
+  const includedEachMonth = tr('subIncludedEachMonth').replace('{n}', monthly);
   const includesTitle = tr('subWhatIncludes').replace('{plan}', tr(PLAN_NAME_KEY[planId]));
   const showUpgrade = !isHighestPlan(planId);
   const showDowngrade = !isLowestPlan(planId) && !pendingDowngrade;
@@ -83,15 +87,18 @@ export function CurrentPlanScreen({
           availableLabel={available}
           includedEachMonth={includedEachMonth}
           membershipLabel={
-            membershipRemaining != null
-              ? membershipRemaining.toLocaleString(locale)
-              : tr('subCreditsMissing')
+            messageBillingActive && includedRemaining != null
+              ? includedRemaining.toLocaleString(locale)
+              : pending
           }
           boughtLabel={
-            boughtRemaining != null ? boughtRemaining.toLocaleString(locale) : tr('subCreditsMissing')
+            messageBillingActive && purchasedMessages != null
+              ? purchasedMessages.toLocaleString(locale)
+              : pending
           }
           tr={tr}
           onBuyCredits={onBuyCredits}
+          messageBillingActive={messageBillingActive}
         />
         <PlanIncludedList
           title={includesTitle}

@@ -10,7 +10,7 @@ import re
 from typing import Any, cast
 
 from services.api_integrations import log_report_event
-from services.montymobile_template_service import montymobile_template_service
+from services.whatsapp_cloud_template_service import whatsapp_cloud_template_service
 
 
 class HumanTakeoverNotificationService:
@@ -129,7 +129,7 @@ class HumanTakeoverNotificationService:
         # Send to each number
         for phone_number in notify_numbers:
             try:
-                result = await montymobile_template_service.send_template_message(
+                result = await whatsapp_cloud_template_service.send_template_message(
                     template_id=self.template_id,
                     phone_number=phone_number,
                     language="ar",

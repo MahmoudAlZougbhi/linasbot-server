@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 
-import { ApiError } from '../../api/client';
+import { ApiError, isDailyEditLimitError } from '../../api/client';
 import { isNetworkFailure } from '../../api/networkError';
 import { EmptyState } from '../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
@@ -174,6 +174,8 @@ export function SmartFollowUpScreen() {
         void reload();
       } else if (err instanceof ApiError && err.status === 400) {
         setError(tr('sfuSaveValidationError'));
+      } else if (isDailyEditLimitError(err)) {
+        setError(tr('aiSetupDailyEditLimit'));
       } else {
         setError(tr('sfuSaveError'));
       }

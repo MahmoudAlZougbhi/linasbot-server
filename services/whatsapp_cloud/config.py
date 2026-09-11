@@ -112,6 +112,5 @@ def whatsapp_config_key_presence() -> dict[str, bool]:
         PUBLIC_AVAILABILITY_ENV,
         "WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT",
         "PUBLIC_URL",
-        "MONTYMOBILE_SOURCE_NUMBER",
     ]
     return {k: bool((os.getenv(k) or "").strip()) for k in keys}

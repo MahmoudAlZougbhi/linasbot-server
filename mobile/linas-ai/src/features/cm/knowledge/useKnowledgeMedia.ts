@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
-import { ApiError } from '../../../api/client';
 import type { StringKey } from '../../../i18n';
+import { mediaUploadErrorMessage } from '../mediaUploadError';
 import { newId } from '../cmApi';
 import { runCmMediaUpload } from '../cmMediaAttach';
 import {
@@ -40,15 +40,11 @@ export function useKnowledgeMedia(
   const [promptError, setPromptError] = useState<string | null>(null);
 
   function failMessage(err: unknown): string {
-    const detail =
-      err instanceof ApiError && err.body && typeof err.body === 'object' && 'detail' in err.body
-        ? JSON.stringify((err.body as { detail: unknown }).detail)
-        : err instanceof Error
-          ? err.message
-          : '';
-    if (detail.includes('file_too_large')) return tr('knowledgeVideoTooLarge');
-    if (detail.includes('unsupported_mime')) return tr('knowledgeUnsupported');
-    return tr('knowledgeUploadFailed');
+    return mediaUploadErrorMessage(err, tr, {
+      tooLarge: 'knowledgeVideoTooLarge',
+      unsupported: 'knowledgeUnsupported',
+      fallback: 'knowledgeUploadFailed',
+    });
   }
 
   async function attachPicked(

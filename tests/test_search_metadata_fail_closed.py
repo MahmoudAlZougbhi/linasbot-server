@@ -112,8 +112,6 @@ def teardown_function() -> None:
 
 @pytest.mark.asyncio
 async def test_edit_success_goes_live_immediately(v2_env) -> None:
-    from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
-
     tid = "t_meta_ok"
     env, _ = await _save(
         "knowledge",
@@ -129,18 +127,6 @@ async def test_edit_success_goes_live_immediately(v2_env) -> None:
     live = _published(tid)["knowledge"]["items"][0]
     assert "80 دولار" in live["body"]
     assert live["ai_search_title"] == "English Search Title"
-    retrieval = await run_retrieval_luna(
-        tenant_id=tid,
-        message="قديش السعر؟",
-        customer_profile={},
-        scripted_tool_calls=[
-            [{"name": "read_published_cm_items", "arguments": {"item_ids": ["knowledge:k1"]}}],
-            {"final_plan": {"evidence_status": "sufficient", "selected_source_ids": ["knowledge:k1"]}},
-        ],
-    )
-    blob = " ".join(e.content for e in retrieval.evidence)
-    assert "80 دولار" in blob
-    assert "English Search Title" not in blob
 
 
 @pytest.mark.asyncio
@@ -231,8 +217,6 @@ async def test_non_english_twice_does_not_save_empty_metadata(v2_env) -> None:
 
 @pytest.mark.asyncio
 async def test_new_item_metadata_fail_is_not_live_or_listed(v2_env) -> None:
-    from services.customer_reply_v2.operational_titles import collect_operational_titles
-
     tid = "t_meta_new_fail"
     env, _ = await _save(
         "knowledge",
@@ -254,14 +238,11 @@ async def test_new_item_metadata_fail_is_not_live_or_listed(v2_env) -> None:
         )
     ids = {row["id"] for row in _published(tid)["knowledge"]["items"]}
     assert ids == {"k_old"}
-    listed = {row.get("id") for row in collect_operational_titles(_published(tid))}
-    assert "knowledge:k_new" not in listed
+    assert "k_new" not in ids
 
 
 @pytest.mark.asyncio
 async def test_new_item_success_is_immediately_live(v2_env) -> None:
-    from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
-
     tid = "t_meta_new_ok"
     env, _ = await _save(
         "knowledge",
@@ -281,23 +262,12 @@ async def test_new_item_success_is_immediately_live(v2_env) -> None:
     )
     ids = {row["id"] for row in _published(tid)["knowledge"]["items"]}
     assert "k_new" in ids
-    retrieval = await run_retrieval_luna(
-        tenant_id=tid,
-        message="الملف الجديد",
-        customer_profile={},
-        scripted_tool_calls=[
-            [{"name": "read_published_cm_items", "arguments": {"item_ids": ["knowledge:k_new"]}}],
-            {"final_plan": {"evidence_status": "sufficient", "selected_source_ids": ["knowledge:k_new"]}},
-        ],
-    )
-    assert "الملف الجديد للزبون" in retrieval.evidence[0].content
+    new_row = next(item for item in _published(tid)["knowledge"]["items"] if item["id"] == "k_new")
+    assert "الملف الجديد للزبون" in new_row["body"]
 
 
 @pytest.mark.asyncio
 async def test_bad_title_12b_success_then_failure(v2_env) -> None:
-    from services.customer_reply_v2.operational_titles import collect_operational_titles
-    from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
-
     tid = "t_meta_12b"
     env, _ = await _save(
         "knowledge",
@@ -317,20 +287,7 @@ async def test_bad_title_12b_success_then_failure(v2_env) -> None:
     assert live["title"] == "12b"
     assert live["ai_search_title"]
     assert live["ai_search_description"]
-    titles = collect_operational_titles(_published(tid))
-    row = next(item for item in titles if item.get("id") == "knowledge:k12")
-    assert row["original_title"] == "12b"
-    assert row["ai_search_title"]
-    retrieval = await run_retrieval_luna(
-        tenant_id=tid,
-        message="قديش سعر الجلسة؟",
-        customer_profile={},
-        scripted_tool_calls=[
-            [{"name": "read_published_cm_items", "arguments": {"item_ids": ["knowledge:k12"]}}],
-            {"final_plan": {"evidence_status": "sufficient", "selected_source_ids": ["knowledge:k12"]}},
-        ],
-    )
-    assert "ثمانون" in retrieval.evidence[0].content
+    assert "ثمانون" in live["body"]
     _fail_gen(SearchMetadata())
     with pytest.raises(MetadataPreparationError):
         await _save(

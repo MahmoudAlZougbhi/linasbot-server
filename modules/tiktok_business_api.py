@@ -1,4 +1,4 @@
-"""TikTok Business connect / disconnect / status APIs."""
+"""TikTok Business connect / disconnect APIs."""
 
 from __future__ import annotations
 
@@ -8,9 +8,8 @@ from fastapi import Body, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from db.session import WhatsAppDatabaseUnavailable
-from modules.api_security import is_platform_owner, require_permission, require_session, user_has_permission
+from modules.api_security import is_platform_owner, require_permission, user_has_permission
 from modules.core import app
-from services.tiktok_business.config import tiktok_config_key_presence, tiktok_redirect_uri, tiktok_webhook_callback_url
 from services.tiktok_business.errors import TikTokBusinessError
 from services.tiktok_business.oauth import disconnect_tiktok, start_tiktok_oauth
 from services.tiktok_business.status import tiktok_integration_row
@@ -36,20 +35,6 @@ def _error(exc: TikTokBusinessError) -> JSONResponse:
     )
 
 
-@app.get("/api/tiktok/status")
-async def tiktok_status(request: Request) -> Any:
-    session = require_session(request)
-    row = tiktok_integration_row(session.tenant_id)
-    return {
-        "success": True,
-        "platform": "tiktok",
-        "integration": row,
-        "production_redirect_uri": tiktok_redirect_uri(),
-        "webhook_callback_url": tiktok_webhook_callback_url(),
-        "config_keys_present": tiktok_config_key_presence(),
-    }
-
-
 @app.post("/api/tiktok/connect/start")
 async def tiktok_connect_start(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
     session = _require_manager(request)
@@ -66,14 +51,17 @@ async def tiktok_connect_start(request: Request, body: dict[str, Any] = Body(def
 async def tiktok_disconnect(request: Request) -> Any:
     session = require_permission(request, "settings")
     try:
-        await disconnect_tiktok(tenant_id=session.tenant_id, actor_user_id=_actor(session))
+        from services.membership.edit_http import guarded_edit
+
+        with guarded_edit(
+            tenant_id=session.tenant_id,
+            kind="safety:disconnect",
+            payload={"platform": "tiktok"},
+            safety=True,
+        ):
+            await disconnect_tiktok(tenant_id=session.tenant_id, actor_user_id=_actor(session))
     except TikTokBusinessError as exc:
         return _error(exc)
     except WhatsAppDatabaseUnavailable:
         return JSONResponse(status_code=503, content={"success": False, "error": "TIKTOK_DB_UNAVAILABLE"})
     return {"success": True, "platform": "tiktok", "integration": tiktok_integration_row(session.tenant_id)}
-
-
-@app.post("/api/tiktok/reconnect")
-async def tiktok_reconnect(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
-    return await tiktok_connect_start(request, body)

@@ -98,6 +98,8 @@ export async function publishRequestGraph(body: {
   source_text: string;
   destination: string;
   confirm: boolean;
+  draft_payload?: Record<string, unknown>;
+  if_match?: string;
 }): Promise<RequestGraphRow> {
   try {
     const data = await apiFetch('/api/cm/request-graphs/publish', {
@@ -111,12 +113,15 @@ export async function publishRequestGraph(body: {
   }
 }
 
-export async function deleteRequestGraph(definitionId: string): Promise<void> {
+export async function deleteRequestGraph(
+  definitionId: string,
+  extras?: { draft_payload?: Record<string, unknown>; if_match?: string },
+): Promise<void> {
   try {
     await apiFetch('/api/cm/request-graphs/delete', {
       method: 'POST',
       schema: DeleteSchema,
-      body: JSON.stringify({ definition_id: definitionId }),
+      body: JSON.stringify({ definition_id: definitionId, ...extras }),
     });
   } catch (err) {
     raiseApiError(err, 'REQUEST_GRAPH_PUBLISH_FAILED');

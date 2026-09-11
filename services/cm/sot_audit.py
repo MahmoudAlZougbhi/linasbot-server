@@ -93,7 +93,7 @@ LEGACY_BUSINESS_FACT_SOURCES: tuple[SotSource, ...] = (
 #: NOT a full-repo crawl — so results are predictable and reviewable.
 SCAN_TARGET_FILES: tuple[str, ...] = (
     "handlers/text_handlers_respond.py",
-    "services/chat_response_service.py",
+    "services/customer_reply_v2/orchestrator.py",
     "services/local_qa_service.py",
     "services/social_contact_routing.py",
     "config.py",

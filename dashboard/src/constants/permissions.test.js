@@ -1,23 +1,14 @@
-import { PATH_TO_PERMISSION } from "./permissions";
+import { SYSTEM_ROLES, PERMISSION_KEYS } from "./permissions";
 
-describe("live chat permission routes", () => {
-  it("keeps desktop live chat mapped to the liveChat permission", () => {
-    expect(PATH_TO_PERMISSION["/live-chat"]).toBe("liveChat");
+describe("session role defaults", () => {
+  it("keeps platform_owner as a system role", () => {
+    expect(SYSTEM_ROLES.platform_owner.assignableInTenantUi).toBe(false);
+    expect(SYSTEM_ROLES.platform_owner.permissions.userManagement).toBe(true);
   });
 
-  it("does not map obsolete /mobile/live-chat (redirects to get-app)", () => {
-    expect(
-      /** @type {Record<string, string | undefined>} */ (PATH_TO_PERMISSION)["/mobile/live-chat"]
-    ).toBeUndefined();
-  });
-});
-
-describe("FAQ single entry routes", () => {
-  it("maps legacy /training to contentManagers (CM FAQ)", () => {
-    expect(PATH_TO_PERMISSION["/training"]).toBe("contentManagers");
-  });
-
-  it("maps AI Setup hub to contentManagers", () => {
-    expect(PATH_TO_PERMISSION["/content-managers"]).toBe("contentManagers");
+  it("keeps liveChat on admin and operator", () => {
+    expect(SYSTEM_ROLES.admin.permissions.liveChat).toBe(true);
+    expect(SYSTEM_ROLES.operator.permissions.liveChat).toBe(true);
+    expect(PERMISSION_KEYS).toContain("liveChat");
   });
 });

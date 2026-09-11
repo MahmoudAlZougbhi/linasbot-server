@@ -16,6 +16,32 @@ from storage.persistent_storage import (
 
 # --- API Keys and Tokens ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Customer Brain retrieval (Voyage). Do not reuse OPENAI_API_KEY for embeddings.
+VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
+MESSAGE_BILLING_ENABLED = os.getenv("MESSAGE_BILLING_ENABLED", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+MESSAGE_BILLING_CUTOVER = os.getenv("MESSAGE_BILLING_CUTOVER", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+FREE_PLAN_ENFORCEMENT_ENABLED = os.getenv("FREE_PLAN_ENFORCEMENT_ENABLED", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+LINAS_CUSTOMER_AI_LAB = os.getenv("LINAS_CUSTOMER_AI_LAB", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 # WhatsApp Meta Cloud API
 # These are fetched from your .env file

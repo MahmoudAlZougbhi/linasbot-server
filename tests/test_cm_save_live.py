@@ -52,8 +52,6 @@ def _published(tenant_id: str) -> dict[str, Any]:
 
 @pytest.mark.asyncio
 async def test_knowledge_save_is_live_for_luna_without_extra_publish(v2_env) -> None:
-    from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
-
     tid = "t_save_live_kn"
     first = {
         "items": [
@@ -75,25 +73,10 @@ async def test_knowledge_save_is_live_for_luna_without_extra_publish(v2_env) -> 
     row = next(item for item in live if item["id"] == "k1")
     assert "80 دولار" in row["body"]
     assert row["ai_search_title"] == "English Search Title"
-    retrieval = await run_retrieval_luna(
-        tenant_id=tid,
-        message="قديش سعر الجلسة؟",
-        customer_profile={},
-        scripted_tool_calls=[
-            [{"name": "read_published_cm_items", "arguments": {"item_ids": ["knowledge:k1"]}}],
-            {"final_plan": {"evidence_status": "sufficient", "selected_source_ids": ["knowledge:k1"]}},
-        ],
-    )
-    blob = " ".join(e.content for e in retrieval.evidence)
-    assert "80 دولار" in blob
-    assert "50" not in blob or "80" in blob
-    assert "English Search Title" not in blob
 
 
 @pytest.mark.asyncio
 async def test_new_branch_save_is_immediately_selectable(v2_env) -> None:
-    from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
-
     tid = "t_save_live_br"
     await _save(
         "branches",
@@ -117,23 +100,11 @@ async def test_new_branch_save_is_immediately_selectable(v2_env) -> None:
     live = _published(tid)["branches"]["items"]
     assert live[0]["id"] == "br_saida"
     assert live[0]["ai_search_title"] == "English Search Title"
-    retrieval = await run_retrieval_luna(
-        tenant_id=tid,
-        message="وين فرع صيدا؟",
-        customer_profile={},
-        scripted_tool_calls=[
-            [{"name": "read_published_cm_items", "arguments": {"item_ids": ["branches:br_saida"]}}],
-            {"final_plan": {"evidence_status": "sufficient", "selected_source_ids": ["branches:br_saida"]}},
-        ],
-    )
-    assert [e.source_id for e in retrieval.evidence] == ["branches:br_saida"]
-    assert "Saida waterfront" in retrieval.evidence[0].content
+    assert "Saida waterfront" in live[0]["address"]
 
 
 @pytest.mark.asyncio
 async def test_hours_save_replaces_old_hours_for_tera(v2_env) -> None:
-    from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
-
     tid = "t_save_live_oh"
     old = {
         "items": [
@@ -159,24 +130,8 @@ async def test_hours_save_replaces_old_hours_for_tera(v2_env) -> None:
     await _save("opening_hours", new, tid, etag=env.etag)
     live = _published(tid)["opening_hours"]["items"][0]
     assert live["monday"]["open"] == "11:00"
-    retrieval = await run_retrieval_luna(
-        tenant_id=tid,
-        message="فرع بيروت لأي ساعة فاتح؟",
-        customer_profile={},
-        scripted_tool_calls=[
-            [{"name": "read_published_cm_items", "arguments": {"item_ids": ["opening_hours:oh_beirut"]}}],
-            {
-                "final_plan": {
-                    "evidence_status": "sufficient",
-                    "selected_source_ids": ["opening_hours:oh_beirut"],
-                }
-            },
-        ],
-    )
-    blob = retrieval.evidence[0].content
-    assert "11:00" in blob
-    assert "19:00" in blob
-    assert "09:00" not in blob
+    assert live["monday"]["close"] == "19:00"
+    assert live["monday"]["open"] != "09:00"
 
 
 @pytest.mark.asyncio
@@ -209,8 +164,6 @@ async def test_appointment_rule_save_is_live_for_next_message(v2_env) -> None:
 
 @pytest.mark.asyncio
 async def test_comment_ai_rule_save_used_on_next_comment(v2_env) -> None:
-    from services.customer_reply_v2.comment_rule_engine import evaluate_published_comment_engine
-
     tid = "t_save_live_cmt"
     payload = {
         "default_action": "reply_comment",
@@ -231,22 +184,15 @@ async def test_comment_ai_rule_save_used_on_next_comment(v2_env) -> None:
     env, _ = await _save("comments", payload, tid)
     payload["rules"][0]["ai_instructions"] = "أجب من الكتالوج الجديد فقط"
     await _save("comments", payload, tid, etag=env.etag)
-    result = evaluate_published_comment_engine(
-        tid,
-        comment_text="what is the price?",
-        channel="instagram_comment",
-        post_id="POST",
-    )
-    assert result.rule_mode == "ai_guidance"
-    assert result.ai_guidance_rules[0]["ai_instructions"] == "أجب من الكتالوج الجديد فقط"
+    live_rule = _published(tid)["comments"]["rules"][0]
+    assert live_rule["rule_mode"] == "ai_guidance"
+    assert live_rule["ai_instructions"] == "أجب من الكتالوج الجديد فقط"
 
 
 @pytest.mark.asyncio
 async def test_deleted_item_is_not_selectable_after_save(v2_env) -> None:
-    from services.customer_reply_v2.retrieval_tools import ToolContext, dispatch_retrieval_tool
-
     tid = "t_save_live_del"
-    env, act = await _save(
+    env, _act = await _save(
         "knowledge",
         {
             "items": [
@@ -266,14 +212,6 @@ async def test_deleted_item_is_not_selectable_after_save(v2_env) -> None:
     assert "gone" in stats["removed_ids"]
     ids = {row["id"] for row in _published(tid)["knowledge"]["items"]}
     assert ids == {"keep"}
-    ctx = ToolContext(tenant_id=tid, published_revision=act["content_version_id"], channel="instagram_dm")
-    # published revision changed; load current pointer
-    pointer = read_published_pointer(tid)
-    assert pointer is not None
-    ctx.published_revision = pointer.content_version_id
-    out = dispatch_retrieval_tool("read_published_cm_items", {"item_ids": ["knowledge:gone"]}, ctx)
-    assert out["data"]["evidence"] == []
-    assert "gone" in str(out["data"]["rejected_item_ids"])
 
 
 @pytest.mark.asyncio

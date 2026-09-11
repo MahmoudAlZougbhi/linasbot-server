@@ -1,14 +1,15 @@
-"""FAQ / Smart Answers entitlements from central plan config.
+"""FAQ / Smart Answers entitlements from the message catalog.
 
-Source of truth: ``services.membership.plan_catalog`` via ``services.plan_economics``.
-Quota counts CM FAQ *groups* (not language variants).
+Source of truth: ``services.membership.message_catalog`` via ``faq_limits_for_plan``.
+Published catalog overlays apply after admin publish. Quota counts CM FAQ groups.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from services.plan_economics import PLAN_FAQ_MAX_ENTRIES, PLAN_FEATURES, PLAN_PRICES_USD
+from services.membership.feature_entitlements import faq_limits_for_plan
+from services.membership.message_catalog import PUBLIC_PAID_PLAN_IDS
 
 
 class FaqEntitlementError(PermissionError):
@@ -21,14 +22,7 @@ class FaqEntitlementError(PermissionError):
 
 
 def _plan_faq_limits(plan_id: str) -> tuple[bool, int]:
-    pid = (plan_id or "none").strip().lower() or "none"
-    if pid not in PLAN_PRICES_USD:
-        return False, 0
-    enabled = bool(PLAN_FEATURES.get(pid, {}).get("faq_enabled", False))
-    max_entries = int(PLAN_FAQ_MAX_ENTRIES.get(pid, 0))
-    if not enabled:
-        return False, 0
-    return True, max(0, max_entries)
+    return faq_limits_for_plan(plan_id)
 
 
 def count_faq_entries(tenant_id: str) -> int:
@@ -43,7 +37,7 @@ def get_faq_entitlement(tenant_id: str) -> dict[str, Any]:
     from services.entitlements_service import entitlements_store
 
     ent = entitlements_store.get(tenant_id)
-    paid_active = ent.status in {"active", "trial", "grace"} and ent.plan_id in PLAN_PRICES_USD
+    paid_active = ent.status in {"active", "trial", "grace"} and ent.plan_id in PUBLIC_PAID_PLAN_IDS
     enabled, max_entries = _plan_faq_limits(ent.plan_id if paid_active else "none")
     if not paid_active:
         enabled, max_entries = False, 0

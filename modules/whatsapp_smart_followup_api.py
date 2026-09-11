@@ -16,7 +16,6 @@ from services.whatsapp_cloud.smart_followup.analytics import (
     build_smart_followup_analytics,
     resolve_analytics_window,
 )
-from services.whatsapp_cloud.smart_followup.constants import OPERATION_TYPE
 from services.whatsapp_cloud.smart_followup.generation import generate_followup_text, preview_prompt_for_goal
 from services.whatsapp_cloud.smart_followup.repository import SmartFollowUpRepository
 from services.whatsapp_cloud.smart_followup.settings_service import (
@@ -86,17 +85,23 @@ async def smart_followup_put_settings(request: Request, body: dict[str, Any] = B
         expected_version = int(expected) if expected is not None else None
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="invalid_settings_version") from exc
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
     try:
-        with whatsapp_session() as db:
-            payload = update_settings(
-                db,
-                tenant_id=session.tenant_id,
-                actor_user_id=_actor_id(session),
-                payload=body,
-                expected_version=expected_version,
-            )
-            payload["blockers"] = _connection_blockers(db, session.tenant_id)
-            return payload
+        with guarded_edit(tenant_id=session.tenant_id, kind="followup:settings", payload=body):
+            with whatsapp_session() as db:
+                payload = update_settings(
+                    db,
+                    tenant_id=session.tenant_id,
+                    actor_user_id=_actor_id(session),
+                    payload=body,
+                    expected_version=expected_version,
+                )
+                payload["blockers"] = _connection_blockers(db, session.tenant_id)
+                return payload
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     except SmartFollowUpSettingsError as exc:
         status = 409 if exc.code == "version_conflict" else 400
         return JSONResponse(
@@ -155,16 +160,21 @@ async def smart_followup_analytics(
 
 @app.post("/api/whatsapp/smart-followup/preview")
 async def smart_followup_preview(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
-    """Safe preview — never sends WhatsApp; may consume AI credits via Customer Reply V2."""
+    """Safe preview — never sends WhatsApp and does not hold leftover credits or message units."""
     session = _require_manager(request)
     goal = str(body.get("goal") or "gentle_check_in").strip()
+    from services.membership.message_flags import message_billing_enabled
+
+    billing = message_billing_enabled()
     disclose = {
-        "sends_whatsapp": False,
-        "uses_credits": True,
-        "disclosure": "Preview uses the canonical AI credit engine and never sends a WhatsApp message.",
         **preview_prompt_for_goal(goal),
+        "sends_whatsapp": False,
+        "uses_credits": False,
+        "uses_messages": False,
+        "disclosure": (
+            "Preview never sends a WhatsApp message and does not consume leftover credits or customer message units."
+        ),
     }
-    reservation_id: str | None = None
     try:
         with whatsapp_session() as db:
             blockers = _connection_blockers(db, session.tenant_id)
@@ -184,26 +194,20 @@ async def smart_followup_preview(request: Request, body: dict[str, Any] = Body(d
                 c for c in repo.list_tenant_connections(session.tenant_id) if c.lifecycle_status == "connected"
             ]
             conn = connections[0]
-            from services.credit_ledger_service import credit_ledger_service
+            if billing:
+                from services.membership.generative_gate import generative_block_reason
 
-            try:
-                reservation_id = credit_ledger_service.reserve(
-                    tenant_id=session.tenant_id,
-                    user_id=_actor_id(session),
-                    credits=1,
-                    operation_type=OPERATION_TYPE,
-                    request_id=f"sfu-preview:{session.tenant_id}:{goal}:{_actor_id(session)}",
-                )
-            except PermissionError:
-                return JSONResponse(
-                    status_code=402,
-                    content={
-                        "success": False,
-                        "error": "insufficient_credits",
-                        "message": "Insufficient AI credits for preview",
-                        **disclose,
-                    },
-                )
+                reason = generative_block_reason(session.tenant_id)
+                if reason:
+                    return JSONResponse(
+                        status_code=402,
+                        content={
+                            "success": False,
+                            "error": reason,
+                            "message": "Insufficient AI messages for preview",
+                            **disclose,
+                        },
+                    )
     except WhatsAppDatabaseUnavailable:
         return JSONResponse(
             status_code=503,
@@ -219,13 +223,6 @@ async def smart_followup_preview(request: Request, body: dict[str, Any] = Body(d
             goal=goal,
         )
     except Exception as exc:
-        if reservation_id:
-            try:
-                from services.credit_ledger_service import credit_ledger_service
-
-                credit_ledger_service.release(tenant_id=session.tenant_id, reservation_id=reservation_id)
-            except Exception:
-                pass
         return JSONResponse(
             status_code=500,
             content={
@@ -235,19 +232,6 @@ async def smart_followup_preview(request: Request, body: dict[str, Any] = Body(d
                 **disclose,
             },
         )
-
-    try:
-        from services.credit_ledger_service import credit_ledger_service
-
-        if reservation_id:
-            credit_ledger_service.capture(
-                tenant_id=session.tenant_id,
-                reservation_id=reservation_id,
-                provider_cost_usd=None,
-                model_provider="whatsapp_cloud",
-            )
-    except Exception:
-        pass
 
     with whatsapp_session() as db:
         SmartFollowUpRepository(db).record_event(

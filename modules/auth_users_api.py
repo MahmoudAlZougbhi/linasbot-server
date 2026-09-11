@@ -114,10 +114,18 @@ async def delete_user(user_id: str, request: Request) -> Any:
     if target is None or str(target.get("tenantId") or "").strip() != session.tenant_id:
         raise HTTPException(status_code=404, detail="User not found")
     try:
-        success = user_service.delete_user(user_id)
-        if success:
-            session_service.revoke_all_for_user(user_id)
-            return {"success": True, "message": "User deleted successfully"}
+        from services.membership.edit_http import guarded_edit
+
+        with guarded_edit(
+            tenant_id=str(session.tenant_id or ""),
+            kind="privacy:delete",
+            payload={"user_id": user_id, "actor": "tenant_admin"},
+            safety=True,
+        ):
+            success = user_service.delete_user(user_id)
+            if success:
+                session_service.revoke_all_for_user(user_id)
+                return {"success": True, "message": "User deleted successfully"}
         return {"success": False, "error": "Failed to delete user"}
     except ValueError as e:
         return {"success": False, "error": str(e)}

@@ -7,7 +7,6 @@ from contextlib import AbstractContextManager
 from typing import Any
 
 from fastapi import HTTPException, Query, Request
-from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
@@ -17,7 +16,6 @@ from services.dashboard_session_service import SessionRecord
 from services.products.media import delete_product_media
 from services.products.schemas import ProductImportBody, ProductWriteBody, ProductXlsxImportBody
 from services.products.service import ProductsError, ProductsService
-from services.products.xlsx_import import build_xlsx_template_bytes
 
 
 def _session_tenant(session: SessionRecord) -> str:
@@ -137,17 +135,6 @@ async def mobile_import_products(request: Request, body: ProductImportBody) -> A
         except ProductsError as exc:
             raise _http(exc) from exc
     return {"success": True, **result}
-
-
-@app.get("/api/mobile/products/import/template.xlsx")
-async def mobile_products_import_template(request: Request) -> Response:
-    require_session(request)
-    content = build_xlsx_template_bytes()
-    return Response(
-        content=content,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=linas-products-template.xlsx"},
-    )
 
 
 @app.post("/api/mobile/products/import/xlsx/preview")

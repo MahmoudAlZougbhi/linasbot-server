@@ -12,7 +12,6 @@ from typing import Any, Literal
 
 from services.cm.schemas import CommentRule, CommentsSection
 from services.cm.version_store import PublishedVersionError, load_published_content
-from services.customer_reply_v2.flags import customer_ai_v10_runtime_enabled
 
 CommentAction = Literal["reply_comment", "reply_dm", "ignore", "reply_comment_and_dm"]
 
@@ -82,7 +81,13 @@ def _post_ok(rule: CommentRule, post_id: str) -> bool:
     return (post_id or "").strip() in wanted
 
 
+def _trigger_all_comments(rule: CommentRule) -> bool:
+    return str(getattr(rule, "trigger_type", "") or "").strip().lower() == "all_comments"
+
+
 def _text_matches(rule: CommentRule, text: str) -> bool:
+    if _trigger_all_comments(rule):
+        return True
     hay = (text or "").strip().lower()
     if not hay:
         return False
@@ -160,14 +165,76 @@ def _legacy_evaluate(
     )
 
 
-def _action_from_engine(action: str) -> CommentAction:
-    if action in {"ignore"}:
-        return "ignore"
-    if action in {"send_dm_static", "reply_dm", "send_dm"}:
-        return "reply_dm"
-    if action in {"reply_comment_and_dm_static", "reply_comment_and_dm"}:
-        return "reply_comment_and_dm"
-    return "reply_comment"
+def _attachment_rows(rule: CommentRule) -> tuple[dict[str, Any], ...]:
+    rows: list[dict[str, Any]] = []
+    for item in getattr(rule, "attachments", None) or []:
+        if hasattr(item, "model_dump"):
+            rows.append(item.model_dump(mode="json"))
+        elif isinstance(item, dict):
+            rows.append(dict(item))
+    return tuple(rows)
+
+
+def _destination_action(rule: CommentRule) -> CommentAction:
+    raw = str(rule.action or "").strip().lower()
+    mapped = {
+        "ignore": "ignore",
+        "reply_comment": "reply_comment",
+        "reply_comment_static": "reply_comment",
+        "reply_dm": "reply_dm",
+        "send_dm": "reply_dm",
+        "send_dm_static": "reply_dm",
+        "reply_comment_and_dm": "reply_comment_and_dm",
+        "reply_comment_and_dm_static": "reply_comment_and_dm",
+    }.get(raw, "reply_comment")
+    return mapped  # type: ignore[return-value]
+
+
+def _specificity(rule: CommentRule) -> int:
+    scope = str(getattr(rule, "scope", "") or "").strip().lower()
+    if scope == "specific_post" or _wanted_post_ids(rule):
+        return 1
+    return 0
+
+
+def _pick_winner(matches: list[CommentRule]) -> CommentRule:
+    best = max((_specificity(rule), int(getattr(rule, "priority", 0) or 0)) for rule in matches)
+    finalists = [rule for rule in matches if (_specificity(rule), int(getattr(rule, "priority", 0) or 0)) == best]
+    return sorted(finalists, key=lambda rule: str(rule.id or ""))[0]
+
+
+def _decision_from_rule(section: CommentsSection, rule: CommentRule) -> CommentRuleDecision:
+    from services.customer_ai.comment_normalize import normalize_comment_mode
+
+    mode = normalize_comment_mode(
+        action=str(rule.action or ""),
+        rule_mode=str(rule.rule_mode or ""),
+        ai_action_mode=str(getattr(rule, "ai_action_mode", "") or ""),
+    ) or str(rule.rule_mode or "")
+    guidance: tuple[dict[str, Any], ...] = ()
+    if mode in {"ai_comment", "ai_dm", "ai_both"}:
+        guidance = (
+            {
+                "rule_id": rule.id,
+                "ai_instructions": (rule.ai_instructions or "").strip(),
+                "ai_action_mode": str(getattr(rule, "ai_action_mode", "") or ""),
+            },
+        )
+    return CommentRuleDecision(
+        action=_destination_action(rule),
+        reply_text=(rule.reply_template or "").strip(),
+        rule_id=rule.id,
+        reason=f"rule_match:{rule.id}",
+        policy_text=(section.policy_text or "").strip(),
+        matched=True,
+        rule_mode=str(mode or ""),
+        rule_revision=int(getattr(rule, "revision", 1) or 1),
+        trigger_matched=str(getattr(rule, "trigger_type", "") or ""),
+        scope=str(getattr(rule, "scope", "") or ""),
+        dm_text=(rule.dm_template or "").strip(),
+        ai_guidance_rules=guidance,
+        attachments=_attachment_rows(rule),
+    )
 
 
 def evaluate_comment_rules(
@@ -178,52 +245,23 @@ def evaluate_comment_rules(
     post_id: str = "",
     account_id: str = "",
 ) -> CommentRuleDecision:
-    """Post-specific + higher priority wins when V10 is on. Else first list match."""
-    if not customer_ai_v10_runtime_enabled():
-        return _legacy_evaluate(section, comment_text=comment_text, channel=channel, post_id=post_id)
-    from services.customer_reply_v2.comment_rule_engine import evaluate_comment_engine
-
-    payload = (section or CommentsSection()).model_dump(mode="json")
-    engine = evaluate_comment_engine(
-        payload,
-        comment_text=comment_text,
-        channel=channel,
-        post_id=post_id,
-        account_id=account_id,
-    )
-    if engine.rule_mode == "ai_guidance":
-        return CommentRuleDecision(
-            action="reply_comment",
-            reply_text="",
-            rule_id=engine.rule_id,
-            reason=engine.reason,
-            policy_text=engine.policy_text,
-            matched=True,
-            rule_mode="ai_guidance",
-            rule_revision=engine.rule_revision,
-            trigger_matched=engine.trigger_matched,
-            scope=engine.scope,
-            dm_text="",
-            ai_guidance_rules=tuple(engine.ai_guidance_rules),
-            conflict_event=engine.conflict_event,
-            attachments=tuple(engine.attachments or []),
-        )
-    return CommentRuleDecision(
-        action=_action_from_engine(engine.action),
-        reply_text=engine.reply_text,
-        rule_id=engine.rule_id,
-        reason=engine.reason,
-        policy_text=engine.policy_text,
-        matched=engine.matched,
-        rule_mode=engine.rule_mode,
-        rule_revision=engine.rule_revision,
-        trigger_matched=engine.trigger_matched,
-        scope=engine.scope,
-        dm_text=engine.dm_text,
-        ai_guidance_rules=tuple(engine.ai_guidance_rules),
-        conflict_event=engine.conflict_event,
-        attachments=tuple(engine.attachments or []),
-    )
+    """Winning published rule: post-specific, then priority, then stable rule id."""
+    _ = account_id
+    policy = section or CommentsSection()
+    matches: list[CommentRule] = []
+    for rule in policy.rules:
+        if not rule_is_matchable(rule):
+            continue
+        if not _channel_ok(rule, channel):
+            continue
+        if not _post_ok(rule, post_id):
+            continue
+        if not _text_matches(rule, comment_text):
+            continue
+        matches.append(rule)
+    if not matches:
+        return _legacy_evaluate(policy, comment_text=comment_text, channel=channel, post_id=post_id)
+    return _decision_from_rule(policy, _pick_winner(matches))
 
 
 def evaluate_published_comment_rules(

@@ -1,6 +1,14 @@
 /** Pure request-rule helpers (CM requests_appointments + request graphs). */
 
-export type RequestRuleType = 'APPOINTMENT' | 'ORDER' | 'OTHER';
+export type RequestRuleType = 'APPOINTMENT' | 'ORDER' | 'OTHER' | 'HUMAN';
+export type RequestRuleScope =
+  | 'general'
+  | 'all_services'
+  | 'specific_service'
+  | 'all_products'
+  | 'specific_product'
+  | 'handoff';
+export type RequestRuleTrigger = 'inquiry' | 'action';
 
 export type RequestRuleItem = {
   id: string;
@@ -8,6 +16,11 @@ export type RequestRuleItem = {
   name: string;
   notes: string;
   enabled: boolean;
+  scope: RequestRuleScope;
+  entityIds: string[];
+  trigger: RequestRuleTrigger;
+  priority: number;
+  confirmationRequired: boolean;
 };
 
 export type RequestField = { key: string; label: string };
@@ -21,7 +34,15 @@ export type RequestGraphRow = {
   required_information: RequestField[];
 };
 
-const TYPES: RequestRuleType[] = ['APPOINTMENT', 'ORDER', 'OTHER'];
+const TYPES: RequestRuleType[] = ['APPOINTMENT', 'ORDER', 'OTHER', 'HUMAN'];
+const SCOPES: RequestRuleScope[] = [
+  'general',
+  'all_services',
+  'specific_service',
+  'all_products',
+  'specific_product',
+  'handoff',
+];
 
 function asFields(value: unknown): RequestField[] {
   if (!Array.isArray(value)) return [];
@@ -40,12 +61,25 @@ function asFields(value: unknown): RequestField[] {
 export function parseRequestRule(row: Record<string, unknown>): RequestRuleItem {
   const raw = String(row.type || '').toUpperCase();
   const type = TYPES.includes(raw as RequestRuleType) ? (raw as RequestRuleType) : 'APPOINTMENT';
+  const scopeRaw = String(row.scope || '').toLowerCase();
+  const scope = SCOPES.includes(scopeRaw as RequestRuleScope)
+    ? (scopeRaw as RequestRuleScope)
+    : type === 'HUMAN'
+      ? 'handoff'
+      : 'general';
+  const ids = Array.isArray(row.entity_ids) ? row.entity_ids.map((v) => String(v).trim()).filter(Boolean) : [];
+  const trigger = String(row.trigger || '').toLowerCase() === 'action' ? 'action' : 'inquiry';
   return {
     id: String(row.id || ''),
     type,
     name: String(row.name || row.title || ''),
     notes: row.notes == null ? '' : String(row.notes),
     enabled: row.enabled !== false,
+    scope,
+    entityIds: ids,
+    trigger,
+    priority: Number(row.priority || 0) || 0,
+    confirmationRequired: row.confirmation_required === true,
   };
 }
 
@@ -56,11 +90,27 @@ export function ruleToRecord(item: RequestRuleItem): Record<string, unknown> {
     name: item.name,
     notes: item.notes,
     enabled: item.enabled,
+    scope: item.scope,
+    entity_ids: item.entityIds,
+    trigger: item.trigger,
+    priority: item.priority,
+    confirmation_required: item.confirmationRequired,
   };
 }
 
 export function createRequestRule(id: string): RequestRuleItem {
-  return { id, type: 'APPOINTMENT', name: '', notes: '', enabled: true };
+  return {
+    id,
+    type: 'APPOINTMENT',
+    name: '',
+    notes: '',
+    enabled: true,
+    scope: 'general',
+    entityIds: [],
+    trigger: 'inquiry',
+    priority: 0,
+    confirmationRequired: false,
+  };
 }
 
 export function matchesRequestQuery(item: RequestRuleItem, query: string): boolean {
@@ -72,6 +122,7 @@ export function matchesRequestQuery(item: RequestRuleItem, query: string): boole
 export function destinationFromType(type: RequestRuleType): string {
   if (type === 'APPOINTMENT') return 'appointment';
   if (type === 'ORDER') return 'order';
+  if (type === 'HUMAN') return 'live_chat';
   return 'general';
 }
 
@@ -100,8 +151,13 @@ export function collectsPhrase(graph: RequestGraphRow | undefined, empty: string
 
 export function typeLabelKey(
   type: RequestRuleType,
-): 'aiSetupRequestTypeAppointment' | 'aiSetupRequestTypeOrder' | 'aiSetupRequestTypeOther' {
+):
+  | 'aiSetupRequestTypeAppointment'
+  | 'aiSetupRequestTypeOrder'
+  | 'aiSetupRequestTypeOther'
+  | 'aiSetupRequestTypeHuman' {
   if (type === 'ORDER') return 'aiSetupRequestTypeOrder';
   if (type === 'OTHER') return 'aiSetupRequestTypeOther';
+  if (type === 'HUMAN') return 'aiSetupRequestTypeHuman';
   return 'aiSetupRequestTypeAppointment';
 }

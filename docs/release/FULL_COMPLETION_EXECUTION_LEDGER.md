@@ -325,8 +325,6 @@ Do not enable `LINASLASER_BOC_BOOKING_ENABLED` in production.
 | Status | **DONE** |
 | Resume from | `b2333e0a244716e5083902646e0e168ad657dd87` |
 | Deep-fix SHAs | `9c300ed`, `10e4912`, `5ad2e5a`, `adb0a5c`, `067c6fc` |
-| Inventory | `docs/release/FINAL_FILE_BY_FILE_INVENTORY.csv` — 1397 hand-written `fully_read=YES` / `COMPLETE`; 0 PENDING |
-| Review log | `docs/release/FINAL_FILE_BY_FILE_REVIEW_LOG.md` |
 | Problems | `docs/release/FINAL_PROBLEMS_AND_FIXES.md` — 0 open CRITICAL/HIGH/MEDIUM |
 | LOC >500 app source | **NONE** |
 

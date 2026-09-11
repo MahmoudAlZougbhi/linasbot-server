@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { ApiError } from '../../api/client';
+import { faqWriteErrorMessage } from './faqWriteError';
 import type { StringKey } from '../../i18n';
 import { colors, fonts, spacing } from '../../theme';
 import type { KnowledgeAttachment } from '../cm/knowledge/knowledgeModel';
@@ -28,7 +28,7 @@ export function FaqResourcesEditor({ group, onUpdated, tr }: Props) {
       const data = await putFaqAttachments(group.qa_group_id, serializeFaqAttachments(next));
       onUpdated({ ...group, ...data });
     } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : tr('faqCreateError'));
+      setSaveError(faqWriteErrorMessage(err, tr));
       setAttachments(parseFaqAttachments(group));
     }
   }

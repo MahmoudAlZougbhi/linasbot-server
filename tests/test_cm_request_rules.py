@@ -79,6 +79,9 @@ def test_schema_accepts_rules() -> None:
     )
     dumped = section.model_dump(mode="json")
     assert dumped["rules"][0]["name"] == "Booking"
+    assert dumped["rules"][0]["scope"] == "general"
+    scoped = normalize_request_rule_item({"id": "r2", "type": "HUMAN", "name": "Staff"})
+    assert scoped["scope"] == "handoff"
     RequestsAppointmentsSection.model_validate(dumped)
 
 

@@ -147,6 +147,17 @@ class TikTokContentRepository:
         self.session.flush()
         return row, created
 
+    def get_comment(self, *, tenant_id: str, comment_id: str) -> TikTokComment | None:
+        cid = (comment_id or "").strip()
+        if not cid:
+            return None
+        return self.session.scalar(
+            select(TikTokComment).where(
+                TikTokComment.tenant_id == tenant_id,
+                TikTokComment.comment_id == cid,
+            )
+        )
+
     def claim_comment_for_ai(
         self, *, tenant_id: str, comment_id: str, lease_seconds: int = 300
     ) -> TikTokComment | None:

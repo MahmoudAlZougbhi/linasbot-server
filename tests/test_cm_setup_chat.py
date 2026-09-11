@@ -51,6 +51,33 @@ def test_setup_chat_rejects_forbidden_fields(tenant_root: Path) -> None:
         )
 
 
+def test_setup_chat_patch_counts_daily_edit(tenant_root: Path) -> None:
+    from services.membership.daily_edits import (
+        DailyEditLimitError,
+        reset_daily_edits_for_tests,
+        set_platform_baseline,
+        status,
+    )
+
+    reset_daily_edits_for_tests()
+    set_platform_baseline(1)
+    apply_section_patch(
+        tenant_id="setup-tenant",
+        section="style",
+        patch={"tone": "friendly"},
+        actor_id="setup",
+    )
+    assert status("setup-tenant").used == 1
+    with pytest.raises(DailyEditLimitError):
+        apply_section_patch(
+            tenant_id="setup-tenant",
+            section="style",
+            patch={"tone": "formal"},
+            actor_id="setup",
+        )
+    reset_daily_edits_for_tests()
+
+
 def test_manual_and_setup_share_draft_store(tenant_root: Path) -> None:
     apply_section_patch(
         tenant_id="setup-tenant",

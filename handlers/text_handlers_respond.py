@@ -25,16 +25,6 @@ from handlers.text_handlers_respond_keywords import (
 )
 from handlers.text_handlers_respond_phase1 import text_handlers_respond_phase1
 from handlers.text_handlers_respond_phase2 import text_handlers_respond_phase2
-from handlers.text_handlers_respond_phase3 import text_handlers_respond_phase3
-from handlers.text_handlers_respond_phase4 import text_handlers_respond_phase4
-from handlers.text_handlers_respond_phase5 import text_handlers_respond_phase5
-from handlers.text_handlers_respond_phase6 import text_handlers_respond_phase6
-from handlers.text_handlers_respond_phase7 import text_handlers_respond_phase7
-from handlers.text_handlers_respond_phase8 import text_handlers_respond_phase8
-from handlers.text_handlers_respond_phase9 import text_handlers_respond_phase9
-from handlers.text_handlers_respond_phase10 import text_handlers_respond_phase10
-from handlers.text_handlers_respond_phase11 import text_handlers_respond_phase11
-from handlers.text_handlers_respond_phase12 import text_handlers_respond_phase12
 from handlers.text_handlers_respond_reply import (
     _apply_turn_by_turn_policy,
     _handle_published_cm_runtime,
@@ -47,16 +37,6 @@ _PHASE_HALT = "_PHASE_HALT"
 _PROCESS_PHASES = (
     text_handlers_respond_phase1,
     text_handlers_respond_phase2,
-    text_handlers_respond_phase3,
-    text_handlers_respond_phase4,
-    text_handlers_respond_phase5,
-    text_handlers_respond_phase6,
-    text_handlers_respond_phase7,
-    text_handlers_respond_phase8,
-    text_handlers_respond_phase9,
-    text_handlers_respond_phase10,
-    text_handlers_respond_phase11,
-    text_handlers_respond_phase12,
 )
 
 

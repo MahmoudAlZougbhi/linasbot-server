@@ -238,6 +238,6 @@ def build_activity_summary(
         ),
         "requests_source": req_source,
         "credits_by_channel_note": (
-            "Per-channel credits are estimated from interaction token/cost fields in activity logs."
+            "Per-channel messages are estimated from interaction token/cost fields in activity logs."
         ),
     }

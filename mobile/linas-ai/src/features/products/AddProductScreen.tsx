@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
 import { pickImageAttachment } from '../chat/v2/pickAttachment';
-import { isMetadataPreparationFailure } from '../../api/client';
+import { isDailyEditLimitError, isMetadataPreparationFailure } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
@@ -104,8 +104,8 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
         mimeType: picked.mimeType,
       });
       return { media_id: uploaded.media_id, previewUri: picked.uri, filename: picked.name };
-    } catch {
-      setError(tr('productsUploadError'));
+    } catch (err) {
+      setError(tr(isDailyEditLimitError(err) ? 'aiSetupDailyEditLimit' : 'productsUploadError'));
       return null;
     } finally {
       setUploading(false);
@@ -156,7 +156,15 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
       else await createProduct(payload);
       onSaved();
     } catch (err) {
-      setError(tr(isMetadataPreparationFailure(err) ? 'productsMetadataSaveError' : 'productsSaveError'));
+      setError(
+        tr(
+          isDailyEditLimitError(err)
+            ? 'aiSetupDailyEditLimit'
+            : isMetadataPreparationFailure(err)
+              ? 'productsMetadataSaveError'
+              : 'productsSaveError',
+        ),
+      );
     } finally {
       setSaving(false);
     }

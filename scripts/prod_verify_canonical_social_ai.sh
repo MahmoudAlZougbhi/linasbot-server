@@ -33,8 +33,11 @@ for env_path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2
 
 import config
 from openai import AsyncOpenAI
-from services.chat_response_service import ORCHESTRATION_MODEL, FINAL_RESPONSE_MODEL
+from services.customer_reply_v2.flags import customer_answer_model_name, customer_retrieval_model_name
 from services.social_contact_routing import route_social_contact_request
+
+ORCHESTRATION_MODEL = customer_retrieval_model_name()
+FINAL_RESPONSE_MODEL = customer_answer_model_name()
 
 key = (config.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY") or "").strip()
 if not key:

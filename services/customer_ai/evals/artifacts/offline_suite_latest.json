@@ -1,0 +1,113 @@
+{
+  "bank": {
+    "by_category": {
+      "abstain": 60,
+      "ambiguous": 60,
+      "arabic": 41,
+      "arabizi": 41,
+      "booking": 40,
+      "contradiction": 40,
+      "duplicate_chunks": 30,
+      "english": 40,
+      "faq": 40,
+      "french": 40,
+      "hallucination": 1,
+      "handoff": 40,
+      "hours": 1,
+      "injection": 100,
+      "lebanese_arabic": 40,
+      "long_kb": 30,
+      "mixed_language": 40,
+      "multi_intent": 60,
+      "multi_turn": 100,
+      "near_duplicate": 30,
+      "noisy": 2
+    },
+    "by_language": {
+      "ar": 41,
+      "arabizi": 41,
+      "en": 634,
+      "fr": 80,
+      "lb": 40,
+      "mixed": 40
+    },
+    "case_count": 876,
+    "live_spend": false,
+    "target_max": 1500,
+    "target_min": 800
+  },
+  "gates": {
+    "case_count_ge_800": true,
+    "missed_unsupported_eq_0": true,
+    "recall@10_ge_0.98": true,
+    "recall@5_ge_0.95": true
+  },
+  "live_spend": false,
+  "ok": true,
+  "suite": "customer_brain_offline_v1",
+  "summary": {
+    "by_category_pass_rate": {
+      "abstain": 1.0,
+      "ambiguous": 1.0,
+      "arabic": 1.0,
+      "arabizi": 1.0,
+      "booking": 1.0,
+      "contradiction": 1.0,
+      "duplicate_chunks": 1.0,
+      "english": 1.0,
+      "faq": 1.0,
+      "french": 1.0,
+      "hallucination": 1.0,
+      "handoff": 1.0,
+      "hours": 1.0,
+      "injection": 0.6,
+      "lebanese_arabic": 1.0,
+      "long_kb": 1.0,
+      "mixed_language": 1.0,
+      "multi_intent": 1.0,
+      "multi_turn": 1.0,
+      "near_duplicate": 1.0,
+      "noisy": 1.0
+    },
+    "by_language_pass_rate": {
+      "ar": 1.0,
+      "arabizi": 1.0,
+      "en": 0.9369085173501577,
+      "fr": 1.0,
+      "lb": 1.0,
+      "mixed": 1.0
+    },
+    "case_count": 876,
+    "cost_usd": {
+      "average": 0.0,
+      "live_spend": false,
+      "note": "offline deterministic suite",
+      "p95": 0.0
+    },
+    "grounding": {
+      "cases": 149,
+      "caught_unsupported_rate": 1.0,
+      "missed_unsupported": 0
+    },
+    "latency_ms": {
+      "mean": 0.0210673515981735,
+      "p50": 0.001,
+      "p90": 0.04,
+      "p95": 0.172,
+      "p99": 0.23825
+    },
+    "pass_rate": 0.954337899543379,
+    "retrieval": {
+      "cases": 65,
+      "mrr": 1.0,
+      "ndcg@10": 1.0,
+      "ndcg@5": 1.0,
+      "precision@10": 0.9923076923076923,
+      "precision@5": 0.9923076923076923,
+      "recall@1": 1.0,
+      "recall@10": 1.0,
+      "recall@3": 1.0,
+      "recall@5": 1.0
+    }
+  }
+}

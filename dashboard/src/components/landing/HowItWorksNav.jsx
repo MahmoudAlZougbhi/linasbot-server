@@ -1,7 +1,7 @@
 import { HOW_IT_WORKS_STEPS } from '../../constants/landingHowItWorks';
 
 /**
- * Right rail — 01…13 with active pill + label (Karen explore layout).
+ * Right rail — 01…12 with active pill + label (Karen explore layout).
  * @param {{
  *   index: number,
  *   onSelect: (index: number) => void,

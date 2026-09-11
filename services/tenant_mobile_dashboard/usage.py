@@ -162,7 +162,7 @@ def aggregate_tenant_usage(
         "distribution": distribution,
         "credits_by_bucket_available": False,
         "credits_by_bucket_note": (
-            "Per-bucket credit attribution is not available from the current file credit ledger; "
-            "period credit totals come from the entitlement/ledger balance."
+            "Per-bucket message attribution is not available from the current file credit ledger; "
+            "period message totals come from the entitlement/ledger balance."
         ),
     }

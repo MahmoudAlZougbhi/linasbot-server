@@ -74,6 +74,13 @@ def schedule_followup_sequence(
     request: FollowUpScheduleRequest,
     conversation: Any | None = None,
 ) -> dict[str, Any]:
+    from services.membership.feature_entitlements import FeatureDenied, assert_followup_allowed
+
+    try:
+        assert_followup_allowed(request.tenant_id)
+    except FeatureDenied:
+        return {"scheduled": False, "reason": "plan_followup_disabled"}
+
     repo = SmartFollowUpRepository(session)
     settings, steps = repo.ensure_defaults(request.tenant_id)
     if not settings.enabled:

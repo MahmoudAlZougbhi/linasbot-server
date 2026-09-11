@@ -21,6 +21,8 @@ def derive_workspace_status(
     available_credits: int | None,
     included_credits: int,
     credits_known: bool,
+    leftover_credits: int | None = None,
+    leftover_known: bool = False,
     cm_published: bool,
     cm_percent: int,
     any_connected: bool,
@@ -53,9 +55,20 @@ def derive_workspace_status(
         return {
             "state": "credits_depleted",
             "reason_code": "credits_depleted",
-            "title": "Credits depleted",
-            "explanation": "No credits remain. Buy credits or upgrade to continue AI operations.",
-            "primary_action": {"code": "buy_credits", "label": "Buy credits"},
+            "title": "Messages depleted",
+            "explanation": (
+                "No messages remain. Message top-ups are not for sale yet. Upgrade your plan to continue AI operations."
+            ),
+            "primary_action": {"code": "upgrade_plan", "label": "See plans"},
+        }
+
+    if leftover_known and leftover_credits is not None and leftover_credits <= 0:
+        return {
+            "state": "leftover_credits_depleted",
+            "reason_code": "leftover_credits_depleted",
+            "title": "Leftover credits depleted",
+            "explanation": "AI replies are paused until leftover credits are available.",
+            "primary_action": {"code": "buy_credits", "label": "Add leftover credits"},
         }
 
     if connection_issue:
@@ -77,9 +90,27 @@ def derive_workspace_status(
             return {
                 "state": "credits_low",
                 "reason_code": "credits_low",
-                "title": "Credits low",
-                "explanation": "Credit balance is running low for this billing period.",
-                "primary_action": {"code": "buy_credits", "label": "Buy credits"},
+                "title": "Messages low",
+                "explanation": (
+                    "Message balance is running low for this billing period. Message top-ups are not for sale yet."
+                ),
+                "primary_action": {"code": "upgrade_plan", "label": "See plans"},
+            }
+
+    if leftover_known and leftover_credits is not None:
+        leftover_included = included_credits if leftover_known else 0
+        leftover_threshold = (
+            max(LOW_CREDIT_ABSOLUTE, int(leftover_included * LOW_CREDIT_RATIO))
+            if leftover_included
+            else LOW_CREDIT_ABSOLUTE
+        )
+        if leftover_credits <= leftover_threshold:
+            return {
+                "state": "leftover_credits_low",
+                "reason_code": "leftover_credits_low",
+                "title": "Leftover credits low",
+                "explanation": "Leftover credit balance is running low.",
+                "primary_action": {"code": "buy_credits", "label": "Add leftover credits"},
             }
 
     if not cm_published or cm_percent < 50 or not any_connected:
@@ -157,20 +188,39 @@ def build_alerts(
         add(
             severity="critical",
             reason_code="credits_depleted",
-            title="Credits depleted",
-            explanation="AI operations will stop until credits are available.",
+            title="Messages depleted",
+            explanation="AI operations will stop until messages are available. Message top-ups are not for sale yet.",
+            action_code="upgrade_plan",
+            action_label="See plans",
+        )
+    elif state == "leftover_credits_depleted":
+        add(
+            severity="critical",
+            reason_code="leftover_credits_depleted",
+            title="Leftover credits depleted",
+            explanation="AI operations will stop until leftover credits are available.",
             action_code="buy_credits",
-            action_label="Buy credits",
+            action_label="Add leftover credits",
         )
     elif state == "credits_low" and credits_known and available_credits is not None:
         add(
             severity="warning",
             reason_code="credits_low",
-            title="Credits running low",
-            explanation=f"{available_credits} credits remain"
-            + (f" of {included_credits} included." if included_credits else "."),
+            title="Messages running low",
+            explanation=f"{available_credits} messages remain"
+            + (f" of {included_credits} included." if included_credits else ".")
+            + " Message top-ups are not for sale yet.",
+            action_code="upgrade_plan",
+            action_label="See plans",
+        )
+    elif state == "leftover_credits_low":
+        add(
+            severity="warning",
+            reason_code="leftover_credits_low",
+            title="Leftover credits running low",
+            explanation="Leftover credit balance is running low.",
             action_code="buy_credits",
-            action_label="Buy credits",
+            action_label="Add leftover credits",
         )
 
     if subscription_status in {"grace", "canceled", "expired"}:

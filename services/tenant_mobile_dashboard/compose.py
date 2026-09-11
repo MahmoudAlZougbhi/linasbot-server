@@ -14,12 +14,15 @@ from services.entitlements_service import (
     get_tenant_entitlement_public,
     is_subscription_exempt_tenant,
 )
+from services.membership.daily_edits import status as daily_edit_status
+from services.membership.message_flags import message_billing_enabled
 from services.membership.plan_catalog import PLAN_CATALOG
 from services.owner_ai_account_state import compute_cm_progress
 from services.plan_economics import PLAN_PRICES_USD, recommend_allowance
 from services.platform_owner_service import PlatformOwnerService
 from services.tenant_mobile_dashboard.activity import build_activity_summary
 from services.tenant_mobile_dashboard.channels import build_channel_breakdown
+from services.tenant_mobile_dashboard.message_surface import overlay_message_fields, workspace_message_balance
 from services.tenant_mobile_dashboard.periods import (
     PeriodValidationError,
     TimezoneValidationError,
@@ -71,7 +74,7 @@ def _plan_and_credits(tenant_id: str) -> dict[str, Any]:
         available = remaining_credits(tenant_id)
         reserved = int(credit_ledger_service.get_reserved(tenant_id))
     except Exception as exc:
-        return _section_error("credits_unavailable", f"Credit service unavailable: {exc}")
+        return _section_error("credits_unavailable", f"Message service unavailable: {exc}")
 
     plan_id = str(public.get("plan_id") or "none")
     included = int(public.get("included_credits") or 0)
@@ -84,6 +87,7 @@ def _plan_and_credits(tenant_id: str) -> dict[str, Any]:
     buckets = split_credit_remaining(included=included, purchased=extra, available=available, reserved=reserved)
     used = buckets["credits_used"]
     catalog = PLAN_CATALOG.get(plan_id)
+    edits = daily_edit_status(tenant_id)
     display_name = catalog.display_name if catalog else (plan_id if plan_id != "none" else None)
 
     # Never coerce missing subscription into a fake zero plan name.
@@ -115,14 +119,23 @@ def _plan_and_credits(tenant_id: str) -> dict[str, Any]:
             "faq_quota_display": public.get("faq_quota_display"),
             "credit_source": "postgres_credit_ledger" if billing_uses_postgres() else "file_credit_ledger",
             "credit_source_note": (
-                "Remaining credits are the credit-ledger available balance — the same wallet "
-                "that gates Owner Copilot and channel AI."
+                "Historical credit balances stay on file. Message remaining is shown only when "
+                "message billing is enabled."
             ),
             "has_subscription": has_subscription,
+            "ai_setup_edits": {
+                "limit": edits.limit,
+                "used": edits.used,
+                "reserved": edits.reserved,
+                "remaining": edits.remaining,
+                "reset_at": edits.reset_at,
+            },
+            **overlay_message_fields(tenant_id, plan_id),
             "actions": {
                 "manage_subscription": True,
                 "upgrade_plan": upgrade_plan_allowed(plan_id),
-                "buy_credits": True,
+                "buy_credits": not message_billing_enabled(),
+                "buy_messages": False,
             },
         }
     )
@@ -184,6 +197,12 @@ def _team_capacity(tenant_id: str, plan_id: str | None) -> dict[str, Any]:
     unlimited = False
     if plan_id and plan_id in PLAN_CATALOG:
         seats = PLAN_CATALOG[plan_id].additional_seats
+        unlimited = seats is None
+    from services.membership.feature_entitlements import additional_seats_for_plan
+
+    known_seats, message_seats = additional_seats_for_plan(plan_id or "")
+    if known_seats:
+        seats = message_seats
         unlimited = seats is None
     try:
         from services.user_service import user_service
@@ -301,8 +320,7 @@ def build_tenant_mobile_dashboard(
     team = _team_capacity(tid, plan.get("plan_id") if plan.get("availability") == "ok" else None)
 
     credits_known = plan.get("availability") == "ok"
-    available = int(plan["available_credits"]) if credits_known else None
-    included = int(plan.get("included_credits") or 0) if credits_known else 0
+    available, included, message_balance_known = workspace_message_balance(plan)
     suspended = platform_owner_service.is_suspended(tid)
     cm_published = bool(content.get("published")) if content.get("availability") == "ok" else False
     cm_percent = int(content.get("percent") or 0) if content.get("availability") == "ok" else 0
@@ -310,6 +328,9 @@ def build_tenant_mobile_dashboard(
         int(content.get("sections_present") or 0) > 0 or int(content.get("percent") or 0) > 0
     )
 
+    leftover_known = bool(credits_known and not message_billing_enabled())
+    leftover = int(plan.get("available_credits") or 0) if leftover_known else None
+    leftover_included = int(plan.get("included_credits") or 0) if leftover_known else included
     workspace_status = derive_workspace_status(
         suspended=suspended,
         plan_id=str(plan.get("plan_id") or "none") if credits_known else "none",
@@ -318,8 +339,10 @@ def build_tenant_mobile_dashboard(
         if credits_known
         else is_subscription_exempt_tenant(tid),
         available_credits=available,
-        included_credits=included,
-        credits_known=credits_known,
+        included_credits=leftover_included,
+        credits_known=message_balance_known,
+        leftover_credits=leftover,
+        leftover_known=leftover_known,
         cm_published=cm_published,
         cm_percent=cm_percent,
         any_connected=bool(channels.get("any_connected")),
@@ -335,7 +358,7 @@ def build_tenant_mobile_dashboard(
     alerts = build_alerts(
         workspace_status=workspace_status,
         available_credits=available,
-        credits_known=credits_known,
+        credits_known=message_balance_known,
         included_credits=included,
         subscription_status=str(plan.get("subscription_status") or "none") if credits_known else "none",
         cm_published=cm_published,

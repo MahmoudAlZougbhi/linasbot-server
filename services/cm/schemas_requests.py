@@ -11,7 +11,7 @@ from pydantic import Field, field_validator
 
 from services.cm.schemas_content import ArticleAttachment, CmBaseModel, LocalizedLabels
 
-RequestTypeCode = Literal["ORDER", "APPOINTMENT", "OTHER"]
+RequestTypeCode = Literal["ORDER", "APPOINTMENT", "OTHER", "HUMAN"]
 NotificationLanguage = Literal["auto", "ar", "en", "fr", "franco"]
 FieldValidationKind = Literal[
     "",
@@ -61,14 +61,31 @@ class RequestAssignmentDefaults(CmBaseModel):
     auto_assign: bool = False
 
 
+RequestRuleScope = Literal[
+    "general",
+    "all_services",
+    "specific_service",
+    "all_products",
+    "specific_product",
+    "handoff",
+]
+RequestRuleTrigger = Literal["inquiry", "action"]
+
+
 class RequestRule(CmBaseModel):
-    """Owner-facing request rule — type, title, and custom note."""
+    """Owner-facing request rule — type, title, scope, and custom note."""
 
     id: str
     type: RequestTypeCode = "APPOINTMENT"
     name: str = ""
     notes: str | None = None
     enabled: bool = True
+    scope: RequestRuleScope = "general"
+    entity_ids: list[str] = Field(default_factory=list)
+    trigger: RequestRuleTrigger = "inquiry"
+    priority: int = 0
+    confirmation_required: bool = False
+    required_fields: list[str] = Field(default_factory=list)
     attachments: list[ArticleAttachment] = Field(default_factory=list)
     ai_search_title: str = ""
     ai_search_description: str = ""
@@ -112,8 +129,8 @@ class RequestsAppointmentsSection(CmBaseModel):
     @field_validator("type_labels")
     @classmethod
     def _type_label_keys(cls, value: dict[str, LocalizedLabels]) -> dict[str, LocalizedLabels]:
-        allowed = {"ORDER", "APPOINTMENT", "OTHER"}
+        allowed = {"ORDER", "APPOINTMENT", "OTHER", "HUMAN"}
         bad = sorted(k for k in value if k not in allowed)
         if bad:
-            raise ValueError(f"type_labels keys must be ORDER|APPOINTMENT|OTHER; got {bad}")
+            raise ValueError(f"type_labels keys must be ORDER|APPOINTMENT|OTHER|HUMAN; got {bad}")
         return value

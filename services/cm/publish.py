@@ -52,6 +52,9 @@ class PublishResult:
     manifest: dict[str, Any]
     pointer: dict[str, Any]
     previous_pointer: dict[str, Any] | None
+    # Best-effort Brain Voyage index after CM publish. None = not attempted.
+    # ready=False is retryable via Owner force-reindex / admin search API.
+    brain_index_status: dict[str, Any] | None = None
 
 
 def _normalize_tenant(tenant_id: str | None) -> str:
@@ -237,6 +240,38 @@ async def publish_draft_sections(
 
     sync_request_graphs_after_publish(tenant_id=tid, sections=sections)
 
+    index_result: dict[str, Any]
+    try:
+        from services.customer_ai.search.index_job import index_published_tenant
+
+        index_result = await index_published_tenant(tid, revision=content_version_id)
+        if not isinstance(index_result, dict):
+            index_result = {"ready": False, "reason": "index_schedule_failed:bad_result", "count": 0}
+    except Exception as exc:
+        index_result = {"ready": False, "reason": f"index_schedule_failed:{type(exc).__name__}", "count": 0}
+
+    try:
+        from services.customer_ai.search.index_status import resolve_health, set_index_status
+
+        health = resolve_health(
+            content_version=content_version_id,
+            index_version=str(index_result.get("version") or index_version_id or ""),
+            indexing=bool(index_result.get("indexing")),
+            failed=not bool(index_result.get("ready")),
+        )
+        if index_result.get("ready"):
+            health = "READY"
+        set_index_status(
+            tid,
+            status=health,
+            content_version=content_version_id,
+            index_version=str(index_result.get("version") or index_version_id or ""),
+            reason=str(index_result.get("reason") or ""),
+        )
+        index_result = {**index_result, "health": health}
+    except Exception:
+        pass
+
     return PublishResult(
         tenant_id=tid,
         content_version_id=content_version_id,
@@ -244,6 +279,7 @@ async def publish_draft_sections(
         manifest=manifest.model_dump(mode="json"),
         pointer=pointer_out.model_dump(mode="json"),
         previous_pointer=previous_pointer.model_dump(mode="json") if previous_pointer else None,
+        brain_index_status=index_result,
     )
 
 

@@ -12,8 +12,11 @@ type Props = {
   planId: string | null;
   status: string | null;
   periodEnd: number | null;
-  includedCredits: number | null;
-  purchasedCredits: number | null;
+  messageBillingActive: boolean;
+  includedMessages: number | null;
+  includedRemaining: number | null;
+  availableMessages: number | null;
+  purchasedMessages: number | null;
   creditBalance: number | null;
   locale: string;
   onManage: () => void;
@@ -24,8 +27,11 @@ export function CurrentPlanSummary({
   planId,
   status,
   periodEnd,
-  includedCredits,
-  purchasedCredits,
+  messageBillingActive,
+  includedMessages,
+  includedRemaining,
+  availableMessages,
+  purchasedMessages,
   creditBalance,
   locale,
   onManage,
@@ -67,17 +73,33 @@ export function CurrentPlanSummary({
       <Text style={[styles.meta, { color: colors.textMuted }]}>
         {status === 'canceled' ? tr('subAccessEnds') : tr('subRenewsOn')}: {dateLabel}
       </Text>
+      <Text style={[styles.meta, { color: colors.textMuted }]}>
+        {tr('subIncludedEachMonth').replace(
+          '{n}',
+          formatCredits(includedMessages, locale, tr('subCreditsMissing')),
+        )}
+      </Text>
       <Text style={[styles.meta, { color: colors.text }]}>
         {tr('subIncludedRemaining')}:{' '}
-        {formatCredits(includedCredits, locale, tr('subCreditsMissing'))}
+        {messageBillingActive
+          ? formatCredits(includedRemaining, locale, tr('subCreditsMissing'))
+          : tr('subMessagesPending')}
       </Text>
       <Text style={[styles.meta, { color: colors.text }]}>
         {tr('subPurchasedRemaining')}:{' '}
-        {formatCredits(purchasedCredits, locale, tr('subCreditsMissing'))}
+        {messageBillingActive
+          ? formatCredits(purchasedMessages, locale, tr('subCreditsMissing'))
+          : tr('subMessagesPending')}
+      </Text>
+      <Text style={[styles.meta, { color: colors.text }]}>
+        {tr('subTotalAvailable')}:{' '}
+        {messageBillingActive
+          ? formatCredits(availableMessages, locale, tr('subCreditsMissing'))
+          : tr('subMessagesPending')}
       </Text>
       {creditBalance != null ? (
         <Text style={[styles.meta, { color: colors.textMuted }]}>
-          {tr('subTotalAvailable')}: {creditBalance.toLocaleString(locale)}
+          {tr('subLeftoverCredits').replace('{n}', creditBalance.toLocaleString(locale))}
         </Text>
       ) : null}
       <Pressable

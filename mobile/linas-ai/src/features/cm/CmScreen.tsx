@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 
-import { ApiError } from '../../api/client';
+import { ApiError, isDailyEditLimitError } from '../../api/client';
 import { EmptyState } from '../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -126,7 +126,9 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
             : '';
         Alert.alert(
           tr('aiSetupLiveToggleFailedTitle'),
-          detail.trim() || tr('aiSetupLiveToggleFailedBody'),
+          isDailyEditLimitError(err)
+            ? tr('aiSetupDailyEditLimit')
+            : detail.trim() || tr('aiSetupLiveToggleFailedBody'),
         );
       } finally {
         setLiveBusy(false);
@@ -183,6 +185,9 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
                     )
                 : undefined
             }
+            editsUsed={meta?.ai_setup_edits?.used}
+            editsLimit={meta?.ai_setup_edits?.limit}
+            editsReset={meta?.ai_setup_edits?.reset_at}
           />
 
           <AiSetupFilterTabs

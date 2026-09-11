@@ -109,7 +109,7 @@ async def verify_webhook(request: Request) -> Any:
 async def receive_webhook(request: Request) -> Any:
     """Endpoint for receiving WhatsApp messages from different providers.
 
-    Inbound WhatsApp (MontyMobile / Meta Cloud / any provider) must not invoke the AI.
+    Inbound WhatsApp Cloud must not invoke the AI.
     Facebook Messenger and Instagram DMs are handled only on /webhook/meta-messaging.
     WhatsApp numbers remain available as social-channel handoff destinations only.
 

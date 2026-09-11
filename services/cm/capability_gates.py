@@ -37,8 +37,22 @@ def image_analysis_enabled(tenant_id: str) -> bool:
     return bool(limits.image_analysis_enabled)
 
 
+def _published_human_request_rule_enabled(sections: dict) -> bool | None:
+    """True/False when Requests has HUMAN rules; None when the owner has not configured one."""
+    raw = sections.get("requests_appointments") if isinstance(sections, dict) else None
+    rules = raw.get("rules") if isinstance(raw, dict) else None
+    if not isinstance(rules, list):
+        return None
+    human_rules = [
+        rule for rule in rules if isinstance(rule, dict) and str(rule.get("type") or "").strip().upper() == "HUMAN"
+    ]
+    if not human_rules:
+        return None
+    return any(bool(rule.get("enabled", True)) for rule in human_rules)
+
+
 def human_handoff_enabled(tenant_id: str) -> bool:
-    """True when published AI Limits enable human handoff (falls back to legacy actions toggle)."""
+    """True when a published Requests HUMAN rule (or AI Limits fallback) allows handoff."""
     tid = (tenant_id or "").strip()
     if not tid:
         raise ValueError("tenant_id required")
@@ -48,6 +62,10 @@ def human_handoff_enabled(tenant_id: str) -> bool:
         _pointer, sections = load_published_content(tid)
     except PublishedVersionError:
         return True
+
+    human_rule = _published_human_request_rule_enabled(sections)
+    if human_rule is not None:
+        return human_rule
 
     raw_limits = sections.get("ai_limits")
     if isinstance(raw_limits, dict) and "human_handoff_enabled" in raw_limits:

@@ -35,6 +35,12 @@ def reserve_before_ai(turn: AiReplyTurnRecord, *, credits: int = 1) -> str | Non
         return None
     request_id = new_reservation_request_id(turn.logical_reply_id)
     try:
+        from services.membership.message_flags import message_billing_enabled
+
+        if message_billing_enabled():
+            turn.state = "AI_PROCESSING"
+            put_turn(turn)
+            return None
         from services.credit_ledger_service import credit_ledger_service
 
         credit_ledger_service.ensure_period_grant(tenant_id)
@@ -44,6 +50,44 @@ def reserve_before_ai(turn: AiReplyTurnRecord, *, credits: int = 1) -> str | Non
             credits=credits,
             operation_type="customer_ai_reply",
             request_id=request_id,
+        )
+        from services.customer_ai.leftover_reserve import _pin
+        from services.membership.pending_settlement import record_hold
+
+        aliases: list[str] = []
+        for item in (
+            request_id,
+            rid,
+            turn.logical_reply_id,
+            turn.external_inbound_id,
+            turn.inbound_event_id,
+        ):
+            text = str(item or "").strip()
+            if text and text not in aliases:
+                aliases.append(text)
+        record_hold(
+            tenant_id=tenant_id,
+            reservation_id=rid,
+            operation_id=request_id,
+            billing_policy="legacy_credits",
+            channel="customer_ai_reply",
+            extra={"operation_type": "customer_ai_reply", "candidate_ids": aliases},
+        )
+        _pin(
+            tenant_id,
+            *[
+                item
+                for item in (request_id, rid, turn.logical_reply_id, turn.external_inbound_id, turn.inbound_event_id)
+                if item
+            ],
+        )
+        from services.membership.credit_reservation_index import record_open
+
+        record_open(
+            tenant_id=tenant_id,
+            reservation_id=rid,
+            request_id=request_id,
+            operation_type="customer_ai_reply",
         )
         turn.credit_reservation_id = rid
         turn.state = "AI_PROCESSING"
@@ -76,16 +120,55 @@ def capture_after_reply_persisted(
     capture_ref = f"capture:{logical_reply_id}"
     result: dict[str, Any] = {"logical_reply_id": logical_reply_id}
 
+    from services.membership.message_flags import message_billing_enabled
+
+    if message_billing_enabled() and not turn.credit_reservation_id:
+        turn.credit_captured = True
+        turn.credit_capture_ref = capture_ref
+        turn.state = "CREDIT_CAPTURED_ONCE"
+        put_turn(turn)
+        mark_state(logical_reply_id, "CREDIT_CAPTURED_ONCE", credit_captured=True, credit_capture_ref=capture_ref)
+        result["skipped"] = True
+        result["reason"] = "message_ledger"
+        return result
+
     if turn.credit_reservation_id:
         from services.credit_ledger_service import credit_ledger_service
 
-        cap = credit_ledger_service.capture(
-            tenant_id=turn.tenant_id,
-            reservation_id=turn.credit_reservation_id,
-            provider_cost_usd=provider_cost_usd or turn.cost_usd,
-            model_provider=model_provider or model or turn.model,
-        )
-        result.update(cap)
+        try:
+            cap = credit_ledger_service.capture(
+                tenant_id=turn.tenant_id,
+                reservation_id=turn.credit_reservation_id,
+                provider_cost_usd=provider_cost_usd or turn.cost_usd,
+                model_provider=model_provider or model or turn.model,
+            )
+            result.update(cap)
+            try:
+                from services.customer_ai.leftover_reserve import complete_leftover_capture
+
+                complete_leftover_capture(
+                    turn.tenant_id,
+                    turn.credit_reservation_id,
+                    operation_id=logical_reply_id,
+                    extra_ids=[item for item in (turn.external_inbound_id, turn.inbound_event_id) if item],
+                )
+            except Exception:
+                pass
+        except Exception:
+            from services.membership.reservation_reconcile import hold_failed_capture_after_send
+
+            hold_failed_capture_after_send(
+                tenant_id=turn.tenant_id,
+                reservation_id=turn.credit_reservation_id,
+                operation_id=logical_reply_id,
+                billing_policy="legacy_credits",
+                channel=model_provider or model or "customer_ai_reply",
+            )
+            from services.membership.credit_reservation_index import mark_closed
+
+            mark_closed(turn.credit_reservation_id, state="pending_settlement")
+            result["pending_settlement"] = True
+            return result
     elif turn.tenant_id and (prompt_tokens or completion_tokens or turn.prompt_tokens):
         from services.token_metering import debit_ai_usage
         from services.token_wallet_service import token_wallet_service
@@ -125,6 +208,25 @@ def release_on_ai_failure(logical_reply_id: str) -> dict[str, Any]:
             from services.credit_ledger_service import credit_ledger_service
 
             out = credit_ledger_service.release(tenant_id=turn.tenant_id, reservation_id=rid)
+            from services.customer_ai.leftover_reserve import _unpin
+            from services.membership.credit_reservation_index import mark_closed
+            from services.membership.pending_settlement import get_pending, upsert
+
+            held = get_pending(turn.tenant_id, rid)
+            aliases = [rid, logical_reply_id, turn.external_inbound_id, turn.inbound_event_id]
+            if held is not None:
+                aliases.append(held.operation_id)
+                aliases.extend(str(item or "") for item in (held.extra.get("candidate_ids") or []))
+            _unpin(turn.tenant_id, *[item for item in aliases if item])
+            mark_closed(rid, state="released")
+            upsert(
+                tenant_id=turn.tenant_id,
+                reservation_id=rid,
+                operation_id=held.operation_id if held is not None else logical_reply_id,
+                billing_policy="legacy_credits",
+                state="released",
+                reason="unused_or_failed_before_send",
+            )
             mark_state(logical_reply_id, "NO_FINAL_CHARGE", last_error=turn.last_error)
             return out
         except Exception as exc:

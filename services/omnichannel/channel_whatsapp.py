@@ -10,21 +10,62 @@ from services.whatsapp_cloud.graph_client import WhatsAppGraphError, send_text_m
 from services.whatsapp_cloud.repository import WhatsAppCloudRepository
 
 
-async def generate_whatsapp_reply(*, tenant_id: str, payload: dict[str, Any]) -> tuple[str, str | None, str | None]:
+async def generate_whatsapp_reply(
+    *,
+    tenant_id: str,
+    payload: dict[str, Any],
+    conversation_key: str = "",
+) -> tuple[str, str | None, str | None]:
+    from services.customer_ai.history_ids import conversation_id_for_brain, message_id_for_brain
+    from services.customer_ai.leftover_reserve import reserve_leftover_reply
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
+    from services.omnichannel.message_hold import release_unsent_omni_hold
 
     _live, _reason = whatsapp_public_onboarding_live()
-    outcome = await run_customer_reply_v2_dm(
-        tenant_id=tenant_id,
-        message=str(payload.get("text_body") or payload.get("text") or ""),
-        channel="whatsapp",
-        provider_sender_id=str(payload.get("customer_wa_id") or ""),
-    )
-    if getattr(outcome, "stop", False):
-        return "", None, "ai_stop"
-    text = str(getattr(outcome, "reply", None) or "").strip()
-    reservation = str(payload.get("credit_reservation_id") or "") or None
-    return text, reservation, None if text else "empty_reply"
+    sender = str(payload.get("customer_wa_id") or payload.get("sender_id") or "")
+    inbound_mid = message_id_for_brain(payload)
+    leftover_rid = str(payload.get("credit_reservation_id") or "") or None
+    if leftover_rid is None:
+        try:
+            leftover_rid = reserve_leftover_reply(
+                tenant_id=tenant_id,
+                request_id=f"omni:whatsapp:{inbound_mid or conversation_key}",
+                operation_type="omnichannel_customer_reply",
+                pin_ids=(inbound_mid, conversation_key),
+            )
+        except PermissionError:
+            return "", None, "insufficient_credits"
+    try:
+        outcome = await run_customer_reply_v2_dm(
+            tenant_id=tenant_id,
+            message=str(payload.get("text_body") or payload.get("text") or ""),
+            channel="whatsapp",
+            provider_sender_id=sender,
+            user_id=sender,
+            conversation_id=conversation_id_for_brain(payload=payload, conversation_key=conversation_key),
+            message_id=inbound_mid,
+        )
+        if getattr(outcome, "stop", False) or not str(getattr(outcome, "reply", None) or "").strip():
+            release_unsent_omni_hold(
+                tenant_id=tenant_id,
+                payload=payload,
+                conversation_key=conversation_key,
+                reservation_id=leftover_rid,
+                extra_ids=(inbound_mid,),
+                channel="whatsapp",
+            )
+            return "", None, str(getattr(outcome, "reason", "") or "ai_stop")
+        return str(getattr(outcome, "reply", None) or "").strip(), leftover_rid, None
+    except Exception:
+        release_unsent_omni_hold(
+            tenant_id=tenant_id,
+            payload=payload,
+            conversation_key=conversation_key,
+            reservation_id=leftover_rid,
+            extra_ids=(inbound_mid,),
+            channel="whatsapp",
+        )
+        raise
 
 
 async def deliver_whatsapp(snapshot: dict[str, Any]) -> dict[str, Any]:

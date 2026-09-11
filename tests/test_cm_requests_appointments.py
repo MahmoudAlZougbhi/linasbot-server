@@ -31,6 +31,7 @@ def test_section_registered_end_to_end() -> None:
     assert guide is not None
     assert guide["title"] == "Requests & Appointments"
     assert guide.get("title_ar") == "الطلبات والمواعيد"
+    assert "HUMAN" in str(guide.get("what_to_fill") or "")
 
 
 def test_defaults_keep_module_inactive() -> None:
@@ -86,6 +87,17 @@ def test_schema_accepts_configured_section() -> None:
     dumped = section.model_dump(mode="json")
     assert dumped["messages"]["order_ready"] == "Your order is ready."
     RequestsAppointmentsSection.model_validate(dumped)
+
+
+def test_schema_accepts_human_request_type() -> None:
+    section = RequestsAppointmentsSection(
+        module_enabled=True,
+        enabled_types=["HUMAN"],
+        type_labels={"HUMAN": LocalizedLabels(en="Human", ar="موظف")},
+        rules=[{"id": "h1", "type": "HUMAN", "name": "Staff", "enabled": True}],
+    )
+    assert section.enabled_types == ["HUMAN"]
+    assert section.rules[0].type == "HUMAN"
 
 
 def test_schema_rejects_bad_type_label_keys() -> None:

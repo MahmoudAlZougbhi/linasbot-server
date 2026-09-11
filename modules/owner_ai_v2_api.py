@@ -37,22 +37,6 @@ class ChoiceBody(BaseModel):
     label: str | None = None
 
 
-@app.get("/api/owner-ai/v2/flags")
-async def owner_ai_v2_flags(request: Request) -> Any:
-    require_session(request)
-    from services.owner_copilot_v2.flags import flags_snapshot
-
-    return {"success": True, "flags": flags_snapshot()}
-
-
-@app.get("/api/owner-ai/v2/attachment-types")
-async def owner_ai_attachment_types(request: Request) -> Any:
-    require_session(request)
-    from services.owner_copilot_v2.attachments import supported_attachment_types
-
-    return {"success": True, "types": supported_attachment_types()}
-
-
 @app.post("/api/owner-ai/v2/attachments")
 async def owner_ai_upload_attachment(
     request: Request,

@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
+import { useBillingData } from '../billing/useBillingData';
 
 type Props = {
   showUpgrade: boolean;
@@ -12,26 +13,29 @@ type Props = {
 export function CreditsPausedBanner({ showUpgrade, onBuyCredits, onUpgrade }: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
+  const { messageBillingActive } = useBillingData();
   return (
     <View
       style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
       accessibilityRole="alert"
     >
-      <Text style={[styles.title, { color: colors.text }]}>{tr('chatCreditsPausedTitle')}</Text>
-      <Text style={[styles.body, { color: colors.textMuted }]}>{tr('chatCreditsPausedBody')}</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{tr('chatLeftoverCreditsPausedTitle')}</Text>
+      <Text style={[styles.body, { color: colors.textMuted }]}>{tr('chatLeftoverCreditsPausedBody')}</Text>
       <View style={styles.row}>
         {showUpgrade ? (
           <Pressable onPress={onUpgrade} style={styles.outline} accessibilityRole="button">
             <Text style={[styles.outlineText, { color: colors.accent }]}>{tr('subUpgradePlan')}</Text>
           </Pressable>
         ) : null}
-        <Pressable
-          onPress={onBuyCredits}
-          style={[styles.fill, { backgroundColor: colors.accent }]}
-          accessibilityRole="button"
-        >
-          <Text style={styles.fillText}>{tr('dashBuyCredits')}</Text>
-        </Pressable>
+        {messageBillingActive ? null : (
+          <Pressable
+            onPress={onBuyCredits}
+            style={[styles.fill, { backgroundColor: colors.accent }]}
+            accessibilityRole="button"
+          >
+            <Text style={styles.fillText}>{tr('chatAddLeftoverCredits')}</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );

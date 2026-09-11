@@ -12,7 +12,12 @@ from services.request_drafts.repository import DraftRepository
 from services.request_graphs.service import get_active_graph
 
 MUTABLE_STATUSES = {"collecting", "paused", "ready"}
-DEST_TO_TYPE = {"appointment": "APPOINTMENT", "order": "ORDER", "general": "OTHER"}
+DEST_TO_TYPE = {
+    "appointment": "APPOINTMENT",
+    "order": "ORDER",
+    "general": "OTHER",
+    "live_chat": "HUMAN",
+}
 
 
 def _now() -> datetime:

@@ -1,4 +1,4 @@
-"""User-facing Enhanced Video Context status for Integrations + /api/tiktok/status."""
+"""User-facing Enhanced Video Context status for Integrations."""
 
 from __future__ import annotations
 

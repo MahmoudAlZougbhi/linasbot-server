@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { ApiError, isMetadataPreparationFailure } from '../../api/client';
+import { ApiError, isDailyEditLimitError, isMetadataPreparationFailure } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
 import {
   applyProposedItem,
@@ -152,6 +152,10 @@ export function useCmMultiDraft(
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
           setConflict('Someone else saved this section. Reload and retry.');
+          return false;
+        }
+        if (isDailyEditLimitError(err)) {
+          setError(tr('aiSetupDailyEditLimit'));
           return false;
         }
         if (isMetadataPreparationFailure(err)) {

@@ -23,8 +23,8 @@ async def generate_comment_reply_text(
     asset_id: str = "",
     provider_sender_id: str = "",
     provider_display_name: str = "",
-) -> str | None:
-    """Generate a public comment reply via Customer Reply AI V2 only (CM tenants).
+) -> Any:
+    """Generate comment destinations via Customer Reply AI V2 only (CM tenants).
 
     Never falls back to Classic ``generate_answer_with_usage``. Non-CM tenants keep
     the pre-existing local FAQ matcher (not Classic CM generative).
@@ -32,10 +32,12 @@ async def generate_comment_reply_text(
     from services.cm.constants import tenant_uses_cm_runtime
     from services.cm.language_policy import detect_and_resolve_customer_languages
 
+    ctx = dict(comment_context or {})
+    thread_id = str(ctx.get("conversation_id") or f"comment:{tenant_id}:{channel}:{ctx.get('post_id') or 'thread'}")
     _lang = detect_and_resolve_customer_languages(
         tenant_id=tenant_id,
         message=comment_text,
-        conversation_id=f"comment:{tenant_id}:{channel}",
+        conversation_id=thread_id,
     )
     detected_language = _lang["detected_language"]
     response_language = _lang["response_language"]
@@ -44,7 +46,8 @@ async def generate_comment_reply_text(
         from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
 
         social_channel = "facebook_comment" if channel == "facebook" else "instagram_comment"
-        enriched = dict(comment_context or {})
+        enriched = ctx
+        enriched.setdefault("conversation_id", thread_id)
         if instructions and "asset_instructions" not in enriched:
             enriched["asset_instructions"] = instructions.strip()[:800]
         if policy_text and "comments_policy" not in enriched:
@@ -60,6 +63,10 @@ async def generate_comment_reply_text(
                 provider_sender_id=provider_sender_id,
                 provider_display_name=provider_display_name,
                 comments_enabled=True,
+                comment_id=str(enriched.get("comment_id") or ""),
+                post_id=str(enriched.get("post_id") or ""),
+                caption=str(enriched.get("caption") or ""),
+                parent_comment=str(enriched.get("parent_comment") or ""),
                 comment_context=enriched or None,
             )
         except Exception as v2_exc:
@@ -68,9 +75,10 @@ async def generate_comment_reply_text(
                 type(v2_exc).__name__,
             )
             raise MetaCommentReplyGenerationError("customer reply generation failed") from v2_exc
-        if v2_outcome.reply:
-            return str(v2_outcome.reply).strip()[:900]
-        return None
+        from services.customer_ai.comments.destinations import destinations_from_outcome
+
+        plan = destinations_from_outcome(v2_outcome)
+        return plan if plan.has_any else None
 
     from services.local_qa_service import local_qa_service
 

@@ -8,6 +8,7 @@ from typing import Any
 
 from services.web_chat.constants import CHANNEL_ID, SOURCE_CHANNEL_WEB_CHAT, USER_ID_PREFIX
 from services.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle, tenant_scoped_user_data
+from services.web_chat.eligibility import evaluate_web_ai_eligibility
 from services.web_chat.operation import (
     advance_operation,
     begin_operation,
@@ -103,37 +104,6 @@ def _replay_if_operation_visible(
     return (record.canonical_reply() if record else None) or reply_text
 
 
-def evaluate_web_ai_eligibility(tenant_id: str, widget: WebChatWidgetConfig) -> tuple[bool, str | None]:
-    if not widget.enabled:
-        return False, "widget_disabled"
-    if not widget.site_url.strip():
-        return False, "site_url_missing"
-    try:
-        from services.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
-
-        assert_web_plan_allowed(tenant_id)
-    except WebPlanDenied:
-        return False, "web_plan_denied"
-    except Exception:
-        return False, "plan_check_failed"
-    try:
-        from services.cm.version_store import load_published_content
-
-        pointer, _sections = load_published_content(tenant_id)
-        if not pointer or not getattr(pointer, "content_version_id", None):
-            return False, "published_cm_missing"
-    except Exception:
-        return False, "published_cm_unavailable"
-    try:
-        from services.credit_ai_gate import ai_generation_blocked
-
-        if ai_generation_blocked(tenant_id):
-            return False, "insufficient_credits"
-    except Exception:
-        return False, "credits_unavailable"
-    return True, None
-
-
 def default_greeting(language: str | None = None, widget: WebChatWidgetConfig | None = None) -> str:
     if widget is not None:
         identity = widget.appearance.get("identity") if isinstance(widget.appearance, dict) else {}
@@ -162,9 +132,17 @@ async def process_web_chat_message(
     tid = widget.tenant_id
     eligible, reason = evaluate_web_ai_eligibility(tid, widget)
     if not eligible:
+        from services.membership.message_flags import message_billing_enabled
+
+        credit_paused = (
+            "AI replies are paused until leftover credits are available."
+            if not message_billing_enabled()
+            else "AI replies are paused until messages are available."
+        )
         blocked = {
             "web_plan_denied": "Web Chat is not included on your plan. Upgrade to enable website chat.",
-            "insufficient_credits": "AI replies are paused until credits are available.",
+            "insufficient_credits": credit_paused,
+            "insufficient_messages": "AI replies are paused until messages are available.",
             "published_cm_missing": "Publish your AI setup before enabling website chat.",
             "widget_disabled": "Website chat is turned off.",
             "site_url_missing": "Add your website URL in Integrations first.",
@@ -230,6 +208,7 @@ async def process_web_chat_message(
         reservation_id=runtime.record.reservation_id if runtime.record else None,
         request_id=request_id,
         operation_state=runtime.record.state if runtime.record else OperationState.CLAIMED,
+        conversation_id=conversation_id,
     )
     try:
         reconcile_credit_before_side_effects(runtime, credit)
@@ -273,6 +252,7 @@ async def process_web_chat_message(
                 reservation_id=runtime.record.reservation_id,
                 request_id=request_id,
                 operation_state=OperationState.CAPTURED,
+                conversation_id=conversation_id,
             )
             from services.web_chat.processor_completion import complete_web_chat_turn
 
@@ -347,9 +327,17 @@ async def process_web_chat_message(
                 credit.state = CreditFsmState.RESERVED
     except PermissionError as exc:
         if runtime.record and (runtime.record.reservation_id or credit.reservation_id):
-            fenced_failure_release(runtime, credit)
+            fenced_failure_release(runtime, credit, conversation_id=conversation_id, user_text=text)
+        from services.membership.message_flags import message_billing_enabled
+
         raise WebChatError(
-            "insufficient_credits", "AI replies are paused until credits are available.", status_code=402
+            "insufficient_credits",
+            (
+                "AI replies are paused until leftover credits are available."
+                if not message_billing_enabled()
+                else "AI replies are paused until messages are available."
+            ),
+            status_code=402,
         ) from exc
 
     if resuming_past_ai and runtime.record and runtime.record.canonical_reply():
@@ -369,6 +357,32 @@ async def process_web_chat_message(
             inbound_media=inbound_media,
             attachment_types=attachment_types,
         )
+        if not reply_text:
+            try:
+                user_result = await persist_web_chat_message(
+                    user_id=user_id,
+                    role="user",
+                    text=text,
+                    conversation_id=conversation_id,
+                    metadata={
+                        "channel": CHANNEL_ID,
+                        "source": SOURCE_CHANNEL_WEB_CHAT,
+                        "widget_key": widget.widget_key,
+                        "tenant_id": tid,
+                        "source_message_id": (
+                            f"user:{conversation_id}:{hashlib.sha256(text.encode()).hexdigest()[:16]}"
+                        ),
+                    },
+                )
+                if user_result.outcome not in {PersistOutcome.CREATED, PersistOutcome.DUPLICATE}:
+                    raise PersistFailure("firestore_unavailable", "User message projection did not commit.")
+            except PersistFailure as exc:
+                raise WebChatError("persist_failed", exc.message, status_code=503) from exc
+            try:
+                advance_operation(runtime, OperationState.COMPLETE, result={"reply_text": "", "engine": "removed"})
+            except Exception:
+                pass
+            return ""
 
     turn_result = {"reply_text": reply_text, "conversation_id": conversation_id, "operation_key": operation_key}
     past_reply_ready = bool(

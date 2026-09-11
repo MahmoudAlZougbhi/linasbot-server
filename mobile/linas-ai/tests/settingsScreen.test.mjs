@@ -32,8 +32,8 @@ test('Settings handoff sections and rows match the iOS mock', () => {
   assert.match(screen, /settingsAppearance/);
   assert.match(screen, /SettingsAppearanceToggle/);
   assert.match(screen, /settingsHelpSupport/);
-  assert.match(screen, /settingsAiLimits/);
-  assert.match(screen, /onOpenAiLimits/);
+  assert.doesNotMatch(screen, /settingsAiLimits/);
+  assert.doesNotMatch(screen, /onOpenAiLimits/);
   assert.doesNotMatch(screen, /settingsAboutLinas/);
   assert.doesNotMatch(screen, /SettingsAboutSheet/);
   assert.doesNotMatch(screen, /settingsBusinessProfile/);
@@ -64,7 +64,7 @@ test('Settings handoff sections and rows match the iOS mock', () => {
   assert.doesNotMatch(en, /About Linas AI/);
   assert.match(en, /Terms & Privacy/);
   assert.match(en, /Support & Legal/);
-  assert.match(read('i18n/locales/en.ts'), /settingsAiLimits: 'Customer AI Limits'/);
+  assert.doesNotMatch(screen, /settingsAiLimits/);
   assert.match(ar, /تنبيهات الدردشات والطلبات/);
   assert.match(fr, /Alertes chats et demandes/);
 });
@@ -77,7 +77,7 @@ test('Settings visual handoff: stacked title, inset hairline, pale canvas, light
 
   assert.match(screen, /stackedHeader/);
   assert.match(screen, /canvasColor=\{SETTINGS_CANVAS\[resolved\]\}/);
-  assert.match(screen, /settingsAiLimits/);
+  assert.doesNotMatch(screen, /settingsAiLimits/);
   assert.doesNotMatch(screen, /settingsAboutLinas|SettingsAboutSheet|linkApple|unlinkApple/);
 
   assert.match(chrome, /SETTINGS_ICON_WASH/);

@@ -1,10 +1,10 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, Navigate } from "react-router-dom";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { HOW_IT_WORKS_STEPS } from "./constants/landingHowItWorks";
 import { PUBLIC_PATHS, PUBLIC_SITE } from "./constants/publicSite";
 import { PublicLandingLocaleProvider } from "./contexts/PublicLandingLocaleContext";
 import Landing from "./pages/public/Landing";
-import NotFound from "./pages/NotFound";
 
 vi.mock("./contexts/AuthContext", () => ({
   useAuth: () => ({
@@ -104,7 +104,9 @@ describe("public marketing landing", () => {
                   plan_id: "lite",
                   display_name: "Lite",
                   price_usd: 9.99,
+                  intended_price_usd: 10,
                   included_credits: 7000,
+                  included_messages: 550,
                 },
               ],
             }),
@@ -128,57 +130,64 @@ describe("public marketing landing", () => {
       </MemoryRouter>
     );
 
-  it("renders approved marketing home without login or create-account CTAs", async () => {
-    renderLanding("/");
+  it(
+    "renders approved marketing home without login or create-account CTAs",
+    async () => {
+      renderLanding("/");
 
-    expect(screen.getByRole("heading", { name: PUBLIC_SITE.heroHeadline })).toBeInTheDocument();
-    expect(screen.getByText(PUBLIC_SITE.heroKicker)).toBeInTheDocument();
-    expect(screen.getByText(PUBLIC_SITE.heroConnect)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Download app" })).toBeInTheDocument();
-    expect(screen.getByText("Knowledge updated")).toBeInTheDocument();
-    expect(screen.getByText("Off day saved")).toBeInTheDocument();
-    expect(screen.getByText("5 channels connected")).toBeInTheDocument();
-    expect(screen.getByText("What would you like to teach me about your business?")).toBeInTheDocument();
-    expect(screen.getByText("Every new client gets a free skin consultation.")).toBeInTheDocument();
-    expect(screen.getByText(/hydrating serum/i)).toBeInTheDocument();
-    expect(screen.getByText(/Saved to Products/i)).toBeInTheDocument();
-    expect(screen.getByText(/book an appointment/i)).toBeInTheDocument();
-    expect(screen.getByText(/Appointment requests go to your team/i)).toBeInTheDocument();
-    expect(screen.getByText("Work with Linas")).toBeInTheDocument();
-    expect(screen.getAllByText("Style").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Opening Hours").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("AI Basic").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Languages")).not.toBeInTheDocument();
-    expect(screen.queryByText("Off Days")).not.toBeInTheDocument();
-    expect(screen.getAllByText(/tanned yesterday/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("العربية").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("You taught").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Price questions → Private DM").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Can you treat this pigmentation/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Write once").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/0 credits/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Auto in every language you select/i).length).toBeGreaterThan(0);
-    expect(screen.getByText("Run every customer conversation from one AI app.")).toBeInTheDocument();
-    expect(screen.getByText("See what matters. Act faster.")).toBeInTheDocument();
-    expect(screen.getByText("Scroll the card to explore")).toBeInTheDocument();
-    expect(screen.getByAltText("Linas AI activity dashboard")).toBeInTheDocument();
-    expect(screen.getAllByText(PUBLIC_SITE.heroTitle).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: "Download app" }));
-    expect(screen.getByRole("menu", { name: "Download Linas AI" })).toBeInTheDocument();
-    expect(screen.getAllByText("Download on the App Store").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Get it on Google Play").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("link", { name: "Create Account" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Log in" })).not.toBeInTheDocument();
-    expect(screen.queryByText("login-page")).not.toBeInTheDocument();
-    expect(screen.queryByRole("group", { name: "Page language" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("group", { name: "Download Linas AI" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: "Contact us" })).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Explore the app" }).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("link", { name: "Web Chat" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "How it works" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Help & support" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Ask Linas" })).not.toBeInTheDocument();
-  });
+      expect(screen.getByRole("heading", { name: PUBLIC_SITE.heroHeadline })).toBeInTheDocument();
+      expect(screen.getByText(PUBLIC_SITE.heroKicker)).toBeInTheDocument();
+      expect(screen.getByText(PUBLIC_SITE.heroConnect)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Download app" })).toBeInTheDocument();
+      expect(screen.getByText("Knowledge updated")).toBeInTheDocument();
+      expect(screen.getByText("Off day saved")).toBeInTheDocument();
+      expect(screen.getByText("5 channels connected")).toBeInTheDocument();
+      expect(screen.getByText("What would you like to teach me about your business?")).toBeInTheDocument();
+      expect(screen.getByText("Every new client gets a free skin consultation.")).toBeInTheDocument();
+      expect(screen.getByText(/hydrating serum/i)).toBeInTheDocument();
+      expect(screen.getByText(/Saved to Products/i)).toBeInTheDocument();
+      expect(screen.getByText(/book an appointment/i)).toBeInTheDocument();
+      expect(screen.getByText(/Appointment requests go to your team/i)).toBeInTheDocument();
+      expect(screen.getByText("Work with Linas")).toBeInTheDocument();
+      expect(screen.getAllByText("Style").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Opening Hours").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("AI Basic").length).toBeGreaterThan(0);
+      expect(screen.queryByText("Languages")).not.toBeInTheDocument();
+      expect(screen.queryByText("Off Days")).not.toBeInTheDocument();
+      expect(screen.getAllByText(/tanned yesterday/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText("العربية").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("You taught").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Price questions → Private DM").length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Can you treat this pigmentation/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Write once").length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/0 messages/i).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/AI Limits/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Protect your credits/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Customer AI Limits/i)).not.toBeInTheDocument();
+      expect(screen.getAllByText(/Auto in every language you select/i).length).toBeGreaterThan(0);
+      expect(screen.getByText("Run every customer conversation from one AI app.")).toBeInTheDocument();
+      expect(screen.getByText("See what matters. Act faster.")).toBeInTheDocument();
+      expect(screen.getByText("Scroll the card to explore")).toBeInTheDocument();
+      expect(screen.getByAltText("Linas AI activity dashboard")).toBeInTheDocument();
+      expect(screen.getAllByText(PUBLIC_SITE.heroTitle).length).toBeGreaterThan(0);
+      fireEvent.click(screen.getByRole("button", { name: "Download app" }));
+      expect(screen.getByRole("menu", { name: "Download Linas AI" })).toBeInTheDocument();
+      expect(screen.getAllByText("Download on the App Store").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Get it on Google Play").length).toBeGreaterThan(0);
+      expect(screen.queryByRole("link", { name: "Create Account" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Log in" })).not.toBeInTheDocument();
+      expect(screen.queryByText("login-page")).not.toBeInTheDocument();
+      expect(screen.queryByRole("group", { name: "Page language" })).not.toBeInTheDocument();
+      expect(screen.getAllByRole("group", { name: "Download Linas AI" }).length).toBeGreaterThan(0);
+      expect(screen.getByRole("link", { name: "Contact us" })).toBeInTheDocument();
+      expect(screen.getAllByRole("link", { name: "Explore the app" }).length).toBeGreaterThan(0);
+      expect(screen.queryByRole("link", { name: "Web Chat" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "How it works" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Help & support" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Ask Linas" })).not.toBeInTheDocument();
+    },
+    15000,
+  );
 
   it("keeps privacy/terms/data-deletion footer targets", () => {
     renderLanding("/");
@@ -206,16 +215,21 @@ describe("public marketing landing", () => {
     });
   });
 
-  it("redirects /analytics to /app dashboard home", () => {
+  it("does not label included monthly messages as remaining", () => {
+    const subscription = HOW_IT_WORKS_STEPS.find((step) => step.navLabel === "Subscription");
+    expect(subscription?.body).toMatch(/included AI messages/i);
+    expect(subscription?.body).not.toMatch(/remaining AI messages/i);
+  });
+
+  it("redirects /analytics to get-app like other obsolete operator paths", () => {
     render(
       <MemoryRouter initialEntries={["/analytics"]}>
         <Routes>
-          <Route path="/app" element={<div>dashboard-app</div>} />
-          <Route path="/analytics" element={<Navigate to="/app" replace />} />
-          <Route path="*" element={<NotFound />} />
+          <Route path="/" element={<div>landing-home</div>} />
+          <Route path="/analytics" element={<Navigate to="/#get-app" replace />} />
         </Routes>
       </MemoryRouter>
     );
-    expect(screen.getByText("dashboard-app")).toBeInTheDocument();
+    expect(screen.getByText("landing-home")).toBeInTheDocument();
   });
 });

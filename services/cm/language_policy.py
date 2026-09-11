@@ -1,11 +1,8 @@
 """Customer reply language policy — multilingual by default.
 
-Customer-facing AI replies are NOT limited by CM Languages / supported_languages.
-CM Languages settings organize content/knowledge only (default fallback, behavior notes).
-
-Core rules (non-configurable):
-- Understand all human languages; detect automatically; reply in the user's language.
-- Arabizi/Franco input is understood everywhere; replies are always Arabic script (never Arabizi).
+Owners have no Languages tile. Reply language is a global system rule:
+detect the customer's language and answer in that language. Franco/Arabizi
+is understood as Arabic and always answered in Arabic script.
 """
 
 from __future__ import annotations
@@ -16,6 +13,9 @@ from services.cm.constants import RESPONSE_LANGUAGE_MAP
 from services.cm.customer_language_detect import detect_broad_customer_language, normalize_language_code
 from services.cm.schemas import LanguagePolicy
 from services.cm.version_store import PublishedVersionError, load_published_content
+
+# Frozen fallback when inbound language cannot be detected. Not tenant-configurable.
+SYSTEM_DEFAULT_RESPONSE_LANGUAGE = "ar"
 
 
 def frozen_response_language_map() -> dict[str, str]:
@@ -29,9 +29,10 @@ def frozen_language_policy() -> LanguagePolicy:
 
 
 def sanitize_languages_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Force fixed reply map into a languages section payload (draft/API saves)."""
+    """Force frozen system language fields into a languages section payload."""
     out = dict(payload)
     out["response_language_map"] = frozen_response_language_map()
+    out["default_language"] = SYSTEM_DEFAULT_RESPONSE_LANGUAGE
     return out
 
 
@@ -52,20 +53,15 @@ def load_language_policy(tenant_id: str | None) -> LanguagePolicy:
         return frozen_language_policy()
 
 
-def _normalize_default(value: str | None) -> str:
-    code = normalize_language_code(value) or "ar"
-    return code if code in {"ar", "en", "fr"} else code
-
-
 def resolve_customer_response_language(
     *,
     tenant_id: str | None,
     detected_language: str | None,
     policy: LanguagePolicy | None = None,
 ) -> str:
-    """Map detected inbound language → customer reply language (multilingual; no tenant clamp)."""
-    pol = policy if policy is not None else load_language_policy(tenant_id)
-    default = _normalize_default(pol.default_language)
+    """Map detected inbound language → customer reply language (no tenant clamp)."""
+    _ = (tenant_id, policy)
+    default = SYSTEM_DEFAULT_RESPONSE_LANGUAGE
 
     detected = normalize_language_code(detected_language)
     if not detected:
@@ -137,9 +133,9 @@ def language_policy_public_summary(tenant_id: str | None) -> dict[str, Any]:
     """Safe summary for Owner Copilot / diagnostics (not a customer override surface)."""
     pol = load_language_policy(tenant_id)
     return {
-        "source": "content_manager_languages",
+        "source": "system_global",
         "supported_languages": list(pol.supported_languages),
-        "default_language": _normalize_default(pol.default_language),
+        "default_language": SYSTEM_DEFAULT_RESPONSE_LANGUAGE,
         "response_language_map": frozen_response_language_map(),
         "response_language_map_editable": False,
         "customer_reply_multilingual": True,
@@ -148,15 +144,15 @@ def language_policy_public_summary(tenant_id: str | None) -> dict[str, Any]:
         "response_language_map_note": (
             "Customer replies are multilingual by default (detect user language, reply in that language). "
             "Arabizi/Franco input always receives Arabic-script replies. "
-            "supported_languages does NOT restrict customer reply languages."
+            "Owners have no Languages tile or reply-language setting."
         ),
         "owner_or_customer_override": False,
         "app_settings_affects_replies": False,
-        "editable": [
-            "supported_languages",
+        "editable": [],
+        "fixed": [
+            "response_language_map",
+            "customer_reply_multilingual",
             "default_language",
-            "mixed_language_behavior",
-            "unknown_language_behavior",
+            "supported_languages",
         ],
-        "fixed": ["response_language_map", "customer_reply_multilingual"],
     }

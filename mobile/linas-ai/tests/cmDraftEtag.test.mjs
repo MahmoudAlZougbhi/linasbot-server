@@ -38,5 +38,9 @@ describe('CM draft ETag', () => {
     assert.match(multi, /saveLock/);
     assert.match(draft, /Someone else saved this section/);
     assert.match(multi, /Someone else saved this section/);
+    assert.match(draft, /isDailyEditLimitError/);
+    assert.match(multi, /isDailyEditLimitError/);
+    assert.match(draft, /aiSetupDailyEditLimit/);
+    assert.match(multi, /aiSetupDailyEditLimit/);
   });
 });

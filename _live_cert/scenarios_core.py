@@ -11,7 +11,6 @@ from _live_cert.calls import comment, dm, has_price, record, trace
 
 async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     from db.session import whatsapp_session
-    from services.customer_reply_v2.safety_gate import evaluate_customer_safety
     from services.request_drafts.engine import apply_draft_action
 
     out = await dm("مرحبا", conversation_id="c_greet", provider_sender_id="u_greet")
@@ -181,19 +180,6 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
         "REAL DATABASE/RETRIEVAL",
         ok=paused.get("ok") is True and resumed.get("ok") is True,
         result={"paused": paused, "resumed": resumed},
-    )
-
-    safe = await evaluate_customer_safety(
-        tenant_id=TENANT_ID, text="مرحبا بدي سعر Full Body", channel="instagram_dm", response_language="ar"
-    )
-    record(
-        "safety_benign_real_moderation",
-        "REAL OPENAI",
-        ok=safe.blocked is False,
-        certainty=safe.certainty,
-        provider=safe.provider,
-        reasons=safe.reasons,
-        note="Block-path illegal strings were not sent to the public API.",
     )
 
     cmt_msg = "قدي سعر Full Body بأنطلياس وإيمتى بتسكروا؟"

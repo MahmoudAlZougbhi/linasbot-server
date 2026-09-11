@@ -52,14 +52,14 @@ def test_new_tenant_without_publish_no_legacy_bridge(monkeypatch, tmp_path) -> N
     assert tenant_allows_legacy_bridge("brand-new") is False
 
 
-def test_linas_without_publish_allows_legacy_bridge(monkeypatch, tmp_path) -> None:
+def test_linas_without_publish_has_no_legacy_bridge(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("CM_EMERGENCY_FORCE_LEGACY", raising=False)
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
     assert tenant_uses_cm_runtime("linas") is False
-    assert tenant_allows_legacy_bridge("linas") is True
+    assert tenant_allows_legacy_bridge("linas") is False
 
 
-def test_emergency_force_legacy(monkeypatch, tmp_path) -> None:
+def test_emergency_force_legacy_no_longer_switches_engine(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("CM_EMERGENCY_FORCE_LEGACY", "true")
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
     from services.cm.schemas import PublishedPointer
@@ -77,7 +77,7 @@ def test_emergency_force_legacy(monkeypatch, tmp_path) -> None:
             embedding_dimensions=1536,
         ),
     )
-    assert cm_emergency_force_legacy() is True
-    assert cm_runtime_mode() == "legacy"
-    assert tenant_uses_cm_runtime("acme-gym") is False
-    assert tenant_allows_legacy_bridge("linas") is True
+    assert cm_emergency_force_legacy() is False
+    assert cm_runtime_mode() == "published"
+    assert tenant_uses_cm_runtime("acme-gym") is True
+    assert tenant_allows_legacy_bridge("linas") is False

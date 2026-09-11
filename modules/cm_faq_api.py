@@ -69,18 +69,6 @@ async def cm_list_faq(
     }
 
 
-@app.get("/api/cm/faq/duplicates")
-async def cm_faq_duplicates(
-    request: Request,
-    question: str = Query(...),
-    language: str = Query(default="ar"),
-) -> Any:
-    session = require_permission(request, "contentManagers")
-    tenant_id = _session_tenant(session)
-    hits = find_duplicate_faq_groups(question=question, language=language, tenant_id=tenant_id)
-    return {"success": True, "data": hits, "count": len(hits)}
-
-
 @app.post("/api/cm/faq")
 async def cm_create_faq(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
     session = require_permission(request, "contentManagers")
@@ -95,6 +83,8 @@ async def cm_create_faq(request: Request, body: dict[str, Any] = Body(default={}
         raise HTTPException(status_code=400, detail="question and answer are required")
 
     from services.faq_entitlements import FaqEntitlementError, assert_can_create_faq
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
 
     try:
         assert_can_create_faq(tenant_id)
@@ -103,15 +93,22 @@ async def cm_create_faq(request: Request, body: dict[str, Any] = Body(default={}
         raise HTTPException(status_code=status, detail={"code": exc.code, **exc.payload}) from exc
 
     try:
-        duplicates = find_duplicate_faq_groups(question=question, language=language, tenant_id=tenant_id)
-        result = await create_faq_pair(
-            question=question,
-            answer=answer,
-            language=language,
-            tags=tags,
-            updated_by=_actor(session),
+        with guarded_edit(
             tenant_id=tenant_id,
-        )
+            kind="faq:create",
+            payload={"question": question, "answer": answer, "language": language},
+        ):
+            duplicates = find_duplicate_faq_groups(question=question, language=language, tenant_id=tenant_id)
+            result = await create_faq_pair(
+                question=question,
+                answer=answer,
+                language=language,
+                tags=tags,
+                updated_by=_actor(session),
+                tenant_id=tenant_id,
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -147,15 +144,25 @@ async def cm_faq_from_livechat(request: Request, body: dict[str, Any] = Body(def
         status = 403 if exc.code == "FAQ_DISABLED" else 402
         raise HTTPException(status_code=status, detail={"code": exc.code, **exc.payload}) from exc
 
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
     try:
-        result = await create_faq_pair_from_livechat(
-            question=question,
-            answer=answer,
-            language=language,
-            updated_by=_actor(session),
-            publish=publish,
+        with guarded_edit(
             tenant_id=tenant_id,
-        )
+            kind="faq:from-livechat",
+            payload={"question": question, "answer": answer, "language": language, "publish": publish},
+        ):
+            result = await create_faq_pair_from_livechat(
+                question=question,
+                answer=answer,
+                language=language,
+                updated_by=_actor(session),
+                publish=publish,
+                tenant_id=tenant_id,
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"success": True, **result}
@@ -180,16 +187,24 @@ async def cm_patch_faq_variant(
 ) -> Any:
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
     try:
-        result = await update_cm_faq_variant(
-            qa_group_id=qa_group_id,
-            language=language,
-            question=body.get("question"),
-            answer=body.get("answer"),
-            reviewed=body.get("reviewed") if "reviewed" in body else None,
-            updated_by=_actor(session),
-            tenant_id=tenant_id,
-        )
+        with guarded_edit(
+            tenant_id=tenant_id, kind="faq:patch", payload={"id": qa_group_id, "language": language, **body}
+        ):
+            result = await update_cm_faq_variant(
+                qa_group_id=qa_group_id,
+                language=language,
+                question=body.get("question"),
+                answer=body.get("answer"),
+                reviewed=body.get("reviewed") if "reviewed" in body else None,
+                updated_by=_actor(session),
+                tenant_id=tenant_id,
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return result
@@ -206,13 +221,19 @@ async def cm_put_faq_attachments(
     raw = body.get("attachments")
     if not isinstance(raw, list):
         raise HTTPException(status_code=400, detail="attachments array is required")
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
     try:
-        return replace_cm_faq_attachments(
-            qa_group_id=qa_group_id,
-            attachments=raw,
-            updated_by=_actor(session),
-            tenant_id=tenant_id,
-        )
+        with guarded_edit(tenant_id=tenant_id, kind="faq:attachments", payload={"id": qa_group_id, "attachments": raw}):
+            return replace_cm_faq_attachments(
+                qa_group_id=qa_group_id,
+                attachments=raw,
+                updated_by=_actor(session),
+                tenant_id=tenant_id,
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -227,14 +248,22 @@ async def cm_regenerate_faq(
     tenant_id = _session_tenant(session)
     raw_langs = body.get("languages")
     languages = [str(lang) for lang in raw_langs] if isinstance(raw_langs, list) else None
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
     try:
-        result = await regenerate_cm_faq_variants(
-            qa_group_id=qa_group_id,
-            source_language=str(body["source_language"]) if body.get("source_language") else None,
-            languages=languages,
-            updated_by=_actor(session),
-            tenant_id=tenant_id,
-        )
+        with guarded_edit(
+            tenant_id=tenant_id, kind="faq:regenerate", payload={"id": qa_group_id, "languages": languages}
+        ):
+            result = await regenerate_cm_faq_variants(
+                qa_group_id=qa_group_id,
+                source_language=str(body["source_language"]) if body.get("source_language") else None,
+                languages=languages,
+                updated_by=_actor(session),
+                tenant_id=tenant_id,
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return result
@@ -259,39 +288,46 @@ async def cm_put_smart_answer_languages(request: Request, body: dict[str, Any] =
     translate_existing = bool(body.get("translate_existing"))
     from services.cm.faq_integration import FaqIntegrationError, translate_existing_faq_groups_to_language
     from services.cm.smart_answer_languages import save_smart_answer_languages
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
 
     try:
-        saved = save_smart_answer_languages(
+        with guarded_edit(
             tenant_id=tenant_id,
-            languages=[str(x) for x in raw],
-            updated_by=_actor(session),
-        )
-    except FaqIntegrationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+            kind="faq:languages",
+            payload={"languages": raw, "translate": translate_existing},
+        ):
+            saved = save_smart_answer_languages(
+                tenant_id=tenant_id,
+                languages=[str(x) for x in raw],
+                updated_by=_actor(session),
+            )
+            from services.cm.faq_integration import purge_smart_answer_language_data
 
-    from services.cm.faq_integration import purge_smart_answer_language_data
-
-    for lang in list(saved.get("removed") or []):
-        purge_smart_answer_language_data(
-            language=str(lang),
-            tenant_id=tenant_id,
-            updated_by=_actor(session),
-            remove_from_config=False,
-        )
-
-    batch: dict[str, Any] | None = None
-    added = list(saved.get("added") or [])
-    if translate_existing and added:
-        batch_results = []
-        for lang in added:
-            batch_results.append(
-                await translate_existing_faq_groups_to_language(
-                    language=lang,
+            for lang in list(saved.get("removed") or []):
+                purge_smart_answer_language_data(
+                    language=str(lang),
                     tenant_id=tenant_id,
                     updated_by=_actor(session),
+                    remove_from_config=False,
                 )
-            )
-        batch = {"languages": added, "results": batch_results}
+            batch: dict[str, Any] | None = None
+            added = list(saved.get("added") or [])
+            if translate_existing and added:
+                batch_results = []
+                for lang in added:
+                    batch_results.append(
+                        await translate_existing_faq_groups_to_language(
+                            language=lang,
+                            tenant_id=tenant_id,
+                            updated_by=_actor(session),
+                        )
+                    )
+                batch = {"languages": added, "results": batch_results}
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
+    except FaqIntegrationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"success": True, **saved, "batch_translate": batch}
 
 
@@ -301,13 +337,18 @@ async def cm_delete_smart_answer_language(request: Request, language: str) -> An
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
     from services.cm.faq_integration import FaqIntegrationError, purge_smart_answer_language_data
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
 
     try:
-        result = purge_smart_answer_language_data(
-            language=language,
-            tenant_id=tenant_id,
-            updated_by=_actor(session),
-        )
+        with guarded_edit(tenant_id=tenant_id, kind="faq:language-delete", payload={"language": language}):
+            result = purge_smart_answer_language_data(
+                language=language,
+                tenant_id=tenant_id,
+                updated_by=_actor(session),
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return result
@@ -320,14 +361,20 @@ async def cm_translate_existing_smart_answers(request: Request, body: dict[str, 
     language = str(body.get("language") or "").strip()
     if not language:
         raise HTTPException(status_code=400, detail="language is required")
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
     try:
         from services.cm.faq_integration import FaqIntegrationError, translate_existing_faq_groups_to_language
 
-        result = await translate_existing_faq_groups_to_language(
-            language=language,
-            tenant_id=tenant_id,
-            updated_by=_actor(session),
-        )
+        with guarded_edit(tenant_id=tenant_id, kind="faq:translate", payload={"language": language}):
+            result = await translate_existing_faq_groups_to_language(
+                language=language,
+                tenant_id=tenant_id,
+                updated_by=_actor(session),
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return result
@@ -337,12 +384,18 @@ async def cm_translate_existing_smart_answers(request: Request, body: dict[str, 
 async def cm_archive_faq(request: Request, qa_group_id: str) -> Any:
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
     try:
-        return archive_cm_faq_group(
-            qa_group_id=qa_group_id,
-            updated_by=_actor(session),
-            tenant_id=tenant_id,
-        )
+        with guarded_edit(tenant_id=tenant_id, kind="faq:archive", payload={"id": qa_group_id}, safety=True):
+            return archive_cm_faq_group(
+                qa_group_id=qa_group_id,
+                updated_by=_actor(session),
+                tenant_id=tenant_id,
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:

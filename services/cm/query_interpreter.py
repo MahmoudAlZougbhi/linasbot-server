@@ -24,8 +24,10 @@ BOOKING_INTENT_RE = re.compile(
     re.IGNORECASE | re.UNICODE,
 )
 HUMAN_INTENT_RE = re.compile(
-    r"(?:human\s*agent|speak\s*to\s*(?:someone|a\s*person|an?\s*agent)|representative|"
-    r"موظف|حدا\s*يحكيني|بدي\s*احكي\s*مع\s*حدا|شخص\s*حقيقي)",
+    r"(?:human\s*agent|\bhuman\b|\bagent\b|speak\s*to\s*(?:someone|a\s*person|an?\s*agent)|"
+    r"talk\s*to\s*(?:a\s*)?(?:person|human|someone)|representative|"
+    r"موظف|موظفة|أريد\s*موظف|بدي\s*موظف|حدا\s*يحكيني|بدي\s*احكي\s*مع\s*حدا|"
+    r"أتحدث\s*مع\s*شخص|احكي\s*مع\s*شخص|شخص\s*حقيقي|بدي\s*شخص)",
     re.IGNORECASE | re.UNICODE,
 )
 

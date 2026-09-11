@@ -11,10 +11,25 @@ from db.models.whatsapp_cloud import WhatsAppOutboundIntent
 from db.session import whatsapp_session
 from services.whatsapp_cloud.graph_client import WhatsAppGraphError, send_text_message
 from services.whatsapp_cloud.observability import emit_wa_event
-from services.whatsapp_cloud.outbound_finalization import finalize_ai_outbound_sent
+from services.whatsapp_cloud.outbound_finalization import (
+    finalize_ai_outbound_sent,
+    inbound_mid_from_intent,
+    release_unsent_ai_outbound,
+)
 from services.whatsapp_cloud.repository import WhatsAppCloudRepository
 
 SENDING_RECONCILIATION_TIMEOUT = timedelta(minutes=5)
+
+
+def _release_unsent_intent(intent: WhatsAppOutboundIntent) -> None:
+    mid = inbound_mid_from_intent(intent)
+    release_unsent_ai_outbound(
+        tenant_id=str(intent.tenant_id),
+        inbound_mid=mid,
+        inbound_id=str(intent.triggering_inbound_message_id or ""),
+        conversation_id=str(intent.conversation_id or ""),
+        intent_mid=mid,
+    )
 
 
 async def send_canonical_intent(intent_id: str) -> dict[str, Any]:
@@ -30,13 +45,16 @@ async def send_canonical_intent(intent_id: str) -> dict[str, Any]:
             return {"ok": True, "skipped": True, "reason": f"already_{intent.dispatch_state}"}
         text = str(getattr(intent, "canonical_text", "") or "")
         if not text:
+            _release_unsent_intent(intent)
             return {"ok": False, "reason": "missing_canonical_text"}
         repo = WhatsAppCloudRepository(session)
         conn = repo.get_tenant_connection(tenant_id=intent.tenant_id, connection_id=intent.connection_id)
         if conn is None:
+            _release_unsent_intent(intent)
             return {"ok": False, "reason": "missing_connection"}
         conv = repo.get_tenant_conversation(tenant_id=intent.tenant_id, conversation_id=intent.conversation_id)
         if conv is None:
+            _release_unsent_intent(intent)
             return {"ok": False, "reason": "missing_conversation"}
 
         current_epoch = int(conv.control_epoch)
@@ -51,6 +69,7 @@ async def send_canonical_intent(intent_id: str) -> dict[str, Any]:
                 ),
             )
             emit_wa_event("ai_suppression_race", conversation_id=intent.conversation_id)
+            _release_unsent_intent(intent)
             return {"ok": True, "skipped": True, "reason": "stale_control_state"}
 
         try:
@@ -62,9 +81,14 @@ async def send_canonical_intent(intent_id: str) -> dict[str, Any]:
                 error_code="credential_unavailable",
                 error_detail=None,
             )
+            _release_unsent_intent(intent)
             return {"ok": False, "retryable": False, "reason": "credential_unavailable"}
         to_wa_id = conv.customer_wa_id
         phone_number_id = conn.phone_number_id
+        hold_tenant_id = str(intent.tenant_id)
+        hold_inbound_mid = inbound_mid_from_intent(intent)
+        hold_inbound_id = str(intent.triggering_inbound_message_id or "")
+        hold_conversation_id = str(intent.conversation_id or "")
         intent.dispatch_state = "sending"
         intent.control_epoch_at_send = current_epoch
         intent.attempt_count = int(getattr(intent, "attempt_count", 0) or 0) + 1
@@ -85,6 +109,14 @@ async def send_canonical_intent(intent_id: str) -> dict[str, Any]:
                 intent.error_code = exc.code
                 intent.error_detail = (exc.message or "")[:255]
                 session.commit()
+        if not ambiguous:
+            release_unsent_ai_outbound(
+                tenant_id=hold_tenant_id,
+                inbound_mid=hold_inbound_mid,
+                inbound_id=hold_inbound_id,
+                conversation_id=hold_conversation_id,
+                intent_mid=hold_inbound_mid,
+            )
         return {"ok": False, "retryable": exc.retryable and not ambiguous, "code": exc.code}
     except Exception as exc:
         with whatsapp_session(require=True) as session:

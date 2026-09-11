@@ -27,7 +27,23 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
     conversation_id = str(snapshot["conversation_id"])
     inbound_id = str(snapshot.get("message_id") or "")
     provider_mid = str(snapshot.get("provider_message_id") or "")
-    text_body = str(snapshot.get("text_body") or "").strip()
+    raw_text = str(snapshot.get("text_body") or "").strip()
+    transcript = str(snapshot.get("transcript") or "").strip()
+    message_type = str(snapshot.get("message_type") or "").lower()
+    from services.customer_reply_v2.inbound_media import inbound_from_attachment_type
+
+    extract = str(snapshot.get("extract") or snapshot.get("file_extract_preview") or "").strip()
+    inbound_media = inbound_from_attachment_type(
+        message_type,
+        transcript=transcript or (raw_text if message_type == "audio" else ""),
+        extract=extract,
+    )
+    media_id = str(snapshot.get("image_media_id") or snapshot.get("media_id") or "").strip()
+    if media_id:
+        inbound_media["image_media_id"] = media_id
+    if extract:
+        inbound_media["extract"] = extract
+    text_body = raw_text or transcript
     if not text_body:
         text_body = "Sent a message."
     expected_epoch = int(snapshot.get("control_epoch") or 0)
@@ -55,7 +71,6 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
         user_data=limit_user,
         text=text_body,
     )
-    message_type = str(snapshot.get("message_type") or "").lower()
     if message_type == "image":
         image_quota = enforce_image_analysis_quota(user_id=uid, user_data=limit_user, amount=1, consume=True)
         if not image_quota.allowed:
@@ -106,24 +121,39 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
         emit_wa_event("ai_reply_limit", reason=reply_precheck.reason)
         return
 
-    # Reserve credits via canonical ledger before model call.
+    # Credits stay the live gate until message billing replaces them.
     reservation_id: str | None = None
-    try:
-        from services.credit_ledger_service import credit_ledger_service
+    from services.membership.message_flags import message_billing_enabled
 
-        reservation_id = credit_ledger_service.reserve(
-            tenant_id=tenant_id,
-            user_id=None,
-            credits=1,
-            operation_type="whatsapp_customer_reply",
-            request_id=f"wa:{provider_mid}",
+    if not message_billing_enabled():
+        try:
+            from services.customer_ai.leftover_reserve import reserve_leftover_reply
+
+            reservation_id = reserve_leftover_reply(
+                tenant_id=tenant_id,
+                request_id=f"wa:{provider_mid}",
+                operation_type="whatsapp_customer_reply",
+                pin_ids=(provider_mid, inbound_id, conversation_id),
+            )
+        except PermissionError:
+            emit_wa_event("insufficient_credits", tenant_id=tenant_id)
+            return
+        except Exception as exc:
+            emit_wa_event("credit_reserve_failed", error=type(exc).__name__)
+            return
+
+    from services.customer_ai.history_ids import message_id_for_brain
+
+    brain_mid = message_id_for_brain(snapshot) or provider_mid
+
+    def release_turn() -> None:
+        _release_reservation(
+            tenant_id,
+            reservation_id,
+            inbound_mid=brain_mid,
+            inbound_id=inbound_id,
+            conversation_id=conversation_id,
         )
-    except PermissionError:
-        emit_wa_event("insufficient_credits", tenant_id=tenant_id)
-        return
-    except Exception as exc:
-        emit_wa_event("credit_reserve_failed", error=type(exc).__name__)
-        return
 
     reply_text = ""
     try:
@@ -146,6 +176,8 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             provider_display_name=str(snapshot.get("profile_name") or ""),
             user_id=f"whatsapp:{snapshot.get('customer_wa_id')}",
             conversation_id=conversation_id,
+            message_id=message_id_for_brain(snapshot),
+            inbound_media=inbound_media or None,
         )
         reply_text = str(
             getattr(outcome, "reply", None) or getattr(outcome, "answer", None) or getattr(outcome, "text", None) or ""
@@ -154,18 +186,18 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             reply_text = str(outcome.get("reply") or outcome.get("answer") or outcome.get("text") or "").strip()
         reason = str(getattr(outcome, "reason", "") or "")
         if reason.endswith("_limit") or reason == "ai_reply_limit":
-            _release_reservation(tenant_id, reservation_id)
+            release_turn()
             reservation_id = None
         if word_notice and reply_text and "limit" not in reason:
             reply_text = f"{word_notice}\n\n{reply_text}"
     except Exception as exc:
         emit_wa_event("ai_generation_failed", error=type(exc).__name__)
-        _release_reservation(tenant_id, reservation_id)
+        release_turn()
         return
 
     if not reply_text:
         emit_wa_event("ai_empty_reply")
-        _release_reservation(tenant_id, reservation_id)
+        release_turn()
         return
 
     with whatsapp_session() as session:
@@ -173,7 +205,7 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
         conn = repo.get_connection(connection_id)
         conv = repo.get_tenant_conversation(tenant_id=tenant_id, conversation_id=conversation_id)
         if conn is None or conv is None or conn.tenant_id != tenant_id:
-            _release_reservation(tenant_id, reservation_id)
+            release_turn()
             return
         # Epoch recheck — manual echo wins the race.
         if conv.control_state != "AI_ACTIVE" or int(conv.control_epoch) != expected_epoch:
@@ -195,13 +227,13 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
                     error_detail="manual_takeover_won_race",
                 )
             emit_wa_event("ai_suppression_race", conversation_id=conversation_id)
-            _release_reservation(tenant_id, reservation_id)
+            release_turn()
             return
 
         eligible, eligibility_reason = evaluate_ai_eligibility(session, conn)
         if not eligible:
             emit_wa_event("ai_became_ineligible", reason=eligibility_reason)
-            _release_reservation(tenant_id, reservation_id)
+            release_turn()
             return
 
         # Customer service window: free-form only within 24h of last inbound.
@@ -211,7 +243,7 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             opened = window_open if window_open.tzinfo else window_open.replace(tzinfo=UTC)
             if now - opened > CUSTOMER_SERVICE_WINDOW:
                 emit_wa_event("outside_customer_service_window", conversation_id=conversation_id)
-                _release_reservation(tenant_id, reservation_id)
+                release_turn()
                 return
 
         intent, created = repo.create_outbound_intent(
@@ -224,13 +256,14 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             source="AI",
         )
         if intent is None:
-            _release_reservation(tenant_id, reservation_id)
+            release_turn()
             return
-        if not created and intent.dispatch_state in {"sent", "sending", "suppressed"}:
-            _release_reservation(tenant_id, reservation_id)
+        if not created and intent.dispatch_state in {"sent", "suppressed"}:
+            release_turn()
             return
-        if not created and str(getattr(intent, "canonical_text", "") or "").strip():
-            _release_reservation(tenant_id, reservation_id)
+        if not created and (
+            intent.dispatch_state == "sending" or str(getattr(intent, "canonical_text", "") or "").strip()
+        ):
             _enqueue_whatsapp_intent_deliver(tenant_id=tenant_id, intent_id=intent.id, conversation_id=conversation_id)
             return
 
@@ -240,23 +273,6 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             canonical_text=reply_text,
             control_epoch_at_send=int(conv.control_epoch),
         )
-
-        # Capture credits once after valid reply is persisted — delivery retry must not re-charge.
-        if reservation_id is not None:
-            try:
-                from services.credit_ledger_service import credit_ledger_service
-
-                credit_ledger_service.capture(
-                    tenant_id=tenant_id,
-                    reservation_id=reservation_id,
-                    provider_cost_usd=None,
-                    model_provider="whatsapp_cloud",
-                )
-                reservation_id = None  # captured — never release on delivery failure
-            except Exception as exc:
-                emit_wa_event("credit_capture_failed", error=type(exc).__name__)
-                _release_reservation(tenant_id, reservation_id)
-                return
 
         from services.job_queue import job_queue
         from services.queues.config import redis_required
@@ -280,7 +296,7 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             token = repo.load_access_token(conn)
         except PermissionError:
             repo.update_outbound_intent(intent, dispatch_state="failed", error_code="credential_unavailable")
-            _release_reservation(tenant_id, reservation_id)
+            release_turn()
             return
 
         try:
@@ -302,9 +318,13 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
                 error_detail=exc.message[:255],
             )
             emit_wa_event("send_failure", code=exc.code, state=state)
+            if state == "failed":
+                release_turn()
+            else:
+                _hold_after_ambiguous_send(tenant_id, reservation_id, brain_mid or provider_mid)
             return
         except Exception as exc:
-            # Ambiguous delivery — do not resend; credits already captured for saved reply.
+            # Ambiguous delivery — do not resend; keep the hold for reconcile.
             repo.update_outbound_intent(
                 intent,
                 dispatch_state="reconciliation_required",
@@ -312,6 +332,7 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
                 error_detail="ambiguous_after_submit",
             )
             emit_wa_event("send_ambiguous", error=type(exc).__name__)
+            _hold_after_ambiguous_send(tenant_id, reservation_id, brain_mid or provider_mid)
             return
 
         messages = result.get("messages") if isinstance(result, dict) else None
@@ -329,15 +350,42 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
         )
 
 
-def _release_reservation(tenant_id: str, reservation_id: str | None) -> None:
-    if not reservation_id:
-        return
-    try:
-        from services.credit_ledger_service import credit_ledger_service
+def _hold_after_ambiguous_send(tenant_id: str, reservation_id: str | None, operation_id: str) -> None:
+    """Keep leftover/message holds. Do not mark sent — the provider outcome is unknown."""
+    from services.membership.hold_policy import hold_billing_policy
+    from services.membership.pending_settlement import upsert
 
-        credit_ledger_service.release(tenant_id=tenant_id, reservation_id=reservation_id)
-    except Exception:
-        emit_wa_event("credit_release_failed", tenant_id=tenant_id)
+    if not tenant_id or not (reservation_id or operation_id):
+        return
+    upsert(
+        tenant_id=tenant_id,
+        reservation_id=reservation_id or operation_id,
+        operation_id=operation_id or (reservation_id or ""),
+        billing_policy=hold_billing_policy(leftover_reservation_id=reservation_id),
+        state="unresolved",
+        reason="unknown_send_outcome",
+        channel="whatsapp_cloud",
+    )
+
+
+def _release_reservation(
+    tenant_id: str,
+    reservation_id: str | None,
+    *,
+    inbound_mid: str = "",
+    inbound_id: str = "",
+    conversation_id: str = "",
+) -> None:
+    from services.whatsapp_cloud.outbound_finalization import release_unsent_ai_outbound
+
+    release_unsent_ai_outbound(
+        tenant_id=tenant_id,
+        inbound_mid=inbound_mid,
+        inbound_id=inbound_id,
+        reservation_id=reservation_id,
+        conversation_id=conversation_id,
+        intent_mid=inbound_mid,
+    )
 
 
 def _enqueue_whatsapp_intent_deliver(*, tenant_id: str, intent_id: str, conversation_id: str) -> None:

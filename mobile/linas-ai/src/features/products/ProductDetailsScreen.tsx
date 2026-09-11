@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 
+import { isDailyEditLimitError } from '../../api/client';
 import { AppIcon, feather } from '../../components/AppIcon';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -73,8 +74,8 @@ export function ProductDetailsScreen({ productId, onBack, onEdit, onDeleted }: P
           try {
             await deleteProduct(productId);
             onDeleted();
-          } catch {
-            setError(tr('productsDeleteError'));
+          } catch (err) {
+            setError(tr(isDailyEditLimitError(err) ? 'aiSetupDailyEditLimit' : 'productsDeleteError'));
           }
         })();
       },

@@ -6,7 +6,7 @@ import { apiFetch } from '../../api/client';
 import { splitCreditRemaining } from '../dashboard/creditSplit';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { BillingPeriod } from './appleProductIds';
-import { isPlanId, type PlanId } from './planCatalog';
+import { applyPublicPlans, isPlanId, type PlanId } from './planCatalog';
 import { parsePendingDowngrade, type PendingDowngrade } from './planChangeApi';
 import {
   loadStorePrices,
@@ -17,6 +17,10 @@ import {
 
 const EntitlementsSchema = z.object({ success: z.boolean() }).passthrough();
 const UsageSchema = z.object({ success: z.literal(true) }).passthrough();
+
+function asNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
 
 export type BillingEntitlementState = {
   loading: boolean;
@@ -29,6 +33,11 @@ export type BillingEntitlementState = {
   creditBalance: number | null;
   membershipRemaining: number | null;
   boughtRemaining: number | null;
+  messageBillingActive: boolean;
+  includedMessages: number | null;
+  availableMessages: number | null;
+  includedRemaining: number | null;
+  purchasedMessages: number | null;
   pendingDowngrade: PendingDowngrade | null;
   raw: string;
 };
@@ -46,6 +55,11 @@ export function useBillingEntitlement() {
     creditBalance: null,
     membershipRemaining: null,
     boughtRemaining: null,
+    messageBillingActive: false,
+    includedMessages: null,
+    availableMessages: null,
+    includedRemaining: null,
+    purchasedMessages: null,
     pendingDowngrade: null,
     raw: '',
   });
@@ -53,6 +67,13 @@ export function useBillingEntitlement() {
   const refresh = useCallback(async () => {
     setState((s) => ({ ...s, loading: true }));
     try {
+      try {
+        const catalog = await apiFetch('/api/public/plans', { schema: EntitlementsSchema });
+        const plans = (catalog as { plans?: Array<Record<string, unknown>> }).plans;
+        if (Array.isArray(plans)) applyPublicPlans(plans);
+      } catch {
+        /* keep seeded catalog; checkout still validates server-side */
+      }
       const data = await apiFetch('/api/entitlements/me', { schema: EntitlementsSchema });
       const record = data as Record<string, unknown>;
       const entitlement =
@@ -72,19 +93,13 @@ export function useBillingEntitlement() {
       let creditBalance: number | null = null;
       let membershipRemaining: number | null = null;
       let boughtRemaining: number | null = null;
+      let usage: Record<string, unknown> = {};
       try {
         const res = await apiFetch('/api/mobile/usage', { schema: UsageSchema });
-        const usage = res as Record<string, unknown>;
-        const bal = usage.credit_balance;
-        creditBalance = typeof bal === 'number' ? bal : null;
-        membershipRemaining =
-          typeof usage.membership_credits_remaining === 'number'
-            ? usage.membership_credits_remaining
-            : null;
-        boughtRemaining =
-          typeof usage.purchased_credits_remaining === 'number'
-            ? usage.purchased_credits_remaining
-            : null;
+        usage = res as Record<string, unknown>;
+        creditBalance = asNumber(usage.credit_balance);
+        membershipRemaining = asNumber(usage.membership_credits_remaining);
+        boughtRemaining = asNumber(usage.purchased_credits_remaining);
       } catch {
         creditBalance = null;
       }
@@ -101,6 +116,8 @@ export function useBillingEntitlement() {
         boughtRemaining = boughtRemaining ?? split.bought;
       }
       const pendingDowngrade = parsePendingDowngrade(entitlement.pending_downgrade);
+      const messageBillingActive =
+        entitlement.message_billing_active === true || usage.message_billing_active === true;
       setState({
         loading: false,
         error: null,
@@ -118,6 +135,18 @@ export function useBillingEntitlement() {
         creditBalance,
         membershipRemaining,
         boughtRemaining,
+        messageBillingActive,
+        includedMessages:
+          asNumber(entitlement.included_messages) ?? asNumber(usage.included_messages),
+        availableMessages: messageBillingActive
+          ? asNumber(entitlement.available_messages) ?? asNumber(usage.available_messages)
+          : null,
+        includedRemaining: messageBillingActive
+          ? asNumber(entitlement.included_remaining) ?? asNumber(usage.included_remaining)
+          : null,
+        purchasedMessages: messageBillingActive
+          ? asNumber(entitlement.purchased_messages) ?? asNumber(usage.purchased_messages)
+          : null,
         pendingDowngrade,
         raw: __DEV__ ? JSON.stringify(data, null, 2) : '',
       });
@@ -133,6 +162,11 @@ export function useBillingEntitlement() {
         creditBalance: null,
         membershipRemaining: null,
         boughtRemaining: null,
+        messageBillingActive: false,
+        includedMessages: null,
+        availableMessages: null,
+        includedRemaining: null,
+        purchasedMessages: null,
         pendingDowngrade: null,
         raw: '',
       });
@@ -145,6 +179,8 @@ export function useBillingEntitlement() {
 
   return { ...state, refresh };
 }
+
+export { useBillingEntitlement as useBillingData };
 
 export function useBillingStorePrices(period: BillingPeriod, locale: string) {
   const { tr } = useI18n();

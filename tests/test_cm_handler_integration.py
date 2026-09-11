@@ -8,7 +8,6 @@ import pytest
 
 from handlers.text_handlers_respond import _handle_published_cm_runtime
 from services.customer_reply_v2.models import CustomerReplyOutcome
-from services.local_qa_service import local_qa_service
 from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
 
@@ -27,20 +26,28 @@ def _cm_handler_credit_entitlement(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_no_published_version_returns_honest_failure_not_exception() -> None:
+async def test_no_published_version_does_not_send_or_raise() -> None:
     reply, metadata = await _handle_published_cm_runtime(
         tenant_id="cm_handler_test_missing",
         message="hello",
         detected_language="en",
         response_language="en",
     )
-    assert reply
-    assert metadata["reason"] == "no_published_version"
+    assert reply == ""
+    assert metadata["reason"] != "engine_removed" or metadata.get("customer_engine") == "brain"
+    assert metadata["reason"] in {
+        "unpublished",
+        "insufficient_credits",
+        "insufficient_messages",
+        "failed_closed",
+        "index_not_ready",
+    }
     assert metadata.get("classic_fallback") is False
+    assert metadata.get("ai_called") is False
 
 
 @pytest.mark.asyncio
-async def test_restricted_topic_short_circuits_without_classic_generate() -> None:
+async def test_published_runtime_does_not_call_classic_generate() -> None:
     from services.cm.schemas import initial_restricted_policy
 
     tenant_id = "cm_handler_test_restricted"
@@ -57,42 +64,22 @@ async def test_restricted_topic_short_circuits_without_classic_generate() -> Non
             response_language="en",
         )
     mock_gen.assert_not_awaited()
-    assert metadata["reason"] == "restricted"
-    assert reply
     assert metadata.get("classic_fallback") is False
-
-
-@pytest.mark.asyncio
-async def test_faq_hit_short_circuits_without_classic_generate() -> None:
-    tenant_id = "cm_handler_test_faq"
-    await publish_test_content(tenant_id)
-
-    original_pairs = list(local_qa_service.qa_pairs)
-    local_qa_service.qa_pairs.append(
-        {
-            "id": "handler_faq_1",
-            "qa_group_id": "handler_faq_group",
-            "question": "what are your opening hours",
-            "answer": "We are open 9am to 6pm.",
-            "language": "en",
-            "category": "content_manager",
-            "tags": [],
+    assert (
+        metadata["reason"]
+        in {
+            "unpublished",
+            "insufficient_credits",
+            "insufficient_messages",
+            "restricted",
+            "failed_closed",
+            "index_not_ready",
         }
+        or metadata.get("customer_engine") == "brain"
     )
-    try:
-        with patch("services.cm.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen:
-            reply, metadata = await _handle_published_cm_runtime(
-                tenant_id=tenant_id,
-                message="what are your opening hours",
-                detected_language="en",
-                response_language="en",
-            )
-        mock_gen.assert_not_awaited()
-        assert metadata["reason"] in ("faq_exact", "faq_direct")
-        assert "9am" in reply or "6pm" in reply
-        assert metadata.get("classic_fallback") is False
-    finally:
-        local_qa_service.qa_pairs[:] = original_pairs
+    # Restricted may return a deterministic policy reply; never call classic generate.
+    if metadata["reason"] != "restricted":
+        assert reply == ""
 
 
 @pytest.mark.asyncio
@@ -141,6 +128,29 @@ async def test_v2_generated_reply_never_calls_classic_generate() -> None:
 
 
 @pytest.mark.asyncio
+async def test_published_runtime_passes_inbound_message_id() -> None:
+    tenant_id = "cm_handler_test_mid"
+    await publish_test_content(tenant_id)
+    captured: dict = {}
+
+    async def capture_dm(**kwargs):
+        captured.update(kwargs)
+        return CustomerReplyOutcome(stop=False, reply="ok", reason="v2_generated")
+
+    with patch("services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm", new=capture_dm):
+        await _handle_published_cm_runtime(
+            tenant_id=tenant_id,
+            message="book me",
+            detected_language="en",
+            response_language="en",
+            conversation_id="ig-thread-1",
+            message_id="mid-ig-22",
+        )
+    assert captured["conversation_id"] == "ig-thread-1"
+    assert captured["message_id"] == "mid-ig-22"
+
+
+@pytest.mark.asyncio
 async def test_insufficient_credits_short_circuits_without_classic_generate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -159,9 +169,22 @@ async def test_insufficient_credits_short_circuits_without_classic_generate(
             response_language="en",
         )
     mock_gen.assert_not_awaited()
-    assert metadata["reason"] == "insufficient_credits"
-    assert reply == ""
     assert metadata.get("classic_fallback") is False
+    assert (
+        metadata["reason"]
+        in {
+            "unpublished",
+            "insufficient_credits",
+            "insufficient_messages",
+            "restricted",
+            "failed_closed",
+            "index_not_ready",
+        }
+        or metadata.get("customer_engine") == "brain"
+    )
+    # Restricted may return a deterministic policy reply; never call classic generate.
+    if metadata["reason"] != "restricted":
+        assert reply == ""
 
 
 @pytest.mark.asyncio

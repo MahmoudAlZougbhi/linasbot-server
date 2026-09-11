@@ -4,299 +4,51 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import math
-import re
 import secrets
 import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from services.firestore_transaction_compat import run_firestore_transaction
-from services.meta_app_registry_common import AuthFlow
-
-_FIRESTORE_APP_ID = "linas-ai-bot-backend"
-_SUBJECT_INDEX_COLLECTION = "meta_deletion_subject_index"
-_REQUEST_COLLECTION = "meta_deletion_requests"
-_LEASE_COLLECTION = "meta_deletion_subject_leases"
-_DEAUTHORIZATION_COLLECTION = "meta_deauthorization_subjects"
-_SCHEMA_VERSION = 1
-_DEFAULT_LEASE_SECONDS = 300.0
-_DEFAULT_DELETION_WAIT_SECONDS = 30.0
-_SUBJECT_KEY_RE = re.compile(r"^[0-9a-f]{64}$")
-_CONFIRMATION_CODE_RE = re.compile(r"^[0-9a-f]{32}$")
-_META_USER_ID_RE = re.compile(r"^[0-9]{3,64}$")
-_INDEX_SAFE_FIELDS = frozenset({"schema_version", "confirmation_code", "created_at"})
-_REQUEST_SAFE_FIELDS = frozenset(
-    {
-        "schema_version",
-        "confirmation_code",
-        "app_key",
-        "app_id",
-        "auth_flow",
-        "bindings",
-        "current_bindings",
-        "generation",
-        "required_nodes",
-        "state",
-        "coordinator_state",
-        "requested_at",
-        "updated_at",
-        "completed_at",
-        "revoked_bindings",
-        "shared_redacted_documents",
-        "redacted_ledger_documents",
-        "safe_error",
-    }
+from services.meta_subject_deletion_guard_models import (
+    _DEAUTHORIZATION_SAFE_FIELDS,
+    _DEFAULT_DELETION_WAIT_SECONDS,
+    _DEFAULT_LEASE_SECONDS,
+    _SCHEMA_VERSION,
+    _SUBJECT_KEY_RE,
+    MetaSubjectDeletionBlockedError,
+    MetaSubjectDeletionChangedError,
+    MetaSubjectDeletionGuardError,
+    MetaSubjectDeletionLeaseBusyError,
+    MetaSubjectDeletionSnapshot,
+    MetaSubjectDeletionStoreUnavailableError,
+    meta_deletion_subject_hmac,
 )
-_LEASE_SAFE_FIELDS = frozenset({"schema_version", "owner_hash", "purpose", "acquired_at", "updated_at", "expires_at"})
-_DEAUTHORIZATION_SAFE_FIELDS = frozenset({"schema_version", "generation", "deauthorized_at"})
+from services.meta_subject_deletion_guard_store import (
+    _capture_snapshot,
+    _deauthorization_ref,
+    _firestore_db,
+    _lease_document,
+    _lease_ref,
+    _parse_lease,
+    _snapshot_dict,
+)
 
-
-class MetaSubjectDeletionGuardError(RuntimeError):
-    """Base error for the OAuth/deletion subject boundary."""
-
-
-class MetaSubjectDeletionStoreUnavailableError(MetaSubjectDeletionGuardError):
-    """Raised when Firestore cannot enforce the subject boundary."""
-
-
-class MetaSubjectDeletionLeaseBusyError(MetaSubjectDeletionGuardError):
-    """Raised when another live owner holds the subject lease."""
-
-
-class MetaSubjectDeletionBlockedError(MetaSubjectDeletionGuardError):
-    """Raised when OAuth is blocked by pending or failed deletion."""
-
-    def __init__(self, state: str) -> None:
-        self.state = str(state or "unavailable").strip().lower()
-        super().__init__(f"Meta OAuth is blocked by deletion state: {self.state}")
-
-
-class MetaSubjectDeletionChangedError(MetaSubjectDeletionGuardError):
-    """Raised when deletion state changes during OAuth provider work."""
-
-
-@dataclass(frozen=True)
-class MetaSubjectDeletionSnapshot:
-    """Safe request fingerprint captured before OAuth provider mutation."""
-
-    state: Literal["none", "pending", "completed", "no_data", "failed"]
-    generation: int
-    fingerprint: str
-    deauthorization_generation: int = 0
-    deauthorized_at: float = 0.0
-    deletion_boundary_at: float = 0.0
-
-    @property
-    def oauth_allowed(self) -> bool:
-        return self.state in {"none", "completed", "no_data"}
-
-    def oauth_allowed_for(self, oauth_started_at: float) -> bool:
-        started_at = float(oauth_started_at)
-        if not self.oauth_allowed:
-            return False
-        if self.deauthorization_generation and started_at <= self.deauthorized_at:
-            return False
-        if self.state in {"completed", "no_data"} and started_at <= self.deletion_boundary_at:
-            return False
-        return True
-
-
-def meta_deletion_subject_hmac(
-    *,
-    app_key: str,
-    app_id: str,
-    auth_flow: AuthFlow,
-    meta_user_id: str,
-    app_secret: str,
-) -> str:
-    """Return the existing secret-keyed subject index without exposing its ID."""
-
-    resolved_app_key = str(app_key or "").strip()
-    resolved_app_id = str(app_id or "").strip()
-    resolved_user_id = str(meta_user_id or "").strip()
-    resolved_secret = str(app_secret or "").strip()
-    if (
-        not resolved_app_key
-        or len(resolved_app_key) > 64
-        or not resolved_app_id.isdigit()
-        or auth_flow not in {"facebook_login", "instagram_login"}
-        or not _META_USER_ID_RE.fullmatch(resolved_user_id)
-        or not resolved_secret
-    ):
-        raise MetaSubjectDeletionGuardError("Meta deletion subject identity is invalid")
-    return hmac.new(
-        resolved_secret.encode("utf-8"),
-        (f"meta-deletion-index:{resolved_app_key}:{resolved_app_id}:{auth_flow}:{resolved_user_id}").encode(),
-        hashlib.sha256,
-    ).hexdigest()
-
-
-def _firestore_db() -> Any:
-    try:
-        from utils.utils import get_firestore_db
-
-        db = get_firestore_db()
-    except Exception as exc:
-        raise MetaSubjectDeletionStoreUnavailableError("Meta subject guard store is unavailable") from exc
-    if db is None:
-        raise MetaSubjectDeletionStoreUnavailableError("Meta subject guard store is unavailable")
-    return db
-
-
-def _app_document(db: Any) -> Any:
-    return db.collection("artifacts").document(_FIRESTORE_APP_ID)
-
-
-def _lease_ref(db: Any, subject_key: str) -> Any:
-    return _app_document(db).collection(_LEASE_COLLECTION).document(subject_key)
-
-
-def _index_ref(db: Any, subject_key: str) -> Any:
-    return _app_document(db).collection(_SUBJECT_INDEX_COLLECTION).document(subject_key)
-
-
-def _request_ref(db: Any, confirmation_code: str) -> Any:
-    return _app_document(db).collection(_REQUEST_COLLECTION).document(confirmation_code)
-
-
-def _deauthorization_ref(db: Any, subject_key: str) -> Any:
-    return _app_document(db).collection(_DEAUTHORIZATION_COLLECTION).document(subject_key)
-
-
-def _snapshot_dict(snapshot: Any) -> dict[str, Any]:
-    try:
-        value = snapshot.to_dict()
-    except Exception as exc:
-        raise MetaSubjectDeletionGuardError("Meta subject guard state is invalid") from exc
-    if not isinstance(value, dict):
-        raise MetaSubjectDeletionGuardError("Meta subject guard state is invalid")
-    return value
-
-
-def _safe_number(value: object, *, minimum: float = 0.0) -> float:
-    if isinstance(value, bool):
-        raise MetaSubjectDeletionGuardError("Meta subject guard state is invalid")
-    try:
-        parsed = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError) as exc:
-        raise MetaSubjectDeletionGuardError("Meta subject guard state is invalid") from exc
-    if not math.isfinite(parsed) or parsed < minimum:
-        raise MetaSubjectDeletionGuardError("Meta subject guard state is invalid")
-    return parsed
-
-
-def _capture_snapshot(db: Any, subject_key: str, transaction: Any) -> MetaSubjectDeletionSnapshot:
-    deauthorization_snapshot = _deauthorization_ref(db, subject_key).get(transaction=transaction)
-    deauthorization: dict[str, Any] = {}
-    if deauthorization_snapshot.exists:
-        deauthorization = _snapshot_dict(deauthorization_snapshot)
-        if (
-            not set(deauthorization).issubset(_DEAUTHORIZATION_SAFE_FIELDS)
-            or deauthorization.get("schema_version") != _SCHEMA_VERSION
-        ):
-            raise MetaSubjectDeletionGuardError("Meta deauthorization state is invalid")
-        generation_value = _safe_number(deauthorization.get("generation"), minimum=1.0)
-        if not generation_value.is_integer():
-            raise MetaSubjectDeletionGuardError("Meta deauthorization state is invalid")
-        _safe_number(deauthorization.get("deauthorized_at"), minimum=1.0)
-    deauthorization_generation = int(deauthorization.get("generation") or 0)
-    deauthorized_at = float(deauthorization.get("deauthorized_at") or 0.0)
-    index_snapshot = _index_ref(db, subject_key).get(transaction=transaction)
-    if not index_snapshot.exists:
-        canonical = json.dumps(
-            {"deauthorization": deauthorization, "deletion": "none"},
-            separators=(",", ":"),
-            sort_keys=True,
-        )
-        return MetaSubjectDeletionSnapshot(
-            state="none",
-            generation=0,
-            fingerprint=hashlib.sha256(canonical.encode()).hexdigest(),
-            deauthorization_generation=deauthorization_generation,
-            deauthorized_at=deauthorized_at,
-            deletion_boundary_at=0.0,
-        )
-    index = _snapshot_dict(index_snapshot)
-    if not set(index).issubset(_INDEX_SAFE_FIELDS) or index.get("schema_version") != _SCHEMA_VERSION:
-        raise MetaSubjectDeletionGuardError("Meta deletion subject index is invalid")
-    confirmation_code = str(index.get("confirmation_code") or "").strip().lower()
-    if not _CONFIRMATION_CODE_RE.fullmatch(confirmation_code):
-        raise MetaSubjectDeletionGuardError("Meta deletion subject index is invalid")
-    request_snapshot = _request_ref(db, confirmation_code).get(transaction=transaction)
-    if not request_snapshot.exists:
-        raise MetaSubjectDeletionGuardError("Meta deletion request is unavailable")
-    request = _snapshot_dict(request_snapshot)
-    if not set(request).issubset(_REQUEST_SAFE_FIELDS) or request.get("schema_version") != _SCHEMA_VERSION:
-        raise MetaSubjectDeletionGuardError("Meta deletion request is invalid")
-    if str(request.get("confirmation_code") or "").strip().lower() != confirmation_code:
-        raise MetaSubjectDeletionGuardError("Meta deletion request is invalid")
-    state = str(request.get("state") or "").strip()
-    if state not in {"pending", "completed", "no_data", "failed"}:
-        raise MetaSubjectDeletionGuardError("Meta deletion request is invalid")
-    generation_value = _safe_number(request.get("generation"), minimum=1.0)
-    if not generation_value.is_integer():
-        raise MetaSubjectDeletionGuardError("Meta deletion request is invalid")
-    generation = int(generation_value)
-    requested_at = _safe_number(request.get("requested_at"), minimum=1.0)
-    updated_at = _safe_number(request.get("updated_at"), minimum=requested_at)
-    completed_at = 0.0
-    if state in {"completed", "no_data"}:
-        completed_at = _safe_number(request.get("completed_at"), minimum=requested_at)
-    deletion_boundary_at = max(requested_at, updated_at, completed_at)
-    canonical = json.dumps(
-        {"deauthorization": deauthorization, "index": index, "request": request},
-        separators=(",", ":"),
-        sort_keys=True,
-    )
-    return MetaSubjectDeletionSnapshot(
-        state=state,  # type: ignore[arg-type]
-        generation=generation,
-        fingerprint=hashlib.sha256(canonical.encode()).hexdigest(),
-        deauthorization_generation=deauthorization_generation,
-        deauthorized_at=deauthorized_at,
-        deletion_boundary_at=deletion_boundary_at,
-    )
-
-
-def _lease_document(
-    *,
-    owner_hash: str,
-    purpose: Literal["oauth", "deletion", "deauthorization", "released"],
-    acquired_at: float,
-    updated_at: float,
-    expires_at: float,
-) -> dict[str, Any]:
-    return {
-        "schema_version": _SCHEMA_VERSION,
-        "owner_hash": owner_hash,
-        "purpose": purpose,
-        "acquired_at": acquired_at,
-        "updated_at": updated_at,
-        "expires_at": expires_at,
-    }
-
-
-def _parse_lease(value: object) -> tuple[str, str, float]:
-    if not isinstance(value, dict) or not set(value).issubset(_LEASE_SAFE_FIELDS):
-        raise MetaSubjectDeletionGuardError("Meta subject lease is invalid")
-    if value.get("schema_version") != _SCHEMA_VERSION:
-        raise MetaSubjectDeletionGuardError("Meta subject lease is invalid")
-    owner_hash = str(value.get("owner_hash") or "")
-    purpose = str(value.get("purpose") or "")
-    if purpose not in {"oauth", "deletion", "deauthorization", "released"}:
-        raise MetaSubjectDeletionGuardError("Meta subject lease is invalid")
-    if owner_hash and not re.fullmatch(r"[0-9a-f]{64}", owner_hash):
-        raise MetaSubjectDeletionGuardError("Meta subject lease is invalid")
-    _safe_number(value.get("acquired_at"))
-    _safe_number(value.get("updated_at"))
-    expires_at = _safe_number(value.get("expires_at"))
-    if (purpose == "released" and (owner_hash or expires_at != 0.0)) or (
-        purpose in {"oauth", "deletion", "deauthorization"} and (not owner_hash or expires_at <= 0.0)
-    ):
-        raise MetaSubjectDeletionGuardError("Meta subject lease is invalid")
-    return owner_hash, purpose, expires_at
+__all__ = [
+    "MetaSubjectDeletionBlockedError",
+    "MetaSubjectDeletionChangedError",
+    "MetaSubjectDeletionGuardError",
+    "MetaSubjectDeletionLease",
+    "MetaSubjectDeletionLeaseBusyError",
+    "MetaSubjectDeletionSnapshot",
+    "MetaSubjectDeletionStoreUnavailableError",
+    "acquire_meta_deauthorization_subject_guard",
+    "acquire_meta_deletion_subject_guard",
+    "acquire_meta_oauth_subject_guard",
+    "acquire_meta_subject_deletion_lease",
+    "meta_deletion_subject_hmac",
+]
 
 
 @dataclass

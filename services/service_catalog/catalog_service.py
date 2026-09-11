@@ -38,6 +38,25 @@ class ServiceCatalogService:
         return service_to_dict(row)
 
     def create_service(self, *, tenant_id: str, body: ServiceWriteBody) -> dict[str, Any]:
+        from services.membership.daily_edits import DailyEditLimitError
+        from services.membership.edit_http import guarded_edit
+        from services.membership.free_slots import SlotLimitError, assert_can_add_service
+
+        try:
+            assert_can_add_service(tenant_id, self.repo.count_services(tenant_id=tenant_id))
+        except SlotLimitError as exc:
+            raise ServiceCatalogError(code=exc.code, message=str(exc), http_status=402) from exc
+        try:
+            with guarded_edit(
+                tenant_id=tenant_id,
+                kind="service:create",
+                payload={"name": body.name, "options": [opt.model_dump() for opt in body.options]},
+            ):
+                return self._create_service(tenant_id=tenant_id, body=body)
+        except DailyEditLimitError as exc:
+            raise ServiceCatalogError(code=exc.code, message=exc.code, http_status=429) from exc
+
+    def _create_service(self, *, tenant_id: str, body: ServiceWriteBody) -> dict[str, Any]:
         row = self.repo.create_service(
             tenant_id=tenant_id,
             fields={"name": body.name.strip(), "active": body.active},
@@ -54,6 +73,26 @@ class ServiceCatalogService:
         return service_to_dict(refreshed)
 
     def update_service(
+        self,
+        *,
+        tenant_id: str,
+        service_id: str,
+        body: ServiceWriteBody,
+    ) -> dict[str, Any]:
+        from services.membership.daily_edits import DailyEditLimitError
+        from services.membership.edit_http import guarded_edit
+
+        try:
+            with guarded_edit(
+                tenant_id=tenant_id,
+                kind="service:update",
+                payload={"id": service_id, "name": body.name, "options": [opt.model_dump() for opt in body.options]},
+            ):
+                return self._update_service(tenant_id=tenant_id, service_id=service_id, body=body)
+        except DailyEditLimitError as exc:
+            raise ServiceCatalogError(code=exc.code, message=exc.code, http_status=429) from exc
+
+    def _update_service(
         self,
         *,
         tenant_id: str,
@@ -79,7 +118,14 @@ class ServiceCatalogService:
         return service_to_dict(refreshed)
 
     def delete_service(self, *, tenant_id: str, service_id: str) -> None:
+        from services.membership.daily_edits import DailyEditLimitError
+        from services.membership.edit_http import guarded_edit
+
         row = self.repo.get_service(tenant_id=tenant_id, service_id=service_id)
         if row is None:
             raise ServiceCatalogError(code="NOT_FOUND", message="service_not_found", http_status=404)
-        self.repo.delete_service(row)
+        try:
+            with guarded_edit(tenant_id=tenant_id, kind="service:delete", payload={"id": service_id}):
+                self.repo.delete_service(row)
+        except DailyEditLimitError as exc:
+            raise ServiceCatalogError(code=exc.code, message=exc.code, http_status=429) from exc

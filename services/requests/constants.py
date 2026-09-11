@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Final
 
-REQUEST_TYPES: Final[tuple[str, ...]] = ("ORDER", "APPOINTMENT", "OTHER")
+REQUEST_TYPES: Final[tuple[str, ...]] = ("ORDER", "APPOINTMENT", "OTHER", "HUMAN")
 
 STATUSES: Final[tuple[str, ...]] = (
     "NEW",

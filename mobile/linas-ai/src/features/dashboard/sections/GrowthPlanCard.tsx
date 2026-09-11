@@ -13,7 +13,6 @@ import {
 } from '../dashboardChrome';
 import { isHighestPlan, isPlanId } from '../../billing/planCatalog';
 import { planNameColor } from '../../billing/planColors';
-import { splitCreditRemaining } from '../creditSplit';
 import { formatCount, formatRenewDate } from '../dashboardFormat';
 import type { TenantDashboard } from '../dashboardTypes';
 
@@ -45,25 +44,21 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
     );
   }
 
-  const available = plan.available_credits ?? 0;
-  const limit = plan.credits_limit ?? 0;
-  const used = plan.credits_consumed_period_estimate ?? Math.max(0, limit - available);
-  const split = splitCreditRemaining({
-    included: plan.included_credits,
-    purchased: plan.purchased_or_promotional_credits,
-    available,
-    reserved: plan.reserved_credits,
-  });
-  const membership = plan.membership_credits_remaining ?? split.membership;
-  const bought = plan.purchased_credits_remaining ?? split.bought;
+  const billingActive = Boolean(plan.message_billing_active);
+  const available = billingActive ? Number(plan.available_messages ?? 0) : null;
+  const bought = billingActive ? Number(plan.purchased_messages ?? 0) : 0;
+  const membership = billingActive ? Number(plan.included_remaining ?? 0) : null;
+  const granted = billingActive ? Number(plan.granted_messages ?? 0) : 0;
+  const used = billingActive ? Number(plan.used_messages ?? 0) : 0;
   const ratio =
-    typeof plan.usage_progress_ratio === 'number'
+    typeof plan.usage_progress_ratio === 'number' && billingActive
       ? Math.max(0, Math.min(1, plan.usage_progress_ratio))
       : 0;
   const renews = formatRenewDate(plan.current_period_end, locale);
   const active = plan.has_subscription || plan.subscription_exempt;
-  const displayRatio = limit > 0 ? Math.max(0, Math.min(1, used / limit)) : ratio;
+  const displayRatio = ratio;
   const showUpgrade = !isHighestPlan(plan.plan_id);
+  const showLeftoverBuy = !billingActive && plan.actions?.buy_credits !== false;
 
   return (
     <View style={styles.card}>
@@ -90,21 +85,26 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
 
       <Text style={styles.creditsLabel}>{tr('dashCredits')}</Text>
       <View style={styles.creditsRow}>
-        <Text style={styles.creditsBig}>{formatCount(available)}</Text>
-        <Text style={styles.remaining}> {tr('dashRemaining')}</Text>
+        <Text style={styles.creditsBig}>{billingActive ? formatCount(available) : '—'}</Text>
+        <Text style={styles.remaining}>
+          {' '}
+          {billingActive ? tr('dashRemaining') : tr('dashMessagesPending')}
+        </Text>
       </View>
       <View style={styles.splitRow}>
         <View style={styles.splitBox}>
           <Text style={styles.splitLabel}>{tr('dashCreditsMembership')}</Text>
-          <Text style={styles.splitValue}>{formatCount(membership)}</Text>
+          <Text style={styles.splitValue}>{billingActive ? formatCount(membership) : '—'}</Text>
         </View>
         <View style={styles.splitBox}>
           <Text style={styles.splitLabel}>{tr('dashCreditsBought')}</Text>
-          <Text style={styles.splitValue}>{formatCount(bought)}</Text>
+          <Text style={styles.splitValue}>{billingActive ? formatCount(bought) : '—'}</Text>
         </View>
       </View>
       <Text style={styles.usedLine}>
-        {formatCount(used)} {tr('dashUsedOf')} {formatCount(limit)}
+        {billingActive
+          ? `${formatCount(used)} ${tr('dashUsedOf')} ${formatCount(granted)}`
+          : tr('dashMessagesPending')}
       </Text>
 
       <View style={styles.track}>
@@ -113,9 +113,11 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
 
       <View style={styles.bottomRow}>
         <Text style={styles.renews}>{renews ? `${tr('dashRenews')} ${renews}` : ''}</Text>
-        <Pressable onPress={onBuyCredits} style={styles.buyBtn} accessibilityRole="button">
-          <Text style={styles.buyText}>{tr('dashBuyCredits')}</Text>
-        </Pressable>
+        {showLeftoverBuy ? (
+          <Pressable onPress={onBuyCredits} style={styles.buyBtn} accessibilityRole="button">
+            <Text style={styles.buyText}>{tr('chatAddLeftoverCredits')}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );

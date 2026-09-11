@@ -48,45 +48,56 @@ def _require_wa_manager(request: Request) -> Any:
     return session
 
 
-@app.post("/api/whatsapp/cloud/connections/{connection_id}/ai/enable")
-async def whatsapp_enable_ai(connection_id: str, request: Request) -> Any:
-    session = _require_wa_manager(request)
+def _set_whatsapp_ai_default(session: Any, connection_id: str, *, enabled: bool) -> dict[str, Any]:
     with whatsapp_session() as db:
         repo = WhatsAppCloudRepository(db)
         conn = repo.get_tenant_connection(tenant_id=session.tenant_id, connection_id=connection_id)
         if conn is None:
             raise HTTPException(status_code=404, detail="connection_not_found")
-        conn.ai_default_enabled = True
+        conn.ai_default_enabled = enabled
         repo.add_audit(
             tenant_id=session.tenant_id,
             connection_id=conn.id,
             actor_user_id=_actor_id(session),
-            event_type="ai_default_enabled",
+            event_type="ai_default_enabled" if enabled else "ai_default_disabled",
             detail={},
         )
+        if not enabled:
+            from services.whatsapp_cloud.smart_followup.hooks import cancel_tenant_followups
+
+            cancel_tenant_followups(db, tenant_id=session.tenant_id, reason="ai_disabled")
         return {"success": True, "connection": connection_status_payload(db, conn)}
+
+
+@app.post("/api/whatsapp/cloud/connections/{connection_id}/ai/enable")
+async def whatsapp_enable_ai(connection_id: str, request: Request) -> Any:
+    session = _require_wa_manager(request)
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
+    try:
+        with guarded_edit(
+            tenant_id=session.tenant_id,
+            kind="whatsapp:ai-enable",
+            payload={"connection_id": connection_id},
+        ):
+            return _set_whatsapp_ai_default(session, connection_id, enabled=True)
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
 
 
 @app.post("/api/whatsapp/cloud/connections/{connection_id}/ai/disable")
 async def whatsapp_disable_ai(connection_id: str, request: Request) -> Any:
     session = _require_wa_manager(request)
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        conn = repo.get_tenant_connection(tenant_id=session.tenant_id, connection_id=connection_id)
-        if conn is None:
-            raise HTTPException(status_code=404, detail="connection_not_found")
-        conn.ai_default_enabled = False
-        repo.add_audit(
-            tenant_id=session.tenant_id,
-            connection_id=conn.id,
-            actor_user_id=_actor_id(session),
-            event_type="ai_default_disabled",
-            detail={},
-        )
-        from services.whatsapp_cloud.smart_followup.hooks import cancel_tenant_followups
+    from services.membership.edit_http import guarded_edit
 
-        cancel_tenant_followups(db, tenant_id=session.tenant_id, reason="ai_disabled")
-        return {"success": True, "connection": connection_status_payload(db, conn)}
+    with guarded_edit(
+        tenant_id=session.tenant_id,
+        kind="safety:ai-disable",
+        payload={"connection_id": connection_id},
+        safety=True,
+    ):
+        return _set_whatsapp_ai_default(session, connection_id, enabled=False)
 
 
 @app.get("/api/whatsapp/cloud/connections/{connection_id}/conversations")
@@ -99,38 +110,6 @@ async def whatsapp_list_conversations(connection_id: str, request: Request) -> A
             raise HTTPException(status_code=404, detail="connection_not_found")
         rows = repo.list_connection_conversations(tenant_id=session.tenant_id, connection_id=connection_id, limit=50)
         return {"success": True, "conversations": [conversation_public_view(c) for c in rows]}
-
-
-@app.post("/api/whatsapp/cloud/conversations/{conversation_id}/pause")
-async def whatsapp_pause_conversation(conversation_id: str, request: Request) -> Any:
-    session = _require_wa_manager(request)
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        conv = repo.get_tenant_conversation(tenant_id=session.tenant_id, conversation_id=conversation_id)
-        if conv is None:
-            raise HTTPException(status_code=404, detail="conversation_not_found")
-        repo.pause_conversation(conv, reason="operator_pause", actor_user_id=_actor_id(session))
-        from services.whatsapp_cloud.smart_followup.hooks import cancel_conversation_followups
-
-        cancel_conversation_followups(
-            db,
-            tenant_id=session.tenant_id,
-            conversation_id=conv.id,
-            reason="conversation_paused",
-        )
-        return {"success": True, "conversation": conversation_public_view(conv)}
-
-
-@app.post("/api/whatsapp/cloud/conversations/{conversation_id}/resume")
-async def whatsapp_resume_conversation(conversation_id: str, request: Request) -> Any:
-    session = _require_wa_manager(request)
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        conv = repo.get_tenant_conversation(tenant_id=session.tenant_id, conversation_id=conversation_id)
-        if conv is None:
-            raise HTTPException(status_code=404, detail="conversation_not_found")
-        repo.resume_conversation(conv, actor_user_id=_actor_id(session))
-        return {"success": True, "conversation": conversation_public_view(conv)}
 
 
 @app.post("/api/whatsapp/cloud/connections/{connection_id}/test-message")
@@ -201,7 +180,15 @@ async def whatsapp_disconnect(connection_id: str, request: Request, body: dict[s
         conn = repo.get_tenant_connection(tenant_id=session.tenant_id, connection_id=connection_id)
         if conn is None:
             raise HTTPException(status_code=404, detail="connection_not_found")
-        repo.revoke_connection(conn, actor_user_id=_actor_id(session), reason="owner_disconnect")
+        from services.membership.edit_http import guarded_edit
+
+        with guarded_edit(
+            tenant_id=session.tenant_id,
+            kind="safety:disconnect",
+            payload={"connection_id": connection_id},
+            safety=True,
+        ):
+            repo.revoke_connection(conn, actor_user_id=_actor_id(session), reason="owner_disconnect")
         repo.add_audit(
             tenant_id=session.tenant_id,
             connection_id=conn.id,

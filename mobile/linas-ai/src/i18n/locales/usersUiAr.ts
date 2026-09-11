@@ -70,7 +70,7 @@ export const usersUiAr: Record<keyof typeof import('./usersUiEn').usersUiEn, str
   usersAccessSmartFollowUp: 'المتابعة الذكية',
   usersAccessIntegrations: 'الربط',
   usersAccessUsers: 'المستخدمون',
-  usersAccessSubscription: 'الاشتراك والرصيد',
+  usersAccessSubscription: 'الاشتراك والرسائل',
   usersAccessSettings: 'الإعدادات',
   usersFullAccess: 'صلاحية كاملة',
   usersNoAccess: 'بدون صلاحية',

@@ -44,7 +44,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import config
 print('OPENAI_API_KEY:', 'SET' if config.OPENAI_API_KEY else 'MISSING')
-print('MONTYMOBILE_API_KEY:', 'SET' if __import__('os').getenv('MONTYMOBILE_API_KEY') else 'MISSING')
+print('WHATSAPP_API_TOKEN:', 'SET' if __import__('os').getenv('WHATSAPP_API_TOKEN') else 'MISSING')
 import main
 "
 ```

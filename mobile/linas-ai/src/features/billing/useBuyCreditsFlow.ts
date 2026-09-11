@@ -3,14 +3,22 @@ import { useCallback, useState } from 'react';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { CreditPackId } from './appleProductIds';
 import { purchaseCredits } from './iapPurchases';
-import { useBillingStorePrices } from './useBillingData';
+import { useBillingEntitlement, useBillingStorePrices } from './useBillingData';
 
 export function useBuyCreditsFlow(onPurchased?: () => void) {
   const { tr, language } = useI18n();
   const locale = language === 'ar' ? 'ar' : language === 'fr' ? 'fr' : 'en';
   const store = useBillingStorePrices('monthly', locale);
-  const [open, setOpen] = useState(false);
+  const { messageBillingActive } = useBillingEntitlement();
+  const [open, setOpenState] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (next && messageBillingActive) return;
+      setOpenState(next);
+    },
+    [messageBillingActive],
+  );
 
   const buy = useCallback(
     async (credits: CreditPackId) => {
@@ -36,7 +44,7 @@ export function useBuyCreditsFlow(onPurchased?: () => void) {
         setPurchasing(false);
       }
     },
-    [onPurchased, purchasing, store, tr],
+    [onPurchased, purchasing, setOpen, store, tr],
   );
 
   return {
@@ -48,5 +56,6 @@ export function useBuyCreditsFlow(onPurchased?: () => void) {
     tr,
     buy,
     purchaseNote: store.purchaseNote,
+    messageBillingActive,
   };
 }

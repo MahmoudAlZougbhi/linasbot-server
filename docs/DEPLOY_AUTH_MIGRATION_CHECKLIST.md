@@ -6,7 +6,7 @@ Do not paste secret values into tickets, chat, or commits.
 
 - [ ] Generate a long random **`DASHBOARD_AUTH_SECRET`** (stable across restarts; never regenerate per process).
 - [ ] Confirm production **`ENVIRONMENT=production`** (or `ENV=production`).
-- [ ] Confirm **`MONTYMOBILE_API_KEY`** is set when using MontyMobile (value not logged).
+- [ ] Confirm **`WHATSAPP_API_TOKEN`** is set for Meta Cloud (value not logged).
 - [ ] Confirm Meta webhook verify token / app secret are configured out-of-band (names only here).
 - [ ] WhatsApp inbound AI remains **disabled** (product contract).
 

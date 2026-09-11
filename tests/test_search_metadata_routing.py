@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from services.cm.request_rules import format_request_rules_for_ai
-from services.customer_reply_v2.operational_titles import collect_operational_titles
 from services.customer_reply_v2.retrieval_item_index import record_content
 from services.search_metadata.luna_titles import luna_title_fields
 
@@ -20,29 +19,6 @@ def test_luna_title_fields_show_original_plus_ai() -> None:
     assert fields["original_title"] == "12b"
     assert fields["ai_search_title"].startswith("Laser")
     assert "shaving" in fields["ai_search_description"]
-
-
-def test_operational_titles_include_ai_fields() -> None:
-    titles = collect_operational_titles(
-        {
-            "knowledge": {
-                "items": [
-                    {
-                        "id": "k1",
-                        "title": "12b",
-                        "body": "prices",
-                        "status": "active",
-                        "ai_search_title": "Laser Session Pricing",
-                        "ai_search_description": "Session prices and prep.",
-                    }
-                ]
-            }
-        }
-    )
-    row = titles[0]
-    assert row["original_title"] == "12b"
-    assert row["ai_search_title"] == "Laser Session Pricing"
-    assert row["ai_search_description"] == "Session prices and prep."
 
 
 def test_record_content_is_original_body_not_ai_metadata() -> None:
@@ -140,68 +116,3 @@ def test_request_rules_only_selected_reach_terra() -> None:
     empty = format_request_rules_for_ai(payload, selected_ids=[])
     assert "Do not assume" in empty
     assert "Rule 1" not in empty
-
-
-def test_multi_intent_titles_keep_hours_and_knowledge_together() -> None:
-    titles = collect_operational_titles(
-        {
-            "opening_hours": {
-                "items": [
-                    {
-                        "id": "h1",
-                        "title": "ساعات",
-                        "monday": {"closed": False, "open": "09:00", "close": "18:00"},
-                        "ai_search_title": "Weekly Opening Hours",
-                        "ai_search_description": "Weekday open and close times.",
-                    }
-                ]
-            },
-            "knowledge": {
-                "items": [
-                    {
-                        "id": "k1",
-                        "title": "12b",
-                        "status": "active",
-                        "ai_search_title": "Laser Session Pricing",
-                        "ai_search_description": "Prices and prep.",
-                    }
-                ]
-            },
-            "services": {
-                "items": [
-                    {
-                        "id": "s1",
-                        "labels": {"en": "Laser"},
-                        "ai_search_title": "Laser Hair Removal",
-                        "ai_search_description": "Service notes.",
-                    }
-                ]
-            },
-        }
-    )
-    kinds = {row["type"] for row in titles}
-    assert kinds >= {"opening_hours", "knowledge", "services"}
-    hours = next(row for row in titles if row["type"] == "opening_hours")
-    assert hours["original_title"] == "ساعات"
-    assert hours["ai_search_title"] == "Weekly Opening Hours"
-
-
-def test_terra_no_invented_product_when_match_false() -> None:
-    from services.customer_reply_v2.answer_luna import build_answer_messages
-
-    messages = build_answer_messages(
-        message="do you have nivea?",
-        fixed_context={"published_revision": "r1", "ai_basics": "", "style": ""},
-        evidence=[],
-        evidence_status="sufficient",
-        customer_profile={},
-        history_messages=[],
-        comment_context=None,
-        channel="instagram_dm",
-        published_revision="r1",
-        response_language="en",
-        product_match_found=False,
-    )
-    blob = str(messages)
-    assert "product_match_found" in blob
-    assert "Do not invent a product" in blob or "No matching product" in blob

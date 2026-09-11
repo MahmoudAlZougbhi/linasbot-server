@@ -323,110 +323,6 @@ def test_sol_chat_completions_tools_force_none_effort() -> None:
     assert terra_kwargs["reasoning_effort"] == "none"
 
 
-@pytest.mark.asyncio
-async def test_customer_v2_answer_payload_terra_medium(monkeypatch: pytest.MonkeyPatch) -> None:
-    from types import SimpleNamespace
-
-    from services.customer_reply_v2 import answer_luna as al
-
-    captured: dict[str, Any] = {}
-
-    class _FakeClient:
-        class responses:
-            @staticmethod
-            async def create(**kwargs: Any) -> Any:
-                captured.update(kwargs)
-                return SimpleNamespace(
-                    output_text='{"reply_text":"hi","grounding_status":"grounded"}',
-                    output=[],
-                    model=MODEL_CUSTOMER_TERRA,
-                    usage=None,
-                )
-
-        class chat:
-            class completions:
-                @staticmethod
-                async def create(**kwargs: Any) -> Any:
-                    raise AssertionError("V10 Tera must use /v1/responses, not chat.completions")
-
-    monkeypatch.setattr("services.llm_core_service.client", _FakeClient)
-    await al._default_llm([{"role": "user", "content": "{}"}], channel="instagram_dm")
-    assert captured["model"] == MODEL_CUSTOMER_TERRA
-    assert captured["reasoning"]["effort"] == "medium"
-    assert "tools" not in captured
-
-
-@pytest.mark.asyncio
-async def test_customer_v2_answer_terra_tools_keeps_requested_effort(monkeypatch: pytest.MonkeyPatch) -> None:
-    from types import SimpleNamespace
-
-    from services.customer_reply_v2 import answer_luna as al
-
-    captured: dict[str, Any] = {}
-
-    class _FakeClient:
-        class responses:
-            @staticmethod
-            async def create(**kwargs: Any) -> Any:
-                captured.update(kwargs)
-                return SimpleNamespace(
-                    output_text='{"reply_text":"hi","grounding_status":"grounded"}',
-                    output=[],
-                    model=MODEL_CUSTOMER_TERRA,
-                    usage=None,
-                )
-
-        class chat:
-            class completions:
-                @staticmethod
-                async def create(**kwargs: Any) -> Any:
-                    raise AssertionError("Tera+tools must not use chat.completions under V10")
-
-    monkeypatch.setattr("services.llm_core_service.client", _FakeClient)
-    response = await al._default_llm(
-        [{"role": "user", "content": "{}"}],
-        tools=[{"type": "function", "function": {"name": "create_customer_request", "parameters": {}}}],
-        channel="instagram_dm",
-        reasoning_effort="medium",
-    )
-    assert captured["model"] == MODEL_CUSTOMER_TERRA
-    assert captured["reasoning"]["effort"] == "medium"
-    assert captured.get("tools")
-    assert response._linas_requested_reasoning_effort == "medium"
-    assert response._linas_effective_reasoning_effort == "medium"
-
-
-@pytest.mark.asyncio
-async def test_customer_v2_retrieval_payload_luna(monkeypatch: pytest.MonkeyPatch) -> None:
-    from types import SimpleNamespace
-
-    from services.customer_reply_v2 import retrieval_luna as rl
-    from services.model_policy import MODEL_CUSTOMER_LUNA
-
-    captured: dict[str, Any] = {}
-
-    async def _responses_create(**kwargs: Any) -> Any:
-        captured.update(kwargs)
-        return SimpleNamespace(
-            output_text="{}",
-            output=[],
-            model=MODEL_CUSTOMER_LUNA,
-            usage=SimpleNamespace(input_tokens=3, output_tokens=1, total_tokens=4),
-        )
-
-    async def _chat_create(**kwargs: Any) -> Any:
-        raise AssertionError("V10 Luna+tools must use /v1/responses, not chat.completions")
-
-    fake = SimpleNamespace(
-        responses=SimpleNamespace(create=_responses_create),
-        chat=SimpleNamespace(completions=SimpleNamespace(create=_chat_create)),
-    )
-    monkeypatch.setattr("services.llm_core_service.client", fake)
-    await rl._default_llm([{"role": "user", "content": "{}"}], tools=[{"type": "function"}])
-    assert captured["model"] == MODEL_CUSTOMER_LUNA
-    assert captured["reasoning"]["effort"] == "low"
-
-
 def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in (
         "LINAS_MODEL_CUSTOMER_DM",
@@ -447,7 +343,6 @@ def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.Mo
 
     from services.cm.answer_generation import DEFAULT_CM_ANSWER_MODEL, cm_answer_model
     from services.customer_reply_v2.flags import customer_answer_model_name, customer_retrieval_model_name
-    from services.model_policy import MODEL_CUSTOMER_LUNA
     from services.owner_ai_model_router import router_config
     from services.providers.base import provider_config
 
@@ -458,8 +353,9 @@ def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.Mo
     assert router_config()["owner_help"]["model"] == MODEL_OWNER_SOL
     assert DEFAULT_CM_ANSWER_MODEL == MODEL_CUSTOMER_TERRA
     assert cm_answer_model() == MODEL_CUSTOMER_TERRA
-    assert customer_answer_model_name() == MODEL_CUSTOMER_TERRA
-    assert customer_retrieval_model_name() == MODEL_CUSTOMER_LUNA
+    # Brain stubs — not Luna/Terra engine names.
+    assert customer_answer_model_name() == "customer_brain_answer"
+    assert customer_retrieval_model_name() == "customer_brain_voyage_entity"
 
 
 def test_no_active_social_getter_returns_forbidden_models(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -467,10 +363,12 @@ def test_no_active_social_getter_returns_forbidden_models(monkeypatch: pytest.Mo
     monkeypatch.setenv("LINAS_CM_ANSWER_MODEL", "gpt-5.6-sol")
     from services.cm.answer_generation import cm_answer_model
     from services.customer_reply_v2.flags import customer_answer_model_name, customer_retrieval_model_name
-    from services.model_policy import MODEL_CUSTOMER_LUNA
 
-    # Answer getters must not honor luna/sol env overrides (hardcoded Terra).
-    assert customer_answer_model_name() == MODEL_CUSTOMER_TERRA
+    # Deprecated stubs stay on Brain names; CM answer stays Terra (not luna/sol env).
+    assert customer_answer_model_name() == "customer_brain_answer"
     assert cm_answer_model() == MODEL_CUSTOMER_TERRA
-    # Retrieval is Luna regardless of answer env override.
-    assert customer_retrieval_model_name() == MODEL_CUSTOMER_LUNA
+    assert customer_retrieval_model_name() == "customer_brain_voyage_entity"
+    assert "luna" not in customer_retrieval_model_name().lower()
+    assert "luna" not in customer_answer_model_name().lower()
+    assert "terra" not in customer_answer_model_name().lower()
+    assert "terra" not in customer_retrieval_model_name().lower()

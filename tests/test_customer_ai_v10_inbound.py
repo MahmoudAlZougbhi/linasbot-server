@@ -15,8 +15,6 @@ from services.customer_reply_v2.inbound_media import (
 from services.customer_reply_v2.inbound_video import extract_bounded_video
 from services.ssrf_guard import SSRFValidationError, validate_fetch_url
 
-pytest_plugins = ("tests.customer_reply_ai_v2_fixtures",)
-
 JPEG = b"\xff\xd8\xff\xd9 inbound"
 PDF = b"%PDF-1.4\n(After Care Cream) Tj\n"
 
@@ -26,34 +24,6 @@ def inbound_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path / "data"))
     monkeypatch.setenv("ENVIRONMENT", "test")
     return tmp_path
-
-
-@pytest.fixture()
-def products_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    monkeypatch.setenv("ENVIRONMENT", "test")
-    monkeypatch.setenv("DASHBOARD_AUTH_SECRET", "ci-dashboard-secret")
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    monkeypatch.setenv("DISABLE_API_DOCS", "true")
-    monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path / "data"))
-    monkeypatch.setenv("CUSTOMER_AI_V10_RUNTIME", "true")
-    url = f"sqlite:///{tmp_path / 'products_v10.db'}"
-    monkeypatch.setenv("LINAS_WHATSAPP_DATABASE_URL", url)
-    monkeypatch.setenv("LINAS_WHATSAPP_ALLOW_SQLITE", "true")
-    from sqlalchemy import create_engine, event
-
-    from db.models import Base
-    from db.session import reset_engine_for_tests
-
-    reset_engine_for_tests()
-    engine = create_engine(url, future=True)
-
-    @event.listens_for(engine, "connect")
-    def _fk(dbapi_conn, _connection_record):  # type: ignore[no-untyped-def]
-        dbapi_conn.execute("PRAGMA foreign_keys=ON")
-
-    Base.metadata.create_all(engine)
-    yield tmp_path
-    reset_engine_for_tests()
 
 
 @pytest.mark.asyncio
@@ -97,6 +67,13 @@ async def test_audio_uses_real_stt_path(inbound_env: Path) -> None:
     assert result.transcript == "بدي كريم after care"
     assert result.pipeline_text == "بدي كريم after care"
     assert luna_inbound_view(result)["transcript"] == "بدي كريم after care"
+    from services.membership.expense_journal import list_events
+
+    events = list_events(tenant_id="t-in", category="stt")
+    assert events
+    assert events[0].status == "pending"
+    assert events[0].amount_usd is None
+    assert events[0].model == "whisper-1"
 
 
 @pytest.mark.asyncio
@@ -204,95 +181,8 @@ def test_whatsapp_public_availability_stays_off(monkeypatch: pytest.MonkeyPatch)
     assert "whatsapp_inbound_ai_disabled" in webhook
 
 
-def test_name_wins_uses_inbound_media_id(products_env: Path) -> None:
-    from unittest.mock import patch
-
-    from services.customer_reply_v2.retrieval_tools import ToolContext, dispatch_retrieval_tool
-    from services.products.media import store_product_media
-    from tests.test_customer_ai_v10_phase4 import _create
-
-    stored = store_product_media(
-        tenant_id="t4",
-        user_id="inbound_customer",
-        filename="q.jpg",
-        content=b"\xff\xd8\xff\xd9named",
-        content_type="image/jpeg",
-    )
-    created = _create(
-        "t4",
-        name="Indexed Serum",
-        sizes=[],
-        colors=[],
-        images=[{"media_id": stored["media_id"], "sort_order": 0}],
-        links=[],
-    )
-    ctx = ToolContext(
-        tenant_id="t4",
-        published_revision="rev",
-        channel="instagram_dm",
-        inbound_image_media_id=str(stored["media_id"]),
-    )
-    with patch("services.products.crv2_tools.vision_rerank_candidates") as vision:
-        out = dispatch_retrieval_tool(
-            "find_product_by_image",
-            {"product_name": "Indexed Serum", "top_k": 8},
-            ctx,
-        )
-        vision.assert_not_called()
-    assert out["data"]["resolver"] == "name_first"
-    assert out["data"]["vision_used"] is False
-    assert out["data"]["matches"][0]["id"] == created["id"]
-
-
 def test_image_candidates_remain_clamped_3_to_8() -> None:
     from services.products.crv2_tools import _clamp_image_top_k
 
     assert _clamp_image_top_k(1) == 3
     assert _clamp_image_top_k(10) == 8
-
-
-@pytest.mark.asyncio
-async def test_luna_payload_includes_inbound_media(v2_env: Path) -> None:
-    from tests.cm_test_helpers import publish_test_content
-    from tests.customer_reply_ai_v2_helpers import _rich_sections
-
-    await publish_test_content("t-luna", _rich_sections())
-    captured: dict[str, object] = {}
-
-    class _Msg:
-        content = json.dumps({"evidence_status": "insufficient_final", "selected_source_ids": []})
-        tool_calls = None
-
-    class _Choice:
-        message = _Msg()
-
-    class _Resp:
-        choices = [_Choice()]
-        model = "gpt-5.6-luna"
-
-    async def llm_fn(*, messages, tools):  # type: ignore[no-untyped-def]
-        captured["payload"] = json.loads(messages[1]["content"])
-        _ = tools
-        return _Resp()
-
-    from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
-
-    await run_retrieval_luna(
-        tenant_id="t-luna",
-        message="[Customer sent an image]",
-        customer_profile={},
-        llm_fn=llm_fn,
-        channel="instagram_dm",
-        channel_metadata={
-            "inbound_media": {
-                "image_media_id": "prdim_abc",
-                "attachment_types": ["image"],
-                "safety_image_urls": ["https://secret.example/x"],
-            }
-        },
-    )
-    payload = captured["payload"]
-    assert isinstance(payload, dict)
-    inbound = payload.get("inbound_media") or {}
-    assert inbound["image_media_id"] == "prdim_abc"
-    assert "safety_image_urls" not in inbound

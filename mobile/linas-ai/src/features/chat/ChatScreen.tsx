@@ -290,11 +290,12 @@ export function ChatScreen({
         onRequestRegister={onRequestRegister}
       />
       <BuyCreditsSheet
-        visible={c.credits.open}
+        visible={c.credits.open && !c.credits.messageBillingActive}
         prices={c.credits.prices}
         purchasing={c.credits.purchasing}
         locale={c.credits.locale}
         tr={c.credits.tr}
+        messageBillingActive={c.credits.messageBillingActive}
         onClose={() => c.credits.setOpen(false)}
         onBuy={(pack) => void c.credits.buy(pack)}
       />

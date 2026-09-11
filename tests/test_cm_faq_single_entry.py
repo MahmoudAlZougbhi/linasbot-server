@@ -31,17 +31,6 @@ async def test_legacy_local_qa_create_blocked_when_canonical(monkeypatch: pytest
 
 
 @pytest.mark.asyncio
-async def test_legacy_qa_create_blocked_when_canonical(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CM_FAQ_CANONICAL", "true")
-    from modules.qa_api import create_qa_pair
-
-    result = await create_qa_pair({"question": "q", "answer": "a", "language": "en"})
-    assert result["success"] is False
-    assert result["error"] == "CM_FAQ_CANONICAL"
-    assert result["redirect"] == "/content-managers/faq"
-
-
-@pytest.mark.asyncio
 async def test_livechat_like_still_writes_cm_faq_only(monkeypatch: pytest.MonkeyPatch) -> None:
     """Live Chat Like → Save to FAQ must keep writing via CM FAQ (not dual-write)."""
     monkeypatch.setenv("CM_FAQ_CANONICAL", "true")

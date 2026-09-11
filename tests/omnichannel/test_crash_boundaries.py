@@ -245,3 +245,14 @@ def test_worker_drain_leaves_queued_inbound_searchable(omni_db, durable_jobs):
         assert row.state == "queued"
     snap = reconcile_omnichannel(older_than_seconds=-1.0)
     assert snap["examined"] >= 1
+
+
+def test_generate_binds_inbound_id_and_reserves_leftover() -> None:
+    from inspect import getsource
+
+    from services.omnichannel import generate
+
+    src = getsource(generate)
+    assert 'payload.setdefault("provider_message_id", event_id)' in src
+    assert "reserve_leftover_reply" in src
+    assert "release_unsent_omni_hold" in src

@@ -13,11 +13,11 @@ const read = (rel) => readFileSync(join(srcRoot, rel), 'utf8');
 
 const PLAN_ORDER = ['lite', 'starter', 'growth', 'pro', 'max'];
 const FROZEN = {
-  lite: { price: 9.99, credits: 7000, faq: 50, seats: 0, comments: false },
-  starter: { price: 25, credits: 17500, faq: 110, seats: 2, comments: true },
-  growth: { price: 59, credits: 41300, faq: 250, seats: 5, comments: true },
-  pro: { price: 109, credits: 76300, faq: 600, seats: null, comments: true },
-  max: { price: 259, credits: 181300, faq: 1500, seats: null, comments: true },
+  lite: { price: 10, messages: 550, credits: 7000, faq: 50, seats: 0, comments: false },
+  starter: { price: 29, messages: 1200, credits: 17500, faq: 110, seats: 2, comments: true },
+  growth: { price: 59, messages: 3000, credits: 41300, faq: 250, seats: 5, comments: true },
+  pro: { price: 120, messages: 10000, credits: 76300, faq: 600, seats: null, comments: true },
+  max: { price: 279, messages: 25000, credits: 181300, faq: 1500, seats: null, comments: true },
 };
 
 function planRank(id) {
@@ -40,18 +40,25 @@ test('planCatalog.ts encodes frozen five-plan matrix with channel flags', () => 
     assert.match(src, new RegExp(`${id}:`));
     const row = FROZEN[id];
     assert.match(src, new RegExp(`includedCredits:\\s*${row.credits}`));
+    assert.match(src, new RegExp(`includedMessages:\\s*${row.messages}`));
     assert.match(src, new RegExp(`faqCapacity:\\s*${row.faq}`));
   }
-  assert.match(src, /catalogPriceUsd:\s*9\.99/);
-  assert.match(src, /catalogPriceUsd:\s*25/);
+  assert.match(src, /catalogPriceUsd:\s*10/);
+  assert.match(src, /catalogPriceUsd:\s*29/);
   assert.match(src, /catalogPriceUsd:\s*59/);
-  assert.match(src, /catalogPriceUsd:\s*109/);
-  assert.match(src, /catalogPriceUsd:\s*259/);
+  assert.match(src, /catalogPriceUsd:\s*120/);
+  assert.match(src, /catalogPriceUsd:\s*279/);
   assert.match(src, /additionalSeats:\s*null/);
   assert.match(src, /commentAutomation:\s*false/);
   assert.match(src, /whatsapp:\s*false/);
   assert.match(src, /tiktok:\s*true/);
   assert.match(src, /recommended:\s*true/);
+  assert.match(src, /typeof row.comment_automation === 'boolean'/);
+  assert.match(src, /typeof row.whatsapp === 'boolean'/);
+  assert.match(src, /typeof row.web === 'boolean'/);
+  assert.match(src, /typeof row.tiktok === 'boolean'/);
+  assert.match(src, /additional_seats === null/);
+  assert.match(src, /additional_seats_unlimited === true/);
 });
 
 test('common features keys cover agreed product list', () => {
@@ -108,6 +115,9 @@ test('BillingScreen routes no-sub to choose, has-sub to current, upgrade + credi
   assert.match(billing, /CurrentPlanScreen/);
   assert.match(billing, /ChoosePlanScreen/);
   assert.match(billing, /BuyCreditsSheet/);
+  assert.match(billing, /creditsOpen && !entitlement.messageBillingActive/);
+  const flow = read('features/billing/useBuyCreditsFlow.ts');
+  assert.match(flow, /if \(next && messageBillingActive\) return/);
   assert.match(billing, /hasSub/);
   assert.match(billing, /setBrowsePlans\(true\)/);
   assert.match(billing, /purchaseSubscription/);
@@ -126,6 +136,10 @@ test('BillingScreen routes no-sub to choose, has-sub to current, upgrade + credi
   const current = read('features/billing/CurrentPlanScreen.tsx');
   assert.match(current, /subUpgradePlan/);
   assert.match(current, /onBuyCredits/);
+  assert.match(current, /messageBillingActive/);
+  assert.match(current, /subMessagesPending/);
+  assert.doesNotMatch(current, /membershipLabel=\{plan\.includedMessages/);
+  assert.doesNotMatch(current, /includedMessages \?\? plan\.includedMessages/);
 });
 
 test('exact EN plan copy present in locale table', () => {
@@ -149,14 +163,17 @@ test('exact EN plan copy present in locale table', () => {
     'Downgrade plan',
     'Schedule downgrade',
     'Cancel downgrade',
-    'Buy credits',
-    'Choose a credit pack',
-    'Purchased credits do not expire.',
+    'Add messages',
+    'Choose a message pack',
+    'Leftover credit packs',
+    'Buy leftover credits',
+    'They are not AI messages',
+    'Purchased messages do not expire.',
     'SOLO BUSINESS',
     'SMALL BUSINESS',
     'HIGH VOLUME',
     'MAXIMUM CAPACITY',
-    'Smart Q&A saves credits',
+    'Smart Q&A uses 0 messages',
   ]) {
     assert.match(en, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
@@ -169,14 +186,14 @@ test('exact EN plan copy present in locale table', () => {
   assert.doesNotMatch(subBlock, /Higher credits/);
 });
 
-test('Arabic subscription strings exist with exact credit numbers', () => {
+test('Arabic subscription strings exist with exact message numbers', () => {
   const ar = read('i18n/locales/subscriptionAr.ts');
   assert.match(ar, /subLiteFeatCredits:/);
-  assert.match(ar, /7,000/);
-  assert.match(ar, /17,500/);
-  assert.match(ar, /41,300/);
-  assert.match(ar, /76,300/);
-  assert.match(ar, /181,300/);
+  assert.match(ar, /550/);
+  assert.match(ar, /1,200/);
+  assert.match(ar, /3,000/);
+  assert.match(ar, /10,000/);
+  assert.match(ar, /25,000/);
   assert.match(ar, /subCommonTitle:/);
   assert.match(ar, /subCtaSwitchLite:/);
 });
@@ -255,4 +272,49 @@ test('billing surfaces tint plan names from planColors', () => {
     assert.match(read(file), pattern, file);
   }
   assert.match(read('features/billing/subscriptionCta.ts'), /export \{ accentForPlan \} from '\.\/planColors'/);
+});
+
+test('GrowthPlanCard uses ledger remaining, not catalog allowance, for membership', () => {
+  const src = read('features/dashboard/sections/GrowthPlanCard.tsx');
+  assert.match(src, /included_remaining/);
+  assert.match(src, /granted_messages/);
+  assert.match(src, /used_messages/);
+  assert.match(src, /usage_progress_ratio/);
+  assert.match(src, /billingActive \? formatCount\(membership\) : '—'/);
+  assert.doesNotMatch(src, /membership = billingActive \? Number\(plan.included_remaining \?\? 0\) : included/);
+  assert.doesNotMatch(src, /limit - available/);
+});
+
+test('live credit IAP is leftover credits, not a 1:1 message relabel', () => {
+  const en = read('i18n/locales/subscriptionEn.ts');
+  const sheet = read('features/billing/BuyCreditsSheet.tsx');
+  const packs = read('features/billing/CreditPacksSection.tsx');
+  const hero = read('features/billing/CurrentPlanHeroCard.tsx');
+  assert.match(en, /leftover credits/);
+  assert.match(en, /They are not AI messages/);
+  assert.match(sheet, /subCreditsUnit/);
+  assert.match(sheet, /subBuyCreditsCta/);
+  assert.match(packs, /subCreditsPacksTitle/);
+  assert.match(hero, /subBuyCredits/);
+  assert.match(hero, /messageBillingActive \? null/);
+  assert.match(sheet, /subCreditsPacksTitle/);
+  assert.match(sheet, /subLeftoverNoExpire/);
+  assert.doesNotMatch(sheet, /subPurchasedNoExpire/);
+  assert.doesNotMatch(sheet, /messageBillingActive \? tr\('subAddMessages'\)/);
+  assert.doesNotMatch(en, /subCreditsUnit:\s*'messages'/);
+  assert.doesNotMatch(sheet, /2500[\s\S]{0,40}messages/);
+});
+
+test('CurrentPlanSummary never copies leftover credits as messages', () => {
+  const src = read('features/billing/CurrentPlanSummary.tsx');
+  assert.match(src, /messageBillingActive/);
+  assert.match(src, /includedMessages/);
+  assert.match(src, /includedRemaining/);
+  assert.match(src, /subIncludedEachMonth/);
+  assert.match(src, /subIncludedRemaining/);
+  assert.match(src, /subMessagesPending/);
+  assert.match(src, /subLeftoverCredits/);
+  assert.match(src, /creditBalance/);
+  assert.doesNotMatch(src, /subIncludedRemaining[\s\S]{0,80}includedMessages/);
+  assert.doesNotMatch(src, /subTotalAvailable[\s\S]{0,80}creditBalance/);
 });

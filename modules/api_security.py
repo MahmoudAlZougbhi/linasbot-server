@@ -180,7 +180,6 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("POST", "/api/auth/verify-email"),
     ("POST", "/api/auth/resend-verification"),
     ("POST", "/api/auth/confirm-email-change"),
-    ("GET", "/api/billing/packages"),
     ("GET", "/api/public/plans"),
     ("GET", "/api/public/app-version"),
     ("POST", "/api/public/app-version/check"),
@@ -231,7 +230,7 @@ def required_permission_for(method: str, path: str) -> str | None:
     if p.startswith("/api/auth/"):
         return None  # authenticated self-service (session/me/change-password/logout)
     if p.startswith("/api/billing/"):
-        return None  # session-scoped wallet; admin-credit checks role/tenant internally
+        return None  # session-scoped billing webhooks / remaining wallet surfaces
 
     if p.startswith("/api/analytics") or p == "/api/stats":
         return "analytics"
@@ -256,9 +255,8 @@ def required_permission_for(method: str, path: str) -> str | None:
     if p.startswith("/api/content-files") or p.startswith("/api/retrieval-debug"):
         return "contentManagers"
     if p.startswith("/api/cm"):
-        # Publish / rollback require contentPublish; everything else (meta/draft/validate/
-        # versions list/preview-packet/local-qa bridge) uses contentManagers.
-        if p in {"/api/cm/publish", "/api/cm/unpublish"} or p.endswith("/rollback"):
+        # Publish / unpublish require contentPublish; draft/meta/FAQ use contentManagers.
+        if p in {"/api/cm/publish", "/api/cm/unpublish"}:
             return "contentPublish"
         if p.startswith("/api/cm/local-qa"):
             return "contentManagers"
@@ -266,9 +264,7 @@ def required_permission_for(method: str, path: str) -> str | None:
     # Live Chat FAQ correction (save-all-languages) — operators need liveChat, not training.
     if p.startswith("/api/faq/"):
         return "liveChat"
-    if p.startswith("/api/local-qa") or p.startswith("/api/qa") or p.startswith("/api/training"):
-        return "training"
-    if p.startswith("/api/feedback"):
+    if p.startswith("/api/local-qa"):
         return "training"
     if p.startswith("/api/test") or p.startswith("/api/switch-provider") or p.startswith("/api/debug"):
         return "testing"

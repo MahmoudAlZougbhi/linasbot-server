@@ -12,6 +12,7 @@ from services.requests.config_loader import (
     published_configuration_version,
     requests_capture_active,
 )
+from services.requests.constants import SOURCE_CHANNELS
 from services.requests.repository import CustomerRequestsRepository
 from services.requests.schemas import RequestCreateBody
 from services.requests.serialize import (
@@ -79,6 +80,9 @@ class CustomerRequestsService:
             return serialize_request(row, include_sensitive=include_sensitive)
 
         cfg_version = body.configuration_version or published_configuration_version(tenant_id)
+        source_channel = body.source_channel.strip().lower()
+        if source_channel not in SOURCE_CHANNELS:
+            raise CustomerRequestsError("INVALID_SOURCE_CHANNEL", f"Bad channel: {source_channel}")
         number = self.repo.allocate_request_number(tenant_id)
         now = _now()
         row = self.repo.create_request(
@@ -86,7 +90,7 @@ class CustomerRequestsService:
             request_number=number,
             request_type=body.request_type.strip().upper(),
             status="NEW",
-            source_channel=body.source_channel.strip().lower(),
+            source_channel=source_channel,
             source_account_id=body.source_account_id,
             external_customer_id=body.external_customer_id,
             platform_username=body.platform_username,

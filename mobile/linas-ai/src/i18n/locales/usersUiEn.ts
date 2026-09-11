@@ -70,7 +70,7 @@ export const usersUiEn = {
   usersAccessSmartFollowUp: 'Smart Follow-Up',
   usersAccessIntegrations: 'Integrations',
   usersAccessUsers: 'Users',
-  usersAccessSubscription: 'Subscription & Credits',
+  usersAccessSubscription: 'Subscription & Messages',
   usersAccessSettings: 'Settings',
   usersFullAccess: 'Full access',
   usersNoAccess: 'No access',

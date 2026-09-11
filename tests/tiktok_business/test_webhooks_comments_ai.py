@@ -172,6 +172,11 @@ async def test_comment_ai_credits_and_success(tt_db, monkeypatch) -> None:
     async def _resolve(**_k):
         return {"comment_context": {}, "caption": "", "context_level": "comment_only", "diagnostics": {}}
 
+    settled: list[dict] = []
+    monkeypatch.setattr(
+        "services.tiktok_business.comment_ai._settle_comment_send",
+        lambda **k: settled.append(k),
+    )
     monkeypatch.setattr("services.tiktok_business.comment_ai.run_customer_reply_v2_comment", _reply)
     monkeypatch.setattr("services.tiktok_business.comment_ai.create_comment_reply", _publish)
     monkeypatch.setattr("services.tiktok_business.comment_ai.ensure_fresh_token", _token)
@@ -181,6 +186,15 @@ async def test_comment_ai_credits_and_success(tt_db, monkeypatch) -> None:
     )
     assert ok["ok"] is True
     assert ok["request_id"] == "req-9"
+    assert settled == [
+        {
+            "tenant_id": "linas",
+            "comment_id": "c-ok",
+            "accepted": True,
+            "provider_message_id": "reply-9",
+            "extra_ids": ("comment:linas:tiktok_comment:v1",),
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -212,6 +226,11 @@ async def test_comment_ai_publish_failure(tt_db, monkeypatch) -> None:
     async def _resolve(**_k):
         return {"comment_context": {}, "caption": "", "context_level": "comment_only", "diagnostics": {}}
 
+    settled: list[dict] = []
+    monkeypatch.setattr(
+        "services.tiktok_business.comment_ai._settle_comment_send",
+        lambda **k: settled.append(k),
+    )
     monkeypatch.setattr("services.tiktok_business.comment_ai.run_customer_reply_v2_comment", _reply)
     monkeypatch.setattr("services.tiktok_business.comment_ai.create_comment_reply", _publish)
     monkeypatch.setattr("services.tiktok_business.comment_ai.ensure_fresh_token", _token)
@@ -223,6 +242,14 @@ async def test_comment_ai_publish_failure(tt_db, monkeypatch) -> None:
     )
     assert result["ok"] is False
     assert result["request_id"] == "req-fail"
+    assert settled == [
+        {
+            "tenant_id": "linas",
+            "comment_id": "c-fail",
+            "accepted": False,
+            "extra_ids": ("comment:linas:tiktok_comment:v2",),
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -256,6 +283,11 @@ async def test_comment_ai_skips_when_v2_has_no_reply(tt_db, monkeypatch) -> None
     async def _resolve(**_k):
         return {"comment_context": {}, "caption": "", "context_level": "comment_only", "diagnostics": {}}
 
+    settled: list[dict] = []
+    monkeypatch.setattr(
+        "services.tiktok_business.comment_ai._settle_comment_send",
+        lambda **k: settled.append(k),
+    )
     monkeypatch.setattr("services.tiktok_business.comment_ai.run_customer_reply_v2_comment", _reply)
     monkeypatch.setattr("services.tiktok_business.comment_ai.create_comment_reply", _publish)
     monkeypatch.setattr("services.tiktok_business.comment_ai.ensure_fresh_token", _token)
@@ -268,3 +300,11 @@ async def test_comment_ai_skips_when_v2_has_no_reply(tt_db, monkeypatch) -> None
     assert result["skipped"] is True
     assert result["reason"] == "comments_toggle_off"
     assert published["called"] is False
+    assert settled == [
+        {
+            "tenant_id": "linas",
+            "comment_id": "c-empty",
+            "accepted": False,
+            "extra_ids": ("comment:linas:tiktok_comment:v3",),
+        }
+    ]

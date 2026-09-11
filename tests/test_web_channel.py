@@ -124,7 +124,13 @@ def test_live_chat_resolves_web_channel() -> None:
 
 
 def test_requests_include_web_chat_source() -> None:
+    from db.models.requests import CustomerRequest
+
     assert SOURCE_CHANNEL_WEB_CHAT in SOURCE_CHANNELS
+    constraint = next(
+        item for item in CustomerRequest.__table__.constraints if item.name == "ck_customer_requests_channel"
+    )
+    assert "web_chat" in str(constraint.sqltext)
 
 
 def test_followup_normalizes_web_channel() -> None:

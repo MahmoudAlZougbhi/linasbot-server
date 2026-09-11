@@ -1,4 +1,4 @@
-"""Item index helpers for Retrieval Luna (no AI Basics/Style bodies)."""
+"""Item index helpers used when CM save writes search_metadata bodies."""
 
 from __future__ import annotations
 

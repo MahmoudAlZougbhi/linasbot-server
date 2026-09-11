@@ -22,8 +22,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "20260812_meta_app_registry"
 down_revision: str | None = "20260811_wa_app_review_source"

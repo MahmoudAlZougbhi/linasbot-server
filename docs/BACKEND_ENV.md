@@ -18,8 +18,13 @@
    ضيف أو حدّث السطر:
    ```
    OPENAI_API_KEY=sk-proj-xxxxxxxx
+   VOYAGE_API_KEY=pa-xxxxxxxx
+      MESSAGE_BILLING_ENABLED=false
+   MESSAGE_BILLING_CUTOVER=false
+   FREE_PLAN_ENFORCEMENT_ENABLED=false
+   LINAS_CUSTOMER_AI_LAB=false
    ```
-   (استخدم الـ key الجديد اللي غيّرته عندك محلياً.)
+   (استخدم الـ key الجديد اللي غيّرته عندك محلياً. Voyage is also stored as a GitHub Actions secret named `VOYAGE_API_KEY`; never commit `.env`.)
 
 4. **أعد تشغيل الـ backend عشان يقرا الـ env الجديد**:
    ```bash
@@ -47,4 +52,4 @@
 
 ---
 
-**ملاحظة:** ما ترفع أبداً ملف `.env` على Git؛ القيم الحساسة (مثل OPENAI_API_KEY) تظل على السيرفر فقط.
+**ملاحظة:** ما ترفع أبداً ملف `.env` على Git؛ القيم الحساسة (مثل `OPENAI_API_KEY` و `VOYAGE_API_KEY`) تظل على السيرفر أو GitHub Secrets فقط. `MESSAGE_BILLING_ENABLED` و `MESSAGE_BILLING_CUTOVER` و `FREE_PLAN_ENFORCEMENT_ENABLED` و `LINAS_CUSTOMER_AI_LAB` تبقى `false` إلى أن يمر acceptance gate.

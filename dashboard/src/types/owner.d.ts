@@ -6,6 +6,8 @@ interface OwnerAnalytics {
   credits_total: number;
   credits_used: number;
   credits_remaining: number;
+  intended_message_mrr_usd?: number;
+  live_checkout_mrr_usd?: number;
   messages_by_channel: Record<string, number>;
   coverage: Record<string, string>;
 }
@@ -21,6 +23,8 @@ interface OwnerSubscriber {
   status: string;
   credits_used: number;
   credits_remaining: number;
+  intended_included_messages?: number | null;
+  intended_price_usd?: number | null;
   users: DashboardUser[];
 }
 

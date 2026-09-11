@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from services.cm.schemas import AiBasics, AnswerPacket, StylePolicy
-from services.customer_reply_v2 import answer_luna
 from services.guest_ai_service import build_guest_system_prompt
 from services.owner_ai_context import SYSTEM_PROMPT
 from services.owner_copilot_v2.brain_support import SYSTEM_V2
@@ -24,8 +23,6 @@ def test_guest_owner_and_customer_prompts_reuse_shared_formatting() -> None:
     assert RESPONSE_FORMATTING_RULES in guest
     assert RESPONSE_FORMATTING_RULES in SYSTEM_PROMPT
     assert RESPONSE_FORMATTING_RULES in SYSTEM_V2
-    # Customer IG/FB DMs + comments share Answer Tera system prompt.
-    assert RESPONSE_FORMATTING_RULES in answer_luna._ANSWER_SYSTEM
 
 
 def test_cm_answer_system_prompt_includes_formatting_rules() -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.membership.feature_entitlements import additional_seats_for_plan
 from services.membership.plan_catalog import require_plan
 
 
@@ -21,12 +22,13 @@ def assert_can_add_seat(
     active_non_owner_members: int,
     pending_invitations: int,
 ) -> dict[str, Any]:
-    plan = require_plan(plan_id)
+    known, limit = additional_seats_for_plan(plan_id)
+    if not known:
+        limit = require_plan(plan_id).additional_seats
     used = seat_usage(
         active_non_owner_members=active_non_owner_members,
         pending_invitations=pending_invitations,
     )
-    limit = plan.additional_seats
     if limit is None:
         return {
             "plan_id": plan_id,

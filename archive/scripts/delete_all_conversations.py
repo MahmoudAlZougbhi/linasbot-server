@@ -24,7 +24,6 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from typing import Any
 
 # archive/scripts/<file> → repo root is two levels up from this file's directory
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

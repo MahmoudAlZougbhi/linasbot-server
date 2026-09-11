@@ -36,16 +36,13 @@ if os.path.exists(DASHBOARD_BUILD_PATH):
     app.mount("/static", StaticFiles(directory=os.path.join(DASHBOARD_BUILD_PATH, "static")), name="static")
 
 # Import all modules to register routes and events (must run before SPA catch-all).
-import modules.analytics_api  # noqa: E402, F401
 import modules.apple_auth_api  # noqa: E402, F401
 import modules.apple_iap_client_api  # noqa: E402, F401
 import modules.apple_store_webhook_api  # noqa: E402, F401
 import modules.auth_api  # noqa: E402, F401
 import modules.auth_email_change_api  # noqa: E402, F401
 import modules.auth_users_roles_api  # noqa: E402, F401
-import modules.chat_history_api  # noqa: E402, F401
 import modules.cm_api  # noqa: E402, F401
-import modules.cm_comment_rules_api  # noqa: E402, F401
 import modules.cm_faq_api  # noqa: E402, F401
 import modules.cm_media_api  # noqa: E402, F401
 import modules.cm_request_graphs_api  # noqa: E402, F401
@@ -53,10 +50,10 @@ import modules.cm_setup_api  # noqa: E402, F401
 import modules.comments_inbox_api  # noqa: E402, F401
 import modules.content_files_api  # noqa: E402, F401
 import modules.creative_api  # noqa: E402, F401
+import modules.customer_ai_lab_api  # noqa: E402, F401
 import modules.dashboard_api  # noqa: E402, F401
 import modules.entitlements_api  # noqa: E402, F401
 import modules.event_handlers  # noqa: E402, F401
-import modules.feedback_api  # noqa: E402, F401
 import modules.flow_api  # noqa: E402, F401
 import modules.google_auth_api  # noqa: E402, F401
 import modules.guest_ai_api  # noqa: E402, F401
@@ -68,7 +65,6 @@ import modules.meta_compliance  # noqa: E402, F401
 import modules.meta_connections_api  # noqa: E402, F401
 import modules.meta_instagram_login_webhook  # noqa: E402, F401
 import modules.meta_messaging_webhook  # noqa: E402, F401
-import modules.meta_social_posts_api  # noqa: E402, F401
 import modules.mobile_app_version_api  # noqa: E402, F401
 import modules.mobile_auth_api  # noqa: E402, F401
 import modules.mobile_dashboard_api  # noqa: E402, F401
@@ -82,24 +78,20 @@ import modules.owner_ai_v2_api  # noqa: E402, F401
 import modules.owner_notifications_api  # noqa: E402, F401
 import modules.plans_api  # noqa: E402, F401
 import modules.platform_api  # noqa: E402, F401
+import modules.platform_message_api  # noqa: E402, F401
+import modules.platform_search_api  # noqa: E402, F401
 import modules.products_media_api  # noqa: E402, F401
 import modules.public_landing_stats_api  # noqa: E402, F401
-import modules.qa_api  # noqa: E402, F401
 import modules.queue_api  # noqa: E402, F401
 import modules.requests_api  # noqa: E402, F401
 import modules.resend_webhook_api  # noqa: E402, F401
 import modules.scale_api  # noqa: E402, F401
-import modules.schedule_api  # noqa: E402, F401
-import modules.settings_api  # noqa: E402, F401
-import modules.smart_messaging_api  # noqa: E402, F401
 import modules.store_iap_api  # noqa: E402, F401
 import modules.tiktok_ads_oauth  # noqa: E402, F401
 import modules.tiktok_business_api  # noqa: E402, F401
 import modules.tiktok_business_oauth  # noqa: E402, F401
 import modules.tiktok_business_webhook  # noqa: E402, F401
-import modules.tiktok_comments_api  # noqa: E402, F401
 import modules.tiktok_enhanced_api  # noqa: E402, F401
-import modules.training_files_api  # noqa: E402, F401
 import modules.wallet_api  # noqa: E402, F401
 import modules.web_chat_api  # noqa: E402, F401
 import modules.webhook_handlers  # noqa: E402, F401

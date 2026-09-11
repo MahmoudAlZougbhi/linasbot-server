@@ -45,16 +45,6 @@ class ProfileUpdateBody(BaseModel):
     address_prompt_asked: bool | None = None
 
 
-class ProposeCmPatchBody(BaseModel):
-    section: str = Field(min_length=1, max_length=64)
-    patch: dict[str, Any]
-
-
-class ApproveCmPatchBody(BaseModel):
-    proposal_id: str = Field(min_length=8, max_length=64)
-    confirmed: bool = False
-
-
 @app.get("/api/owner-ai/conversations")
 async def list_owner_conversations(request: Request) -> Any:
     session = require_session(request)
@@ -242,23 +232,6 @@ async def delete_owner_conversation(conversation_id: str, request: Request) -> A
     return {"success": True}
 
 
-@app.get("/api/owner-ai/greeting")
-async def owner_ai_greeting(request: Request) -> Any:
-    session = require_session(request)
-    from services.owner_ai_greeting import build_greeting
-    from services.owner_ai_profile import language_from_accept_header
-
-    lang = language_from_accept_header(request.headers.get("accept-language"))
-    return {
-        "success": True,
-        "greeting": build_greeting(
-            tenant_id=session.tenant_id,
-            user_id=session.user_id,
-            language=lang,
-        ),
-    }
-
-
 @app.get("/api/owner-ai/profile")
 async def get_owner_ai_profile(request: Request) -> Any:
     session = require_session(request)
@@ -275,59 +248,3 @@ async def patch_owner_ai_profile(body: ProfileUpdateBody, request: Request) -> A
     updates = body.model_dump(exclude_none=True)
     profile = update_owner_profile(session.user_id, updates)
     return {"success": True, "profile": profile}
-
-
-@app.get("/api/owner-ai/knowledge")
-async def owner_ai_knowledge(request: Request, q: str = "") -> Any:
-    session = require_session(request)
-    del session
-    from services.system_knowledge_retrieval import help_payload_for_query
-
-    return {"success": True, **help_payload_for_query(q)}
-
-
-@app.post("/api/owner-ai/cm/propose-patch")
-async def owner_ai_propose_cm_patch(body: ProposeCmPatchBody, request: Request) -> Any:
-    session = require_session(request)
-    from services.owner_ai_tools import dispatch_tool
-
-    result = await dispatch_tool(
-        "propose_cm_patch",
-        tenant_id=session.tenant_id,
-        user_id=session.user_id,
-        role=session.role,
-        args={"section": body.section, "patch": body.patch},
-    )
-    if not result.ok:
-        raise HTTPException(status_code=400, detail=result.error or "propose failed")
-    return {
-        "success": True,
-        **result.data,
-        "requires_confirmation": result.requires_confirmation,
-        "confirmation_token": result.confirmation_token,
-    }
-
-
-@app.post("/api/owner-ai/cm/approve-patch")
-async def owner_ai_approve_cm_patch(body: ApproveCmPatchBody, request: Request) -> Any:
-    session = require_session(request)
-    from services.owner_ai_tools import dispatch_tool
-
-    result = await dispatch_tool(
-        "approve_cm_patch",
-        tenant_id=session.tenant_id,
-        user_id=session.user_id,
-        role=session.role,
-        args={"proposal_id": body.proposal_id},
-        confirmed=body.confirmed,
-    )
-    if result.requires_confirmation:
-        return {
-            "success": True,
-            "requires_confirmation": True,
-            "confirmation_token": result.confirmation_token,
-            "data": result.data,
-        }
-    if not result.ok:
-        raise HTTPException(status_code=400, detail=result.error or "approve failed")
-    return {"success": True, **result.data}

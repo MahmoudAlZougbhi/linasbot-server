@@ -14,7 +14,6 @@ function formatPrice(value) {
 export default function LandingPricing() {
   const [plans, setPlans] = useState(/** @type {Array<any>} */ ([]));
   const [error, setError] = useState(/** @type {string | null} */ (null));
-  const [period, setPeriod] = useState('monthly');
   const [enterpriseOpen, setEnterpriseOpen] = useState(false);
 
   useEffect(() => {
@@ -52,20 +51,8 @@ export default function LandingPricing() {
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <div className="inline-flex rounded-full border border-[#E4E8E6] bg-white p-1" role="group" aria-label="Billing period">
-            {['monthly', 'yearly'].map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setPeriod(key)}
-                className={`rounded-full px-4 py-1.5 text-sm font-semibold capitalize ${period === key ? 'bg-[#06715F] text-white' : 'text-[#5C6663]'}`}
-              >
-                {key}
-              </button>
-            ))}
-          </div>
           <p className="flex items-center gap-1 text-xs text-[#06715F]">
-            <LinasStar className="h-3.5 w-3.5" /> Included credits refresh each billing month.
+            <LinasStar className="h-3.5 w-3.5" /> Included AI messages refresh each billing month.
           </p>
         </div>
 
@@ -82,7 +69,8 @@ export default function LandingPricing() {
             );
             const copy = catalog[String(plan.plan_id)] || { tier: '', blurb: '', included: [], missing: null };
             const recommended = Boolean(copy.recommended);
-            const price = formatPrice(plan.price_usd);
+            const price = formatPrice(plan.intended_price_usd ?? plan.price_usd);
+            const messages = Number(plan.included_messages);
             return (
               <article
                 key={plan.plan_id}
@@ -97,11 +85,16 @@ export default function LandingPricing() {
                 <h3 className="mt-1 text-xl font-semibold text-[#171A19]">{plan.display_name}</h3>
                 <p className="mt-2 text-2xl font-semibold text-[#171A19]">
                   {price || '—'}
-                  <span className="text-sm font-normal text-[#6B746F]"> / {period === 'yearly' ? 'year' : 'month'}</span>
+                  <span className="text-sm font-normal text-[#6B746F]"> / month</span>
                 </p>
                 <p className="mt-2 text-sm text-[#6B746F]">{copy.blurb}</p>
                 <p className="mt-4 rounded-xl bg-[#E8F5F1] px-3 py-2 text-sm font-semibold text-[#06715F]">
-                  {Number(plan.included_credits).toLocaleString()} AI credits.
+                  {Number.isFinite(messages) && messages > 0
+                    ? `${messages.toLocaleString()} AI messages.`
+                    : 'AI message allowance is set on the server catalog.'}
+                  {Number(plan.faq_capacity) > 0
+                    ? ` ${Number(plan.faq_capacity).toLocaleString()} saved Smart Answers.`
+                    : ''}
                 </p>
                 <ul className="mt-4 flex-1 space-y-2 text-sm text-[#171A19]">
                   {copy.included.map((/** @type {string} */ item) => (
@@ -130,7 +123,7 @@ export default function LandingPricing() {
           <LinasStar className="mt-0.5 h-5 w-5" />
           <p>
             <span className="font-semibold">Smart Answers are free replies. </span>
-            When a saved Q&amp;A matches, the reply uses 0 credits. Write it once and it applies in every language you
+            When a saved Q&amp;A matches, the reply uses 0 AI messages. Write it once and it applies in every language you
             select. The more Q&amp;As you save, the more customer replies stay free. They are not a limit on AI
             conversations.
           </p>

@@ -1,0 +1,299 @@
+{
+  "gates": {
+    "ATOMIC_SWITCH": {
+      "after_hits": 5,
+      "after_versions": [
+        "ctx:lab_ctx_v1:sw"
+      ],
+      "back_hits": 5,
+      "detail": "sql_candidate_copy\u2192activate\u2192query\u2192rollback",
+      "mid_hits": 5,
+      "n2": 5,
+      "rollback": {
+        "backend": "pgvector",
+        "ok": true,
+        "pointer": {
+          "active_version": "ctx:lab_ctx_v1",
+          "ready": true,
+          "reason": "rollback",
+          "record_count": 5,
+          "rollback_version": "ctx:lab_ctx_v1:sw",
+          "source_family": "knowledge_ctx",
+          "source_revision": "lab_cand",
+          "space_id": "voyage|voyage-context-4|contextualized|1024|fp32|cosine|v1|document",
+          "tenant_id": "linas-lab"
+        }
+      },
+      "status": "PASS",
+      "v1": "ctx:lab_ctx_v1",
+      "v2": "ctx:lab_ctx_v1:sw"
+    },
+    "BILLING": {
+      "detail": "requires OpenAI-backed turns + billing flags off in lab",
+      "status": "NOT_RUN"
+    },
+    "CHANNEL_SMOKE": {
+      "detail": "sandbox channel credentials not configured in local lab",
+      "status": "BLOCKED"
+    },
+    "CODE": {
+      "detail": "brain_permanent",
+      "status": "PASS"
+    },
+    "CONTEXTUAL_MODEL": {
+      "card_count": 11,
+      "chunker_version": "customer_ai.chunk.v2",
+      "contextualization_version": "customer_ai.context.v1",
+      "count": 5,
+      "detail": "ok",
+      "dimensions": 1024,
+      "duration_sec": 1.514,
+      "entity_index": {
+        "count": 11,
+        "ready": true,
+        "reason": "ok",
+        "store": "pgvector"
+      },
+      "error": null,
+      "model": "voyage-context-4",
+      "pointer": {
+        "active_version": "ctx:lab_ctx_v1",
+        "ready": true,
+        "reason": "ok",
+        "record_count": 5,
+        "rollback_version": "",
+        "source_family": "knowledge_ctx",
+        "source_revision": "lab_ctx_v1",
+        "space_id": "voyage|voyage-context-4|contextualized|1024|fp32|cosine|v1|document",
+        "tenant_id": "linas-lab"
+      },
+      "publish": {
+        "checksums": {
+          "branches": "eea68b37450208c57d1cd63a2e6b6f69f74edc27bd8c6ef0e7003a32208c412f",
+          "care": "32d30493b698e383c890037c0282112fd248d34e0bbc38f9b2996d2cdb160f00",
+          "faq": "a4dd9ecfce0d736ed7326dd1572ac2e376d207699dca7d4f45d03742391b72d9",
+          "knowledge": "5886dbce9043c8299311f357373e6fbf6480569858f2ccffeae4b17effcd6a38",
+          "opening_hours": "29ecdfc4197d5060b2fe439d23d862734df22deebcaceccb4076c9193003a809",
+          "prices": "617e0fbbfe4a5be9822995927420f750d101a38dfdd695b225f1f8bc65956bf1",
+          "services": "eef46741adfc3a9f76294d3b78f37a45f113092ac9d44ee77c7a038a88ff09a1"
+        },
+        "revision": "lab_ctx_v1",
+        "sections": [
+          "branches",
+          "care",
+          "faq",
+          "knowledge",
+          "opening_hours",
+          "prices",
+          "services"
+        ],
+        "tenant_id": "linas-lab"
+      },
+      "ready": true,
+      "reason": "ok",
+      "role": "active",
+      "space_id": "voyage|voyage-context-4|contextualized|1024|fp32|cosine|v1|document",
+      "status": "PASS",
+      "store": "pgvector",
+      "version": "ctx:lab_ctx_v1"
+    },
+    "COST": {
+      "detail": "OPENAI cost needs live LLM turns",
+      "status": "BLOCKED"
+    },
+    "GROUNDING": {
+      "detail": "needs OpenAI generator+critic live",
+      "status": "NOT_RUN"
+    },
+    "INDEX": {
+      "count": 5,
+      "detail": "ok",
+      "status": "PASS",
+      "version": "ctx:lab_ctx_v1"
+    },
+    "LATENCY": {
+      "detail": "retrieval hybrid latencies (not full E2E LLM)",
+      "load_p95": 5.749258114024997,
+      "p50": 5.277634395984933,
+      "p95": 16.009183041448704,
+      "status": "PASS"
+    },
+    "LOAD": {
+      "detail": "n=6 errors=0",
+      "error_rate": 0.0,
+      "p50": 5.324489812366664,
+      "p95": 5.749258114024997,
+      "p99": 5.797379855625331,
+      "status": "PASS",
+      "throughput_qps": 0.179
+    },
+    "MEMORY": {
+      "detail": "write\u2192reconnect\u2192read + tenant isolation",
+      "facts": 1,
+      "status": "PASS"
+    },
+    "MULTILINGUAL": {
+      "detail": "ar/en/fr/arabizi/mixed covered in live cases",
+      "status": "PASS"
+    },
+    "MULTIMODAL": {
+      "detail": "external extractors/providers not wired for live PASS",
+      "status": "BLOCKED"
+    },
+    "OPENAI": {
+      "detail": "OPENAI_API_KEY missing \u2014 BLOCKED_BY_SECRET",
+      "status": "BLOCKED"
+    },
+    "PGVECTOR": {
+      "detail": "pgvector",
+      "status": "PASS"
+    },
+    "PGVECTOR_BENCH": {
+      "detail": "hnsw_or_index_scan",
+      "plan_snippet": "[{\"Plan\": {\"Node Type\": \"Limit\", \"Parallel Aware\": false, \"Async Capable\": false, \"Startup Cost\": 8.17, \"Total Cost\": 8.17, \"Plan Rows\": 1, \"Plan Width\": 282, \"Actual Startup Time\": 1.252, \"Actual Total Time\": 1.253, \"Actual Rows\": 10, \"Actual Loops\": 1, \"Shared Hit Blocks\": 46, \"Shared Read Blocks\": 0, \"Shared Dirtied Blocks\": 0, \"Shared Written Blocks\": 0, \"Local Hit Blocks\": 0, \"Local Read Blocks\": 0, \"Local Dirtied Blocks\": 0, \"Local Written Blocks\": 0, \"Temp Read Blocks\": 0, \"Temp Written Blocks\": 0, \"Plans\": [{\"Node Type\": \"Sort\", \"Parent Relationship\": \"Outer\", \"Parallel Aware\": false, \"Async Capable\": false, \"Startup Cost\": 8.17, \"Total Cost\": 8.17, \"Plan Rows\": 1, \"Plan Width\": 282, \"Actual Startup Time\": 1.25, \"Actual Total Time\": 1.251, \"Actual Rows\": 10, \"Actual Loops\": 1, \"Sor",
+      "status": "PASS",
+      "uses_index": true
+    },
+    "RELATIONS": {
+      "detail": "branch-scoped price via tools",
+      "sample": {
+        "antelias": {
+          "data": {
+            "amount": 60,
+            "branch_id": "antelias",
+            "currency": "USD",
+            "id": "laser_antelias",
+            "price": 60,
+            "service_id": "laser",
+            "title": "Laser hair removal",
+            "unit": "session"
+          },
+          "ok": true
+        },
+        "bad_args": {
+          "data": null,
+          "error": "not_found",
+          "ok": false
+        },
+        "booking": {
+          "data": null,
+          "error": "unsupported_tool",
+          "ok": false,
+          "unsupported": true
+        },
+        "other_tenant": {
+          "data": null,
+          "error": "not_found",
+          "ok": false
+        },
+        "verdun": {
+          "data": {
+            "amount": 75,
+            "branch_id": "verdun",
+            "currency": "USD",
+            "id": "laser_verdun",
+            "price": 75,
+            "service_id": "laser",
+            "title": "Laser hair removal",
+            "unit": "session"
+          },
+          "ok": true
+        }
+      },
+      "status": "PASS"
+    },
+    "RERANK": {
+      "candidate_count": 5,
+      "detail": "rerank-2.5",
+      "fallback_rrf_safe": true,
+      "latency_sec": 0.442,
+      "model": "rerank-2.5",
+      "status": "PASS",
+      "top_index": 0,
+      "top_k": 3
+    },
+    "RETRIEVAL_EVAL": {
+      "detail": "recall@10>=0.98",
+      "failures": [],
+      "latency_p50": 5.277634395984933,
+      "latency_p95": 16.009183041448704,
+      "metrics": {
+        "mrr": 1.0,
+        "ndcg@10": 1.0,
+        "ndcg@5": 1.0,
+        "precision@10": 0.6166666666666666,
+        "precision@5": 0.6166666666666666,
+        "recall@1": 1.0,
+        "recall@10": 1.0,
+        "recall@3": 1.0,
+        "recall@5": 1.0
+      },
+      "n": 10,
+      "status": "PASS"
+    },
+    "SECURITY": {
+      "detail": "other_tenant_empty_index",
+      "memory": "PASS",
+      "other_hits": 0,
+      "status": "PASS"
+    },
+    "TOOLS": {
+      "booking_unsupported_clear": true,
+      "detail": "registry+branch_price+unsupported_booking",
+      "missing": [],
+      "sample": {
+        "antelias": {
+          "data": {
+            "amount": 60,
+            "branch_id": "antelias",
+            "currency": "USD",
+            "id": "laser_antelias",
+            "price": 60,
+            "service_id": "laser",
+            "title": "Laser hair removal",
+            "unit": "session"
+          },
+          "ok": true
+        },
+        "bad_args": {
+          "data": null,
+          "error": "not_found",
+          "ok": false
+        },
+        "booking": {
+          "data": null,
+          "error": "unsupported_tool",
+          "ok": false,
+          "unsupported": true
+        },
+        "other_tenant": {
+          "data": null,
+          "error": "not_found",
+          "ok": false
+        },
+        "verdun": {
+          "data": {
+            "amount": 75,
+            "branch_id": "verdun",
+            "currency": "USD",
+            "id": "laser_verdun",
+            "price": 75,
+            "service_id": "laser",
+            "title": "Laser hair removal",
+            "unit": "session"
+          },
+          "ok": true
+        }
+      },
+      "status": "PASS"
+    },
+    "VOYAGE": {
+      "detail": "VOYAGE_API_KEY",
+      "status": "PASS"
+    }
+  },
+  "note": "BLOCKED != PASS. Full E requires OpenAI live agent + channel smoke.",
+  "openai_configured": false,
+  "tenant_id": "linas-lab",
+  "voyage_configured": true
+}

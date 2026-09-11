@@ -178,6 +178,15 @@ def assess_section_fill(
             "summary": "Filled enough to use — do not re-ask unless the owner explicitly wants changes.",
         }
 
+    # Languages are a global system rule — never an owner fill gap.
+    if name == "languages":
+        return {
+            "fill": "filled",
+            "is_done": True,
+            "gaps": [],
+            "summary": "System-managed. No owner Languages setting.",
+        }
+
     # Requests & Appointments is optional — disabled defaults keep capture inactive.
     if name == "requests_appointments":
         if is_default or not isinstance(payload, dict):
@@ -221,12 +230,6 @@ def assess_section_fill(
             gaps.append("business_or_assistant_name")
         if not has_role:
             gaps.append("role_or_purpose")
-    elif name == "languages":
-        if not _nonempty(payload.get("default_language")):
-            gaps.append("default_language")
-        langs = payload.get("supported_languages")
-        if not isinstance(langs, (list, tuple)) or not langs:
-            gaps.append("supported_languages")
     elif name == "style":
         if not any(_nonempty(payload.get(k)) for k in ("tone", "formality", "style_body", "response_length")):
             gaps.append("tone_or_style_body")

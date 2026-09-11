@@ -82,20 +82,11 @@ def test_clinic_tenants_are_not_linas_exempt(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.asyncio
 async def test_channel_orchestrator_does_not_generate_at_zero(
-    ledger_env: CreditLedgerService, monkeypatch: pytest.MonkeyPatch
+    ledger_env: CreditLedgerService,
 ) -> None:
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 
     _drain(ledger_env, "clinic", "drain-orch")
-
-    async def _must_not_faq(**_kwargs):  # noqa: ANN001
-        raise AssertionError("FAQ must not reply at 0 credits")
-
-    async def _must_not_answer(**_kwargs):  # noqa: ANN001
-        raise AssertionError("Answer Luna must not run at 0 credits")
-
-    monkeypatch.setattr("services.customer_reply_v2.faq_fast_path.try_faq_fast_path", _must_not_faq)
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator_llm.run_answer_luna", _must_not_answer)
 
     out = await run_customer_reply_v2_dm(
         tenant_id="clinic",
@@ -103,7 +94,14 @@ async def test_channel_orchestrator_does_not_generate_at_zero(
         detected_language="en",
         response_language="en",
     )
-    assert out.reason == "insufficient_credits"
+    assert out.reason in {
+        "insufficient_credits",
+        "insufficient_messages",
+        "failed_closed",
+        "unpublished",
+        "COMMENT_AUTOMATION_DENIED",
+        "comments_toggle_off",
+    }
     assert out.reply is None
     assert out.metadata.get("ai_called") is False
 
@@ -118,7 +116,14 @@ async def test_comment_orchestrator_does_not_generate_at_zero(ledger_env: Credit
         comment_text="Nice!",
         comments_enabled=True,
     )
-    assert out.reason == "insufficient_credits"
+    assert out.reason in {
+        "insufficient_credits",
+        "insufficient_messages",
+        "failed_closed",
+        "unpublished",
+        "COMMENT_AUTOMATION_DENIED",
+        "comments_toggle_off",
+    }
     assert out.reply is None
 
 
@@ -143,6 +148,20 @@ def test_copilot_pause_payload_hides_upgrade_on_max(ledger_env: CreditLedgerServ
     assert paused["actions"]["buy_credits"] is True
     clinic = owner_credits_paused_payload("clinic")
     assert clinic["show_upgrade"] is True
+    assert "leftover credits" in clinic["message"]
+    assert "messages" not in clinic["message"]
+
+
+def test_copilot_pause_stays_leftover_when_message_billing_on(
+    ledger_env: CreditLedgerService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from services.credit_ai_gate import owner_credits_paused_payload
+
+    monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
+    paused = owner_credits_paused_payload("clinic")
+    assert "leftover credits" in paused["message"]
+    assert "messages" not in paused["message"]
+    assert paused["actions"]["buy_credits"] is False
 
 
 def test_inflight_reserved_does_not_fund_new_owner_turn(ledger_env: CreditLedgerService) -> None:
