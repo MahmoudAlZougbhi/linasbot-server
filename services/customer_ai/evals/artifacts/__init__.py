@@ -7,6 +7,16 @@ from pathlib import Path
 from typing import Any
 
 LATEST = Path(__file__).resolve().parent / "offline_suite_latest.json"
+HOST_DIR = Path("/var/lib/linasbot/customer-ai-evals")
+
+
+def durable_report_path(name: str) -> Path:
+    """Production host dir when present; repo artifacts for local/CI."""
+    if HOST_DIR.parent.is_dir():
+        HOST_DIR.mkdir(parents=True, exist_ok=True)
+        return HOST_DIR / name
+    LATEST.parent.mkdir(parents=True, exist_ok=True)
+    return LATEST.parent / name
 
 
 def latest_offline_artifact() -> dict[str, Any] | None:

@@ -34,14 +34,14 @@ jobs:
           command_timeout: 20m
           script: |
             set -e
-            test -f /opt/linasbot/scripts/prod_preflight_readonly.sh
-            sudo bash /opt/linasbot/scripts/prod_preflight_readonly.sh
             echo "[preflight] git_head=$(git -C /opt/linasbot rev-parse HEAD)"
             echo "[preflight] git_status_porcelain_begin"
             git -C /opt/linasbot --no-pager status --porcelain
             echo "[preflight] git_status_porcelain_end"
             echo "[preflight] dirty_tracked=$(git -C /opt/linasbot diff --name-only HEAD | tr '\n' ',')"
             echo "[preflight] dirty_index=$(git -C /opt/linasbot diff --cached --name-only | tr '\n' ',')"
+            test -f /opt/linasbot/scripts/prod_preflight_readonly.sh
+            sudo bash /opt/linasbot/scripts/prod_preflight_readonly.sh
 
       - name: Collect redacted Meta social runtime diagnostics
         if: ${{ always() && inputs.include_meta_runtime_diagnostics }}
