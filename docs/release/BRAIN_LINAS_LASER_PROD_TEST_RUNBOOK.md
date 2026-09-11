@@ -60,7 +60,7 @@ Before real-customer Brain:
 
 - [ ] `CUSTOMER_BRAIN_TENANT_ALLOWLIST` set, **or** default allowlist includes `linas`.
 - [ ] Lab tenants (`lab` / `lab_*`) only when `LINAS_CUSTOMER_AI_LAB=true`.
-- [ ] Non-allowlist non-lab tenants require activation `testing_ready`; otherwise `brain_gates_incomplete`.
+- [ ] Non-allowlist non-lab tenants are **always** fail-closed (`brain_gates_incomplete` / `not_allowlisted`). `activation_readiness.testing_ready` is import-only and must **not** unlock other customers.
 
 ## 4) Enable for Linas Laser live AI test
 

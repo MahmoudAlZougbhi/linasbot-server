@@ -87,7 +87,7 @@ rule / window immediately before send.
 ## Still missing vs the contract (honest)
 
 - Live pgvector write/query against a provisioned DB (migration exists; production apply + force-reindex + tenant pointer ready still required — see runbook)
-- P0 cutover honesty: Brain OFF never restores Luna/Terra; emergency legacy is fail-closed (`emergency_legacy_unavailable`); tenant allowlist + testing_ready gate; published retrieve fails closed on missing Voyage/pgvector/pointer; handler must not mask empty Brain stops as validation-failed success
+- P0 cutover honesty: Brain OFF never restores Luna/Terra; emergency legacy is fail-closed (`emergency_legacy_unavailable`, no holding reply / no Luna); tenant gate is allowlist (`linas` default) or lab-only — `testing_ready` must not unlock other customers; published retrieve fails closed on missing Voyage/pgvector/pointer; handler must not mask empty Brain stops as validation-failed success
 - OpenAI live planner/generate (fails closed without a key in tests)
 - FAQ many-language job UX beyond existing `faq_integration*`
 - Visual reading path (resource-by-id only; multimodal stays disabled — honest UX, no fake vision)

@@ -74,22 +74,21 @@ def test_lab_tenant_requires_lab_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     assert allowed["path"] == "lab"
 
 
-def test_non_allowlist_uses_testing_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_non_allowlist_denied_even_when_testing_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    """testing_ready is import-only — must not unlock arbitrary customer tenants."""
     monkeypatch.setenv("CUSTOMER_BRAIN_TENANT_ALLOWLIST", "other-shop")
-    monkeypatch.setattr(
-        "services.membership.activation_readiness.activation_readiness",
-        lambda: {"testing_ready": False, "testing_blockers": ["brain_import"]},
-    )
-    denied = evaluate_brain_tenant_gate("unknown-tenant")
-    assert denied["allow"] is False
-    assert denied["reason"] == "brain_gates_incomplete"
     monkeypatch.setattr(
         "services.membership.activation_readiness.activation_readiness",
         lambda: {"testing_ready": True, "testing_blockers": []},
     )
-    allowed = evaluate_brain_tenant_gate("unknown-tenant")
+    denied = evaluate_brain_tenant_gate("unknown-tenant")
+    assert denied["allow"] is False
+    assert denied["reason"] == "brain_gates_incomplete"
+    assert denied["path"] == "not_allowlisted"
+    # Allowlisted tenant still passes without needing testing_ready.
+    allowed = evaluate_brain_tenant_gate("other-shop")
     assert allowed["allow"] is True
-    assert allowed["path"] == "testing_ready"
+    assert allowed["path"] == "allowlist"
 
 
 @pytest.mark.asyncio
