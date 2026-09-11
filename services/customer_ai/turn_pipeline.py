@@ -193,6 +193,19 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
             }
         )
     task_text = inbound_task_text(turn, message)
+    from services.customer_ai.conversation_resolve import resolve_followup_query
+
+    resolved = resolve_followup_query(task_text, turn.history.messages)
+    if resolved.rewritten_query.strip() and resolved.rewritten_query.strip() != task_text.strip():
+        task_text = resolved.rewritten_query
+        flow_base = _flow_extra(
+            flow_base,
+            (
+                "context",
+                "Resolved follow-up using recent conversation",
+                {"carry": resolved.carry, "used_turns": len(resolved.used_turns)},
+            ),
+        )
     plan_timer = StageTimer()
     plan = await plan_turn(
         task_text,

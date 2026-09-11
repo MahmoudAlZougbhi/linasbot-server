@@ -20,7 +20,9 @@ from services.customer_ai.contracts.evidence import EvidenceBundle
 from services.customer_ai.contracts.plan import PlannerPlan
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
 from services.customer_ai.contracts.turn import CustomerTurn
+from services.customer_ai.grounding.claims import claims_fail_closed, verify_claims
 from services.customer_ai.grounding.facts import ungrounded_amounts, ungrounded_claims
+from services.customer_ai.grounding.contradiction import detect_amount_contradictions
 from services.customer_ai.identity import IdentityBundle
 from services.customer_ai.providers.config import answer_model
 
@@ -96,6 +98,14 @@ async def generate_grounded_reply(
     if not bundle.items:
         # No provenance means nothing factual can be said. Ask instead of guessing.
         return _clarify()
+    conflicts = detect_amount_contradictions("\n".join(item.text for item in bundle.items))
+    if conflicts:
+        return FinalReplyEnvelope(
+            decision="clarify",
+            messages=[],
+            used_evidence_ids=_used_evidence_ids(bundle),
+            dispositions={task.id: "blocked" for task in plan.tasks if task.type in _ANSWERED_TASK_TYPES},
+        )
     context = compose_evidence_context(
         identity=identity,
         plan=plan,
@@ -116,7 +126,8 @@ async def generate_grounded_reply(
         )
         text = await _ask_model(turn=turn, prompt=prompt, attempt=attempt)
         reasons = ungrounded_claims(text, bundle, receipts)
-        if not reasons:
+        verdicts = verify_claims(text, bundle, receipts=receipts)
+        if not reasons and not claims_fail_closed(verdicts):
             return FinalReplyEnvelope(
                 decision="reply",
                 messages=[OutboundMessage(destination=destination, text=text)],
@@ -125,5 +136,5 @@ async def generate_grounded_reply(
                     task.id: "answered" for task in plan.tasks if task.type in _ANSWERED_TASK_TYPES
                 },
             )
-        feedback = grounding_feedback(reasons)
+        feedback = grounding_feedback(reasons or [v.reason or v.status for v in verdicts if v.status != "SUPPORTED"])
     return _clarify()

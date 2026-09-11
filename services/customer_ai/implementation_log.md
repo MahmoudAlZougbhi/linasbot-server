@@ -143,3 +143,19 @@ Owner Portal → Brain lab → **Run fixture evals** / **Run verification exerci
 ## Tests
 
 `python3.11 -m pytest tests/test_customer_ai_*.py tests/test_customer_reply_engine_removed.py tests/test_cm_comments_policy.py tests/test_cm_request_rules.py tests/test_alembic_single_head.py tests/test_model_routing_policy.py tests/test_customer_ai_p2_dead_paths.py -q`
+
+## RAG upgrade pass (Phases 0–29 scaffolding)
+
+See `CURRENT_STATE.md` + `QUALITY_REPORT.md`.
+
+Added: offline case bank (≥800), IR metrics, claim verifier, contradiction amounts, injection sanitize, Arabic/Arabizi query fold, conversation resolve, readiness CLI (`python -m services.customer_ai.readiness`), shadow compare helper (default off), lab feedback store, latency/load offline benches, index versioning helpers.
+
+### Still NOT DONE (do not fake)
+
+- Dense/Voyage + rerank offline metrics without live spend
+- Recall@10 ≥ 0.98 gate FAIL on current lexical fixture set (0.969)
+- Contextual voyage-context-4 cutover (baseline kept)
+- Atomic HA candidate index switch proof
+- Provider-backed E2E latency/cost p95
+- Production-scale DB/queue load
+- Real-customer Brain enablement (out of scope for this workstream)

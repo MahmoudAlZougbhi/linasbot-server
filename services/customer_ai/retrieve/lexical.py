@@ -15,6 +15,7 @@ from services.customer_ai.budgets import DEFAULT_BUDGETS
 from services.customer_ai.contracts.enums import SourceFamily
 from services.customer_ai.normalize import normalize_search_text
 from services.customer_ai.retrieve.cards import TitleCard
+from services.customer_ai.retrieve.normalize_ar import normalize_arabic
 
 BM25_K1 = 1.5
 BM25_B = 0.75
@@ -24,6 +25,15 @@ BM25_B = 0.75
 class LexicalHit:
     card: TitleCard
     score: float
+
+
+def prepare_query_text(query: str) -> str:
+    """Normalize query; append Arabic/Arabizi fold when it adds signal."""
+    base = normalize_search_text(query)
+    folded = normalize_arabic(query)
+    if folded and folded != base:
+        return normalize_search_text(f"{base} {folded}")
+    return base
 
 
 def tokenize(text: str) -> list[str]:
@@ -67,10 +77,13 @@ def search_cards(
 ) -> list[LexicalHit]:
     cap = limit if limit is not None else DEFAULT_BUDGETS.lexical_candidates_per_source
     scoped = [card for card in cards if families is None or card.source_family in families]
-    query_tokens = tokenize(normalize_search_text(query))
+    query_tokens = tokenize(prepare_query_text(query))
     if not scoped or not query_tokens:
         return []
-    scores = bm25_scores(query_tokens, [tokenize(card.search_text) for card in scoped])
+    scores = bm25_scores(
+        query_tokens,
+        [tokenize(prepare_query_text(card.search_text)) for card in scoped],
+    )
     hits = [
         LexicalHit(card=card, score=score)
         for card, score in zip(scoped, scores, strict=True)

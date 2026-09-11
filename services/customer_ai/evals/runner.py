@@ -77,14 +77,28 @@ def run_fixture_corpus() -> dict[str, Any]:
             )
     contract = run_contract_cases()
     golden = run_golden_pack_linas()
+    from services.customer_ai.evals.suite_runner import run_offline_suite
+    from services.customer_ai.evals.latency_bench import run_latency_benchmark
+
+    offline = run_offline_suite(write_artifact=True)
+    latency = run_latency_benchmark(repeats=20)
     elapsed_ms = (time.perf_counter() - started) * 1000.0
-    total_cases = len(cases) + int(contract.get("case_count") or 0) + int(golden.get("case_count") or 0)
+    total_cases = int(offline.get("summary", {}).get("case_count") or 0) + int(
+        contract.get("case_count") or 0
+    ) + int(golden.get("case_count") or 0)
     return {
-        "ok": bool(contract.get("ok")) and bool(golden.get("ok")),
+        "ok": bool(contract.get("ok")) and bool(golden.get("ok")) and bool(offline.get("gates", {}).get("case_count_ge_800")),
         "live_spend": False,
         "case_count": total_cases,
         "cases": cases,
         "contract_cases": contract.get("cases") or [],
         "golden_pack_linas": golden,
+        "offline_suite": {
+            "ok": offline.get("ok"),
+            "gates": offline.get("gates"),
+            "summary": offline.get("summary"),
+            "artifact": offline.get("artifact"),
+        },
+        "latency_bench": latency,
         "metrics": _metric_hooks(latency_ms=elapsed_ms, case_count=total_cases),
     }

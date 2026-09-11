@@ -76,6 +76,13 @@ def public_flow_from_extra(extra: dict[str, Any] | None) -> list[dict[str, Any]]
                 "provider_message_id",
                 "cost_pending_events",
                 "known_usd",
+                "carry",
+                "used_turns",
+                "reason",
+                "verification",
+                "contradiction_detected",
+                "index_version",
+                "content_version",
             )
             if key in detail
         }
