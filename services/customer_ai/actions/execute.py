@@ -20,7 +20,11 @@ async def execute_actions(
     session: Any | None = None,
 ) -> ActionReceiptSet:
     receipts: list[ActionReceipt] = []
-    inbound = turn.history.included_inbound_ids[0] if turn.history.included_inbound_ids else ""
+    inbound = (
+        turn.history.included_inbound_ids[0]
+        if turn.history.included_inbound_ids
+        else (turn.event_ids[0] if turn.event_ids else "")
+    )
     for proposal in proposals.actions:
         if proposal.action_type == "no_op":
             receipts.append(

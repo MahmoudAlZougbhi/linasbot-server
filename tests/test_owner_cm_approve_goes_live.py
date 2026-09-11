@@ -209,3 +209,83 @@ async def test_tool_approve_cm_patch_returns_live_activation(
     assert result.ok is True
     assert result.data["live"] is True
     assert result.data["activation"]["live"] is True
+
+
+@pytest.mark.asyncio
+async def test_tool_approve_cm_patch_maps_daily_edit_limit(
+    proposal_store: CmPatchProposalStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from services.membership.daily_edits import DailyEditDecision, DailyEditLimitError, LIMIT_CODE
+    from services.owner_ai_tools_write import tool_approve_cm_patch
+
+    def _blocked(**_kwargs: Any) -> Any:
+        raise DailyEditLimitError(
+            DailyEditDecision(
+                False,
+                30,
+                0,
+                0,
+                30,
+                "2026-09-10",
+                "2026-09-11T00:00:00+00:00",
+                reason=LIMIT_CODE,
+            )
+        )
+
+    _stub_approve_deps(monkeypatch)
+    monkeypatch.setattr("services.cm.setup_chat.apply_section_patch", _blocked)
+    monkeypatch.setattr(
+        "services.owner_ai_tools_write.resolve_permissions",
+        lambda *_a, **_k: {"contentManagers": True},
+    )
+    proposed = propose_cm_patch(
+        tenant_id="t1",
+        user_id="u1",
+        section="services",
+        patch={"sessions_note": "7-10 sessions"},
+    )
+    result = await tool_approve_cm_patch(
+        tenant_id="t1",
+        role="admin",
+        user_id="u1",
+        proposal_id=proposed["proposal_id"],
+        confirmed=True,
+    )
+    assert result.ok is False
+    assert result.error == "AI_SETUP_DAILY_LIMIT"
+
+
+@pytest.mark.asyncio
+async def test_tool_approve_diagnosis_fix_maps_daily_edit_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.membership.daily_edits import DailyEditDecision, DailyEditLimitError, LIMIT_CODE
+    from services.owner_ai_tools_diagnosis import tool_approve_diagnosis_fix
+
+    async def _blocked(**_kwargs: Any) -> Any:
+        raise DailyEditLimitError(
+            DailyEditDecision(
+                False,
+                30,
+                0,
+                0,
+                30,
+                "2026-09-10",
+                "2026-09-11T00:00:00+00:00",
+                reason=LIMIT_CODE,
+            )
+        )
+
+    monkeypatch.setattr(
+        "services.owner_ai_tools_diagnosis.resolve_permissions",
+        lambda *_a, **_k: {"contentManagers": True},
+    )
+    monkeypatch.setattr("services.owner_ai_diagnosis.approve_diagnosis_fix", _blocked)
+    result = await tool_approve_diagnosis_fix(
+        tenant_id="t1",
+        role="admin",
+        user_id="u1",
+        proposal_id="p1",
+        confirmed=True,
+    )
+    assert result.ok is False
+    assert result.error == "AI_SETUP_DAILY_LIMIT"

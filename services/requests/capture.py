@@ -29,6 +29,16 @@ _CHANNEL_TO_SOURCE: dict[str, str] = {
     "whatsapp_cloud": "whatsapp_cloud",
     "wa": "whatsapp_cloud",
     "comment_linked_dm": "comment_linked_dm",
+    "instagram_comment": "comment_linked_dm",
+    "facebook_comment": "comment_linked_dm",
+    "ig_comment": "comment_linked_dm",
+    "fb_comment": "comment_linked_dm",
+    "tiktok_comment": "comment_linked_dm",
+    "comment": "comment_linked_dm",
+    "web": "web_chat",
+    "web_chat": "web_chat",
+    "website": "web_chat",
+    "website_chat": "web_chat",
 }
 
 

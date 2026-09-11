@@ -172,18 +172,17 @@ test('drawer search chrome is header icon; Settings beside search; New chat on R
   assert.doesNotMatch(modules, /newChat:\s*feather\('plus'\)/);
 });
 
-test('Settings hosts AI Limits only (no Actions)', () => {
+test('Settings no longer hosts Customer AI Limits or Actions', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
   const tree = read('app/AppScreenTree.tsx');
-  assert.match(settings, /onOpenAiLimits/);
-  assert.match(settings, /settingsAiLimits/);
+  assert.doesNotMatch(settings, /onOpenAiLimits/);
+  assert.doesNotMatch(settings, /settingsAiLimits/);
   assert.doesNotMatch(settings, /SettingsAboutSheet/);
   assert.doesNotMatch(settings, /settingsAboutLinas/);
   assert.doesNotMatch(settings, /onOpenActions/);
   assert.doesNotMatch(settings, /settingsActions/);
   assert.doesNotMatch(tree, /section: 'actions'/);
-  assert.match(tree, /section: 'ai_limits'/);
-  assert.match(tree, /backTo: 'settings'/);
+  assert.doesNotMatch(tree, /section: 'ai_limits'/);
   assert.match(tree, /onBack=\{[\s\S]*?setScreen\(\{ name: 'settings' \}\)/);
 });
 
@@ -320,12 +319,13 @@ test('Buy credits sheet matches design handoff', () => {
   assert.match(sheet, /accessibilityRole="radio"/);
   assert.match(sheet, /DEFAULT_CREDIT_PACK/);
   assert.match(sheet, /subBuyCreditsCta/);
-  assert.match(sheet, /subPurchasedNoExpire/);
+  assert.match(sheet, /subLeftoverNoExpire/);
+  assert.doesNotMatch(sheet, /subPurchasedNoExpire/);
   assert.match(sheet, /subFooterStore/);
   assert.match(sheet, /subCancel/);
-  assert.match(en, /Buy \{n\} credits • \{price\}/);
+  assert.match(en, /Add \{n\} leftover credits • \{price\}/);
   assert.match(en, /Payment is completed securely through the App Store or Google Play/);
-  assert.match(en, /Purchased credits do not expire/);
+  assert.match(en, /Purchased leftover credits do not expire/);
 });
 
 test('Dashboard sections match design handoff', () => {
@@ -356,10 +356,14 @@ test('Dashboard sections match design handoff', () => {
   assert.match(plan, /dashPlanTitle/);
   assert.match(plan, /dashCreditsMembership/);
   assert.match(plan, /dashCreditsBought/);
+  assert.match(plan, /dashMessagesPending/);
+  assert.match(plan, /message_billing_active/);
   assert.match(plan, /splitRow/);
-  assert.match(plan, /dashBuyCredits/);
+  assert.match(plan, /chatAddLeftoverCredits/);
+  assert.match(plan, /buy_credits/);
   assert.match(en, /dashCreditsMembership: 'Membership'/);
   assert.match(en, /dashCreditsBought: 'Bought'/);
+  assert.match(en, /dashMessagesPending: 'Not active yet'/);
   assert.match(plan, /DASH_MINT/);
   assert.match(plan, /buyBtn/);
   assert.match(grid, /dashTotalActivity/);
@@ -391,7 +395,7 @@ test('Dashboard sections match design handoff', () => {
   assert.match(fr, /Copilote propriétaire/);
 });
 
-test('Customer AI Limits screen matches design handoff', () => {
+test('Customer AI Limits editor remains but is not an owner feature', () => {
   const editor = read('features/cm/editors/AiLimitsEditor.tsx');
   const field = read('features/cm/editors/AiLimitsPencilField.tsx');
   const screen = read('features/cm/CmSectionScreen.tsx');
@@ -422,7 +426,7 @@ test('Customer AI Limits screen matches design handoff', () => {
   assert.match(read('features/cm/editors/aiLimitsStyles.ts'), /typography\.sectionTitle/);
   assert.doesNotMatch(read('features/cm/editors/aiLimitsStyles.ts'), /cardTitle:[\s\S]*?fontSize:\s*17/);
   assert.match(en, /Customer AI Limits/);
-  assert.match(en, /Protect credits by limiting each customer/);
+  assert.match(en, /Protect messages by limiting each customer/);
   assert.match(ar, /حدود الذكاء الاصطناعي للزبائن/);
   assert.match(fr, /Limites IA clients/);
 });

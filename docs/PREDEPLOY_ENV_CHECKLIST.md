@@ -12,6 +12,10 @@ Do **not** paste secret values into tickets, chat, commits, or logs. Mark each i
 | `OPENAI_API_KEY` | LLM | Required; readiness checks presence only |
 | `VOYAGE_API_KEY` | Customer Brain embed/rerank | Required before enabling Customer Brain semantic search; never reuse the OpenAI key |
 | `CUSTOMER_BRAIN_ENABLED` | Customer Brain runtime | Default off. Do not enable for live customers until the acceptance gate passes |
+| `MESSAGE_BILLING_ENABLED` | Message ledger gate | Default off. Keep credit gates until cutover is approved |
+| `MESSAGE_BILLING_CUTOVER` | Public/checkout message offer | Default off. Do not sell unmapped message prices |
+| `FREE_PLAN_ENFORCEMENT_ENABLED` | Free slot/content caps | Default off until section-2 Free values exist |
+| `LINAS_CUSTOMER_AI_LAB` | Isolated Brain lab API | Default off. Capture-only; lab / lab_* tenants only |
 
 ## First admin (empty DB)
 

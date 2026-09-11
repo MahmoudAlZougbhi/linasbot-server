@@ -151,7 +151,7 @@ async def tool_propose_smart_answer(
             "proposed_value": proposed_text,
             "impact": (
                 "Smart Q&A / FAQ: when a customer asks the same question (or same meaning), "
-                "the bot replies from this ready-made Q&A instead of a full AI generation — saving credits."
+                "the bot replies from this ready-made Q&A instead of a full AI generation — using 0 AI messages."
             ),
         },
         "requires_confirmation": True,
@@ -201,14 +201,25 @@ async def tool_approve_smart_answer(
     except FaqEntitlementError as exc:
         return ToolResult(ok=False, name="approve_smart_answer", data=exc.payload, error=str(exc))
 
-    created = await create_faq_pair(
-        question=prop.question,
-        answer=prop.answer,
-        language=prop.language,
-        tenant_id=tenant_id,
-        updated_by=user_id,
-        tags=["smart_answer", "owner_copilot"],
-    )
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit
+
+    try:
+        with guarded_edit(
+            tenant_id=tenant_id,
+            kind="faq:owner-approve",
+            payload={"proposal_id": proposal_id, "question": prop.question, "answer": prop.answer},
+        ):
+            created = await create_faq_pair(
+                question=prop.question,
+                answer=prop.answer,
+                language=prop.language,
+                tenant_id=tenant_id,
+                updated_by=user_id,
+                tags=["smart_answer", "owner_copilot"],
+            )
+    except DailyEditLimitError as exc:
+        return ToolResult(ok=False, name="approve_smart_answer", data={"reset_at": exc.decision.reset_at}, error=exc.code)
     from services.owner_ai_cm_approval import activate_cm_after_save
 
     # Same Approve→Live path as CM patches (#171): draft mirror is already in faq section.

@@ -23,6 +23,7 @@ from services.web_chat.operation import (
 )
 from services.web_chat.operation_fsm import OperationFsmError, OperationState, stable_operation_key
 from services.web_chat.persistence import PersistFailure, PersistOutcome, persist_web_chat_message
+from services.web_chat.followup_message_ledger import followup_uses_message_ledger
 from services.web_chat.session_authority import verified_session_snapshot
 from services.web_chat.session_binding import FollowUpSessionBoundaryError, resolve_durable_visitor_binding
 from services.web_chat.store import WebChatStoreBackend, web_chat_store
@@ -74,7 +75,7 @@ async def _converge_from_durable_outbox(
     if record.state == OperationState.COMPLETE:
         return _duplicate_delivery_result(key)
     if record.state in {OperationState.CLAIMED, OperationState.RESERVED}:
-        if record.state == OperationState.CLAIMED:
+        if record.state == OperationState.CLAIMED and bound_reservation_id:
             advance_operation(runtime, OperationState.RESERVED, reservation_id=bound_reservation_id)
         advance_operation(runtime, OperationState.REPLY_READY, result=turn_result)
     refresh_operation_runtime(runtime)
@@ -110,6 +111,8 @@ def _resolve_bound_reservation(
             "Follow-up delivery reservation does not match the bound operation.",
         )
     resolved = explicit or bound
+    if not resolved and followup_uses_message_ledger():
+        return ""
     if not resolved:
         raise OperationFsmError(
             "reservation_required",
@@ -125,6 +128,8 @@ def _preflight_reservation_or_resume(
     reservation_id: str | None,
 ) -> None:
     """Fail closed on brand-new deliveries with no bound reservation."""
+    if followup_uses_message_ledger():
+        return
     explicit = str(reservation_id or "").strip()
     if explicit:
         return
@@ -173,6 +178,21 @@ def _finalize_followup_billing(
         return False, True
     if record.state != OperationState.DURABLE_VISIBLE:
         return False, False
+    if followup_uses_message_ledger():
+        from services.smart_followup.billing_ids import settle_followup_from_snapshot
+
+        payload = dict(record.result or {})
+        payload.setdefault("idempotency_key", idempotency_key)
+        settle_followup_from_snapshot(tenant_id, payload, accepted=True)
+        try_advance_operation(
+            runtime,
+            OperationState.DURABLE_VISIBLE,
+            OperationState.COMPLETE,
+            result=record.result,
+        )
+        refresh_operation_runtime(runtime)
+        complete = bool(runtime.record and runtime.record.state == OperationState.COMPLETE)
+        return complete, not complete
     if not record.reservation_id:
         advance_operation(runtime, OperationState.BILLING_PENDING, result=record.result)
         abandon_operation_lease(runtime)
@@ -348,7 +368,11 @@ async def deliver_web_followup_message(
         authority_hash=binding.authority_hash,
     )
     payload = build_followup_payload(visitor_id=visitor_id, reply_text=reply_text, idempotency_key=key)
-    turn_result = {"reply_text": reply_text, "idempotency_key": key}
+    turn_result = {
+        "reply_text": reply_text,
+        "idempotency_key": key,
+        "conversation_id": conversation_id,
+    }
 
     _preflight_reservation_or_resume(
         tenant_id=tid,
@@ -391,7 +415,8 @@ async def deliver_web_followup_message(
     record = runtime.record
 
     if record is None or record.state == OperationState.CLAIMED:
-        advance_operation(runtime, OperationState.RESERVED, reservation_id=bound_reservation_id)
+        if bound_reservation_id:
+            advance_operation(runtime, OperationState.RESERVED, reservation_id=bound_reservation_id)
         advance_operation(runtime, OperationState.REPLY_READY, result=turn_result)
 
     return await _project_then_enqueue_followup(

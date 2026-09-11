@@ -62,7 +62,7 @@ SECTION_MODELS: dict[str, type[CmBaseModel]] = {
 
 # Interview order for guided setup (Sources/Publish are UI hubs, not draft sections).
 # languages is system-global — owners never configure reply languages.
-_SKIP_OWNER_SETUP: frozenset[str] = frozenset({"languages"})
+_SKIP_OWNER_SETUP: frozenset[str] = frozenset({"languages", "ai_limits"})
 SETUP_SECTION_ORDER: tuple[str, ...] = tuple(
     s for s in CM_SECTIONS if s in SECTION_MODELS and s not in _SKIP_OWNER_SETUP
 )
@@ -182,24 +182,26 @@ def apply_section_patch(
     merged = _merge_dict(current, patch)
     validated = model_cls.model_validate(merged)
     payload = validated.model_dump(mode="json")
-    try:
-        updated = put_draft(
-            name,
-            payload=payload,
-            if_match=env.etag,
-            updated_by=actor_id,
-            tenant_id=tenant_id,
-        )
-    except ConflictError:
-        # One retry with fresh etag for setup chat UX.
-        env2 = get_draft(name, tenant_id=tenant_id, create_default=True)
-        updated = put_draft(
-            name,
-            payload=payload,
-            if_match=env2.etag,
-            updated_by=actor_id,
-            tenant_id=tenant_id,
-        )
+    from services.membership.edit_http import guarded_cm_write
+
+    with guarded_cm_write(tenant_id=tenant_id, section=name, current=current, payload=payload):
+        try:
+            updated = put_draft(
+                name,
+                payload=payload,
+                if_match=env.etag,
+                updated_by=actor_id,
+                tenant_id=tenant_id,
+            )
+        except ConflictError:
+            env2 = get_draft(name, tenant_id=tenant_id, create_default=True)
+            updated = put_draft(
+                name,
+                payload=payload,
+                if_match=env2.etag,
+                updated_by=actor_id,
+                tenant_id=tenant_id,
+            )
     return {
         "section": name,
         "revision": updated.revision,

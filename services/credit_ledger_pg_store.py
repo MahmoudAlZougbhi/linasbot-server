@@ -117,6 +117,47 @@ def _entry_dict(row: CreditLedgerEntryRow) -> dict[str, Any]:
     }
 
 
+def list_reserve_tenant_ids(session: Session) -> list[str]:
+    """Tenants that already have a credit reserve row. Do not invent ids."""
+    rows = session.scalars(
+        select(CreditLedgerEntryRow.tenant_id).where(CreditLedgerEntryRow.op == "reserve").distinct()
+    ).all()
+    return sorted({str(tid) for tid in rows if tid})
+
+
+def list_open_leftover_reservations(session: Session, tenant_id: str) -> list[dict[str, str]]:
+    """Open leftover-credit reserves for one known tenant. No tenant guess."""
+    from datetime import datetime, timezone
+
+    rows = session.scalars(select(CreditLedgerEntryRow).where(CreditLedgerEntryRow.tenant_id == tenant_id)).all()
+    from services.membership.credit_reservation_scan import leftover_closed, leftover_op
+
+    reserved: dict[str, CreditLedgerEntryRow] = {}
+    closed: set[str] = set()
+    for row in rows:
+        if row.op == "reserve" and row.id:
+            reserved[str(row.id)] = row
+        if row.op in {"capture", "release"}:
+            closed_id = str(row.request_id or "").strip()
+            if closed_id:
+                closed.add(closed_id)
+    out: list[dict[str, str]] = []
+    for rid, row in reserved.items():
+        op = str(row.operation_type or "")
+        if leftover_closed(rid, str(row.request_id or ""), closed) or not leftover_op(op):
+            continue
+        created = datetime.fromtimestamp(float(row.created_at or 0), tz=timezone.utc).isoformat()
+        out.append(
+            {
+                "reservation_id": rid,
+                "request_id": str(row.request_id or rid),
+                "operation_type": op or "legacy_credits",
+                "created_at": created,
+            }
+        )
+    return out
+
+
 def import_balance(session: Session, tenant_id: str, available: int, reserved: int, updated_at: float) -> None:
     row = session.get(CreditBalanceRow, tenant_id)
     if row is None:

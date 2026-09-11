@@ -18,6 +18,7 @@ class TitleCard:
     search_text: str
     revision: str = ""
     aliases: tuple[str, ...] = field(default_factory=tuple)
+    body: str = ""
 
 
 def _label(labels: Any) -> str:
@@ -36,6 +37,7 @@ def _card(
     title: str,
     extra: list[str],
     revision: str = "",
+    body: str = "",
 ) -> TitleCard | None:
     if not item_id:
         return None
@@ -50,6 +52,7 @@ def _card(
         search_text=search,
         revision=revision,
         aliases=tuple(p for p in extra if p),
+        body=body.strip(),
     )
 
 
@@ -58,8 +61,14 @@ def _from_items(family: SourceFamily, rows: list[Any], revision: str) -> list[Ti
     for raw in rows:
         if not isinstance(raw, dict):
             continue
+        status = str(raw.get("status") or "active").strip().lower()
+        if status in {"archived", "draft", "deleted", "inactive", "withdrawn"}:
+            continue
+        if raw.get("active") is False:
+            continue
         item_id = str(raw.get("id") or raw.get("qa_group_id") or "").strip()
         title = str(raw.get("title") or raw.get("name") or _label(raw.get("labels")) or "").strip()
+        body = str(raw.get("body") or raw.get("content") or raw.get("text") or raw.get("description") or "")
         extra = [
             str(raw.get("ai_search_title") or ""),
             str(raw.get("ai_search_description") or ""),
@@ -71,7 +80,7 @@ def _from_items(family: SourceFamily, rows: list[Any], revision: str) -> list[Ti
             for variant in raw.get("variants") or []:
                 if isinstance(variant, dict):
                     extra.append(str(variant.get("question") or ""))
-        card = _card(family=family, item_id=item_id, title=title, extra=extra, revision=revision)
+        card = _card(family=family, item_id=item_id, title=title, extra=extra, revision=revision, body=body)
         if card:
             cards.append(card)
     return cards
@@ -93,6 +102,11 @@ def cards_from_sections(sections: dict[str, Any], *, revision: str = "") -> list
         rows = payload.get("items")
         if isinstance(rows, list):
             cards.extend(_from_items(family, rows, revision))
+    if not any(card.source_family == "hours" for card in cards):
+        branches = sections.get("branches")
+        items = branches.get("items") if isinstance(branches, dict) else None
+        if isinstance(items, list):
+            cards.extend(_from_items("hours", items, revision))
     # Mobile Services screen writes published CM prices.catalog — that is the service SoT.
     prices = sections.get("prices")
     catalog = prices.get("catalog") if isinstance(prices, dict) else None

@@ -171,6 +171,7 @@ async def _delayed_process_messages(
                     pending_delivery_for_claim,
                     reset_turn_runtime_state,
                     retry_saved_reply_delivery,
+                    settle_reserved_credits,
                     try_reserve_for_ai,
                 )
                 from services.outbound_turn_idempotency import _claim_key_basis
@@ -233,38 +234,42 @@ async def _delayed_process_messages(
                         f"combined_len={len(combined_message or '')} — distributed dedupe inactive for this turn"
                     )
                 try:
-                    import time as _time
-
-                    from services.scale.latency_histogram import observe
-                    from services.scale.trace_span import mark
-
-                    mark(str(trace), "ai_started")
-                    _ai_t0 = _time.time()
-                except Exception:
-                    _ai_t0 = None
-                await _process_and_respond(
-                    user_id,
-                    user_name=config.user_names.get(user_id, "عميل"),
-                    user_input_to_process=combined_message,
-                    user_data=user_data,
-                    send_message_func=outbound_send,
-                    send_action_func=send_action_func,
-                )
-                if _ai_t0 is not None:
                     try:
-                        mark(str(trace), "ai_finished")
-                        observe("ai_ms", max(0.0, (_time.time() - _ai_t0) * 1000.0))
+                        import time as _time
+
+                        from services.scale.latency_histogram import observe
+                        from services.scale.trace_span import mark
+
+                        mark(str(trace), "ai_started")
+                        _ai_t0 = _time.time()
                     except Exception:
-                        pass
-                delivery_summary = finalize_delivery({"user_data": user_data})
-                if delivery_summary.get("delivery") != "delivered" and key_basis:
-                    from services.outbound_turn_idempotency import release_ai_turn_claim
+                        _ai_t0 = None
+                    await _process_and_respond(
+                        user_id,
+                        user_name=config.user_names.get(user_id, "عميل"),
+                        user_input_to_process=combined_message,
+                        user_data=user_data,
+                        send_message_func=outbound_send,
+                        send_action_func=send_action_func,
+                    )
+                    if _ai_t0 is not None:
+                        try:
+                            mark(str(trace), "ai_finished")
+                            observe("ai_ms", max(0.0, (_time.time() - _ai_t0) * 1000.0))
+                        except Exception:
+                            pass
+                    delivery_summary = finalize_delivery({"user_data": user_data})
+                    if delivery_summary.get("delivery") != "delivered" and key_basis:
+                        from services.outbound_turn_idempotency import release_ai_turn_claim
 
-                    await release_ai_turn_claim(key_basis)
-                elif delivery_summary.get("delivery") == "delivered" and key_basis:
-                    from services.outbound_turn_idempotency import complete_ai_turn_claim
+                        await release_ai_turn_claim(key_basis)
+                    elif delivery_summary.get("delivery") == "delivered" and key_basis:
+                        from services.outbound_turn_idempotency import complete_ai_turn_claim
 
-                    await complete_ai_turn_claim(key_basis)
+                        await complete_ai_turn_claim(key_basis)
+                finally:
+                    if not user_data.get("_credit_captured_for_turn"):
+                        settle_reserved_credits(user_data)
             finally:
                 user_data.pop("_dashboard_test_turn_sticky", None)
             config.user_last_bot_response_time[user_id] = datetime.datetime.now()

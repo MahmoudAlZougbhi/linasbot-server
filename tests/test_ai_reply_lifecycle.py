@@ -63,6 +63,11 @@ def test_capture_once_not_on_delivery_failure(ledger_env: CreditLedgerService, t
 
 
 def test_release_on_ai_failure_no_capture(ledger_env: CreditLedgerService, turn_store: None) -> None:
+    from services.customer_ai.leftover_reserve import reset_leftover_pins_for_tests
+    from services.membership.pending_settlement import reset_pending_settlements_for_tests
+
+    reset_leftover_pins_for_tests()
+    reset_pending_settlements_for_tests()
     ledger_env.ensure_period_grant("t1")
     before = ledger_env.get_balance("t1")
     turn = begin_turn(tenant_id="t1", channel="facebook", external_inbound_id="mid-2")
@@ -73,6 +78,50 @@ def test_release_on_ai_failure_no_capture(ledger_env: CreditLedgerService, turn_
     rec = get_turn(turn.logical_reply_id)
     assert rec is not None
     assert rec.credit_captured is False
+    from services.customer_ai.leftover_reserve import leftover_policy_for
+    from services.membership.pending_settlement import get_pending
+
+    held = get_pending("t1", turn.credit_reservation_id or "")
+    assert held is None or held.state == "released"
+    assert leftover_policy_for("t1", "mid-2") is None
+
+
+def test_capture_after_reply_persisted_settles_leftover_hold(
+    ledger_env: CreditLedgerService, turn_store: None
+) -> None:
+    from services.customer_ai.leftover_reserve import leftover_policy_for, reset_leftover_pins_for_tests
+    from services.membership.pending_settlement import get_pending, reset_pending_settlements_for_tests
+
+    reset_leftover_pins_for_tests()
+    reset_pending_settlements_for_tests()
+    ledger_env.ensure_period_grant("t1")
+    turn = begin_turn(tenant_id="t1", channel="whatsapp", external_inbound_id="mid-settle")
+    rid = reserve_before_ai(turn)
+    assert leftover_policy_for("t1", "mid-settle") == "legacy_credits"
+    persist_generated_reply(turn.logical_reply_id, reply_text="Hello customer")
+    capture_after_reply_persisted(turn.logical_reply_id)
+    held = get_pending("t1", rid or "", turn.logical_reply_id)
+    assert held is not None
+    assert held.state == "settled"
+    assert leftover_policy_for("t1", "mid-settle", turn.logical_reply_id, rid or "") is None
+
+
+def test_reserve_before_ai_persists_candidate_ids(ledger_env: CreditLedgerService, turn_store: None) -> None:
+    from services.customer_ai.leftover_reserve import reset_leftover_pins_for_tests
+    from services.membership.pending_settlement import reset_pending_settlements_for_tests
+
+    reset_leftover_pins_for_tests()
+    reset_pending_settlements_for_tests()
+    ledger_env.ensure_period_grant("t1")
+    turn = begin_turn(tenant_id="t1", channel="whatsapp", external_inbound_id="mid-pin")
+    rid = reserve_before_ai(turn)
+    from services.customer_ai.leftover_reserve import leftover_policy_for
+    from services.membership.pending_settlement import get_pending
+
+    held = get_pending("t1", rid or "", "")
+    assert held is not None
+    assert "mid-pin" in (held.extra.get("candidate_ids") or [])
+    assert leftover_policy_for("t1", "mid-pin") == "legacy_credits"
 
 
 def test_pending_delivery_blocks_duplicate_generation(turn_store: None) -> None:

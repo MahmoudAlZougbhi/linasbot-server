@@ -9,6 +9,7 @@ Surface = Literal["dm", "comment", "web_chat"]
 
 CommentMode = Literal[
     "ignore",
+    "manual",
     "static_comment",
     "static_dm",
     "static_both",
@@ -88,6 +89,7 @@ StopReason = Literal[
     "brain_disabled",
     "comments_toggle_off",
     "insufficient_credits",
+    "insufficient_messages",
     "human_control",
     "restricted",
     "policy_suppressed",

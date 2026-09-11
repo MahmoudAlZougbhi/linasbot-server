@@ -17,6 +17,21 @@ from services.queues.models import QueueJob
 MAX_ATTEMPTS = 8
 
 
+def _message_settle_ops(*, inbound: Any, inbound_id: str, reservation: str = "") -> tuple[str, tuple[str, ...]]:
+    provider = str(getattr(inbound, "provider_event_id", "") or "")
+    payload = dict(getattr(inbound, "payload", None) or {})
+    if provider:
+        payload.setdefault("provider_event_id", provider)
+        payload.setdefault("provider_message_id", provider)
+        payload.setdefault("message_id", provider)
+    from services.customer_ai.history_ids import message_id_for_brain
+
+    brain_mid = message_id_for_brain(payload)
+    primary = brain_mid or provider or inbound_id
+    extras = tuple(item for item in (inbound_id, reservation, provider, brain_mid) if item)
+    return primary, extras
+
+
 def _limiter_provider(channel: str) -> str:
     ch = (channel or "").strip().lower()
     if ch in {"instagram", "facebook", "whatsapp"}:
@@ -41,6 +56,12 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
         row.state = "sending"
         row.attempt_count = int(row.attempt_count or 0) + 1
         session.commit()
+        inbound = session.get(OmnichannelInboundEvent, row.inbound_event_id) if row.inbound_event_id else None
+        primary, extras = _message_settle_ops(
+            inbound=inbound,
+            inbound_id=str(row.inbound_event_id or ""),
+            reservation=str(row.credit_reservation_id or ""),
+        )
         snapshot: dict[str, Any] = {
             "id": row.id,
             "tenant_id": row.tenant_id,
@@ -50,6 +71,8 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
             "conversation_key": row.conversation_key,
             "canonical_body": row.canonical_body,
             "inbound_event_id": row.inbound_event_id,
+            "message_operation_id": primary,
+            "message_extra_ids": extras,
             "credit_reservation_id": row.credit_reservation_id,
             "attempt_count": row.attempt_count,
             "source": row.source,
@@ -191,29 +214,63 @@ def _finish_success(outbox_id: str, result: dict[str, Any]) -> None:
         inbound_id = row.inbound_event_id
         tenant_id = row.tenant_id
         channel = row.channel
-        if inbound_id:
-            inbound = session.get(OmnichannelInboundEvent, inbound_id)
-            if inbound is not None:
-                inbound.state = "delivered"
+        inbound = session.get(OmnichannelInboundEvent, inbound_id) if inbound_id else None
+        if inbound is not None:
+            inbound.state = "delivered"
+        operation_id, extra_ids = _message_settle_ops(
+            inbound=inbound,
+            inbound_id=str(inbound_id or ""),
+            reservation=str(reservation or ""),
+        )
         session.commit()
     if reservation:
-        from services.credit_ledger_service import credit_ledger_service
+        from services.membership.message_flags import message_billing_enabled
 
-        credit_ledger_service.capture(
-            tenant_id=tenant_id,
-            reservation_id=reservation,
-            provider_cost_usd=None,
-            model_provider=channel,
-        )
+        if not message_billing_enabled():
+            from services.customer_ai.leftover_reserve import capture_leftover_reply
+
+            capture_leftover_reply(
+                tenant_id,
+                reservation,
+                model_provider=channel,
+                provider_message_id=str(result.get("message_id") or ""),
+            )
+    from services.customer_ai.billing import settle_after_send
+
+    settle_after_send(
+        tenant_id=tenant_id,
+        operation_id=operation_id,
+        accepted=True,
+        channel=channel,
+        provider_message_id=str(result.get("message_id") or ""),
+        extra_ids=extra_ids,
+    )
 
 
 def _release_credits_if_never_submitted(snapshot: dict[str, Any], *, submitted: bool) -> None:
     reservation = snapshot.get("credit_reservation_id")
-    if submitted or not reservation:
+    inbound_id = str(snapshot.get("inbound_event_id") or "")
+    tenant_id = str(snapshot.get("tenant_id") or "")
+    if submitted or not tenant_id:
         return
-    from services.credit_ledger_service import credit_ledger_service
+    from services.membership.message_flags import message_billing_enabled
 
-    credit_ledger_service.release(tenant_id=str(snapshot["tenant_id"]), reservation_id=str(reservation))
+    if message_billing_enabled():
+        from services.customer_ai.billing import settle_after_send
+
+        settle_after_send(
+            tenant_id=tenant_id,
+            operation_id=str(snapshot.get("message_operation_id") or inbound_id or reservation or ""),
+            accepted=False,
+            channel=str(snapshot.get("channel") or ""),
+            extra_ids=tuple(snapshot.get("message_extra_ids") or ()) or (inbound_id, str(reservation or "")),
+        )
+        return
+    if not reservation:
+        return
+    from services.customer_ai.leftover_reserve import release_leftover_reply
+
+    release_leftover_reply(tenant_id, str(reservation))
 
 
 async def _send(snapshot: dict[str, Any]) -> dict[str, Any]:

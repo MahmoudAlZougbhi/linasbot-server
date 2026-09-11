@@ -27,12 +27,15 @@ test('Smart Q&A list matches screenshot handoff', () => {
   const faqAr = read('i18n/locales/faqUiAr.ts');
   const faqFr = read('i18n/locales/faqUiFr.ts');
 
+  assert.match(screen, /faqWriteErrorMessage/);
+  assert.match(read('features/faq/faqWriteError.ts'), /isDailyEditLimitError/);
+  assert.match(read('features/faq/FaqResourcesEditor.tsx'), /faqWriteErrorMessage/);
   assert.match(screen, /title=\{tr\('faqTitle'\)\}/);
   assert.match(screen, /subtitle=\{mode === 'list' \? tr\('faqSub'\) : undefined\}/);
   assert.match(en, /faqTitle:\s*'Smart Q&A'/);
   assert.match(en, /faqSub:\s*'Translate Q&A into any language you choose\.'/);
   assert.match(en, /faqCreateNew:\s*'Create Q&A'/);
-  assert.match(en, /faqWhyTitle:\s*'Save credits with Smart Q&A'/);
+  assert.match(en, /faqWhyTitle:\s*'Smart Q&A uses 0 messages'/);
   assert.doesNotMatch(en, /Smart Answers/);
   assert.doesNotMatch(faqEn, /Smart Answers/);
 

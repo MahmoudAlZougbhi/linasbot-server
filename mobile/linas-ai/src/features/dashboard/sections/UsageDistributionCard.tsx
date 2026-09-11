@@ -41,7 +41,7 @@ export function UsageDistributionCard({ distribution }: Props) {
       <Text style={[styles.title, { color: colors.text }]}>Usage distribution</Text>
       <Text style={{ color: colors.textDim, fontFamily: fonts.body, fontSize: 12 }}>
         Interaction count
-        {distribution.credits_mode_available ? '' : ' · Credits mode unavailable'}
+        {distribution.credits_mode_available ? '' : ' · Messages mode unavailable'}
       </Text>
       {items.length === 0 ? (
         <Text style={{ color: colors.textMuted, fontFamily: fonts.body }}>No usage yet.</Text>

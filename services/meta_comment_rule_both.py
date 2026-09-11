@@ -35,11 +35,9 @@ def _dm_payload(*, comment_id: str, binding: MetaAssetBinding, text: str, rule_i
 
 
 def is_deterministic_comment_and_dm(rule_decision: Any) -> TypeGuard[CommentRuleDecision]:
-    return (
-        rule_decision is not None
-        and getattr(rule_decision, "action", "") == "reply_comment_and_dm"
-        and getattr(rule_decision, "rule_mode", "") == "deterministic"
-    )
+    from services.meta_comment_rule_modes import is_static_both_comment
+
+    return is_static_both_comment(rule_decision)
 
 
 async def maybe_handle_comment_and_dm(

@@ -28,6 +28,28 @@ export class ApiError extends Error {
   }
 }
 
+const DAILY_EDIT_LIMIT_CODES = new Set(['AI_SETUP_DAILY_LIMIT', 'AI_SETUP_EDIT_LIMIT']);
+
+function bodyErrorCode(body: unknown): string {
+  if (!body || typeof body !== 'object') return '';
+  const rec = body as Record<string, unknown>;
+  if (typeof rec.error === 'string' && rec.error.trim()) return rec.error;
+  if (typeof rec.code === 'string' && rec.code.trim()) return rec.code;
+  const detail = rec.detail;
+  if (detail && typeof detail === 'object') {
+    const nested = detail as Record<string, unknown>;
+    if (typeof nested.error === 'string' && nested.error.trim()) return nested.error;
+    if (typeof nested.code === 'string' && nested.code.trim()) return nested.code;
+  }
+  return '';
+}
+
+export function isDailyEditLimitError(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  if (err.status === 429) return true;
+  return DAILY_EDIT_LIMIT_CODES.has(bodyErrorCode(err.body)) || DAILY_EDIT_LIMIT_CODES.has(err.message);
+}
+
 export function isMetadataPreparationFailure(err: unknown): boolean {
   if (!(err instanceof ApiError)) return false;
   if (err.message === 'METADATA_PREPARATION_FAILED') return true;

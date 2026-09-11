@@ -61,6 +61,51 @@ def _rule_text(rule: DynamicMessageRecord, language: str) -> str:
     return ""
 
 
+def inbound_greeting_language(message: str) -> str:
+    text = (message or "").strip()
+    if not text:
+        return "en"
+    try:
+        from services.system_knowledge_retrieval import detect_message_language
+
+        code = detect_message_language(text, fallback="en")
+        if code in {"ar", "franco"}:
+            return "ar"
+        if code in {"en", "fr"}:
+            return code
+    except Exception:
+        pass
+    return "en"
+
+
+def _greeting_texts(section: DynamicMessagesSection) -> set[str]:
+    texts: set[str] = set()
+    for rule in section.items:
+        if not rule.enabled:
+            continue
+        for lang in ("ar", "en", "fr"):
+            value = str(getattr(rule, lang, "") or "").strip()
+            if value:
+                texts.add(value)
+    return texts
+
+
+def _history_already_greeted(
+    history: HistorySnapshot,
+    section: DynamicMessagesSection,
+    now: datetime,
+) -> bool:
+    if _session_start(history, now):
+        return False
+    texts = _greeting_texts(section)
+    if not texts:
+        return False
+    return any(
+        item.role in {"assistant", "ai", "bot"} and (item.text or "").strip() in texts
+        for item in history.messages
+    )
+
+
 def _trigger_ok(rule: DynamicMessageRecord, message: str, *, session_start: bool) -> bool:
     mode = (rule.trigger_mode or "always").strip().lower()
     if mode == "always":
@@ -100,18 +145,21 @@ def evaluate_greeting(
     tenant_id: str,
     message: str,
     history: HistorySnapshot,
-    language: str = "ar",
+    language: str = "",
     already_greeted: bool = False,
     invocation_kind: str = "dm",
     now: datetime | None = None,
 ) -> GreetingDecision:
-    if invocation_kind == "followup" or already_greeted:
+    if invocation_kind in {"followup", "comment"} or already_greeted:
         return GreetingDecision(False, reason="not_eligible")
     section = load_dynamic_messages(tenant_id)
     if section is None:
         return GreetingDecision(False, reason="no_greeting_config")
     current = now or datetime.now(UTC)
+    if _history_already_greeted(history, section, current):
+        return GreetingDecision(False, reason="already_greeted")
     session_start = _session_start(history, current)
+    language = (language or inbound_greeting_language(message)).strip().lower() or "en"
     for rule in section.items:
         if not rule.enabled:
             continue

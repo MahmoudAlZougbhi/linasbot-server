@@ -39,12 +39,77 @@ def _rrf(*rank_lists: list[str], k: int = 60) -> dict[str, float]:
     return scores
 
 
+async def _semantic_from_store(
+    tenant_id: str,
+    query: str,
+    scoped: list[TitleCard],
+    families: set[SourceFamily] | None,
+    limit: int,
+) -> list[tuple[float, TitleCard]] | None:
+    if not tenant_id.strip():
+        return None
+    from services.customer_ai.search.store import query_similar
+
+    qvec = await embed_texts(ENTITY_QUERY, [query])
+    from datetime import datetime, timezone
+
+    from services.membership.provider_expense import record_pending_provider
+
+    record_pending_provider(
+        event_id=f"embed-query:{tenant_id}:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}",
+        tenant_id=tenant_id,
+        category="embedding",
+        feature="customer_chat",
+        provider="voyage",
+        model=ENTITY_QUERY.model,
+        operation_id="query",
+    )
+
+    def _map(result) -> list[tuple[float, TitleCard]] | None:
+        if result.outcome != "found" or not result.items:
+            return None
+        by_id = {card.item_id: card for card in scoped}
+        by_source = {card.item_id.split(":", 1)[-1]: card for card in scoped}
+        mapped: list[tuple[float, TitleCard]] = []
+        for hit in result.items:
+            card = (
+                by_id.get(hit.doc_id)
+                or by_id.get(f"{hit.source_family}:{hit.source_id}")
+                or by_source.get(hit.source_id)
+            )
+            if card is None:
+                continue
+            mapped.append((hit.score, card))
+        return mapped or None
+
+    query_kwargs = {
+        "tenant_id": tenant_id,
+        "space_id": ENTITY_DOCUMENT.space_id,
+        "vector": qvec.vectors[0],
+        "families": set(families) if families else None,
+        "limit": limit,
+    }
+    try:
+        from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+
+        with whatsapp_session(require=True) as session:
+            mapped = _map(query_similar(session, **query_kwargs))
+            if mapped is not None:
+                return mapped
+    except WhatsAppDatabaseUnavailable:
+        pass
+    except Exception:
+        pass
+    return _map(query_similar(None, **query_kwargs))
+
+
 async def search_hybrid(
     cards: list[TitleCard],
     query: str,
     *,
     families: set[SourceFamily] | None = None,
     limit: int | None = None,
+    tenant_id: str = "",
 ) -> list[HybridHit]:
     if not compatible(ENTITY_DOCUMENT, ENTITY_QUERY):
         raise RuntimeError("entity_space_mismatch")
@@ -54,14 +119,17 @@ async def search_hybrid(
     texts = [card.search_text for card in scoped]
     if not texts:
         return []
-    docs = await embed_texts(ENTITY_DOCUMENT, texts)
-    qvec = await embed_texts(ENTITY_QUERY, [query])
-    query_vec = qvec.vectors[0]
-    semantic: list[tuple[float, TitleCard]] = []
-    for card, vector in zip(scoped, docs.vectors, strict=True):
-        semantic.append((_cosine(query_vec, vector), card))
-    semantic.sort(key=lambda row: (-row[0], row[1].item_id))
-    semantic = semantic[: DEFAULT_BUDGETS.semantic_candidates_per_source]
+    stored = await _semantic_from_store(
+        tenant_id,
+        query,
+        scoped,
+        families,
+        DEFAULT_BUDGETS.semantic_candidates_per_source,
+    )
+    if stored is None:
+        semantic = []
+    else:
+        semantic = stored[: DEFAULT_BUDGETS.semantic_candidates_per_source]
     fused = _rrf(
         [hit.card.item_id for hit in lexical],
         [card.item_id for _score, card in semantic],

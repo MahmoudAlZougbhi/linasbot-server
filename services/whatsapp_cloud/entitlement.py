@@ -95,10 +95,11 @@ def evaluate_ai_eligibility(session: Session, conn: WhatsAppConnection) -> tuple
         return False, "published_cm_unavailable"
     # Credits: same remaining wallet as Dashboard. In-flight reserve is not a block.
     try:
-        from services.credit_ai_gate import ai_generation_blocked
+        from services.membership.generative_gate import generative_block_reason
 
-        if ai_generation_blocked(conn.tenant_id, honor_inflight_reserved=True):
-            return False, "insufficient_credits"
+        reason = generative_block_reason(conn.tenant_id, honor_inflight_reserved=True)
+        if reason:
+            return False, reason
     except Exception:
         return False, "credits_unavailable"
     if not conn.ai_default_enabled:

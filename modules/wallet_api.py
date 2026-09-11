@@ -33,7 +33,28 @@ async def stripe_webhook(request: Request) -> Any:
     data_object = (event.get("data") or {}).get("object") or {}
     if etype == "checkout.session.completed":
         metadata = data_object.get("metadata") or {}
-        if str(metadata.get("product") or "") != "linas_token_pack":
+        from services.membership.iap_message_grant import (
+            apply_verified_stripe_message_checkout,
+            stripe_checkout_kind,
+        )
+
+        kind = stripe_checkout_kind(metadata)
+        if kind == "message_pack":
+            payment_status = str(data_object.get("payment_status") or "")
+            if payment_status and payment_status != "paid":
+                return Response(status_code=200, content='{"success":true,"pending":true}')
+            tenant_id = str(metadata.get("tenant_id") or "").strip().lower()
+            product_id = str(metadata.get("package_id") or metadata.get("product_id") or "")
+            if not tenant_id:
+                raise HTTPException(status_code=400, detail="Invalid metadata")
+            grant = apply_verified_stripe_message_checkout(
+                tenant_id=tenant_id,
+                product_id=product_id,
+                transaction_id=str(data_object.get("id") or event_id),
+            )
+            stripe_checkout_service.mark_processed(event_id, {"kind": "message_pack", **grant})
+            return {"success": True, "message_grant": grant}
+        if kind != "token_pack":
             stripe_checkout_service.mark_processed(event_id, {"skipped": "not_token_pack"})
             return {"success": True, "skipped": True}
         payment_status = str(data_object.get("payment_status") or "")

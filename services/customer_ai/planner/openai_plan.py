@@ -10,7 +10,7 @@ from services.customer_ai.planner.heuristic import plan_message
 from services.customer_ai.providers.config import planner_model
 
 
-async def plan_with_openai(message: str) -> PlannerPlan | None:
+async def plan_with_openai(message: str, history: str = "") -> PlannerPlan | None:
     if not openai_configured():
         return None
     from services.llm_core_service import create_chat_completion
@@ -27,10 +27,15 @@ async def plan_with_openai(message: str) -> PlannerPlan | None:
                 "content": (
                     "Return JSON only matching PlannerPlan. Task types: information, comparison, "
                     "resource_request, hours, service_request, product_request, draft_correction, "
-                    "cancel_or_status, human_request, acknowledgement. Do not invent entity IDs."
+                    "cancel_or_status, human_request, acknowledgement. Do not invent entity IDs. "
+                    "Negated booking or 'I do not want a human' is information, not an action. "
+                    "Keep one task per distinct question."
                 ),
             },
-            {"role": "user", "content": f"Message:\n{message}\nExample shape:\n{schema_hint}"},
+            {
+                "role": "user",
+                "content": f"History:\n{history[-4000:]}\n\nMessage:\n{message}\nExample shape:\n{schema_hint}",
+            },
         ],
         max_tokens=800,
     )
@@ -49,6 +54,21 @@ async def plan_with_openai(message: str) -> PlannerPlan | None:
         return None
 
 
-async def plan_turn(message: str) -> PlannerPlan:
-    planned = await plan_with_openai(message)
+async def plan_turn(message: str, history: str = "", *, tenant_id: str = "") -> PlannerPlan:
+    planned = await plan_with_openai(message, history)
+    if planned is not None and tenant_id.strip():
+        from datetime import datetime, timezone
+
+        from services.customer_ai.providers.config import planner_model
+        from services.membership.provider_expense import record_pending_provider
+
+        record_pending_provider(
+            event_id=f"llm-plan:{tenant_id}:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}",
+            tenant_id=tenant_id,
+            category="llm_generation",
+            feature="planning",
+            provider="openai",
+            model=planner_model(),
+            operation_id="planner",
+        )
     return planned or plan_message(message)

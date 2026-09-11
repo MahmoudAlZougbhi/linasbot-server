@@ -167,6 +167,15 @@ def update_settings(
     payload: dict[str, Any],
     expected_version: int | None = None,
 ) -> dict[str, Any]:
+    from services.membership.feature_entitlements import FeatureDenied, assert_followup_allowed
+
+    enabling = bool(payload.get("enabled", True))
+    if enabling or payload.get("steps") or payload.get("channels_enabled"):
+        try:
+            assert_followup_allowed(tenant_id)
+        except FeatureDenied as exc:
+            raise SmartFollowUpSettingsError(exc.code, str(exc)) from exc
+
     repo = SmartFollowUpRepository(session)
     settings, _existing = repo.ensure_defaults(tenant_id)
 

@@ -21,7 +21,9 @@ async def generate_web_chat_reply(*, tenant_id: str, payload: dict[str, Any]) ->
         store=web_chat_store,
         idempotency_key=str(payload.get("idempotency_key") or "") or None,
     )
-    reservation = str(payload.get("credit_reservation_id") or "") or None
+    from services.membership.message_flags import message_billing_enabled
+
+    reservation = None if message_billing_enabled() else (str(payload.get("credit_reservation_id") or "") or None)
     return str(reply or "").strip(), reservation, None
 
 

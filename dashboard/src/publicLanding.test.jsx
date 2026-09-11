@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, Navigate } from "react-router-dom";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { HOW_IT_WORKS_STEPS } from "./constants/landingHowItWorks";
 import { PUBLIC_PATHS, PUBLIC_SITE } from "./constants/publicSite";
 import { PublicLandingLocaleProvider } from "./contexts/PublicLandingLocaleContext";
 import Landing from "./pages/public/Landing";
@@ -103,7 +104,9 @@ describe("public marketing landing", () => {
                   plan_id: "lite",
                   display_name: "Lite",
                   price_usd: 9.99,
+                  intended_price_usd: 10,
                   included_credits: 7000,
+                  included_messages: 550,
                 },
               ],
             }),
@@ -155,7 +158,10 @@ describe("public marketing landing", () => {
     expect(screen.getAllByText("Price questions → Private DM").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Can you treat this pigmentation/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Write once").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/0 credits/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/0 messages/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/AI Limits/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Protect your credits/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Customer AI Limits/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(/Auto in every language you select/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Run every customer conversation from one AI app.")).toBeInTheDocument();
     expect(screen.getByText("See what matters. Act faster.")).toBeInTheDocument();
@@ -203,6 +209,12 @@ describe("public marketing landing", () => {
       expect(replies).toHaveTextContent("12");
       expect(businesses).toHaveTextContent("4");
     });
+  });
+
+  it("does not label included monthly messages as remaining", () => {
+    const subscription = HOW_IT_WORKS_STEPS.find((step) => step.navLabel === "Subscription");
+    expect(subscription?.body).toMatch(/included AI messages/i);
+    expect(subscription?.body).not.toMatch(/remaining AI messages/i);
   });
 
   it("redirects /analytics to get-app like other obsolete operator paths", () => {

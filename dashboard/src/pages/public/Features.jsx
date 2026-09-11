@@ -8,7 +8,7 @@ const FEATURES = [
   'Social media DM and comment automation',
   'Creative Studio (Pro+)',
   'Scheduling (Pro+)',
-  'Usage credits and subscription entitlements',
+  'Monthly AI messages and subscription entitlements',
   'Role-aware team users',
 ];
 

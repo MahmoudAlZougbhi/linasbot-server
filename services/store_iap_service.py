@@ -46,8 +46,14 @@ def iap_config_status() -> dict[str, Any]:
     apple_bundle = bool((os.getenv("APPLE_BUNDLE_ID") or "com.linasai.app").strip())
     google_sa = bool((os.getenv("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH") or "").strip())
     google_pkg = bool((os.getenv("GOOGLE_PLAY_PACKAGE_NAME") or "com.linasai.app").strip())
+    from services.membership.catalog_revenue import intended_price_usd
+    from services.membership.message_catalog import PUBLIC_PAID_PLAN_IDS
+
     return {
         "plans": PLAN_PRICES_USD,
+        "intended_message_prices_usd": {
+            pid: intended_price_usd(pid) for pid in PUBLIC_PAID_PLAN_IDS
+        },
         "product_map": _product_map(),
         "apple": {
             "configured": bool(apple_key and apple_bundle),

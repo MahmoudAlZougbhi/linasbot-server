@@ -25,12 +25,26 @@ def should_rerank(hits: list[HybridHit]) -> bool:
     return True
 
 
-async def rerank_hits(query: str, hits: list[HybridHit]) -> list[HybridHit]:
+async def rerank_hits(query: str, hits: list[HybridHit], *, tenant_id: str = "") -> list[HybridHit]:
     if not hits or not should_rerank(hits) or not voyage_configured():
         return hits
     documents = [item.card.search_text for item in hits]
     try:
         ranked = await rerank_texts(query=query, documents=documents, model=rerank_model())
+        if tenant_id.strip():
+            from datetime import datetime, timezone
+
+            from services.membership.provider_expense import record_pending_provider
+
+            record_pending_provider(
+                event_id=f"rerank:{tenant_id}:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}",
+                tenant_id=tenant_id,
+                category="rerank",
+                feature="knowledge",
+                provider="voyage",
+                model=rerank_model(),
+                quantity=len(documents),
+            )
     except Exception:
         return hits
     if not ranked:

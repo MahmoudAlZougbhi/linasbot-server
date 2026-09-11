@@ -122,11 +122,12 @@ export function DashboardScreen({ onNavigate, active = true }: Props) {
       ) : null}
 
       <BuyCreditsSheet
-        visible={credits.open}
+        visible={credits.open && !credits.messageBillingActive}
         prices={credits.prices}
         purchasing={credits.purchasing}
         locale={credits.locale}
         tr={credits.tr}
+        messageBillingActive={credits.messageBillingActive}
         onClose={() => credits.setOpen(false)}
         onBuy={(pack) => void credits.buy(pack)}
       />

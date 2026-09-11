@@ -81,6 +81,8 @@ async def cm_meta(request: Request) -> Any:
     else:
         tenant_runtime = "unpublished"
 
+    from services.membership.daily_edits import decision_payload, status as daily_edit_status
+
     return {
         "success": True,
         "tenant_id": tenant_id,
@@ -91,6 +93,7 @@ async def cm_meta(request: Request) -> Any:
         "has_published_content": tenant_has_published_cm(tenant_id),
         "publish_disabled_message": status.get("message"),
         "faq_canonical": cm_faq_canonical(),
+        "ai_setup_edits": decision_payload(daily_edit_status(tenant_id)),
     }
 
 
@@ -130,6 +133,45 @@ async def cm_put_draft(
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Request body must include a payload object")
 
+    from services.membership.daily_edits import (
+        DailyEditLimitError,
+        commit_edit,
+        decision_payload,
+        release_edit,
+        reserve_cm_section,
+    )
+
+    edit_op: str | None = None
+    try:
+        from services.cm.storage import get_draft
+        from services.membership.edit_http import payloads_equivalent
+
+        current = None
+        try:
+            current = get_draft(name, tenant_id=tenant_id, create_default=False)
+            same = current is not None and payloads_equivalent(getattr(current, "payload", None), payload)
+        except Exception:
+            same = False
+        if same:
+            edit_op = None
+        else:
+            from services.membership.free_slots import SlotLimitError, assert_cm_section_slots
+
+            try:
+                assert_cm_section_slots(
+                    tenant_id,
+                    name,
+                    payload,
+                    current_payload=getattr(current, "payload", None) if current is not None else None,
+                )
+            except SlotLimitError as exc:
+                raise HTTPException(status_code=402, detail={"error": exc.code, "message": str(exc)}) from exc
+            edit_op = reserve_cm_section(tenant_id=tenant_id, section=name, payload=payload)
+    except DailyEditLimitError as exc:
+        from services.membership.edit_http import limit_response
+
+        return limit_response(exc)
+
     try:
         envelope = put_draft(
             name,
@@ -139,8 +181,12 @@ async def cm_put_draft(
             tenant_id=tenant_id,
         )
     except UnknownSectionError as exc:
+        if edit_op:
+            release_edit(tenant_id=tenant_id, operation_id=edit_op)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except MetadataPreparationError as exc:
+        if edit_op:
+            release_edit(tenant_id=tenant_id, operation_id=edit_op)
         return JSONResponse(
             status_code=422,
             content={
@@ -151,6 +197,8 @@ async def cm_put_draft(
             },
         )
     except ConflictError as exc:
+        if edit_op:
+            release_edit(tenant_id=tenant_id, operation_id=edit_op)
         current = _owner_sanitize_envelope(_envelope_dict(exc.current), name) if exc.current is not None else {}
         current_etag = str(current.get("etag") or "")
         return JSONResponse(
@@ -165,6 +213,8 @@ async def cm_put_draft(
             headers={"ETag": current_etag} if current_etag else {},
         )
 
+    if edit_op:
+        commit_edit(tenant_id=tenant_id, operation_id=edit_op)
     data = _owner_sanitize_envelope(_envelope_dict(envelope), name)
     if name == "ai_limits":
         from services.ai_limits_source import sync_enforcement_from_payload
@@ -217,19 +267,36 @@ async def cm_publish(request: Request, body: dict[str, Any] = Body(default={})) 
 
     notes = body.get("notes") if isinstance(body.get("notes"), str) else None
     scope = str(body.get("scope") or "all").strip().lower()
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
+    etags = {}
+    for section in CM_SECTIONS:
+        try:
+            draft = get_draft(section, tenant_id=tenant_id, create_default=False)
+            etags[section] = getattr(draft, "etag", "") or getattr(draft, "revision", "")
+        except Exception:
+            etags[section] = ""
     try:
-        if scope in {"faq", "faq_only"}:
-            result = await publish_faq_only(
-                tenant_id=tenant_id,
-                published_by=session.user_id or session.email,
-                notes=notes,
-            )
-        else:
-            result = await publish_draft(
-                tenant_id=tenant_id,
-                published_by=session.user_id or session.email,
-                notes=notes,
-            )
+        with guarded_edit(
+            tenant_id=tenant_id,
+            kind=f"cm:publish:{scope}",
+            payload={"notes": notes, "etags": etags},
+        ):
+            if scope in {"faq", "faq_only"}:
+                result = await publish_faq_only(
+                    tenant_id=tenant_id,
+                    published_by=session.user_id or session.email,
+                    notes=notes,
+                )
+            else:
+                result = await publish_draft(
+                    tenant_id=tenant_id,
+                    published_by=session.user_id or session.email,
+                    notes=notes,
+                )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     except PublishBlockedError as exc:
         return JSONResponse(
             status_code=422,
@@ -262,9 +329,20 @@ async def cm_unpublish(request: Request) -> Any:
         return _publish_disabled_response(exc.message)
 
     from services.cm.version_store import clear_published_pointer, read_published_pointer
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
 
     previous = read_published_pointer(tenant_id)
-    cleared = clear_published_pointer(tenant_id)
+    try:
+        with guarded_edit(
+            tenant_id=tenant_id,
+            kind="cm:unpublish",
+            payload={"previous": getattr(previous, "revision", "")},
+            safety=True,
+        ):
+            cleared = clear_published_pointer(tenant_id)
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     from services.customer_reply_v2.manifest import clear_manifest_cache
 
     clear_manifest_cache(tenant_id)

@@ -29,3 +29,23 @@ def find_published_restricted(tenant_id: str, message: str) -> RestrictedTopic |
     if policy is None:
         return None
     return find_restricted_topic(message, policy)
+
+
+_DEFAULT_REFUSE = {
+    "ar": "هيدا الموضوع مش من ضمن الخدمات يلي منقدمها حالياً. بس فيني ساعدك بمواضيع تانية.",
+    "en": "This isn't one of the services we currently offer, but I'm happy to help with anything else.",
+    "fr": "Ce sujet ne fait pas partie des services que nous proposons actuellement, mais je peux vous aider pour autre chose.",
+}
+
+
+def refuse_text(topic: RestrictedTopic, message: str = "") -> str:
+    template = (topic.refuse_template or "").strip()
+    if template:
+        return template
+    try:
+        from services.customer_ai.greeting import inbound_greeting_language
+
+        lang = inbound_greeting_language(message)
+    except Exception:
+        lang = "en"
+    return _DEFAULT_REFUSE.get(lang, _DEFAULT_REFUSE["en"])

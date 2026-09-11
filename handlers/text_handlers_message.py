@@ -262,7 +262,9 @@ async def handle_message(
 
     # Greeting policy (code-driven) runs only in non AI-primary mode.
     # In AI-primary mode, greeting timing/wording decisions are delegated to AI.
-    if not ai_primary_mode:
+    from services.customer_ai.flags import customer_brain_enabled
+
+    if not ai_primary_mode and not customer_brain_enabled():
         # Greeting policy:
         # - New conversation => send greeting first
         # - Existing conversation but user inactive >= threshold => send greeting first

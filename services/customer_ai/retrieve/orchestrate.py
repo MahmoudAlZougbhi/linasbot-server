@@ -40,6 +40,7 @@ async def retrieve_cards(
     families: set[SourceFamily] | None = None,
     sections: dict | None = None,
     revision: str = "",
+    tenant_id: str = "",
 ) -> EvidenceBundle:
     scoped = [c for c in cards if families is None or c.source_family in families]
     if not scoped:
@@ -47,17 +48,19 @@ async def retrieve_cards(
     if not voyage_configured():
         return EvidenceBundle(outcome="provider_not_configured")
     try:
-        hits: list[HybridHit] = await search_hybrid(scoped, query, families=families, limit=_cap())
-        hits = await rerank_hits(query, hits)
+        hits: list[HybridHit] = await search_hybrid(
+            scoped, query, families=families, limit=_cap(), tenant_id=tenant_id
+        )
+        hits = await rerank_hits(query, hits, tenant_id=tenant_id)
     except VoyageNotConfiguredError:
         return EvidenceBundle(outcome="provider_not_configured")
     except VoyageContractError:
         return EvidenceBundle(outcome="provider_error")
-    bundle = expand_ranked(hits, sections or {}, revision=revision)
+    bundle = expand_ranked(hits, sections or {}, revision=revision, tenant_id=tenant_id)
     if not bundle.items:
         lexical = search_cards(scoped, query, families=families, limit=_cap())
         if lexical:
-            bundle = expand_ranked(lexical, sections or {}, revision=revision)
+            bundle = expand_ranked(lexical, sections or {}, revision=revision, tenant_id=tenant_id)
             if bundle.items:
                 bundle = bundle.model_copy(update={"outcome": "found"})
                 return bundle
@@ -86,6 +89,7 @@ async def retrieve_published(ctx: RetrieveContext) -> EvidenceBundle:
         families=ctx.families,
         sections=sections or {},
         revision=revision,
+        tenant_id=ctx.tenant_id,
     )
 
 

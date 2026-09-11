@@ -231,6 +231,7 @@ async def _handle_published_cm_runtime(
     provider_display_name: str | None = None,
     inbound_media: dict[str, Any] | None = None,
     attachment_types: list[str] | None = None,
+    message_id: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Run Customer Reply AI V2 end-to-end and return ``(reply_text, metadata)``.
 
@@ -264,6 +265,7 @@ async def _handle_published_cm_runtime(
             conversation_id=conversation_id or "",
             inbound_media=inbound_media,
             attachment_types=attachment_types,
+            message_id=message_id or "",
         )
     except Exception as v2_exc:
         print(f"[_handle_published_cm_runtime] ⚠️ customer_reply_v2 failed closed: {v2_exc}")
@@ -281,7 +283,7 @@ async def _handle_published_cm_runtime(
         }
 
     reply = (v2_outcome.reply or "").strip()
-    if v2_outcome.reason in {"insufficient_credits", ENGINE_REMOVED}:
+    if v2_outcome.reason in {"insufficient_credits", "insufficient_messages", ENGINE_REMOVED}:
         return "", {
             "reason": v2_outcome.reason,
             "customer_reply_ai_v2": True,

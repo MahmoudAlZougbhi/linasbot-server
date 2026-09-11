@@ -89,4 +89,96 @@ def finalize_ai_outbound_sent(
     except Exception as exc:
         emit_wa_event("smart_followup_schedule_failed", error=type(exc).__name__)
 
+    _settle_confirmed_send(
+        tenant_id=intent.tenant_id,
+        inbound_mid=inbound_provider_mid,
+        provider_wamid=wamid,
+        triggering_inbound_id=str(intent.triggering_inbound_message_id or ""),
+        conversation_id=str(intent.conversation_id or ""),
+        intent_mid=inbound_mid_from_intent(intent),
+    )
     return True
+
+
+def _settle_confirmed_send(
+    *,
+    tenant_id: str,
+    inbound_mid: str,
+    provider_wamid: str,
+    triggering_inbound_id: str,
+    conversation_id: str = "",
+    intent_mid: str = "",
+) -> None:
+    request_id = f"wa:{inbound_mid or intent_mid}" if (inbound_mid or intent_mid) else ""
+    reservation_id = ""
+    if request_id:
+        try:
+            from services.credit_ledger_service import credit_ledger_service
+
+            reservation_id = credit_ledger_service.find_open_reservation_by_request(tenant_id, request_id) or ""
+        except Exception:
+            reservation_id = ""
+    if reservation_id:
+        from services.customer_ai.leftover_reserve import capture_leftover_reply
+
+        capture_leftover_reply(
+            tenant_id,
+            reservation_id,
+            model_provider="whatsapp_cloud",
+            operation_id=request_id,
+            provider_message_id=provider_wamid,
+        )
+    from services.customer_ai.billing import settle_after_send
+
+    settle_after_send(
+        tenant_id=tenant_id,
+        operation_id=inbound_mid or intent_mid or triggering_inbound_id,
+        accepted=True,
+        channel="whatsapp_cloud",
+        provider_message_id=provider_wamid,
+        extra_ids=(request_id, reservation_id, triggering_inbound_id, intent_mid, conversation_id),
+    )
+
+
+def inbound_mid_from_intent(intent: WhatsAppOutboundIntent) -> str:
+    key = str(getattr(intent, "idempotency_key", "") or "")
+    if key.startswith("ai:"):
+        return key[3:].strip()
+    return ""
+
+
+def release_unsent_ai_outbound(
+    *,
+    tenant_id: str,
+    inbound_mid: str = "",
+    inbound_id: str = "",
+    reservation_id: str | None = None,
+    conversation_id: str = "",
+    intent_mid: str = "",
+) -> None:
+    """Release leftover credits and message units when the send was never submitted."""
+    rid = str(reservation_id or "")
+    mid = inbound_mid or intent_mid
+    if not rid and mid:
+        try:
+            from services.credit_ledger_service import credit_ledger_service
+
+            rid = credit_ledger_service.find_open_reservation_by_request(tenant_id, f"wa:{mid}") or ""
+        except Exception:
+            rid = ""
+    if rid:
+        try:
+            from services.customer_ai.leftover_reserve import release_leftover_reply
+
+            release_leftover_reply(tenant_id, rid)
+        except Exception:
+            emit_wa_event("credit_release_failed", tenant_id=tenant_id)
+    from services.customer_ai.billing import settle_after_send
+
+    settle_after_send(
+        tenant_id=tenant_id,
+        operation_id=mid or inbound_id or rid or conversation_id,
+        accepted=False,
+        channel="whatsapp_cloud",
+        extra_ids=(inbound_mid, inbound_id, f"wa:{mid}" if mid else "", rid, intent_mid, conversation_id),
+    )

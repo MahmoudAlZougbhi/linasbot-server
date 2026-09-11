@@ -5,7 +5,7 @@ export const commentsSetupFr: Record<keyof typeof commentsSetupEn, string> = {
   commentsAdd: 'Ajouter une règle de commentaire',
   commentsInfoTitle: 'Les règles sont facultatives.',
   commentsInfoBody:
-    'Sans règle, Linas répond toujours avec vos connaissances publiées. Automatique est gratuit et envoie votre message exact. La réponse IA suit votre note et utilise des crédits.',
+    'Sans règle, Linas répond toujours avec vos connaissances publiées. Automatique est gratuit et envoie votre message exact. La réponse IA suit votre note et utilise un message IA.',
   commentsSearch: 'Rechercher des règles de commentaire',
   commentsCount: 'règles de commentaire',
   commentsCountOne: 'règle de commentaire',

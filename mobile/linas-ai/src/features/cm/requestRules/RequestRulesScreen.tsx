@@ -17,6 +17,7 @@ import { PrimaryButton } from '../../../components/PrimaryButton';
 import { useI18n } from '../../../i18n/LanguageContext';
 import { fonts } from '../../../theme';
 import { ScreenChrome } from '../../shared/ScreenChrome';
+import { isDailyEditLimitError } from '../../../api/client';
 import { asRecordList, newId } from '../cmApi';
 import type { CmProposalReview } from '../cmProposalReview';
 import { useCmDraft } from '../useCmDraft';
@@ -56,6 +57,7 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
   const [preview, setPreview] = useState<RequestGraphRow | undefined>(undefined);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
+  const [graphBusy, setGraphBusy] = useState(false);
 
   const items = useMemo(
     () => asRecordList(draft.payload.rules).map(parseRequestRule),
@@ -75,6 +77,9 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
   }, [graphs]);
 
   function graphErrorMessage(err: unknown): string {
+    if (isDailyEditLimitError(err) || (err instanceof RequestGraphsApiError && err.status === 429)) {
+      return tr('aiSetupDailyEditLimit');
+    }
     if (err instanceof RequestGraphsApiError) {
       if (err.code === 'REQUEST_GRAPHS_UNMIGRATED') return tr('requestRulesGraphUnmigrated');
       if (err.code === 'REQUEST_GRAPHS_DB_UNAVAILABLE') return tr('requestRulesGraphDbUnavailable');
@@ -165,9 +170,12 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
       setSaveError(tr('requestRulesNameRequired'));
       return;
     }
+    if (!draft.etag) {
+      setSaveError('Missing ETag — reload before saving.');
+      return;
+    }
     const nextPayload = rulesPayload(items);
-    const ok = await draft.save(nextPayload);
-    if (!ok) return;
+    setGraphBusy(true);
     try {
       const graph = await publishRequestGraph({
         source_item_id: selected.id,
@@ -175,7 +183,10 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
         source_text: `${selected.name}\n${selected.notes}`.trim(),
         destination: destinationFromType(selected.type),
         confirm: true,
+        draft_payload: nextPayload,
+        if_match: draft.etag,
       });
+      await draft.load();
       if (graph.status !== 'active') {
         setPreview(graph);
         setSaveError(tr('aiSetupRequestNeedsClarification'));
@@ -189,6 +200,8 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
       setSaveError(null);
     } catch (err) {
       setSaveError(graphErrorMessage(err) || tr('requestRulesPublishFailed'));
+    } finally {
+      setGraphBusy(false);
     }
   }
 
@@ -203,13 +216,22 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
           void (async () => {
             const definitionId = graphsBySource[selected.id]?.definition_id;
             const nextPayload = rulesPayload(items.filter((item) => item.id !== selected.id));
-            const ok = await draft.save(nextPayload);
-            if (!ok) return;
-            if (definitionId) {
+            if (!definitionId) {
+              const ok = await draft.save(nextPayload);
+              if (!ok) return;
+            } else if (!draft.etag) {
+              setSaveError('Missing ETag — reload before saving.');
+              return;
+            } else {
               try {
-                await deleteRequestGraph(definitionId);
-              } catch {
-                setSaveError(tr('requestRulesDeleteGraphFailed'));
+                await deleteRequestGraph(definitionId, {
+                  draft_payload: nextPayload,
+                  if_match: draft.etag,
+                });
+                await draft.load();
+              } catch (err) {
+                setSaveError(graphErrorMessage(err) || tr('requestRulesDeleteGraphFailed'));
+                return;
               }
             }
             await loadGraphs();
@@ -281,7 +303,7 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
             <PrimaryButton
               label={tr('requestRulesSave')}
               onPress={() => void handleSave()}
-              loading={draft.saving}
+              loading={draft.saving || graphBusy}
               disabled={!draft.etag}
               style={styles.saveBtn}
             />

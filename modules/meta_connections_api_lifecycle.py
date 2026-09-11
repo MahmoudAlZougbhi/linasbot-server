@@ -1,4 +1,4 @@
-"""Meta connection lifecycle routes: disconnect/reconnect/activate/rollback/comment-replies (LOC split)."""
+"""Meta connection lifecycle routes: disconnect/activate/rollback/comment-replies (LOC split)."""
 
 from __future__ import annotations
 
@@ -26,7 +26,6 @@ from services.meta_comment_reply_settings import get_comment_reply_setting, set_
 from services.meta_comment_webhooks import credential_has_comment_scopes
 from services.meta_connection_disconnect import disconnect_meta_binding_set
 from services.meta_graph_routing import required_comment_scopes_for_binding
-from services.meta_instagram_login_subscription_recovery import retry_instagram_login_webhook_subscription
 from services.meta_oauth import (
     MetaOAuthError,
     subscribe_binding_webhook,
@@ -218,12 +217,20 @@ async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
         )
         if not targets:
             targets = [binding]
-        disconnected = await disconnect_meta_binding_set(
-            targets,
-            actor_id=session.user_id or session.email,
-            registry=registry,
-            asset_id=binding.asset_id,
-        )
+        from services.membership.edit_http import guarded_edit
+
+        with guarded_edit(
+            tenant_id=session.tenant_id,
+            kind="safety:disconnect",
+            payload={"binding_id": binding_id, "platform": platform},
+            safety=True,
+        ):
+            disconnected = await disconnect_meta_binding_set(
+                targets,
+                actor_id=session.user_id or session.email,
+                registry=registry,
+                asset_id=binding.asset_id,
+            )
         updated = next(
             (item for item in disconnected if item.binding_id == binding.binding_id),
             disconnected[0],
@@ -244,49 +251,6 @@ async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
         "connection": updated.public_dict(),
         "connections": [item.public_dict() for item in disconnected],
     }
-
-
-@app.post("/api/meta/connections/{binding_id}/instagram-login/retry-webhook")
-async def retry_instagram_login_webhook_setup(binding_id: str, request: Request) -> Any:
-    session = require_permission(request, "settings")
-    binding = _tenant_binding(binding_id, session.tenant_id)
-    if binding.auth_flow != "instagram_login":
-        raise HTTPException(status_code=409, detail="Webhook retry applies only to Instagram Login connections")
-    try:
-        state = await retry_instagram_login_webhook_subscription(
-            binding.binding_id,
-            actor_id=session.user_id or session.email,
-        )
-    except MetaOAuthError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    refreshed = _tenant_binding(binding_id, session.tenant_id)
-    public = refreshed.public_dict()
-    public["webhook_subscription"] = state.public_dict()
-    return {
-        "success": state.ready_for_dm,
-        "connection": public,
-        "webhook_subscription": state.public_dict(),
-    }
-
-
-@app.post("/api/meta/connections/{binding_id}/reconnect")
-async def reconnect_meta_connection(binding_id: str, request: Request) -> Any:
-    """Reconnect requires a fresh OAuth authorization — token reuse is not supported."""
-
-    session = require_permission(request, "settings")
-    binding = _tenant_binding(binding_id, session.tenant_id)
-    if binding.status not in {"disconnected", "inactive"}:
-        raise HTTPException(status_code=409, detail="Connection is already active or cannot be reconnected here")
-    channel = str(binding.channel or "").strip().lower()
-    if binding.auth_flow == "instagram_login" or channel == "instagram":
-        raise HTTPException(
-            status_code=409,
-            detail="Disconnect Instagram, then use Connect Instagram to authorize again.",
-        )
-    raise HTTPException(
-        status_code=409,
-        detail="Disconnect this channel, then use Connect to run a fresh Meta authorization.",
-    )
 
 
 @app.post("/api/meta/connections/{binding_id}/activate")
@@ -340,18 +304,26 @@ async def rollback_meta_connection(binding_id: str, request: Request) -> Any:
     )
     if previous is None or previous.tenant_id != session.tenant_id:
         raise HTTPException(status_code=409, detail="Previous Meta connection is unavailable")
+    from services.membership.edit_http import guarded_edit
+
     try:
-        async with lock_facebook_page_oauth_operation(
-            registry,
-            app_key=binding.app_key,
-            page_ids=tuple({binding.page_id, previous.page_id}),
+        with guarded_edit(
+            tenant_id=session.tenant_id,
+            kind="safety:rollback",
+            payload={"binding_id": binding_id, "previous_binding_id": previous.binding_id},
+            safety=True,
         ):
-            restored = await _rollback_meta_connection_locked(
-                binding,
-                previous,
-                actor_id=session.user_id or session.email,
-                registry=registry,
-            )
+            async with lock_facebook_page_oauth_operation(
+                registry,
+                app_key=binding.app_key,
+                page_ids=tuple({binding.page_id, previous.page_id}),
+            ):
+                restored = await _rollback_meta_connection_locked(
+                    binding,
+                    previous,
+                    actor_id=session.user_id or session.email,
+                    registry=registry,
+                )
     except (MetaOAuthError, MetaRegistryError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"success": True, "connection": restored.public_dict()}
@@ -407,14 +379,26 @@ async def update_meta_comment_replies(
         channel=binding.channel,
         asset_id=binding.asset_id,
     )
-    updated_setting = set_comment_reply_setting(
-        tenant_id=binding.tenant_id,
-        app_key=binding.app_key,
-        channel=binding.channel,
-        asset_id=binding.asset_id,
-        enabled=enabled,
-        instructions=instructions,
-    )
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
+    try:
+        with guarded_edit(
+            tenant_id=binding.tenant_id,
+            kind="integration:comment-replies" if enabled else "safety:toggle:comment-replies",
+            payload={"binding_id": binding_id, "enabled": enabled, "instructions": instructions},
+            safety=not enabled,
+        ):
+            updated_setting = set_comment_reply_setting(
+                tenant_id=binding.tenant_id,
+                app_key=binding.app_key,
+                channel=binding.channel,
+                asset_id=binding.asset_id,
+                enabled=enabled,
+                instructions=instructions,
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     registry = get_meta_app_registry()
     registry._append_audit(
         {

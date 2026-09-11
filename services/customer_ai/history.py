@@ -20,7 +20,7 @@ _PRIVATE_ROLES = frozenset(
 )
 _STAFF_VISIBLE = frozenset({"staff", "operator", "human", "agent"})
 _ASSISTANT = frozenset({"assistant", "ai", "bot"})
-_USER = frozenset({"user", "customer"})
+_USER = frozenset({"user", "customer", "visitor"})
 
 
 def _role_of(raw: dict[str, Any]) -> str:

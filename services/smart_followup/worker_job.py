@@ -24,11 +24,65 @@ def _release(tenant_id: str, reservation_id: str | None) -> None:
     if not reservation_id:
         return
     try:
-        from services.credit_ledger_service import credit_ledger_service
+        from services.customer_ai.leftover_reserve import release_leftover_reply
 
-        credit_ledger_service.release(tenant_id=tenant_id, reservation_id=reservation_id)
+        release_leftover_reply(tenant_id, reservation_id)
     except Exception:
         emit_wa_event("sfu_credit_release_failed", tenant_id=tenant_id)
+
+
+def _capture(tenant_id: str, reservation_id: str | None) -> bool:
+    if not reservation_id:
+        return False
+    from services.customer_ai.leftover_reserve import capture_leftover_reply
+
+    ok = capture_leftover_reply(
+        tenant_id=tenant_id,
+        reservation_id=reservation_id,
+        model_provider="smart_followup",
+        operation_id=reservation_id,
+    )
+    if not ok:
+        emit_wa_event("sfu_credit_capture_failed", error="capture_leftover_reply")
+    return ok
+
+
+def _settle_leftover(tenant_id: str, reservation_id: str | None, *, sent: bool) -> None:
+    if sent:
+        if not _capture(tenant_id, reservation_id):
+            from services.membership.reservation_reconcile import hold_failed_capture_after_send
+
+            hold_failed_capture_after_send(
+                tenant_id=tenant_id,
+                reservation_id=reservation_id,
+                operation_id=reservation_id or "",
+                billing_policy="legacy_credits",
+                channel="smart_followup",
+            )
+        return
+    _release(tenant_id, reservation_id)
+
+
+def _settle_message_followup(tenant_id: str, snapshot: dict[str, Any], *, accepted: bool) -> None:
+    from services.smart_followup.billing_ids import settle_followup_from_snapshot
+
+    settle_followup_from_snapshot(tenant_id, snapshot, accepted=accepted)
+
+
+def _release_message_followup(tenant_id: str, snapshot: dict[str, Any]) -> None:
+    _settle_message_followup(tenant_id, snapshot, accepted=False)
+
+
+def _finish_attempt_holds(
+    tenant_id: str,
+    snapshot: dict[str, Any],
+    reservation_id: str | None,
+    *,
+    sent: bool,
+) -> None:
+    """Confirmed send settles leftover + Brain even if the job fence is already gone."""
+    _settle_leftover(tenant_id, reservation_id, sent=sent)
+    _settle_message_followup(tenant_id, snapshot, accepted=sent)
 
 
 def _sender_id_for_generation(job: Any, conv: Any) -> tuple[str, str]:
@@ -66,6 +120,14 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
         claim_generation = claim_generation_of(job)
 
         tenant_id = job.tenant_id
+        from services.membership.feature_entitlements import FeatureDenied, assert_followup_allowed
+
+        try:
+            assert_followup_allowed(tenant_id)
+        except FeatureDenied:
+            sfu.mark_job_terminal(job, status="skipped", reason="plan_followup_disabled")
+            sfu.maybe_complete_sequence(job.sequence_id)
+            return {"job_id": job_id, "status": "skipped", "reason": "plan_followup_disabled"}
         settings = sfu.get_settings(tenant_id)
         sequence = sfu.get_sequence(job.sequence_id)
         if sequence is None or sequence.status != "active":
@@ -90,19 +152,38 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             job = _fence_job(session, job_id=job_id, worker_id=worker_id, claim_generation=claim_generation)
             if job is None:
                 return {"job_id": job_id, "status": "missing"}
-            from services.credit_ledger_service import credit_ledger_service
+            from services.membership.message_flags import message_billing_enabled
 
-            reservation_id = credit_ledger_service.reserve(
-                tenant_id=tenant_id,
-                user_id=None,
-                credits=1,
-                operation_type=OPERATION_TYPE,
-                request_id=canonical_sfu_credit_request_id(job.idempotency_key),
-            )
+            from services.smart_followup.billing_ids import leftover_followup_pins
+
+            pins = leftover_followup_pins(job)
+            if message_billing_enabled():
+                reservation_id = str(job.reservation_id or "").strip() or None
+                if reservation_id:
+                    from services.customer_ai.leftover_reserve import remember_leftover_hold
+
+                    remember_leftover_hold(
+                        tenant_id=tenant_id,
+                        reservation_id=reservation_id,
+                        request_id=canonical_sfu_credit_request_id(job.idempotency_key),
+                        operation_type=OPERATION_TYPE,
+                        pin_ids=pins,
+                    )
+            else:
+                from services.customer_ai.leftover_reserve import reserve_leftover_reply
+
+                request_id = canonical_sfu_credit_request_id(job.idempotency_key)
+                reservation_id = reserve_leftover_reply(
+                    tenant_id=tenant_id,
+                    request_id=request_id,
+                    operation_type=OPERATION_TYPE,
+                    pin_ids=pins,
+                )
             job.reservation_id = reservation_id
             job.status = "generating"
             session.flush()
         except JobClaimFenceError:
+            _release(tenant_id, reservation_id)
             return {"job_id": job_id, "status": "claim_lost"}
         except PermissionError:
             if job is None:
@@ -111,6 +192,7 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             sfu.maybe_complete_sequence(job.sequence_id)
             return {"job_id": job_id, "status": "skipped", "reason": "insufficient_credits"}
         except Exception as exc:
+            _release(tenant_id, reservation_id)
             if job is None:
                 return {"job_id": job_id, "status": "missing"}
             sfu.mark_job_terminal(
@@ -150,8 +232,10 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             goal=str(snapshot["goal"]),
             profile_name=str(snapshot.get("profile_name") or ""),
             user_id=str(snapshot.get("user_id") or ""),
+            operation_id=str(snapshot.get("idempotency_key") or ""),
         )
     except Exception as exc:
+        _release_message_followup(tenant_id, snapshot)
         _release(tenant_id, reservation_id)
         with whatsapp_session() as session:
             try:
@@ -170,6 +254,7 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
         return {"job_id": job_id, "status": "failed", "reason": "generation_failed"}
 
     if not reply_text:
+        _release_message_followup(tenant_id, snapshot)
         _release(tenant_id, reservation_id)
         with whatsapp_session() as session:
             try:
@@ -186,9 +271,11 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
         try:
             job = _fence_job(session, job_id=job_id, worker_id=worker_id, claim_generation=claim_generation)
         except JobClaimFenceError:
+            _release_message_followup(tenant_id, snapshot)
             _release(tenant_id, reservation_id)
             return {"job_id": job_id, "status": "claim_lost"}
         if job is None:
+            _release_message_followup(tenant_id, snapshot)
             _release(tenant_id, reservation_id)
             return {"job_id": job_id, "status": "missing"}
 
@@ -205,6 +292,7 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             trigger_ai_sent_at=sequence.trigger_ai_sent_at if sequence else None,
         )
         if not ok or conv is None:
+            _release_message_followup(tenant_id, snapshot)
             _release(tenant_id, reservation_id)
             sfu.mark_job_terminal(job, status="skipped", reason=reason)
             sfu.maybe_complete_sequence(job.sequence_id)
@@ -213,13 +301,20 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
         from services.customer_ai.control import live_handoff_active
         from services.customer_ai.followup.revalidate import revalidate_followup_send
 
+        trigger_at = getattr(sequence, "trigger_ai_sent_at", None) if sequence else None
+        last_inbound = getattr(conv, "last_inbound_at", None)
+        customer_replied = bool(trigger_at and last_inbound and last_inbound > trigger_at)
         recheck = revalidate_followup_send(
             takeover=live_handoff_active(user_id=conv.user_id or conv.social_sender_id)
             or str(conv.control_state or "") == "HUMAN_PAUSED",
             rule_permits=sequence is not None and str(getattr(sequence, "status", "") or "") == "active",
             window_valid=ok,
+            customer_replied=customer_replied or reason == "customer_replied",
+            opt_out=reason == "opt_out",
+            goal_completed=str(getattr(sequence, "status", "") or "") == "completed",
         )
         if not recheck.allow:
+            _release_message_followup(tenant_id, snapshot)
             _release(tenant_id, reservation_id)
             sfu.mark_job_terminal(job, status="skipped", reason=recheck.reason)
             sfu.maybe_complete_sequence(job.sequence_id)
@@ -238,11 +333,40 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
         try:
             job = _fence_job(session, job_id=job_id, worker_id=worker_id, claim_generation=claim_generation)
         except JobClaimFenceError:
+            _finish_attempt_holds(
+                tenant_id,
+                snapshot,
+                reservation_id,
+                sent=send_result.status == "sent",
+            )
             return {"job_id": job_id, "status": "claim_lost"}
         if job is None:
+            _finish_attempt_holds(
+                tenant_id,
+                snapshot,
+                reservation_id,
+                sent=send_result.status == "sent",
+            )
             return {"job_id": job_id, "status": "missing"}
 
         if send_result.status == "sent":
+            from services.smart_followup.billing_ids import settle_followup_from_snapshot
+
+            settle_followup_from_snapshot(tenant_id, snapshot, accepted=True)
+            leftover_captured = _capture(tenant_id, reservation_id)
+            if reservation_id and not leftover_captured:
+                from services.membership.reservation_reconcile import hold_failed_capture_after_send
+
+                from services.membership.hold_policy import hold_billing_policy
+
+                hold_failed_capture_after_send(
+                    tenant_id=tenant_id,
+                    reservation_id=reservation_id,
+                    operation_id=str(snapshot.get("idempotency_key") or reservation_id),
+                    billing_policy=hold_billing_policy(leftover_reservation_id=reservation_id),
+                    provider_message_id=str(send_result.provider_message_id or ""),
+                    channel="smart_followup",
+                )
             if send_result.reason == "duplicate_delivery":
                 if send_result.billing_captured:
                     sfu.mark_job_terminal(
@@ -268,7 +392,7 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
                     provider_wamid=send_result.provider_message_id,
                     credits_captured=1,
                 )
-            elif send_result.billing_pending or snapshot.get("channel") == "web_chat":
+            elif send_result.billing_pending:
                 sfu.mark_job_terminal(
                     job,
                     status="reconciliation_required",
@@ -277,36 +401,12 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
                     credits_captured=0,
                 )
             else:
-                credits_captured = 0
-                try:
-                    from services.credit_ledger_service import credit_ledger_service
-
-                    if reservation_id:
-                        credit_ledger_service.capture(
-                            tenant_id=tenant_id,
-                            reservation_id=reservation_id,
-                            provider_cost_usd=None,
-                            model_provider="smart_followup",
-                        )
-                        credits_captured = 1
-                except Exception as exc:
-                    emit_wa_event("sfu_credit_capture_failed", error=type(exc).__name__)
-                    sfu.mark_job_terminal(
-                        job,
-                        status="reconciliation_required",
-                        reason="billing_pending",
-                        detail=type(exc).__name__,
-                        provider_wamid=send_result.provider_message_id,
-                        credits_captured=0,
-                    )
-                    sfu.maybe_complete_sequence(job.sequence_id)
-                    return {"job_id": job_id, "status": "reconciliation_required", "reason": "billing_pending"}
                 sfu.mark_job_terminal(
                     job,
                     status="sent",
                     reason=send_result.reason,
                     provider_wamid=send_result.provider_message_id,
-                    credits_captured=credits_captured,
+                    credits_captured=1 if leftover_captured else 0,
                 )
             sfu.maybe_complete_sequence(job.sequence_id)
             return {
@@ -317,6 +417,32 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             }
 
         if send_result.reconciliation or send_result.status == "reconciliation_required":
+            if send_result.provider_message_id:
+                from services.membership.reservation_reconcile import hold_failed_capture_after_send
+
+                from services.membership.hold_policy import hold_billing_policy
+
+                hold_failed_capture_after_send(
+                    tenant_id=tenant_id,
+                    reservation_id=reservation_id,
+                    operation_id=str(snapshot.get("idempotency_key") or reservation_id or ""),
+                    billing_policy=hold_billing_policy(leftover_reservation_id=reservation_id),
+                    provider_message_id=str(send_result.provider_message_id or ""),
+                    channel="smart_followup",
+                )
+            else:
+                from services.membership.hold_policy import hold_billing_policy
+                from services.membership.pending_settlement import upsert
+
+                upsert(
+                    tenant_id=tenant_id,
+                    reservation_id=reservation_id or str(snapshot.get("idempotency_key") or ""),
+                    operation_id=str(snapshot.get("idempotency_key") or reservation_id or ""),
+                    billing_policy=hold_billing_policy(leftover_reservation_id=reservation_id),
+                    state="unresolved",
+                    reason="unknown_send_outcome",
+                    channel="smart_followup",
+                )
             sfu.mark_job_terminal(
                 job,
                 status="reconciliation_required",
@@ -326,6 +452,7 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             sfu.maybe_complete_sequence(job.sequence_id)
             return {"job_id": job_id, "status": "reconciliation_required", "reason": send_result.reason}
 
+        _release_message_followup(tenant_id, snapshot)
         _release(tenant_id, reservation_id)
         terminal = "skipped" if send_result.status == "skipped" else "failed"
         sfu.mark_job_terminal(

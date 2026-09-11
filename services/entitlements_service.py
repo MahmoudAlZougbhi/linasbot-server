@@ -26,6 +26,7 @@ from typing import Any, Literal
 
 from services.billing_backend import billing_uses_postgres, require_billing_pg_session
 from services.plan_economics import PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
+from services.membership.feature_entitlements import additional_seats_for_plan, channel_flags_for_plan
 from storage.persistent_storage import _DATA_ROOT as _DEFAULT_DATA_ROOT
 
 # Overridable in tests
@@ -33,6 +34,13 @@ _DATA_ROOT = _DEFAULT_DATA_ROOT
 
 # Linas Laser founder clinic — reserved tenant_id (see services/cm/constants.DEFAULT_TENANT_ID).
 DEFAULT_SUBSCRIPTION_EXEMPT_TENANTS = frozenset({"linas"})
+
+
+def _catalog_features(plan_id: str) -> dict[str, Any]:
+    """Credit catalog features plus message-catalog channel/FAQ flags. Prices stay credit-side."""
+    features = dict(PLAN_FEATURES.get(plan_id, {}))
+    features.update(channel_flags_for_plan(plan_id))
+    return features
 
 
 def subscription_exempt_tenant_ids() -> frozenset[str]:
@@ -99,6 +107,18 @@ class EntitlementsStore:
             updated_at=time.time(),
         )
 
+    def list_tenant_ids(self) -> list[str]:
+        if billing_uses_postgres():
+            try:
+                from services.entitlements_pg_store import list_tenant_ids
+
+                with require_billing_pg_session() as session:
+                    return list_tenant_ids(session)
+            except Exception:
+                return []
+        with self._lock:
+            return sorted(path.stem for path in self._root.glob("*.json") if path.is_file())
+
     def get(self, tenant_id: str) -> TenantEntitlement:
         if billing_uses_postgres():
             from services.entitlements_pg_store import get_entitlement
@@ -137,7 +157,7 @@ class EntitlementsStore:
         store_original_transaction_id: str | None = None,
         period_days: int = 30,
     ) -> TenantEntitlement:
-        if plan_id not in PLAN_PRICES_USD and plan_id != "none":
+        if plan_id not in PLAN_PRICES_USD and plan_id not in {"none", "free"}:
             raise ValueError(f"Unknown plan: {plan_id}")
         allowance = recommend_allowance(plan_id) if plan_id in PLAN_PRICES_USD else None
         existing = self.get(tenant_id)
@@ -149,13 +169,20 @@ class EntitlementsStore:
             current_period_end=time.time() + period_days * 86400 if status in {"active", "trial", "grace"} else None,
             included_credits=allowance.included_credits if allowance else 0,
             extra_credits=existing.extra_credits,
-            features=dict(PLAN_FEATURES.get(plan_id, {})),
+            features=_catalog_features(plan_id),
             updated_at=time.time(),
             store_original_transaction_id=store_original_transaction_id,
             pending_plan_id=existing.pending_plan_id,
             pending_plan_effective_at=existing.pending_plan_effective_at,
         )
-        return self.save(ent)
+        saved = self.save(ent)
+        try:
+            from services.membership.period_grants import ensure_included_grant
+
+            ensure_included_grant(tenant_id)
+        except Exception:
+            pass
+        return saved
 
 
 entitlements_store = EntitlementsStore()
@@ -184,7 +211,7 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
     exempt = is_subscription_exempt_tenant(tenant_id)
     app_access = tenant_has_app_access(tenant_id)
     # Catalog features are SoT for known plan_ids; do not trust stale stored blobs.
-    features = dict(PLAN_FEATURES.get(plan_id) or ent.features or {})
+    features = _catalog_features(plan_id) or dict(ent.features or {})
     faq: dict[str, Any]
     try:
         from services.faq_entitlements import get_faq_entitlement
@@ -199,7 +226,8 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         }
     features.setdefault("faq_enabled", bool(faq.get("faq_enabled")))
     display_name = None
-    additional_seats = PLAN_ADDITIONAL_SEATS.get(plan_id)
+    known_seats, message_seats = additional_seats_for_plan(plan_id)
+    additional_seats = message_seats if known_seats else PLAN_ADDITIONAL_SEATS.get(plan_id)
     comment_automation = bool(features.get("comment_automation"))
     if plan_id in PLAN_PRICES_USD:
         from services.membership.plan_catalog import require_plan
@@ -208,7 +236,7 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
     from services.subscription_downgrade import pending_downgrade_public
 
     pending = pending_downgrade_public(ent)
-    return {
+    payload = {
         "tenant_id": ent.tenant_id,
         "plan_id": ent.plan_id,
         "display_name": display_name,
@@ -239,6 +267,14 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         # Omit iap_note entirely — JSON null previously broke mobile Zod
         # (z.string().optional rejects null) and fail-closed the subscription gate.
     }
+    try:
+        from services.tenant_mobile_dashboard.message_surface import overlay_message_fields
+
+        payload.update(overlay_message_fields(tenant_id, plan_id))
+    except Exception:
+        payload["message_billing_active"] = False
+        payload.setdefault("available_messages", None)
+    return payload
 
 
 def assert_feature(tenant_id: str, feature: str) -> None:
@@ -246,7 +282,7 @@ def assert_feature(tenant_id: str, feature: str) -> None:
     if ent.status not in {"active", "trial", "grace"}:
         raise PermissionError("Active subscription required")
     plan_id = (ent.plan_id or "").strip().lower()
-    features = PLAN_FEATURES.get(plan_id) or ent.features or {}
+    features = _catalog_features(plan_id) or ent.features or {}
     if not features.get(feature):
         raise PermissionError(f"Plan does not include feature: {feature}")
 

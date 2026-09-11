@@ -461,6 +461,10 @@ async def translate_existing_faq_groups_to_language(
             skipped.append(item.qa_group_id)
             continue
         try:
+            from services.membership.processing_budgets import ProcessingBudgetError, consume_attempt
+
+            if tenant_id:
+                consume_attempt(tenant_id)
             await regenerate_cm_faq_variants(
                 qa_group_id=item.qa_group_id,
                 languages=[lang],
@@ -468,6 +472,9 @@ async def translate_existing_faq_groups_to_language(
                 updated_by=updated_by,
             )
             translated.append(item.qa_group_id)
+        except ProcessingBudgetError as exc:
+            errors.append({"qa_group_id": item.qa_group_id, "error": exc.code})
+            break
         except FaqIntegrationError as exc:
             errors.append({"qa_group_id": item.qa_group_id, "error": str(exc)})
 

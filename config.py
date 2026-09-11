@@ -24,6 +24,30 @@ CUSTOMER_BRAIN_ENABLED = os.getenv("CUSTOMER_BRAIN_ENABLED", "").strip().lower()
     "yes",
     "on",
 }
+MESSAGE_BILLING_ENABLED = os.getenv("MESSAGE_BILLING_ENABLED", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+MESSAGE_BILLING_CUTOVER = os.getenv("MESSAGE_BILLING_CUTOVER", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+FREE_PLAN_ENFORCEMENT_ENABLED = os.getenv("FREE_PLAN_ENFORCEMENT_ENABLED", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+LINAS_CUSTOMER_AI_LAB = os.getenv("LINAS_CUSTOMER_AI_LAB", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 # WhatsApp Meta Cloud API
 # These are fetched from your .env file

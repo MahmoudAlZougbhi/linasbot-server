@@ -67,6 +67,13 @@ async def test_audio_uses_real_stt_path(inbound_env: Path) -> None:
     assert result.transcript == "بدي كريم after care"
     assert result.pipeline_text == "بدي كريم after care"
     assert luna_inbound_view(result)["transcript"] == "بدي كريم after care"
+    from services.membership.expense_journal import list_events
+
+    events = list_events(tenant_id="t-in", category="stt")
+    assert events
+    assert events[0].status == "pending"
+    assert events[0].amount_usd is None
+    assert events[0].model == "whisper-1"
 
 
 @pytest.mark.asyncio

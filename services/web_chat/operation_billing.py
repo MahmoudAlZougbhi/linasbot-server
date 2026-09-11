@@ -65,6 +65,7 @@ def ensure_operation_credit_reserved(
         credit.reservation_id = record.reservation_id
         credit.operation_state = record.state
         credit.state = CreditFsmState.RESERVED
+        credit._index_open()
         if record.state in {OperationState.RESERVED, OperationState.REPLY_READY, OperationState.BILLING_PENDING}:
             return record
     if record is not None and record.state == OperationState.RELEASE_PENDING:
@@ -74,6 +75,7 @@ def ensure_operation_credit_reserved(
     if existing:
         credit.reservation_id = existing
         credit.state = CreditFsmState.RESERVED
+        credit._index_open()
         if record is None or record.state == OperationState.CLAIMED:
             return advance_operation(
                 runtime,

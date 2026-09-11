@@ -71,7 +71,7 @@ export const usersUiFr: Record<keyof typeof import('./usersUiEn').usersUiEn, str
   usersAccessSmartFollowUp: 'Suivi intelligent',
   usersAccessIntegrations: 'Intégrations',
   usersAccessUsers: 'Utilisateurs',
-  usersAccessSubscription: 'Abonnement et crédits',
+  usersAccessSubscription: 'Abonnement et messages',
   usersAccessSettings: 'Paramètres',
   usersFullAccess: 'Accès complet',
   usersNoAccess: 'Aucun accès',

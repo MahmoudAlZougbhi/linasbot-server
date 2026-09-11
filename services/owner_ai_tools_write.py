@@ -133,6 +133,7 @@ async def tool_approve_cm_patch(
             confirmation_token=f"approve_cm_patch:{proposal_id}",
             error="Confirmation required",
         )
+    from services.membership.daily_edits import DailyEditLimitError
     from services.owner_ai_cm_approval import approve_cm_patch_and_activate
 
     # Approve → validate → save Draft → publish Live (section overlay or first full publish).
@@ -144,6 +145,13 @@ async def tool_approve_cm_patch(
             proposal_id=proposal_id,
             delete_ids=delete_ids,
             actor_id=user_id,
+        )
+    except DailyEditLimitError as exc:
+        return ToolResult(
+            ok=False,
+            name="approve_cm_patch",
+            data={"proposal_id": proposal_id, "reset_at": exc.decision.reset_at},
+            error=exc.code,
         )
     except PermissionError as exc:
         return ToolResult(
@@ -180,8 +188,25 @@ async def tool_publish_cm(*, tenant_id: str, role: str, confirmed: bool) -> Tool
             confirmation_token="publish_cm",
             error="Confirmation required before publish",
         )
-    from services.cm.publish import publish_draft
+    from time import time_ns
 
-    result = await publish_draft(tenant_id=tenant_id)
+    from services.cm.publish import publish_draft
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit
+
+    try:
+        with guarded_edit(
+            tenant_id=tenant_id,
+            kind="cm:publish:all",
+            payload={"source": "owner_copilot", "nonce": time_ns()},
+        ):
+            result = await publish_draft(tenant_id=tenant_id)
+    except DailyEditLimitError as exc:
+        return ToolResult(
+            ok=False,
+            name="publish_cm",
+            data={"reset_at": exc.decision.reset_at},
+            error=exc.code,
+        )
     data = result if isinstance(result, dict) else {"result": str(result)}
     return ToolResult(ok=True, name="publish_cm", data=data)

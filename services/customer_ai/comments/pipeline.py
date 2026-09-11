@@ -25,6 +25,7 @@ def winning_comment_mode(
     already = str(getattr(decision, "rule_mode", "") or "")
     if already in {
         "ignore",
+        "manual",
         "static_comment",
         "static_dm",
         "static_both",
@@ -52,7 +53,7 @@ def deterministic_comment_result(
     private = str(getattr(decision, "dm_text", "") or "")
     rule_id = str(getattr(decision, "rule_id", "") or "")
     extra = {"path": "comment_rule", "rule_id": rule_id, "comment_mode": mode}
-    if mode == "ignore":
+    if mode in {"ignore", "manual"}:
         return TurnResult(
             stop_reason="policy_suppressed",
             envelope=FinalReplyEnvelope(decision="no_reply", dispositions={"comment": "policy_suppressed"}),
@@ -101,3 +102,28 @@ def deterministic_comment_result(
             extra=extra,
         )
     return None
+
+
+def apply_ai_comment_destinations(result: TurnResult, mode: CommentMode | None) -> TurnResult:
+    if not mode or not str(mode).startswith("ai") or not result.envelope.messages:
+        return result
+    messages = list(result.envelope.messages)
+    if mode == "ai_comment":
+        messages = [item.model_copy(update={"destination": "comment"}) for item in messages]
+    elif mode == "ai_dm":
+        messages = [item.model_copy(update={"destination": "dm"}) for item in messages]
+    elif mode == "ai_both":
+        text = next((item.text for item in messages if item.text.strip()), "")
+        messages = [
+            OutboundMessage(destination="dm", text=text, component_id="private"),
+            OutboundMessage(
+                destination="comment",
+                text="Sent you a DM.",
+                component_id="public",
+                depends_on=["private"],
+            ),
+        ]
+    envelope = result.envelope.model_copy(update={"messages": messages})
+    extra = dict(result.extra)
+    extra["comment_mode"] = mode
+    return result.model_copy(update={"envelope": envelope, "extra": extra})

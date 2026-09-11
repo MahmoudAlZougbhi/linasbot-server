@@ -13,10 +13,11 @@ from services.customer_ai.actions.resources import resolve_authorized_resource, 
 from services.customer_ai.comments.pipeline import deterministic_comment_result, winning_comment_mode
 from services.customer_ai.contracts.actions import ActionProposal, ActionProposalSet
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
-from services.customer_ai.contracts.turn import ConversationState, CustomerTurn
+from services.customer_ai.contracts.turn import ConversationState, CustomerTurn, MediaView
 from services.customer_ai.faq_freshness import faq_static_allowed, looks_like_dynamic_fact
 from services.customer_ai.followup.revalidate import revalidate_followup_send
 from services.customer_ai.gates import evaluate_gates
+from services.customer_ai.turn_pipeline import inbound_task_text
 from services.customer_ai.outbox_test import reset_saved_outbox, save_envelope_for_test, saved_outbox
 from services.customer_ai.policies.privacy import public_comment_safe
 from services.customer_ai.search.invalidate import mark_products_stale
@@ -34,12 +35,76 @@ def test_restricted_gate_runs_before_faq(monkeypatch: pytest.MonkeyPatch) -> Non
         "services.customer_ai.gates.read_published_pointer",
         lambda _tid: SimpleNamespace(revision="1"),
     )
-    monkeypatch.setattr("services.customer_ai.gates.ai_generation_blocked", lambda _tid: False)
+    monkeypatch.setattr("services.membership.generative_gate.generative_block_reason", lambda *_a, **_k: None)
     turn = CustomerTurn(tenant_id="t1", customer_id="u1")
     blocked = evaluate_gates(turn, apply_credits=False, message="do you do tattoo removal?")
     assert blocked.allow is False
     assert blocked.reason == "restricted"
     assert blocked.detail == "tattoo_removal"
+    assert "isn't one of the services" in blocked.reply_text.lower()
+
+
+def test_restricted_refuse_template_wins(monkeypatch: pytest.MonkeyPatch) -> None:
+    topic = RestrictedTopic(
+        id="tattoo_removal",
+        keywords=["tattoo"],
+        active=True,
+        refuse_template="We do not offer tattoo removal.",
+    )
+    monkeypatch.setattr(
+        "services.customer_ai.policies.restricted.load_restricted_policy",
+        lambda _tid: RestrictedPolicy(topics=[topic]),
+    )
+    monkeypatch.setattr(
+        "services.customer_ai.gates.read_published_pointer",
+        lambda _tid: SimpleNamespace(revision="1"),
+    )
+    monkeypatch.setattr("services.membership.generative_gate.generative_block_reason", lambda *_a, **_k: None)
+    blocked = evaluate_gates(
+        CustomerTurn(tenant_id="t1", customer_id="u1"),
+        apply_credits=False,
+        message="do you do tattoo removal?",
+    )
+    assert blocked.reply_text == "We do not offer tattoo removal."
+
+
+def test_safety_blocked_inbound_media_stops_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "services.customer_ai.gates.read_published_pointer",
+        lambda _tid: SimpleNamespace(revision="1"),
+    )
+    turn = CustomerTurn(tenant_id="t1", customer_id="u1", media=MediaView(safety_blocked=True))
+    gate = evaluate_gates(turn, apply_credits=False, message="photo?")
+    assert gate.allow is False
+    assert gate.reason == "policy_suppressed"
+    assert gate.detail == "inbound_media_blocked"
+
+
+def test_conversation_store_isolates_same_conversation_id() -> None:
+    from services.customer_ai.conversation_store import (
+        load_conversation,
+        reset_conversation_store_for_tests,
+        save_conversation,
+    )
+
+    reset_conversation_store_for_tests()
+    save_conversation("alpha", "shared", ConversationState(greeted=True), [])
+    save_conversation("beta", "shared", ConversationState(greeted=False), [])
+    assert load_conversation("alpha", "shared")["state"]["greeted"] is True
+    assert load_conversation("beta", "shared")["state"]["greeted"] is False
+
+
+def test_inbound_task_text_uses_transcript_and_file_extract() -> None:
+    turn = CustomerTurn(
+        tenant_id="t1",
+        media=MediaView(transcript="said hours", extract_preview="menu.pdf: open 9-5"),
+        extra={"post_caption": "Summer hours"},
+        surface="comment",
+    )
+    text = inbound_task_text(turn, "")
+    assert "said hours" in text
+    assert "menu.pdf: open 9-5" in text
+    assert text.startswith("Summer hours")
 
 
 def test_live_human_control_blocks_turn(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -51,6 +116,32 @@ def test_live_human_control_blocks_turn(monkeypatch: pytest.MonkeyPatch) -> None
     turn = CustomerTurn(tenant_id="t1", customer_id="u1")
     gate = evaluate_gates(turn, apply_credits=False, message="hi")
     assert gate.reason == "human_control"
+
+
+def test_shared_redis_takeover_blocks_without_local_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.customer_ai.control import live_handoff_active
+
+    monkeypatch.setattr("services.customer_ai.control._local_takeover", lambda _uid: False)
+    monkeypatch.setattr("services.scale.conversation_state_redis.get_takeover", lambda _key: True)
+    monkeypatch.setattr(
+        "services.scale.conversation_state_redis.shared_conv_state_fail_closed",
+        lambda: False,
+    )
+    assert live_handoff_active(user_id="cust-1", conversation_id="c1") is True
+
+
+def test_stale_stored_handoff_clears_after_release(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.customer_ai.control import apply_live_control
+
+    monkeypatch.setattr("services.customer_ai.control.live_handoff_active", lambda **_k: False)
+    turn = CustomerTurn(
+        tenant_id="t1",
+        customer_id="u1",
+        conversation_id="c1",
+        state=ConversationState(handoff_active=True),
+    )
+    updated = apply_live_control(turn)
+    assert updated.state.handoff_active is False
 
 
 def test_store_never_leaks_other_tenant() -> None:
@@ -281,3 +372,71 @@ def test_index_job_does_not_claim_ready_without_pgvector(monkeypatch: pytest.Mon
     assert written["ready"] is False
     assert written["reason"] == "index_not_ready"
     _ = monkeypatch
+
+
+def test_ai_both_comment_uses_public_placeholder() -> None:
+    from services.customer_ai.comments.pipeline import apply_ai_comment_destinations
+    from services.customer_ai.contracts.reply import TurnResult
+
+    generated = TurnResult(
+        stop_reason="ok",
+        envelope=FinalReplyEnvelope(
+            decision="reply",
+            messages=[OutboundMessage(destination="dm", text="Private details here.")],
+        ),
+        ai_called=True,
+    )
+    dual = apply_ai_comment_destinations(generated, "ai_both")
+    dests = [item.destination for item in dual.envelope.messages]
+    assert dests == ["dm", "comment"]
+    assert dual.envelope.messages[1].depends_on == ["private"]
+    assert "DM" in dual.envelope.messages[1].text
+
+
+def test_knowledge_index_rows_are_chunked() -> None:
+    from services.customer_ai.retrieve.cards import TitleCard
+    from services.customer_ai.search.index_job import document_rows
+
+    card = TitleCard(
+        item_id="knowledge:hours",
+        source_family="knowledge",
+        title="Hours",
+        search_text="hours policy",
+        body="# Hours\nWe open at 10.\n\n# Returns\nNo cash refunds after 7 days.",
+    )
+    rows = document_rows([card], tenant_id="shop", version="v1")
+    assert len(rows) >= 2
+    assert all(row["source_family"] == "knowledge" for row in rows)
+    assert any(row["chunk_id"] for row in rows)
+
+
+def test_fixture_eval_runner_has_no_live_spend() -> None:
+    from services.customer_ai.evals.runner import run_fixture_corpus
+
+    report = run_fixture_corpus()
+    assert report["live_spend"] is False
+    assert report["case_count"] >= 1
+
+
+def test_branch_schedule_hydrates_hours() -> None:
+    from services.customer_ai.retrieve.expand import expand_ranked
+    from services.customer_ai.retrieve.lexical import LexicalHit
+    from services.customer_ai.retrieve.cards import TitleCard
+
+    card = TitleCard(item_id="hours:main", source_family="hours", title="Main", search_text="hours")
+    sections = {
+        "branches": {
+            "items": [
+                {
+                    "id": "main",
+                    "title": "Downtown",
+                    "timezone": "Asia/Beirut",
+                    "weekly_hours": {"monday": {"open": "10:00", "close": "19:00"}},
+                }
+            ]
+        }
+    }
+    bundle = expand_ranked([LexicalHit(card=card, score=1.0)], sections, revision="r1")
+    assert bundle.items
+    assert "10:00" in bundle.items[0].text
+    assert "Asia/Beirut" in bundle.items[0].text or "monday" in bundle.items[0].text

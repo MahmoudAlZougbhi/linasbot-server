@@ -58,7 +58,11 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_usage",
-            "description": "Read usage and credit wallet snapshot.",
+            "description": (
+                "Read the credit wallet plus message-catalog fields. Wallet quantities "
+                "are leftover credits, never Messages remaining. available_messages is "
+                "live remaining only when message_billing_active is true."
+            ),
             "parameters": {"type": "object", "properties": {}},
         },
     },
@@ -66,7 +70,10 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_subscription",
-            "description": "Read subscription/plan entitlements.",
+            "description": (
+                "Read subscription/plan entitlements. included_messages is the catalog "
+                "allowance. Do not read leftover credits or included_credits as Messages remaining."
+            ),
             "parameters": {"type": "object", "properties": {}},
         },
     },

@@ -108,7 +108,7 @@ def cancel_request_or_draft(
         action_id=f"cancel:{proposal.task_id}",
         action_type="cancel_request",
         state="success",
-        backend_id=str(updated.get("id") or request_id),
+        backend_id=str(updated.get("request_id") or updated.get("id") or request_id),
         revision=str(updated.get("row_version") or ""),
         reason="cancelled",
     )

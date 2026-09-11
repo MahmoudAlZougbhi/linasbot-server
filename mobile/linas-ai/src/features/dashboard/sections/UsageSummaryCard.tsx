@@ -72,7 +72,7 @@ export function UsageSummaryCard({ usage, periodLabel }: Props) {
       ) : null}
       {usage.credits_by_bucket_note ? (
         <Text style={{ color: colors.textDim, fontFamily: fonts.body, fontSize: 11, marginTop: 6 }}>
-          Credits consumed by channel: unavailable from current ledger.
+          Messages consumed by channel: unavailable from current ledger.
         </Text>
       ) : null}
     </View>

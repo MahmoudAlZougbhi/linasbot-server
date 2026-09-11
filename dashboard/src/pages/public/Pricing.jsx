@@ -13,6 +13,7 @@ export default function Pricing() {
   const [plans, setPlans] = useState(/** @type {Array<any>} */ ([]));
   const [error, setError] = useState(/** @type {string | null} */ (null));
   const [loading, setLoading] = useState(true);
+  const [checkoutReady, setCheckoutReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,6 +26,7 @@ export default function Pricing() {
         }
         if (!cancelled) {
           setPlans(Array.isArray(body.plans) ? body.plans : []);
+          setCheckoutReady(Boolean(body.checkout_ready));
           setError(null);
         }
       } catch {
@@ -50,9 +52,14 @@ export default function Pricing() {
           <div>
             <h1 className="font-display text-4xl font-semibold tracking-tight">Pricing</h1>
             <p className="mt-1 max-w-2xl text-[#8B9BB8]">
-              Manage your business AI from the Linas AI mobile app. Subscriptions and credits are
+              Manage your business AI from the Linas AI mobile app. Subscriptions and AI messages are
               enforced by the Linas API — not by the website.
             </p>
+            {checkoutReady ? null : (
+              <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">
+                Intended catalog — live checkout still uses leftover credits until message cutover.
+              </p>
+            )}
           </div>
         </div>
         {loading && <p className="text-[#8B9BB8]">Loading plans…</p>}
@@ -63,18 +70,26 @@ export default function Pricing() {
         )}
         {!loading && !error && (
           <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {plans.map((plan) => (
+            {plans.map((plan) => {
+              const messages = Number(plan.included_messages);
+              return (
               <article
                 key={plan.plan_id}
                 className="rounded-2xl border border-[#243248] bg-[#162033]/70 p-6"
               >
                 <h2 className="text-xl font-semibold text-[#E8EEF8]">{plan.display_name}</h2>
                 <p className="mt-2 text-3xl font-bold text-[#3B8EF0]">
-                  {Number(plan.price_usd) % 1 === 0 ? `$${plan.price_usd}` : `$${Number(plan.price_usd).toFixed(2)}`}
+                  {Number(plan.intended_price_usd ?? plan.price_usd) % 1 === 0
+                    ? `$${plan.intended_price_usd ?? plan.price_usd}`
+                    : `$${Number(plan.intended_price_usd ?? plan.price_usd).toFixed(2)}`}
                   <span className="text-base font-normal text-[#8B9BB8]">/mo</span>
                 </p>
                 <ul className="mt-3 space-y-1 text-sm text-[#8B9BB8]">
-                  <li>{plan.included_credits.toLocaleString()} included credits / period</li>
+                  <li>
+                    {Number.isFinite(messages) && messages > 0
+                      ? `${messages.toLocaleString()} included AI messages / month`
+                      : 'AI message allowance is set on the server catalog.'}
+                  </li>
                   <li>FAQ capacity: {plan.faq_capacity}</li>
                   <li>
                     Additional seats:{' '}
@@ -83,7 +98,8 @@ export default function Pricing() {
                   <li>Comments: {plan.comment_automation ? 'Enabled' : 'Disabled'}</li>
                 </ul>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
         <p className="mt-10 text-[#8B9BB8]">

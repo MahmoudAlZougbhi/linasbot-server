@@ -46,6 +46,38 @@ async def handle_photo_message(
     if not tenant_id:
         print("ERROR: photo handler refused — tenant_id required")
         return
+    from services.customer_ai.flags import customer_brain_enabled
+
+    if customer_brain_enabled():
+        from handlers.text_handlers_respond import _process_and_respond
+        from services.ai_reply_turn_runtime import run_reserved_customer_turn
+        from services.customer_reply_v2.inbound_media import mark_inbound_attachment, store_inbound_image_base64
+
+        if not user_data.get("_source_message_id") and image_url:
+            user_data["_source_message_id"] = str(image_url)
+        if str(image_url or "").startswith("data:"):
+            store_inbound_image_base64(user_data, b64=image_url)
+        elif image_url:
+            from services.customer_reply_v2.inbound_media import store_inbound_image_from_url
+
+            await store_inbound_image_from_url(user_data, image_url)
+        else:
+            mark_inbound_attachment(user_data, "image")
+        from services.ai_reply_delivery import wrap_tracked_send
+
+        tracked_send = wrap_tracked_send(send_message_func, user_data)
+        await run_reserved_customer_turn(
+            user_data,
+            lambda: _process_and_respond(
+                user_id,
+                user_name,
+                "[صورة]",
+                user_data,
+                tracked_send,
+                send_action_func,
+            ),
+        )
+        return
     if not _photo_analysis_enabled_for_tenant(tenant_id):
         await send_message_func(
             user_id,
@@ -145,34 +177,36 @@ async def handle_photo_message(
         # 📊 ANALYTICS: Log image message from user
         response_time_ms = (time.time() - start_time) * 1000
 
-        # Estimate tokens and cost for image model
-        # Vision API typically uses more tokens for image analysis
-        estimated_tokens = analysis_data.get("tokens_used", 500)  # Default estimate
-        vision_cost = (estimated_tokens / 1000) * 0.01  # GPT-4 Vision input pricing
+        from services.membership.provider_expense import record_pending_provider
 
+        source_mid = str(user_data.get("_source_message_id") or user_data.get("provider_message_id") or "")
+        record_pending_provider(
+            event_id=f"vision:{tenant_id}:{source_mid or user_id[-8:]}",
+            tenant_id=tenant_id,
+            category="visual",
+            feature="inbound_media",
+            provider="openai",
+            model="gpt-4o-mini",
+            operation_id=source_mid or "photo",
+        )
         analytics.log_message(
             source="user",
             msg_type="image",
             user_id=user_id,
             language=user_data.get("user_preferred_lang", "ar"),
-            tokens=estimated_tokens,
-            cost_usd=vision_cost,
+            tokens=0,
+            cost_usd=0.0,
             model="gpt-4o-mini",
             response_time_ms=response_time_ms,
-            message_length=0,  # Images don't have text length
+            message_length=0,
         )
-
-        # 📊 ANALYTICS: Log bot's response
-        bot_tokens = len(bot_reply.split()) * 1.3  # Rough estimate
-        bot_cost = (bot_tokens / 1000) * 0.03  # Vision output pricing
-
         analytics.log_message(
             source="bot",
             msg_type="text",
             user_id=user_id,
             language=user_data.get("user_preferred_lang", "ar"),
-            tokens=int(bot_tokens),
-            cost_usd=bot_cost,
+            tokens=0,
+            cost_usd=0.0,
             model="gpt-4o-mini",
             response_time_ms=response_time_ms,
             message_length=len(bot_reply),

@@ -97,7 +97,7 @@ def runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[_FakeFirestore]:
         return None
 
     monkeypatch.setattr(processor, "get_user_state_from_firestore", restore)
-    monkeypatch.setattr(processor, "save_user_name_to_firestore", persist_name)
+    monkeypatch.setattr("services.social_customer_name.save_user_name_to_firestore", persist_name)
     quota_calls: list[bool] = []
 
     def enforce(**kwargs: Any) -> Any:

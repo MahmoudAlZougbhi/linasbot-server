@@ -112,12 +112,13 @@ def list_subscribers(users: list[dict[str, Any]] | None = None) -> list[dict[str
         total_credits = int(bill.get("included_credits") or 0) + int(bill.get("extra_credits") or 0)
         remaining = int(bill.get("credits_remaining") or 0)
         primary = next((u for u in members if u.get("role") in {"owner", "admin"}), members[0])
+        plan_id = str(bill.get("plan_id") or "none")
         rows.append(
             {
                 "tenant_id": tenant_id,
                 "email": primary.get("email"),
                 "business_name": primary.get("businessName"),
-                "subscription": bill.get("plan_id") or "none",
+                "subscription": plan_id,
                 "membership": bill.get("subscription_status") or "none",
                 "seats_created": len(members),
                 "roles": sorted({str(u.get("role") or "viewer") for u in members}),
@@ -125,10 +126,31 @@ def list_subscribers(users: list[dict[str, Any]] | None = None) -> list[dict[str
                 "credits_total": total_credits,
                 "credits_used": max(0, total_credits - remaining),
                 "credits_remaining": remaining,
+                **_catalog_offer(plan_id),
                 "users": members,
             }
         )
     return sorted(rows, key=lambda row: (str(row["business_name"] or "").lower(), row["tenant_id"]))
+
+
+def _catalog_offer(plan_id: str) -> dict[str, Any]:
+    from services.membership.catalog_admin import effective_included_messages
+    from services.membership.catalog_revenue import intended_price_usd
+
+    try:
+        included = effective_included_messages(plan_id)
+    except Exception:
+        included = None
+    return {
+        "intended_included_messages": included,
+        "intended_price_usd": intended_price_usd(plan_id),
+    }
+
+
+def _catalog_revenue(plan_ids: list[str]) -> dict[str, Any]:
+    from services.membership.catalog_revenue import revenue_pair
+
+    return revenue_pair(plan_ids)
 
 
 def analytics(range_key: str) -> dict[str, Any]:
@@ -155,10 +177,12 @@ def analytics(range_key: str) -> dict[str, Any]:
         "credits_total": sum(int(row["credits_total"]) for row in active_subscribers),
         "credits_used": sum(int(row["credits_used"]) for row in active_subscribers),
         "credits_remaining": sum(int(row["credits_remaining"]) for row in active_subscribers),
+        **_catalog_revenue([str(row["subscription"] or "") for row in active_subscribers]),
         "coverage": {
             "users": "Firestore dashboard users",
             "billing": "tenant entitlements + credit balances",
             "messages": "bounded Interaction Logs (latest 500 rows); not a full historical aggregate",
             "tiktok": "stored TikTok comments/DMs + interaction logs when connected",
+            "revenue": "live_checkout_mrr_usd is membership-v1. intended_message_mrr_usd is the message catalog.",
         },
     }

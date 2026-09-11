@@ -13,7 +13,12 @@ def _rows(sections: dict[str, Any], family: str) -> list[dict[str, Any]]:
     if family == "hours":
         payload = sections.get("opening_hours")
         rows = payload.get("items") if isinstance(payload, dict) else None
-        return [r for r in rows or [] if isinstance(r, dict)]
+        hours = [r for r in rows or [] if isinstance(r, dict)]
+        if hours:
+            return hours
+        branches = sections.get("branches")
+        items = branches.get("items") if isinstance(branches, dict) else None
+        return [r for r in items or [] if isinstance(r, dict)]
     if family in {"prices", "services"}:
         payload = sections.get("prices")
         catalog = payload.get("catalog") if isinstance(payload, dict) else None
@@ -58,6 +63,25 @@ def _price_lines(sections: dict[str, Any], catalog_item_id: str) -> list[str]:
     return lines
 
 
+def _schedule_lines(raw: dict[str, Any]) -> list[str]:
+    nested = raw.get("weekly_hours") or raw.get("hours") or raw.get("schedule")
+    schedule = nested if isinstance(nested, dict) else raw
+    lines: list[str] = []
+    for day in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"):
+        row = schedule.get(day)
+        if not isinstance(row, dict):
+            continue
+        if row.get("closed"):
+            lines.append(f"{day}: closed")
+        elif row.get("open") or row.get("close"):
+            lines.append(f"{day}: {row.get('open') or ''}–{row.get('close') or ''}".strip())
+    exceptions = raw.get("exceptions") or raw.get("off_days") or []
+    if isinstance(exceptions, list):
+        for item in exceptions:
+            lines.append(str(item))
+    return lines
+
+
 def _text_card(family: str, raw: dict[str, Any], *, sections: dict[str, Any]) -> str:
     parts = [
         str(raw.get("title") or raw.get("name") or _label(raw.get("labels")) or ""),
@@ -74,15 +98,15 @@ def _text_card(family: str, raw: dict[str, Any], *, sections: dict[str, Any]) ->
                 parts.append(str(variant.get("answer") or ""))
     if family == "branches":
         parts.append(str(raw.get("address") or raw.get("maps_url") or ""))
+        tz = str(raw.get("timezone") or raw.get("tz") or "").strip()
+        if tz:
+            parts.append(f"timezone {tz}")
+        parts.extend(_schedule_lines(raw))
     if family == "hours":
-        for day in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"):
-            row = raw.get(day)
-            if not isinstance(row, dict):
-                continue
-            if row.get("closed"):
-                parts.append(f"{day}: closed")
-            elif row.get("open") or row.get("close"):
-                parts.append(f"{day}: {row.get('open') or ''}–{row.get('close') or ''}".strip())
+        tz = str(raw.get("timezone") or raw.get("tz") or "").strip()
+        if tz:
+            parts.append(f"timezone {tz}")
+        parts.extend(_schedule_lines(raw))
     return "\n".join(p.strip() for p in parts if str(p).strip())
 
 
@@ -91,6 +115,7 @@ def expand_ranked(
     sections: dict[str, Any],
     *,
     revision: str = "",
+    tenant_id: str = "",
 ) -> EvidenceBundle:
     hits: list[LexicalHit] = []
     for item in ranked:
@@ -99,7 +124,7 @@ def expand_ranked(
             continue
         score = float(getattr(item, "lexical_score", 0.0) or getattr(item, "score", 0.0) or 0.0)
         hits.append(LexicalHit(card=card, score=score))
-    return expand_hits(hits, sections, revision=revision)
+    return expand_hits(hits, sections, revision=revision, tenant_id=tenant_id)
 
 
 def expand_hits(
@@ -107,12 +132,32 @@ def expand_hits(
     sections: dict[str, Any],
     *,
     revision: str = "",
+    tenant_id: str = "",
 ) -> EvidenceBundle:
     items: list[EvidenceItem] = []
     for hit in hits:
         card = hit.card
         _, _, source_id = card.item_id.partition(":")
         family = card.source_family
+        if family == "products":
+            from services.customer_ai.retrieve.products import evidence_from_product, load_product_evidence
+
+            match = next((row for row in _rows(sections, family) if _row_id(row) == source_id), None)
+            if match is not None:
+                product_item = evidence_from_product(match)
+            else:
+                product_item = load_product_evidence(tenant_id, source_id)
+            if product_item is None:
+                continue
+            items.append(
+                product_item.model_copy(
+                    update={
+                        "revision": revision or product_item.revision or card.revision,
+                        "extra": {**(product_item.extra or {}), "lexical_score": hit.score},
+                    }
+                )
+            )
+            continue
         match = next((row for row in _rows(sections, family) if _row_id(row) == source_id), None)
         if match is None:
             continue
@@ -140,4 +185,4 @@ def expand_published(tenant_id: str, hits: list[LexicalHit]) -> EvidenceBundle:
     except PublishedVersionError:
         return EvidenceBundle(outcome="source_unpublished")
     revision = str(getattr(pointer, "revision", "") or "")
-    return expand_hits(hits, sections, revision=revision)
+    return expand_hits(hits, sections, revision=revision, tenant_id=tenant_id)

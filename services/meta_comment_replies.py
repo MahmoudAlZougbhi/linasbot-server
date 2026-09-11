@@ -35,6 +35,25 @@ class CommentReplyResult:
     reply_id: str = ""
 
 
+def _settle_generated_comment(
+    *,
+    binding: MetaAssetBinding,
+    comment_id: str,
+    inbound_event_id: str | None,
+    accepted: bool,
+    reply_id: str = "",
+) -> None:
+    from services.meta_comment_brain_send import _settle_comment_send
+
+    _settle_comment_send(
+        binding=binding,
+        comment_id=comment_id,
+        inbound_event_id=inbound_event_id,
+        reply_id=reply_id,
+        accepted=accepted,
+    )
+
+
 def _provider_rejection_is_definitive(reason: str) -> bool:
     """Only an explicit client rejection proves Meta did not accept the send."""
 
@@ -231,8 +250,14 @@ async def process_meta_comment_event(
                 )
                 return CommentReplyResult(status="failed", reason="reply_dedupe_check_failed")
         from services.meta_comment_rule_both import is_deterministic_comment_and_dm, maybe_handle_comment_and_dm
+        from services.meta_comment_rule_dm import maybe_handle_static_dm
+        from services.meta_comment_rule_modes import (
+            allows_private_after_public_reply,
+            is_static_comment_dm,
+            is_static_public_comment,
+        )
 
-        if already_replied and not is_deterministic_comment_and_dm(rule_decision):
+        if already_replied and not allows_private_after_public_reply(rule_decision):
             return CommentReplyResult(status="ignored", reason="human_replied")
         if is_deterministic_comment_and_dm(rule_decision):
             return await maybe_handle_comment_and_dm(
@@ -247,121 +272,73 @@ async def process_meta_comment_event(
                 client=client,
                 skip_public=already_replied,
             )
-
-        # CM rule: reply via private DM — never fall back to a public comment reply.
-        if rule_decision is not None and rule_decision.action == "reply_dm":
-            dm_text = (rule_decision.reply_text or "").strip()
-            if not dm_text:
-                return CommentReplyResult(status="skipped", reason="comment_rule_dm_template_required")
-            if simulation:
-                payload = {
-                    "comment_id": comment_id,
-                    "channel": binding.channel,
-                    "message": dm_text,
-                    "delivery": "private_reply",
-                    "rule_id": rule_decision.rule_id,
-                }
-                if capture_send is not None:
-                    capture_send.append(payload)
-                _mark_sent_reply(binding, comment_id)
-                return CommentReplyResult(status="simulated", reply_id="simulated_dm")
-            from services.meta_comment_private_reply import send_comment_private_reply
-            from services.meta_controlled_evidence import meta_evidence_surface
-            from services.meta_outbound_attempts import (
-                MetaOutboundAttemptDecision,
-                begin_meta_outbound_attempt,
-                finish_meta_outbound_attempt,
+        if is_static_comment_dm(rule_decision):
+            return await maybe_handle_static_dm(
+                rule_decision=rule_decision,
+                binding=binding,
+                comment_id=comment_id,
+                simulation=simulation,
+                capture_send=capture_send,
+                inbound_event_id=inbound_event_id,
+                token=token,
+                graph_api_version=graph_version,
+                client=client,
             )
 
-            private_attempt: MetaOutboundAttemptDecision | None = None
-            if inbound_event_id:
-                private_attempt = await begin_meta_outbound_attempt(
-                    event_id=inbound_event_id,
-                    surface=meta_evidence_surface(kind="meta_comment", channel=binding.channel),
-                    binding_id=binding.binding_id,
-                )
-                if private_attempt.kind == "duplicate_suppressed":
-                    return CommentReplyResult(status="ignored", reason="already_replied")
-                if private_attempt.kind == "needs_owner_action":
-                    return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
-
-            try:
-                ok, reason, response = await send_comment_private_reply(
-                    client,
-                    binding=binding,
-                    comment_id=comment_id,
-                    message=dm_text,
-                    token=token,
-                    graph_api_version=graph_version,
-                )
-            except BaseException:
-                if private_attempt is not None and private_attempt.kind == "send":
-                    task = asyncio.create_task(
-                        finish_meta_outbound_attempt(
-                            private_attempt,
-                            status="needs_owner_action",
-                            safe_reason="provider_call_ambiguous",
-                        )
-                    )
-                    from services.async_safety_cleanup import await_safety_task
-
-                    await await_safety_task(task)
-                raise
-            if not ok:
-                if private_attempt is not None and private_attempt.kind == "send":
-                    ambiguous = not _provider_rejection_is_definitive(reason)
-                    try:
-                        await finish_meta_outbound_attempt(
-                            private_attempt,
-                            status="needs_owner_action" if ambiguous else "definitive_failure",
-                            safe_reason="accepted_without_provider_id" if ambiguous else "provider_rejected",
-                        )
-                    except BaseException:
-                        return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
-                    if ambiguous:
-                        return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
-                return CommentReplyResult(status="failed", reason=f"private_reply:{reason}")
-            reply_id = str(response.get("id") or response.get("message_id") or "").strip()
-            if private_attempt is not None and private_attempt.kind == "send":
-                try:
-                    await finish_meta_outbound_attempt(
-                        private_attempt,
-                        status="accepted",
-                        safe_reason="provider_accepted",
-                        provider_message_id=reply_id,
-                    )
-                except BaseException:
-                    return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
-            _mark_sent_reply(binding, comment_id)
-            _runtime_logger.info(
-                "[meta-comment] private_reply_sent channel=%s tenant=%s comment=%s rule=%s",
-                binding.channel,
-                binding.tenant_id,
-                comment_id[-8:],
-                rule_decision.rule_id or "-",
-            )
-            return CommentReplyResult(status="sent_dm", reply_id=reply_id)
-
-        if (
-            rule_decision is not None
-            and rule_decision.action == "reply_comment"
-            and rule_decision.matched
-            and (rule_decision.reply_text or "").strip()
-        ):
+        if is_static_public_comment(rule_decision):
             reply_text: str | None = rule_decision.reply_text.strip()[:900]
         else:
-            reply_text = await _generate_comment_reply_text(
+            generated = await _generate_comment_reply_text(
                 tenant_id=binding.tenant_id,
                 comment_text=comment_text,
                 instructions=reply_setting.instructions,
                 channel=binding.channel,
                 policy_text=(rule_decision.policy_text if rule_decision else ""),
-                comment_context=None,
+                comment_context={
+                    "conversation_id": f"comment:{binding.tenant_id}:{binding.channel}:{post_id or comment_id}",
+                    "comment_id": comment_id,
+                    "post_id": post_id,
+                    "parent_id": str(event.get("parent_id") or ""),
+                    "caption": str(event.get("caption") or event.get("post_caption") or ""),
+                    "parent_comment": str(event.get("parent_comment") or event.get("parent_text") or ""),
+                },
                 asset_id=binding.asset_id,
                 provider_sender_id=str(event.get("author_id") or "").strip(),
                 provider_display_name=str(event.get("author_name") or "").strip(),
             )
+            from services.customer_ai.comments.destinations import coerce_comment_destinations
+            from services.meta_comment_brain_send import send_comment_destinations
+
+            plan = coerce_comment_destinations(generated)
+            if plan is None or not plan.has_any:
+                _settle_generated_comment(
+                    binding=binding,
+                    comment_id=comment_id,
+                    inbound_event_id=inbound_event_id,
+                    accepted=False,
+                )
+                return CommentReplyResult(status="skipped", reason="no_confident_reply")
+            if plan.private_text:
+                return await send_comment_destinations(
+                    plan=plan,
+                    binding=binding,
+                    comment_id=comment_id,
+                    simulation=simulation,
+                    capture_send=capture_send,
+                    inbound_event_id=inbound_event_id,
+                    token=token,
+                    graph_api_version=graph_version,
+                    client=client,
+                    skip_public=already_replied,
+                )
+            reply_text = plan.public_text
         if not reply_text:
+            _settle_generated_comment(
+                binding=binding,
+                comment_id=comment_id,
+                inbound_event_id=inbound_event_id,
+                accepted=False,
+            )
             return CommentReplyResult(status="skipped", reason="no_confident_reply")
 
         if simulation:
@@ -375,6 +352,13 @@ async def process_meta_comment_event(
             if capture_send is not None:
                 capture_send.append(payload)
             _mark_sent_reply(binding, comment_id)
+            _settle_generated_comment(
+                binding=binding,
+                comment_id=comment_id,
+                inbound_event_id=inbound_event_id,
+                accepted=False,
+                reply_id="simulated",
+            )
             return CommentReplyResult(status="simulated", reply_id="simulated")
 
         from services.meta_controlled_evidence import meta_evidence_surface
@@ -392,6 +376,12 @@ async def process_meta_comment_event(
                 binding_id=binding.binding_id,
             )
             if public_attempt.kind == "duplicate_suppressed":
+                _settle_generated_comment(
+                    binding=binding,
+                    comment_id=comment_id,
+                    inbound_event_id=inbound_event_id,
+                    accepted=False,
+                )
                 return CommentReplyResult(status="ignored", reason="already_replied")
             if public_attempt.kind == "needs_owner_action":
                 return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
@@ -441,6 +431,12 @@ async def process_meta_comment_event(
                 binding.channel,
                 reason,
             )
+            _settle_generated_comment(
+                binding=binding,
+                comment_id=comment_id,
+                inbound_event_id=inbound_event_id,
+                accepted=False,
+            )
             return CommentReplyResult(status="failed", reason=reason)
 
         reply_id = str(response.get("id") or "").strip()
@@ -455,6 +451,13 @@ async def process_meta_comment_event(
             except BaseException:
                 return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
         _mark_sent_reply(binding, comment_id)
+        _settle_generated_comment(
+            binding=binding,
+            comment_id=comment_id,
+            inbound_event_id=inbound_event_id,
+            accepted=True,
+            reply_id=reply_id,
+        )
         _runtime_logger.info(
             "[meta-comment] reply_sent channel=%s tenant=%s asset=%s comment=%s",
             binding.channel,

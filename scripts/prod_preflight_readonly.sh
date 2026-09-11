@@ -250,6 +250,16 @@ for root in repo_roots:
         sys.path.insert(0, str(root))
         break
 from services.meta_surface_secret_separation import evaluate_meta_surface_secret_separation
+from services.membership.message_flags import activation_flags_report
+
+flag_report = activation_flags_report(values)
+for row in flag_report["flags"]:
+    print(
+        f"[preflight] {row['key']}: set={str(row['set']).lower()} "
+        f"enabled={str(row['enabled']).lower()} required_off=true"
+    )
+if not flag_report["ok"]:
+    raise SystemExit("[preflight] ACTIVATION_FLAGS_MUST_STAY_OFF")
 
 separation = evaluate_meta_surface_secret_separation(values)
 print(
@@ -324,6 +334,22 @@ print(
 if owners < 1 and active < 1:
     raise SystemExit("[preflight] NO_EXISTING_ADMIN_USERS")
 print("[preflight] existing_admin_retained=true (hashes unchanged by deploy; no default account created)")
+
+from services.membership.durable_tables import durable_table_report
+from services.membership.pg_store import optional_message_session, store_backend, tables_ready
+
+print(f"[preflight] message_store_backend={store_backend()}")
+tables_ok = False
+try:
+    with optional_message_session() as session:
+        tables_ok = bool(session is not None and tables_ready(session))
+except Exception as exc:
+    print(f"[preflight] message_billing_tables_error={type(exc).__name__}")
+print(f"[preflight] message_billing_tables_ready={str(tables_ok).lower()}")
+durable = durable_table_report()
+print(f"[preflight] message_durable_tables_ready={str(bool(durable.get('ready'))).lower()}")
+for name, ok in (durable.get("tables") or {}).items():
+    print(f"[preflight] message_table_{name}={str(bool(ok)).lower()}")
 PY
 
 if [ -f scripts/backfill_live_chat_index.py ]; then

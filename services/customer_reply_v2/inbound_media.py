@@ -42,7 +42,124 @@ class InboundMediaResult:
     safety_image_urls: list[str] = field(default_factory=list)
 
 
-def inbound_payload_from_user_data(user_data: dict[str, Any] | None) -> dict[str, Any]:
+def inbound_from_attachment_type(kind: str, *, transcript: str = "", extract: str = "") -> dict[str, Any]:
+    """Shared inbound-media view for channel snapshots. No bytes, no invented ids."""
+    label = (kind or "").strip().lower()
+    if label == "image":
+        return {"attachment_types": ["image"]}
+    if label in {"audio", "video"}:
+        view: dict[str, Any] = {"attachment_types": [label]}
+        text = (transcript or "").strip()
+        if text:
+            view["transcript"] = text
+        return view
+    if label in {"document", "file"}:
+        view = {"attachment_types": ["file"]}
+        preview = (extract or "").strip()
+        if preview:
+            view["extract"] = preview
+        return view
+    return {}
+
+
+def planner_text_from_inbound(media: dict[str, Any] | None, *, text: str = "") -> str:
+    """Prefer customer text, then transcript / file extract. Never invent copy."""
+    view = media if isinstance(media, dict) else {}
+    for item in (text, view.get("transcript"), view.get("extract"), view.get("file_extract_preview")):
+        value = str(item or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def store_inbound_image(
+    user_data: dict[str, Any],
+    *,
+    content: bytes = b"",
+    filename: str = "inbound.jpg",
+    content_type: str = "image/jpeg",
+) -> str:
+    """Persist inbound bytes as a resource id. Visual reading stays disabled."""
+    existing = str(user_data.get("inbound_image_media_id") or "").strip()
+    if existing:
+        mark_inbound_attachment(user_data, "image", image_media_id=existing)
+        return existing
+    tenant_id = str(user_data.get("tenant_id") or user_data.get("tenantId") or "").strip()
+    if tenant_id and content:
+        from services.products.media import store_product_media
+
+        stored = store_product_media(
+            tenant_id=tenant_id,
+            user_id="inbound_customer",
+            filename=filename,
+            content=content,
+            content_type=content_type,
+        )
+        media_id = str(stored.get("media_id") or "") if stored.get("ok") else ""
+        if media_id:
+            user_data["inbound_image_media_id"] = media_id
+            mark_inbound_attachment(user_data, "image", image_media_id=media_id)
+            return media_id
+    mark_inbound_attachment(user_data, "image")
+    return ""
+
+
+async def store_inbound_image_from_url(user_data: dict[str, Any], url: str) -> str:
+    """Persist a remote inbound image via the existing SSRF-safe fetch. Fail soft."""
+    existing = str(user_data.get("inbound_image_media_id") or "").strip()
+    if existing:
+        mark_inbound_attachment(user_data, "image", image_media_id=existing)
+        return existing
+    fetched = await fetch_inbound_url(str(url or ""), max_bytes=max_bytes_for_kind("image"))
+    if not fetched.get("ok"):
+        mark_inbound_attachment(user_data, "image")
+        return ""
+    mime = str(fetched.get("mime") or "image/jpeg")
+    return store_inbound_image(
+        user_data,
+        content=fetched.get("bytes") or b"",
+        filename="inbound.jpg",
+        content_type=mime or "image/jpeg",
+    )
+
+
+def store_inbound_image_base64(
+    user_data: dict[str, Any],
+    *,
+    b64: str,
+    filename: str = "inbound.jpg",
+    content_type: str = "image/jpeg",
+) -> str:
+    text = str(b64 or "").strip()
+    raw = b""
+    if text:
+        if text.startswith("data:") and "," in text:
+            text = text.split(",", 1)[1]
+        try:
+            import base64
+
+            raw = base64.b64decode(text)
+        except Exception:
+            raw = b""
+    return store_inbound_image(user_data, content=raw, filename=filename, content_type=content_type)
+
+
+def mark_inbound_attachment(user_data: dict[str, Any], kind: str, **extra: Any) -> None:
+    """Stamp the shared inbound-media view. Do not store image bytes here."""
+    inbound = dict(user_data.get("inbound_media_for_luna") or {})
+    types = [str(item) for item in (inbound.get("attachment_types") or []) if str(item).strip()]
+    label = (kind or "").strip()
+    if label and label not in types:
+        types.append(label)
+    inbound["attachment_types"] = types
+    for key, value in extra.items():
+        if value is None:
+            continue
+        inbound[key] = value
+    user_data["inbound_media_for_luna"] = inbound
+
+
+def inbound_payload_from_user_data(user_data: dict[str, Any] | None, *, has_image: bool = False) -> dict[str, Any]:
     data = user_data if isinstance(user_data, dict) else {}
     inbound = dict(data.get("inbound_media_for_luna") or {})
     urls = data.get("inbound_safety_image_urls")
@@ -54,6 +171,15 @@ def inbound_payload_from_user_data(user_data: dict[str, Any] | None) -> dict[str
     media_id = str(data.get("inbound_image_media_id") or "").strip()
     if media_id and not inbound.get("image_media_id"):
         inbound["image_media_id"] = media_id
+    if has_image or data.get("user_image_base64"):
+        attached = [str(item) for item in (inbound.get("attachment_types") or []) if str(item).strip()]
+        if "image" not in attached:
+            attached.append("image")
+        inbound["attachment_types"] = attached
+        if not inbound.get("image_media_id") and data.get("user_image_base64"):
+            media_id = store_inbound_image_base64(data, b64=str(data.get("user_image_base64") or ""))
+            if media_id:
+                inbound["image_media_id"] = media_id
     return inbound
 
 
@@ -166,7 +292,14 @@ async def ingest_inbound_attachments(
                 tenant_id=tenant_id, item=item, blob=blob, mime=mime, result=result, text_parts=text_parts
             )
         elif kind == "audio":
-            await _ingest_audio(item=item, blob=blob, stt=stt, result=result, text_parts=text_parts)
+            await _ingest_audio(
+                tenant_id=tenant_id,
+                item=item,
+                blob=blob,
+                stt=stt,
+                result=result,
+                text_parts=text_parts,
+            )
         elif kind == "video":
             await _ingest_video(
                 tenant_id=tenant_id,
@@ -235,8 +368,25 @@ async def _ingest_image(
     text_parts.append(_PIPELINE_LABELS["image"])
 
 
+def _journal_stt(tenant_id: str, spoken: dict[str, Any], filename: str) -> None:
+    if not tenant_id:
+        return
+    from services.membership.provider_expense import record_pending_provider
+
+    record_pending_provider(
+        event_id=f"stt:{tenant_id}:{filename}",
+        tenant_id=tenant_id,
+        category="stt",
+        feature="inbound_media",
+        provider="openai",
+        model=str(spoken.get("model") or "stt"),
+        operation_id=filename,
+    )
+
+
 async def _ingest_audio(
     *,
+    tenant_id: str,
     item: dict[str, Any],
     blob: bytes,
     stt: TranscribeFn,
@@ -246,7 +396,9 @@ async def _ingest_audio(
     if not blob:
         text_parts.append(_PIPELINE_LABELS["audio"])
         return
-    spoken = await stt(data=blob, filename=_filename(item, "audio"))
+    filename = _filename(item, "audio")
+    spoken = await stt(data=blob, filename=filename)
+    _journal_stt(tenant_id, spoken, filename)
     if spoken.get("ok") and spoken.get("text"):
         result.transcript = str(spoken["text"]).strip()
         text_parts.append(result.transcript)
@@ -290,6 +442,7 @@ async def _ingest_video(
     audio = extracted.get("audio")
     if audio:
         spoken = await stt(data=audio, filename="video_audio.wav")
+        _journal_stt(tenant_id, spoken, "video_audio.wav")
         if spoken.get("ok") and spoken.get("text"):
             result.transcript = str(spoken["text"]).strip()
             text_parts.append(result.transcript)

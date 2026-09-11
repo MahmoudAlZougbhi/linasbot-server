@@ -252,7 +252,12 @@ def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monk
     assert payload["plan_and_credits"]["availability"] == "ok"
     assert payload["plan_and_credits"]["available_credits"] == 0
     assert payload["plan_and_credits"]["actions"]["upgrade_plan"] is True
-    assert payload["workspace_status"]["state"] == "credits_depleted"
+    assert payload["plan_and_credits"]["ai_setup_edits"]["limit"] == 30
+    assert payload["workspace_status"]["state"] != "credits_depleted"
+    assert payload["workspace_status"]["state"] == "leftover_credits_depleted"
+    assert "Add messages" not in json.dumps(payload)
+    assert payload["plan_and_credits"]["available_messages"] is None
+    assert payload["plan_and_credits"]["message_billing_active"] is False
     blob = json.dumps(payload).lower()
     assert "cost_usd" not in blob
     assert "provider_cost" not in blob
@@ -466,6 +471,47 @@ def test_workspace_status_suspended_and_active() -> None:
     )
     assert active["state"] == "active"
     assert active["reason_code"] == "workspace_active"
+
+    messages_gone = derive_workspace_status(
+        suspended=False,
+        plan_id="starter",
+        subscription_status="active",
+        subscription_exempt=False,
+        available_credits=0,
+        included_credits=1200,
+        credits_known=True,
+        leftover_known=False,
+        cm_published=True,
+        cm_percent=100,
+        any_connected=True,
+        connection_issue=False,
+        dm_ok=True,
+    )
+    assert messages_gone["state"] == "credits_depleted"
+    assert messages_gone["primary_action"]["code"] == "upgrade_plan"
+    assert "Add messages" not in json.dumps(messages_gone)
+    assert "leftover" not in json.dumps(messages_gone).lower()
+
+    leftover_gone = derive_workspace_status(
+        suspended=False,
+        plan_id="starter",
+        subscription_status="active",
+        subscription_exempt=False,
+        available_credits=None,
+        included_credits=17500,
+        credits_known=False,
+        leftover_credits=0,
+        leftover_known=True,
+        cm_published=True,
+        cm_percent=100,
+        any_connected=True,
+        connection_issue=False,
+        dm_ok=True,
+    )
+    assert leftover_gone["state"] == "leftover_credits_depleted"
+    assert leftover_gone["primary_action"]["code"] == "buy_credits"
+    assert leftover_gone["primary_action"]["label"] == "Add leftover credits"
+    assert "Add messages" not in json.dumps(leftover_gone)
 
 
 def test_mobile_dashboard_api_auth_and_tenant_scope(monkeypatch: pytest.MonkeyPatch) -> None:

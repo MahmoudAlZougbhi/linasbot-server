@@ -28,13 +28,24 @@ async def mobile_upload_product_media(
     session = require_session(request)
     tenant_id = _session_tenant(session)
     raw = await file.read()
-    result = store_product_media(
-        tenant_id=tenant_id,
-        user_id=str(session.user_id or ""),
-        filename=file.filename or "upload.bin",
-        content=raw,
-        content_type=file.content_type,
-    )
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
+    try:
+        with guarded_edit(
+            tenant_id=tenant_id,
+            kind="product:media",
+            payload={"filename": file.filename or "upload.bin", "size": len(raw)},
+        ):
+            result = store_product_media(
+                tenant_id=tenant_id,
+                user_id=str(session.user_id or ""),
+                filename=file.filename or "upload.bin",
+                content=raw,
+                content_type=file.content_type,
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result.get("error") or "upload_failed")
     return {

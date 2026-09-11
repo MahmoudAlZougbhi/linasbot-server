@@ -3,7 +3,7 @@ export const commentsSetupEn = {
   commentsAdd: 'Add comment rule',
   commentsInfoTitle: 'Rules are optional.',
   commentsInfoBody:
-    'Without a rule, Linas still replies using your published knowledge. Automatic is free and sends your exact message. AI Reply follows your note and uses credits.',
+    'Without a rule, Linas still replies using your published knowledge. Automatic is free and sends your exact message. AI Reply follows your note and uses one AI message.',
   commentsSearch: 'Search comment rules',
   commentsCount: 'comment rules',
   commentsCountOne: 'comment rule',

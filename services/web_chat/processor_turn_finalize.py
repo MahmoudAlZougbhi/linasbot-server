@@ -94,4 +94,21 @@ def complete_captured_turn(
             pass
         raise
     refresh_operation_runtime(runtime)
+    from services.customer_ai.billing import settle_after_send
+    from services.customer_ai.history_ids import web_inbound_message_id
+
+    conversation_id = str((turn_result or {}).get("conversation_id") or "")
+    web_mid = web_inbound_message_id(conversation_id, user_text) if conversation_id else ""
+    settle_after_send(
+        tenant_id=runtime.tenant_id,
+        operation_id=web_mid or operation_key,
+        accepted=True,
+        channel="web_chat",
+        extra_ids=(
+            operation_key,
+            str(getattr(runtime.record, "inbound_event_id", "") or ""),
+            web_mid,
+            conversation_id,
+        ),
+    )
     return canonical_reply_text(runtime.record, canonical)

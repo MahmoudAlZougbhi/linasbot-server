@@ -38,9 +38,9 @@ def assert_tenant_can_use_ai(tenant_id: str | None) -> None:
     ledger — remaining 0 blocks generation for every tenant.
     """
     tid = resolve_tenant_id(explicit=tenant_id)
-    from services.credit_ai_gate import ai_generation_blocked
+    from services.membership.generative_gate import generative_ai_blocked
 
-    if ai_generation_blocked(tid):
+    if generative_ai_blocked(tid):
         raise PermissionError("Insufficient credits")
     if is_unlimited_tenant(tid):
         return

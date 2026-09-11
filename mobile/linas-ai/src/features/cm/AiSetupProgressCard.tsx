@@ -22,6 +22,9 @@ type Props = {
   liveBusy?: boolean;
   onToggleLive?: () => void;
   onContinueSetup?: () => void;
+  editsUsed?: number;
+  editsLimit?: number;
+  editsReset?: string;
 };
 
 /** Setup progress card — hub section fill %, Live AI on/off control, Linas CTA. */
@@ -34,6 +37,9 @@ export function AiSetupProgressCard({
   liveBusy,
   onToggleLive,
   onContinueSetup,
+  editsUsed,
+  editsLimit,
+  editsReset,
 }: Props) {
   const { tr } = useI18n();
   const pct = Math.min(100, Math.max(0, Math.round(percent)));
@@ -73,6 +79,14 @@ export function AiSetupProgressCard({
       <Text style={styles.subLine}>
         {tr('aiSetupSectionsOf').replace('{complete}', String(complete)).replace('{total}', String(total))}
       </Text>
+      {editsLimit != null ? (
+        <Text style={styles.subLine}>
+          {tr('aiSetupDailyEdits')
+            .replace('{used}', String(editsUsed ?? 0))
+            .replace('{limit}', String(editsLimit))
+            .replace('{reset}', editsReset || '')}
+        </Text>
+      ) : null}
 
       <View style={[styles.track, { backgroundColor: AI_SETUP_PROGRESS_TRACK }]}>
         <View style={[styles.fill, { width: `${pct}%`, backgroundColor: AI_SETUP_TEAL }]} />

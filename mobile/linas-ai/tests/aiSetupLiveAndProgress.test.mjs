@@ -68,10 +68,13 @@ describe('AI Setup Live toggle + hub section count', () => {
     const screen = read('features/cm/CmScreen.tsx');
     const api = read('features/cm/cmApi.ts');
     assert.match(card, /onToggleLive/);
+    assert.match(card, /aiSetupDailyEdits/);
     assert.match(card, /accessibilityRole="switch"/);
     assert.match(card, /aiSetupOff/);
     assert.match(screen, /publishCmLive/);
     assert.match(screen, /unpublishCmLive/);
+    assert.match(screen, /isDailyEditLimitError/);
+    assert.match(screen, /aiSetupDailyEditLimit/);
     assert.match(screen, /onToggleLive=\{onToggleLive\}/);
     assert.match(api, /\/api\/cm\/publish/);
     assert.match(api, /\/api\/cm\/unpublish/);

@@ -43,8 +43,20 @@ async def generate_grounded_reply(
         + "\n".join(history_lines)
         + f"\n\nCURRENT_INBOUND\n{message}\n\nReply in the customer's language. One coherent message."
     )
+    from services.customer_ai.billing import operation_id_for_turn
     from services.llm_core_service import create_chat_completion
+    from services.membership.provider_expense import record_pending_provider
 
+    op = operation_id_for_turn(turn)
+    record_pending_provider(
+        event_id=f"llm:{op}",
+        tenant_id=turn.tenant_id,
+        category="llm_generation",
+        feature="followup" if turn.invocation_kind == "followup" else "customer_chat",
+        provider="openai",
+        model=answer_model(),
+        operation_id=op,
+    )
     response = await create_chat_completion(
         model=answer_model(),
         messages=[

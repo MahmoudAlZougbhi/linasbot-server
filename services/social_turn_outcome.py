@@ -4,6 +4,18 @@ from __future__ import annotations
 
 from typing import Any
 
+_TERMINAL_META_DELIVERIES = frozenset({"delivered", "blocked_quota", "no_text", "permanent_block", "skipped"})
+
+
+def meta_social_outcome_requires_retry(outcome: dict[str, Any] | None) -> bool:
+    """Classify provider/intent outcomes consistently across webhook and queue paths."""
+    result = outcome if isinstance(outcome, dict) else {}
+    explicit = result.get("retryable")
+    if isinstance(explicit, bool):
+        return explicit
+    delivery = str(result.get("delivery") or "unknown").strip().lower()
+    return delivery not in _TERMINAL_META_DELIVERIES
+
 
 def deferred_combine_outcome(user_data: dict[str, Any]) -> dict[str, Any] | None:
     if user_data.get("_distributed_combine_scheduled"):

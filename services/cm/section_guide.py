@@ -112,7 +112,7 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "purpose": "Smart Q&A — ready-made linked Q&A (ar/en/fr/franco) for repeated customer questions.",
         "why": (
             "Matching questions (same text or meaning) reply from FAQ before a full AI generation — "
-            "saves AI credits. Highest-precision answers; production FAQ lives here."
+            "uses 0 AI messages. Highest-precision answers; production FAQ lives here."
         ),
         "what_to_fill": ["items[] with at least one language question + answer"],
         "useful": "Full four-language variants, tags, review status, plan quota.",
@@ -159,18 +159,11 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
     },
     "ai_limits": {
         "title": "Customer AI Limits",
-        "purpose": "Per-customer text, photo, and voice caps across connected channels.",
-        "why": "Protects credits so one customer cannot burn the owner's AI budget.",
-        "what_to_fill": [
-            "text_words_per_message",
-            "text_replies_per_day/week/month",
-            "photos_per_message",
-            "image_per_day/week/month",
-            "voice_minutes_per_message",
-            "voice_minutes_per_day/week/month",
-        ],
-        "useful": "Save applies immediately to customer replies on WhatsApp, Instagram, and Messenger.",
-        "app_path": "Settings → Customer AI Limits (mobile)",
+        "purpose": "Retired owner surface. Customer allowance is now plan AI messages.",
+        "why": "Credit-protection limits are no longer an owner feature.",
+        "what_to_fill": [],
+        "useful": "Backend safety defaults may still apply. Owners manage capacity from Subscription.",
+        "app_path": "Subscription (mobile) — Customer AI Limits was removed",
     },
     "off_days": {
         "title": "Off Days",

@@ -36,6 +36,8 @@ _ROUTE_MODULES = (
     "modules.entitlements_api",
     "modules.creative_api",
     "modules.platform_api",
+    "modules.platform_message_api",
+    "modules.customer_ai_lab_api",
     "modules.mobile_integrations_api",
     "modules.mobile_app_version_api",
     "modules.mobile_dashboard_api",

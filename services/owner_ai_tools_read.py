@@ -131,10 +131,20 @@ async def tool_validate_cm(*, tenant_id: str, role: str) -> ToolResult:
 
 async def tool_read_usage(*, tenant_id: str, role: str) -> ToolResult:
     del role
+    from services.entitlements_service import get_tenant_entitlement_public
+    from services.tenant_mobile_dashboard.message_surface import copilot_usage_overlay
     from services.token_wallet_service import token_wallet_service
 
-    wallet = token_wallet_service.get_wallet(tenant_id)
-    return ToolResult(ok=True, name="read_usage", data={"wallet": wallet.to_public_dict()})
+    wallet = token_wallet_service.get_wallet(tenant_id).to_public_dict()
+    plan = get_tenant_entitlement_public(tenant_id)
+    return ToolResult(
+        ok=True,
+        name="read_usage",
+        data={
+            "wallet": wallet,
+            **copilot_usage_overlay(tenant_id, str(plan.get("plan_id") or "")),
+        },
+    )
 
 
 async def tool_read_subscription(*, tenant_id: str, role: str) -> ToolResult:

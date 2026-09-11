@@ -23,6 +23,7 @@ _TURN_RUNTIME_KEYS = (
     "_last_outbound_delivery",
     "_delivery_succeeded",
     "_credit_captured_for_turn",
+    "_reply_ready",
     "_ai_credit_blocked",
     "_ai_turn_started",
 )
@@ -81,9 +82,9 @@ def try_reserve_for_ai(user_data: dict[str, Any]) -> bool:
     if not tenant_id:
         user_data["_ai_credit_blocked"] = True
         return False
-    from services.credit_ai_gate import ai_generation_blocked
+    from services.membership.generative_gate import generative_ai_blocked
 
-    if ai_generation_blocked(tenant_id):
+    if generative_ai_blocked(tenant_id):
         user_data["_ai_credit_blocked"] = True
         return False
     lid = ensure_turn_started(user_data)
@@ -117,7 +118,7 @@ def on_ai_generated(ctx: dict[str, Any]) -> None:
     flow_meta = ctx.get("flow_meta") or {}
     reply = str(ctx.get("bot_reply_text") or "").strip()
     if not reply:
-        release_on_ai_failure(str(lid))
+        on_ai_failed(ctx)
         return
     persist_generated_reply(
         str(lid),
@@ -136,14 +137,34 @@ def on_ai_generated(ctx: dict[str, Any]) -> None:
         mark_stage("ai_generated")
     except Exception:
         pass
-    capture_after_reply_persisted(
-        str(lid),
-        prompt_tokens=flow_meta.get("prompt_tokens"),
-        completion_tokens=flow_meta.get("completion_tokens"),
-        cost_usd=flow_meta.get("cost_usd"),
-        model=flow_meta.get("final_response_model") or flow_meta.get("model"),
+    user_data["_reply_ready"] = True
+
+
+def _message_settle_ids(user_data: dict[str, Any]) -> tuple[str, ...]:
+    from services.customer_ai.history_ids import conversation_id_from_user_data
+
+    return (
+        str(user_data.get("_logical_reply_id") or ""),
+        str(user_data.get("_combine_mid") or ""),
+        str(user_data.get("_source_message_id") or ""),
+        str(user_data.get("_inbound_event_id") or ""),
+        conversation_id_from_user_data(user_data),
     )
-    user_data["_credit_captured_for_turn"] = True
+
+
+def _settle_unsent_message(user_data: dict[str, Any]) -> None:
+    from services.customer_ai.billing import settle_after_send
+    from services.customer_ai.history_ids import message_id_for_brain
+
+    lid = str(user_data.get("_logical_reply_id") or "")
+    inbound = message_id_for_brain(user_data)
+    settle_after_send(
+        tenant_id=str(user_data.get("tenant_id") or user_data.get("tenantId") or ""),
+        operation_id=inbound or lid,
+        accepted=False,
+        channel=str(user_data.get("channel") or ""),
+        extra_ids=_message_settle_ids(user_data),
+    )
 
 
 def on_ai_failed(ctx: dict[str, Any]) -> None:
@@ -151,6 +172,94 @@ def on_ai_failed(ctx: dict[str, Any]) -> None:
     lid = user_data.get("_logical_reply_id")
     if lid:
         release_on_ai_failure(str(lid))
+    _settle_unsent_message(user_data)
+
+
+def _capture_ready_turn(user_data: dict[str, Any], *, flow_meta: dict[str, Any] | None = None) -> None:
+    lid = str(user_data.get("_logical_reply_id") or "")
+    if not lid or user_data.get("_credit_captured_for_turn"):
+        return
+    meta = flow_meta or {}
+    capture_after_reply_persisted(
+        lid,
+        prompt_tokens=meta.get("prompt_tokens"),
+        completion_tokens=meta.get("completion_tokens"),
+        cost_usd=meta.get("cost_usd"),
+        model=meta.get("final_response_model") or meta.get("model"),
+    )
+    user_data["_credit_captured_for_turn"] = True
+    from services.customer_ai.billing import settle_after_send
+    from services.customer_ai.history_ids import message_id_for_brain
+
+    inbound = message_id_for_brain(user_data)
+    settle_after_send(
+        tenant_id=str(user_data.get("tenant_id") or user_data.get("tenantId") or ""),
+        operation_id=inbound or lid,
+        accepted=True,
+        channel=str(user_data.get("channel") or ""),
+        extra_ids=_message_settle_ids(user_data),
+    )
+
+
+def settle_reserved_credits(
+    user_data: dict[str, Any],
+    *,
+    reply: str = "",
+    flow_meta: dict[str, Any] | None = None,
+) -> None:
+    """Capture leftover-credit reserve after a customer reply, else release."""
+    if not user_data.get("_logical_reply_id"):
+        return
+    if (reply or "").strip():
+        on_ai_generated({"user_data": user_data, "bot_reply_text": reply, "flow_meta": flow_meta or {}})
+        _capture_ready_turn(user_data, flow_meta=flow_meta)
+        return
+    if user_data.get("_reply_ready") or user_data.get("_delivery_succeeded"):
+        return
+    on_ai_failed({"user_data": user_data})
+
+
+def _release_unused_hold(user_data: dict[str, Any]) -> None:
+    """Release leftover credits and message units when the send was never submitted."""
+    on_ai_failed({"user_data": user_data})
+
+
+def settle_after_outbound(
+    user_data: dict[str, Any],
+    *,
+    reply: str = "",
+    flow_meta: dict[str, Any] | None = None,
+) -> None:
+    """Capture only after a confirmed send. Failed never-submitted holds release."""
+    evidence = user_data.get("_last_outbound_delivery")
+    if isinstance(evidence, dict) and evidence:
+        if evidence.get("success"):
+            settle_reserved_credits(user_data, reply=reply, flow_meta=flow_meta)
+            return
+        if evidence.get("success") is False and not evidence.get("retryable") and not evidence.get("submitted"):
+            _release_unused_hold(user_data)
+            return
+        if (reply or "").strip():
+            on_ai_generated({"user_data": user_data, "bot_reply_text": reply, "flow_meta": flow_meta or {}})
+        return
+    if user_data.get("_delivery_succeeded"):
+        settle_reserved_credits(user_data, reply=reply, flow_meta=flow_meta)
+        return
+    if (reply or "").strip():
+        on_ai_generated({"user_data": user_data, "bot_reply_text": reply, "flow_meta": flow_meta or {}})
+
+
+async def run_reserved_customer_turn(user_data: dict[str, Any], produce) -> bool:
+    """Reserve leftover credits, run the customer reply, then capture or release."""
+    if not try_reserve_for_ai(user_data):
+        return False
+    try:
+        await produce()
+    finally:
+        if not user_data.get("_credit_captured_for_turn"):
+            settle_reserved_credits(user_data)
+        finalize_delivery({"user_data": user_data})
+    return True
 
 
 def finalize_delivery(ctx: dict[str, Any]) -> dict[str, Any]:
@@ -169,6 +278,10 @@ def finalize_delivery(ctx: dict[str, Any]) -> dict[str, Any]:
             user_data,
             provider_message_id=str(evidence.get("provider_message_id") or ""),
         )
+        _capture_ready_turn(user_data)
+    elif evidence.get("success") is False and not evidence.get("retryable") and not evidence.get("submitted"):
+        if not user_data.get("_credit_captured_for_turn"):
+            _release_unused_hold(user_data)
     turn = get_turn(str(lid))
     if turn is None:
         return {"delivery": "unknown"}

@@ -5,6 +5,9 @@ const links = [
   { to: '/owner', label: 'Overview' },
   { to: '/owner/users', label: 'Users' },
   { to: '/owner/copilot-setup', label: 'Owner Copilot Setup' },
+  { to: '/owner/catalog', label: 'Message catalog' },
+  { to: '/owner/costs', label: 'Costs' },
+  { to: '/owner/lab', label: 'Brain lab' },
 ];
 
 export default function OwnerPortalShell() {

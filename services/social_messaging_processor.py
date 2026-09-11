@@ -7,14 +7,8 @@ from typing import Any
 
 import config
 from handlers.text_handlers import handle_message
-from services.meta_messaging import (
-    SOCIAL_DISPLAY_NAME_FALLBACK,
-    MetaMessagingAdapter,
-    MetaMessagingSettings,
-    is_unresolved_social_display_name,
-    pick_meta_participant_display_name,
-    resolve_meta_send_account_id,
-)
+from services.meta_messaging import MetaMessagingAdapter, MetaMessagingSettings, resolve_meta_send_account_id
+from services.social_customer_name import resolve_social_customer_display_name as _resolve_social_customer_display_name
 from services.social_delayed_wait import await_delayed_processing as _await_delayed_processing
 from services.social_image_quota import (
     deliver_image_quota_notice as _deliver_image_quota_notice,
@@ -25,80 +19,12 @@ from services.social_image_quota import (
 from services.social_image_quota import (
     truncate_image_attachments as _truncate_image_attachments,
 )
-from utils.utils import get_user_state_from_firestore, save_user_name_to_firestore
+from services.social_turn_outcome import meta_social_outcome_requires_retry
+from utils.utils import get_user_state_from_firestore
 
 SendFunc = Callable[..., Awaitable[Any]]
-_TERMINAL_META_DELIVERIES = frozenset({"delivered", "blocked_quota", "no_text", "permanent_block", "skipped"})
 
-
-def meta_social_outcome_requires_retry(outcome: dict[str, Any] | None) -> bool:
-    """Classify provider/intent outcomes consistently across webhook and queue paths."""
-
-    result = outcome if isinstance(outcome, dict) else {}
-    explicit = result.get("retryable")
-    if isinstance(explicit, bool):
-        return explicit
-    delivery = str(result.get("delivery") or "unknown").strip().lower()
-    return delivery not in _TERMINAL_META_DELIVERIES
-
-
-async def _resolve_social_customer_display_name(
-    *,
-    user_id: str,
-    sender_id: str,
-    event: dict[str, Any],
-    adapter: MetaMessagingAdapter | None,
-    persisted_state: dict[str, Any] | None,
-    skip_persist: bool,
-) -> str:
-    """
-    Resolve the Meta participant's display name for Live Chat + AI context.
-
-    Order: webhook fields → in-memory → Firestore → Graph User Profile → honest fallback.
-    Never invent names. Never keep "Instagram Customer" / "Facebook Customer".
-    """
-    webhook_name = pick_meta_participant_display_name(
-        name=str(event.get("sender_name") or event.get("name") or ""),
-        username=str(event.get("sender_username") or event.get("username") or ""),
-    )
-    if webhook_name:
-        config.user_names[user_id] = webhook_name
-        if not skip_persist:
-            try:
-                await save_user_name_to_firestore(user_id, webhook_name)
-            except Exception as exc:
-                print(f"[meta-social] name_persist_skipped type={type(exc).__name__}")
-        return webhook_name
-
-    cached = str(config.user_names.get(user_id) or "").strip()
-    if cached and not is_unresolved_social_display_name(cached):
-        return cached
-
-    persisted_name = pick_meta_participant_display_name(name=(persisted_state or {}).get("name"))
-    if persisted_name:
-        config.user_names[user_id] = persisted_name
-        return persisted_name
-
-    if adapter is not None:
-        profile = await adapter.fetch_participant_profile(sender_id)
-        graph_name = pick_meta_participant_display_name(
-            name=profile.get("name"),
-            first_name=profile.get("first_name"),
-            last_name=profile.get("last_name"),
-            username=profile.get("username"),
-        )
-        if graph_name:
-            config.user_names[user_id] = graph_name
-            if not skip_persist:
-                try:
-                    await save_user_name_to_firestore(user_id, graph_name)
-                except Exception as exc:
-                    print(f"[meta-social] name_persist_skipped type={type(exc).__name__}")
-            return graph_name
-
-    # Honest temporary label — not channel-branded placeholders.
-    config.user_names[user_id] = SOCIAL_DISPLAY_NAME_FALLBACK
-    return SOCIAL_DISPLAY_NAME_FALLBACK
+__all__ = ["meta_social_outcome_requires_retry", "process_meta_social_event"]
 
 
 async def process_meta_social_event(

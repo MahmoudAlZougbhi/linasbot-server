@@ -111,11 +111,20 @@ async def tool_approve_diagnosis_fix(
             confirmation_token=f"approve_diagnosis_fix:{proposal_id}",
             error="Confirmation required",
         )
+    from services.membership.daily_edits import DailyEditLimitError
     from services.owner_ai_diagnosis import approve_diagnosis_fix
 
-    data = await approve_diagnosis_fix(
-        tenant_id=tenant_id,
-        user_id=user_id,
-        proposal_id=proposal_id,
-    )
+    try:
+        data = await approve_diagnosis_fix(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            proposal_id=proposal_id,
+        )
+    except DailyEditLimitError as exc:
+        return ToolResult(
+            ok=False,
+            name="approve_diagnosis_fix",
+            data={"proposal_id": proposal_id, "reset_at": exc.decision.reset_at},
+            error=exc.code,
+        )
     return ToolResult(ok=True, name="approve_diagnosis_fix", data=data)

@@ -247,30 +247,33 @@ async def approve_diagnosis_fix(
 
     if corr.get("type") == "faq_update":
         from services.cm.faq_integration import create_faq_pair, update_cm_faq_variant
+        from services.membership.edit_http import guarded_edit
 
         qa_group_id = corr.get("qa_group_id")
         answer = str((corr.get("patch") or corr.get("patch_hint") or {}).get("answer") or "").strip()
         question = str((corr.get("patch") or corr.get("patch_hint") or {}).get("question") or "").strip()
         if qa_group_id and answer:
-            updated = await update_cm_faq_variant(
-                qa_group_id=str(qa_group_id),
-                language=str(corr.get("language") or "ar"),
-                question=question or None,
-                answer=answer,
-                reviewed=True,
-                tenant_id=tenant_id,
-                updated_by=user_id,
-            )
+            with guarded_edit(tenant_id=tenant_id, kind="faq:diagnosis-update", payload={"id": qa_group_id, "answer": answer}):
+                updated = await update_cm_faq_variant(
+                    qa_group_id=str(qa_group_id),
+                    language=str(corr.get("language") or "ar"),
+                    question=question or None,
+                    answer=answer,
+                    reviewed=True,
+                    tenant_id=tenant_id,
+                    updated_by=user_id,
+                )
             applied["faq"] = {"qa_group_id": qa_group_id, "updated": True, "result": updated.get("success", True)}
         elif question and answer:
-            created = await create_faq_pair(
-                question=question,
-                answer=answer,
-                language=str(corr.get("language") or "ar"),
-                tenant_id=tenant_id,
-                updated_by=user_id,
-                tags=["diagnosis_fix"],
-            )
+            with guarded_edit(tenant_id=tenant_id, kind="faq:diagnosis-create", payload={"question": question, "answer": answer}):
+                created = await create_faq_pair(
+                    question=question,
+                    answer=answer,
+                    language=str(corr.get("language") or "ar"),
+                    tenant_id=tenant_id,
+                    updated_by=user_id,
+                    tags=["diagnosis_fix"],
+                )
             applied["faq"] = {"created": True, "qa_group_id": created.get("qa_group_id")}
         else:
             raise ValueError("FAQ correction requires answer (and qa_group_id or question)")

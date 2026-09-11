@@ -100,16 +100,33 @@ async def mobile_integration_toggles(
     else:
         raise HTTPException(status_code=400, detail="Body must include dm or comments boolean")
 
+    from services.membership.daily_edits import DailyEditLimitError
+    from services.membership.edit_http import guarded_edit, limit_response
+
+    kind = (
+        f"safety:toggle:{platform_key}:{toggle}"
+        if not enabled
+        else f"integration:toggle:{platform_key}:{toggle}"
+    )
+
     if platform_key == "tiktok":
         from services.tiktok_business.toggles import TikTokToggleError, set_tiktok_toggle
 
         try:
-            result = await set_tiktok_toggle(
+            with guarded_edit(
                 tenant_id=session.tenant_id,
-                toggle=toggle,
-                enabled=enabled,
-                actor=session.user_id or session.email or "mobile",
-            )
+                kind=kind,
+                payload={"platform": platform_key, "toggle": toggle, "enabled": enabled},
+                safety=not enabled,
+            ):
+                result = await set_tiktok_toggle(
+                    tenant_id=session.tenant_id,
+                    toggle=toggle,
+                    enabled=enabled,
+                    actor=session.user_id or session.email or "mobile",
+                )
+        except DailyEditLimitError as exc:
+            return limit_response(exc)
         except TikTokToggleError as exc:
             return JSONResponse(
                 status_code=exc.status_code,
@@ -133,13 +150,21 @@ async def mobile_integration_toggles(
         raise HTTPException(status_code=404, detail="Unknown platform")
 
     try:
-        result = await set_channel_toggle(
+        with guarded_edit(
             tenant_id=session.tenant_id,
-            platform=platform_key,
-            toggle=toggle,
-            enabled=enabled,
-            actor=session.user_id or session.email or "mobile",
-        )
+            kind=kind,
+            payload={"platform": platform_key, "toggle": toggle, "enabled": enabled},
+            safety=not enabled,
+        ):
+            result = await set_channel_toggle(
+                tenant_id=session.tenant_id,
+                platform=platform_key,
+                toggle=toggle,
+                enabled=enabled,
+                actor=session.user_id or session.email or "mobile",
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
     except ChannelToggleError as exc:
         return JSONResponse(
             status_code=exc.status_code,
@@ -174,7 +199,15 @@ async def mobile_disconnect_platform(platform: str, request: Request) -> Any:
 
         actor = session.user_id or session.email or "mobile_disconnect"
         try:
-            await disconnect_tiktok(tenant_id=session.tenant_id, actor_user_id=actor)
+            from services.membership.edit_http import guarded_edit
+
+            with guarded_edit(
+                tenant_id=session.tenant_id,
+                kind="safety:disconnect",
+                payload={"platform": "tiktok"},
+                safety=True,
+            ):
+                await disconnect_tiktok(tenant_id=session.tenant_id, actor_user_id=actor)
         except TikTokBusinessError as exc:
             raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
         except WhatsAppDatabaseUnavailable as exc:
@@ -190,7 +223,15 @@ async def mobile_disconnect_platform(platform: str, request: Request) -> Any:
 
     actor = session.user_id or session.email or "mobile_disconnect"
     try:
-        await disconnect_meta_binding_set(bindings, actor_id=actor, registry=registry)
+        from services.membership.edit_http import guarded_edit
+
+        with guarded_edit(
+            tenant_id=session.tenant_id,
+            kind="safety:disconnect",
+            payload={"platform": platform_key, "bindings": [getattr(item, "binding_id", "") for item in bindings]},
+            safety=True,
+        ):
+            await disconnect_meta_binding_set(bindings, actor_id=actor, registry=registry)
     except (MetaOAuthError, MetaRegistryError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -217,10 +258,18 @@ async def mobile_reconcile_comments(platform: str, request: Request) -> Any:
     if platform_key not in supported_platforms():
         raise HTTPException(status_code=404, detail="Unknown platform")
     try:
-        result = await reconcile_comment_webhooks_for_platform(
+        from services.membership.edit_http import guarded_edit
+
+        with guarded_edit(
             tenant_id=session.tenant_id,
-            platform=platform_key,
-        )
+            kind="safety:webhook",
+            payload={"platform": platform_key, "action": "reconcile_comments"},
+            safety=True,
+        ):
+            result = await reconcile_comment_webhooks_for_platform(
+                tenant_id=session.tenant_id,
+                platform=platform_key,
+            )
     except ChannelToggleError as exc:
         return JSONResponse(
             status_code=exc.status_code,
@@ -275,6 +324,9 @@ async def mobile_usage(request: Request) -> Any:
     )
     used = buckets["credits_used"]
     allowance = recommend_allowance(ent.plan_id) if ent.plan_id in PLAN_PRICES_USD else None
+    from services.tenant_mobile_dashboard.message_surface import overlay_message_fields
+
+    messages = overlay_message_fields(session.tenant_id, ent.plan_id)
     return {
         "success": True,
         "plan_id": ent.plan_id,
@@ -292,4 +344,5 @@ async def mobile_usage(request: Request) -> Any:
         "included_owner_messages": int(allowance.included_owner_messages) if allowance else None,
         "included_images": int(allowance.included_images) if allowance else None,
         "included_videos": int(allowance.included_videos) if allowance else None,
+        **messages,
     }

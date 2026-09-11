@@ -20,34 +20,51 @@ def _hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _row(*, tenant_id: str, card: TitleCard, version: str, chunk_id: str, text: str) -> dict[str, Any]:
+    return {
+        "id": f"{tenant_id}:{chunk_id or card.item_id}:{version}",
+        "tenant_id": tenant_id,
+        "space_id": ENTITY_DOCUMENT.space_id,
+        "source_family": card.source_family,
+        "source_id": card.item_id.split(":", 1)[-1],
+        "chunk_id": chunk_id,
+        "index_version": version,
+        "source_revision": card.revision,
+        "content_hash": _hash(text),
+        "title": card.title,
+        "search_text": text,
+        "visible": True,
+    }
+
+
 def document_rows(cards: list[TitleCard], *, tenant_id: str, version: str) -> list[dict[str, Any]]:
+    from services.customer_ai.compiler.chunks import chunk_document
+
     rows: list[dict[str, Any]] = []
     for card in cards:
-        rows.append(
-            {
-                "id": f"{tenant_id}:{card.item_id}:{version}",
-                "tenant_id": tenant_id,
-                "space_id": ENTITY_DOCUMENT.space_id,
-                "source_family": card.source_family,
-                "source_id": card.item_id.split(":", 1)[-1],
-                "chunk_id": "",
-                "index_version": version,
-                "source_revision": card.revision,
-                "content_hash": _hash(card.search_text),
-                "title": card.title,
-                "search_text": card.search_text,
-                "visible": True,
-            }
-        )
+        if card.source_family == "knowledge":
+            chunks = chunk_document(document_id=card.item_id, body=card.body or card.search_text)
+            if chunks:
+                for chunk in chunks:
+                    rows.append(
+                        _row(tenant_id=tenant_id, card=card, version=version, chunk_id=chunk.chunk_id, text=chunk.text)
+                    )
+                continue
+        rows.append(_row(tenant_id=tenant_id, card=card, version=version, chunk_id="", text=card.search_text))
     return rows
 
 
 async def embed_card_batch(cards: list[TitleCard]) -> list[list[float]]:
-    if not cards:
+    rows = document_rows(cards, tenant_id="embed", version="batch")
+    return await embed_document_rows(rows)
+
+
+async def embed_document_rows(rows: list[dict[str, Any]]) -> list[list[float]]:
+    if not rows:
         return []
     if not voyage_configured():
         raise VoyageContractError("provider_not_configured")
-    vectors = await embed_texts(ENTITY_DOCUMENT, [card.search_text for card in cards])
+    vectors = await embed_texts(ENTITY_DOCUMENT, [str(row.get("search_text") or "") for row in rows])
     return vectors.vectors
 
 
@@ -80,26 +97,49 @@ async def index_published_tenant(tenant_id: str, *, revision: str, session: Any 
     tid = (tenant_id or "").strip()
     if not tid:
         return {"ready": False, "reason": "unpublished", "count": 0}
-    cards = [*load_published_cards(tid), *load_product_cards(tid)]
-    rows = document_rows(cards, tenant_id=tid, version=revision or "unpublished")
-    if not voyage_configured():
-        log.info("customer_ai index skipped: voyage_not_configured tenant=%s", tid)
-        return {"ready": False, "reason": "provider_not_configured", "count": len(rows)}
-    try:
-        vectors = await embed_card_batch(cards)
-    except Exception as exc:
-        log.warning("customer_ai index embed failed tenant=%s err=%s", tid, type(exc).__name__)
-        return {"ready": False, "reason": "provider_error", "count": len(rows)}
-    if len(vectors) != len(rows):
-        return {"ready": False, "reason": "provider_error", "count": len(rows)}
-    if session is not None:
-        return _persist_index(session, rows, vectors, tenant_id=tid, revision=revision)
-    try:
-        from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+    from services.membership.processing_budgets import ProcessingBudgetError, begin_job, consume_attempt, end_job
 
-        with whatsapp_session(require=True) as db:
-            return _persist_index(db, rows, vectors, tenant_id=tid, revision=revision)
-    except WhatsAppDatabaseUnavailable:
-        return {"ready": False, "reason": "index_not_ready", "count": len(rows), "store": "unavailable"}
-    except Exception:
-        return {"ready": False, "reason": "index_not_ready", "count": len(rows), "store": "unavailable"}
+    try:
+        begin_job(tid)
+        consume_attempt(tid)
+    except ProcessingBudgetError as exc:
+        return {"ready": False, "reason": exc.code, "count": 0}
+    try:
+        cards = [*load_published_cards(tid), *load_product_cards(tid)]
+        rows = document_rows(cards, tenant_id=tid, version=revision or "unpublished")
+        if not voyage_configured():
+            log.info("customer_ai index skipped: voyage_not_configured tenant=%s", tid)
+            return {"ready": False, "reason": "provider_not_configured", "count": len(rows)}
+        try:
+            vectors = await embed_document_rows(rows)
+            from services.customer_ai.providers.spaces import ENTITY_MODEL
+            from services.membership.provider_expense import record_pending_provider
+
+            record_pending_provider(
+                event_id=f"embed:{tid}:{revision}",
+                tenant_id=tid,
+                category="embedding",
+                feature="knowledge",
+                provider="voyage",
+                model=ENTITY_MODEL,
+                quantity=len(rows),
+                operation_id=revision,
+            )
+        except Exception as exc:
+            log.warning("customer_ai index embed failed tenant=%s err=%s", tid, type(exc).__name__)
+            return {"ready": False, "reason": "provider_error", "count": len(rows)}
+        if len(vectors) != len(rows):
+            return {"ready": False, "reason": "provider_error", "count": len(rows)}
+        if session is not None:
+            return _persist_index(session, rows, vectors, tenant_id=tid, revision=revision)
+        try:
+            from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+
+            with whatsapp_session(require=True) as db:
+                return _persist_index(db, rows, vectors, tenant_id=tid, revision=revision)
+        except WhatsAppDatabaseUnavailable:
+            return {"ready": False, "reason": "index_not_ready", "count": len(rows), "store": "unavailable"}
+        except Exception:
+            return {"ready": False, "reason": "index_not_ready", "count": len(rows), "store": "unavailable"}
+    finally:
+        end_job(tid)

@@ -76,6 +76,27 @@ def evidence_from_product(row: Any) -> EvidenceItem | None:
     )
 
 
+def load_product_evidence(tenant_id: str, product_id: str) -> EvidenceItem | None:
+    """Hydrate one customer-facing product from the Products repository."""
+    tid = (tenant_id or "").strip()
+    pid = (product_id or "").strip()
+    if not tid or not pid:
+        return None
+    try:
+        from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+        from services.products.repository import ProductsRepository
+    except Exception:
+        return None
+    try:
+        with whatsapp_session(require=True) as session:
+            row = ProductsRepository(session).get_product(tenant_id=tid, product_id=pid)
+            return evidence_from_product(row) if row is not None else None
+    except WhatsAppDatabaseUnavailable:
+        return None
+    except Exception:
+        return None
+
+
 def load_product_cards(tenant_id: str) -> list[TitleCard]:
     tid = (tenant_id or "").strip()
     if not tid:

@@ -35,6 +35,7 @@ async def generate_followup_text(
     goal: str,
     profile_name: str = "",
     user_id: str = "",
+    operation_id: str = "",
 ) -> str:
     normalized = normalize_followup_channel(channel)
     cr_channel = normalized
@@ -44,7 +45,15 @@ async def generate_followup_text(
         cr_channel = "facebook_dm"
 
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
+    from services.smart_followup.billing_ids import followup_operation_ids
 
+    mid, _extras = followup_operation_ids(
+        {
+            "idempotency_key": operation_id,
+            "conversation_id": conversation_id,
+            "goal": goal,
+        }
+    )
     outcome = await run_customer_reply_v2_dm(
         tenant_id=tenant_id,
         message="",
@@ -58,6 +67,7 @@ async def generate_followup_text(
         conversation_id=conversation_id,
         apply_customer_usage_limits=False,
         followup_goal=goal,
+        message_id=mid or f"sfu:{conversation_id}:{goal}",
     )
     reply_text = str(
         getattr(outcome, "reply", None) or getattr(outcome, "answer", None) or getattr(outcome, "text", None) or ""
@@ -72,6 +82,6 @@ def preview_prompt_for_goal(goal: str) -> dict[str, Any]:
         "goal": goal if goal in GOAL_PROMPTS else "gentle_check_in",
         "instruction": GOAL_PROMPTS.get(goal) or GOAL_PROMPTS["gentle_check_in"],
         "sends_message": False,
-        "uses_credits": True,
+        "uses_credits": False,
         "writer": "customer_reply_v2",
     }

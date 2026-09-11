@@ -31,7 +31,6 @@ import {
 type Props = {
   onLogout: () => void;
   onOpenNotifications?: () => void;
-  onOpenAiLimits?: () => void;
 };
 
 type Sheet = 'none' | 'name' | 'email' | 'language';
@@ -50,7 +49,6 @@ function languageLabel(lang: AppLanguage, tr: (key: 'settingsLangEn' | 'settings
 export function SettingsScreen({
   onLogout,
   onOpenNotifications,
-  onOpenAiLimits,
 }: Props) {
   const { tr, language, setLanguage } = useI18n();
   const { resolved, setMode } = useTheme();
@@ -211,11 +209,6 @@ export function SettingsScreen({
             icon={SETTINGS_ICONS.help}
             label={tr('settingsHelpSupport')}
             onPress={() => void open(LEGAL_URLS.supportMailto)}
-          />
-          <SettingsRow
-            icon={SETTINGS_ICONS.limits}
-            label={tr('settingsAiLimits')}
-            onPress={onOpenAiLimits}
           />
           <SettingsRow
             icon={SETTINGS_ICONS.terms}

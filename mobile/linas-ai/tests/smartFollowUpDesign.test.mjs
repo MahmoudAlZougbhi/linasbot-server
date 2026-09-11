@@ -14,6 +14,8 @@ test('Smart Follow-Up layout: no Enabled, business hours first, no extra copy', 
   const screen = read('features/smartFollowUp/SmartFollowUpScreen.tsx');
   assert.match(screen, /SmartFollowUpChannelsCard/);
   assert.match(screen, /SmartFollowUpStepsCard/);
+  assert.match(screen, /isDailyEditLimitError/);
+  assert.match(screen, /aiSetupDailyEditLimit/);
   assert.match(screen, /sfuSaveChanges/);
   assert.match(screen, /channels_enabled/);
   assert.match(screen, /featureEnabledFromSteps/);

@@ -109,9 +109,6 @@ export function AppScreenTree({
         <SettingsScreen
           onLogout={() => void logout()}
           onOpenNotifications={() => setScreen({ name: 'notifications', backTo: 'settings' })}
-          onOpenAiLimits={() =>
-            setScreen({ name: 'cm_section', section: 'ai_limits', backTo: 'settings' })
-          }
         />
       </KeepMountedPane>
       <KeepMountedPane key={`integrations-${authEpoch}`} active={name === 'integrations'}>

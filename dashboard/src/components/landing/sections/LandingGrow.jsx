@@ -24,7 +24,7 @@ export default function LandingGrow({ stats }) {
         id: 'smart-answers',
         title: 'Smart Answers',
         description:
-          'Matched replies cost 0 credits — they are free. Write a Q&A once for every language you select. The more Q&As you save, the more replies stay free.',
+          'Matched replies use 0 AI messages — they are free. Write a Q&A once for every language you select. The more Q&As you save, the more replies stay free.',
         core: true,
         Mini: GrowSmartAnswers,
       },
@@ -37,7 +37,7 @@ export default function LandingGrow({ stats }) {
       {
         id: 'insights',
         title: 'Channel Insights',
-        description: 'Know which channels perform best and how credits are used.',
+        description: 'Know which channels perform best and how AI messages are used.',
         Mini: GrowInsights,
       },
     ],
@@ -50,7 +50,7 @@ export default function LandingGrow({ stats }) {
       kicker="Grow"
       title="Turn every conversation"
       accent="into growth."
-      subtitle="Save credits, follow up, capture requests and see what is working."
+      subtitle="Save messages, follow up, capture requests and see what is working."
       cards={cards}
     />
   );

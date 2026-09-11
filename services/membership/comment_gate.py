@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from services.entitlements_service import entitlements_store, is_subscription_exempt_tenant
-from services.plan_economics import PLAN_FEATURES
+from services.membership.feature_entitlements import comments_allowed_for_plan
 
 
 class CommentAutomationDenied(PermissionError):
@@ -25,6 +25,5 @@ def assert_comment_automation_allowed(tenant_id: str) -> None:
         raise CommentAutomationDenied(
             f"Comment automation requires an active paid plan (plan={ent.plan_id}, status={ent.status})."
         )
-    features = PLAN_FEATURES.get(ent.plan_id) or ent.features or {}
-    if not features.get("comment_automation"):
+    if not comments_allowed_for_plan(ent.plan_id):
         raise CommentAutomationDenied(f"Comment automation is not included on plan={ent.plan_id}. Upgrade required.")

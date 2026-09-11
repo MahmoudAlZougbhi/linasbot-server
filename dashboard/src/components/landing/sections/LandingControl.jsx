@@ -1,5 +1,5 @@
 import FeatureCarousel from '../FeatureCarousel';
-import { ControlAssignment, ControlHandoff, ControlLimits, ControlLiveChat, ControlRoles } from '../cards/ControlMinis';
+import { ControlAssignment, ControlHandoff, ControlLiveChat, ControlRoles } from '../cards/ControlMinis';
 
 const CARDS = [
   {
@@ -27,12 +27,6 @@ const CARDS = [
     description: 'Assign chats and requests to the right team member.',
     Mini: ControlAssignment,
   },
-  {
-    id: 'limits',
-    title: 'AI Limits',
-    description: 'Set safe limits per customer, message and time period.',
-    Mini: ControlLimits,
-  },
 ];
 
 export default function LandingControl() {
@@ -42,7 +36,7 @@ export default function LandingControl() {
       kicker="Control"
       title="Stay in control of every"
       accent="conversation."
-      subtitle="Take over, assign work and protect your credits without losing context."
+      subtitle="Take over, assign work and keep every conversation without losing context."
       cards={CARDS}
     />
   );

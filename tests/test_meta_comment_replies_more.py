@@ -72,7 +72,19 @@ class MetaCommentProcessorTests(unittest.IsolatedAsyncioTestCase):
         )
         self.mock_registry.return_value = registry
 
+        def _enforcement(**kwargs):
+            if not kwargs.get("per_asset_enabled"):
+                return {"allow": False, "reason": "feature_disabled", "readiness": {}}
+            return {"allow": True, "reason": "", "readiness": {}}
+
+        self._enforcement_patch = mock.patch(
+            "services.cm.actions.comments_enforcement_decision",
+            side_effect=_enforcement,
+        )
+        self._enforcement_patch.start()
+
     def tearDown(self):
+        self._enforcement_patch.stop()
         self._registry_patch.stop()
         self._settings_patch.stop()
         self.tmp.cleanup()

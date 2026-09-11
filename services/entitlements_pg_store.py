@@ -47,6 +47,13 @@ def count_active_subscribers(session: Session) -> int:
     return int(session.execute(stmt).scalar_one() or 0)
 
 
+def list_tenant_ids(session: Session) -> list[str]:
+    from sqlalchemy import select
+
+    rows = session.execute(select(TenantEntitlementRow.tenant_id)).scalars().all()
+    return [str(row) for row in rows if str(row).strip()]
+
+
 def get_entitlement(session: Session, tenant_id: str) -> dict[str, Any] | None:
     row = session.get(TenantEntitlementRow, tenant_id)
     if row is None:

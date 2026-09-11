@@ -111,7 +111,9 @@ class WebFollowUpAdapter:
         visitor = web_chat_store.get_visitor(visitor_id)
         authority_hash = str(getattr(visitor, "authority_hash", "") or "") if visitor is not None else ""
         bound_reservation = str(job.reservation_id or "").strip()
-        if not bound_reservation:
+        from services.web_chat.followup_message_ledger import credit_reservation_required
+
+        if credit_reservation_required(bound_reservation):
             return FollowUpSendResult(
                 status="failed",
                 reason="reservation_required",

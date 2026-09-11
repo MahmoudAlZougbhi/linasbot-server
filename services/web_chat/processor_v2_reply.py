@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.customer_ai.history_ids import web_inbound_message_id
 from services.web_chat.constants import CUSTOMER_REPLY_CHANNEL
 from services.web_chat.credit_fsm import WebChatCreditHandle
 from services.web_chat.operation_fence import fenced_failure_release
 from services.web_chat.store import WebChatWidgetConfig
+
+
+def _fence(runtime: Any, credit: WebChatCreditHandle, conversation_id: str, text: str) -> bool:
+    return fenced_failure_release(runtime, credit, conversation_id=conversation_id, user_text=text)
 
 
 async def generate_web_chat_reply_text(
@@ -53,9 +58,10 @@ async def generate_web_chat_reply_text(
             conversation_id=conversation_id,
             inbound_media=inbound_media,
             attachment_types=attachment_types,
+            message_id=web_inbound_message_id(conversation_id, text),
         )
         if heartbeat.lost_lease:
-            fenced_failure_release(runtime, credit)
+            _fence(runtime, credit, conversation_id, text)
             raise WebChatError("operation_in_progress", "Operation lease lost during AI.", status_code=409)
         reply_text = str(
             getattr(outcome, "reply", None) or getattr(outcome, "answer", None) or getattr(outcome, "text", None) or ""
@@ -64,23 +70,30 @@ async def generate_web_chat_reply_text(
             reply_text = str(outcome.get("reply") or outcome.get("answer") or outcome.get("text") or "").strip()
         reason = str(getattr(outcome, "reason", "") or "")
         if reason.endswith("_limit") or reason == "ai_reply_limit":
-            fenced_failure_release(runtime, credit)
+            _fence(runtime, credit, conversation_id, text)
             raise WebChatError("ai_reply_limit", customer_reply_limit_message(reply_precheck), status_code=429)
+        if reason == "insufficient_messages":
+            _fence(runtime, credit, conversation_id, text)
+            raise WebChatError(
+                "insufficient_messages",
+                "AI replies are paused until messages are available.",
+                status_code=402,
+            )
         if word_notice and reply_text:
             reply_text = f"{word_notice}\n\n{reply_text}"
         if reason == "engine_removed":
-            fenced_failure_release(runtime, credit)
+            _fence(runtime, credit, conversation_id, text)
             return ""
     except WebChatError:
-        fenced_failure_release(runtime, credit)
+        _fence(runtime, credit, conversation_id, text)
         raise
     except Exception as exc:
-        fenced_failure_release(runtime, credit)
+        _fence(runtime, credit, conversation_id, text)
         raise WebChatError("ai_failed", "Could not generate a reply right now.", status_code=503) from exc
     finally:
         await heartbeat.stop()
 
     if not reply_text:
-        fenced_failure_release(runtime, credit)
+        _fence(runtime, credit, conversation_id, text)
         return ""
     return reply_text

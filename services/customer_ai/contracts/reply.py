@@ -33,10 +33,21 @@ class FinalReplyEnvelope(BaseModel):
 
     @property
     def reply_text(self) -> str:
-        for item in self.messages:
-            if item.destination in {"dm", "comment", "web_chat"} and item.text.strip():
-                return item.text.strip()
-        return ""
+        visible = [
+            item.text.strip()
+            for item in self.messages
+            if item.destination in {"dm", "comment", "web_chat"} and item.text.strip()
+        ]
+        if not visible:
+            return ""
+        destinations = {
+            item.destination
+            for item in self.messages
+            if item.destination in {"dm", "comment", "web_chat"} and item.text.strip()
+        }
+        if len(destinations) == 1:
+            return "\n\n".join(visible)
+        return visible[0]
 
     @property
     def public_comment_text(self) -> str:

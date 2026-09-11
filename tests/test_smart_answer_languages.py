@@ -138,3 +138,15 @@ def test_save_smart_answer_languages_persists_in_draft(monkeypatch, tmp_path) ->
     env = get_draft(FAQ_SECTION, tenant_id="linas", create_default=True)
     section = FaqSection.model_validate(env.payload)
     assert section.smart_answer_languages == ["en", "es"]
+
+
+def test_language_save_keeps_purge_and_translate_inside_daily_edit() -> None:
+    from inspect import getsource
+
+    from modules.cm_faq_api import cm_put_smart_answer_languages
+
+    src = getsource(cm_put_smart_answer_languages)
+    guard = src.index("with guarded_edit")
+    limit = src.index("except DailyEditLimitError")
+    assert guard < src.index("purge_smart_answer_language_data(") < limit
+    assert guard < src.index("await translate_existing_faq_groups_to_language(") < limit

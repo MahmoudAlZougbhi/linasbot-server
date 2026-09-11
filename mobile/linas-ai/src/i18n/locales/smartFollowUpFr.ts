@@ -29,7 +29,7 @@ export const smartFollowUpFr = {
   sfuBusinessHoursHint: 'Envoyer uniquement pendant vos heures d’ouverture.',
   sfuStopRules: 'S’arrête définitivement quand',
   sfuStopRulesDefault:
-    'réponse client · réponse manuelle app pro · conversation en pause · fonctionnalité off · IA off · WhatsApp déconnecté · désabonnement · crédits insuffisants · fenêtre service client expirée',
+    'réponse client · réponse manuelle app pro · conversation en pause · fonctionnalité off · IA off · WhatsApp déconnecté · désabonnement · messages insuffisants · fenêtre service client expirée',
   sfuSave: 'Enregistrer',
   sfuSaveChanges: 'Enregistrer les modifications',
   sfuSaveSuccess: 'Paramètres de relance intelligente enregistrés.',
@@ -45,14 +45,14 @@ export const smartFollowUpFr = {
   sfuConnectedOnlyFromStatus: 'Le statut de connexion vient de WhatsApp — jamais d’un deep link seul.',
   sfuAiDisabled: 'Les réponses IA WhatsApp sont désactivées. Activez l’IA dans Intégrations.',
   sfuMetaSetupRequired: 'La configuration Meta WhatsApp nécessite encore de l’attention.',
-  sfuPreview: 'Aperçu du message (utilise des crédits)',
+  sfuPreview: 'Aperçu du message',
   sfuPreviewTitle: 'Aperçu de relance',
   sfuPreviewDisclose:
-    'L’aperçu utilise des crédits IA et n’envoie jamais de message WhatsApp au client. Continuer ?',
+    'L’aperçu n’envoie jamais de message WhatsApp et n’utilise ni crédits restants ni messages IA. Continuer ?',
   sfuPreviewRun: 'Générer l’aperçu',
   sfuPreviewEmpty: 'Aperçu généré (texte vide).',
   sfuPreviewError: 'Impossible de générer l’aperçu.',
-  sfuPreviewCredits: 'Crédits IA insuffisants pour l’aperçu.',
+  sfuPreviewCredits: 'Messages IA insuffisants pour l’aperçu.',
   sfuValidationNoSteps: 'Activez au moins une étape.',
   sfuValidationNoChannels: 'Activez au moins un canal.',
   sfuValidationDelays:

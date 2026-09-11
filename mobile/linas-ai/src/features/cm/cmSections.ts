@@ -133,8 +133,8 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   {
     id: 'ai_limits',
     title: 'Customer AI Limits',
-    description: 'Protect credits by limiting each customer’s AI usage.',
-    mobileSupported: true,
+    description: 'Retired owner screen. Plan message allowances replace per-customer usage limits.',
+    mobileSupported: false,
     showInCmHub: false,
   },
 ];

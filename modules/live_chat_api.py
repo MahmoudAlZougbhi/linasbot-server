@@ -85,13 +85,21 @@ async def takeover_conversation(request: TakeoverRequest, http_request: Request)
     async def _handler() -> Any:
         session = require_chat_channel(http_request, request.user_id)
         operator_id, operator_name = resolve_takeover_assignee(session, request.operator_id)
-        result = await live_chat_service.takeover_conversation(
-            conversation_id=request.conversation_id,
-            user_id=request.user_id,
-            operator_id=operator_id,
-            operator_name=operator_name,
-            tenant_id=getattr(session, "tenant_id", None),
-        )
+        from services.membership.edit_http import guarded_edit
+
+        with guarded_edit(
+            tenant_id=str(getattr(session, "tenant_id", "") or ""),
+            kind="safety:handoff",
+            payload={"action": "takeover", "conversation_id": request.conversation_id},
+            safety=True,
+        ):
+            result = await live_chat_service.takeover_conversation(
+                conversation_id=request.conversation_id,
+                user_id=request.user_id,
+                operator_id=operator_id,
+                operator_name=operator_name,
+                tenant_id=getattr(session, "tenant_id", None),
+            )
         if result.get("success"):
             # Broadcast so all clients (including other tabs) refresh and move conv from Waiting to Active
             await broadcast_sse_event("conversations", {"trigger_refresh": True})
@@ -107,12 +115,20 @@ async def release_conversation(request: ReleaseRequest, http_request: Request) -
     async def _handler() -> Any:
         session = require_chat_channel(http_request, request.user_id)
         # Same server-authoritative clear as /resume-ai so WA Cloud epoch cannot stay HUMAN_PAUSED.
-        result = await live_chat_service.resume_ai_conversation(
-            conversation_id=request.conversation_id,
-            user_id=request.user_id,
-            operator_id=session.user_id,
-            tenant_id=getattr(session, "tenant_id", None),
-        )
+        from services.membership.edit_http import guarded_edit
+
+        with guarded_edit(
+            tenant_id=str(getattr(session, "tenant_id", "") or ""),
+            kind="safety:handoff",
+            payload={"action": "release", "conversation_id": request.conversation_id},
+            safety=True,
+        ):
+            result = await live_chat_service.resume_ai_conversation(
+                conversation_id=request.conversation_id,
+                user_id=request.user_id,
+                operator_id=session.user_id,
+                tenant_id=getattr(session, "tenant_id", None),
+            )
         if result.get("success"):
             await broadcast_sse_event("conversations", {"trigger_refresh": True})
         return result
@@ -224,20 +240,28 @@ async def end_conversation(request: dict, http_request: Request) -> Any:
 
     async def _handler() -> Any:
         # Clear server pause (Firestore + WA Cloud epoch) before resolving so AI is not stuck paused.
-        resume = await live_chat_service.resume_ai_conversation(
-            conversation_id=str(conversation_id),
-            user_id=str(user_id),
-            operator_id=session.user_id,
-            tenant_id=getattr(session, "tenant_id", None),
-        )
-        if not resume.get("success"):
-            print(f"⚠️ end-conversation: resume before end failed: {resume.get('error')}")
-        adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
-        return await live_chat_service.end_conversation(
-            conversation_id=str(conversation_id),
-            user_id=str(user_id),
-            operator_id=session.user_id,
-            adapter=adapter,
-        )
+        from services.membership.edit_http import guarded_edit
+
+        with guarded_edit(
+            tenant_id=str(getattr(session, "tenant_id", "") or ""),
+            kind="safety:handoff",
+            payload={"action": "end", "conversation_id": conversation_id},
+            safety=True,
+        ):
+            resume = await live_chat_service.resume_ai_conversation(
+                conversation_id=str(conversation_id),
+                user_id=str(user_id),
+                operator_id=session.user_id,
+                tenant_id=getattr(session, "tenant_id", None),
+            )
+            if not resume.get("success"):
+                print(f"⚠️ end-conversation: resume before end failed: {resume.get('error')}")
+            adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
+            return await live_chat_service.end_conversation(
+                conversation_id=str(conversation_id),
+                user_id=str(user_id),
+                operator_id=session.user_id,
+                adapter=adapter,
+            )
 
     return await _run_endpoint(_handler)

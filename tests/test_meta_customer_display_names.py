@@ -156,7 +156,10 @@ async def test_graph_name_replaces_legacy_placeholder(monkeypatch: pytest.Monkey
     monkeypatch.setattr(social_messaging_processor, "get_user_state_from_firestore", restore)
     monkeypatch.setattr(social_messaging_processor, "handle_message", handle)
     monkeypatch.setattr(social_messaging_processor, "MetaMessagingAdapter", _Adapter)
-    monkeypatch.setattr(social_messaging_processor, "save_user_name_to_firestore", mock.AsyncMock())
+    monkeypatch.setattr(
+        "services.social_customer_name.save_user_name_to_firestore",
+        mock.AsyncMock(),
+    )
 
     try:
         await social_messaging_processor.process_meta_social_event(
@@ -194,7 +197,10 @@ async def test_webhook_name_used_without_graph(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(social_messaging_processor, "get_user_state_from_firestore", restore)
     monkeypatch.setattr(social_messaging_processor, "handle_message", handle)
-    monkeypatch.setattr(social_messaging_processor, "save_user_name_to_firestore", mock.AsyncMock())
+    monkeypatch.setattr(
+        "services.social_customer_name.save_user_name_to_firestore",
+        mock.AsyncMock(),
+    )
 
     try:
         await social_messaging_processor.process_meta_social_event(

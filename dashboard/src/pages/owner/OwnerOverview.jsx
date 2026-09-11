@@ -56,9 +56,11 @@ export default function OwnerOverview() {
         <Metric label="Live users" value={analytics?.live_users} />
         <Metric label="Subscribers" value={analytics?.subscribers} />
         <Metric label="Comments captured" value={analytics?.comments} />
-        <Metric label="Credits total" value={analytics?.credits_total} />
-        <Metric label="Credits used" value={analytics?.credits_used} />
-        <Metric label="Credits remaining" value={analytics?.credits_remaining} />
+        <Metric label="Intended message MRR" value={analytics?.intended_message_mrr_usd} />
+        <Metric label="Live checkout MRR" value={analytics?.live_checkout_mrr_usd} />
+        <Metric label="Legacy credits total" value={analytics?.credits_total} />
+        <Metric label="Legacy credits used" value={analytics?.credits_used} />
+        <Metric label="Legacy credits remaining" value={analytics?.credits_remaining} />
       </section>
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <h3 className="font-semibold">Messages by channel</h3>

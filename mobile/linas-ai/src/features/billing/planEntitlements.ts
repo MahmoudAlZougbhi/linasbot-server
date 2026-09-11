@@ -1,7 +1,7 @@
 /**
  * Included / not-included rows from the frozen catalog flags.
- * Channel flags, FAQ cap, seats, and monthly credits must match planCatalog.ts
- * and services.membership.plan_catalog.
+ * Channel flags, FAQ cap, seats, and monthly messages must match planCatalog.ts
+ * and services.membership.message_catalog.
  */
 import type { StringKey } from '../../i18n';
 import { PLAN_CATALOG, PLAN_ORDER, type PlanDefinition, type PlanId } from './planCatalog';
@@ -28,6 +28,7 @@ export type ExcludedId = 'comments' | 'whatsapp' | 'tiktok' | 'web';
 export type PlanEntitlements = {
   planId: PlanId;
   includedCredits: number;
+  includedMessages: number;
   faqCapacity: number;
   included: IncludedRow[];
   excluded: ExcludedId[];
@@ -100,6 +101,7 @@ export function entitlementsForPlan(plan: PlanDefinition): PlanEntitlements {
   return {
     planId: plan.id,
     includedCredits: plan.includedCredits,
+    includedMessages: plan.includedMessages,
     faqCapacity: plan.faqCapacity,
     included,
     excluded,

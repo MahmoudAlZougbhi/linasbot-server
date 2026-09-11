@@ -223,6 +223,16 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
         name="Omnichannel Inbound/Outbound Reconcile",
         replace_existing=True,
     )
+    from modules.message_reservation_gc_job import run_message_reservation_gc_job
+
+    scheduler.add_job(
+        run_message_reservation_gc_job,
+        "interval",
+        minutes=15,
+        id="message_reservation_gc",
+        name="Message Reservation GC",
+        replace_existing=True,
+    )
 
     scheduler.start()
 

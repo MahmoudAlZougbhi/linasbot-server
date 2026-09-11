@@ -35,6 +35,8 @@ def normalize_comment_mode(
     mode = (rule_mode or "").strip().lower()
     if raw_action in {"ignore", "skip", "no_reply"}:
         return "ignore"
+    if raw_action == "manual" or mode == "manual":
+        return "manual"
     if raw_action in _STATIC_ACTIONS:
         return _STATIC_ACTIONS[raw_action]  # type: ignore[return-value]
     if mode == "deterministic" and raw_action in {

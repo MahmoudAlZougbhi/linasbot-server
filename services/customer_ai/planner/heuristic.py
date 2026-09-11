@@ -15,6 +15,22 @@ _HOURS = re.compile(r"\b(hour|hours|open|close|opening|ساعات|مفتوح|م�
 _PRICE = re.compile(r"\b(price|cost|how much|كم|سعر|غلى|كلفة)\b", re.I)
 _PRODUCT = re.compile(r"\b(product|serum|cream|shampoo|منتج|سيروم|كريم)\b", re.I)
 _CANCEL = re.compile(r"\b(cancel|status|الغِ|الغي|وين صار)\b", re.I)
+_NEGATE_BOOK = re.compile(
+    r"(لا تحجز|ما تحجز|don't book|do not book|just asking|بس عم اسأل|بس اسأل|not booking)",
+    re.I,
+)
+_NEGATE_HUMAN = re.compile(
+    r"(i do not want a human|don't want a human|لا أريد موظف|ما بدي موظف|مش بدي حدا)",
+    re.I,
+)
+_REFERENCE = re.compile(
+    r"\b(the first one|the second one|that one|this one|the same one|هي|هاد|هيدا|الأول|التاني)\b",
+    re.I,
+)
+_CORRECT = re.compile(
+    r"\b(i meant|i mean|not the|actually the|قصدت|مش ال|مو ال|غلط.? قصدي)\b",
+    re.I,
+)
 
 
 def _has(pattern: re.Pattern[str], text: str, *substrings: str) -> bool:
@@ -36,11 +52,11 @@ def _task(task_id: str, task_type: TaskType, text: str, families: list[SourceFam
 def plan_message(message: str) -> PlannerPlan:
     text = (message or "").strip()
     tasks: list[PlannerTask] = []
-    if _has(_HUMAN, text, "موظف", "شخص حقيقي"):
+    if _has(_HUMAN, text, "موظف", "شخص حقيقي") and not _NEGATE_HUMAN.search(text):
         tasks.append(_task("t_human", "human_request", text, ["none"]))
     if _has(_CANCEL, text, "الغي", "وين صار"):
         tasks.append(_task("t_status", "cancel_or_status", text, ["requests"]))
-    if _has(_BOOK, text, "حجز", "موعد"):
+    if _has(_BOOK, text, "حجز", "موعد") and not _NEGATE_BOOK.search(text):
         tasks.append(_task("t_book", "service_request", text, ["services", "branches", "hours"]))
     if _has(_ORDER, text, "اطلب", "اشتري"):
         tasks.append(_task("t_order", "product_request", text, ["products"]))
@@ -53,7 +69,31 @@ def plan_message(message: str) -> PlannerPlan:
         if _has(_PRODUCT, text, "منتج", "سيروم", "كريم"):
             families = ["products", "prices"]
         tasks.append(_task("t_info", "information", text, families))
+    questions = [part.strip() for part in re.split(r"[؟?]+", text) if part.strip()]
+    if len(questions) > 1 and all(item.type in {"information", "hours", "comparison"} for item in tasks):
+        tasks = [
+            _task(f"t_q{index}", "information", part, ["knowledge", "care", "services", "faq", "branches"])
+            for index, part in enumerate(questions, start=1)
+        ]
+    if _CORRECT.search(text):
+        fix = _task("t_fix", "draft_correction", text, ["knowledge", "services", "products", "faq"])
+        fix.entity_mentions = ["correction"]
+        tasks.append(fix)
+    if _REFERENCE.search(text):
+        tagged = False
+        for item in tasks:
+            if item.type in {"information", "hours", "comparison"}:
+                if "anaphor" not in item.entity_mentions:
+                    item.entity_mentions.append("anaphor")
+                tagged = True
+        if not tagged:
+            ref = _task("t_ref", "information", text, ["knowledge", "services", "products", "faq"])
+            ref.entity_mentions = ["anaphor"]
+            tasks.append(ref)
     if not tasks:
         tasks.append(_task("t_info", "information", text, ["knowledge", "care", "services", "faq", "branches"]))
-    read_only = all(item.type in {"information", "comparison", "hours", "acknowledgement"} for item in tasks)
+    read_only = all(
+        item.type in {"information", "comparison", "hours", "acknowledgement", "draft_correction"}
+        for item in tasks
+    )
     return PlannerPlan(tasks=tasks, read_only=read_only)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from services.entitlements_service import entitlements_store, is_subscription_exempt_tenant
-from services.plan_economics import PLAN_FEATURES
+from services.membership.feature_entitlements import web_allowed_for_plan
 
 
 class WebPlanDenied(PermissionError):
@@ -23,6 +23,5 @@ def assert_web_plan_allowed(tenant_id: str) -> None:
     plan_id = (ent.plan_id or "").strip().lower()
     if ent.status not in {"active", "trial", "grace"} or plan_id in {"", "none"}:
         raise WebPlanDenied(f"Web Chat requires an active paid plan (plan={ent.plan_id}, status={ent.status}).")
-    features = PLAN_FEATURES.get(plan_id) or ent.features or {}
-    if not features.get("web"):
+    if not web_allowed_for_plan(plan_id):
         raise WebPlanDenied(f"Web Chat is not included on plan={ent.plan_id}. Upgrade required.")

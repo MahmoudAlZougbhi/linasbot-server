@@ -28,7 +28,7 @@ export function PlanDetailCard({ planId, priceLabel, periodSuffix, locale, tr }:
   const planAccent = accentForPlan(planId);
   const nameColor = planNameColor(planId, resolved);
   const ents = entitlementsForPlanId(planId);
-  const credits = ents.includedCredits.toLocaleString(locale);
+  const included = ents.includedMessages.toLocaleString(locale);
   return (
     <View
       style={[
@@ -51,7 +51,7 @@ export function PlanDetailCard({ planId, priceLabel, periodSuffix, locale, tr }:
       <View style={[styles.credits, { backgroundColor: colors.surfaceAlt }]}>
         <LinasSparkleIcon size={18} color={planAccent} />
         <Text style={[styles.creditsText, { color: planAccent }]}>
-          <Text style={styles.creditsStrong}>{credits}</Text>
+          <Text style={styles.creditsStrong}>{included}</Text>
           {` ${tr('subAiCreditsIncluded')}`}
         </Text>
       </View>

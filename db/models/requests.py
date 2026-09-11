@@ -47,7 +47,7 @@ class CustomerRequest(Base):
         CheckConstraint(
             "source_channel IN ("
             "'instagram_dm','facebook_messenger',"
-            "'whatsapp_cloud','comment_linked_dm')",
+            "'whatsapp_cloud','comment_linked_dm','web_chat')",
             name="ck_customer_requests_channel",
         ),
         CheckConstraint(

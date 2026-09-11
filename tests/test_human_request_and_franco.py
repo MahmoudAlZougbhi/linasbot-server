@@ -36,6 +36,8 @@ def test_franco_reply_language_is_arabic_script() -> None:
 def test_owner_setup_does_not_interview_languages() -> None:
     assert "languages" not in SETUP_SECTION_ORDER
     assert "languages" not in SETUP_SECTIONS
+    assert "ai_limits" not in SETUP_SECTIONS
+    assert "ai_limits" not in SETUP_SECTION_ORDER
     quality = assess_section_fill("languages", {}, is_default=True)
     assert quality["is_done"] is True
     assert quality["gaps"] == []

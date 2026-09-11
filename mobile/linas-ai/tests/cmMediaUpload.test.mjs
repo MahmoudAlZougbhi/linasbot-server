@@ -25,5 +25,7 @@ test('cm media upload prepares picker URIs before multipart append', () => {
 test('knowledge media hook clears spinner via shared upload runner', () => {
   const hook = read('features/cm/knowledge/useKnowledgeMedia.ts');
   assert.match(hook, /runCmMediaUpload/);
+  assert.match(hook, /mediaUploadErrorMessage/);
+  assert.match(read('features/cm/mediaUploadError.ts'), /isDailyEditLimitError/);
   assert.doesNotMatch(hook, /uploadCmArticleMedia/);
 });

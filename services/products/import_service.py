@@ -49,18 +49,22 @@ def preview_csv_rows(csv_text: str) -> dict[str, Any]:
 
 def import_csv_rows(svc: Any, *, tenant_id: str, csv_text: str) -> dict[str, Any]:
     preview = preview_csv_rows(csv_text)
+    from services.membership.edit_http import guarded_edit
+    from services.membership.processing_budgets import reject_oversized_import
+
+    valid_rows = [row for row in preview.get("preview") or [] if row.get("valid")]
+    reject_oversized_import(len(valid_rows))
     created = 0
     errors = list(preview.get("errors") or [])
-    for row in preview.get("preview") or []:
-        if not row.get("valid"):
-            continue
-        try:
-            body = _body_from_preview(row)
-            svc.create_product(tenant_id=tenant_id, body=body, require_description=False)
-            created += 1
-        except Exception as exc:
-            code = getattr(exc, "code", None) or str(exc)
-            errors.append({"row": str(row.get("row")), "error": str(code)})
+    with guarded_edit(tenant_id=tenant_id, kind="product:import", payload={"format": "csv", "count": len(valid_rows), "csv": csv_text}):
+        for row in valid_rows:
+            try:
+                body = _body_from_preview(row)
+                svc.create_product(tenant_id=tenant_id, body=body, require_description=False, count_edit=False)
+                created += 1
+            except Exception as exc:
+                code = getattr(exc, "code", None) or str(exc)
+                errors.append({"row": str(row.get("row")), "error": str(code)})
     return {"created": created, "errors": errors, "import_format": "csv_v1"}
 
 
@@ -87,18 +91,26 @@ def preview_xlsx_rows(content: bytes) -> dict[str, Any]:
 
 def import_xlsx_rows(svc: Any, *, tenant_id: str, content: bytes) -> dict[str, Any]:
     preview = preview_xlsx_rows(content)
+    from services.membership.edit_http import guarded_edit
+    from services.membership.processing_budgets import reject_oversized_import
+
+    valid_rows = [row for row in preview.get("preview") or [] if row.get("valid")]
+    reject_oversized_import(len(valid_rows))
     created = 0
     errors = list(preview.get("errors") or [])
-    for row in preview.get("preview") or []:
-        if not row.get("valid"):
-            continue
-        try:
-            body = _body_from_preview(row)
-            svc.create_product(tenant_id=tenant_id, body=body, require_description=False)
-            created += 1
-        except Exception as exc:
-            code = getattr(exc, "code", None) or str(exc)
-            errors.append({"row": str(row.get("row")), "error": str(code)})
+    with guarded_edit(
+        tenant_id=tenant_id,
+        kind="product:import",
+        payload={"format": "xlsx", "count": len(valid_rows), "sha": len(content)},
+    ):
+        for row in valid_rows:
+            try:
+                body = _body_from_preview(row)
+                svc.create_product(tenant_id=tenant_id, body=body, require_description=False, count_edit=False)
+                created += 1
+            except Exception as exc:
+                code = getattr(exc, "code", None) or str(exc)
+                errors.append({"row": str(row.get("row")), "error": str(code)})
     return {"created": created, "errors": errors, "import_format": "xlsx_v1"}
 
 

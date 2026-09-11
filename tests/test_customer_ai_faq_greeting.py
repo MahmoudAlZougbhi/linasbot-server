@@ -87,6 +87,101 @@ def test_greeting_session_start(monkeypatch: pytest.MonkeyPatch) -> None:
         invocation_kind="followup",
     )
     assert follow.eligible is False
+    comment = evaluate_greeting(
+        tenant_id="t1",
+        message="hi",
+        history=history,
+        invocation_kind="comment",
+    )
+    assert comment.eligible is False
+
+
+def test_generated_dm_prepends_greeting(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
+    from services.customer_ai.contracts.turn import CustomerTurn
+    from services.customer_ai.turn_pipeline import _apply_greeting
+
+    monkeypatch.setattr(
+        "services.customer_ai.turn_pipeline.evaluate_greeting",
+        lambda **_k: type("G", (), {"eligible": True, "text": "Hello there"})(),
+    )
+    turn = CustomerTurn(tenant_id="t1", invocation_kind="dm")
+    envelope = FinalReplyEnvelope(
+        decision="reply",
+        messages=[OutboundMessage(destination="dm", text="We open at 10.")],
+    )
+    out = _apply_greeting(turn, "hours?", "instagram_dm", envelope)
+    assert [item.text for item in out.messages] == ["Hello there", "We open at 10."]
+    assert turn.state.greeted is True
+    comment_turn = CustomerTurn(tenant_id="t1", invocation_kind="comment")
+    skipped = _apply_greeting(comment_turn, "nice", "instagram_comment", envelope)
+    assert [item.text for item in skipped.messages] == ["We open at 10."]
+    assert comment_turn.state.greeted is False
+
+
+def test_greeting_follows_inbound_language(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "services.customer_ai.greeting.load_dynamic_messages",
+        lambda _tid: DynamicMessagesSection(
+            items=[
+                DynamicMessageRecord(
+                    id="g1",
+                    enabled=True,
+                    trigger_mode="session_start",
+                    en="Hello there",
+                    ar="مرحبا",
+                )
+            ]
+        ),
+    )
+    now = datetime.now(UTC)
+    english = evaluate_greeting(
+        tenant_id="t1",
+        message="hello",
+        history=build_history_snapshot([{"id": "m1", "role": "user", "text": "hello"}], current_inbound_id="m1"),
+        now=now,
+    )
+    assert english.text == "Hello there"
+    arabic = evaluate_greeting(
+        tenant_id="t1",
+        message="مرحبا كيفك",
+        history=build_history_snapshot(
+            [{"id": "m1", "role": "user", "text": "مرحبا كيفك"}],
+            current_inbound_id="m1",
+        ),
+        now=now,
+    )
+    assert arabic.text == "مرحبا"
+
+
+def test_greeting_not_repeated_after_history_hit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "services.customer_ai.greeting.load_dynamic_messages",
+        lambda _tid: DynamicMessagesSection(
+            items=[
+                DynamicMessageRecord(
+                    id="g1",
+                    enabled=True,
+                    trigger_mode="any_keyword",
+                    keywords=["hours"],
+                    en="Hello there",
+                    ar="مرحبا",
+                )
+            ]
+        ),
+    )
+    now = datetime.now(UTC)
+    history = build_history_snapshot(
+        [
+            {"id": "m1", "role": "user", "text": "hi", "timestamp": now.isoformat()},
+            {"id": "m2", "role": "assistant", "text": "Hello there", "timestamp": now.isoformat()},
+            {"id": "m3", "role": "user", "text": "hours?", "timestamp": now.isoformat()},
+        ],
+        current_inbound_id="m3",
+    )
+    decision = evaluate_greeting(tenant_id="t1", message="hours?", history=history, now=now)
+    assert decision.eligible is False
+    assert decision.reason == "already_greeted"
 
 
 @pytest.mark.asyncio
@@ -104,7 +199,13 @@ async def test_flag_on_exact_faq_is_deterministic(monkeypatch: pytest.MonkeyPatc
         "services.customer_ai.turn_pipeline.find_published_exact_faq",
         lambda _tid, _msg: FaqExactHit("faq1", "en", "hours?", "We reply within one business day.", 1),
     )
-    out = await run_customer_reply_v2_dm(tenant_id="t1", message="hours?")
+    out = await run_customer_reply_v2_dm(
+        tenant_id="t1",
+        message="hours?",
+        conversation_id="ig-thread-faq",
+        user_id="igsid-faq",
+        message_id="mid-faq-1",
+    )
     assert out.stop is False
     assert out.reply == "We reply within one business day."
     assert out.metadata.get("ai_called") is False

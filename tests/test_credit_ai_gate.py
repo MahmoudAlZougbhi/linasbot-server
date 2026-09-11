@@ -134,6 +134,20 @@ def test_copilot_pause_payload_hides_upgrade_on_max(ledger_env: CreditLedgerServ
     assert paused["actions"]["buy_credits"] is True
     clinic = owner_credits_paused_payload("clinic")
     assert clinic["show_upgrade"] is True
+    assert "leftover credits" in clinic["message"]
+    assert "messages" not in clinic["message"]
+
+
+def test_copilot_pause_stays_leftover_when_message_billing_on(
+    ledger_env: CreditLedgerService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from services.credit_ai_gate import owner_credits_paused_payload
+
+    monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
+    paused = owner_credits_paused_payload("clinic")
+    assert "leftover credits" in paused["message"]
+    assert "messages" not in paused["message"]
+    assert paused["actions"]["buy_credits"] is False
 
 
 def test_inflight_reserved_does_not_fund_new_owner_turn(ledger_env: CreditLedgerService) -> None:

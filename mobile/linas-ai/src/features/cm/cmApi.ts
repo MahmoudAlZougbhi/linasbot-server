@@ -28,6 +28,14 @@ export const CmMetaSchema = z
     has_published_content: z.boolean().optional(),
     runtime_mode: z.string().optional(),
     publish_disabled_message: z.string().optional().nullable(),
+    ai_setup_edits: z
+      .object({
+        limit: z.number(),
+        used: z.number(),
+        remaining: z.number().optional(),
+        reset_at: z.string().optional(),
+      })
+      .optional(),
   })
   .passthrough();
 

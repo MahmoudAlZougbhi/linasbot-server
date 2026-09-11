@@ -30,6 +30,7 @@ type Props = {
   tr: (key: StringKey) => string;
   onBuy: (credits: CreditPackId) => void;
   onClose: () => void;
+  messageBillingActive?: boolean;
 };
 
 export function BuyCreditsSheet({
@@ -40,6 +41,7 @@ export function BuyCreditsSheet({
   tr,
   onBuy,
   onClose,
+  messageBillingActive = false,
 }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -73,8 +75,12 @@ export function BuyCreditsSheet({
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <View style={styles.head}>
             <View style={styles.headCopy}>
-              <Text style={[styles.title, { color: colors.text }]}>{tr('subBuyCredits')}</Text>
-              <Text style={[styles.sub, { color: colors.textMuted }]}>{tr('subChooseCreditPack')}</Text>
+              <Text style={[styles.title, { color: colors.text }]}>
+                {messageBillingActive ? tr('subCreditsPacksTitle') : tr('subBuyCredits')}
+              </Text>
+              <Text style={[styles.sub, { color: colors.textMuted }]}>
+                {messageBillingActive ? tr('subCreditsPacksBody') : tr('subChooseCreditPack')}
+              </Text>
             </View>
             <Pressable
               onPress={onClose}
@@ -86,6 +92,14 @@ export function BuyCreditsSheet({
             </Pressable>
           </View>
 
+          {messageBillingActive ? (
+          <View style={[styles.info, { backgroundColor: colors.banner }]}>
+            <AppIcon icon={ion('information-circle')} size={18} color={colors.accent} />
+            <Text style={[styles.infoText, { color: colors.textMuted }]}>
+              {tr('subCreditsPacksBody')}
+            </Text>
+          </View>
+          ) : (
           <View style={styles.packs}>
             {CREDIT_PACK_ORDER.map((credits) => {
               const row = byCredits.get(credits);
@@ -126,14 +140,18 @@ export function BuyCreditsSheet({
               );
             })}
           </View>
+          )}
 
+          {messageBillingActive ? null : (
           <View style={[styles.info, { backgroundColor: colors.banner }]}>
             <AppIcon icon={ion('information-circle')} size={18} color={colors.accent} />
             <Text style={[styles.infoText, { color: colors.textMuted }]}>
-              {tr('subPurchasedNoExpire')}
+              {tr('subLeftoverNoExpire')}
             </Text>
           </View>
+          )}
 
+          {messageBillingActive ? null : (
           <Pressable
             onPress={() => onBuy(selected)}
             disabled={!available || purchasing}
@@ -160,6 +178,7 @@ export function BuyCreditsSheet({
               </Text>
             )}
           </Pressable>
+          )}
           <Text style={[styles.legal, { color: colors.textMuted }]}>{tr('subFooterStore')}</Text>
           <Pressable
             onPress={onClose}

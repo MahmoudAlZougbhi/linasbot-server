@@ -20,6 +20,10 @@
    OPENAI_API_KEY=sk-proj-xxxxxxxx
    VOYAGE_API_KEY=pa-xxxxxxxx
    CUSTOMER_BRAIN_ENABLED=false
+   MESSAGE_BILLING_ENABLED=false
+   MESSAGE_BILLING_CUTOVER=false
+   FREE_PLAN_ENFORCEMENT_ENABLED=false
+   LINAS_CUSTOMER_AI_LAB=false
    ```
    (استخدم الـ key الجديد اللي غيّرته عندك محلياً. Voyage is also stored as a GitHub Actions secret named `VOYAGE_API_KEY`; never commit `.env`.)
 
@@ -49,4 +53,4 @@
 
 ---
 
-**ملاحظة:** ما ترفع أبداً ملف `.env` على Git؛ القيم الحساسة (مثل `OPENAI_API_KEY` و `VOYAGE_API_KEY`) تظل على السيرفر أو GitHub Secrets فقط. `CUSTOMER_BRAIN_ENABLED` يبقى `false` إلى أن يمر acceptance gate.
+**ملاحظة:** ما ترفع أبداً ملف `.env` على Git؛ القيم الحساسة (مثل `OPENAI_API_KEY` و `VOYAGE_API_KEY`) تظل على السيرفر أو GitHub Secrets فقط. `CUSTOMER_BRAIN_ENABLED` و `MESSAGE_BILLING_ENABLED` و `MESSAGE_BILLING_CUTOVER` و `FREE_PLAN_ENFORCEMENT_ENABLED` و `LINAS_CUSTOMER_AI_LAB` تبقى `false` إلى أن يمر acceptance gate.

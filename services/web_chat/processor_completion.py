@@ -209,7 +209,7 @@ async def complete_web_chat_turn(
                 widget=widget,
             )
         except WebChatError:
-            fenced_failure_release(runtime, credit)
+            fenced_failure_release(runtime, credit, conversation_id=conversation_id, user_text=text)
             raise
         _, won_durable = try_advance_operation(
             runtime,

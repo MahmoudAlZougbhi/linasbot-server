@@ -1,3 +1,4 @@
+import { LITE_INCLUDED_MESSAGES } from '../../../constants/landingPlansCopy';
 import MiniFrame from './MiniFrame';
 import CountUp from '../CountUp';
 
@@ -70,7 +71,7 @@ export function GrowSmartAnswers({ play }) {
         ))}
       </div>
       <p className="lp-fade-up mt-2 text-[0.65rem] font-semibold text-[#06715F]" style={{ animationDelay: '1300ms' }}>
-        0 credits · Free reply · More Q&amp;As, more free replies
+        0 messages · Free reply · More Q&amp;As, more free replies
       </p>
     </MiniFrame>
   );
@@ -138,7 +139,7 @@ export function GrowInsights({ play }) {
         </div>
       ))}
       <p className="lp-fade-up mt-3 text-sm font-semibold text-[#06715F]" style={{ animationDelay: '900ms' }}>
-        Credits remaining: 12,480
+        Lite includes {LITE_INCLUDED_MESSAGES} messages / month
       </p>
     </MiniFrame>
   );

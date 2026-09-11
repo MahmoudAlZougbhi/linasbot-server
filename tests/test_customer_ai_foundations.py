@@ -42,6 +42,17 @@ def test_legacy_reply_text_is_projection() -> None:
     assert envelope.reply_text == "public"
 
 
+def test_same_destination_keeps_greeting_and_faq() -> None:
+    envelope = FinalReplyEnvelope(
+        decision="reply",
+        messages=[
+            OutboundMessage(destination="dm", text="Hello"),
+            OutboundMessage(destination="dm", text="We open at 10."),
+        ],
+    )
+    assert envelope.reply_text == "Hello\n\nWe open at 10."
+
+
 def test_history_keeps_all_17_and_marks_inbound_once() -> None:
     raw = [{"id": f"m{i}", "role": "user" if i % 2 == 0 else "assistant", "text": str(i)} for i in range(17)]
     snap = build_history_snapshot(raw, current_inbound_id="m16", current_inbound_text="16")
@@ -164,3 +175,45 @@ async def test_facade_flag_off_still_engine_removed(monkeypatch: pytest.MonkeyPa
     assert out.metadata.get("ai_called") is False
     comment = await run_customer_reply_v2_comment(tenant_id="t1", comment_text="nice")
     assert comment.reason == ENGINE_REMOVED
+
+
+@pytest.mark.asyncio
+async def test_lab_turn_echoes_ids_and_receipts(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    from services.customer_ai.test_lab import run_lab_turn
+
+    monkeypatch.setenv("LINAS_CUSTOMER_AI_LAB", "true")
+    monkeypatch.setenv("CUSTOMER_BRAIN_ENABLED", "true")
+
+    async def fake_dm(**_kwargs):
+        return SimpleNamespace(
+            reply="ok",
+            stop=False,
+            reason="",
+            metadata={
+                "receipts": [{"state": "success"}],
+                "pending_actions": [{"action_type": "start_request"}],
+                "operation_id": "op1",
+                "outbound_messages": [],
+                "response_class": "generated",
+            },
+        )
+
+    monkeypatch.setattr("services.customer_ai.runtime.run_customer_ai_dm", fake_dm)
+    out = await run_lab_turn(
+        tenant_id="lab",
+        message="hi",
+        conversation_id="c1",
+        user_id="u1",
+        channel="instagram_dm",
+        message_id="mid-1",
+    )
+    assert out["ok"] is True
+    assert out["conversation_id"] == "c1"
+    assert out["user_id"] == "u1"
+    assert out["channel"] == "instagram_dm"
+    assert out["message_id"] == "mid-1"
+    assert out["receipts"] == [{"state": "success"}]
+    assert out["pending_actions"] == [{"action_type": "start_request"}]
+    assert out["live_send"] is False

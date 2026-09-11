@@ -112,8 +112,8 @@ async def test_propose_smart_answer_preview_explains_savings(
     preview = (result.data or {}).get("preview") or {}
     assert preview.get("section") == "faq"
     assert (
-        "saving credits" in str(preview.get("impact") or "").lower()
-        or "credits" in str(preview.get("impact") or "").lower()
+        "0 ai messages" in str(preview.get("impact") or "").lower()
+        or "messages" in str(preview.get("impact") or "").lower()
     )
     assert "Hours?" in str(preview.get("proposed_value") or "")
 

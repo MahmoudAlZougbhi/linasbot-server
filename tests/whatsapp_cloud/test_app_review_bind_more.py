@@ -260,6 +260,7 @@ async def test_inbound_resolves_linas_uses_ai_bridge_not_canned(wa_db, monkeypat
 
     src = inspect.getsource(ai_bridge.maybe_generate_and_send_ai_reply)
     assert "run_customer_reply_v2_dm" in src
+    assert "message_id=message_id_for_brain(snapshot)" in src
     assert "send_text_message" in src
     assert "canned" not in src.lower()
     assert "app_review" not in src.lower()

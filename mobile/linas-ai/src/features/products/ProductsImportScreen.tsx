@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { isDailyEditLimitError } from '../../api/client';
 import { pickDocumentAttachment } from '../chat/v2/pickAttachment';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -90,8 +91,8 @@ export function ProductsImportScreen({ onBack, onImported }: Props) {
         await importProducts(csvText || '');
       }
       onImported();
-    } catch {
-      setError(tr('productsImportError'));
+    } catch (err) {
+      setError(tr(isDailyEditLimitError(err) ? 'aiSetupDailyEditLimit' : 'productsImportError'));
     } finally {
       setLoading(false);
     }

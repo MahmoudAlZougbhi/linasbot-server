@@ -112,7 +112,7 @@ export function ControlLimits({ play }) {
         <div className="lp-fill h-full w-[70%] rounded-full bg-[#06715F]" style={{ transform: play ? undefined : 'scaleX(1)' }} />
       </div>
       <p className="lp-fade-up mt-2 text-[0.7rem] font-semibold text-[#06715F]" style={{ animationDelay: '900ms' }}>
-        Credits protected
+        Messages protected
       </p>
     </MiniFrame>
   );

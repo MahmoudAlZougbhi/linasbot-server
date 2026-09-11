@@ -22,7 +22,7 @@ from services.apple_iap_effects import (
     reverse_consumable_credits,
 )
 from services.entitlements_service import EntitlementStatus
-from services.iap_product_catalog import is_credit_product
+from services.iap_product_catalog import is_credit_product, is_subscription_product
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,12 @@ def handle_refund_or_revoke(
     tid, _ = resolve_tenant(tenant_id=tenant_id, payload=payload, source="assn")
     status: Literal["refunded", "revoked"] = "refunded" if notification_type == "REFUND" else "revoked"
     out: dict[str, Any] = {"notification_type": notification_type, "tenant_id": tid}
+    from services.membership.iap_message_grant import maybe_revoke_purchased_from_verified_txn
+
+    out["message_revoke"] = maybe_revoke_purchased_from_verified_txn(
+        tenant_id=tid,
+        transaction_id=transaction_id,
+    )
     if is_credit_product(product_id):
         out["credit_reverse"] = reverse_consumable_credits(
             tenant_id=tid,
@@ -74,7 +80,7 @@ def handle_refund_or_revoke(
             txn_ledger.mark_reversed(transaction_id, effect=out["credit_reverse"])
         except ValueError:
             pass
-    else:
+    elif is_subscription_product(product_id):
         out["subscription"] = apply_subscription_effect(
             tenant_id=tid,
             product_id=product_id,
@@ -104,11 +110,18 @@ def handle_refund_reversed(
             transaction_id=transaction_id,
             allow_regrant_after_reverse=True,
         )
+        from services.membership.iap_message_grant import maybe_grant_purchased_from_verified_txn
+
+        out["message_grant"] = maybe_grant_purchased_from_verified_txn(
+            tenant_id=tid,
+            product_id=product_id,
+            transaction_id=transaction_id,
+        )
         try:
             txn_ledger.mark_applied(transaction_id, effect=out["credit_restore"])
         except ValueError:
             pass
-    else:
+    elif is_subscription_product(product_id):
         out["subscription"] = apply_subscription_effect(
             tenant_id=tid,
             product_id=product_id,
@@ -116,6 +129,14 @@ def handle_refund_reversed(
             status="active",
             idempotency_key=f"apple:notify:REFUND_REVERSED:{transaction_id}",
             notification_type="REFUND_REVERSED",
+        )
+    else:
+        from services.membership.iap_message_grant import maybe_grant_purchased_from_verified_txn
+
+        out["message_grant"] = maybe_grant_purchased_from_verified_txn(
+            tenant_id=tid,
+            product_id=product_id,
+            transaction_id=transaction_id,
         )
     return out
 

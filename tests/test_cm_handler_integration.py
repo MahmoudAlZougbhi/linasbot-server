@@ -108,6 +108,29 @@ async def test_v2_generated_reply_never_calls_classic_generate() -> None:
 
 
 @pytest.mark.asyncio
+async def test_published_runtime_passes_inbound_message_id() -> None:
+    tenant_id = "cm_handler_test_mid"
+    await publish_test_content(tenant_id)
+    captured: dict = {}
+
+    async def capture_dm(**kwargs):
+        captured.update(kwargs)
+        return CustomerReplyOutcome(stop=False, reply="ok", reason="v2_generated")
+
+    with patch("services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm", new=capture_dm):
+        await _handle_published_cm_runtime(
+            tenant_id=tenant_id,
+            message="book me",
+            detected_language="en",
+            response_language="en",
+            conversation_id="ig-thread-1",
+            message_id="mid-ig-22",
+        )
+    assert captured["conversation_id"] == "ig-thread-1"
+    assert captured["message_id"] == "mid-ig-22"
+
+
+@pytest.mark.asyncio
 async def test_insufficient_credits_short_circuits_without_classic_generate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

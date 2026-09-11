@@ -51,7 +51,15 @@ async def tiktok_connect_start(request: Request, body: dict[str, Any] = Body(def
 async def tiktok_disconnect(request: Request) -> Any:
     session = require_permission(request, "settings")
     try:
-        await disconnect_tiktok(tenant_id=session.tenant_id, actor_user_id=_actor(session))
+        from services.membership.edit_http import guarded_edit
+
+        with guarded_edit(
+            tenant_id=session.tenant_id,
+            kind="safety:disconnect",
+            payload={"platform": "tiktok"},
+            safety=True,
+        ):
+            await disconnect_tiktok(tenant_id=session.tenant_id, actor_user_id=_actor(session))
     except TikTokBusinessError as exc:
         return _error(exc)
     except WhatsAppDatabaseUnavailable:

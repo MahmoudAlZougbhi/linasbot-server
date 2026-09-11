@@ -25,6 +25,8 @@ describe('AI Products design screens', () => {
     assert.match(list, /onToggleStock/);
     assert.match(screen, /LinasSparkleIcon/);
     assert.match(screen, /updateProductAvailability/);
+    assert.match(screen, /isDailyEditLimitError/);
+    assert.match(screen, /aiSetupDailyEditLimit/);
     assert.match(screen, /onOpenDetails/);
     assert.doesNotMatch(list, /AiSetupListHeader/);
   });
@@ -39,6 +41,8 @@ describe('AI Products design screens', () => {
     assert.match(add, /ProductMediaLinksStep/);
     assert.match(details, /productsContinue/);
     assert.match(details, /productsDescription/);
+    assert.match(add, /isDailyEditLimitError/);
+    assert.match(add, /aiSetupDailyEditLimit/);
     assert.match(add, /productsDescriptionRequired/);
     assert.match(media, /productsSave/);
     assert.match(media, /productsAddVideo/);
@@ -56,6 +60,8 @@ describe('AI Products design screens', () => {
     assert.match(details, /productsDetailsTitle/);
     assert.match(details, /productsEdit/);
     assert.match(details, /productsDeleteProduct/);
+    assert.match(details, /isDailyEditLimitError/);
+    assert.match(read('features/products/ProductsImportScreen.tsx'), /aiSetupDailyEditLimit/);
     assert.match(nav, /products_details/);
     assert.match(tree, /ProductDetailsScreen/);
   });

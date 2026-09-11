@@ -19,16 +19,21 @@ export function BillingPeriodToggle({ period, onChange, tr }: Props) {
         return (
           <Pressable
             key={p}
-            onPress={() => onChange(p)}
+            onPress={() => {
+              if (p === 'yearly') return;
+              onChange(p);
+            }}
+            disabled={p === 'yearly'}
             style={[
               styles.tab,
               {
                 borderColor: active ? colors.accent : colors.border,
                 backgroundColor: colors.surface,
+                opacity: p === 'yearly' ? 0.45 : 1,
               },
             ]}
             accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
+            accessibilityState={{ selected: active, disabled: p === 'yearly' }}
             accessibilityLabel={p === 'monthly' ? tr('subPeriodMonthly') : tr('subPeriodYearly')}
           >
             <Text
