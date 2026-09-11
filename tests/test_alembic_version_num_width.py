@@ -232,6 +232,22 @@ def test_fresh_and_older_head_postgres_can_stamp_the_long_revision(postgres_url:
 
     _alembic_ok(postgres_url, "downgrade", "-1")
     maxlen, current = _version_meta(postgres_url)
+    assert current == {"20260910_req_web_chat"}
+
+    _alembic_ok(postgres_url, "downgrade", "-1")
+    maxlen, current = _version_meta(postgres_url)
+    assert current == {"20260910_msg_billing"}
+
+    _alembic_ok(postgres_url, "downgrade", "-1")
+    maxlen, current = _version_meta(postgres_url)
+    assert current == {"20260910_cust_ai_search"}
+
+    _alembic_ok(postgres_url, "downgrade", "-1")
+    maxlen, current = _version_meta(postgres_url)
+    assert current == {"20260908_wa_calls_enabled"}
+
+    _alembic_ok(postgres_url, "downgrade", "-1")
+    maxlen, current = _version_meta(postgres_url)
     assert current == {"20260907_tiktok_enhanced"}
 
     _alembic_ok(postgres_url, "downgrade", "-1")
