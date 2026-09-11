@@ -302,3 +302,92 @@ async def test_hybrid_prefers_pg_session_when_available(monkeypatch: pytest.Monk
     )
     assert sessions
     assert hits[0].card.item_id == "services:hair"
+
+
+def test_knowledge_expand_prefers_winning_chunk() -> None:
+    from services.customer_ai.retrieve.cards import TitleCard
+    from services.customer_ai.retrieve.expand import expand_hits
+    from services.customer_ai.retrieve.lexical import LexicalHit
+
+    sections = {
+        "knowledge": {
+            "items": [
+                {
+                    "id": "policy",
+                    "title": "Returns",
+                    "body": "## Shipping\nShips in 2 days\n\n## Returns\n14 day returns only",
+                    "status": "active",
+                }
+            ]
+        }
+    }
+    card = TitleCard(
+        item_id="knowledge:policy",
+        source_family="knowledge",
+        title="Returns",
+        search_text="returns",
+        body="## Returns\n14 day returns only",
+    )
+    bundle = expand_hits([LexicalHit(card=card, score=1.0)], sections)
+    assert bundle.outcome == "found"
+    assert "14 day returns only" in bundle.items[0].text
+    assert "Ships in 2 days" not in bundle.items[0].text
+
+
+def test_validate_drops_archived_section_winners() -> None:
+    from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
+    from services.customer_ai.retrieve.validate import validate_evidence
+
+    bundle = EvidenceBundle(
+        outcome="found",
+        items=[
+            EvidenceItem(
+                evidence_id="knowledge:gone",
+                source_family="knowledge",
+                source_id="gone",
+                title="Gone",
+                text="secret",
+            )
+        ],
+    )
+    sections = {"knowledge": {"items": [{"id": "gone", "title": "Gone", "body": "secret", "status": "archived"}]}}
+    assert validate_evidence(bundle, sections=sections).outcome == "not_found"
+
+
+def test_followup_compose_includes_goal_instruction() -> None:
+    from services.customer_ai.compose.blocks import compose_evidence_context
+    from services.customer_ai.contracts.evidence import EvidenceBundle
+    from services.customer_ai.contracts.plan import PlannerPlan
+
+    text = compose_evidence_context(
+        identity=None,
+        plan=PlannerPlan(tasks=[]),
+        bundle=EvidenceBundle(outcome="not_found"),
+        followup_goal="gentle_check_in",
+    )
+    assert "goal=gentle_check_in" in text
+    assert "gentle check-in" in text.lower()
+
+
+def test_knowledge_cards_include_attachment_captions(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "services.cm.article_media.format_attachments_block",
+        lambda attachments, tenant_id=None: "CASE EXAMPLES\n- [file] menu.txt: weekend hours",
+    )
+    sections = {
+        "knowledge": {
+            "items": [
+                {
+                    "id": "menu",
+                    "title": "Menu",
+                    "body": "See attachment",
+                    "status": "active",
+                    "attachments": [{"id": "cmed_1", "kind": "file", "filename": "menu.txt"}],
+                }
+            ]
+        }
+    }
+    cards = cards_from_sections(sections, tenant_id="shop")
+    assert cards[0].item_id == "knowledge:menu"
+    assert "weekend hours" in cards[0].body
+    assert "weekend hours" in cards[0].search_text

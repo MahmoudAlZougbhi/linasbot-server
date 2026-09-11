@@ -56,7 +56,13 @@ def _card(
     )
 
 
-def _from_items(family: SourceFamily, rows: list[Any], revision: str) -> list[TitleCard]:
+def _from_items(
+    family: SourceFamily,
+    rows: list[Any],
+    revision: str,
+    *,
+    tenant_id: str = "",
+) -> list[TitleCard]:
     cards: list[TitleCard] = []
     for raw in rows:
         if not isinstance(raw, dict):
@@ -69,6 +75,14 @@ def _from_items(family: SourceFamily, rows: list[Any], revision: str) -> list[Ti
         item_id = str(raw.get("id") or raw.get("qa_group_id") or "").strip()
         title = str(raw.get("title") or raw.get("name") or _label(raw.get("labels")) or "").strip()
         body = str(raw.get("body") or raw.get("content") or raw.get("text") or raw.get("description") or "")
+        if family in {"knowledge", "care"} and tenant_id:
+            attachments = raw.get("attachments") or []
+            if attachments:
+                from services.cm.article_media import format_attachments_block
+
+                block = format_attachments_block(list(attachments), tenant_id=tenant_id)
+                if block:
+                    body = f"{body}\n\n{block}".strip() if body else block
         extra = [
             str(raw.get("ai_search_title") or ""),
             str(raw.get("ai_search_description") or ""),
@@ -80,13 +94,20 @@ def _from_items(family: SourceFamily, rows: list[Any], revision: str) -> list[Ti
             for variant in raw.get("variants") or []:
                 if isinstance(variant, dict):
                     extra.append(str(variant.get("question") or ""))
+        if family in {"knowledge", "care"} and body:
+            extra.append(body)
         card = _card(family=family, item_id=item_id, title=title, extra=extra, revision=revision, body=body)
         if card:
             cards.append(card)
     return cards
 
 
-def cards_from_sections(sections: dict[str, Any], *, revision: str = "") -> list[TitleCard]:
+def cards_from_sections(
+    sections: dict[str, Any],
+    *,
+    revision: str = "",
+    tenant_id: str = "",
+) -> list[TitleCard]:
     cards: list[TitleCard] = []
     mapping: list[tuple[str, SourceFamily]] = [
         ("knowledge", "knowledge"),
@@ -101,22 +122,22 @@ def cards_from_sections(sections: dict[str, Any], *, revision: str = "") -> list
             continue
         rows = payload.get("items")
         if isinstance(rows, list):
-            cards.extend(_from_items(family, rows, revision))
+            cards.extend(_from_items(family, rows, revision, tenant_id=tenant_id))
     if not any(card.source_family == "hours" for card in cards):
         branches = sections.get("branches")
         items = branches.get("items") if isinstance(branches, dict) else None
         if isinstance(items, list):
-            cards.extend(_from_items("hours", items, revision))
+            cards.extend(_from_items("hours", items, revision, tenant_id=tenant_id))
     # Mobile Services screen writes published CM prices.catalog — that is the service SoT.
     prices = sections.get("prices")
     catalog = prices.get("catalog") if isinstance(prices, dict) else None
     if isinstance(catalog, list) and catalog:
-        cards.extend(_from_items("services", catalog, revision))
+        cards.extend(_from_items("services", catalog, revision, tenant_id=tenant_id))
     else:
         legacy = sections.get("services")
         rows = legacy.get("items") if isinstance(legacy, dict) else None
         if isinstance(rows, list):
-            cards.extend(_from_items("services", rows, revision))
+            cards.extend(_from_items("services", rows, revision, tenant_id=tenant_id))
     return cards
 
 
@@ -126,4 +147,4 @@ def load_published_cards(tenant_id: str) -> list[TitleCard]:
     except PublishedVersionError:
         return []
     revision = str(getattr(pointer, "revision", "") or getattr(pointer, "etag", "") or "")
-    return cards_from_sections(sections, revision=revision)
+    return cards_from_sections(sections, revision=revision, tenant_id=tenant_id)

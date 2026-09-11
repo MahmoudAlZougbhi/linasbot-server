@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from services.customer_ai.budgets import DEFAULT_BUDGETS
 from services.customer_ai.contracts.enums import SourceFamily
@@ -37,6 +37,13 @@ def _rrf(*rank_lists: list[str], k: int = 60) -> dict[str, float]:
         for index, item_id in enumerate(ranks):
             scores[item_id] = scores.get(item_id, 0.0) + 1.0 / (k + index + 1)
     return scores
+
+
+def _card_with_chunk(card: TitleCard, search_text: str) -> TitleCard:
+    chunk = (search_text or "").strip()
+    if not chunk or card.source_family != "knowledge":
+        return card
+    return replace(card, body=chunk)
 
 
 async def _semantic_from_store(
@@ -79,7 +86,7 @@ async def _semantic_from_store(
             )
             if card is None:
                 continue
-            mapped.append((hit.score, card))
+            mapped.append((hit.score, _card_with_chunk(card, hit.search_text)))
         return mapped or None
 
     query_kwargs = {
@@ -135,12 +142,13 @@ async def search_hybrid(
         [card.item_id for _score, card in semantic],
     )
     by_id = {card.item_id: card for card in scoped}
+    sem_cards = {card.item_id: card for _score, card in semantic}
     lex_map = {hit.card.item_id: hit.score for hit in lexical}
     sem_map = {card.item_id: score for score, card in semantic}
     ordered = sorted(fused.items(), key=lambda row: (-row[1], row[0]))[:cap]
     out: list[HybridHit] = []
     for rank, (item_id, _score) in enumerate(ordered):
-        card = by_id.get(item_id)
+        card = sem_cards.get(item_id) or by_id.get(item_id)
         if card is None:
             continue
         out.append(

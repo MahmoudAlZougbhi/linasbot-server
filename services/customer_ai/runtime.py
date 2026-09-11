@@ -85,6 +85,17 @@ async def _run_billed(turn: CustomerTurn, *, message: str, channel: str) -> Turn
         raise
 
 
+def _language_extra(*, detected_language: str = "", response_language: str = "") -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    detected = (detected_language or "").strip()
+    response = (response_language or "").strip()
+    if detected:
+        out["detected_language"] = detected
+    if response:
+        out["response_language"] = response
+    return out
+
+
 async def _turn_from_dm(
     *,
     tenant_id: str,
@@ -96,6 +107,8 @@ async def _turn_from_dm(
     injected_history: list[dict[str, Any]] | None,
     message_id: str,
     followup_goal: str = "",
+    detected_language: str = "",
+    response_language: str = "",
 ) -> CustomerTurn:
     media = inbound_media if isinstance(inbound_media, dict) else {}
     conversation_id, message_id = bind_dm_ids(
@@ -126,6 +139,7 @@ async def _turn_from_dm(
             event_ids=[message_id] if message_id else [],
             history=history,
             followup_goal=followup_goal,
+            extra=_language_extra(detected_language=detected_language, response_language=response_language),
             media=MediaView(
                 attachment_types=[str(t) for t in (media.get("attachment_types") or [])],
                 transcript=str(media.get("transcript") or ""),
@@ -179,6 +193,8 @@ async def run_customer_ai_dm(
         injected_history=injected_history,
         message_id=message_id,
         followup_goal=followup_goal or str(_kwargs.get("followup_goal") or ""),
+        detected_language=str(_kwargs.get("detected_language") or ""),
+        response_language=str(_kwargs.get("response_language") or ""),
     )
     turn = apply_live_control(turn)
     remember_turn(turn)
@@ -297,6 +313,10 @@ async def run_customer_ai_comment(
                 "winning_rule": getattr(decision, "rule_id", ""),
                 "post_caption": caption,
                 "post_id": post_id_value,
+                **_language_extra(
+                    detected_language=str(_kwargs.get("detected_language") or ""),
+                    response_language=str(_kwargs.get("response_language") or ""),
+                ),
             },
         )
     )

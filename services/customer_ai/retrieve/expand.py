@@ -161,7 +161,13 @@ def expand_hits(
         match = next((row for row in _rows(sections, family) if _row_id(row) == source_id), None)
         if match is None:
             continue
-        text = _text_card(family, match, sections=sections)
+        if family == "knowledge" and (card.body or "").strip():
+            chunk = card.body.strip()
+            full = _text_card(family, match, sections=sections)
+            # Prefer indexed winning chunk when shorter than (or equal to) the full article.
+            text = chunk if (not full or len(chunk) <= len(full)) else full
+        else:
+            text = _text_card(family, match, sections=sections)
         if not text:
             continue
         items.append(

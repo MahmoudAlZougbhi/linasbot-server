@@ -202,6 +202,11 @@ rule / window immediately before send.
 - Product expand hydrates winners from the Products repository when CM sections have no products row
 - Hybrid semantic query uses the WhatsApp/Postgres session (pgvector) when available, then falls back to memory
 - Published cards skip archived/draft/withdrawn knowledge and inactive catalog rows
+- Follow-up compose injects GOAL_PROMPTS instruction prose (not only the goal key)
+- Adapter `detected_language` / `response_language` land on the turn and steer generate
+- Knowledge semantic winners expand the indexed chunk text when shorter than the full article
+- Knowledge/care cards include attachment caption/excerpt blocks at index time
+- Post-retrieve validate drops empty or non-visible section winners
 
 ## Rollout / rollback
 

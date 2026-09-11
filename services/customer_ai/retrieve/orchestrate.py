@@ -15,6 +15,7 @@ from services.customer_ai.retrieve.hybrid import HybridHit, search_hybrid
 from services.customer_ai.retrieve.lexical import search_cards
 from services.customer_ai.retrieve.rerank import rerank_hits
 from services.customer_ai.retrieve.products import cards_from_products, load_product_cards
+from services.customer_ai.retrieve.validate import validate_evidence
 from services.cm.version_store import PublishedVersionError, load_published_content
 
 
@@ -62,10 +63,9 @@ async def retrieve_cards(
         if lexical:
             bundle = expand_ranked(lexical, sections or {}, revision=revision, tenant_id=tenant_id)
             if bundle.items:
-                bundle = bundle.model_copy(update={"outcome": "found"})
-                return bundle
+                return validate_evidence(bundle.model_copy(update={"outcome": "found"}), sections=sections or {})
         return EvidenceBundle(outcome="not_found")
-    return bundle
+    return validate_evidence(bundle, sections=sections or {})
 
 
 async def retrieve_published(ctx: RetrieveContext) -> EvidenceBundle:

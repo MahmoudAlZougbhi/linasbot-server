@@ -38,10 +38,16 @@ async def generate_grounded_reply(
         followup_goal=turn.followup_goal,
     )
     history_lines = [f"{item.role}: {item.text}" for item in turn.history.messages]
+    response_language = str((turn.extra or {}).get("response_language") or "").strip()
+    language_rule = (
+        f"Reply in language code `{response_language}`."
+        if response_language
+        else "Reply in the customer's language."
+    )
     prompt = (
         f"{context}\n\nHISTORY\n"
         + "\n".join(history_lines)
-        + f"\n\nCURRENT_INBOUND\n{message}\n\nReply in the customer's language. One coherent message."
+        + f"\n\nCURRENT_INBOUND\n{message}\n\n{language_rule} One coherent message."
     )
     from services.customer_ai.billing import operation_id_for_turn
     from services.llm_core_service import create_chat_completion

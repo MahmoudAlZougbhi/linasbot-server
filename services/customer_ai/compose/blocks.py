@@ -28,7 +28,13 @@ def compose_evidence_context(
         if identity.style_body:
             parts.append(f"STYLE\n{identity.style_body}")
     if followup_goal:
-        parts.append(f"FOLLOWUP_DUE\ngoal={followup_goal}\nThis is a system due event, not a new customer message.")
+        from services.customer_ai.followup_goals import resolve_followup_instruction
+
+        instruction = resolve_followup_instruction(followup_goal)
+        block = f"FOLLOWUP_DUE\ngoal={followup_goal}\nThis is a system due event, not a new customer message."
+        if instruction:
+            block += f"\ninstruction={instruction}"
+        parts.append(block)
     if policy_notes:
         parts.append("POLICY\n" + "\n".join(policy_notes))
     task_lines = [f"{task.id}:{task.type}:{','.join(task.source_families)}" for task in plan.tasks]
