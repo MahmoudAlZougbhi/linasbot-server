@@ -25,12 +25,14 @@ Helper: `services.customer_ai.flags.assert_safe_brain_cutover()` →
 ## 0) Before deploy
 
 - [ ] Confirm live prod SHA is recorded (should match rollback tag if prod was on `main` @ `0f23bcf1`).
-- [ ] **Secrets:** do **not** paste new API keys. Use existing GitHub Actions secrets:
-  - `OPENAI_API_KEY` (present)
-  - `VOYAGE_API_KEY` (present)
-  - `CUSTOMER_BRAIN_ENABLED` (present — leave `false` for first smoke deploy)
-  - Add/set `LINAS_CUSTOMER_AI_LAB` if missing (needed for Owner Lab)
-  - Keep `MESSAGE_BILLING_CUTOVER` unset/`false` (compose default)
+- [ ] **Secrets (GitHub Actions — already set for the Linas live window; do not paste keys):**
+  - `OPENAI_API_KEY` / `VOYAGE_API_KEY` present
+  - `CUSTOMER_BRAIN_ENABLED=true`
+  - `LINAS_CUSTOMER_AI_LAB=true`
+  - `CUSTOMER_BRAIN_TENANT_ALLOWLIST=linas`
+  - `EMERGENCY_LEGACY_REPLY_ENABLED=false`
+  - `MESSAGE_BILLING_CUTOVER=false` (commerce stays off)
+  - After merge/deploy, sync the same flag values onto both prod nodes (`scripts/prod_apply_customer_brain_flags.sh` via the HA two-node env path). GitHub Secrets alone do not rewrite `/opt/linasbot/.env`.
 - [ ] Keep `EMERGENCY_LEGACY_REPLY_ENABLED=false`.
 - [ ] Linas Laser: AI Setup sections published (or publish once after deploy).
 - [ ] Run `assert_safe_brain_cutover()` mentally: Brain off ⇒ rollback tag required for AI.

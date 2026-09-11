@@ -32,6 +32,7 @@ ENV_KEY_RE = re.compile(r"[A-Z][A-Z0-9_]*")
 ALLOWED_SCRIPTS = frozenset(
     {
         "scripts/prod_apply_copilot_v2_flags.sh",
+        "scripts/prod_apply_customer_brain_flags.sh",
         "scripts/prod_apply_dashboard_auth.sh",
         "scripts/prod_apply_model_routing_policy.sh",
         "scripts/prod_apply_openai_api_key.sh",
@@ -70,6 +71,7 @@ ALLOWED_SCRIPTS = frozenset(
 TWO_NODE_ENV_TRANSACTION_REQUIRED = frozenset(
     {
         "scripts/prod_apply_copilot_v2_flags.sh",
+        "scripts/prod_apply_customer_brain_flags.sh",
         "scripts/prod_apply_dashboard_auth.sh",
         "scripts/prod_apply_model_routing_policy.sh",
         "scripts/prod_apply_openai_api_key.sh",
