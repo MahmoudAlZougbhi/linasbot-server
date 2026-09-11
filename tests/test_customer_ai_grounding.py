@@ -102,6 +102,15 @@ def test_booking_success_needs_a_receipt() -> None:
     assert _kinds(failed) == {"booking"}
     ok = ungrounded_claims("I booked your session", bundle, receipts=["booking:confirmed:bk_9"])
     assert ok == []
+    assert _kinds(ungrounded_claims("تم الحجز", bundle)) == {"booking"}
+
+
+def test_availability_talk_is_not_a_booking_success_claim() -> None:
+    bundle = _bundle("Laser session\n99.0 USD")
+    # Saying a slot is taken is not claiming the customer now has a booking.
+    assert ungrounded_claims("We are fully booked this week", bundle) == []
+    assert ungrounded_claims("Do you want me to book it for you?", bundle) == []
+    assert _kinds(ungrounded_claims("Your appointment is confirmed", bundle)) == {"booking"}
 
 
 def test_empty_reply_and_empty_evidence_fail_closed() -> None:

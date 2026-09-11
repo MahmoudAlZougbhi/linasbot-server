@@ -81,7 +81,7 @@ def _stock_reasons(reply_text: str, corpus: str) -> list[str]:
 
 
 def _booking_reasons(reply_text: str, receipts: list[str]) -> list[str]:
-    claim = extract.has_marker(extract.marker_text(reply_text), extract.BOOKING_CLAIMS)
+    claim = extract.matched_pattern(extract.marker_text(reply_text), extract.BOOKING_CLAIM_PATTERNS)
     if not claim:
         return []
     for receipt in receipts:
