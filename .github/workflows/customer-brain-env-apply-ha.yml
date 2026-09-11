@@ -110,7 +110,13 @@ jobs:
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
               --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --register-prestage-backup
             ENV_BACKUP="$META_HA_STATE_ROOT/env.before"
-            stage_brain_env() {
+            # Pass Voyage to peer via stdin-bound env file (never argv).
+            VOYAGE_STAGE_DIR="$(mktemp -d /run/linasbot-voyage-stage.XXXXXX)"
+            install -m 0600 /dev/null "$VOYAGE_STAGE_DIR/voyage.env"
+            printf 'VOYAGE_API_KEY=%s\n' "$VOYAGE_API_KEY" >"$VOYAGE_STAGE_DIR/voyage.env"
+            if [ -x "$REPO_DIR/scripts/prod_stage_customer_brain_env.sh" ]; then
+              bash "$REPO_DIR/scripts/prod_stage_customer_brain_env.sh"
+            else
               "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
                 --expected-sha "$EXPECTED_RELEASE_SHA" --verify-stage-authority
               "$REPO_DIR/venv/bin/python" -I - <<'PY'
@@ -150,17 +156,14 @@ jobs:
                     print(f"[brain-env-stage] {key}:match=true")
             print("[brain-env-stage] COMPLETE_OK")
             PY
-            }
-            stage_brain_env
-            # Pass Voyage to peer via stdin-bound env file (never argv).
-            VOYAGE_STAGE_DIR="$(mktemp -d /run/linasbot-voyage-stage.XXXXXX)"
-            install -m 0600 /dev/null "$VOYAGE_STAGE_DIR/voyage.env"
-            printf 'VOYAGE_API_KEY=%s\n' "$VOYAGE_API_KEY" >"$VOYAGE_STAGE_DIR/voyage.env"
+            fi
             scp -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
               "$VOYAGE_STAGE_DIR/voyage.env" "root@${PEER_HOST}:/run/linasbot-voyage.env"
             ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
               "root@${PEER_HOST}" \
               "chmod 0600 /run/linasbot-voyage.env; chown root:root /run/linasbot-voyage.env"
+            # Peer must NOT call --verify-stage-authority (node01-only identity).
+            # Match scripts/ha/whatsapp_phase1_web_chat_apply.sh peer-stage authority.
             ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
               "root@${PEER_HOST}" \
               "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true; set -a; . /run/linasbot-voyage.env; set +a; bash -s" <<'STAGEEOF'
@@ -169,9 +172,43 @@ jobs:
             flock -x 9
             export LINAS_PRODUCTION_MUTATION_LOCK_FD=9
             REPO_DIR=/opt/linasbot
-            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
-              --expected-sha "$EXPECTED_RELEASE_SHA" --verify-stage-authority
             "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            import os
+            import sys
+            from pathlib import Path
+
+            sys.path.insert(0, "/opt/linasbot")
+            import scripts.ha.sync_meta_env_to_peer as sync
+
+            expected_sha = os.environ["EXPECTED_RELEASE_SHA"]
+            state_root = Path("/var/lib/linasbot/meta-ha")
+            sync._refuse_conflicting_ha_transaction(state_root)
+            sync._require_node_identity(sync.ENV_PATH, sync.PEER_NODE_ID)
+            if sync._load_journal(state_root) is not None:
+                raise SystemExit("[brain-env-stage] peer journal present")
+            sync._ensure_maintenance_armed(state_root)
+            worker_state = sync._load_worker_state(state_root)
+            if (
+                worker_state is None
+                or worker_state["role"] != "peer"
+                or worker_state["expected_sha"] != expected_sha
+                or worker_state["status"] != "quiesced"
+            ):
+                raise SystemExit("[brain-env-stage] peer worker state invalid")
+            current_fingerprint = sync._meta_fingerprint(
+                sync._read_meta_values(sync.ENV_PATH),
+                expected_sha,
+            )
+            if current_fingerprint != worker_state["old_fingerprint"]:
+                raise SystemExit("[brain-env-stage] peer env fingerprint drift")
+            sync._verify_worker_units_quiesced()
+            print("[brain-env-stage] peer_stage_authority_verified=true")
+            PY
+            if [ -x "$REPO_DIR/scripts/prod_stage_customer_brain_env.sh" ]; then
+              # Script re-checks node02 + maintenance; skip nested verify-stage-authority.
+              bash "$REPO_DIR/scripts/prod_stage_customer_brain_env.sh"
+            else
+              "$REPO_DIR/venv/bin/python" -I - <<'PY'
             import hashlib
             import hmac
             import os
@@ -206,18 +243,22 @@ jobs:
                     print(f"[brain-env-stage] VOYAGE_API_KEY:fp={fp} len={len(expected)}")
                 else:
                     print(f"[brain-env-stage] {key}:match=true")
-            print("[brain-env-stage] COMPLETE_OK")
+            print("[brain-env-stage] peer COMPLETE_OK")
             PY
+            fi
             shred -u /run/linasbot-voyage.env 2>/dev/null || rm -f /run/linasbot-voyage.env
             STAGEEOF
             shred -u "$VOYAGE_STAGE_DIR/voyage.env" 2>/dev/null || rm -f "$VOYAGE_STAGE_DIR/voyage.env"
             rmdir "$VOYAGE_STAGE_DIR" 2>/dev/null || true
-            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
-              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active \
-              --local-prestage-backup "$ENV_BACKUP"
+            # Non-meta keys: commit via restart only (do NOT start a Meta sync transaction).
             # shellcheck source=/dev/null
             source "$REPO_DIR/scripts/ha/whatsapp_phase1_apply_lib.sh"
+            # Re-arm fail-closed after lib source resets MAINTENANCE_ARMED.
+            MAINTENANCE_ARMED=true
+            ENV_BACKUP="$META_HA_STATE_ROOT/env.before"
             commit_staged_non_meta_env_via_restart "[brain-env-ha]"
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+              "$EXPECTED_RELEASE_SHA" cluster-release-only
             "$REPO_DIR/venv/bin/python" -I - <<'PY'
             import hashlib
             import os
@@ -258,6 +299,47 @@ jobs:
                     raise SystemExit(f"[brain-env-ha] process flag mismatch:{flag}")
             print(f"[brain-env-ha] process_env_match=true voyage_fp={got_fp}")
             PY
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              "$REPO_DIR/venv/bin/python -I -" <<'PEERCHECK'
+            import hashlib
+            import subprocess
+            from pathlib import Path
+
+            key = "VOYAGE_API_KEY"
+            expected = None
+            for line in Path("/opt/linasbot/.env").read_text(encoding="utf-8").splitlines():
+                if line.startswith(key + "="):
+                    expected = line.split("=", 1)[1]
+                    break
+            if not expected:
+                raise SystemExit("[brain-env-ha] peer voyage missing after commit")
+            pid = subprocess.check_output(
+                ["systemctl", "show", "-p", "MainPID", "--value", "linasbot"], text=True
+            ).strip()
+            if not pid or pid == "0":
+                raise SystemExit("[brain-env-ha] peer linasbot MainPID unavailable")
+            env_map = {}
+            for item in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0"):
+                if b"=" in item:
+                    k, v = item.split(b"=", 1)
+                    env_map[k.decode()] = v.decode()
+            loaded = env_map.get(key, "")
+            if not loaded:
+                raise SystemExit("[brain-env-ha] peer process missing VOYAGE_API_KEY")
+            exp_fp = hashlib.sha256(expected.encode()).hexdigest()[:16]
+            got_fp = hashlib.sha256(loaded.encode()).hexdigest()[:16]
+            if exp_fp != got_fp:
+                raise SystemExit("[brain-env-ha] peer process voyage fingerprint mismatch")
+            for flag, want in (
+                ("LINAS_CUSTOMER_AI_LAB", "true"),
+                ("EMERGENCY_LEGACY_REPLY_ENABLED", "false"),
+                ("MESSAGE_BILLING_CUTOVER", "false"),
+            ):
+                if env_map.get(flag) != want:
+                    raise SystemExit(f"[brain-env-ha] peer process flag mismatch:{flag}")
+            print(f"[brain-env-ha] peer_process_env_match=true voyage_fp={got_fp}")
+            PEERCHECK
             TRANSACTION_COMPLETE=true
             MAINTENANCE_ARMED=false
             echo "[brain-env-ha] COMPLETE_OK"
