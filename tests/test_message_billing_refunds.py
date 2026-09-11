@@ -136,11 +136,20 @@ def test_activation_flags_report_requires_all_off() -> None:
             "MESSAGE_BILLING_ENABLED": "",
             "MESSAGE_BILLING_CUTOVER": "0",
             "FREE_PLAN_ENFORCEMENT_ENABLED": "false",
-            "LINAS_CUSTOMER_AI_LAB": "false",
         }
     )
     assert ok["ok"] is True
     assert ok["enabled"] == []
+    # Owner Lab UI flag is not a commerce activation blocker.
+    lab_on = activation_flags_report(
+        {
+            "MESSAGE_BILLING_ENABLED": "false",
+            "MESSAGE_BILLING_CUTOVER": "false",
+            "FREE_PLAN_ENFORCEMENT_ENABLED": "false",
+            "LINAS_CUSTOMER_AI_LAB": "true",
+        }
+    )
+    assert lab_on["ok"] is True
     blocked = activation_flags_report({"MESSAGE_BILLING_ENABLED": "true"})
     assert blocked["ok"] is False
     assert "MESSAGE_BILLING_ENABLED" in blocked["enabled"]
