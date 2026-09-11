@@ -47,15 +47,21 @@ jobs:
             echo "[brain-live-lab] local_ready=${LOCAL_READY} public_ready=${PUBLIC_READY}"
             test "$LOCAL_READY" = "200"
             cd "$REPO_DIR"
-            # shellcheck disable=SC1091
-            set -a
-            . "$REPO_DIR/.env"
-            set +a
+            # Do not `source` production .env in bash (values break set -euo).
+            # Load via python-dotenv for every Python invocation.
             export PYTHONPATH="$REPO_DIR${PYTHONPATH:+:$PYTHONPATH}"
-            "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            export LINAS_DOTENV_PATH="$REPO_DIR/.env"
+            run_py() {
+              "$REPO_DIR/venv/bin/python" -I - "$@"
+            }
+            run_py <<'PY'
             import hashlib
             import os
             from pathlib import Path
+
+            from dotenv import load_dotenv
+
+            load_dotenv(os.environ.get("LINAS_DOTENV_PATH") or "/opt/linasbot/.env", override=True)
 
             def present(key: str, *, min_len: int = 1) -> str:
                 raw = (os.getenv(key) or "").strip()
@@ -80,18 +86,29 @@ jobs:
                     print(f"[brain-live-lab] {key}_fp={hashlib.sha256(raw.encode()).hexdigest()[:16]} len={len(raw)}")
             if voyage != "PRESENT" or openai != "PRESENT" or db != "PRESENT":
                 raise SystemExit("[brain-live-lab] required secrets missing")
-            alembic = Path("/opt/linasbot")
             print("[brain-live-lab] secrets_preflight_ok=true")
             PY
-            "$REPO_DIR/venv/bin/python" -I -m alembic current 2>/dev/null | tee /tmp/brain-alembic-current.txt || true
-            "$REPO_DIR/venv/bin/python" -I -m services.customer_ai.evals.live_lab_runner
+            run_py -m alembic current 2>/dev/null | tee /tmp/brain-alembic-current.txt || true
+            run_py <<'PY'
+            import os
+            import runpy
+            from dotenv import load_dotenv
+
+            load_dotenv(os.environ.get("LINAS_DOTENV_PATH") or "/opt/linasbot/.env", override=True)
+            runpy.run_module("services.customer_ai.evals.live_lab_runner", run_name="__main__")
+            PY
             # If deployed SHA lacks live OpenAI harness, run controlled inline turns.
-            "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            run_py <<'PY'
             import asyncio
             import json
+            import os
             import time
             import uuid
             from pathlib import Path
+
+            from dotenv import load_dotenv
+
+            load_dotenv(os.environ.get("LINAS_DOTENV_PATH") or "/opt/linasbot/.env", override=True)
 
             report_path = Path("services/customer_ai/evals/artifacts/live_lab_latest.json")
             report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -193,10 +210,22 @@ jobs:
             report_path.write_text(json.dumps(report, indent=2, sort_keys=True, default=str), encoding="utf-8")
             print(json.dumps({"OPENAI": result["status"], "detail": result["detail"]}, sort_keys=True))
             PY
-            "$REPO_DIR/venv/bin/python" -I -m services.customer_ai.readiness | tee /tmp/brain-readiness.txt
-            "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            run_py <<'PY' | tee /tmp/brain-readiness.txt
+            import os
+            import runpy
+            from dotenv import load_dotenv
+
+            load_dotenv(os.environ.get("LINAS_DOTENV_PATH") or "/opt/linasbot/.env", override=True)
+            runpy.run_module("services.customer_ai.readiness", run_name="__main__")
+            PY
+            run_py <<'PY'
             import json
+            import os
             from pathlib import Path
+
+            from dotenv import load_dotenv
+
+            load_dotenv(os.environ.get("LINAS_DOTENV_PATH") or "/opt/linasbot/.env", override=True)
 
             report_path = Path("services/customer_ai/evals/artifacts/live_lab_latest.json")
             if not report_path.is_file():
@@ -204,7 +233,6 @@ jobs:
             report = json.loads(report_path.read_text(encoding="utf-8"))
             gates = report.get("gates") or {}
             # Billing lab gate: PASS when commerce flags remain off.
-            import os
 
             billing_on = (os.getenv("MESSAGE_BILLING_ENABLED") or "").strip().lower() in {
                 "1",
