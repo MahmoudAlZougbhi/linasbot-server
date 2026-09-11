@@ -18,6 +18,14 @@ from services.customer_ai.retrieve.orchestrate import RetrieveContext, retrieve_
 from services.customer_ai.actions.pending import attach_confirmation, try_confirm_pending
 from services.customer_ai.billing import operation_id_for_turn, reserve_generative
 from services.customer_ai.conversation_store import remember_turn
+from services.customer_ai.stage_timeline import StageTimer, evidence_preview, stamp
+
+
+def _flow_extra(extra: dict | None, *rows: tuple[str, str, dict | None]) -> dict:
+    out = dict(extra or {})
+    for stage, title, detail in rows:
+        out = stamp(out, stage, title=title, detail=detail)
+    return out
 
 
 def _destination(channel: str) -> str:
@@ -173,12 +181,42 @@ def _history_blob(turn: CustomerTurn) -> str:
 
 
 async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) -> TurnResult:
+    flow_base = _flow_extra(
+        None,
+        (
+            "received",
+            "Message received",
+            {
+                "channel": channel,
+                "history_count": len(turn.history.messages),
+                "inbound_preview": (message or turn.followup_goal or "")[:180],
+            },
+        ),
+    )
     confirmed = await try_confirm_pending(turn, message, channel)
     if confirmed is not None:
-        return confirmed
+        return confirmed.model_copy(
+            update={
+                "extra": _flow_extra(
+                    {**(confirmed.extra or {}), **flow_base},
+                    ("confirm", "Customer confirmed a pending request", {"phase": "confirm"}),
+                )
+            }
+        )
     faq = _exact_faq_result(turn, message, channel) or await _semantic_faq_result(turn, message, channel)
     if faq:
-        return faq
+        return faq.model_copy(
+            update={
+                "extra": _flow_extra(
+                    {**(faq.extra or {}), **flow_base},
+                    (
+                        "faq",
+                        "Answered from published FAQ",
+                        {"faq_id": (faq.extra or {}).get("faq_id"), "path": (faq.extra or {}).get("path")},
+                    ),
+                )
+            }
+        )
     from services.customer_ai.visual import visual_retrieval_decision
 
     visual = visual_retrieval_decision(
@@ -186,11 +224,23 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
         requires_visual_reading=bool(turn.media.image_media_id),
     )
     task_text = inbound_task_text(turn, message)
+    plan_timer = StageTimer()
     plan = await plan_turn(
         task_text,
         _history_blob(turn),
         tenant_id=turn.tenant_id,
         operation_id=operation_id_for_turn(turn),
+    )
+    flow_base = _flow_extra(
+        flow_base,
+        (
+            "plan",
+            "Understood the customer request",
+            {
+                "ms": plan_timer.ms(),
+                "plan_tasks": [{"id": task.id, "type": task.type} for task in plan.tasks],
+            },
+        ),
     )
     if any(task.type == "human_request" for task in plan.tasks):
         from services.customer_ai.actions.execute import execute_actions
@@ -208,7 +258,10 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
                 else [],
                 dispositions={"handoff": "action_succeeded" if ok else "failed"},
             ),
-            extra={"phase": "handoff", "receipts": [r.model_dump() for r in receipts.receipts]},
+            extra=_flow_extra(
+                {"phase": "handoff", "receipts": [r.model_dump() for r in receipts.receipts], **flow_base},
+                ("handoff", "Handed off to a human teammate", {"decision": "handoff_ack" if ok else "no_reply"}),
+            ),
         )
     request_proposals = _request_proposals(plan, tenant_id=turn.tenant_id)
     if request_proposals.actions:
@@ -224,18 +277,36 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
                     )
                 ],
             ),
-            extra={
-                "phase": "actions_pending",
-                "plan": plan.model_dump(),
-                "awaiting_confirmation": True,
-                "pending_actions": [item.model_dump() for item in proposals.actions],
-            },
+            extra=_flow_extra(
+                {
+                    "phase": "actions_pending",
+                    "plan": plan.model_dump(),
+                    "awaiting_confirmation": True,
+                    "pending_actions": [item.model_dump() for item in proposals.actions],
+                    **flow_base,
+                },
+                ("request", "Waiting for customer confirmation before submitting request", None),
+            ),
         )
     families: set[SourceFamily] = set()
     for task in plan.tasks:
         families |= _families(task.source_families) or set()
+    retrieve_timer = StageTimer()
     bundle: EvidenceBundle = await retrieve_published(
         RetrieveContext(tenant_id=turn.tenant_id, query=task_text, families=families or None)
+    )
+    evidence = evidence_preview(bundle)
+    flow_base = _flow_extra(
+        flow_base,
+        (
+            "search",
+            "Searched published Knowledge / Services / Products / FAQ",
+            {
+                "ms": retrieve_timer.ms(),
+                "retrieval_outcome": bundle.outcome,
+                "evidence": evidence,
+            },
+        ),
     )
     resource_receipts: list[dict] = []
     resource_result = None
@@ -252,26 +323,40 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
         )
         info_tasks = [task for task in plan.tasks if task.type in {"information", "hours", "comparison"}]
         if resource_result is not None and not info_tasks:
-            return resource_result
+            return resource_result.model_copy(
+                update={
+                    "extra": _flow_extra(
+                        {**(resource_result.extra or {}), **flow_base, "evidence_preview": evidence},
+                        ("resource", "Prepared authorized resource to send", None),
+                    )
+                }
+            )
         if resource_result is not None:
             resource_receipts = list((resource_result.extra or {}).get("receipts") or [])
     if bundle.outcome != "found":
         if resource_result is not None:
-            return resource_result
+            return resource_result.model_copy(
+                update={"extra": {**(resource_result.extra or {}), **flow_base, "evidence_preview": evidence}}
+            )
         return TurnResult(
             stop_reason=_stop_from_outcome(bundle.outcome),
             envelope=FinalReplyEnvelope(decision="no_reply"),
-            extra={
-                "phase": "retrieve",
-                "retrieval_outcome": bundle.outcome,
-                "plan": plan.model_dump(),
-                "visual": visual.reason,
-                "receipts": resource_receipts,
-            },
+            extra=_flow_extra(
+                {
+                    "phase": "retrieve",
+                    "retrieval_outcome": bundle.outcome,
+                    "plan": plan.model_dump(),
+                    "visual": visual.reason,
+                    "receipts": resource_receipts,
+                    "evidence_preview": evidence,
+                    **flow_base,
+                },
+                ("search_empty", "No published evidence found for this question", {"retrieval_outcome": bundle.outcome}),
+            ),
         )
-    blocked = reserve_generative(turn)
-    if blocked is not None:
-        return blocked
+    held = reserve_generative(turn, mixed=any(item.source_family == "faq" for item in bundle.items))
+    if held is not None:
+        return held
     result: TurnResult | None = None
     try:
         result = await _generate_after_reserve(
@@ -284,6 +369,20 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
             visual=visual,
             resource_receipts=resource_receipts,
         )
+        merged = {**(result.extra or {}), **flow_base, "evidence_preview": evidence}
+        if result.ai_called:
+            merged = _flow_extra(
+                merged,
+                (
+                    "generate",
+                    "Composed grounded AI reply from evidence",
+                    {
+                        "decision": result.envelope.decision,
+                        "used_evidence_ids": result.extra.get("used_evidence_ids") if result.extra else None,
+                    },
+                ),
+            )
+        result = result.model_copy(update={"extra": merged})
         return result
     except Exception:
         from services.customer_ai.billing import release_turn_reservation

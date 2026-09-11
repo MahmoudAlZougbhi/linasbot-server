@@ -178,3 +178,29 @@ async def platform_message_ledger(tenant_id: str, request: Request) -> Any:
     if not tid:
         raise HTTPException(status_code=400, detail="tenant_id is required")
     return {"success": True, "ledger": snapshot_dict(tid), "health": ledger_health(tid)}
+
+
+@app.get("/api/platform/message-flows")
+async def platform_message_flows(
+    request: Request,
+    tenant_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> Any:
+    require_platform_owner(request)
+    from services.customer_ai.turn_inspector import list_message_flows
+
+    return {
+        "success": True,
+        "messages": list_message_flows(tenant_id=(tenant_id or "").strip(), limit=limit),
+    }
+
+
+@app.get("/api/platform/message-flows/{tenant_id}/{operation_id}")
+async def platform_message_flow_detail(tenant_id: str, operation_id: str, request: Request) -> Any:
+    require_platform_owner(request)
+    from services.customer_ai.turn_inspector import get_message_flow
+
+    detail = get_message_flow(tenant_id=tenant_id, operation_id=operation_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="message_flow_not_found")
+    return {"success": True, "message": detail}

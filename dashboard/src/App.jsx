@@ -20,6 +20,7 @@ import OwnerCopilotSetup from './pages/owner/OwnerCopilotSetup';
 import OwnerCatalog from './pages/owner/OwnerCatalog';
 import OwnerCosts from './pages/owner/OwnerCosts';
 import OwnerLab from './pages/owner/OwnerLab';
+import OwnerMessages from './pages/owner/OwnerMessages';
 
 /**
  * Operator SPA shell removed after FINAL_WEB_TO_MOBILE_PARITY_MATRIX.csv.
@@ -89,6 +90,7 @@ function App() {
           <Route path="/owner" element={<OwnerPortalShell />}>
             <Route index element={<OwnerOverview />} />
             <Route path="users" element={<OwnerUsers />} />
+            <Route path="messages" element={<OwnerMessages />} />
             <Route path="copilot-setup" element={<OwnerCopilotSetup />} />
             <Route path="catalog" element={<OwnerCatalog />} />
             <Route path="costs" element={<OwnerCosts />} />

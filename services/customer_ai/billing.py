@@ -140,6 +140,18 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
     extra["billing_policy"] = pinned or ("message_units" if message_billing_enabled() else "legacy_credits")
     if result.ai_called:
         _record_pending_llm(turn, op)
+    from services.customer_ai.stage_timeline import stamp
+
+    extra = stamp(
+        extra,
+        "billing",
+        title="Message units and provider cost recorded for this turn",
+        detail={
+            "message_units": extra.get("message_units"),
+            "response_class": response_class,
+            "billing_policy": extra.get("billing_policy"),
+        },
+    )
     if owner_preview_turn(turn) or lab_turn(turn):
         return result.model_copy(update={"extra": extra})
     if extra["billing_policy"] != "legacy_credits":

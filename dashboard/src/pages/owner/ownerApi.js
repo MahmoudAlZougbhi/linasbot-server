@@ -37,9 +37,24 @@ export const ownerApi = {
     const query = params.toString();
     return request(query ? `/api/platform/costs?${query}` : '/api/platform/costs');
   },
-  /** @param {string} tenantId @param {Record<string, string>} [filters] */
   conversionDryRun: () => request('/api/platform/credit-conversion/dry-run'),
+  /** @param {string} tenantId */
   messageLedger: (tenantId) => request(`/api/platform/message-ledger/${encodeURIComponent(tenantId)}`),
+  /**
+   * @param {string} tenantId
+   * @param {Record<string, string>} [filters]
+   */
+  tenantCosts: (tenantId, filters = {}) => {
+    const params = new URLSearchParams(
+      Object.fromEntries(Object.entries(filters).filter(([, value]) => value)),
+    );
+    const query = params.toString();
+    return request(
+      query
+        ? `/api/platform/costs/tenants/${encodeURIComponent(tenantId)}?${query}`
+        : `/api/platform/costs/tenants/${encodeURIComponent(tenantId)}`,
+    );
+  },
   /** @param {{ tenant_id: string, message: string, conversation_id?: string, user_id?: string, channel?: string, message_id?: string, history?: object[] }} body */
   labTurn: (body) =>
     request('/api/platform/customer-ai-lab/turn', { method: 'POST', body: JSON.stringify(body) }),
@@ -56,15 +71,19 @@ export const ownerApi = {
       method: 'POST',
       body: '{}',
     }),
-  tenantCosts: (tenantId, filters = {}) => {
+  /** @param {{ tenant_id?: string, limit?: number }} [filters] */
+  messageFlows: (filters = {}) => {
     const params = new URLSearchParams(
-      Object.fromEntries(Object.entries(filters).filter(([, value]) => value)),
+      Object.fromEntries(
+        Object.entries(filters)
+          .filter(([, value]) => value !== undefined && value !== null && String(value) !== '')
+          .map(([key, value]) => [key, String(value)]),
+      ),
     );
     const query = params.toString();
-    return request(
-      query
-        ? `/api/platform/costs/tenants/${encodeURIComponent(tenantId)}?${query}`
-        : `/api/platform/costs/tenants/${encodeURIComponent(tenantId)}`,
-    );
+    return request(query ? `/api/platform/message-flows?${query}` : '/api/platform/message-flows');
   },
+  /** @param {string} tenantId @param {string} operationId */
+  messageFlow: (tenantId, operationId) =>
+    request(`/api/platform/message-flows/${encodeURIComponent(tenantId)}/${encodeURIComponent(operationId)}`),
 };

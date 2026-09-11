@@ -235,6 +235,12 @@ def persist_turn_result(turn: CustomerTurn, result: TurnResult) -> OutboxItem | 
     op = str(extra.get("operation_id") or "").strip()
     if not op:
         return None
+    inbound = ""
+    if turn.history.messages:
+        current = next((m for m in reversed(turn.history.messages) if m.is_current_inbound), None)
+        inbound = (current.text if current else turn.history.messages[-1].text) or ""
+    if not inbound and turn.followup_goal:
+        inbound = f"Follow-up: {turn.followup_goal}"
     return enqueue_envelope(
         tenant_id=turn.tenant_id,
         operation_id=op,
@@ -246,8 +252,30 @@ def persist_turn_result(turn: CustomerTurn, result: TurnResult) -> OutboxItem | 
             "conversation_id": turn.conversation_id,
             "surface": turn.surface,
             "invocation_kind": turn.invocation_kind,
+            "inbound_preview": (inbound or "")[:280],
+            "phase": extra.get("phase"),
+            "stop_reason": result.stop_reason,
+            "message_units": extra.get("message_units"),
+            "response_class": extra.get("response_class"),
+            "billing_policy": extra.get("billing_policy"),
+            "used_evidence_ids": extra.get("used_evidence_ids") or result.envelope.used_evidence_ids,
+            "evidence_preview": extra.get("evidence_preview") or [],
+            "stage_timeline": extra.get("stage_timeline") or [],
+            "plan_tasks": [
+                {"id": task.get("id"), "type": task.get("type")}
+                for task in ((extra.get("plan") or {}).get("tasks") or [])
+                if isinstance(task, dict)
+            ],
         },
     )
+
+
+def list_recent(*, tenant_id: str = "", limit: int = 50) -> list[OutboxItem]:
+    _hydrate()
+    tid = (tenant_id or "").strip()
+    rows = [item for item in _ITEMS.values() if not tid or item.tenant_id == tid]
+    rows.sort(key=lambda item: item.updated_at, reverse=True)
+    return rows[: max(1, min(int(limit or 50), 200))]
 
 
 def mark_sent(outbox_id: str, *, provider_message_id: str = "") -> OutboxItem | None:

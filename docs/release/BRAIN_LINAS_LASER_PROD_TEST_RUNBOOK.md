@@ -34,10 +34,11 @@ VOYAGE_API_KEY=...
 MESSAGE_BILLING_CUTOVER=false
 ```
 
+- [ ] Owner Portal → **Message flow**: open a live turn and confirm stages (receive → plan → search → evidence → reply → cost).
 - [ ] Owner Portal → Brain lab: turn on tenant `lab` (capture-only).
 - [ ] Owner Portal → Costs: pending events appear for lab / Linas Laser tenant_id.
-- [ ] Force reindex for Linas Laser after publish (Owner lab reindex or admin search API).
-- [ ] Live channel smoke on Linas Laser only: WA / IG / FB / Web as connected.
+- [ ] Force reindex for Linas Laser after publish (Owner lab reindex or admin search API). Published Knowledge is chunked for search automatically on index.
+- [ ] Live channel smoke on Linas Laser only: WA / IG / FB / TikTok / Web as connected.
 
 ## 3) If AI breaks during Meta testing — rollback
 

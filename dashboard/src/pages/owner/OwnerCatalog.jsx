@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ownerApi } from './ownerApi';
 
-function parseOptionalInt(raw, label) {
+function parseOptionalInt(/** @type {unknown} */ raw, /** @type {string} */ label) {
   const text = String(raw ?? '').trim();
   if (!text) return undefined;
   if (!/^-?\d+$/.test(text)) {
@@ -12,6 +12,7 @@ function parseOptionalInt(raw, label) {
 
 /** @param {any} catalog */
 function planDraftFromCatalog(catalog) {
+  /** @type {Record<string, { intended_price_usd?: unknown, included_messages?: unknown, faq_capacity?: unknown }>} */
   const rows = {};
   for (const plan of catalog?.plans || []) {
     rows[plan.plan_id] = {
@@ -25,6 +26,7 @@ function planDraftFromCatalog(catalog) {
 
 /** @param {any} catalog */
 function packDraftFromCatalog(catalog) {
+  /** @type {Record<string, { product_id: string }>} */
   const rows = {};
   for (const pack of catalog?.topup_packs || []) {
     rows[pack.pack_id] = { product_id: pack.product_id || '' };
@@ -263,7 +265,7 @@ export default function OwnerCatalog() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800 bg-slate-950">
-            {plans.map((plan) => {
+            {plans.map((/** @type {any} */ plan) => {
               const draft = planDrafts[plan.plan_id] || {};
               return (
                 <tr key={plan.plan_id}>
@@ -312,7 +314,7 @@ export default function OwnerCatalog() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800 bg-slate-950">
-            {packs.map((pack) => (
+            {packs.map((/** @type {any} */ pack) => (
               <tr key={pack.pack_id}>
                 <td className="px-4 py-3">{pack.pack_id}</td>
                 <td className="px-4 py-3">{pack.quantity}</td>

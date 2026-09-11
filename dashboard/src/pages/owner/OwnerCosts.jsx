@@ -114,8 +114,13 @@ export default function OwnerCosts() {
               key={name}
               className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
               placeholder={name}
-              value={filters[name]}
-              onChange={(event) => setFilters((current) => ({ ...current, [name]: event.target.value }))}
+              value={filters[/** @type {keyof typeof emptyFilters} */ (name)]}
+              onChange={(event) =>
+                setFilters((current) => ({
+                  ...current,
+                  [/** @type {keyof typeof emptyFilters} */ (name)]: event.target.value,
+                }))
+              }
             />
           ),
         )}
@@ -163,7 +168,7 @@ export default function OwnerCosts() {
         </div>
         <h3 className="mt-5 font-semibold">Tenants with expense activity</h3>
         <div className="mt-3 space-y-2">
-          {(dashboard?.tenants || []).map((row) => (
+          {(dashboard?.tenants || []).map((/** @type {any} */ row) => (
             <button
               key={row.tenant_id}
               type="button"
@@ -183,7 +188,7 @@ export default function OwnerCosts() {
         </div>
         <h3 className="mt-5 font-semibold">Recent events</h3>
         <div className="mt-3 max-h-56 space-y-1 overflow-auto text-xs text-slate-400">
-          {(dashboard?.events || []).slice(0, 40).map((event) => (
+          {(dashboard?.events || []).slice(0, 40).map((/** @type {any} */ event) => (
             <p key={event.event_id || `${event.tenant_id}-${event.operation_id}-${event.category}`}>
               {event.tenant_id} · {event.status} · {event.category}/{event.feature} · {event.provider}{' '}
               {event.model} · op {event.operation_id || '—'} · {event.amount_usd ?? 'unpriced'}
@@ -246,7 +251,7 @@ export default function OwnerCosts() {
             </p>
             <p>{tenant.attribution_note}</p>
             <ul className="mt-2 list-disc pl-5">
-              {(tenant.events || []).map((event) => (
+              {(tenant.events || []).map((/** @type {any} */ event) => (
                 <li key={event.event_id}>
                   {event.created_at} · {event.category} · {event.provider}/{event.model} ·{' '}
                   {event.amount_usd ?? event.status} · {event.operation_id}

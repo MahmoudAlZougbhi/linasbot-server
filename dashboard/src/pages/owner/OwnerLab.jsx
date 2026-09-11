@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ownerApi } from './ownerApi';
 
-function parseHistory(raw) {
+function parseHistory(/** @type {string} */ raw) {
   const text = raw.trim();
   if (!text) return undefined;
   const parsed = JSON.parse(text);

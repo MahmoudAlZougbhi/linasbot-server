@@ -142,7 +142,7 @@ export function metricStringArray(value) {
 
 /**
  * @param {unknown} error
- * @returns {error is AxiosLikeError}
+ * @returns {error is { code?: unknown, message?: unknown, response?: unknown }}
  */
 export function isAxiosLikeError(error) {
   return (
@@ -168,10 +168,14 @@ export function getAxiosErrorCode(error) {
  * @returns {string | undefined}
  */
 export function getAxiosResponseDetail(error) {
-  if (!isAxiosLikeError(error) || !isPlainObject(error.response?.data)) {
+  if (!isAxiosLikeError(error)) {
     return undefined;
   }
-  const data = error.response.data;
+  const response = /** @type {{ data?: unknown }} */ (error).response;
+  if (!isPlainObject(response?.data)) {
+    return undefined;
+  }
+  const data = /** @type {Record<string, unknown>} */ (response.data);
   if (typeof data.detail === "string") return data.detail;
   if (typeof data.error === "string") return data.error;
   if (typeof data.message === "string") return data.message;
