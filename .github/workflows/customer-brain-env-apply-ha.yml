@@ -120,7 +120,8 @@ jobs:
             import sys
 
             sys.path.insert(0, "/opt/linasbot")
-            from scripts.ha.production_env_cas import atomic_update_canonical_env
+            from pathlib import Path
+            from scripts.ha.meta_env_file import atomic_update_env
 
             voyage = os.environ["VOYAGE_API_KEY"].strip()
             if len(voyage) < 20:
@@ -132,7 +133,7 @@ jobs:
                 "MESSAGE_BILLING_CUTOVER": "false",
                 "MESSAGE_BILLING_ENABLED": "false",
             }
-            atomic_update_canonical_env(updates)
+            atomic_update_env(Path("/opt/linasbot/.env"), updates)
             text = open("/opt/linasbot/.env", encoding="utf-8").read().splitlines()
             for key, expected in updates.items():
                 values = [
@@ -174,7 +175,8 @@ jobs:
             import sys
 
             sys.path.insert(0, "/opt/linasbot")
-            from scripts.ha.production_env_cas import atomic_update_canonical_env
+            from pathlib import Path
+            from scripts.ha.meta_env_file import atomic_update_env
 
             voyage = os.environ["VOYAGE_API_KEY"].strip()
             if len(voyage) < 20:
@@ -186,7 +188,7 @@ jobs:
                 "MESSAGE_BILLING_CUTOVER": "false",
                 "MESSAGE_BILLING_ENABLED": "false",
             }
-            atomic_update_canonical_env(updates)
+            atomic_update_env(Path("/opt/linasbot/.env"), updates)
             text = open("/opt/linasbot/.env", encoding="utf-8").read().splitlines()
             for key, expected in updates.items():
                 values = [
