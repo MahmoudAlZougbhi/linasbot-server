@@ -51,7 +51,7 @@ def _retry_delay(response: httpx.Response, attempt: int) -> float:
     raw = (response.headers.get("Retry-After") or "").strip()
     if raw.isdigit():
         return min(float(raw), 8.0)
-    return min(0.6 * (2**attempt), 6.0)
+    return float(min(0.6 * (2**attempt), 6.0))
 
 
 async def _post(path: str, payload: dict[str, Any]) -> dict[str, Any]:

@@ -279,8 +279,8 @@ async def interpret_and_patch(
     state = load_setup_state(tenant_id, user_id)
     current = (section or state.get("current_section") or SETUP_SECTION_ORDER[0]).strip().replace("-", "_")
     if current not in SETUP_SECTION_ORDER:
-        completed = set(state.get("completed_sections") or [])
-        current = next((name for name in SETUP_SECTION_ORDER if name not in completed), SETUP_SECTION_ORDER[0])
+        completed_names = set(state.get("completed_sections") or [])
+        current = next((name for name in SETUP_SECTION_ORDER if name not in completed_names), SETUP_SECTION_ORDER[0])
 
     patch = _heuristic_patch(current, message)
     llm_meta: dict[str, Any] = {"used_llm": False}

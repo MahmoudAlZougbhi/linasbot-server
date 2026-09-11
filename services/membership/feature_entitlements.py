@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.membership.message_catalog import require_message_plan
+from services.membership.message_catalog import MessagePlan, require_message_plan
 
 
 class FeatureDenied(PermissionError):
@@ -14,7 +14,7 @@ class FeatureDenied(PermissionError):
         self.payload = payload or {}
 
 
-def _plan(plan_id: str):
+def _plan(plan_id: str) -> MessagePlan | None:
     try:
         return require_message_plan(plan_id)
     except KeyError:

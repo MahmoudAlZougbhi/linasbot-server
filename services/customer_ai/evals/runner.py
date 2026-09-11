@@ -39,7 +39,8 @@ def _queries(sections: dict[str, Any]) -> list[str]:
         for item in rows:
             if not isinstance(item, dict):
                 continue
-            labels = item.get("labels") if isinstance(item.get("labels"), dict) else {}
+            raw_labels = item.get("labels")
+            labels = raw_labels if isinstance(raw_labels, dict) else {}
             title = str(item.get("title") or labels.get("en") or item.get("id") or "").strip()
             if title:
                 queries.append(title)

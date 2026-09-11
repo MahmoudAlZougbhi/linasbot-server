@@ -111,7 +111,10 @@ def _by_tenant(events: list[ExpenseEvent]) -> list[dict[str, Any]]:
                 "top_category": _largest_category(items) or _top_pending_category(items),
             }
         )
-    rows.sort(key=lambda row: (int(row["pending"]), Decimal(row["known_usd"])), reverse=True)
+    rows.sort(
+        key=lambda row: (int(str(row.get("pending", 0))), Decimal(str(row.get("known_usd", "0")))),
+        reverse=True,
+    )
     return rows
 
 
@@ -122,7 +125,7 @@ def _top_pending_category(events: list[ExpenseEvent]) -> str:
             totals[event.category] += 1
     if not totals:
         return ""
-    return max(totals, key=totals.get)
+    return max(totals, key=lambda key: totals[key])
 
 
 def _largest_category(events: list[ExpenseEvent]) -> str:
@@ -132,7 +135,7 @@ def _largest_category(events: list[ExpenseEvent]) -> str:
             totals[event.category] += event.amount_usd
     if not totals:
         return ""
-    return max(totals, key=totals.get)
+    return max(totals, key=lambda key: totals[key])
 
 
 def period_bounds(preset: str | None) -> tuple[str | None, str | None]:

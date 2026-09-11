@@ -256,7 +256,8 @@ async def _generate_canonical(
     try:
         from services.customer_reply_v2.inbound_media import planner_text_from_inbound
 
-        inbound_media = payload.get("inbound_media") if isinstance(payload.get("inbound_media"), dict) else {}
+        inbound_media_raw = payload.get("inbound_media")
+        inbound_media = inbound_media_raw if isinstance(inbound_media_raw, dict) else {}
         message = planner_text_from_inbound(
             inbound_media,
             text=str(payload.get("text") or payload.get("text_body") or ""),

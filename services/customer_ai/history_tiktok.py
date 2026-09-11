@@ -22,7 +22,9 @@ def rows_from_tt_messages(messages: list[Any]) -> list[dict[str, Any]]:
                 "id": str(getattr(row, "provider_message_id", None) or getattr(row, "id", None) or f"tt:{index}"),
                 "role": "user" if direction == "inbound" else "assistant",
                 "text": str(getattr(row, "text", None) or "").strip(),
-                "timestamp": created.isoformat() if hasattr(created, "isoformat") else str(created or ""),
+                "timestamp": created.isoformat()
+                if created is not None and hasattr(created, "isoformat")
+                else str(created or ""),
                 "visible_to_customer": True,
             }
         )

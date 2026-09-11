@@ -167,7 +167,8 @@ async def _maybe_ai_dm(snapshot: dict[str, Any]) -> None:
         from services.customer_ai.history_ids import bind_dm_ids
         from services.customer_reply_v2.inbound_media import planner_text_from_inbound
 
-        inbound_media = snapshot.get("inbound_media") if isinstance(snapshot.get("inbound_media"), dict) else {}
+        inbound_media_raw = snapshot.get("inbound_media")
+        inbound_media = inbound_media_raw if isinstance(inbound_media_raw, dict) else {}
         message = planner_text_from_inbound(inbound_media, text=str(snapshot.get("text") or ""))
         if not message and inbound_media.get("attachment_types"):
             message = "Sent a message."
@@ -213,7 +214,7 @@ async def _maybe_ai_dm(snapshot: dict[str, Any]) -> None:
         provider_mid = str(published.get("message_id") or "")
         with whatsapp_session() as session:
             content_repo = TikTokContentRepository(session)
-            conv = content_repo.upsert_conversation(
+            tiktok_conv = content_repo.upsert_conversation(
                 tenant_id=tenant_id,
                 connection_id=snapshot["connection_id"],
                 conversation_id=str(snapshot["conversation_id"]),
@@ -224,7 +225,7 @@ async def _maybe_ai_dm(snapshot: dict[str, Any]) -> None:
             content_repo.insert_message(
                 tenant_id=tenant_id,
                 connection_id=snapshot["connection_id"],
-                conversation_row_id=conv.id,
+                conversation_row_id=tiktok_conv.id,
                 provider_message_id=str(published.get("message_id") or uuid.uuid4()),
                 direction="outbound",
                 text=reply,

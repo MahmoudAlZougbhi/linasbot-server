@@ -204,6 +204,9 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
     from services.whatsapp_cloud.inbound_media_cloud import hydrate_cloud_inbound_snapshot
 
     ai_snapshot = await hydrate_cloud_inbound_snapshot(ai_snapshot)
+    if ai_snapshot is None:
+        _finish_claim_without_ai(claim_id)
+        return "accepted"
     if ai_snapshot["control_state"] != "AI_ACTIVE":
         emit_wa_event("ai_suppressed_paused", conversation_id=ai_snapshot["conversation_id"])
         _finish_claim_without_ai(claim_id)

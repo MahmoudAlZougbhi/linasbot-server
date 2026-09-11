@@ -257,37 +257,39 @@ async def process_meta_comment_event(
             is_static_public_comment,
         )
 
-        if already_replied and not allows_private_after_public_reply(rule_decision):
-            return CommentReplyResult(status="ignored", reason="human_replied")
-        if is_deterministic_comment_and_dm(rule_decision):
-            return await maybe_handle_comment_and_dm(
-                rule_decision=rule_decision,
-                binding=binding,
-                comment_id=comment_id,
-                simulation=simulation,
-                capture_send=capture_send,
-                inbound_event_id=inbound_event_id,
-                token=token,
-                graph_api_version=graph_version,
-                client=client,
-                skip_public=already_replied,
-            )
-        if is_static_comment_dm(rule_decision):
-            return await maybe_handle_static_dm(
-                rule_decision=rule_decision,
-                binding=binding,
-                comment_id=comment_id,
-                simulation=simulation,
-                capture_send=capture_send,
-                inbound_event_id=inbound_event_id,
-                token=token,
-                graph_api_version=graph_version,
-                client=client,
-            )
+        reply_text: str | None = None
+        if rule_decision is not None:
+            if already_replied and not allows_private_after_public_reply(rule_decision):
+                return CommentReplyResult(status="ignored", reason="human_replied")
+            if is_deterministic_comment_and_dm(rule_decision):
+                return await maybe_handle_comment_and_dm(
+                    rule_decision=rule_decision,
+                    binding=binding,
+                    comment_id=comment_id,
+                    simulation=simulation,
+                    capture_send=capture_send,
+                    inbound_event_id=inbound_event_id,
+                    token=token,
+                    graph_api_version=graph_version,
+                    client=client,
+                    skip_public=already_replied,
+                )
+            if is_static_comment_dm(rule_decision):
+                return await maybe_handle_static_dm(
+                    rule_decision=rule_decision,
+                    binding=binding,
+                    comment_id=comment_id,
+                    simulation=simulation,
+                    capture_send=capture_send,
+                    inbound_event_id=inbound_event_id,
+                    token=token,
+                    graph_api_version=graph_version,
+                    client=client,
+                )
+            if is_static_public_comment(rule_decision):
+                reply_text = rule_decision.reply_text.strip()[:900]
 
-        if is_static_public_comment(rule_decision):
-            reply_text: str | None = rule_decision.reply_text.strip()[:900]
-        else:
+        if reply_text is None:
             generated = await _generate_comment_reply_text(
                 tenant_id=binding.tenant_id,
                 comment_text=comment_text,

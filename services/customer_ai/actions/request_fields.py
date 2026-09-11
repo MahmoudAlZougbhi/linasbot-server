@@ -54,7 +54,8 @@ def prior_collected_fields(pending: list[Any], request_type: str) -> dict[str, A
     for item in pending:
         if not isinstance(item, dict):
             continue
-        fields = item.get("fields") if isinstance(item.get("fields"), dict) else {}
+        raw_fields = item.get("fields")
+        fields = raw_fields if isinstance(raw_fields, dict) else {}
         kind = str(fields.get("request_type") or "").strip().upper()
         if want and kind and kind != want:
             continue

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from services.cm.comment_rules import CommentRuleDecision
 from services.meta_app_registry import MetaAssetBinding
+
+if TYPE_CHECKING:
+    from services.meta_comment_replies import CommentReplyResult
 from services.meta_comment_rule_modes import is_static_comment_dm, static_dm_text
 
 
@@ -21,7 +24,7 @@ async def maybe_handle_static_dm(
     token: str = "",
     graph_api_version: str = "v24.0",
     client: Any | None = None,
-) -> Any:
+) -> CommentReplyResult:
     from services.meta_comment_replies import CommentReplyResult, _mark_sent_reply, _provider_rejection_is_definitive
 
     if not is_static_comment_dm(rule_decision):
@@ -60,6 +63,9 @@ async def maybe_handle_static_dm(
             return CommentReplyResult(status="ignored", reason="already_replied")
         if private_attempt.kind == "needs_owner_action":
             return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
+
+    if client is None:
+        return CommentReplyResult(status="failed", reason="missing_client")
 
     try:
         ok, reason, response = await send_comment_private_reply(

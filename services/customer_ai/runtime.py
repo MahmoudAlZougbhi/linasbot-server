@@ -12,7 +12,7 @@ from services.customer_ai.contracts.turn import CustomerTurn, MediaView
 from services.customer_ai.control import apply_live_control
 from services.customer_ai.conversation_history import record_turn_history
 from services.customer_ai.conversation_store import hydrate_turn_state, remember_turn
-from services.customer_ai.gates import evaluate_gates
+from services.customer_ai.gates import GateDecision, evaluate_gates
 from services.customer_ai.history_ids import bind_dm_ids, comment_conversation_id
 from services.customer_ai.history_store import load_history_snapshot
 from services.customer_ai.turn_pipeline import run_dm_after_gates
@@ -53,7 +53,7 @@ def _destination_for(turn: CustomerTurn, channel: str) -> str:
     return "web_chat" if "web" in (channel or turn.channel or "") else "dm"
 
 
-def _gate_result(turn: CustomerTurn, gate, channel: str) -> TurnResult:
+def _gate_result(turn: CustomerTurn, gate: GateDecision, channel: str) -> TurnResult:
     extra = {"gate": gate.detail}
     if gate.reason == "restricted" and gate.reply_text:
         extra["restricted_topic_id"] = gate.detail

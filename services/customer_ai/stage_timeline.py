@@ -58,7 +58,8 @@ def public_flow_from_extra(extra: dict[str, Any] | None) -> list[dict[str, Any]]
     for item in list((extra or {}).get("stage_timeline") or []):
         if not isinstance(item, dict):
             continue
-        detail = item.get("detail") if isinstance(item.get("detail"), dict) else {}
+        raw_detail = item.get("detail")
+        detail: dict[str, Any] = raw_detail if isinstance(raw_detail, dict) else {}
         clean_detail = {
             key: detail[key]
             for key in (

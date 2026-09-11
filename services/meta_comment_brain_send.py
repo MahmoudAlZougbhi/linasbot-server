@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from services.customer_ai.comments.destinations import CommentDestinations
+
+if TYPE_CHECKING:
+    from services.meta_comment_replies import CommentReplyResult
 from services.meta_comment_rule_both import (
     _dm_payload,
     _guarded_private_dm,
@@ -25,7 +28,7 @@ async def send_comment_destinations(
     graph_api_version: str,
     client: Any,
     skip_public: bool = False,
-) -> Any:
+) -> CommentReplyResult:
     from services.meta_comment_replies import CommentReplyResult, _mark_sent_reply
 
     public = "" if skip_public else plan.public_text

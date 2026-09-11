@@ -18,7 +18,9 @@ def rows_from_wa_messages(messages: list[Any]) -> list[dict[str, Any]]:
                 "id": str(getattr(row, "id", None) or f"wa:{index}"),
                 "role": "user" if direction == "inbound" else "assistant",
                 "text": text,
-                "timestamp": created.isoformat() if hasattr(created, "isoformat") else str(created or ""),
+                "timestamp": created.isoformat()
+                if created is not None and hasattr(created, "isoformat")
+                else str(created or ""),
                 "visible_to_customer": True,
             }
         )

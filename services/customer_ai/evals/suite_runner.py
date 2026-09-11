@@ -18,7 +18,7 @@ from services.customer_ai.evals.fixtures import (
 )
 from services.customer_ai.evals.metrics import mean, percentile, retrieval_row
 from services.customer_ai.grounding.facts import ungrounded_claims
-from services.customer_ai.retrieve.cards import cards_from_sections
+from services.customer_ai.retrieve.cards import TitleCard, cards_from_sections
 from services.customer_ai.retrieve.lexical import search_cards
 
 ARTIFACT_DIR = Path(__file__).resolve().parent / "artifacts"
@@ -52,7 +52,7 @@ def _bundle_from_text(text: str) -> EvidenceBundle:
     )
 
 
-def _run_case(case: EvalCase, cards) -> dict[str, Any]:
+def _run_case(case: EvalCase, cards: list[TitleCard]) -> dict[str, Any]:
     started = time.perf_counter()
     result: dict[str, Any] = {
         "case_id": case.case_id,

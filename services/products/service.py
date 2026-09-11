@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -165,7 +166,7 @@ class ProductsService:
 
         return self._run_import(lambda: import_xlsx_rows(self, tenant_id=tenant_id, content=content))
 
-    def _run_import(self, fn):
+    def _run_import(self, fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
         from services.membership.daily_edits import DailyEditLimitError
         from services.membership.processing_budgets import ProcessingBudgetError
         from services.products.import_service import ProductsImportError

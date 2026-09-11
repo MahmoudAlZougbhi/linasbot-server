@@ -5,8 +5,10 @@ Never tag a message-ledger hold as leftover credits. Age still never refunds.
 
 from __future__ import annotations
 
+from services.membership.pending_settlement import BillingPolicy
 
-def hold_billing_policy(*, leftover_reservation_id: str | None) -> str:
+
+def hold_billing_policy(*, leftover_reservation_id: str | None) -> BillingPolicy:
     if leftover_reservation_id:
         return "legacy_credits"
     from services.membership.message_flags import message_billing_enabled

@@ -199,8 +199,10 @@ async def cm_put_draft(
     except ConflictError as exc:
         if edit_op:
             release_edit(tenant_id=tenant_id, operation_id=edit_op)
-        current = _owner_sanitize_envelope(_envelope_dict(exc.current), name) if exc.current is not None else {}
-        current_etag = str(current.get("etag") or "")
+        conflict_current: dict[str, Any] = (
+            _owner_sanitize_envelope(_envelope_dict(exc.current), name) if exc.current is not None else {}
+        )
+        current_etag = str(conflict_current.get("etag") or "")
         return JSONResponse(
             status_code=409,
             content={
@@ -208,7 +210,7 @@ async def cm_put_draft(
                 "error": "CONFLICT",
                 "message": exc.message,
                 "current_etag": current_etag,
-                "current": current or None,
+                "current": conflict_current or None,
             },
             headers={"ETag": current_etag} if current_etag else {},
         )

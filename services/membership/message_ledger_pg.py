@@ -284,7 +284,7 @@ def pg_list_stale_reserved(
     for row in rows:
         data = dict(row)
         created = data.get("created_at")
-        if hasattr(created, "isoformat"):
+        if created is not None and hasattr(created, "isoformat"):
             data["created_at"] = created.isoformat()
         items.append(MessageReservation(**data))
     return items
@@ -304,7 +304,7 @@ def pg_list_reservations(session: Any, *, tenant_id: str | None = None) -> list[
     for row in rows:
         data = dict(row)
         created = data.get("created_at")
-        if hasattr(created, "isoformat"):
+        if created is not None and hasattr(created, "isoformat"):
             data["created_at"] = created.isoformat()
         items.append(MessageReservation(**data))
     return items

@@ -41,7 +41,7 @@ def _cosine(left: list[float], right: list[float]) -> float:
     n2 = sum(b * b for b in right) ** 0.5
     if n1 == 0 or n2 == 0:
         return 0.0
-    return dot / (n1 * n2)
+    return float(dot / (n1 * n2))
 
 
 def _vector_literal(values: list[float]) -> str:

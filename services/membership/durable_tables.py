@@ -7,6 +7,8 @@ activation. This report never flips flags.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import text
 
 from services.membership.pg_store import optional_message_session, store_backend
@@ -27,7 +29,7 @@ DURABLE_TABLES = (
 )
 
 
-def _table_exists(session, name: str) -> bool:
+def _table_exists(session: Any, name: str) -> bool:
     try:
         bind = session.get_bind()
         dialect = getattr(bind.dialect, "name", "") if bind is not None else ""

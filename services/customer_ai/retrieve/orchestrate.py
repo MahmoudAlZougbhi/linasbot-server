@@ -70,7 +70,7 @@ async def retrieve_published(ctx: RetrieveContext) -> EvidenceBundle:
     if ctx.tenant_id:
         from services.customer_ai.search.product_freshness import product_questions_blocked
 
-        fams = set(ctx.families) if ctx.families is not None else None
+        fams: set[str] | None = set(ctx.families) if ctx.families is not None else None
         blocked = product_questions_blocked(ctx.tenant_id, fams)
         if blocked:
             return EvidenceBundle(outcome="product_index_stale")

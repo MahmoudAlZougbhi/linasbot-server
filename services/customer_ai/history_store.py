@@ -13,7 +13,8 @@ def _as_raw(rows: list[Any]) -> list[dict[str, Any]]:
     for index, row in enumerate(rows or []):
         if not isinstance(row, dict):
             continue
-        meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        raw_meta = row.get("metadata")
+        meta: dict[str, Any] = raw_meta if isinstance(raw_meta, dict) else {}
         role = str(row.get("role") or row.get("sender_role") or "user")
         out.append(
             {

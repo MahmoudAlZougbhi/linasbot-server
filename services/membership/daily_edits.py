@@ -349,9 +349,10 @@ def reserve_edit(
                 sql_ids=sql_ids,
             )
     with _LOCK:
-        used, reserved_ids = _USED.setdefault(tid, {}), _RESERVED.setdefault(tid, {}).setdefault(window_id, set())
+        used_map = _USED.setdefault(tid, {})
+        reserved_ids = _RESERVED.setdefault(tid, {}).setdefault(window_id, set())
         committed_ids = _COMMITTED.setdefault(tid, {}).setdefault(window_id, set())
-        used_count = used.get(window_id, 0)
+        used_count = used_map.get(window_id, 0)
         if operation_id in reserved_ids or operation_id in committed_ids:
             remaining = max(0, limit - used_count - len(reserved_ids))
             return DailyEditDecision(

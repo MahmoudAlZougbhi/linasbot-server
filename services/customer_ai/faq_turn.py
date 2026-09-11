@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.customer_ai.contracts.turn import CustomerTurn
 from services.customer_ai.faq_exact import find_published_exact_faq
@@ -23,8 +26,8 @@ def faq_envelope(
     channel: str,
     *,
     text: str,
-    extra: dict,
-    apply_greeting,
+    extra: dict[str, Any],
+    apply_greeting: Callable[[CustomerTurn, str, str, FinalReplyEnvelope], FinalReplyEnvelope],
 ) -> TurnResult:
     destination = _destination(channel)
     envelope = apply_greeting(
@@ -41,7 +44,13 @@ def faq_envelope(
     return TurnResult(stop_reason="ok", envelope=envelope, extra=extra)
 
 
-def exact_faq_result(turn: CustomerTurn, message: str, channel: str, *, apply_greeting) -> TurnResult | None:
+def exact_faq_result(
+    turn: CustomerTurn,
+    message: str,
+    channel: str,
+    *,
+    apply_greeting: Callable[[CustomerTurn, str, str, FinalReplyEnvelope], FinalReplyEnvelope],
+) -> TurnResult | None:
     if turn.invocation_kind == "followup" or not message.strip():
         return None
     faq = find_published_exact_faq(turn.tenant_id, message)
@@ -68,7 +77,7 @@ async def semantic_faq_result(
     message: str,
     channel: str,
     *,
-    apply_greeting,
+    apply_greeting: Callable[[CustomerTurn, str, str, FinalReplyEnvelope], FinalReplyEnvelope],
 ) -> TurnResult | None:
     if turn.invocation_kind == "followup" or not message.strip():
         return None

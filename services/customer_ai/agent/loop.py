@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from services.customer_ai.actions.pending import attach_confirmation
@@ -111,7 +112,7 @@ async def _maybe_tool_calls(
     *,
     budget: int,
     trace: list[dict[str, Any]],
-    coverage: dict[str, str] | None = None,
+    coverage: Mapping[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str], int]:
     from services.customer_ai.agent.tool_decide import propose_tools_dynamic
     from services.customer_ai.facts.structured import facts_from_tool_data

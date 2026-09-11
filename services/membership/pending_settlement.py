@@ -7,7 +7,7 @@ import threading
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from storage.persistent_storage import _DATA_ROOT
 
@@ -405,7 +405,9 @@ def policy_for_operation(tenant_id: str, *operation_ids: str) -> BillingPolicy |
 
                 if table_ready(session):
                     found = pg_policy_for(session, tenant_id, wanted)
-                    return found if found in {"legacy_credits", "message_units"} else None
+                    if found in {"legacy_credits", "message_units"}:
+                        return cast(BillingPolicy, found)
+                    return None
     _hydrate()
     with _LOCK:
         for item in _ITEMS.values():

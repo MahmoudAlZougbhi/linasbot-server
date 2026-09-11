@@ -14,15 +14,15 @@ from services.customer_ai.agent.task_coverage import (
 from services.customer_ai.budgets import DEFAULT_BUDGETS
 from services.customer_ai.contracts.enums import SourceFamily
 from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.customer_ai.contracts.plan import PlannerPlan
+from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask
 from services.customer_ai.contracts.turn import CustomerTurn
 from services.customer_ai.retrieve.orchestrate import RetrieveContext, retrieve_published
 
 _INFO_TYPES = {"information", "hours", "comparison"}
 
 
-def _families(task) -> set[SourceFamily] | None:
-    cleaned = {item for item in (task.source_families or []) if item != "none"}
+def _families(task: PlannerTask) -> set[SourceFamily] | None:
+    cleaned: set[SourceFamily] = {item for item in (task.source_families or []) if item != "none"}
     return cleaned or None
 
 

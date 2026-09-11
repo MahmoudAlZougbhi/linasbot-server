@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from services.customer_ai.contracts.evidence import EvidenceBundle
-from services.customer_ai.contracts.plan import PlannerPlan
+from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask
 
 TaskCoverageStatus = Literal["covered", "missing", "partial"]
 CoverageState = TaskCoverageStatus
@@ -18,7 +18,7 @@ _FAMILY_HINTS: dict[str, set[str]] = {
 }
 
 
-def _task_families(task) -> set[str]:
+def _task_families(task: PlannerTask) -> set[str]:
     families = {str(f) for f in (task.source_families or []) if f and f != "none"}
     return families or set(_FAMILY_HINTS.get(task.type, set()))
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from services.ai_reply_credit_gate import (
@@ -249,7 +250,7 @@ def settle_after_outbound(
         on_ai_generated({"user_data": user_data, "bot_reply_text": reply, "flow_meta": flow_meta or {}})
 
 
-async def run_reserved_customer_turn(user_data: dict[str, Any], produce) -> bool:
+async def run_reserved_customer_turn(user_data: dict[str, Any], produce: Callable[[], Awaitable[Any]]) -> bool:
     """Reserve leftover credits, run the customer reply, then capture or release."""
     if not try_reserve_for_ai(user_data):
         return False

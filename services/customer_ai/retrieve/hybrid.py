@@ -17,6 +17,7 @@ from services.customer_ai.providers.spaces import (
 from services.customer_ai.providers.voyage_client import embed_texts
 from services.customer_ai.retrieve.cards import TitleCard
 from services.customer_ai.retrieve.lexical import search_cards
+from services.customer_ai.search.store import StoreQueryResult
 
 
 @dataclass(frozen=True)
@@ -35,7 +36,7 @@ def _cosine(left: list[float], right: list[float]) -> float:
     n2 = sum(b * b for b in right) ** 0.5
     if n1 == 0 or n2 == 0:
         return 0.0
-    return dot / (n1 * n2)
+    return float(dot / (n1 * n2))
 
 
 def _rrf(*rank_lists: list[str], k: int = 60) -> dict[str, float]:
@@ -78,7 +79,7 @@ async def _semantic_from_store(
 
     from services.membership.provider_expense import record_pending_provider
 
-    def _map(result) -> list[tuple[float, TitleCard]] | None:
+    def _map(result: StoreQueryResult) -> list[tuple[float, TitleCard]] | None:
         if result.outcome != "found" or not result.items:
             return None
         by_id = {card.item_id: card for card in scoped}
@@ -131,21 +132,33 @@ async def _semantic_from_store(
             model=q_model,
             operation_id=(operation_id or "query").strip() or "query",
         )
-        query_kwargs = {
-            "tenant_id": tenant_id,
-            "space_id": doc_space_i.space_id,
-            "vector": q_vector,
-            "families": set(families) if families else None,
-            "limit": limit,
-        }
+        query_families: set[str] | None = set(families) if families else None
         mapped = None
         try:
             from db.session import whatsapp_session
 
             with whatsapp_session(require=True) as session:
-                mapped = _map(query_similar(session, **query_kwargs))
+                mapped = _map(
+                    query_similar(
+                        session,
+                        tenant_id=tenant_id,
+                        space_id=doc_space_i.space_id,
+                        vector=q_vector,
+                        families=query_families,
+                        limit=limit,
+                    )
+                )
         except Exception:
-            mapped = _map(query_similar(None, **query_kwargs))
+            mapped = _map(
+                query_similar(
+                    None,
+                    tenant_id=tenant_id,
+                    space_id=doc_space_i.space_id,
+                    vector=q_vector,
+                    families=query_families,
+                    limit=limit,
+                )
+            )
         if not mapped:
             continue
         for score, card in mapped:

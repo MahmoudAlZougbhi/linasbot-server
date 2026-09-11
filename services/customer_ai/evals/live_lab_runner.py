@@ -10,9 +10,11 @@ import asyncio
 import json
 import os
 import time
+from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any
 
+from db.session import whatsapp_session
 from services.customer_ai.evals.live_lab_corpus import retrieval_eval_cases
 from services.customer_ai.evals.live_lab_publish import publish_lab_tenant
 from services.customer_ai.evals.live_lab_switch import atomic_switch_live as _atomic_switch_live
@@ -38,9 +40,7 @@ def _gate(status: str, detail: str = "", **extra: Any) -> dict[str, Any]:
     return row
 
 
-def _session():
-    from db.session import whatsapp_session
-
+def _session() -> AbstractContextManager[Any]:
     return whatsapp_session(require=True)
 
 
@@ -99,8 +99,10 @@ async def build_contextual_live() -> dict[str, Any]:
         # index_published_tenant already builds entity + contextual indexes.
         bundled = await index_published_tenant(LAB_TENANT, revision=publish["revision"], session=session)
     duration = round(time.perf_counter() - t0, 3)
-    ctx = bundled.get("contextual") if isinstance(bundled.get("contextual"), dict) else bundled
-    entity = bundled.get("entity") if isinstance(bundled.get("entity"), dict) else {}
+    ctx_raw = bundled.get("contextual")
+    ctx = ctx_raw if isinstance(ctx_raw, dict) else bundled if isinstance(bundled, dict) else {}
+    entity_raw = bundled.get("entity")
+    entity = entity_raw if isinstance(entity_raw, dict) else {}
     result = {
         **dict(ctx or {}),
         "duration_sec": duration,

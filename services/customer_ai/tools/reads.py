@@ -72,6 +72,11 @@ def _search_rows(rows: list[dict[str, Any]], query: str, *, limit: int = 5) -> l
     return [row for _score, row in scored[:limit]]
 
 
+def _first_search_row(rows: list[dict[str, Any]], query: str) -> dict[str, Any] | None:
+    hits = _search_rows(rows, query, limit=1)
+    return hits[0] if hits else None
+
+
 def _card_search(tenant_id: str, query: str, families: set[str] | None, *, limit: int = 5) -> list[dict[str, Any]]:
     cards: list[TitleCard] = load_published_cards(tenant_id) + load_product_cards(tenant_id)
     hits = search_cards(cards, query, families=families, limit=limit)  # type: ignore[arg-type]
@@ -108,7 +113,7 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
 
     if name == "get_service":
         prices = _items(sections, "prices") or _items(sections, "services")
-        row = _match_id(prices, item_id) or (_search_rows(prices, query, limit=1)[:1] or [None])[0]
+        row = _match_id(prices, item_id) or _first_search_row(prices, query)
         if not row:
             hits = _card_search(tenant_id, item_id or query, {"services", "prices"}, limit=1)
             return {"ok": bool(hits), "data": hits[0] if hits else None, "error": None if hits else "not_found"}
@@ -128,7 +133,7 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
 
     if name == "get_product":
         products = _items(sections, "products")
-        row = _match_id(products, item_id) or (_search_rows(products, query, limit=1)[:1] or [None])[0]
+        row = _match_id(products, item_id) or _first_search_row(products, query)
         if not row:
             hits = _card_search(tenant_id, item_id or query, {"products"}, limit=1)
             return {"ok": bool(hits), "data": hits[0] if hits else None, "error": None if hits else "not_found"}
@@ -138,7 +143,8 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
         return {"ok": True, "data": _card_search(tenant_id, query, {"products"})}
 
     if name == "get_price":
-        prices_section = sections.get("prices") if isinstance(sections.get("prices"), dict) else {}
+        prices_raw = sections.get("prices")
+        prices_section = prices_raw if isinstance(prices_raw, dict) else {}
         catalog = _items(sections, "prices") or _items(sections, "services")
         entries = [
             row
@@ -220,7 +226,7 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
 
     if name == "get_branch":
         branches = _items(sections, "branches")
-        row = _match_id(branches, item_id) or (_search_rows(branches, query, limit=1)[:1] or [None])[0]
+        row = _match_id(branches, item_id) or _first_search_row(branches, query)
         if not row:
             return {"ok": False, "error": "not_found", "data": None}
         return {"ok": True, "data": _hours_from_branch(row)}
@@ -228,7 +234,7 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
     if name == "get_branch_hours":
         branches = _items(sections, "branches") or _items(sections, "opening_hours")
         if item_id or query:
-            row = _match_id(branches, item_id) or (_search_rows(branches, query or item_id, limit=1)[:1] or [None])[0]
+            row = _match_id(branches, item_id) or _first_search_row(branches, query or item_id)
             if not row:
                 hits = _card_search(tenant_id, query or item_id, {"hours", "branches"})
                 return {"ok": bool(hits), "data": hits, "error": None if hits else "not_found"}
@@ -272,7 +278,7 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
 
     if name == "get_contact":
         branches = _items(sections, "branches")
-        row = _match_id(branches, item_id) or (_search_rows(branches, query, limit=1)[:1] or [None])[0]
+        row = _match_id(branches, item_id) or _first_search_row(branches, query)
         if not row:
             return {"ok": False, "error": "not_found", "data": None}
         return {

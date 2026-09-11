@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from typing import Any
 
 from services.customer_ai.contracts.plan import PlannerPlan
@@ -39,7 +40,7 @@ def propose_tools_from_plan(plan: PlannerPlan, message: str) -> list[dict[str, A
 
 
 async def propose_tools_dynamic(
-    plan: PlannerPlan, message: str, *, coverage: dict[str, str] | None = None
+    plan: PlannerPlan, message: str, *, coverage: Mapping[str, str] | None = None
 ) -> list[dict[str, Any]]:
     """Bounded dynamic tool proposals. Falls back to plan map if LLM unavailable."""
     base = propose_tools_from_plan(plan, message)

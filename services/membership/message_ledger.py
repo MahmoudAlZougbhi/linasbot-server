@@ -7,6 +7,7 @@ Quantities are non-negative integer message units. Money is not stored here.
 from __future__ import annotations
 
 import threading
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -86,7 +87,7 @@ def _res_key(tenant_id: str, operation_id: str) -> str:
     return f"{tenant_id}:{operation_id}"
 
 
-def _pg_session():
+def _pg_session() -> AbstractContextManager[Any]:
     from services.membership.message_flags import message_billing_enabled
     from services.membership.pg_store import optional_message_session, postgres_requested
 

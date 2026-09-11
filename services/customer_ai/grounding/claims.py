@@ -47,7 +47,9 @@ def _is_factual(sentence: str) -> bool:
         return True
     if extract.clock_surfaces(sentence):
         return True
-    if extract.has_marker(markers, extract.STOCK_CLAIMS):
+    if extract.has_marker(markers, extract.STOCK_NEGATIVE_CLAIMS) or extract.has_marker(
+        markers, extract.STOCK_POSITIVE_CLAIMS
+    ):
         return True
     if extract.matched_pattern(markers, extract.BOOKING_CLAIM_PATTERNS):
         return True

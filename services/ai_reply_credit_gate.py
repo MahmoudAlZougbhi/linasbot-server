@@ -73,7 +73,14 @@ def reserve_before_ai(turn: AiReplyTurnRecord, *, credits: int = 1) -> str | Non
             channel="customer_ai_reply",
             extra={"operation_type": "customer_ai_reply", "candidate_ids": aliases},
         )
-        _pin(tenant_id, request_id, rid, turn.logical_reply_id, turn.external_inbound_id, turn.inbound_event_id)
+        _pin(
+            tenant_id,
+            *[
+                item
+                for item in (request_id, rid, turn.logical_reply_id, turn.external_inbound_id, turn.inbound_event_id)
+                if item
+            ],
+        )
         from services.membership.credit_reservation_index import record_open
 
         record_open(
@@ -143,7 +150,7 @@ def capture_after_reply_persisted(
                     turn.tenant_id,
                     turn.credit_reservation_id,
                     operation_id=logical_reply_id,
-                    extra_ids=(turn.external_inbound_id, turn.inbound_event_id),
+                    extra_ids=[item for item in (turn.external_inbound_id, turn.inbound_event_id) if item],
                 )
             except Exception:
                 pass
@@ -210,7 +217,7 @@ def release_on_ai_failure(logical_reply_id: str) -> dict[str, Any]:
             if held is not None:
                 aliases.append(held.operation_id)
                 aliases.extend(str(item or "") for item in (held.extra.get("candidate_ids") or []))
-            _unpin(turn.tenant_id, *aliases)
+            _unpin(turn.tenant_id, *[item for item in aliases if item])
             mark_closed(rid, state="released")
             upsert(
                 tenant_id=turn.tenant_id,

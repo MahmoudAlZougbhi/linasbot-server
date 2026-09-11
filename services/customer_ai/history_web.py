@@ -24,7 +24,9 @@ def rows_from_web_messages(messages: list[Any]) -> list[dict[str, Any]]:
                 "id": str(getattr(row, "id", None) or f"web:{index}"),
                 "role": "user" if role in {"user", "customer", "visitor"} else "assistant",
                 "text": str(getattr(row, "content", None) or getattr(row, "text", None) or "").strip(),
-                "timestamp": created.isoformat() if hasattr(created, "isoformat") else str(created or ""),
+                "timestamp": created.isoformat()
+                if created is not None and hasattr(created, "isoformat")
+                else str(created or ""),
                 "visible_to_customer": True,
             }
         )

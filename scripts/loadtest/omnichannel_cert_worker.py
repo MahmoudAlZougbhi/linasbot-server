@@ -15,7 +15,12 @@ from scripts.loadtest.omnichannel_cert_guards import assert_staging_cert_allowed
 
 
 async def _stub_generate(
-    *, channel: str, surface: str, tenant_id: str, payload: dict[str, Any]
+    *,
+    channel: str,
+    surface: str,
+    tenant_id: str,
+    payload: dict[str, Any],
+    conversation_key: str = "",
 ) -> tuple[str, str | None, str | None]:
     if channel == "tiktok" and surface == "dm":
         from services.omnichannel.gates import TIKTOK_DM_GATE_REASON, tiktok_dm_live_allowed
