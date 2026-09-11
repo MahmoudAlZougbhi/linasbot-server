@@ -159,3 +159,15 @@ Added: offline case bank (≥800), IR metrics, claim verifier, contradiction amo
 - Provider-backed E2E latency/cost p95
 - Production-scale DB/queue load
 - Real-customer Brain enablement (out of scope for this workstream)
+
+
+## 2026-09-11 — Permanent Brain + agentic runtime
+
+- Removed `CUSTOMER_BRAIN_ENABLED` from runtime/config/tests/docs. Brain is the only customer reply path.
+- Removed experimental tenant allowlist / lab runtime gate from `tenant_gate.py` (lab flag remains Owner Lab UI only).
+- Wired bounded agent loop: plan → multi-round retrieve → tools → coverage → generate → deterministic+critic verify → repair.
+- Customer-only tool registry (reads/actions); `get_availability` / booking tools explicitly unsupported.
+- Query rewrite + Arabizi/typo normalization; memory summary + semantic fact store; index health READY/STALE/FAILED on publish.
+- Photo inbound always Brain (legacy vision path deleted).
+- No production deploy / no merge to main in this change.
+

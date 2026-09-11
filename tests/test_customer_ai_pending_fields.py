@@ -127,7 +127,6 @@ def test_bind_dm_ids_uses_existing_ids_only() -> None:
 
 @pytest.mark.asyncio
 async def test_brain_dm_fails_closed_without_ids(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CUSTOMER_BRAIN_ENABLED", "true")
     from services.customer_ai.runtime import run_customer_ai_dm
 
     monkeypatch.setattr("services.customer_ai.runtime.assert_channel_plan_allowed", lambda *_a, **_k: None)

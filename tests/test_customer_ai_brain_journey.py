@@ -34,8 +34,8 @@ async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytes
             ],
         )
 
-    monkeypatch.setattr("services.customer_ai.turn_pipeline.plan_turn", fake_plan)
-    monkeypatch.setattr("services.customer_ai.turn_pipeline.retrieve_published", fake_retrieve)
+    monkeypatch.setattr("services.customer_ai.agent.loop.plan_turn", fake_plan)
+    monkeypatch.setattr("services.customer_ai.agent.multi_retrieve.retrieve_published", fake_retrieve)
     monkeypatch.setattr(
         "services.cm.setup_resources.index_published_resources",
         lambda _tid: {
@@ -86,7 +86,7 @@ async def test_booking_still_asks_confirmation(monkeypatch: pytest.MonkeyPatch) 
     async def _no_confirm(*_a, **_k):
         return None
 
-    monkeypatch.setattr("services.customer_ai.turn_pipeline.plan_turn", fake_plan)
+    monkeypatch.setattr("services.customer_ai.agent.loop.plan_turn", fake_plan)
     monkeypatch.setattr("services.customer_ai.turn_pipeline.try_confirm_pending", _no_confirm)
     monkeypatch.setattr("services.customer_ai.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
 
@@ -133,7 +133,7 @@ async def test_handoff_executes_receipt(monkeypatch: pytest.MonkeyPatch) -> None
     async def _no_confirm(*_a, **_k):
         return None
 
-    monkeypatch.setattr("services.customer_ai.turn_pipeline.plan_turn", fake_plan)
+    monkeypatch.setattr("services.customer_ai.agent.loop.plan_turn", fake_plan)
     monkeypatch.setattr("services.customer_ai.turn_pipeline.try_confirm_pending", _no_confirm)
     monkeypatch.setattr("services.customer_ai.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
 

@@ -5,7 +5,7 @@
 
 ## Critical fact
 
-With this branch deployed, `CUSTOMER_BRAIN_ENABLED=false` returns `engine_removed` (old Luna/Terra engine is gone).  
+With this branch deployed, `Customer Brain permanent (no enable flag)` returns `engine_removed` (old Luna/Terra engine is gone).  
 **Instant AI restore = redeploy the rollback tag**, not only flipping the flag off.  
 `EMERGENCY_LEGACY_REPLY_ENABLED` (default **false**) does **not** restore Luna/Terra — it fails closed with `emergency_legacy_unavailable`.
 
@@ -13,9 +13,9 @@ With this branch deployed, `CUSTOMER_BRAIN_ENABLED=false` returns `engine_remove
 
 ## Flag matrix (deploy gate)
 
-| `CUSTOMER_BRAIN_ENABLED` | `EMERGENCY_LEGACY_REPLY_ENABLED` | Customer outcome | Luna/Terra? |
+| Brain permanent | `EMERGENCY_LEGACY_REPLY_ENABLED` | Customer outcome | Luna/Terra? |
 | --- | --- | --- | --- |
-| `false` | `false` (default) | `engine_removed`, no reply | No |
+| always on | `false` (default) | Brain fail-closed if not ready | No |
 | `false` | `true` | `emergency_legacy_unavailable`, no reply | No |
 | `true` | any | Brain runtime (subject to tenant + index gates) | No |
 
@@ -27,9 +27,9 @@ Helper: `services.customer_ai.flags.assert_safe_brain_cutover()` →
 - [ ] Confirm live prod SHA is recorded (should match rollback tag if prod was on `main` @ `0f23bcf1`).
 - [ ] **Secrets (GitHub Actions — already set for the Linas live window; do not paste keys):**
   - `OPENAI_API_KEY` / `VOYAGE_API_KEY` present
-  - `CUSTOMER_BRAIN_ENABLED=true`
+  - `Customer Brain permanent`
   - `LINAS_CUSTOMER_AI_LAB=true`
-  - `CUSTOMER_BRAIN_TENANT_ALLOWLIST=linas`
+  - `tenant gates: plan/channel only`
   - `EMERGENCY_LEGACY_REPLY_ENABLED=false`
   - `MESSAGE_BILLING_CUTOVER=false` (commerce stays off)
   - After merge/deploy, sync the same flag values onto both prod nodes (`scripts/prod_apply_customer_brain_flags.sh` via the HA two-node env path). GitHub Secrets alone do not rewrite `/opt/linasbot/.env`.
@@ -40,7 +40,7 @@ Helper: `services.customer_ai.flags.assert_safe_brain_cutover()` →
 ## 1) Deploy branch (Brain still OFF)
 
 - [ ] Merge/deploy `cleanup/ai-setup-runtime` to production.
-- [ ] Leave `CUSTOMER_BRAIN_ENABLED=false` and `LINAS_CUSTOMER_AI_LAB=false` for first smoke.
+- [ ] Leave `Customer Brain permanent (no enable flag)` and `LINAS_CUSTOMER_AI_LAB=false` for first smoke.
 - [ ] Smoke: app boots, Owner Portal loads, Meta webhooks still received.
 - [ ] Run Alembic to expected head `20260910_req_web_chat` if not already applied.
 - [ ] Confirm `CREATE EXTENSION vector` / customer AI search migration (`20260910_cust_ai_search`) applied where pgvector is available.
@@ -60,7 +60,6 @@ Helper: `services.customer_ai.flags.assert_safe_brain_cutover()` →
 
 Before real-customer Brain:
 
-- [ ] `CUSTOMER_BRAIN_TENANT_ALLOWLIST` set, **or** default allowlist includes `linas`.
 - [ ] Lab tenants (`lab` / `lab_*`) only when `LINAS_CUSTOMER_AI_LAB=true`.
 - [ ] Non-allowlist non-lab tenants are **always** fail-closed (`brain_gates_incomplete` / `not_allowlisted`). `activation_readiness.testing_ready` is import-only and must **not** unlock other customers.
 
@@ -70,9 +69,7 @@ On production env only after steps 1–3. **Flip flags via GitHub Secrets → ap
 
 | Flag / secret | Action after smoke |
 | --- | --- |
-| `CUSTOMER_BRAIN_ENABLED` | set GitHub secret / prod env → `true` |
 | `LINAS_CUSTOMER_AI_LAB` | set GitHub secret / prod env → `true` (create secret if missing) |
-| `CUSTOMER_BRAIN_TENANT_ALLOWLIST` | optional; code default includes `linas` |
 | `EMERGENCY_LEGACY_REPLY_ENABLED` | leave unset/`false` |
 | `OPENAI_API_KEY` | **already in GitHub Secrets** — sync to nodes if needed; do not re-enter |
 | `VOYAGE_API_KEY` | **already in GitHub Secrets** — sync to nodes if needed; do not re-enter |
@@ -105,7 +102,7 @@ Then:
 3. Confirm inbound Meta/WA replies work on the previous engine.
 4. Keep fixing on `cleanup/ai-setup-runtime` offline; re-attempt deploy later.
 
-**Do not rely on** `CUSTOMER_BRAIN_ENABLED=false` alone to restore old AI on this branch.  
+**Do not rely on** `Customer Brain permanent (no enable flag)` alone to restore old AI on this branch.  
 **Do not rely on** `EMERGENCY_LEGACY_REPLY_ENABLED=true` — it is fail-closed, not an answering engine.
 
 ## 6) After a good live window

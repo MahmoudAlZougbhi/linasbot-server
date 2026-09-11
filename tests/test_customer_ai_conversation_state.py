@@ -196,7 +196,7 @@ async def test_request_confirm_survives_next_turn(monkeypatch: pytest.MonkeyPatc
             tasks=[PlannerTask(id="book", type="service_request", span=TaskSpan(text=text))],
         )
 
-    monkeypatch.setattr("services.customer_ai.turn_pipeline.plan_turn", plan)
+    monkeypatch.setattr("services.customer_ai.agent.loop.plan_turn", plan)
 
     first = CustomerTurn(tenant_id="t1", conversation_id="c-book", event_ids=["m1"])
     staged = await run_dm_after_gates(first, message="book laser", channel="instagram_dm")

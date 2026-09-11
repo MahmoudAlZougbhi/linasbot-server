@@ -11,7 +11,6 @@ Do **not** paste secret values into tickets, chat, commits, or logs. Mark each i
 | `WHATSAPP_API_TOKEN` | WhatsApp Cloud outbound | Required for Meta Cloud template/session send |
 | `OPENAI_API_KEY` | LLM | Required; readiness checks presence only |
 | `VOYAGE_API_KEY` | Customer Brain embed/rerank | Required before enabling Customer Brain semantic search; never reuse the OpenAI key |
-| `CUSTOMER_BRAIN_ENABLED` | Customer Brain runtime | Default off. Do not enable for live customers until the acceptance gate passes |
 | `MESSAGE_BILLING_ENABLED` | Message ledger gate | Default off. Keep credit gates until cutover is approved |
 | `MESSAGE_BILLING_CUTOVER` | Public/checkout message offer | Default off. Do not sell unmapped message prices |
 | `FREE_PLAN_ENFORCEMENT_ENABLED` | Free slot/content caps | Default off until section-2 Free values exist |

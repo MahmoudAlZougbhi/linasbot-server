@@ -190,7 +190,6 @@ async def test_flag_on_exact_faq_is_deterministic(monkeypatch: pytest.MonkeyPatc
     from services.customer_ai.gates import GateDecision
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 
-    monkeypatch.setenv("CUSTOMER_BRAIN_ENABLED", "true")
     monkeypatch.setattr(
         "services.customer_ai.runtime.evaluate_gates",
         lambda turn, apply_credits=True, message="": GateDecision(True, "ok"),

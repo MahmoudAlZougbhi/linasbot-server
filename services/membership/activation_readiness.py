@@ -185,8 +185,8 @@ def activation_readiness() -> dict[str, Any]:
         "blockers": blockers,
         "note": (
             "testing_ready means Brain/admin code paths import and are ready for staging lab tests "
-            "with LINAS_CUSTOMER_AI_LAB + CUSTOMER_BRAIN_ENABLED on a non-customer tenant. "
+            "with LINAS_CUSTOMER_AI_LAB (Owner Lab page) on a non-customer tenant. "
             "ready_to_enable stays false until commercial/live verification blockers clear. "
-            "This report never enables CUSTOMER_BRAIN_ENABLED or message billing."
+            "This report never enables message billing."
         ),
     }

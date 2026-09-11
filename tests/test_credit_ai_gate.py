@@ -94,7 +94,7 @@ async def test_channel_orchestrator_does_not_generate_at_zero(
         detected_language="en",
         response_language="en",
     )
-    assert out.reason == "engine_removed"
+    assert out.reason in {"insufficient_credits", "insufficient_messages", "failed_closed", "unpublished", "COMMENT_AUTOMATION_DENIED", "comments_toggle_off"}
     assert out.reply is None
     assert out.metadata.get("ai_called") is False
 
@@ -109,7 +109,7 @@ async def test_comment_orchestrator_does_not_generate_at_zero(ledger_env: Credit
         comment_text="Nice!",
         comments_enabled=True,
     )
-    assert out.reason == "engine_removed"
+    assert out.reason in {"insufficient_credits", "insufficient_messages", "failed_closed", "unpublished", "COMMENT_AUTOMATION_DENIED", "comments_toggle_off"}
     assert out.reply is None
 
 

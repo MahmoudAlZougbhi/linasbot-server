@@ -54,7 +54,7 @@ export default function OwnerActivationBanner() {
           : ''}
       </p>
       <p className="mt-1 opacity-80">
-        For lab turns set LINAS_CUSTOMER_AI_LAB=true and CUSTOMER_BRAIN_ENABLED=true on staging only.
+        For lab turns set LINAS_CUSTOMER_AI_LAB=true on staging only (Customer Brain is permanent).
         Pending provider events attribute to tenant_id; known_usd stays 0 until invoice finalization.
       </p>
       <p className="mt-1 opacity-80">

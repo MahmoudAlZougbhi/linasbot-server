@@ -10,7 +10,7 @@ from services.cm.schemas import CommentRule, CommentsSection
 from services.customer_ai.comment_normalize import normalize_comment_mode
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
 from services.customer_ai.contracts.turn import CustomerTurn
-from services.customer_ai.flags import customer_brain_enabled
+from services.customer_ai.flags import flags_snapshot
 from services.customer_ai.history import build_history_snapshot
 from services.customer_ai.precedence import wins
 from services.customer_ai.providers.spaces import ENTITY_DOCUMENT, ENTITY_QUERY, KNOWLEDGE_DOCUMENT, compatible
@@ -20,8 +20,7 @@ from services.customer_reply_v2.orchestrator import run_customer_reply_v2_commen
 
 
 def test_brain_flag_defaults_off(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CUSTOMER_BRAIN_ENABLED", raising=False)
-    assert customer_brain_enabled() is False
+    assert flags_snapshot()["brain_permanent"] is True
 
 
 def test_customer_turn_rejects_unknown_fields() -> None:
@@ -168,13 +167,11 @@ def test_search_readiness_without_voyage_is_typed(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
-async def test_facade_flag_off_still_engine_removed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CUSTOMER_BRAIN_ENABLED", raising=False)
-    out = await run_customer_reply_v2_dm(tenant_id="t1", message="hello")
-    assert out.reason == ENGINE_REMOVED
-    assert out.metadata.get("ai_called") is False
-    comment = await run_customer_reply_v2_comment(tenant_id="t1", comment_text="nice")
-    assert comment.reason == ENGINE_REMOVED
+async def test_facade_always_brain_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    out = await run_customer_reply_v2_dm(tenant_id="t1", message="hello", conversation_id="c1", message_id="m1")
+    # Permanent Brain: never engine_removed from a missing enable flag.
+    assert out.reason != ENGINE_REMOVED
+    assert (out.metadata or {}).get("customer_engine", "brain") == "brain"
 
 
 @pytest.mark.asyncio
@@ -184,8 +181,7 @@ async def test_lab_turn_echoes_ids_and_receipts(monkeypatch: pytest.MonkeyPatch)
     from services.customer_ai.test_lab import run_lab_turn
 
     monkeypatch.setenv("LINAS_CUSTOMER_AI_LAB", "true")
-    monkeypatch.setenv("CUSTOMER_BRAIN_ENABLED", "true")
-
+    
     async def fake_dm(**_kwargs):
         return SimpleNamespace(
             reply="ok",

@@ -43,7 +43,7 @@ export default function OwnerLab() {
       if (result?.ok === false) {
         const reason = String(result.reason || 'lab_turn_failed');
         if (reason === 'brain_disabled') {
-          setError('Brain disabled: set CUSTOMER_BRAIN_ENABLED=true and LINAS_CUSTOMER_AI_LAB=true on staging.');
+          setError('Lab API disabled: set LINAS_CUSTOMER_AI_LAB=true (Brain is always on).');
         } else if (reason === 'lab_disabled') {
           setError('Lab API disabled: set LINAS_CUSTOMER_AI_LAB=true on staging.');
         } else {
@@ -102,7 +102,7 @@ export default function OwnerLab() {
       <header>
         <h2 className="text-2xl font-semibold">Customer Brain lab</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Capture-only verification lab. Requires LINAS_CUSTOMER_AI_LAB=true and CUSTOMER_BRAIN_ENABLED=true on
+          Capture-only verification lab. Requires LINAS_CUSTOMER_AI_LAB=true on
           staging, plus a lab / lab_* tenant. No live channel send or real-customer billing. Force reindex needs
           published CM content. Use verification exercises for confirmation copy, index readiness, and retrieval
           outcomes without billing customers.

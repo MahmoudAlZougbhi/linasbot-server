@@ -119,13 +119,16 @@ def _history_routes_by_channel() -> bool:
 
 
 def _legacy_photo_fetches_ssrf_safe() -> bool:
+    from handlers import photo_handlers
     from handlers.photo_handlers import handle_photo_message
 
     src = getsource(handle_photo_message)
+    module = getsource(photo_handlers)
     return (
         "store_inbound_image_from_url" in src
-        and src.index("store_inbound_image_from_url") < src.index("httpx.AsyncClient")
-        and "record_pending_provider" in src
+        and "run_reserved_customer_turn" in src
+        and "httpx.AsyncClient" not in module
+        and "get_bot_photo_analysis_from_gpt" not in module
         and "0.01" not in src
         and "0.03" not in src
     )

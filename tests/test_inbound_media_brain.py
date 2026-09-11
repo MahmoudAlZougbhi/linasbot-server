@@ -199,13 +199,13 @@ def test_whatsapp_photo_and_voice_stamp_inbound_media() -> None:
     assert "settle_after_outbound" in phase2
     assert "settle_reserved_credits" in phase2
     photo = getsource(photo_handlers.handle_photo_message)
-    assert "customer_brain_enabled()" in photo
+    assert "run_reserved_customer_turn" in photo or "_process_and_respond" in photo
     assert "_process_and_respond" in photo
     assert "run_reserved_customer_turn" in photo
     assert "wrap_tracked_send" in photo
     assert "store_inbound_image_from_url" in photo
     assert "store_inbound_image_base64" in photo
-    assert "get_bot_photo_analysis_from_gpt" in getsource(photo_handlers)
+    assert "get_bot_photo_analysis_from_gpt" not in getsource(photo_handlers)
     from services.whatsapp_cloud import ai_bridge
 
     wa = getsource(ai_bridge.maybe_generate_and_send_ai_reply)

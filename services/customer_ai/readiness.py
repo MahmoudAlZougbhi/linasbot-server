@@ -14,7 +14,6 @@ def _flag(name: str) -> bool:
 def brain_readiness_report(*, tenant_id: str = "linas") -> dict[str, Any]:
     from services.customer_ai.flags import (
         assert_safe_brain_cutover,
-        customer_brain_enabled,
         emergency_legacy_reply_enabled,
         voyage_configured,
     )
@@ -28,15 +27,15 @@ def brain_readiness_report(*, tenant_id: str = "linas") -> dict[str, Any]:
     checks: dict[str, bool] = {
         "openai_configured": openai_configured(),
         "voyage_configured": voyage_configured(),
-        "brain_flag_readable": True,
-        "brain_enabled": customer_brain_enabled(),
-        "lab_enabled": _flag("LINAS_CUSTOMER_AI_LAB"),
+        "brain_permanent": True,
+        "lab_page_flag": _flag("LINAS_CUSTOMER_AI_LAB"),
         "billing_cutover_off": not _flag("MESSAGE_BILLING_CUTOVER"),
         "emergency_legacy_off": not emergency_legacy_reply_enabled(),
         "tenant_gate_allow": bool(gate.get("allow")),
         "search_ready": bool(search.ready),
         "rollback_tag_documented": True,
-        "luna_terra_not_restored_on_flag_off": cutover.get("luna_terra_restored") is False,
+        "luna_terra_not_restored": cutover.get("luna_terra_restored") is False,
+        "enable_flag_removed": True,
     }
     try:
         from services.customer_ai.evals.artifacts import latest_offline_artifact
@@ -47,8 +46,11 @@ def brain_readiness_report(*, tenant_id: str = "linas") -> dict[str, Any]:
         artifact = None
         checks["latest_eval_artifact"] = False
 
-    blockers = [name for name, ok in checks.items() if not ok and name not in {"brain_enabled", "lab_enabled"}]
-    # brain/lab may be intentionally off; they are status, not blockers for the readiness tool itself.
+    blockers = [
+        name
+        for name, ok in checks.items()
+        if not ok and name not in {"lab_page_flag", "search_ready", "latest_eval_artifact"}
+    ]
     return {
         "ok": all(
             checks[k]
@@ -57,8 +59,9 @@ def brain_readiness_report(*, tenant_id: str = "linas") -> dict[str, Any]:
                 "voyage_configured",
                 "billing_cutover_off",
                 "emergency_legacy_off",
-                "luna_terra_not_restored_on_flag_off",
-                "rollback_tag_documented",
+                "luna_terra_not_restored",
+                "enable_flag_removed",
+                "brain_permanent",
             )
         ),
         "tenant_id": tenant_id,
@@ -79,7 +82,7 @@ def brain_readiness_report(*, tenant_id: str = "linas") -> dict[str, Any]:
             "tag": "rollback/pre-brain-2026-09-11",
             "sha": "0f23bcf1d35886acec5dbf53eb1af2faf2734757",
         },
-        "note": "Read-only. Does not enable Brain or print secrets.",
+        "note": "CUSTOMER_BRAIN_ENABLED removed. Brain is permanent. Read-only; no secrets printed.",
     }
 
 

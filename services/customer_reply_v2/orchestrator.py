@@ -1,10 +1,9 @@
-"""Customer DM reply facade. Delegates to Customer Brain when enabled."""
+"""Customer DM reply facade — always Customer Brain (permanent runtime)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from services.customer_ai.brain_off import brain_off_outcome
 from services.customer_reply_v2.models import CustomerReplyOutcome
 
 
@@ -31,12 +30,9 @@ async def run_customer_reply_v2_dm(
     apply_customer_usage_limits: bool = True,
     followup_goal: str = "",
 ) -> CustomerReplyOutcome:
-    """Stable entry point for all DM channels."""
-    from services.customer_ai.flags import customer_brain_enabled
+    """Stable entry point for all DM channels — Brain only, no enable flag."""
     from services.customer_ai.runtime import run_customer_ai_dm
 
-    if not customer_brain_enabled():
-        return brain_off_outcome()
     return await run_customer_ai_dm(
         tenant_id=tenant_id,
         message=message,

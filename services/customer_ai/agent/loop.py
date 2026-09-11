@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from services.customer_ai.actions.pending import attach_confirmation
-from services.customer_ai.agent.finalize import generate_verified
+from services.customer_ai.agent.generate_path import generate_verified
 from services.customer_ai.agent.multi_retrieve import multi_round_retrieve
 from services.customer_ai.agent.rewrite import rewrite_queries
 from services.customer_ai.agent.task_coverage import evaluate_task_coverage, missing_tasks
@@ -16,6 +16,7 @@ from services.customer_ai.contracts.enums import StopReason
 from services.customer_ai.contracts.plan import PlannerPlan
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.customer_ai.contracts.turn import CustomerTurn
+from services.customer_ai.memory.store import recall_facts
 from services.customer_ai.memory.summary import rolling_summary
 from services.customer_ai.planner.openai_plan import plan_turn
 from services.customer_ai.stage_timeline import StageTimer, evidence_preview, stamp
@@ -41,7 +42,14 @@ def _flow_extra(extra: dict | None, *rows: tuple[str, str, dict | None]) -> dict
 def _history_blob(turn: CustomerTurn) -> str:
     visible = "\n".join(f"{item.role}: {item.text}" for item in turn.history.messages)
     older = rolling_summary(turn.history.messages, visible_cap=DEFAULT_BUDGETS.history_visible_cap)
-    return f"{older}\n{visible}".strip() if older else visible
+    memory = recall_facts(
+        tenant_id=turn.tenant_id,
+        customer_id=turn.customer_id or "",
+        limit=8,
+    )
+    mem_lines = [f"memory:{row.get('key')}={row.get('value')}" for row in memory if row.get("key")]
+    parts = [p for p in (older, visible, "\n".join(mem_lines)) if p]
+    return "\n".join(parts).strip()
 
 
 def _stop_from_outcome(outcome: str) -> StopReason:
@@ -112,7 +120,11 @@ async def _maybe_tool_calls(
             trace.append({"step": "TOOL", "reason": "budget_exhausted", "tool_calls": used})
             break
         name = ""
-        args: dict[str, Any] = {"query": task.span.text or message, "task_id": task.id, "customer_text": message}
+        args: dict[str, Any] = {
+            "query": task.span.text or message,
+            "task_id": task.id,
+            "customer_text": message,
+        }
         if task.type == "hours":
             name = "get_branch_hours"
         elif task.type == "information" and any(f in {"prices", "services"} for f in task.source_families):
@@ -358,10 +370,10 @@ async def run_agentic_dm_path(
     channel: str,
     flow_base: dict[str, Any] | None = None,
     visual_reason: str = "",
-    plan: PlannerPlan | None = None,
 ) -> TurnResult:
-    """Entry used by turn_pipeline after FAQ / greeting / visual / confirm paths."""
-    task_text = message
+    from services.customer_ai.turn_pipeline import inbound_task_text
+
+    task_text = inbound_task_text(turn, message)
     rewritten = await rewrite_queries(task_text, list(turn.history.messages), _response_language(turn))
     if rewritten.get("rewritten") and rewritten["rewritten"].strip() != task_text.strip():
         task_text = rewritten["rewritten"]
@@ -369,32 +381,26 @@ async def run_agentic_dm_path(
             flow_base,
             ("context", "Resolved follow-up using recent conversation", {"variants": rewritten.get("variants")}),
         )
-    active_plan = plan
-    if active_plan is None:
-        plan_timer = StageTimer()
-        active_plan = await plan_turn(
-            task_text,
-            _history_blob(turn),
-            tenant_id=turn.tenant_id,
-            operation_id=operation_id_for_turn(turn),
-        )
-        flow_base = _flow_extra(
-            flow_base,
-            (
-                "plan",
-                "Understood the customer request",
-                {
-                    "ms": plan_timer.ms(),
-                    "plan_tasks": [{"id": task.id, "type": task.type} for task in active_plan.tasks],
-                },
-            ),
-        )
+    plan_timer = StageTimer()
+    plan = await plan_turn(
+        task_text,
+        _history_blob(turn),
+        tenant_id=turn.tenant_id,
+        operation_id=operation_id_for_turn(turn),
+    )
+    flow_base = _flow_extra(
+        flow_base,
+        (
+            "plan",
+            "Understood the customer request",
+            {"ms": plan_timer.ms(), "plan_tasks": [{"id": task.id, "type": task.type} for task in plan.tasks]},
+        ),
+    )
     return await run_agentic_turn(
         turn,
         task_text,
         channel,
-        _destination(channel),
-        plan=active_plan,
+        plan=plan,
         flow_extra=flow_base,
-        visual_reason=visual_reason or str((flow_base or {}).get("visual") or ""),
+        visual_reason=visual_reason,
     )

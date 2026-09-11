@@ -12,7 +12,6 @@ from services.customer_reply_v2.models import ENGINE_REMOVED
 
 @pytest.mark.asyncio
 async def test_comment_ai_loads_history_and_parent(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CUSTOMER_BRAIN_ENABLED", "true")
     loaded: dict[str, str] = {}
 
     async def fake_history(**kwargs):
@@ -73,7 +72,6 @@ async def test_comment_ai_loads_history_and_parent(monkeypatch: pytest.MonkeyPat
 
 @pytest.mark.asyncio
 async def test_comment_gate_blocks_lite_like_meta(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CUSTOMER_BRAIN_ENABLED", "true")
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
     monkeypatch.delenv("FREE_PLAN_ENFORCEMENT_ENABLED", raising=False)
     from services.entitlements_service import entitlements_store
@@ -108,7 +106,6 @@ async def test_comment_gate_blocks_lite_like_meta(monkeypatch: pytest.MonkeyPatc
 
 @pytest.mark.asyncio
 async def test_whatsapp_brain_blocks_lite(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CUSTOMER_BRAIN_ENABLED", "true")
     from services.entitlements_service import entitlements_store
     from services.customer_ai.runtime import run_customer_ai_dm
 
@@ -131,7 +128,6 @@ async def test_whatsapp_brain_blocks_lite(monkeypatch: pytest.MonkeyPatch) -> No
 
 @pytest.mark.asyncio
 async def test_followup_gate_waits_for_enforcement_flag(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CUSTOMER_BRAIN_ENABLED", "true")
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
     monkeypatch.delenv("FREE_PLAN_ENFORCEMENT_ENABLED", raising=False)
     from services.entitlements_service import entitlements_store
@@ -236,14 +232,13 @@ async def test_meta_generate_passes_comment_ids(monkeypatch: pytest.MonkeyPatch)
     assert captured["comment_context"]["conversation_id"].startswith("comment:t1:instagram:")
 
 
-def test_flag_off_comment_still_engine_removed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CUSTOMER_BRAIN_ENABLED", raising=False)
+def test_comment_path_is_permanent_brain(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
 
     from services.customer_ai.runtime import run_customer_ai_comment
 
-    outcome = asyncio.run(run_customer_ai_comment(tenant_id="x", comment_text="hi"))
-    assert outcome.reason == ENGINE_REMOVED
+    outcome = asyncio.run(run_customer_ai_comment(tenant_id="x", comment_text="hi", comment_id="m1"))
+    assert outcome.reason != ENGINE_REMOVED
 
 
 def test_manual_comment_mode_is_zero_units() -> None:

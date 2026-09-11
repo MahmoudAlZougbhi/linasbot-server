@@ -18,12 +18,6 @@ from storage.persistent_storage import (
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Customer Brain retrieval (Voyage). Do not reuse OPENAI_API_KEY for embeddings.
 VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
-CUSTOMER_BRAIN_ENABLED = os.getenv("CUSTOMER_BRAIN_ENABLED", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
 MESSAGE_BILLING_ENABLED = os.getenv("MESSAGE_BILLING_ENABLED", "").strip().lower() in {
     "1",
     "true",

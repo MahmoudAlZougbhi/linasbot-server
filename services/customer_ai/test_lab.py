@@ -27,11 +27,8 @@ async def run_lab_turn(
 ) -> dict[str, Any]:
     if not lab_enabled():
         return {"ok": False, "reason": "lab_disabled"}
-    from services.customer_ai.flags import customer_brain_enabled
     from services.customer_ai.runtime import run_customer_ai_dm
 
-    if not customer_brain_enabled():
-        return {"ok": False, "reason": "brain_disabled"}
     inbound_id = message_id or f"lab:{conversation_id}:{len(history or [])}"
     channel_name = channel or "web_chat"
     meta: dict[str, Any] = {}

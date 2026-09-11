@@ -1,4 +1,4 @@
-"""Customer Brain turn entry. Flag-off keeps the removed-engine contract."""
+"""Customer Brain turn entry. Brain is the permanent customer reply runtime."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from typing import Any
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.customer_ai.contracts.turn import CustomerTurn, MediaView
 from services.customer_ai.control import apply_live_control
-from services.customer_ai.flags import customer_brain_enabled
 from services.customer_ai.gates import evaluate_gates
 from services.customer_ai.comments.pipeline import deterministic_comment_result, winning_comment_mode
 from services.customer_ai.history_store import load_history_snapshot
@@ -17,7 +16,7 @@ from services.customer_ai.history_ids import bind_dm_ids, comment_conversation_i
 from services.customer_ai.billing import apply_message_billing, operation_id_for_turn
 from services.customer_ai.channel_plan import assert_channel_plan_allowed, denied_code
 from services.customer_ai.turn_pipeline import run_dm_after_gates
-from services.customer_reply_v2.models import ENGINE_REMOVED, CustomerReplyOutcome
+from services.customer_reply_v2.models import CustomerReplyOutcome
 
 
 def _outcome(result: TurnResult, *, comment_surface: bool = False) -> CustomerReplyOutcome:
@@ -38,7 +37,7 @@ def _outcome(result: TurnResult, *, comment_surface: bool = False) -> CustomerRe
         metadata={
             "ai_called": result.ai_called,
             "cost_status": "none" if not result.ai_called else "tracked",
-            "customer_engine": "brain" if customer_brain_enabled() else "removed",
+            "customer_engine": "brain",
             "outbound_messages": [item.model_dump() for item in result.envelope.messages],
             "public_comment_text": result.envelope.public_comment_text,
             "private_dm_text": result.envelope.private_dm_text,
@@ -46,16 +45,6 @@ def _outcome(result: TurnResult, *, comment_surface: bool = False) -> CustomerRe
             "operation_id": result.extra.get("operation_id") or "",
         },
     )
-
-
-def _disabled(reason: str = ENGINE_REMOVED) -> TurnResult:
-    from services.customer_ai.flags import emergency_legacy_reply_enabled
-
-    if reason == ENGINE_REMOVED and emergency_legacy_reply_enabled():
-        return TurnResult(stop_reason="emergency_legacy_unavailable")
-    if reason == ENGINE_REMOVED:
-        return TurnResult(stop_reason="engine_removed")
-    return TurnResult(stop_reason="brain_disabled")
 
 
 def _destination_for(turn: CustomerTurn, channel: str) -> str:
@@ -172,8 +161,6 @@ async def run_customer_ai_dm(
     followup_goal: str = "",
     **_kwargs: Any,
 ) -> CustomerReplyOutcome:
-    if not customer_brain_enabled():
-        return _outcome(_disabled())
     from services.customer_ai.tenant_gate import evaluate_brain_tenant_gate
 
     gate_tenant = evaluate_brain_tenant_gate(tenant_id)
@@ -181,7 +168,7 @@ async def run_customer_ai_dm(
         return CustomerReplyOutcome(
             stop=True,
             reply=None,
-            reason=str(gate_tenant.get("reason") or "brain_gates_incomplete"),
+            reason=str(gate_tenant.get("reason") or "missing_tenant"),
             evidence_status="policy_stop",
             metadata={
                 "ai_called": False,
@@ -250,8 +237,6 @@ async def run_customer_ai_comment(
 ) -> CustomerReplyOutcome:
     if not comments_enabled:
         return CustomerReplyOutcome(stop=True, reason="comments_toggle_off", reply=None)
-    if not customer_brain_enabled():
-        return _outcome(_disabled())
     from services.customer_ai.tenant_gate import evaluate_brain_tenant_gate
 
     gate_tenant = evaluate_brain_tenant_gate(tenant_id)
@@ -259,7 +244,7 @@ async def run_customer_ai_comment(
         return CustomerReplyOutcome(
             stop=True,
             reply=None,
-            reason=str(gate_tenant.get("reason") or "brain_gates_incomplete"),
+            reason=str(gate_tenant.get("reason") or "missing_tenant"),
             evidence_status="policy_stop",
             metadata={
                 "ai_called": False,

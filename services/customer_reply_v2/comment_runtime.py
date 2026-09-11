@@ -1,4 +1,4 @@
-"""Customer comment reply facade. Delegates to Customer Brain when enabled."""
+"""Customer comment reply facade — always Customer Brain."""
 
 from __future__ import annotations
 
@@ -30,15 +30,10 @@ async def run_customer_reply_v2_comment(
     comment_id: str = "",
     post_id: str = "",
 ) -> CustomerReplyOutcome:
-    from services.customer_ai.flags import customer_brain_enabled
     from services.customer_ai.runtime import run_customer_ai_comment
 
     if not comments_enabled:
         return CustomerReplyOutcome(stop=True, reason="comments_toggle_off", reply=None)
-    if not customer_brain_enabled():
-        from services.customer_ai.brain_off import brain_off_outcome
-
-        return brain_off_outcome()
     context = comment_context if isinstance(comment_context, dict) else {}
     from services.customer_ai.history_ids import conversation_id_for_brain
 

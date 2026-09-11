@@ -250,6 +250,28 @@ async def publish_draft_sections(
     except Exception as exc:
         index_result = {"ready": False, "reason": f"index_schedule_failed:{type(exc).__name__}", "count": 0}
 
+    try:
+        from services.customer_ai.search.index_status import resolve_health, set_index_status
+
+        health = resolve_health(
+            content_version=content_version_id,
+            index_version=str(index_result.get("version") or index_version_id or ""),
+            indexing=bool(index_result.get("indexing")),
+            failed=not bool(index_result.get("ready")),
+        )
+        if index_result.get("ready"):
+            health = "READY"
+        set_index_status(
+            tid,
+            status=health,
+            content_version=content_version_id,
+            index_version=str(index_result.get("version") or index_version_id or ""),
+            reason=str(index_result.get("reason") or ""),
+        )
+        index_result = {**index_result, "health": health}
+    except Exception:
+        pass
+
     return PublishResult(
         tenant_id=tid,
         content_version_id=content_version_id,

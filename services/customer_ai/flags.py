@@ -1,4 +1,4 @@
-"""Customer Brain enablement. Default off — not a live-customer switch."""
+"""Customer Brain flags. Brain is the permanent customer reply runtime (no enable flag)."""
 
 from __future__ import annotations
 
@@ -18,17 +18,8 @@ def env_flag(name: str, *, default: bool = False) -> bool:
     return default
 
 
-def customer_brain_enabled() -> bool:
-    return env_flag("CUSTOMER_BRAIN_ENABLED")
-
-
 def emergency_legacy_reply_enabled() -> bool:
-    """Temporary documented switch. Default false.
-
-    Never restores Luna/Terra. When Brain is OFF and this is true, the runtime
-    still fails closed with ``emergency_legacy_unavailable``. Honest AI restore
-    is redeploy of rollback tag ``rollback/pre-brain-2026-09-11`` → ``0f23bcf1``.
-    """
+    """Documented emergency switch. Default false. Never restores Luna/Terra."""
     return env_flag("EMERGENCY_LEGACY_REPLY_ENABLED")
 
 
@@ -49,42 +40,31 @@ def voyage_configured() -> bool:
 
 
 def assert_safe_brain_cutover() -> dict[str, Any]:
-    """Hard deploy gate matrix. Emergency legacy stays false by default."""
-    brain_on = customer_brain_enabled()
+    """Brain is permanent on this branch. Code rollback is the only AI restore path."""
     emergency = emergency_legacy_reply_enabled()
     return {
-        "brain_on": brain_on,
-        "brain_off": not brain_on,
+        "customer_engine": "brain",
+        "brain_permanent": True,
+        "enable_flag_removed": True,
         "emergency_legacy": emergency,
         "emergency_legacy_default": False,
-        "rollback_required_when_brain_off": True,
+        "luna_terra_restored": False,
+        "rollback_required_to_leave_brain": True,
         "rollback_tag": "rollback/pre-brain-2026-09-11",
         "rollback_sha": "0f23bcf1d35886acec5dbf53eb1af2faf2734757",
-        "luna_terra_restored": False,
-        "safe_to_leave_brain_off_without_rollback": False,
-        "flag_off_stop_reason": (
-            "emergency_legacy_unavailable" if emergency else "engine_removed"
-        ),
         "note": (
-            "Brain OFF does not restore Luna/Terra on this branch. "
-            "Redeploy the rollback tag to restore pre-Brain AI."
+            "CUSTOMER_BRAIN_ENABLED was removed. Customer Brain is the only customer reply "
+            "engine. Redeploy the rollback tag to restore pre-Brain code; flag tricks cannot."
         ),
     }
 
 
 def flags_snapshot() -> dict[str, Any]:
     cutover = assert_safe_brain_cutover()
-    try:
-        from services.customer_ai.tenant_gate import gate_snapshot
-
-        gates = gate_snapshot()
-    except Exception:
-        gates = {}
     return {
-        "customer_brain_enabled": customer_brain_enabled(),
-        "emergency_legacy_reply_enabled": emergency_legacy_reply_enabled(),
         "voyage_configured": voyage_configured(),
-        "customer_engine": "brain" if customer_brain_enabled() else "removed",
+        "emergency_legacy_reply_enabled": emergency_legacy_reply_enabled(),
+        "customer_engine": "brain",
+        "brain_permanent": True,
         "cutover": cutover,
-        **gates,
     }

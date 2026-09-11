@@ -1,3 +1,15 @@
+# Customer Brain — CURRENT STATE
+
+**Branch:** `cleanup/ai-setup-runtime`
+**Customer Brain:** permanent runtime (CUSTOMER_BRAIN_ENABLED removed)
+**Lab UI only:** `LINAS_CUSTOMER_AI_LAB` (Owner Lab page / capture API)
+**Tenant gate:** plan/channel only — experimental allowlist removed
+**Agent path:** `turn_pipeline` → `agent.loop.run_agentic_dm_path`
+**Budgets:** max_retrieval_rounds=3, max_agent_steps=6, max_tool_calls=8, verifier_repairs=1
+**Rollback:** `rollback/pre-brain-2026-09-11` → `0f23bcf1` (code redeploy only)
+
+---
+
 # Customer Brain — CURRENT STATE (pre Phase 0→29 upgrade)
 
 **Branch:** `cleanup/ai-setup-runtime`  

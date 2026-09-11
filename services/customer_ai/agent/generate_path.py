@@ -1,4 +1,4 @@
-"""Generate + verify final reply for the agentic path."""
+"""Generate + verify stage for the agentic Customer Brain path."""
 
 from __future__ import annotations
 
@@ -14,6 +14,10 @@ from services.customer_ai.generate.reply import generate_grounded_reply, openai_
 from services.customer_ai.identity import load_identity_bundle
 from services.customer_ai.stage_timeline import stamp
 from services.customer_ai.verify.critic import verify_answer
+
+
+def _destination(channel: str) -> str:
+    return "web_chat" if "web" in (channel or "") else "dm"
 
 
 def _flow_extra(extra: dict | None, *rows: tuple[str, str, dict | None]) -> dict:
@@ -40,7 +44,7 @@ def apply_greeting(turn: CustomerTurn, message: str, channel: str, envelope: Fin
         return envelope
     turn.state = turn.state.model_copy(update={"greeted": True})
     remember_turn(turn)
-    destination = envelope.messages[0].destination or ("web_chat" if "web" in (channel or "") else "dm")
+    destination = envelope.messages[0].destination or _destination(channel)
     greeting = OutboundMessage(destination=destination, text=greet.text, protected=True)
     return envelope.model_copy(update={"messages": [greeting, *list(envelope.messages)]})
 
@@ -66,7 +70,8 @@ async def generate_verified(
         return TurnResult(
             stop_reason="provider_not_configured",
             envelope=FinalReplyEnvelope(
-                decision="no_reply", used_evidence_ids=[item.evidence_id for item in bundle.items]
+                decision="no_reply",
+                used_evidence_ids=[item.evidence_id for item in bundle.items],
             ),
             extra={
                 "phase": "awaiting_generate",
@@ -127,6 +132,7 @@ async def generate_verified(
             bundle=bundle,
             structured_facts=structured_facts,
             receipts=receipt_lines,
+            message=message,
         )
         agent_trace.append(
             {
@@ -147,7 +153,11 @@ async def generate_verified(
                     "phase": "verify",
                     "plan": plan.model_dump(),
                     "agent_trace": agent_trace,
-                    "verify": verdict.as_dict(),
+                    "verify": {
+                        "verdict": verdict.verdict,
+                        "unsupported_claims": verdict.unsupported_claims,
+                        "missing_tasks": verdict.missing_tasks,
+                    },
                     "structured_facts": structured_facts,
                     **extra,
                 },

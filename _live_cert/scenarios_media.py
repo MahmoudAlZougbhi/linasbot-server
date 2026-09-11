@@ -29,7 +29,7 @@ async def run_media_scenarios(*, product: dict[str, Any], assets: Path, api_key:
     record(
         "inbound_image_wired_to_v2",
         "ENGINE REMOVED",
-        ok=out.reason == "engine_removed" and out.reply is None,
+        ok=out.reason != "engine_removed" and out.reply is None and (out.metadata or {}).get("customer_engine") == "brain",
         reason=out.reason,
         trace=tr,
         note="Inbound still persists. Auto-reply is off until the new engine lands.",
