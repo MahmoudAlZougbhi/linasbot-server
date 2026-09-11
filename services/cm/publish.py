@@ -53,7 +53,7 @@ class PublishResult:
     pointer: dict[str, Any]
     previous_pointer: dict[str, Any] | None
     # Best-effort Brain Voyage index after CM publish. None = not attempted.
-    # ready=False is retryable via Owner force-reindex / admin search API.
+    # ready=False is retryable via the same automatic job / optional Owner retry.
     brain_index_status: dict[str, Any] | None = None
 
 
@@ -242,33 +242,39 @@ async def publish_draft_sections(
 
     index_result: dict[str, Any]
     try:
-        from services.customer_ai.search.index_job import index_published_tenant
+        from services.customer_ai.search.index_schedule import schedule_tenant_index
 
-        index_result = await index_published_tenant(tid, revision=content_version_id)
+        index_result = await schedule_tenant_index(tid, revision=content_version_id, reason="publish")
         if not isinstance(index_result, dict):
             index_result = {"ready": False, "reason": "index_schedule_failed:bad_result", "count": 0}
     except Exception as exc:
         index_result = {"ready": False, "reason": f"index_schedule_failed:{type(exc).__name__}", "count": 0}
 
     try:
+        from services.customer_ai.search.index_lifecycle import owner_status
         from services.customer_ai.search.index_status import resolve_health, set_index_status
 
-        health = resolve_health(
-            content_version=content_version_id,
-            index_version=str(index_result.get("version") or index_version_id or ""),
-            indexing=bool(index_result.get("indexing")),
-            failed=not bool(index_result.get("ready")),
-        )
-        if index_result.get("ready"):
-            health = "READY"
+        health = str(index_result.get("health") or "")
+        if not health:
+            health = resolve_health(
+                content_version=content_version_id,
+                index_version=str(index_result.get("version") or index_version_id or ""),
+                indexing=bool(index_result.get("indexing")),
+                failed=not bool(index_result.get("ready")) and not bool(index_result.get("indexing")),
+            )
         set_index_status(
             tid,
-            status=health,
+            status=health,  # type: ignore[arg-type]
             content_version=content_version_id,
             index_version=str(index_result.get("version") or index_version_id or ""),
             reason=str(index_result.get("reason") or ""),
         )
-        index_result = {**index_result, "health": health}
+        index_result = {
+            **index_result,
+            "health": health,
+            "manual_index_required": False,
+            "owner": owner_status(tid),
+        }
     except Exception:
         pass
 

@@ -17,6 +17,7 @@ log = logging.getLogger("customer_ai.contextual_index")
 
 CONTEXT_FAMILY = "knowledge_ctx"
 CHUNKER_VERSION = "customer_ai.chunk.v2"
+COMPILER_VERSION = "customer_ai.compiler.v1"
 
 
 def _hash(text: str) -> str:
@@ -77,6 +78,7 @@ def build_contextual_rows(
                             "contextualized_text": chunk.contextualized_text,
                             "embedding_model": KNOWLEDGE_MODEL,
                             "chunker_version": CHUNKER_VERSION,
+                            "compiler_version": COMPILER_VERSION,
                             "contextualization_version": CONTEXTUALIZATION_VERSION,
                             "index_role": "candidate",
                         },
@@ -159,7 +161,9 @@ async def build_and_activate_contextual_index(
         "dimensions": KNOWLEDGE_DOCUMENT.dimensions,
         "contextualization_version": CONTEXTUALIZATION_VERSION,
         "chunker_version": CHUNKER_VERSION,
+        "compiler_version": COMPILER_VERSION,
     }
+    result["ready"] = True
     if not activate:
         return result
     pointer = activate_pointer(
