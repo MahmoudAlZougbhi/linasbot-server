@@ -51,8 +51,9 @@ jobs:
             # Load via python-dotenv for every Python invocation.
             export PYTHONPATH="$REPO_DIR${PYTHONPATH:+:$PYTHONPATH}"
             export LINAS_DOTENV_PATH="$REPO_DIR/.env"
+            # Do not use python -I here: isolated mode ignores PYTHONPATH.
             run_py() {
-              "$REPO_DIR/venv/bin/python" -I - "$@"
+              "$REPO_DIR/venv/bin/python" "$@"
             }
             run_py <<'PY'
             import hashlib
