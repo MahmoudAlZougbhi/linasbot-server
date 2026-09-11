@@ -171,7 +171,7 @@ export function getAxiosResponseDetail(error) {
   if (!isAxiosLikeError(error)) {
     return undefined;
   }
-  const response = /** @type {{ data?: unknown }} */ (error).response;
+  const response = /** @type {{ response?: { data?: unknown } }} */ (error).response;
   if (!isPlainObject(response?.data)) {
     return undefined;
   }
