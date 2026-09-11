@@ -63,6 +63,19 @@ def _session_tenant(session: SessionRecord) -> str:
     return tenant_id
 
 
+def _brain_index_payload(tenant_id: str) -> dict[str, Any]:
+    from services.customer_ai.search.index_lifecycle import owner_status
+
+    return owner_status(tenant_id)
+
+
+@app.get("/api/cm/brain-index")
+async def cm_brain_index(request: Request) -> Any:
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
+    return {"success": True, "brain_index": _brain_index_payload(tenant_id)}
+
+
 @app.get("/api/cm/meta")
 async def cm_meta(request: Request) -> Any:
     session = require_session(request)
@@ -95,6 +108,7 @@ async def cm_meta(request: Request) -> Any:
         "publish_disabled_message": status.get("message"),
         "faq_canonical": cm_faq_canonical(),
         "ai_setup_edits": decision_payload(daily_edit_status(tenant_id)),
+        "brain_index": _brain_index_payload(tenant_id),
     }
 
 

@@ -33,7 +33,27 @@ def mark_products_stale(session: Any | None, tenant_id: str) -> dict[str, Any]:
 
 
 def notify_product_change(session: Any | None, tenant_id: str) -> None:
+    tid = (tenant_id or "").strip()
     try:
-        mark_products_stale(session, tenant_id)
+        mark_products_stale(session, tid)
+    except Exception:
+        return
+    if not tid:
+        return
+    try:
+        from services.cm.version_store import read_published_pointer
+        from services.customer_ai.search.index_lifecycle import mark_stale_durable
+        from services.customer_ai.search.index_schedule import enqueue_tenant_index, run_tenant_index_job
+
+        pointer = read_published_pointer(tid)
+        revision = str(getattr(pointer, "content_version_id", "") or "") if pointer is not None else ""
+        mark_stale_durable(tid, revision=revision, reason="products_changed")
+        try:
+            import asyncio
+
+            loop = asyncio.get_running_loop()
+            loop.create_task(run_tenant_index_job(tid, revision=revision, reason="products_changed"))
+        except RuntimeError:
+            enqueue_tenant_index(tid, revision=revision, reason="products_changed")
     except Exception:
         return

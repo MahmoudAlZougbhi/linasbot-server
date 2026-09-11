@@ -1,0 +1,118 @@
+# Build + activate the real Linas tenant index on production (never linas-lab).
+# Does not deploy application code. Never prints secret values.
+name: Customer Brain Linas Real Index HA
+
+on:
+  workflow_dispatch:
+    inputs:
+      CONFIRM:
+        description: "Type RUN_LINAS_REAL_TENANT_INDEX"
+        required: true
+        type: string
+
+concurrency:
+  group: meta-social-cutover
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  linas-index:
+    name: Index and activate real Linas tenant
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event.inputs.CONFIRM == 'RUN_LINAS_REAL_TENANT_INDEX'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: meta-social-cutover
+    steps:
+      - name: Production Linas real tenant index
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: false
+          command_timeout: 80m
+          script: |
+            set -euo pipefail
+            test "$(id -u)" -eq 0 && test "$(id -g)" -eq 0
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            echo "[linas-real-index] deployed_sha=${DEPLOYED_SHA}"
+            LOCAL_READY="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 http://127.0.0.1:8003/api/ready || true)"
+            echo "[linas-real-index] local_ready=${LOCAL_READY}"
+            test "$LOCAL_READY" = "200"
+            cd "$REPO_DIR"
+            export PYTHONPATH="$REPO_DIR${PYTHONPATH:+:$PYTHONPATH}"
+            export LINAS_DOTENV_PATH="$REPO_DIR/.env"
+            run_py() {
+              "$REPO_DIR/venv/bin/python" "$@"
+            }
+            run_py <<'PY'
+            import hashlib
+            import os
+            from dotenv import load_dotenv
+
+            load_dotenv(os.environ.get("LINAS_DOTENV_PATH") or "/opt/linasbot/.env", override=True)
+
+            def present(key: str, *, min_len: int = 1) -> str:
+                raw = (os.getenv(key) or "").strip()
+                if not raw:
+                    return "MISSING"
+                if len(raw) < min_len:
+                    return "INVALID"
+                return "PRESENT"
+
+            voyage = present("VOYAGE_API_KEY", min_len=20)
+            openai = present("OPENAI_API_KEY", min_len=20)
+            print(f"[linas-real-index] OPENAI_API_KEY={openai}")
+            print(f"[linas-real-index] VOYAGE_API_KEY={voyage}")
+            for key in ("OPENAI_API_KEY", "VOYAGE_API_KEY"):
+                raw = (os.getenv(key) or "").strip()
+                if raw:
+                    print(f"[linas-real-index] {key}_fp={hashlib.sha256(raw.encode()).hexdigest()[:16]} len={len(raw)}")
+            if voyage != "PRESENT":
+                raise SystemExit("[linas-real-index] VOYAGE_API_KEY missing")
+            tenant = (os.getenv("LINASBOT_TENANT_ID") or "linas").strip() or "linas"
+            if tenant in {"linas-lab", "linas-lab-b"}:
+                raise SystemExit("[linas-real-index] refusing lab tenant")
+            print(f"[linas-real-index] tenant={tenant}")
+            PY
+            run_py -m alembic current 2>/dev/null | tee /tmp/linas-index-alembic.txt || true
+            run_py <<'PY'
+            import os
+            import runpy
+            from dotenv import load_dotenv
+
+            load_dotenv(os.environ.get("LINAS_DOTENV_PATH") or "/opt/linasbot/.env", override=True)
+            runpy.run_module("services.customer_ai.evals.linas_real_index", run_name="__main__")
+            PY
+            run_py <<'PY'
+            import json
+            import os
+            from pathlib import Path
+            from dotenv import load_dotenv
+
+            load_dotenv(os.environ.get("LINAS_DOTENV_PATH") or "/opt/linasbot/.env", override=True)
+            path = Path("services/customer_ai/evals/artifacts/linas_real_index_latest.json")
+            if not path.is_file():
+                raise SystemExit("[linas-real-index] missing report")
+            report = json.loads(path.read_text(encoding="utf-8"))
+            tenant = str(report.get("tenant_id") or "")
+            if tenant in {"linas-lab", "linas-lab-b"}:
+                raise SystemExit("[linas-real-index] lab tenant in report")
+            if not report.get("activated"):
+                raise SystemExit("[linas-real-index] not activated")
+            if report.get("manual_index_required") is not False:
+                raise SystemExit("[linas-real-index] manual_index_required must be false")
+            print(json.dumps({
+                "activated": report.get("activated"),
+                "active_version": report.get("active_version"),
+                "rollback_version": report.get("rollback_version"),
+                "models": report.get("models"),
+            }, sort_keys=True))
+            PY
+            echo "[linas-real-index] COMPLETE_OK"

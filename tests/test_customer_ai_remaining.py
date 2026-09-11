@@ -349,10 +349,11 @@ async def test_rerank_skips_exact_and_keeps_fused_on_failure(monkeypatch: pytest
 
 
 def test_index_job_does_not_claim_ready_without_pgvector(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.search.index_job import _persist_index
+    from services.customer_ai.search.index_job import write_entity_candidate
 
-    written = _persist_index(
-        None,
+    monkeypatch.setattr("services.customer_ai.search.store.probe_pgvector", lambda _session: False)
+    written = write_entity_candidate(
+        object(),
         [
             {
                 "id": "t1:s1",
@@ -369,9 +370,9 @@ def test_index_job_does_not_claim_ready_without_pgvector(monkeypatch: pytest.Mon
         tenant_id="t1",
         revision="r1",
     )
+    assert written["written"] is False
     assert written["ready"] is False
     assert written["reason"] == "index_not_ready"
-    _ = monkeypatch
 
 
 def test_ai_both_comment_uses_public_placeholder() -> None:

@@ -209,6 +209,19 @@ async def handle_combine_flush(job: QueueJob) -> dict[str, Any]:
     return await _impl(job)
 
 
+async def handle_customer_ai_index(job: QueueJob) -> dict[str, Any]:
+    from services.customer_ai.search.index_schedule import run_tenant_index_job
+
+    revision = str(job.payload.get("revision") or "")
+    reason = str(job.payload.get("reason") or "queued")
+    result = await run_tenant_index_job(job.tenant_id, revision=revision, reason=reason)
+    if result.get("ready"):
+        return result
+    if str(result.get("reason") or "") in {"unpublished", "tenant_required"}:
+        raise PermanentJobError(str(result.get("reason") or "unpublished"))
+    raise RuntimeError(str(result.get("reason") or "index_failed"))
+
+
 HANDLERS: dict[str, Handler] = {
     "publish_scheduled": handle_publish_scheduled,
     "creative_image": handle_creative_expensive,
@@ -228,6 +241,7 @@ HANDLERS: dict[str, Handler] = {
     "tiktok_webhook_event": handle_tiktok_webhook_event,
     "operator_deliver": handle_operator_deliver,
     "combine_flush": handle_combine_flush,
+    "customer_ai_index": handle_customer_ai_index,
 }
 
 
