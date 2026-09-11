@@ -42,7 +42,10 @@ jobs:
             REPO_DIR=/opt/linasbot
             DEPLOYED_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
             echo "[brain-live-lab] deployed_sha=${DEPLOYED_SHA}"
-            test "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 https://www.linasaibot.com/api/ready || true)" = "200"
+            LOCAL_READY="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 http://127.0.0.1:8003/api/ready || true)"
+            PUBLIC_READY="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 https://www.linasaibot.com/api/ready || true)"
+            echo "[brain-live-lab] local_ready=${LOCAL_READY} public_ready=${PUBLIC_READY}"
+            test "$LOCAL_READY" = "200"
             cd "$REPO_DIR"
             # shellcheck disable=SC1091
             set -a
