@@ -111,34 +111,43 @@ async def _maybe_tool_calls(
     *,
     budget: int,
     trace: list[dict[str, Any]],
+    coverage: dict[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str], int]:
+    from services.customer_ai.agent.tool_decide import propose_tools_dynamic
+    from services.customer_ai.facts.structured import facts_from_tool_data
+
     receipts: list[str] = []
     tool_rows: list[dict[str, Any]] = []
     used = 0
-    for task in plan.tasks:
+    proposals = await propose_tools_dynamic(plan, message, coverage=coverage)
+    for proposal in proposals:
         if used >= budget:
             trace.append({"step": "TOOL", "reason": "budget_exhausted", "tool_calls": used})
             break
-        name = ""
-        args: dict[str, Any] = {
-            "query": task.span.text or message,
-            "task_id": task.id,
-            "customer_text": message,
-        }
-        if task.type == "hours":
-            name = "get_branch_hours"
-        elif task.type == "information" and any(f in {"prices", "services"} for f in task.source_families):
-            name = "get_price"
-        elif task.type == "human_request":
-            name = "escalate_to_human"
-        elif task.type == "resource_request":
-            name = "resolve_resource"
+        name = str(proposal.get("tool") or "")
+        args = dict(proposal.get("args") or {})
         if not name:
             continue
         used += 1
         result = await execute_tool(name, args, turn)
-        tool_rows.append({"tool": name, "ok": result.get("ok"), "error": result.get("error"), "task_id": task.id})
-        trace.append({"step": "TOOL", "tool": name, "ok": result.get("ok"), "task_id": task.id})
+        tool_rows.append(
+            {
+                "tool": name,
+                "ok": result.get("ok"),
+                "error": result.get("error"),
+                "task_id": proposal.get("task_id"),
+                "source": proposal.get("source"),
+            }
+        )
+        trace.append(
+            {
+                "step": "TOOL",
+                "tool": name,
+                "ok": result.get("ok"),
+                "task_id": proposal.get("task_id"),
+                "source": proposal.get("source"),
+            }
+        )
         if result.get("receipt"):
             receipt = result["receipt"]
             receipts.append(
@@ -146,6 +155,8 @@ async def _maybe_tool_calls(
             )
         elif result.get("ok") and result.get("data") is not None:
             receipts.append(f"tool:{name}:ok")
+            for fact in facts_from_tool_data(name, result.get("data"), tenant_id=turn.tenant_id, task_id=str(proposal.get("task_id") or "")):
+                receipts.append(f"fact:{fact.kind}:{fact.entity_id}:{fact.value}")
     return tool_rows, receipts, used
 
 
@@ -248,7 +259,7 @@ async def run_agentic_turn(
 
     steps += 1
     tool_rows, tool_receipts, tools_used = await _maybe_tool_calls(
-        turn, plan, message, budget=tool_budget, trace=agent_trace
+        turn, plan, message, budget=tool_budget, trace=agent_trace, coverage=evaluate_task_coverage(plan, bundle, structured_facts)
     )
     coverage = evaluate_task_coverage(plan, bundle, structured_facts)
     agent_trace.append({"step": "DECIDE", "n": steps, "tools_used": tools_used, "coverage": coverage})

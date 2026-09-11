@@ -39,18 +39,18 @@
   "gates": {
     "case_count_ge_800": true,
     "missed_unsupported_eq_0": true,
-    "recall@10_ge_0.98": false,
+    "recall@10_ge_0.98": true,
     "recall@5_ge_0.95": true
   },
   "live_spend": false,
-  "ok": false,
+  "ok": true,
   "suite": "customer_brain_offline_v1",
   "summary": {
     "by_category_pass_rate": {
       "abstain": 1.0,
       "ambiguous": 1.0,
-      "arabic": 0.975609756097561,
-      "arabizi": 0.975609756097561,
+      "arabic": 1.0,
+      "arabizi": 1.0,
       "booking": 1.0,
       "contradiction": 1.0,
       "duplicate_chunks": 1.0,
@@ -70,8 +70,8 @@
       "noisy": 1.0
     },
     "by_language_pass_rate": {
-      "ar": 0.975609756097561,
-      "arabizi": 0.975609756097561,
+      "ar": 1.0,
+      "arabizi": 1.0,
       "en": 0.9369085173501577,
       "fr": 1.0,
       "lb": 1.0,
@@ -90,24 +90,24 @@
       "missed_unsupported": 0
     },
     "latency_ms": {
-      "mean": 0.020573059360730568,
-      "p50": 0.002,
-      "p90": 0.0435,
-      "p95": 0.0785,
-      "p99": 0.20525
+      "mean": 0.0210673515981735,
+      "p50": 0.001,
+      "p90": 0.04,
+      "p95": 0.172,
+      "p99": 0.23825
     },
-    "pass_rate": 0.952054794520548,
+    "pass_rate": 0.954337899543379,
     "retrieval": {
       "cases": 65,
-      "mrr": 0.9692307692307692,
-      "ndcg@10": 0.9692307692307692,
-      "ndcg@5": 0.9692307692307692,
-      "precision@10": 0.9615384615384616,
-      "precision@5": 0.9615384615384616,
-      "recall@1": 0.9692307692307692,
-      "recall@10": 0.9692307692307692,
-      "recall@3": 0.9692307692307692,
-      "recall@5": 0.9692307692307692
+      "mrr": 1.0,
+      "ndcg@10": 1.0,
+      "ndcg@5": 1.0,
+      "precision@10": 0.9923076923076923,
+      "precision@5": 0.9923076923076923,
+      "recall@1": 1.0,
+      "recall@10": 1.0,
+      "recall@3": 1.0,
+      "recall@5": 1.0
     }
   }
 }

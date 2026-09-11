@@ -6,7 +6,13 @@ from dataclasses import dataclass, replace
 
 from services.customer_ai.budgets import DEFAULT_BUDGETS
 from services.customer_ai.contracts.enums import SourceFamily
-from services.customer_ai.providers.spaces import ENTITY_DOCUMENT, ENTITY_QUERY, compatible
+from services.customer_ai.providers.spaces import (
+    ENTITY_DOCUMENT,
+    ENTITY_QUERY,
+    KNOWLEDGE_DOCUMENT,
+    KNOWLEDGE_QUERY,
+    compatible,
+)
 from services.customer_ai.providers.voyage_client import embed_texts
 from services.customer_ai.retrieve.cards import TitleCard
 from services.customer_ai.retrieve.lexical import search_cards
@@ -59,20 +65,17 @@ async def _semantic_from_store(
         return None
     from services.customer_ai.search.store import query_similar
 
-    qvec = await embed_texts(ENTITY_QUERY, [query])
+    use_knowledge = families is None or bool({"knowledge", "care", "faq"} & set(families or set()))
+    query_space = KNOWLEDGE_QUERY if use_knowledge and compatible(KNOWLEDGE_DOCUMENT, KNOWLEDGE_QUERY) else ENTITY_QUERY
+    doc_space = KNOWLEDGE_DOCUMENT if query_space is KNOWLEDGE_QUERY else ENTITY_DOCUMENT
+    # Prefer contextual knowledge space when available; always also try entity for services/products.
+    spaces = [(doc_space, query_space)]
+    if use_knowledge and doc_space is KNOWLEDGE_DOCUMENT:
+        spaces.append((ENTITY_DOCUMENT, ENTITY_QUERY))
+
     from datetime import datetime, timezone
 
     from services.membership.provider_expense import record_pending_provider
-
-    record_pending_provider(
-        event_id=f"embed-query:{tenant_id}:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}",
-        tenant_id=tenant_id,
-        category="embedding",
-        feature="customer_chat",
-        provider="voyage",
-        model=ENTITY_QUERY.model,
-        operation_id=(operation_id or "query").strip() or "query",
-    )
 
     def _map(result) -> list[tuple[float, TitleCard]] | None:
         if result.outcome != "found" or not result.items:
@@ -91,25 +94,67 @@ async def _semantic_from_store(
             mapped.append((hit.score, _card_with_chunk(card, hit.search_text)))
         return mapped or None
 
-    query_kwargs = {
-        "tenant_id": tenant_id,
-        "space_id": ENTITY_DOCUMENT.space_id,
-        "vector": qvec.vectors[0],
-        "families": set(families) if families else None,
-        "limit": limit,
-    }
-    try:
-        from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+    merged: list[tuple[float, TitleCard]] = []
+    seen: set[str] = set()
+    for doc_space_i, query_space_i in spaces:
+        try:
+            if query_space_i.endpoint == "contextualized":
+                from services.customer_ai.providers.voyage_client import embed_contextual_groups
 
-        with whatsapp_session(require=True) as session:
-            mapped = _map(query_similar(session, **query_kwargs))
-            if mapped is not None:
-                return mapped
-    except WhatsAppDatabaseUnavailable:
-        pass
-    except Exception:
-        pass
-    return _map(query_similar(None, **query_kwargs))
+                groups = await embed_contextual_groups(query_space_i, [[query]])
+                qvec_vectors = groups[0].vectors if groups else []
+                if not qvec_vectors:
+                    raise RuntimeError("empty_contextual_query")
+                q_vector = qvec_vectors[0]
+                q_model = query_space_i.model
+            else:
+                qvec = await embed_texts(query_space_i, [query])
+                q_vector = qvec.vectors[0]
+                q_model = query_space_i.model
+        except Exception:
+            if doc_space_i is ENTITY_DOCUMENT:
+                continue
+            try:
+                qvec = await embed_texts(ENTITY_QUERY, [query])
+                doc_space_i = ENTITY_DOCUMENT
+                q_vector = qvec.vectors[0]
+                q_model = ENTITY_QUERY.model
+            except Exception:
+                continue
+        record_pending_provider(
+            event_id=f"embed-query:{tenant_id}:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}",
+            tenant_id=tenant_id,
+            category="embedding",
+            feature="customer_chat",
+            provider="voyage",
+            model=q_model,
+            operation_id=(operation_id or "query").strip() or "query",
+        )
+        query_kwargs = {
+            "tenant_id": tenant_id,
+            "space_id": doc_space_i.space_id,
+            "vector": q_vector,
+            "families": set(families) if families else None,
+            "limit": limit,
+        }
+        mapped = None
+        try:
+            from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+
+            with whatsapp_session(require=True) as session:
+                mapped = _map(query_similar(session, **query_kwargs))
+        except Exception:
+            mapped = _map(query_similar(None, **query_kwargs))
+        if not mapped:
+            continue
+        for score, card in mapped:
+            if card.item_id in seen:
+                continue
+            seen.add(card.item_id)
+            merged.append((score, card))
+        if merged and doc_space_i is KNOWLEDGE_DOCUMENT:
+            break
+    return merged or None
 
 
 async def search_hybrid(

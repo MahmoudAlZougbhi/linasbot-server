@@ -125,6 +125,7 @@ def remember_fact(
     value: str,
     source_message_ids: list[str] | None = None,
     confidence: float = 0.7,
+    fact_type: str = "preference",
 ) -> dict[str, Any]:
     ok = _STORE.remember(
         tenant_id,
@@ -136,10 +137,39 @@ def remember_fact(
     )
     if not ok:
         return {"ok": False, "reason": "rejected"}
+    try:
+        from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+        from services.customer_ai.memory import store_pg
+
+        with whatsapp_session(require=True) as session:
+            if store_pg.table_ready(session):
+                store_pg.upsert_fact(
+                    session,
+                    tenant_id=tenant_id,
+                    customer_id=customer_id,
+                    key=(key or "").strip().casefold()[:80],
+                    value=(value or "").strip()[:500],
+                    source_message_ids=source_message_ids,
+                    confidence=confidence,
+                    fact_type=fact_type,
+                )
+    except Exception:
+        pass
     return {"ok": True, "fact": {"key": key, "value": value}}
 
 
 def recall_facts(*, tenant_id: str, customer_id: str, limit: int = 12) -> list[dict[str, Any]]:
+    try:
+        from db.session import whatsapp_session
+        from services.customer_ai.memory import store_pg
+
+        with whatsapp_session(require=True) as session:
+            if store_pg.table_ready(session):
+                rows = store_pg.list_facts(session, tenant_id=tenant_id, customer_id=customer_id, limit=limit)
+                if rows:
+                    return rows
+    except Exception:
+        pass
     rows = _STORE.export_safe(tenant_id, customer_id)
     return rows[-max(1, limit) :]
 

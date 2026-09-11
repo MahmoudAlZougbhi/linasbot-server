@@ -75,15 +75,29 @@ def query_similar(
     vector: list[float],
     families: set[str] | None = None,
     limit: int = 20,
+    index_version: str | None = None,
 ) -> StoreQueryResult:
     tid = (tenant_id or "").strip()
     if not tid:
         return StoreQueryResult(outcome="permission_denied", reason="missing_tenant")
+    active = (index_version or "").strip() or _active_version_for(tid, space_id)
     if session is None:
-        return _query_memory(tid, space_id, vector, families, limit)
+        return _query_memory(tid, space_id, vector, families, limit, active_version=active)
     if not probe_pgvector(session):
         return StoreQueryResult(outcome="index_not_ready", reason="index_not_ready")
-    return _query_sql(session, tid, space_id, vector, families, limit)
+    return _query_sql(session, tid, space_id, vector, families, limit, active_version=active)
+
+
+def _active_version_for(tenant_id: str, space_id: str) -> str:
+    for row in _POINTERS.values():
+        if (
+            isinstance(row, dict)
+            and row.get("tenant_id") == tenant_id
+            and row.get("space_id") == space_id
+            and row.get("ready")
+        ):
+            return str(row.get("active_version") or "")
+    return ""
 
 
 def activate_pointer(
@@ -278,12 +292,16 @@ def _query_memory(
     vector: list[float],
     families: set[str] | None,
     limit: int,
+    *,
+    active_version: str = "",
 ) -> StoreQueryResult:
     scored: list[StoreHit] = []
     for row in _MEMORY.get(tenant_id, []):
         if row.get("tenant_id") != tenant_id:
             continue
         if str(row.get("space_id") or "") != space_id:
+            continue
+        if active_version and str(row.get("index_version") or "") != active_version:
             continue
         if not row.get("visible", True):
             continue
@@ -359,6 +377,8 @@ def _query_sql(
     vector: list[float],
     families: set[str] | None,
     limit: int,
+    *,
+    active_version: str = "",
 ) -> StoreQueryResult:
     from sqlalchemy import text
 
@@ -373,6 +393,7 @@ def _query_sql(
                 WHERE tenant_id = :tenant_id
                   AND space_id = :space_id
                   AND visible = true
+                  AND (CAST(:version_len AS int) = 0 OR index_version = :active_version)
                   AND (CAST(:family_count AS int) = 0 OR source_family = ANY(:families))
                 ORDER BY embedding <=> CAST(:embedding AS vector)
                 LIMIT :limit
@@ -385,6 +406,8 @@ def _query_sql(
                 "family_count": len(family_list),
                 "families": family_list,
                 "limit": limit,
+                "active_version": active_version,
+                "version_len": len(active_version or ""),
             },
         )
     except Exception:

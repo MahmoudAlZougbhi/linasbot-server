@@ -144,8 +144,23 @@ async def multi_round_retrieve(
                 }
             )
         provisional = EvidenceBundle(items=merged, outcome=outcome)  # type: ignore[arg-type]
+        from services.customer_ai.retrieve.conflict import apply_authority
+
+        provisional, conflict_meta = apply_authority(provisional)
+        merged = list(provisional.items)
         facts = _structured_facts(provisional)
         coverage = evaluate_task_coverage(plan, provisional, facts)
+        if conflict_meta.get("decisions"):
+            trace.append(
+                {
+                    "round": round_idx,
+                    "query": "",
+                    "families": [],
+                    "hit_ids": [],
+                    "reason": "authority_conflict_resolved",
+                    "decisions": conflict_meta.get("decisions"),
+                }
+            )
         if info_tasks_covered(plan, coverage):
             trace.append(
                 {"round": round_idx, "query": "", "families": [], "hit_ids": [], "reason": "early_stop_covered"}

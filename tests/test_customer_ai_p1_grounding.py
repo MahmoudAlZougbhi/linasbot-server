@@ -139,10 +139,11 @@ def test_bm25_ranks_relevant_card_higher() -> None:
     assert max(scores) > 0
 
 
-def test_spaces_snapshot_excludes_active_knowledge_document() -> None:
+def test_spaces_snapshot_includes_active_knowledge_document() -> None:
     snap = spaces_snapshot()
-    assert "knowledge_document" not in snap
-    assert snap.get("knowledge_reserved") == "voyage-context-4"
+    assert "knowledge_document" in snap
+    assert snap.get("knowledge_model") == "voyage-context-4"
+    assert snap.get("contextual_active") == "true"
     assert "entity_document" in snap
 
 

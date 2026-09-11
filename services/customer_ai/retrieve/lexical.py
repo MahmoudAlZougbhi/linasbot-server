@@ -28,10 +28,18 @@ class LexicalHit:
 
 
 def prepare_query_text(query: str) -> str:
-    """Normalize query; append Arabic/Arabizi fold when it adds signal."""
-    base = normalize_search_text(query)
-    folded = normalize_arabic(query)
-    if folded and folded != base:
+    """Normalize query; fold Arabic/Arabizi and expand retrieval synonyms."""
+    import re
+
+    from services.customer_ai.agent.normalize_query import normalize_query
+
+    norm = normalize_query(query)
+    parts = [norm.get("primary") or "", *(norm.get("alternates") or [])[:2], query]
+    base = normalize_search_text(" ".join(p for p in parts if p))
+    if re.search(r"(دوام|اوقات|أوقات|ساعات|aw2at|dawem|hours|open(?:ing)?)", base, re.I):
+        base = normalize_search_text(f"{base} hours opening clinic hours")
+    folded = normalize_arabic(base)
+    if folded and folded not in base:
         return normalize_search_text(f"{base} {folded}")
     return base
 

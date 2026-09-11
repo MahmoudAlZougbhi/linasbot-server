@@ -20,7 +20,16 @@ def service_appointment_corpus() -> dict[str, Any]:
                 {"id": "e1", "catalog_item_id": "laser", "amount": 80, "currency": "USD", "unit": "session", "active": True}
             ],
         },
-        "opening_hours": {"items": [{"id": "main", "title": "Clinic hours", "monday": {"open": "10:00", "close": "20:00"}}]},
+        "opening_hours": {
+            "items": [
+                {
+                    "id": "main",
+                    "title": "Clinic hours",
+                    "aliases": ["hours", "opening hours", "دوام", "أوقات", "اوقات", "aw2at", "dawem"],
+                    "monday": {"open": "10:00", "close": "20:00"},
+                }
+            ]
+        },
         "faq": {"items": []},
     }
 

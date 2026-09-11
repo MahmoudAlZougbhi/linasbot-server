@@ -20,6 +20,8 @@ READ_TOOLS = frozenset(
         "get_faq",
         "get_published_knowledge",
         "resolve_resource",
+        "get_contact",
+        "get_request_state",
     }
 )
 

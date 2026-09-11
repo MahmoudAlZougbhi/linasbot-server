@@ -130,13 +130,36 @@ async def index_published_tenant(tenant_id: str, *, revision: str, session: Any 
             return {"ready": False, "reason": "provider_error", "count": len(rows)}
         if len(vectors) != len(rows):
             return {"ready": False, "reason": "provider_error", "count": len(rows)}
+
+        from services.customer_ai.search.contextual_index import build_and_activate_contextual_index
+
         if session is not None:
-            return _persist_index(session, rows, vectors, tenant_id=tid, revision=revision)
+            entity = _persist_index(session, rows, vectors, tenant_id=tid, revision=revision)
+            contextual = await build_and_activate_contextual_index(
+                cards, tenant_id=tid, revision=revision, session=session, activate=True
+            )
+            return {
+                **entity,
+                "entity": entity,
+                "contextual": contextual,
+                "version": revision,
+                "health": "READY" if entity.get("ready") else "FAILED",
+            }
         try:
             from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 
             with whatsapp_session(require=True) as db:
-                return _persist_index(db, rows, vectors, tenant_id=tid, revision=revision)
+                entity = _persist_index(db, rows, vectors, tenant_id=tid, revision=revision)
+                contextual = await build_and_activate_contextual_index(
+                    cards, tenant_id=tid, revision=revision, session=db, activate=True
+                )
+                return {
+                    **entity,
+                    "entity": entity,
+                    "contextual": contextual,
+                    "version": revision,
+                    "health": "READY" if entity.get("ready") else "FAILED",
+                }
         except WhatsAppDatabaseUnavailable:
             return {"ready": False, "reason": "index_not_ready", "count": len(rows), "store": "unavailable"}
         except Exception:

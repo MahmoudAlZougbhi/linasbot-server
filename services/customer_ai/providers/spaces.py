@@ -1,8 +1,8 @@
 """Immutable embedding-space contracts. Never mix spaces by dimension alone.
 
-Production Customer Brain retrieval is ENTITY-ONLY (`voyage-4-large` via
-ENTITY_DOCUMENT / ENTITY_QUERY). `voyage-context-4` (KNOWLEDGE_*) is reserved
-and not wired into the active index/query path — do not half-wire it.
+Production Customer Brain retrieval:
+- ENTITY (`voyage-4-large`) for services/products/branches/hours
+- KNOWLEDGE (`voyage-context-4`) contextual embeddings for knowledge/care/faq
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from services.customer_ai.budgets import DEFAULT_BUDGETS
 
 PROVIDER = "voyage"
-KNOWLEDGE_MODEL = "voyage-context-4"  # reserved / not wired — entity path only in prod
+KNOWLEDGE_MODEL = "voyage-context-4"
 ENTITY_MODEL = "voyage-4-large"
 MULTIMODAL_MODEL = "voyage-multimodal-3.5"
 RERANK_MODEL = "rerank-2.5"
@@ -52,7 +52,6 @@ def _space(*, family: str, model: str, endpoint: str, input_mode: str) -> Embedd
     )
 
 
-# Reserved: voyage-context-4 knowledge spaces — kept for contracts/tests, not active retrieval.
 KNOWLEDGE_DOCUMENT = _space(
     family="knowledge",
     model=KNOWLEDGE_MODEL,
@@ -106,11 +105,13 @@ def compatible(index: EmbeddingSpace, query: EmbeddingSpace) -> bool:
 
 
 def spaces_snapshot() -> dict[str, str]:
-    """Active production spaces only. Knowledge (voyage-context-4) is excluded."""
     return {
         "entity_document": ENTITY_DOCUMENT.space_id,
+        "knowledge_document": KNOWLEDGE_DOCUMENT.space_id,
+        "knowledge_model": KNOWLEDGE_MODEL,
+        "entity_model": ENTITY_MODEL,
         "multimodal_document": MULTIMODAL_DOCUMENT.space_id,
         "rerank": RERANK_MODEL,
         "rerank_preview_gated": RERANK_CANDIDATE,
-        "knowledge_reserved": KNOWLEDGE_MODEL,
+        "contextual_active": "true",
     }

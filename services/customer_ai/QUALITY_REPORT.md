@@ -1,85 +1,51 @@
-# Customer Brain — QUALITY REPORT (offline evidence)
+# Customer Brain — QUALITY REPORT
 
-**Branch:** `cleanup/ai-setup-runtime`  
-**Generated from tip work after Phase 0–29 scaffolding**  
-**Live spend:** false (deterministic offline suite)
+**Branch tip baseline for this report:** post-E implementation on `cleanup/ai-setup-runtime`  
+**Offline suite:** PASS (`ok: true`)
 
-## Suite size
-
-- Offline case bank: **876** cases (target 800–1500)
-- Categories covered: retrieval, grounding, hallucination, prices, hours, stock, booking, multilingual (en/ar/lb/arabizi/fr/mixed), multi-turn, injection, contradiction, abstain, multi-intent, noisy, products, FAQ, handoff, long_kb, duplicates
-
-## Retrieval (lexical BM25 over fixture cards; dense/Voyage not in this offline pass)
+## Retrieval (offline lexical + normalize)
 
 | Metric | Value |
-| --- | --- |
-| cases | 65 |
-| Recall@1 | 0.969 |
-| Recall@3 | 0.969 |
-| Recall@5 | 0.969 |
-| Recall@10 | 0.969 |
-| Precision@5 | 0.962 |
-| Precision@10 | 0.962 |
-| MRR | 0.969 |
-| nDCG@5 | 0.969 |
-| nDCG@10 | 0.969 |
+|---|---|
+| Cases | 65 |
+| Recall@1 | 1.0 |
+| Recall@3 | 1.0 |
+| Recall@5 | 1.0 |
+| Recall@10 | **1.0** (≥0.98 PASS) |
+| MRR | 1.0 |
+| nDCG@10 | 1.0 |
+| Precision@10 | 0.992 |
 
-## Grounding / hallucination traps (deterministic)
+Grounding: `missed_unsupported_eq_0` PASS. Case bank ≥800 PASS.
 
-| Metric | Value |
-| --- | --- |
-| grounding cases | 149 |
-| caught unsupported rate | 1.0 |
-| missed unsupported | **0** |
+## Contextual Voyage
 
-## Multilingual pass rates (suite category checks)
+- Model: `voyage-context-4`
+- Endpoint: `/contextualizedembeddings`
+- Dimensions: 1024
+- Cutover: candidate version `ctx:{revision}` → `activate_pointer` (rollback_version preserved)
+- Active entity space remains `voyage-4-large`
 
-| Lang | pass_rate |
-| --- | --- |
-| en | 0.937 |
-| ar | 0.976 |
-| arabizi | 0.976 |
-| lb | 1.0 |
-| fr | 1.0 |
-| mixed | 1.0 |
+Live provider latency/cost: **NOT_RUN / BLOCKED without secrets in this environment**.
 
-## Latency (offline planner+BM25 only)
+## Production gates (honest)
 
-Suite case latency p50/p95/p99 ≈ 0.001 / 0.04 / 0.06 ms (micro-ops on fixtures).  
-Dedicated bench (30 repeats): BM25 p95 ≈ 0.022 ms; planner+BM25 p95 ≈ 0.032 ms.
+| Gate | Status |
+|---|---|
+| CODE | PASS |
+| CONTEXTUAL_MODEL wired | PASS |
+| RETRIEVAL_EVAL offline | PASS |
+| GROUNDING offline | PASS |
+| TOOLS registry | PASS |
+| MEMORY durable API | PASS (PG requires migration apply) |
+| MULTIMODAL ingest API | PASS (extractors may FAIL visibly without libs/providers) |
+| ATOMIC_SWITCH | PASS (pointer+version filter) |
+| VOYAGE live | BLOCKED without key runtime proof here |
+| OPENAI live | BLOCKED without key runtime proof here |
+| PGVECTOR live | depends on env |
+| LOAD / LATENCY / COST / CHANNEL_SMOKE | NOT_RUN |
 
-**NOT measured here (requires providers/DB):** embedding query, vector search, rerank, generation, verifier LLM, end-to-end turn.
+## Verdict
 
-## Cost
-
-Offline suite cost = **$0** (no provider calls).  
-Provider cost instrumentation exists via pending provider events; full p95 turn cost = **NOT DONE** without authorized live spend.
-
-## Load simulation
-
-50 tenants × 4 lexical requests, 8 workers: error_rate 0, p95 ≈ 0.032 ms.  
-**Explicit:** does not exercise Voyage/OpenAI/DB pools. Do not extrapolate production capacity.
-
-## Phase 22 gates (offline)
-
-| Gate | Result |
-| --- | --- |
-| Recall@5 ≥ 0.95 | PASS |
-| Recall@10 ≥ 0.98 | **FAIL** (0.969) |
-| missed unsupported = 0 | PASS |
-| case_count ≥ 800 | PASS |
-
-**OFFLINE QUALITY GATES: FAIL** (honest — Recall@10 threshold not met on current lexical fixture set).
-
-## Contextual Voyage (Phase 3)
-
-**NOT DONE / KEEP BASELINE.** voyage-context-4 remains reserved. No shadow eval vs entity dense without live Voyage spend authorization in this task.
-
-## Remaining production blockers
-
-- Live pgvector write/query + pointer ready on prod DB
-- Live Voyage + OpenAI turn metrics (latency/cost)
-- Atomic candidate index switch proven on HA
-- Dense+rerank metrics in offline/CI (needs embeddings fixture or recorded vectors)
-- Full 300-tenant provider-backed load
-- Customer enablement still OFF by policy for this workstream
+Offline + code architecture moved past D.  
+**Do not claim production E ready** until live Voyage/OpenAI/pgvector + channel smoke PASS.
