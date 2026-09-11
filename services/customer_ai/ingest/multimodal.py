@@ -31,8 +31,9 @@ async def extract_pdf_text(data: bytes) -> dict[str, Any]:
     if not data:
         return {"ok": False, "status": "FAILED", "reason": "empty_pdf", "text": "", "pages": 0}
     try:
-        from pypdf import PdfReader  # type: ignore
         import io
+
+        from pypdf import PdfReader  # type: ignore
 
         reader = PdfReader(io.BytesIO(data))
         pages: list[str] = []

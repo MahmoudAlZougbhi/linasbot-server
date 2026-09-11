@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+
 import pytest
 
 from services.membership.iap_message_grant import (
@@ -145,7 +147,7 @@ def test_activation_flags_report_requires_all_off() -> None:
 
 
 def test_stale_reservation_gc_marks_unresolved_without_refund() -> None:
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from services.membership.message_ledger import (
         grant_lot,
@@ -164,7 +166,7 @@ def test_stale_reservation_gc_marks_unresolved_without_refund() -> None:
     grant_lot(tenant_id="gc-shop", lot_id="inc", kind="included", period_id=current_period_id(), amount=5)
     reserve(tenant_id="gc-shop", operation_id="stuck", response_class="generated_ai")
     held = next(item for item in list_reservations("gc-shop") if item.operation_id == "stuck")
-    held.created_at = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    held.created_at = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
     assert remaining_messages("gc-shop") == 4
     assert release_stale_reservations(max_age_seconds=3600) == 1
     assert remaining_messages("gc-shop") == 4

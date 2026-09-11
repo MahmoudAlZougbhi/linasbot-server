@@ -16,7 +16,7 @@ from services.customer_ai.precedence import wins
 from services.customer_ai.providers.spaces import ENTITY_DOCUMENT, ENTITY_QUERY, KNOWLEDGE_DOCUMENT, compatible
 from services.customer_ai.search.readiness import search_readiness
 from services.customer_reply_v2.models import ENGINE_REMOVED
-from services.customer_reply_v2.orchestrator import run_customer_reply_v2_comment, run_customer_reply_v2_dm
+from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 
 
 def test_brain_flag_defaults_off(monkeypatch: pytest.MonkeyPatch) -> None:

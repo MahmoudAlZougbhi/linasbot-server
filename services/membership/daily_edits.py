@@ -10,7 +10,7 @@ import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from services.membership.message_catalog import AI_SETUP_DAILY_EDIT_DEFAULT
@@ -132,8 +132,8 @@ def set_tenant_override(tenant_id: str, limit: int | None) -> None:
 
 
 def _window(now: datetime | None = None) -> tuple[str, str]:
-    current = now or datetime.now(timezone.utc)
-    start = current.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    current = now or datetime.now(UTC)
+    start = current.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     reset = start + timedelta(days=1)
     return start.date().isoformat(), reset.isoformat()
 

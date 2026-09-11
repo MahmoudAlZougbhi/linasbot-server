@@ -19,23 +19,8 @@ Helpers/signals: language_resolver_text, language_resolver_signals (LOC split).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
 
-# Public re-exports (keep `from language_resolver import ...` working)
-from language_resolver_text import (  # noqa: F401
-    ARABIC_RE,
-    URL_RE,
-    CODEBLOCK_RE,
-    FULL_NAME_RE,
-    NAME_EXCLUSIONS,
-    TIME_PATTERNS,
-    TIME_RE,
-    alpha_len,
-    clean,
-    looks_like_full_name,
-    mask_times,
-    tokenize,
-)
 from language_resolver_signals import (  # noqa: F401
     ARABIZI_DIGITS_RE,
     ARABIZI_WORDS,
@@ -49,6 +34,21 @@ from language_resolver_signals import (  # noqa: F401
     is_arabizi,
 )
 
+# Public re-exports (keep `from language_resolver import ...` working)
+from language_resolver_text import (  # noqa: F401
+    ARABIC_RE,
+    CODEBLOCK_RE,
+    FULL_NAME_RE,
+    NAME_EXCLUSIONS,
+    TIME_PATTERNS,
+    TIME_RE,
+    URL_RE,
+    alpha_len,
+    clean,
+    looks_like_full_name,
+    mask_times,
+    tokenize,
+)
 
 # ============================================================
 # 7) State + resolver

@@ -129,9 +129,9 @@ def activate_pointer(
     if not probe_pgvector(session):
         return {"ok": False, "reason": "index_not_ready"}
     try:
-        from sqlalchemy import text
-
         import hashlib
+
+        from sqlalchemy import text
 
         space_digest = hashlib.sha1(space_id.encode("utf-8")).hexdigest()[:10]
         pointer_id = f"{tenant_id}:{source_family}:{space_digest}"[:64]

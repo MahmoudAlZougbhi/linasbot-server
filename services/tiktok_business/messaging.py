@@ -248,9 +248,8 @@ async def _maybe_ai_dm(snapshot: dict[str, Any]) -> None:
         )
     except Exception:
         if sent:
-            from services.membership.reservation_reconcile import hold_failed_capture_after_send
-
             from services.membership.hold_policy import hold_billing_policy
+            from services.membership.reservation_reconcile import hold_failed_capture_after_send
 
             hold_failed_capture_after_send(
                 tenant_id=tenant_id,

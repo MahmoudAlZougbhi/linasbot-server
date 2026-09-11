@@ -13,12 +13,13 @@ from services.membership.cost_dashboard import global_dashboard, tenant_dashboar
 from services.membership.daily_edits import (
     DailyEditLimitError,
     commit_edit,
-    reset_daily_edits_for_tests,
     reserve_edit,
+    reset_daily_edits_for_tests,
     set_tenant_override,
     status,
 )
 from services.membership.expense_journal import known_total, list_events, record_expense, reset_expenses_for_tests
+from services.membership.lot_window import current_period_id
 from services.membership.message_catalog import (
     PAID_PLANS,
     UNCONFIGURED_FREE_FIELDS,
@@ -27,7 +28,6 @@ from services.membership.message_catalog import (
     require_message_plan,
 )
 from services.membership.message_flags import message_billing_cutover, message_billing_enabled
-from services.membership.lot_window import current_period_id
 from services.membership.message_ledger import (
     InsufficientMessages,
     grant_lot,
@@ -285,7 +285,6 @@ def test_failed_generate_releases_reservation(monkeypatch: pytest.MonkeyPatch) -
     from services.customer_ai.billing import apply_message_billing, reserve_generative
     from services.customer_ai.contracts.reply import FinalReplyEnvelope, TurnResult
     from services.customer_ai.contracts.turn import CustomerTurn
-
     from services.membership.pending_settlement import get_pending, reset_pending_settlements_for_tests
 
     reset_pending_settlements_for_tests()
@@ -397,7 +396,7 @@ def test_purchased_lot_used_after_included() -> None:
 
 
 def test_followup_locked_on_free_and_none() -> None:
-    from services.membership.feature_entitlements import followup_allowed_for_plan, faq_limits_for_plan
+    from services.membership.feature_entitlements import faq_limits_for_plan, followup_allowed_for_plan
 
     assert followup_allowed_for_plan("free") is False
     assert followup_allowed_for_plan("lite") is True
@@ -406,8 +405,8 @@ def test_followup_locked_on_free_and_none() -> None:
 
 
 def test_followup_assert_waits_for_enforcement_flag(monkeypatch) -> None:
-    from services.membership.feature_entitlements import FeatureDenied, assert_followup_allowed
     from services.entitlements_service import entitlements_store
+    from services.membership.feature_entitlements import FeatureDenied, assert_followup_allowed
 
     entitlements_store.set_plan(tenant_id="free-tenant", plan_id="free", status="active", source="admin")
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)

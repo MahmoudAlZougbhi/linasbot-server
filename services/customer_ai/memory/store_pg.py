@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -49,7 +49,7 @@ def upsert_fact(
     fact_type: str = "preference",
     expires_at: str = "",
 ) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     fact_id = f"{tenant_id}:{customer_id}:{key}"[:128]
     session.execute(
         text(
@@ -129,7 +129,7 @@ def upsert_summary(
     summary: str,
     source_message_ids: list[str] | None = None,
 ) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     sid = f"{tenant_id}:{conversation_id}"[:128]
     session.execute(
         text(

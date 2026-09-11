@@ -12,8 +12,8 @@ from services.customer_ai.planner.heuristic import plan_message
 from services.customer_ai.providers.voyage_client import VoyageVectors
 from services.customer_ai.retrieve.cards import cards_from_sections
 from services.customer_ai.retrieve.expand import expand_hits
-from services.customer_ai.retrieve.lexical import LexicalHit
 from services.customer_ai.retrieve.hybrid import search_hybrid
+from services.customer_ai.retrieve.lexical import LexicalHit
 from services.customer_ai.retrieve.orchestrate import retrieve_cards
 from services.customer_ai.retrieve.products import cards_from_products, evidence_from_product
 

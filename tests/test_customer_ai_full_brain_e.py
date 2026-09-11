@@ -9,12 +9,12 @@ import pytest
 from services.customer_ai.compiler.chunks import chunk_document, contextual_groups
 from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.customer_ai.ingest.multimodal import classify_media, process_knowledge_media
-from services.customer_ai.memory.store import remember_fact, recall_facts, reset_memory_for_tests
+from services.customer_ai.memory.store import recall_facts, remember_fact, reset_memory_for_tests
 from services.customer_ai.providers.spaces import KNOWLEDGE_DOCUMENT, KNOWLEDGE_MODEL, spaces_snapshot
-from services.customer_ai.retrieve.conflict import apply_authority
 from services.customer_ai.relations.graph import load_relations
+from services.customer_ai.retrieve.conflict import apply_authority
 from services.customer_ai.search.store import activate_pointer, query_similar, write_documents
-from services.customer_ai.tools.registry import execute_tool, list_tools
+from services.customer_ai.tools.registry import list_tools
 
 
 def test_contextual_chunks_keep_raw_and_context() -> None:

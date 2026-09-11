@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from services.cm.version_store import PublishedVersionError, load_published_content
 from services.customer_ai.budgets import DEFAULT_BUDGETS
 from services.customer_ai.contracts.enums import SourceFamily
 from services.customer_ai.contracts.evidence import EvidenceBundle
@@ -13,10 +14,9 @@ from services.customer_ai.retrieve.cards import TitleCard, load_published_cards
 from services.customer_ai.retrieve.expand import expand_ranked
 from services.customer_ai.retrieve.hybrid import HybridHit, search_hybrid
 from services.customer_ai.retrieve.lexical import search_cards
-from services.customer_ai.retrieve.rerank import rerank_hits
 from services.customer_ai.retrieve.products import cards_from_products, load_product_cards
+from services.customer_ai.retrieve.rerank import rerank_hits
 from services.customer_ai.retrieve.validate import validate_evidence
-from services.cm.version_store import PublishedVersionError, load_published_content
 
 
 @dataclass(frozen=True)

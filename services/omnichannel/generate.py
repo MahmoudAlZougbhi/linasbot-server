@@ -187,9 +187,8 @@ async def _generate_canonical(
 
         return await generate_web_chat_reply(tenant_id=tenant_id, payload=payload)
     if surface == "comment":
-        from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
-
         from services.customer_ai.history_ids import conversation_id_for_brain
+        from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
 
         comment_id = str(payload.get("comment_id") or payload.get("provider_event_id") or "")
         post_id = str(payload.get("post_id") or payload.get("item_id") or "")

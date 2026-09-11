@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 ReviewLabel = Literal[
@@ -34,7 +34,7 @@ def record_lab_review(review: LabReview) -> dict[str, Any]:
         "turn_id": review.turn_id,
         "label": review.label,
         "note": (review.note or "")[:500],
-        "at": datetime.now(timezone.utc).isoformat(),
+        "at": datetime.now(UTC).isoformat(),
         "auto_train": False,
     }
     _STORE.append(row)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from services.membership.lot_window import lot_is_live
@@ -78,7 +78,7 @@ def reset_ledger_for_tests() -> None:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _res_key(tenant_id: str, operation_id: str) -> str:

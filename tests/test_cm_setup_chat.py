@@ -52,7 +52,12 @@ def test_setup_chat_rejects_forbidden_fields(tenant_root: Path) -> None:
 
 
 def test_setup_chat_patch_counts_daily_edit(tenant_root: Path) -> None:
-    from services.membership.daily_edits import DailyEditLimitError, reset_daily_edits_for_tests, set_platform_baseline, status
+    from services.membership.daily_edits import (
+        DailyEditLimitError,
+        reset_daily_edits_for_tests,
+        set_platform_baseline,
+        status,
+    )
 
     reset_daily_edits_for_tests()
     set_platform_baseline(1)

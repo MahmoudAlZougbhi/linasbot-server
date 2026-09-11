@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -74,7 +74,7 @@ def pg_upsert(
             "revision": int(revision or 1),
             "published": bool(published),
             "audit": json.dumps(audit[-50:], ensure_ascii=False),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         },
     )
 

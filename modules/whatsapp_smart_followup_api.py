@@ -16,7 +16,6 @@ from services.whatsapp_cloud.smart_followup.analytics import (
     build_smart_followup_analytics,
     resolve_analytics_window,
 )
-from services.whatsapp_cloud.smart_followup.constants import OPERATION_TYPE
 from services.whatsapp_cloud.smart_followup.generation import generate_followup_text, preview_prompt_for_goal
 from services.whatsapp_cloud.smart_followup.repository import SmartFollowUpRepository
 from services.whatsapp_cloud.smart_followup.settings_service import (

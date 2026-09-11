@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+
 import pytest
 
 from services.customer_ai.leftover_reserve import (
@@ -89,7 +91,7 @@ def test_reconcile_settles_once_and_does_not_double_capture(monkeypatch: pytest.
 
 
 def test_unknown_stale_reservation_is_unresolved_not_released(monkeypatch: pytest.MonkeyPatch) -> None:
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from services.membership.lot_window import current_period_id
     from services.membership.message_ledger import (
@@ -104,7 +106,7 @@ def test_unknown_stale_reservation_is_unresolved_not_released(monkeypatch: pytes
     grant_lot(tenant_id="shop-b", lot_id="inc", kind="included", period_id=current_period_id(), amount=3)
     reserve(tenant_id="shop-b", operation_id="unknown-1", response_class="generated_ai")
     held = next(item for item in list_reservations("shop-b") if item.operation_id == "unknown-1")
-    held.created_at = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
+    held.created_at = (datetime.now(UTC) - timedelta(hours=3)).isoformat()
     result = run_reservation_reconcile()
     assert result["ran"] is True
     assert remaining_messages("shop-b") == 2

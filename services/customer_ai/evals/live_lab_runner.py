@@ -27,7 +27,6 @@ from services.customer_ai.retrieve.hybrid import search_hybrid
 from services.customer_ai.search.store import query_similar
 from services.customer_ai.tools.registry import list_tools
 
-
 LAB_TENANT = "linas-lab"
 OTHER_TENANT = "linas-lab-b"
 REPORT_PATH = Path("services/customer_ai/evals/artifacts/live_lab_latest.json")

@@ -17,7 +17,7 @@ from services.meta_comment_rule_modes import (
     is_static_public_comment,
     static_dm_text,
 )
-from tests.test_meta_comment_replies import _binding, _facebook_comment_payload, _settings
+from tests.test_meta_comment_replies import _facebook_comment_payload, _settings
 from tests.test_meta_comment_replies_more import MetaCommentProcessorTests
 
 

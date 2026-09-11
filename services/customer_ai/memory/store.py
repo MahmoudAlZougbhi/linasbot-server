@@ -138,7 +138,7 @@ def remember_fact(
     if not ok:
         return {"ok": False, "reason": "rejected"}
     try:
-        from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+        from db.session import whatsapp_session
         from services.customer_ai.memory import store_pg
 
         with whatsapp_session(require=True) as session:

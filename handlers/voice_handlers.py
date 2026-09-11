@@ -19,9 +19,9 @@ import config
 
 # We'll call text_handlers.handle_message directly, but need to pass all required args
 from handlers.text_handlers import handle_message as handle_text_message_from_voice
-from services.customer_reply_v2.inbound_media import mark_inbound_attachment
 from handlers.training_handlers import handle_training_input
 from services.analytics_events import analytics  # 📊 ANALYTICS
+from services.customer_reply_v2.inbound_media import mark_inbound_attachment
 from services.llm_core_service import client as openai_client  # Assuming this is correct
 from services.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
 from utils.utils import (

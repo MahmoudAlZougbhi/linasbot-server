@@ -2,11 +2,11 @@
 
 import pytest
 
+from services.cm.language_policy import resolve_customer_response_language
 from services.cm.progress_quality import assess_section_fill
 from services.cm.query_interpreter import HUMAN_INTENT_RE
 from services.cm.request_rules import normalize_request_rule_item
 from services.cm.setup_chat import SETUP_SECTION_ORDER
-from services.cm.language_policy import resolve_customer_response_language
 from services.owner_copilot_v2.setup_flow import SETUP_SECTIONS
 from services.request_graphs.compiler import destination_from_type
 from services.requests.constants import REQUEST_TYPES

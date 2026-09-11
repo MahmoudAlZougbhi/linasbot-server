@@ -25,8 +25,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from services.billing_backend import billing_uses_postgres, require_billing_pg_session
-from services.plan_economics import PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
 from services.membership.feature_entitlements import additional_seats_for_plan, channel_flags_for_plan
+from services.plan_economics import PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
 from storage.persistent_storage import _DATA_ROOT as _DEFAULT_DATA_ROOT
 
 # Overridable in tests

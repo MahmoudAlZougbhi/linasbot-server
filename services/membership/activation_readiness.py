@@ -8,7 +8,6 @@ from services.membership.message_catalog import AI_SETUP_DAILY_EDIT_DEFAULT, UNC
 from services.membership.message_flags import activation_flags_report
 from services.membership.pg_store import store_backend
 
-
 EXPECTED_ALEMBIC_HEAD = "20260910_req_web_chat"
 LIVE_VERIFICATION_BLOCKERS = (
     "eval_suite_below_800",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from inspect import getsource
 
 from services.ai_reply_turn_runtime import (
@@ -171,7 +171,7 @@ def test_stale_credit_index_marks_unresolved_without_refund() -> None:
     record_open(tenant_id="idx-shop", reservation_id=rid, request_id="wa:mid", operation_type="whatsapp")
     from services.membership import credit_reservation_index as index
 
-    index._ITEMS[rid].created_at = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    index._ITEMS[rid].created_at = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
     assert list_stale_open(older_than_seconds=3600)
     assert watch_stale_legacy_credits() == 1
     pending = list_pending()
@@ -417,12 +417,12 @@ def test_leftover_index_get_prefers_sql_over_stale_memory(monkeypatch) -> None:
 
 
 def test_list_stale_open_unions_memory_and_sql(monkeypatch) -> None:
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from services.membership import credit_reservation_index as index
     from services.membership.credit_reservation_index import OpenCreditReservation, list_stale_open, record_open
 
-    old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    old = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
     item = record_open(
         tenant_id="idx-stale",
         reservation_id="rid-mem-stale",

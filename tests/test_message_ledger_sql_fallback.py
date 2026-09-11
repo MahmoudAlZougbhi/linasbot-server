@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -164,7 +164,7 @@ def test_list_stale_reserved_unions_memory_when_sql_empty(monkeypatch: pytest.Mo
         "services.membership.message_ledger_pg.pg_list_stale_reserved",
         lambda *_a, **_k: [],
     )
-    items = list_stale_reserved(older_than=datetime.now(timezone.utc), limit=50)
+    items = list_stale_reserved(older_than=datetime.now(UTC), limit=50)
     assert any(item.operation_id == "mid-stale" for item in items)
 
 

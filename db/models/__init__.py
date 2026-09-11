@@ -28,8 +28,6 @@ from db.models.message_billing import (
     CustomerAiCatalogAdminRow,
     CustomerAiConversationRow,
     CustomerAiCreditReservationIndexRow,
-    CustomerAiProcessingAttemptRow,
-    CustomerAiProcessingJobRow,
     CustomerAiDailyEditPolicyRow,
     CustomerAiDailyEditRow,
     CustomerAiExpenseEventRow,
@@ -37,6 +35,8 @@ from db.models.message_billing import (
     CustomerAiMessageReservationRow,
     CustomerAiOutboxRow,
     CustomerAiPendingSettlementRow,
+    CustomerAiProcessingAttemptRow,
+    CustomerAiProcessingJobRow,
 )
 from db.models.meta_registry import (
     MetaAssetBindingRow,

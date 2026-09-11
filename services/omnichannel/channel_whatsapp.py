@@ -18,8 +18,8 @@ async def generate_whatsapp_reply(
 ) -> tuple[str, str | None, str | None]:
     from services.customer_ai.history_ids import conversation_id_for_brain, message_id_for_brain
     from services.customer_ai.leftover_reserve import reserve_leftover_reply
-    from services.omnichannel.message_hold import release_unsent_omni_hold
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
+    from services.omnichannel.message_hold import release_unsent_omni_hold
 
     _live, _reason = whatsapp_public_onboarding_live()
     sender = str(payload.get("customer_wa_id") or payload.get("sender_id") or "")

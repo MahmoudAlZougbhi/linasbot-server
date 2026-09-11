@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from services.membership.daily_edits import known_daily_edit_tenant_ids, status as daily_edit_status
+from services.membership.daily_edits import known_daily_edit_tenant_ids
+from services.membership.daily_edits import status as daily_edit_status
 from services.membership.expense_journal import ExpenseEvent, event_dict, known_total, list_events
 from services.membership.message_ledger import known_ledger_tenant_ids, list_reservations, snapshot_dict
 from services.membership.message_policy import ZERO_DEBIT
@@ -137,7 +138,7 @@ def _largest_category(events: list[ExpenseEvent]) -> str:
 def period_bounds(preset: str | None) -> tuple[str | None, str | None]:
     if not preset or preset in {"all", "custom"}:
         return None, None
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     today = now.date()
     start = today
     if preset == "yesterday":

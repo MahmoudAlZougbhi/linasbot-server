@@ -81,7 +81,8 @@ async def cm_meta(request: Request) -> Any:
     else:
         tenant_runtime = "unpublished"
 
-    from services.membership.daily_edits import decision_payload, status as daily_edit_status
+    from services.membership.daily_edits import decision_payload
+    from services.membership.daily_edits import status as daily_edit_status
 
     return {
         "success": True,
@@ -136,7 +137,6 @@ async def cm_put_draft(
     from services.membership.daily_edits import (
         DailyEditLimitError,
         commit_edit,
-        decision_payload,
         release_edit,
         reserve_cm_section,
     )

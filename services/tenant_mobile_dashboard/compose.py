@@ -20,9 +20,9 @@ from services.membership.plan_catalog import PLAN_CATALOG
 from services.owner_ai_account_state import compute_cm_progress
 from services.plan_economics import PLAN_PRICES_USD, recommend_allowance
 from services.platform_owner_service import PlatformOwnerService
-from services.tenant_mobile_dashboard.message_surface import overlay_message_fields, workspace_message_balance
 from services.tenant_mobile_dashboard.activity import build_activity_summary
 from services.tenant_mobile_dashboard.channels import build_channel_breakdown
+from services.tenant_mobile_dashboard.message_surface import overlay_message_fields, workspace_message_balance
 from services.tenant_mobile_dashboard.periods import (
     PeriodValidationError,
     TimezoneValidationError,

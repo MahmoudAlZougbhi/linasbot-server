@@ -9,9 +9,9 @@ import pytest
 from services.customer_ai.billing import apply_message_billing, settle_after_send
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.customer_ai.contracts.turn import CustomerTurn
+from services.customer_ai.outbox import outbox_counts, recover_unsent, reset_outbox_for_tests
 from services.membership.lot_window import current_period_id
 from services.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests, snapshot
-from services.customer_ai.outbox import outbox_counts, recover_unsent, reset_outbox_for_tests
 from services.membership.pending_settlement import reset_pending_settlements_for_tests
 
 

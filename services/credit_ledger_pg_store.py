@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from datetime import UTC
 from typing import Any
 
 from sqlalchemy import select
@@ -127,7 +128,7 @@ def list_reserve_tenant_ids(session: Session) -> list[str]:
 
 def list_open_leftover_reservations(session: Session, tenant_id: str) -> list[dict[str, str]]:
     """Open leftover-credit reserves for one known tenant. No tenant guess."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     rows = session.scalars(select(CreditLedgerEntryRow).where(CreditLedgerEntryRow.tenant_id == tenant_id)).all()
     from services.membership.credit_reservation_scan import leftover_closed, leftover_op
@@ -146,7 +147,7 @@ def list_open_leftover_reservations(session: Session, tenant_id: str) -> list[di
         op = str(row.operation_type or "")
         if leftover_closed(rid, str(row.request_id or ""), closed) or not leftover_op(op):
             continue
-        created = datetime.fromtimestamp(float(row.created_at or 0), tz=timezone.utc).isoformat()
+        created = datetime.fromtimestamp(float(row.created_at or 0), tz=UTC).isoformat()
         out.append(
             {
                 "reservation_id": rid,

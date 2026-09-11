@@ -50,6 +50,7 @@ import modules.cm_setup_api  # noqa: E402, F401
 import modules.comments_inbox_api  # noqa: E402, F401
 import modules.content_files_api  # noqa: E402, F401
 import modules.creative_api  # noqa: E402, F401
+import modules.customer_ai_lab_api  # noqa: E402, F401
 import modules.dashboard_api  # noqa: E402, F401
 import modules.entitlements_api  # noqa: E402, F401
 import modules.event_handlers  # noqa: E402, F401
@@ -79,7 +80,6 @@ import modules.plans_api  # noqa: E402, F401
 import modules.platform_api  # noqa: E402, F401
 import modules.platform_message_api  # noqa: E402, F401
 import modules.platform_search_api  # noqa: E402, F401
-import modules.customer_ai_lab_api  # noqa: E402, F401
 import modules.products_media_api  # noqa: E402, F401
 import modules.public_landing_stats_api  # noqa: E402, F401
 import modules.queue_api  # noqa: E402, F401

@@ -10,6 +10,7 @@ from services.customer_ai.actions.confirm import confirmation_valid
 from services.customer_ai.actions.pending import attach_confirmation, try_confirm_pending
 from services.customer_ai.contracts.actions import ActionProposal, ActionProposalSet
 from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.customer_ai.contracts.turn import ConversationState, CustomerTurn
 from services.customer_ai.conversation_history import (
     append_visible_history,
@@ -23,7 +24,6 @@ from services.customer_ai.conversation_store import (
     reset_conversation_store_for_tests,
     save_conversation,
 )
-from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.customer_ai.history_ids import (
     conversation_id_for_brain,
     conversation_id_from_user_data,

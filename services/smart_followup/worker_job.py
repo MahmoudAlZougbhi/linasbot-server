@@ -153,7 +153,6 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             if job is None:
                 return {"job_id": job_id, "status": "missing"}
             from services.membership.message_flags import message_billing_enabled
-
             from services.smart_followup.billing_ids import leftover_followup_pins
 
             pins = leftover_followup_pins(job)
@@ -355,9 +354,8 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             settle_followup_from_snapshot(tenant_id, snapshot, accepted=True)
             leftover_captured = _capture(tenant_id, reservation_id)
             if reservation_id and not leftover_captured:
-                from services.membership.reservation_reconcile import hold_failed_capture_after_send
-
                 from services.membership.hold_policy import hold_billing_policy
+                from services.membership.reservation_reconcile import hold_failed_capture_after_send
 
                 hold_failed_capture_after_send(
                     tenant_id=tenant_id,
@@ -418,9 +416,8 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
 
         if send_result.reconciliation or send_result.status == "reconciliation_required":
             if send_result.provider_message_id:
-                from services.membership.reservation_reconcile import hold_failed_capture_after_send
-
                 from services.membership.hold_policy import hold_billing_policy
+                from services.membership.reservation_reconcile import hold_failed_capture_after_send
 
                 hold_failed_capture_after_send(
                     tenant_id=tenant_id,

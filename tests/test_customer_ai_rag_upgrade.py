@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
+from services.customer_ai.conversation_resolve import resolve_followup_query
 from services.customer_ai.evals.case_bank import build_case_bank, case_bank_snapshot
 from services.customer_ai.evals.metrics import mrr, ndcg_at_k, recall_at_k
 from services.customer_ai.evals.suite_runner import run_offline_suite
 from services.customer_ai.grounding.claims import claims_fail_closed, verify_claims
 from services.customer_ai.grounding.contradiction import detect_amount_contradictions
-from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.customer_ai.security.injection import evidence_has_injection, sanitize_evidence_for_prompt
-from services.customer_ai.conversation_resolve import resolve_followup_query
 from services.customer_ai.readiness import brain_readiness_report
+from services.customer_ai.security.injection import evidence_has_injection, sanitize_evidence_for_prompt
 from services.customer_ai.shadow import shadow_compare_payload, shadow_mode_enabled
 
 

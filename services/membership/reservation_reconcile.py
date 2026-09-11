@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from services.membership.pending_settlement import (
@@ -26,8 +26,8 @@ def _age_seconds(stamp: str) -> float:
     except ValueError:
         return 0.0
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return max(0.0, (datetime.now(timezone.utc) - parsed).total_seconds())
+        parsed = parsed.replace(tzinfo=UTC)
+    return max(0.0, (datetime.now(UTC) - parsed).total_seconds())
 
 
 def _retry_legacy(item: PendingSettlement) -> str:
@@ -138,11 +138,11 @@ def watch_stale_message_reservations(
     limit: int = DEFAULT_BATCH,
     max_age_seconds: int = ACTIVE_MAX_AGE_SECONDS,
 ) -> int:
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from services.membership.message_ledger import list_stale_reserved
 
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=max(1, int(max_age_seconds)))
+    cutoff = datetime.now(UTC) - timedelta(seconds=max(1, int(max_age_seconds)))
     watched = 0
     for reservation in list_stale_reserved(older_than=cutoff, limit=limit):
         upsert(

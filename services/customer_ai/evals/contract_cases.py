@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+from inspect import getsource
 from typing import Any
 
+from services.cm.schemas import RestrictedTopic
 from services.customer_ai.actions.confirm import confirmation_valid, looks_like_confirmation
+from services.customer_ai.actions.requests import request_source_channel
 from services.customer_ai.billing import classify_result, owner_preview_turn
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
-from services.customer_ai.contracts.turn import CustomerTurn
-from services.customer_ai.greeting import evaluate_greeting
-from services.customer_ai.history import build_history_snapshot
+from services.customer_ai.contracts.turn import CustomerTurn, MediaView
 from services.customer_ai.conversation_history import append_visible_history, load_stored_history_rows
 from services.customer_ai.conversation_store import reset_conversation_store_for_tests
-from services.customer_ai.actions.requests import request_source_channel
+from services.customer_ai.gates import evaluate_gates
+from services.customer_ai.greeting import evaluate_greeting
+from services.customer_ai.history import build_history_snapshot
 from services.customer_ai.history_ids import (
     conversation_id_for_brain,
     message_id_for_brain,
@@ -20,17 +23,17 @@ from services.customer_ai.history_ids import (
 )
 from services.customer_ai.history_tiktok import provider_conversation_id
 from services.customer_ai.history_web import session_id_from_conversation
-from services.customer_ai.policies.restricted import refuse_text
-from services.customer_ai.visual import visual_retrieval_decision
-from services.cm.schemas import RestrictedTopic
-from services.membership.feature_entitlements import channel_flags_for_plan, comments_allowed_for_plan, faq_limits_for_plan
-from services.membership.message_flags import activation_flags_report
 from services.customer_ai.planner.heuristic import plan_message
-from services.customer_ai.gates import evaluate_gates
+from services.customer_ai.policies.restricted import refuse_text
 from services.customer_ai.turn_pipeline import inbound_task_text
-from services.customer_ai.contracts.turn import MediaView
+from services.customer_ai.visual import visual_retrieval_decision
+from services.membership.feature_entitlements import (
+    channel_flags_for_plan,
+    comments_allowed_for_plan,
+    faq_limits_for_plan,
+)
+from services.membership.message_flags import activation_flags_report
 from services.membership.message_policy import message_units_for
-from inspect import getsource
 
 
 def _turn(**kwargs: Any) -> CustomerTurn:
@@ -82,9 +85,9 @@ def _tiktok_media_reaches_brain() -> bool:
 
 
 def _omni_generate_releases_unsent() -> bool:
-    from services.omnichannel.generate import handle_omnichannel_generate
-    from services.omnichannel.channel_whatsapp import generate_whatsapp_reply
     from services.customer_ai.test_lab import run_lab_turn
+    from services.omnichannel.channel_whatsapp import generate_whatsapp_reply
+    from services.omnichannel.generate import handle_omnichannel_generate
 
     return (
         "release_unsent_omni_hold" in getsource(handle_omnichannel_generate)
@@ -135,8 +138,8 @@ def _legacy_photo_fetches_ssrf_safe() -> bool:
 
 
 def _index_seeds_from_pending() -> bool:
-    from services.membership.reservation_reconcile import watch_stale_legacy_credits
     from services.membership.credit_reservation_scan import known_credit_tenant_ids
+    from services.membership.reservation_reconcile import watch_stale_legacy_credits
 
     src = getsource(watch_stale_legacy_credits)
     known = getsource(known_credit_tenant_ids)

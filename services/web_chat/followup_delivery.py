@@ -8,6 +8,7 @@ from typing import Literal
 
 from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
 from services.smart_followup.idempotency import canonical_sfu_credit_request_id, canonical_sfu_key
+from services.web_chat.followup_message_ledger import followup_uses_message_ledger
 from services.web_chat.operation import (
     OperationRuntime,
     abandon_operation_lease,
@@ -23,7 +24,6 @@ from services.web_chat.operation import (
 )
 from services.web_chat.operation_fsm import OperationFsmError, OperationState, stable_operation_key
 from services.web_chat.persistence import PersistFailure, PersistOutcome, persist_web_chat_message
-from services.web_chat.followup_message_ledger import followup_uses_message_ledger
 from services.web_chat.session_authority import verified_session_snapshot
 from services.web_chat.session_binding import FollowUpSessionBoundaryError, resolve_durable_visitor_binding
 from services.web_chat.store import WebChatStoreBackend, web_chat_store

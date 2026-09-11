@@ -7,20 +7,19 @@ import time
 from pathlib import Path
 from typing import Any
 
+from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.customer_ai.evals.case_bank import build_case_bank, case_bank_snapshot
 from services.customer_ai.evals.case_schema import EvalCase
-from services.customer_ai.evals.metrics import mean, percentile, retrieval_row
 from services.customer_ai.evals.fixtures import (
     hospitality_corpus,
     knowledge_heavy_corpus,
     product_retailer_corpus,
     service_appointment_corpus,
 )
+from services.customer_ai.evals.metrics import mean, percentile, retrieval_row
 from services.customer_ai.grounding.facts import ungrounded_claims
-from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.customer_ai.retrieve.cards import cards_from_sections
 from services.customer_ai.retrieve.lexical import search_cards
-
 
 ARTIFACT_DIR = Path(__file__).resolve().parent / "artifacts"
 

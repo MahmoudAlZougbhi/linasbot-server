@@ -215,6 +215,7 @@ def test_sql_outbox_survives_memory_clear(sql_message_store: Path) -> None:
 def test_sql_outbox_promotes_disk_when_pg_row_missing(sql_message_store: Path) -> None:
     from sqlalchemy import text
 
+    import services.customer_ai.outbox as outbox
     from db.session import whatsapp_session
     from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
     from services.customer_ai.outbox import (
@@ -224,7 +225,6 @@ def test_sql_outbox_promotes_disk_when_pg_row_missing(sql_message_store: Path) -
         recover_unsent,
         reset_outbox_for_tests,
     )
-    import services.customer_ai.outbox as outbox
 
     reset_outbox_for_tests()
     enqueue_envelope(

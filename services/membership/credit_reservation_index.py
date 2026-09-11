@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import threading
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from storage.persistent_storage import _DATA_ROOT
@@ -42,7 +42,7 @@ def reset_credit_reservation_index_for_tests() -> None:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _root() -> Path:
@@ -328,7 +328,7 @@ def open_counts(*, tenant_id: str = "", stale_after_seconds: int = 3600) -> dict
 
 def list_stale_open(*, older_than_seconds: int = 3600, limit: int = 50, after_id: str = "") -> list[OpenCreditReservation]:
     cap = max(1, min(int(limit), 200))
-    cutoff = datetime.now(timezone.utc).timestamp() - max(1, int(older_than_seconds))
+    cutoff = datetime.now(UTC).timestamp() - max(1, int(older_than_seconds))
     _hydrate()
     rows: list[OpenCreditReservation] = []
     seen: set[str] = set()
@@ -350,7 +350,7 @@ def list_stale_open(*, older_than_seconds: int = 3600, limit: int = 50, after_id
         try:
             parsed = datetime.fromisoformat(item.created_at.replace("Z", "+00:00"))
             if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
+                parsed = parsed.replace(tzinfo=UTC)
             if parsed.timestamp() > cutoff:
                 continue
         except ValueError:

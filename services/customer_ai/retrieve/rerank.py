@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import UTC
 
 from services.customer_ai.flags import voyage_configured
 from services.customer_ai.normalize import normalize_search_text
@@ -33,12 +34,12 @@ async def rerank_hits(query: str, hits: list[HybridHit], *, tenant_id: str = "")
     try:
         ranked = await rerank_texts(query=query, documents=documents, model=rerank_model())
         if tenant_id.strip():
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             from services.membership.provider_expense import record_pending_provider
 
             record_pending_provider(
-                event_id=f"rerank:{tenant_id}:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}",
+                event_id=f"rerank:{tenant_id}:{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}",
                 tenant_id=tenant_id,
                 category="rerank",
                 feature="knowledge",

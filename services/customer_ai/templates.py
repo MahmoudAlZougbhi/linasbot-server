@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 _HANDOFF = {
     "en": "A teammate will continue from here.",
     "ar": "سيكمل أحد الزملاء من هنا.",

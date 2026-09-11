@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -52,7 +52,7 @@ def test_reservation_insert_writes_created_at() -> None:
 
 
 def test_gc_parses_datetime_created_at() -> None:
-    stamp = datetime.now(timezone.utc) - timedelta(hours=2)
+    stamp = datetime.now(UTC) - timedelta(hours=2)
     assert _created_at(stamp) == stamp
     assert _created_at(stamp.isoformat()) is not None
     assert _created_at("") is None
@@ -305,8 +305,8 @@ def test_settle_after_send_does_not_mint_when_leftover_owns_turn(
 def test_followup_leftover_pins_include_conversation() -> None:
     from inspect import getsource
 
-    from services.smart_followup.billing_ids import leftover_followup_pins
     from services.smart_followup import worker_job
+    from services.smart_followup.billing_ids import leftover_followup_pins
 
     class _Job:
         conversation_id = "conv-1"

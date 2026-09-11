@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC
 
 from services.customer_ai.contracts.plan import PlannerPlan
 from services.customer_ai.generate.reply import openai_configured
@@ -63,14 +64,14 @@ async def plan_turn(
 ) -> PlannerPlan:
     planned = await plan_with_openai(message, history)
     if planned is not None and tenant_id.strip():
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from services.customer_ai.providers.config import planner_model
         from services.membership.provider_expense import record_pending_provider
 
         op = (operation_id or "planner").strip() or "planner"
         record_pending_provider(
-            event_id=f"llm-plan:{tenant_id}:{op}:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}",
+            event_id=f"llm-plan:{tenant_id}:{op}:{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}",
             tenant_id=tenant_id,
             category="llm_generation",
             feature="planning",

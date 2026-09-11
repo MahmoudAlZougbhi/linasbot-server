@@ -6,7 +6,7 @@ import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 DEFAULT_CONCURRENT_JOBS = 2
@@ -51,7 +51,7 @@ def reset_processing_budgets_for_tests() -> None:
 
 
 def _day() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    return datetime.now(UTC).date().isoformat()
 
 
 @contextmanager

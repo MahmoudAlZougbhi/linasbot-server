@@ -49,8 +49,8 @@ async def test_comment_ai_loads_history_and_parent(monkeypatch: pytest.MonkeyPat
     )
     monkeypatch.setattr("services.customer_ai.runtime.apply_message_billing", lambda _turn, result: result)
 
-    from services.entitlements_service import entitlements_store
     from services.customer_ai.runtime import run_customer_ai_comment
+    from services.entitlements_service import entitlements_store
 
     entitlements_store.set_plan(tenant_id="c-shop", plan_id="starter", status="active", source="admin")
     outcome = await run_customer_ai_comment(
@@ -106,8 +106,8 @@ async def test_comment_gate_blocks_lite_like_meta(monkeypatch: pytest.MonkeyPatc
 
 @pytest.mark.asyncio
 async def test_whatsapp_brain_blocks_lite(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.entitlements_service import entitlements_store
     from services.customer_ai.runtime import run_customer_ai_dm
+    from services.entitlements_service import entitlements_store
 
     entitlements_store.set_plan(tenant_id="lite-wa", plan_id="lite", status="active", source="admin")
     blocked = await run_customer_ai_dm(tenant_id="lite-wa", message="hi", channel="whatsapp")
@@ -130,8 +130,8 @@ async def test_whatsapp_brain_blocks_lite(monkeypatch: pytest.MonkeyPatch) -> No
 async def test_followup_gate_waits_for_enforcement_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
     monkeypatch.delenv("FREE_PLAN_ENFORCEMENT_ENABLED", raising=False)
-    from services.entitlements_service import entitlements_store
     from services.customer_ai.runtime import run_customer_ai_dm
+    from services.entitlements_service import entitlements_store
 
     entitlements_store.set_plan(tenant_id="free-fu", plan_id="free", status="active", source="admin")
     monkeypatch.setattr(
@@ -242,11 +242,11 @@ def test_comment_path_is_permanent_brain(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_manual_comment_mode_is_zero_units() -> None:
+    from services.customer_ai.billing import classify_result
     from services.customer_ai.comment_normalize import normalize_comment_mode
     from services.customer_ai.comments.pipeline import deterministic_comment_result
-    from services.membership.message_policy import message_units_for
-    from services.customer_ai.billing import classify_result
     from services.customer_ai.contracts.turn import CustomerTurn
+    from services.membership.message_policy import message_units_for
 
     assert normalize_comment_mode(action="manual") == "manual"
     result = deterministic_comment_result("manual", type("D", (), {"reply_text": "", "dm_text": "", "rule_id": "r1"})())

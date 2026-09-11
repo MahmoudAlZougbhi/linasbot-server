@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from time import monotonic
 from typing import Any
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def stamp(extra: dict[str, Any] | None, stage: str, *, title: str, detail: dict[str, Any] | None = None) -> dict[str, Any]:

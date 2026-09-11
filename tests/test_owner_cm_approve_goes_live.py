@@ -216,7 +216,7 @@ async def test_tool_approve_cm_patch_maps_daily_edit_limit(
     proposal_store: CmPatchProposalStore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.membership.daily_edits import DailyEditDecision, DailyEditLimitError, LIMIT_CODE
+    from services.membership.daily_edits import LIMIT_CODE, DailyEditDecision, DailyEditLimitError
     from services.owner_ai_tools_write import tool_approve_cm_patch
 
     def _blocked(**_kwargs: Any) -> Any:
@@ -258,7 +258,7 @@ async def test_tool_approve_cm_patch_maps_daily_edit_limit(
 
 @pytest.mark.asyncio
 async def test_tool_approve_diagnosis_fix_maps_daily_edit_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.membership.daily_edits import DailyEditDecision, DailyEditLimitError, LIMIT_CODE
+    from services.membership.daily_edits import LIMIT_CODE, DailyEditDecision, DailyEditLimitError
     from services.owner_ai_tools_diagnosis import tool_approve_diagnosis_fix
 
     async def _blocked(**_kwargs: Any) -> Any:

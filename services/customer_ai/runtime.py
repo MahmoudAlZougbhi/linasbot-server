@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.customer_ai.billing import apply_message_billing, operation_id_for_turn
+from services.customer_ai.channel_plan import assert_channel_plan_allowed, denied_code
+from services.customer_ai.comments.pipeline import deterministic_comment_result, winning_comment_mode
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.customer_ai.contracts.turn import CustomerTurn, MediaView
 from services.customer_ai.control import apply_live_control
-from services.customer_ai.gates import evaluate_gates
-from services.customer_ai.comments.pipeline import deterministic_comment_result, winning_comment_mode
-from services.customer_ai.history_store import load_history_snapshot
 from services.customer_ai.conversation_history import record_turn_history
 from services.customer_ai.conversation_store import hydrate_turn_state, remember_turn
+from services.customer_ai.gates import evaluate_gates
 from services.customer_ai.history_ids import bind_dm_ids, comment_conversation_id
-from services.customer_ai.billing import apply_message_billing, operation_id_for_turn
-from services.customer_ai.channel_plan import assert_channel_plan_allowed, denied_code
+from services.customer_ai.history_store import load_history_snapshot
 from services.customer_ai.turn_pipeline import run_dm_after_gates
 from services.customer_reply_v2.models import CustomerReplyOutcome
 

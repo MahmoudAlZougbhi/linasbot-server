@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.customer_ai.evals.fixtures import hospitality_corpus, service_appointment_corpus
 from services.customer_ai.grounding.facts import evidence_supports_text, ungrounded_claims
 from services.customer_ai.planner.heuristic import plan_message
 from services.customer_ai.retrieve.cards import cards_from_sections
 from services.customer_ai.retrieve.expand import expand_ranked
 from services.customer_ai.retrieve.lexical import LexicalHit, search_cards
-from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
 
 
 def _case(case_id: str, *, ok: bool, detail: dict[str, Any] | None = None) -> dict[str, Any]:

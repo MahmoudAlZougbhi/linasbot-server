@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -46,9 +46,9 @@ def _iso(created_at: Any) -> str:
     if isinstance(created_at, str) and created_at.strip():
         return created_at
     try:
-        return datetime.fromtimestamp(float(created_at or 0), tz=timezone.utc).isoformat()
+        return datetime.fromtimestamp(float(created_at or 0), tz=UTC).isoformat()
     except (TypeError, ValueError, OSError):
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
 
 def known_credit_tenant_ids() -> list[str]:

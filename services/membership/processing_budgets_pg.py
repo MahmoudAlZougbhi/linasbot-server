@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -39,11 +39,11 @@ def pg_reset(session: Any) -> None:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _cutoff() -> str:
-    return (datetime.now(timezone.utc) - timedelta(seconds=JOB_STALE_SECONDS)).isoformat()
+    return (datetime.now(UTC) - timedelta(seconds=JOB_STALE_SECONDS)).isoformat()
 
 
 def pg_consume_attempt(session: Any, *, tenant_id: str, day_id: str, limit: int) -> int | None:

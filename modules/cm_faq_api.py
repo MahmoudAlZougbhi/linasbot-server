@@ -284,7 +284,6 @@ async def cm_put_smart_answer_languages(request: Request, body: dict[str, Any] =
     translate_existing = bool(body.get("translate_existing"))
     from services.cm.faq_integration import FaqIntegrationError, translate_existing_faq_groups_to_language
     from services.cm.smart_answer_languages import save_smart_answer_languages
-
     from services.membership.daily_edits import DailyEditLimitError
     from services.membership.edit_http import guarded_edit, limit_response
 
@@ -334,7 +333,6 @@ async def cm_delete_smart_answer_language(request: Request, language: str) -> An
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
     from services.cm.faq_integration import FaqIntegrationError, purge_smart_answer_language_data
-
     from services.membership.daily_edits import DailyEditLimitError
     from services.membership.edit_http import guarded_edit, limit_response
 

@@ -17,11 +17,11 @@ from services.customer_ai.contracts.turn import ConversationState, CustomerTurn,
 from services.customer_ai.faq_freshness import faq_static_allowed, looks_like_dynamic_fact
 from services.customer_ai.followup.revalidate import revalidate_followup_send
 from services.customer_ai.gates import evaluate_gates
-from services.customer_ai.turn_pipeline import inbound_task_text
 from services.customer_ai.outbox_test import reset_saved_outbox, save_envelope_for_test, saved_outbox
 from services.customer_ai.policies.privacy import public_comment_safe
 from services.customer_ai.search.invalidate import mark_products_stale
 from services.customer_ai.search.store import query_similar, reset_memory_store, write_documents
+from services.customer_ai.turn_pipeline import inbound_task_text
 from services.customer_ai.visual import visual_retrieval_decision
 
 
@@ -419,9 +419,9 @@ def test_fixture_eval_runner_has_no_live_spend() -> None:
 
 
 def test_branch_schedule_hydrates_hours() -> None:
+    from services.customer_ai.retrieve.cards import TitleCard
     from services.customer_ai.retrieve.expand import expand_ranked
     from services.customer_ai.retrieve.lexical import LexicalHit
-    from services.customer_ai.retrieve.cards import TitleCard
 
     card = TitleCard(item_id="hours:main", source_family="hours", title="Main", search_text="hours")
     sections = {

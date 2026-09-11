@@ -21,8 +21,8 @@ from services.customer_ai.contracts.plan import PlannerPlan
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
 from services.customer_ai.contracts.turn import CustomerTurn
 from services.customer_ai.grounding.claims import claims_fail_closed, verify_claims
-from services.customer_ai.grounding.facts import ungrounded_amounts, ungrounded_claims
 from services.customer_ai.grounding.contradiction import detect_amount_contradictions
+from services.customer_ai.grounding.facts import ungrounded_amounts, ungrounded_claims
 from services.customer_ai.identity import IdentityBundle
 from services.customer_ai.providers.config import answer_model
 

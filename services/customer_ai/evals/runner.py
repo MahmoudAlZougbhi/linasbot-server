@@ -14,8 +14,8 @@ from services.customer_ai.evals.fixtures import (
 )
 from services.customer_ai.evals.golden_pack_linas import run_golden_pack_linas
 from services.customer_ai.planner.heuristic import plan_message
-from services.customer_ai.retrieve.expand import expand_ranked
 from services.customer_ai.retrieve.cards import cards_from_sections
+from services.customer_ai.retrieve.expand import expand_ranked
 from services.customer_ai.retrieve.lexical import LexicalHit, search_cards
 
 
@@ -77,8 +77,8 @@ def run_fixture_corpus() -> dict[str, Any]:
             )
     contract = run_contract_cases()
     golden = run_golden_pack_linas()
-    from services.customer_ai.evals.suite_runner import run_offline_suite
     from services.customer_ai.evals.latency_bench import run_latency_benchmark
+    from services.customer_ai.evals.suite_runner import run_offline_suite
 
     offline = run_offline_suite(write_artifact=True)
     latency = run_latency_benchmark(repeats=20)

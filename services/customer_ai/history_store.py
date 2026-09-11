@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.customer_ai.history import build_history_snapshot
 from services.customer_ai.contracts.turn import HistorySnapshot
+from services.customer_ai.history import build_history_snapshot
 
 
 def _as_raw(rows: list[Any]) -> list[dict[str, Any]]:

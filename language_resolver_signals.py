@@ -13,7 +13,7 @@ from typing import List, Optional, Tuple
 from language_resolver_text import alpha_len, clean, mask_times, tokenize
 
 try:
-    from langdetect import detect, detect_langs, LangDetectException
+    from langdetect import LangDetectException, detect, detect_langs
 except Exception:
     detect = None
     detect_langs = None

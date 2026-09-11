@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import UTC
 
 from services.customer_ai.budgets import DEFAULT_BUDGETS
 from services.customer_ai.contracts.enums import SourceFamily
@@ -73,7 +74,7 @@ async def _semantic_from_store(
     if use_knowledge and doc_space is KNOWLEDGE_DOCUMENT:
         spaces.append((ENTITY_DOCUMENT, ENTITY_QUERY))
 
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from services.membership.provider_expense import record_pending_provider
 
@@ -122,7 +123,7 @@ async def _semantic_from_store(
             except Exception:
                 continue
         record_pending_provider(
-            event_id=f"embed-query:{tenant_id}:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}",
+            event_id=f"embed-query:{tenant_id}:{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}",
             tenant_id=tenant_id,
             category="embedding",
             feature="customer_chat",
@@ -139,7 +140,7 @@ async def _semantic_from_store(
         }
         mapped = None
         try:
-            from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+            from db.session import whatsapp_session
 
             with whatsapp_session(require=True) as session:
                 mapped = _map(query_similar(session, **query_kwargs))

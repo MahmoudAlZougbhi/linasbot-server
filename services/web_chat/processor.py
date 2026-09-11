@@ -8,6 +8,7 @@ from typing import Any
 
 from services.web_chat.constants import CHANNEL_ID, SOURCE_CHANNEL_WEB_CHAT, USER_ID_PREFIX
 from services.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle, tenant_scoped_user_data
+from services.web_chat.eligibility import evaluate_web_ai_eligibility
 from services.web_chat.operation import (
     advance_operation,
     begin_operation,
@@ -20,7 +21,6 @@ from services.web_chat.operation_fence import fenced_failure_release
 from services.web_chat.operation_fsm import OperationFsmError, OperationState, stable_operation_key
 from services.web_chat.persistence import PersistFailure, PersistOutcome, persist_web_chat_message
 from services.web_chat.session_authority import verified_session_snapshot
-from services.web_chat.eligibility import evaluate_web_ai_eligibility
 from services.web_chat.store import WebChatStoreBackend, WebChatVisitorSession, WebChatWidgetConfig, web_chat_store
 
 
