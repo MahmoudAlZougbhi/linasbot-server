@@ -54,6 +54,18 @@ def test_invented_opening_hours_are_ungrounded() -> None:
     assert any(reason.startswith("hours:day:sunday") for reason in invented_day)
 
 
+def test_day_names_are_compared_across_languages() -> None:
+    bundle = _bundle("Beirut branch\nmonday 09:00 - 18:00")
+    # Arabic reply against English evidence is the same day, not an invented one.
+    assert ungrounded_claims("يوم الاثنين مفتوحين من 09:00 لـ 18:00", bundle) == []
+    assert "hours:day:sunday" in ungrounded_claims("مفتوحين يوم الاحد من 09:00 لـ 18:00", bundle)
+
+
+def test_clock_times_are_not_read_as_phone_numbers() -> None:
+    bundle = _bundle("Branch\nmonday 09:00 - 18:00\ntuesday 10:00 - 20:00")
+    assert ungrounded_claims("Monday 09:00 - 18:00 and tuesday 10:00 - 20:00", bundle) == []
+
+
 def test_open_claim_without_any_hours_evidence_fails_closed() -> None:
     bundle = _bundle("Hair Removal\n99.0 USD / session")
     assert "hours:no_hours_evidence" in ungrounded_claims("We are open every day", bundle)
