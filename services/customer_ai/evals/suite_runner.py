@@ -68,9 +68,7 @@ def _run_case(case: EvalCase, cards) -> dict[str, Any]:
         result["retrieval"] = metrics
         result["ranked"] = ranked[:10]
         # Pass if any relevant appears in top-10 OR corpus genuinely lacks it (still record miss).
-        result["ok"] = metrics["recall@10"] > 0.0 or not any(
-            card.item_id in case.relevant_ids for card in cards
-        )
+        result["ok"] = metrics["recall@10"] > 0.0 or not any(card.item_id in case.relevant_ids for card in cards)
     elif case.expected in {"grounded_ok", "ungrounded", "abstain"}:
         claims = ungrounded_claims(case.candidate_reply, _bundle_from_text(case.evidence_text))
         if case.expected == "grounded_ok":
@@ -95,8 +93,8 @@ def _run_case(case: EvalCase, cards) -> dict[str, Any]:
         plan = plan_message(case.query)
         types = {task.type for task in plan.tasks}
         if case.expected == "handoff":
-            result["ok"] = ("human_request" in types) or ("human" in case.query.lower()) or (
-                "speak to" in case.query.lower()
+            result["ok"] = (
+                ("human_request" in types) or ("human" in case.query.lower()) or ("speak to" in case.query.lower())
             )
         else:
             result["ok"] = len(plan.tasks) >= 1
@@ -122,14 +120,8 @@ def _aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
     retrieval_metrics = [r["retrieval"] for r in results if isinstance(r.get("retrieval"), dict)]
     latencies = [float(r.get("latency_ms") or 0.0) for r in results]
     grounded = [r for r in results if r.get("expected") in {"grounded_ok", "ungrounded", "abstain"}]
-    unsupported = [
-        r
-        for r in grounded
-        if r.get("expected") in {"ungrounded", "abstain"} and r.get("ok")
-    ]
-    missed_ungrounded = [
-        r for r in grounded if r.get("expected") in {"ungrounded", "abstain"} and not r.get("ok")
-    ]
+    unsupported = [r for r in grounded if r.get("expected") in {"ungrounded", "abstain"} and r.get("ok")]
+    missed_ungrounded = [r for r in grounded if r.get("expected") in {"ungrounded", "abstain"} and not r.get("ok")]
 
     def _mean_metric(key: str) -> float:
         return mean(float(m.get(key) or 0.0) for m in retrieval_metrics)

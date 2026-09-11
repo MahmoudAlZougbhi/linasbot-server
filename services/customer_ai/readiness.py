@@ -116,7 +116,9 @@ def brain_readiness_report(*, tenant_id: str = "linas") -> dict[str, Any]:
         if row.get("status") == "FAIL" and name in {"CODE", "CONTEXTUAL_MODEL", "ATOMIC_SWITCH", "TOOLS"}
     ]
     return {
-        "ok": all(checks[k] for k in ("brain_permanent", "enable_flag_removed", "billing_cutover_off", "emergency_legacy_off")),
+        "ok": all(
+            checks[k] for k in ("brain_permanent", "enable_flag_removed", "billing_cutover_off", "emergency_legacy_off")
+        ),
         "tenant_id": tenant_id,
         "gates": gates,
         "checks": checks,

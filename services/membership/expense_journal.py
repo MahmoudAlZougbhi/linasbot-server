@@ -20,6 +20,7 @@ def expense_environment(raw: str | None = None) -> str:
         return value
     return "test"
 
+
 ExpenseCategory = Literal[
     "llm_generation",
     "embedding",
@@ -35,7 +36,7 @@ ExpenseCategory = Literal[
 ExpenseStatus = Literal["known", "pending", "unpriced", "estimated", "adjusted"]
 
 _LOCK = threading.Lock()
-_EVENTS: list["ExpenseEvent"] = []
+_EVENTS: list[ExpenseEvent] = []
 
 
 @dataclass

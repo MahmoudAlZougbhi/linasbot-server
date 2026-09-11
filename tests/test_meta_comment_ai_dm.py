@@ -70,9 +70,7 @@ async def test_ai_dm_calls_generate(tmp_path, monkeypatch) -> None:
                 rule_id="ai-dm-1",
             ),
         )
-        generate = mock.AsyncMock(
-            return_value=CommentDestinations(private_text="Hours are 9-5", comment_mode="ai_dm")
-        )
+        generate = mock.AsyncMock(return_value=CommentDestinations(private_text="Hours are 9-5", comment_mode="ai_dm"))
         monkeypatch.setattr("services.meta_comment_replies._generate_comment_reply_text", generate)
         monkeypatch.setattr(
             "services.meta_comment_replies._comment_has_page_reply",
@@ -149,4 +147,3 @@ def test_meta_ingress_source_routes_ai_dm() -> None:
     assert "allows_private_after_public_reply" in src
     assert "comment_rule_dm_template_required" not in src
     assert "is_static_public_comment" in src
-

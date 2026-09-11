@@ -86,9 +86,7 @@ def test_release_on_ai_failure_no_capture(ledger_env: CreditLedgerService, turn_
     assert leftover_policy_for("t1", "mid-2") is None
 
 
-def test_capture_after_reply_persisted_settles_leftover_hold(
-    ledger_env: CreditLedgerService, turn_store: None
-) -> None:
+def test_capture_after_reply_persisted_settles_leftover_hold(ledger_env: CreditLedgerService, turn_store: None) -> None:
     from services.customer_ai.leftover_reserve import leftover_policy_for, reset_leftover_pins_for_tests
     from services.membership.pending_settlement import get_pending, reset_pending_settlements_for_tests
 

@@ -22,7 +22,9 @@ def _plan(*tasks: PlannerTask) -> PlannerPlan:
     return PlannerPlan(tasks=list(tasks), read_only=True)
 
 
-def _task(task_id: str, task_type: str = "information", *, families: list[str] | None = None, span: str = "") -> PlannerTask:
+def _task(
+    task_id: str, task_type: str = "information", *, families: list[str] | None = None, span: str = ""
+) -> PlannerTask:
     return PlannerTask(
         id=task_id,
         type=task_type,  # type: ignore[arg-type]

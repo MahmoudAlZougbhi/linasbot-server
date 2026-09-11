@@ -42,9 +42,7 @@ def load_tiktok_history_rows(conversation_id: str) -> list[dict[str, Any]]:
         from db.session import whatsapp_session
 
         with whatsapp_session() as session:
-            conv = session.scalar(
-                select(TikTokConversation).where(TikTokConversation.conversation_id == cid).limit(1)
-            )
+            conv = session.scalar(select(TikTokConversation).where(TikTokConversation.conversation_id == cid).limit(1))
             if conv is None:
                 return []
             rows = list(

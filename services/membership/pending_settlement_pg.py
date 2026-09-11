@@ -148,13 +148,17 @@ def pg_policy_for(session: Any, tenant_id: str, operation_ids: set[str]) -> str 
     row = session.execute(stmt, {"tid": tenant_id, "ops": tuple(operation_ids)}).mappings().first()
     if row and row.get("billing_policy"):
         return str(row["billing_policy"])
-    rows = session.execute(
-        text(
-            "SELECT billing_policy, extra FROM customer_ai_pending_settlements "
-            "WHERE tenant_id = :tid AND state IN ('reserved', 'pending_settlement')"
-        ),
-        {"tid": tenant_id},
-    ).mappings().all()
+    rows = (
+        session.execute(
+            text(
+                "SELECT billing_policy, extra FROM customer_ai_pending_settlements "
+                "WHERE tenant_id = :tid AND state IN ('reserved', 'pending_settlement')"
+            ),
+            {"tid": tenant_id},
+        )
+        .mappings()
+        .all()
+    )
     wanted = {str(item).strip() for item in operation_ids if str(item).strip()}
     for raw in rows:
         extra = raw.get("extra") or {}
@@ -188,14 +192,18 @@ def pg_get_by_alias(session: Any, tenant_id: str, tokens: set[str]) -> PendingSe
     row = session.execute(stmt, {"tid": tenant_id, "ops": tuple(wanted)}).mappings().first()
     if row:
         return _row(dict(row))
-    rows = session.execute(
-        text(
-            "SELECT settlement_id, tenant_id, reservation_id, operation_id, billing_policy, state, "
-            "created_at, updated_at, attempts, send_status, provider_message_id, channel, reason, extra "
-            "FROM customer_ai_pending_settlements WHERE tenant_id = :tid"
-        ),
-        {"tid": tenant_id},
-    ).mappings().all()
+    rows = (
+        session.execute(
+            text(
+                "SELECT settlement_id, tenant_id, reservation_id, operation_id, billing_policy, state, "
+                "created_at, updated_at, attempts, send_status, provider_message_id, channel, reason, extra "
+                "FROM customer_ai_pending_settlements WHERE tenant_id = :tid"
+            ),
+            {"tid": tenant_id},
+        )
+        .mappings()
+        .all()
+    )
     for raw in rows:
         extra = raw.get("extra") or {}
         if isinstance(extra, str):
@@ -216,25 +224,33 @@ def pg_get_by_alias(session: Any, tenant_id: str, tokens: set[str]) -> PendingSe
 def pg_get_by_reservation(session: Any, tenant_id: str, reservation_id: str) -> PendingSettlement | None:
     if not tenant_id or not reservation_id:
         return None
-    row = session.execute(
-        text(
-            "SELECT settlement_id, tenant_id, reservation_id, operation_id, billing_policy, state, "
-            "created_at, updated_at, attempts, send_status, provider_message_id, channel, reason, extra "
-            "FROM customer_ai_pending_settlements WHERE tenant_id = :tid AND reservation_id = :rid "
-            "ORDER BY settlement_id LIMIT 1"
-        ),
-        {"tid": tenant_id, "rid": reservation_id},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "SELECT settlement_id, tenant_id, reservation_id, operation_id, billing_policy, state, "
+                "created_at, updated_at, attempts, send_status, provider_message_id, channel, reason, extra "
+                "FROM customer_ai_pending_settlements WHERE tenant_id = :tid AND reservation_id = :rid "
+                "ORDER BY settlement_id LIMIT 1"
+            ),
+            {"tid": tenant_id, "rid": reservation_id},
+        )
+        .mappings()
+        .first()
+    )
     return _row(dict(row)) if row else None
 
 
 def pg_get(session: Any, settlement_id: str) -> PendingSettlement | None:
-    row = session.execute(
-        text(
-            "SELECT settlement_id, tenant_id, reservation_id, operation_id, billing_policy, state, "
-            "created_at, updated_at, attempts, send_status, provider_message_id, channel, reason, extra "
-            "FROM customer_ai_pending_settlements WHERE settlement_id = :sid"
-        ),
-        {"sid": settlement_id},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "SELECT settlement_id, tenant_id, reservation_id, operation_id, billing_policy, state, "
+                "created_at, updated_at, attempts, send_status, provider_message_id, channel, reason, extra "
+                "FROM customer_ai_pending_settlements WHERE settlement_id = :sid"
+            ),
+            {"sid": settlement_id},
+        )
+        .mappings()
+        .first()
+    )
     return _row(dict(row)) if row else None

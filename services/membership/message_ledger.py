@@ -18,6 +18,7 @@ from services.membership.message_policy import ResponseClass, message_units_for
 def _live_remaining(lot: MessageLot) -> int:
     return lot.remaining if lot_is_live(lot) else 0
 
+
 _LOCK = threading.Lock()
 
 
@@ -264,11 +265,7 @@ def reserve(
             )
             _RESERVATIONS[key] = reservation
             return reservation
-        held = sum(
-            item.units
-            for item in _RESERVATIONS.values()
-            if item.tenant_id == tid and item.status == "reserved"
-        )
+        held = sum(item.units for item in _RESERVATIONS.values() if item.tenant_id == tid and item.status == "reserved")
         available = sum(_live_remaining(lot) for lot in _LOTS.get(tid, [])) - held
         if available < units:
             raise InsufficientMessages(tid, max(0, available))

@@ -8,7 +8,6 @@ and full-name heuristics. (LOC split from language_resolver.)
 from __future__ import annotations
 
 import re
-from typing import List
 
 # ============================================================
 # 1) Helpers: cleaning, tokenization, counts
@@ -30,7 +29,7 @@ def alpha_len(text: str) -> int:
     """Count alphabetic chars across scripts."""
     return sum(ch.isalpha() for ch in text)
 
-def tokenize(text: str) -> List[str]:
+def tokenize(text: str) -> list[str]:
     """Tokenize Latin/accents/digits/apostrophes; keeps digits for Arabizi."""
     return re.findall(r"[a-zA-Z0-9\u00C0-\u00FF']+", (text or "").lower())
 

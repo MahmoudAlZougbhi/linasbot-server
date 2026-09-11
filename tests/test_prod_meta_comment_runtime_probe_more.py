@@ -29,7 +29,8 @@ from tests.prod_meta_comment_runtime_probe_support import (
     _verification_keys,
 )
 
-pytest_plugins = ('tests.prod_meta_comment_runtime_probe_support',)
+pytest_plugins = ("tests.prod_meta_comment_runtime_probe_support",)
+
 
 def test_manifest_requires_exact_four_distinct_event_ids() -> None:
     duplicate = dict(EVENTS)

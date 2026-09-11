@@ -261,7 +261,9 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
         if not created and intent.dispatch_state in {"sent", "suppressed"}:
             release_turn()
             return
-        if not created and (intent.dispatch_state == "sending" or str(getattr(intent, "canonical_text", "") or "").strip()):
+        if not created and (
+            intent.dispatch_state == "sending" or str(getattr(intent, "canonical_text", "") or "").strip()
+        ):
             _enqueue_whatsapp_intent_deliver(tenant_id=tenant_id, intent_id=intent.id, conversation_id=conversation_id)
             return
 

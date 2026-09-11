@@ -79,7 +79,7 @@ def _tiktok_media_reaches_brain() -> bool:
     omni = getsource(omni_generate)
     return (
         "hydrate_tiktok_inbound_media" in hook
-        and "inbound_media.get(\"attachment_types\")" in hook
+        and 'inbound_media.get("attachment_types")' in hook
         and "inbound_media=inbound_media or None" in omni
     )
 
@@ -105,7 +105,9 @@ def _comment_threads_share_fallback() -> bool:
         channel="instagram_comment",
         post_id="p1",
     )
-    return fallback == "comment:t:instagram_comment:p1" and "comment_conversation_id" in getsource(run_customer_ai_comment)
+    return fallback == "comment:t:instagram_comment:p1" and "comment_conversation_id" in getsource(
+        run_customer_ai_comment
+    )
 
 
 def _history_routes_by_channel() -> bool:
@@ -369,10 +371,7 @@ def run_contract_cases() -> dict[str, Any]:
         },
         {
             "id": "omni_conversation_id",
-            "ok": conversation_id_for_brain(
-                payload={"conversation_id": "ig-thread-12345678"}
-            )
-            == "ig-thread-12345678",
+            "ok": conversation_id_for_brain(payload={"conversation_id": "ig-thread-12345678"}) == "ig-thread-12345678",
         },
         {
             "id": "stored_history_fallback",

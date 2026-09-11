@@ -48,7 +48,9 @@ def mark_stale(tenant_id: str, *, content_version: str = "", reason: str = "cont
     )
 
 
-def resolve_health(*, content_version: str, index_version: str, indexing: bool = False, failed: bool = False) -> IndexHealth:
+def resolve_health(
+    *, content_version: str, index_version: str, indexing: bool = False, failed: bool = False
+) -> IndexHealth:
     if failed:
         return "FAILED"
     if indexing:

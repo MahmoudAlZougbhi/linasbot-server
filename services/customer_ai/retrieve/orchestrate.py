@@ -49,9 +49,7 @@ async def retrieve_cards(
     if not voyage_configured():
         return EvidenceBundle(outcome="provider_not_configured")
     try:
-        hits: list[HybridHit] = await search_hybrid(
-            scoped, query, families=families, limit=_cap(), tenant_id=tenant_id
-        )
+        hits: list[HybridHit] = await search_hybrid(scoped, query, families=families, limit=_cap(), tenant_id=tenant_id)
         hits = await rerank_hits(query, hits, tenant_id=tenant_id)
     except VoyageNotConfiguredError:
         return EvidenceBundle(outcome="provider_not_configured")
@@ -81,9 +79,7 @@ async def retrieve_published(ctx: RetrieveContext) -> EvidenceBundle:
         status = resolve_search_readiness(ctx.tenant_id)
         if not status.ready:
             reason = (
-                status.reason
-                if status.reason in {"provider_not_configured", "index_not_ready"}
-                else "index_not_ready"
+                status.reason if status.reason in {"provider_not_configured", "index_not_ready"} else "index_not_ready"
             )
             return EvidenceBundle(outcome=reason)  # type: ignore[arg-type]
     sections = ctx.sections

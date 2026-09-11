@@ -46,9 +46,7 @@ async def send_comment_destinations(
     if simulation:
         if capture_send is not None:
             if private:
-                capture_send.append(
-                    _dm_payload(comment_id=comment_id, binding=binding, text=private, rule_id=rule_id)
-                )
+                capture_send.append(_dm_payload(comment_id=comment_id, binding=binding, text=private, rule_id=rule_id))
             if public:
                 capture_send.append(
                     _public_payload(comment_id=comment_id, binding=binding, text=public, rule_id=rule_id)

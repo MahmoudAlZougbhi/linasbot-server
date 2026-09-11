@@ -33,11 +33,17 @@ def pg_grant_lot(
     expires: bool,
     catalog_version: str,
 ) -> MessageLot:
-    existing = session.execute(
-        text("SELECT lot_id, tenant_id, kind, period_id, granted, remaining, expires, catalog_version "
-             "FROM customer_ai_message_lots WHERE lot_id = :lot_id"),
-        {"lot_id": lot_id},
-    ).mappings().first()
+    existing = (
+        session.execute(
+            text(
+                "SELECT lot_id, tenant_id, kind, period_id, granted, remaining, expires, catalog_version "
+                "FROM customer_ai_message_lots WHERE lot_id = :lot_id"
+            ),
+            {"lot_id": lot_id},
+        )
+        .mappings()
+        .first()
+    )
     if existing:
         return MessageLot(**dict(existing))
     session.execute(
@@ -70,13 +76,17 @@ def pg_grant_lot(
 
 
 def pg_snapshot(session: Any, tenant_id: str) -> LedgerSnapshot:
-    lots_rows = session.execute(
-        text(
-            "SELECT lot_id, tenant_id, kind, period_id, granted, remaining, expires, catalog_version "
-            "FROM customer_ai_message_lots WHERE tenant_id = :tid"
-        ),
-        {"tid": tenant_id},
-    ).mappings().all()
+    lots_rows = (
+        session.execute(
+            text(
+                "SELECT lot_id, tenant_id, kind, period_id, granted, remaining, expires, catalog_version "
+                "FROM customer_ai_message_lots WHERE tenant_id = :tid"
+            ),
+            {"tid": tenant_id},
+        )
+        .mappings()
+        .all()
+    )
     lots = [MessageLot(**dict(row)) for row in lots_rows]
     reserved = session.execute(
         text(
@@ -104,16 +114,19 @@ def _row_lock(session: Any) -> str:
 
 
 def _pick_lot(session: Any, tenant_id: str) -> MessageLot | None:
-    row = session.execute(
-        text(
-            "SELECT lot_id, tenant_id, kind, period_id, granted, remaining, expires, catalog_version "
-            "FROM customer_ai_message_lots WHERE tenant_id = :tid AND remaining > 0 "
-            "AND (expires = false OR period_id = :period) "
-            "ORDER BY CASE WHEN kind = 'included' THEN 0 ELSE 1 END, created_at"
-            + _row_lock(session)
-        ),
-        {"tid": tenant_id, "period": current_period_id()},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "SELECT lot_id, tenant_id, kind, period_id, granted, remaining, expires, catalog_version "
+                "FROM customer_ai_message_lots WHERE tenant_id = :tid AND remaining > 0 "
+                "AND (expires = false OR period_id = :period) "
+                "ORDER BY CASE WHEN kind = 'included' THEN 0 ELSE 1 END, created_at" + _row_lock(session)
+            ),
+            {"tid": tenant_id, "period": current_period_id()},
+        )
+        .mappings()
+        .first()
+    )
     return MessageLot(**dict(row)) if row else None
 
 
@@ -138,14 +151,18 @@ def pg_reserve(
 ) -> MessageReservation:
     units = message_units_for(response_class)
     key = f"{tenant_id}:{operation_id}"
-    existing = session.execute(
-        text(
-            "SELECT reservation_id, tenant_id, operation_id, units, status, lot_id, period_id, "
-            "response_class, created_at FROM customer_ai_message_reservations "
-            "WHERE reservation_id = :rid"
-        ),
-        {"rid": key},
-    ).mappings().first()
+    existing = (
+        session.execute(
+            text(
+                "SELECT reservation_id, tenant_id, operation_id, units, status, lot_id, period_id, "
+                "response_class, created_at FROM customer_ai_message_reservations "
+                "WHERE reservation_id = :rid"
+            ),
+            {"rid": key},
+        )
+        .mappings()
+        .first()
+    )
     if existing:
         if existing["response_class"] and existing["response_class"] != response_class:
             raise ReservationConflict(f"operation {operation_id} already classified")
@@ -194,15 +211,18 @@ def _insert_reservation(session: Any, reservation: MessageReservation) -> None:
 
 def pg_settle(session: Any, *, tenant_id: str, operation_id: str, accepted: bool) -> MessageReservation:
     key = f"{tenant_id}:{operation_id}"
-    row = session.execute(
-        text(
-            "SELECT reservation_id, tenant_id, operation_id, units, status, lot_id, period_id, "
-            "response_class, created_at FROM customer_ai_message_reservations "
-            "WHERE reservation_id = :rid"
-            + _row_lock(session)
-        ),
-        {"rid": key},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "SELECT reservation_id, tenant_id, operation_id, units, status, lot_id, period_id, "
+                "response_class, created_at FROM customer_ai_message_reservations "
+                "WHERE reservation_id = :rid" + _row_lock(session)
+            ),
+            {"rid": key},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         raise KeyError(operation_id)
     reservation = MessageReservation(**dict(row))
@@ -217,10 +237,7 @@ def pg_settle(session: Any, *, tenant_id: str, operation_id: str, accepted: bool
         return reservation
     if reservation.units:
         lot = session.execute(
-            text(
-                "SELECT remaining FROM customer_ai_message_lots WHERE lot_id = :lot"
-                + _row_lock(session)
-            ),
+            text("SELECT remaining FROM customer_ai_message_lots WHERE lot_id = :lot" + _row_lock(session)),
             {"lot": reservation.lot_id},
         ).first()
         remaining = int(lot[0]) if lot else 0
@@ -250,15 +267,19 @@ def pg_list_stale_reserved(
     limit: int = 50,
     after_id: str = "",
 ) -> list[MessageReservation]:
-    rows = session.execute(
-        text(
-            "SELECT reservation_id, tenant_id, operation_id, units, status, lot_id, period_id, "
-            "response_class, created_at FROM customer_ai_message_reservations "
-            "WHERE status = 'reserved' AND created_at < :cutoff "
-            "AND reservation_id > :after ORDER BY reservation_id LIMIT :lim"
-        ),
-        {"cutoff": older_than, "after": after_id or "", "lim": max(1, min(int(limit), 200))},
-    ).mappings().all()
+    rows = (
+        session.execute(
+            text(
+                "SELECT reservation_id, tenant_id, operation_id, units, status, lot_id, period_id, "
+                "response_class, created_at FROM customer_ai_message_reservations "
+                "WHERE status = 'reserved' AND created_at < :cutoff "
+                "AND reservation_id > :after ORDER BY reservation_id LIMIT :lim"
+            ),
+            {"cutoff": older_than, "after": after_id or "", "lim": max(1, min(int(limit), 200))},
+        )
+        .mappings()
+        .all()
+    )
     items: list[MessageReservation] = []
     for row in rows:
         data = dict(row)
@@ -291,23 +312,24 @@ def pg_list_reservations(session: Any, *, tenant_id: str | None = None) -> list[
 
 def pg_known_tenant_ids(session: Any) -> list[str]:
     lots = session.execute(text("SELECT DISTINCT tenant_id FROM customer_ai_message_lots")).scalars().all()
-    reserved = (
-        session.execute(text("SELECT DISTINCT tenant_id FROM customer_ai_message_reservations")).scalars().all()
-    )
+    reserved = session.execute(text("SELECT DISTINCT tenant_id FROM customer_ai_message_reservations")).scalars().all()
     return sorted({str(item) for item in [*lots, *reserved] if item})
 
 
 def pg_reverse(session: Any, *, tenant_id: str, operation_id: str) -> MessageReservation:
     key = f"{tenant_id}:{operation_id}"
-    row = session.execute(
-        text(
-            "SELECT reservation_id, tenant_id, operation_id, units, status, lot_id, period_id, "
-            "response_class, created_at FROM customer_ai_message_reservations "
-            "WHERE reservation_id = :rid"
-            + _row_lock(session)
-        ),
-        {"rid": key},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "SELECT reservation_id, tenant_id, operation_id, units, status, lot_id, period_id, "
+                "response_class, created_at FROM customer_ai_message_reservations "
+                "WHERE reservation_id = :rid" + _row_lock(session)
+            ),
+            {"rid": key},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         raise KeyError(operation_id)
     reservation = MessageReservation(**dict(row))
@@ -328,15 +350,18 @@ def pg_reverse(session: Any, *, tenant_id: str, operation_id: str) -> MessageRes
 
 def pg_revoke_purchased(session: Any, *, tenant_id: str, transaction_id: str) -> dict[str, Any]:
     suffix = f"%:{transaction_id}"
-    rows = session.execute(
-        text(
-            "SELECT lot_id, remaining FROM customer_ai_message_lots "
-            "WHERE tenant_id = :tid AND kind = 'purchased' "
-            "AND (period_id = :txn OR catalog_version = :txn OR lot_id LIKE :suffix)"
-            + _row_lock(session)
-        ),
-        {"tid": tenant_id, "txn": transaction_id, "suffix": suffix},
-    ).mappings().all()
+    rows = (
+        session.execute(
+            text(
+                "SELECT lot_id, remaining FROM customer_ai_message_lots "
+                "WHERE tenant_id = :tid AND kind = 'purchased' "
+                "AND (period_id = :txn OR catalog_version = :txn OR lot_id LIKE :suffix)" + _row_lock(session)
+            ),
+            {"tid": tenant_id, "txn": transaction_id, "suffix": suffix},
+        )
+        .mappings()
+        .all()
+    )
     lot_ids = [str(row["lot_id"]) for row in rows]
     cleared = 0
     for row in rows:

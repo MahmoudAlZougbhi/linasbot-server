@@ -183,17 +183,21 @@ def rollback_pointer(
         try:
             from sqlalchemy import text
 
-            row = session.execute(
-                text(
-                    """
+            row = (
+                session.execute(
+                    text(
+                        """
                     SELECT tenant_id, space_id, source_family, active_version, rollback_version,
                            ready, reason, source_revision, record_count
                     FROM customer_ai_index_pointers
                     WHERE tenant_id = :tenant_id AND space_id = :space_id AND source_family = :source_family
                     """
-                ),
-                {"tenant_id": tenant_id, "space_id": space_id, "source_family": source_family},
-            ).mappings().first()
+                    ),
+                    {"tenant_id": tenant_id, "space_id": space_id, "source_family": source_family},
+                )
+                .mappings()
+                .first()
+            )
             if row:
                 current = dict(row)
                 _POINTERS[key] = current

@@ -11,12 +11,7 @@ def rows_from_wa_messages(messages: list[Any]) -> list[dict[str, Any]]:
         direction = str(getattr(row, "direction", "") or "")
         meta = getattr(row, "meta", None)
         extra = meta if isinstance(meta, dict) else {}
-        text = str(
-            extra.get("text")
-            or extra.get("body")
-            or getattr(row, "content_preview", None)
-            or ""
-        ).strip()
+        text = str(extra.get("text") or extra.get("body") or getattr(row, "content_preview", None) or "").strip()
         created = getattr(row, "created_at", None) or getattr(row, "provider_timestamp", None)
         out.append(
             {

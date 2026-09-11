@@ -58,7 +58,9 @@ def test_whatsapp_history_maps_roles() -> None:
     rows = rows_from_wa_messages(
         [
             SimpleNamespace(id="1", direction="inbound", content_preview="hi", meta={}, created_at=None),
-            SimpleNamespace(id="2", direction="outbound", content_preview="hello", meta={"text": "full"}, created_at=None),
+            SimpleNamespace(
+                id="2", direction="outbound", content_preview="hello", meta={"text": "full"}, created_at=None
+            ),
         ]
     )
     assert rows[0]["role"] == "user"

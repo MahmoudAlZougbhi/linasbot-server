@@ -25,6 +25,7 @@ GOAL_PROMPTS: dict[str, str] = {
     ),
 }
 
+
 async def generate_followup_text(
     *,
     tenant_id: str,

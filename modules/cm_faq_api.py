@@ -191,7 +191,9 @@ async def cm_patch_faq_variant(
     from services.membership.edit_http import guarded_edit, limit_response
 
     try:
-        with guarded_edit(tenant_id=tenant_id, kind="faq:patch", payload={"id": qa_group_id, "language": language, **body}):
+        with guarded_edit(
+            tenant_id=tenant_id, kind="faq:patch", payload={"id": qa_group_id, "language": language, **body}
+        ):
             result = await update_cm_faq_variant(
                 qa_group_id=qa_group_id,
                 language=language,
@@ -250,7 +252,9 @@ async def cm_regenerate_faq(
     from services.membership.edit_http import guarded_edit, limit_response
 
     try:
-        with guarded_edit(tenant_id=tenant_id, kind="faq:regenerate", payload={"id": qa_group_id, "languages": languages}):
+        with guarded_edit(
+            tenant_id=tenant_id, kind="faq:regenerate", payload={"id": qa_group_id, "languages": languages}
+        ):
             result = await regenerate_cm_faq_variants(
                 qa_group_id=qa_group_id,
                 source_language=str(body["source_language"]) if body.get("source_language") else None,

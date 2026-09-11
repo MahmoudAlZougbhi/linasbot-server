@@ -56,7 +56,9 @@ def test_meta_registry_startup_repair_is_local_and_fail_closed(
 def test_meta_registry_repair_precedes_other_startup_work() -> None:
     source = Path("modules/event_handlers.py").read_text(encoding="utf-8")
     startup = source[source.index("async def startup_event") : source.index('@app.on_event("shutdown")')]
-    assert startup.index("repair_meta_registry_before_readiness()") < startup.index('WhatsAppFactory.get_adapter("meta")')
+    assert startup.index("repair_meta_registry_before_readiness()") < startup.index(
+        'WhatsAppFactory.get_adapter("meta")'
+    )
 
 
 def test_meta_deletion_reconcile_runs_per_node_without_cluster_singleton_lock() -> None:

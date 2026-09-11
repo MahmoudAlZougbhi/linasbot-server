@@ -17,7 +17,14 @@ def service_appointment_corpus() -> dict[str, Any]:
                 }
             ],
             "price_entries": [
-                {"id": "e1", "catalog_item_id": "laser", "amount": 80, "currency": "USD", "unit": "session", "active": True}
+                {
+                    "id": "e1",
+                    "catalog_item_id": "laser",
+                    "amount": 80,
+                    "currency": "USD",
+                    "unit": "session",
+                    "active": True,
+                }
             ],
         },
         "opening_hours": {
@@ -36,7 +43,16 @@ def service_appointment_corpus() -> dict[str, Any]:
 
 def product_retailer_corpus() -> dict[str, Any]:
     return {
-        "knowledge": {"items": [{"id": "ship", "title": "Shipping", "body": "Orders ship in two days.", "ai_search_description": "shipping"}]},
+        "knowledge": {
+            "items": [
+                {
+                    "id": "ship",
+                    "title": "Shipping",
+                    "body": "Orders ship in two days.",
+                    "ai_search_description": "shipping",
+                }
+            ]
+        },
         "prices": {"catalog": []},
     }
 
@@ -44,9 +60,25 @@ def product_retailer_corpus() -> dict[str, Any]:
 def hospitality_corpus() -> dict[str, Any]:
     return {
         "opening_hours": {
-            "items": [{"id": "kitchen", "title": "Kitchen hours", "friday": {"open": "12:00", "close": "23:00"}, "sunday": {"closed": True}}]
+            "items": [
+                {
+                    "id": "kitchen",
+                    "title": "Kitchen hours",
+                    "friday": {"open": "12:00", "close": "23:00"},
+                    "sunday": {"closed": True},
+                }
+            ]
         },
-        "knowledge": {"items": [{"id": "menu", "title": "Menu notes", "body": "No peanuts in the kitchen.", "ai_search_description": "allergy"}]},
+        "knowledge": {
+            "items": [
+                {
+                    "id": "menu",
+                    "title": "Menu notes",
+                    "body": "No peanuts in the kitchen.",
+                    "ai_search_description": "allergy",
+                }
+            ]
+        },
     }
 
 

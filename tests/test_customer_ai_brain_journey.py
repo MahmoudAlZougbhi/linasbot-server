@@ -55,6 +55,7 @@ async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytes
             "resource": {"resource_ref": "res_before", "title": "Before photo"},
         },
     )
+
     async def _no_confirm(*_a, **_k):
         return None
 

@@ -20,7 +20,8 @@ from tests.meta_social_image_quota_delivery_support import (
     processor_meta_document,
 )
 
-pytest_plugins = ('tests.meta_social_image_quota_delivery_support',)
+pytest_plugins = ("tests.meta_social_image_quota_delivery_support",)
+
 
 @pytest.mark.asyncio
 async def test_crash_after_consumed_marker_retries_notice_without_reconsume(

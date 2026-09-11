@@ -24,7 +24,8 @@ from tests.meta_instagram_single_active_support import (
     _stage_direct_instagram,
 )
 
-pytest_plugins = ('tests.meta_instagram_single_active_support', 'tests.meta_app_registry_fixtures')
+pytest_plugins = ("tests.meta_instagram_single_active_support", "tests.meta_app_registry_fixtures")
+
 
 @pytest.mark.asyncio
 async def test_direct_instagram_disconnect_uses_exact_provider_endpoint(

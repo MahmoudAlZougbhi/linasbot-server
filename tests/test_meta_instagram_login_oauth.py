@@ -38,7 +38,8 @@ from tests.meta_instagram_login_oauth_support import (
     _transport,
 )
 
-pytest_plugins = ('tests.meta_instagram_login_oauth_support',)
+pytest_plugins = ("tests.meta_instagram_login_oauth_support",)
+
 
 def test_instagram_login_config_accepts_apex_public_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("META_APP_A_ID", "2963733803971681")

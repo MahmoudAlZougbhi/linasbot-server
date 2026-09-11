@@ -83,11 +83,15 @@ def run_fixture_corpus() -> dict[str, Any]:
     offline = run_offline_suite(write_artifact=True)
     latency = run_latency_benchmark(repeats=20)
     elapsed_ms = (time.perf_counter() - started) * 1000.0
-    total_cases = int(offline.get("summary", {}).get("case_count") or 0) + int(
-        contract.get("case_count") or 0
-    ) + int(golden.get("case_count") or 0)
+    total_cases = (
+        int(offline.get("summary", {}).get("case_count") or 0)
+        + int(contract.get("case_count") or 0)
+        + int(golden.get("case_count") or 0)
+    )
     return {
-        "ok": bool(contract.get("ok")) and bool(golden.get("ok")) and bool(offline.get("gates", {}).get("case_count_ge_800")),
+        "ok": bool(contract.get("ok"))
+        and bool(golden.get("ok"))
+        and bool(offline.get("gates", {}).get("case_count_ge_800")),
         "live_spend": False,
         "case_count": total_cases,
         "cases": cases,

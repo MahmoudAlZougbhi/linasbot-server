@@ -23,7 +23,8 @@ from tests.meta_instagram_single_active_support import (
     _stage_direct_instagram,
 )
 
-pytest_plugins = ('tests.meta_instagram_single_active_support', 'tests.meta_app_registry_fixtures')
+pytest_plugins = ("tests.meta_instagram_single_active_support", "tests.meta_app_registry_fixtures")
+
 
 @pytest.mark.asyncio
 async def test_instagram_disconnect_then_reconnect_converges_to_one_fresh_binding(

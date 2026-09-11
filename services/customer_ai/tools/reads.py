@@ -192,11 +192,17 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
                     branch_hits = [row for row in matched_entries if row.get("branch_id") == branch_id]
                     if branch_hits:
                         matched_entries = branch_hits
-                data = matched_entries[0] if (service_id or branch_id) and len(matched_entries) == 1 else matched_entries
+                data = (
+                    matched_entries[0] if (service_id or branch_id) and len(matched_entries) == 1 else matched_entries
+                )
                 if isinstance(data, list) and service_id and branch_id and data:
                     data = data[0]
                 return {"ok": True, "data": data}
-        rows = [_match_id(catalog, service_id or item_id)] if (service_id or item_id) else _search_rows(catalog, query, limit=5)
+        rows = (
+            [_match_id(catalog, service_id or item_id)]
+            if (service_id or item_id)
+            else _search_rows(catalog, query, limit=5)
+        )
         rows = [row for row in rows if row]
         if not rows:
             hits = _card_search(tenant_id, query or item_id, {"services", "prices"})

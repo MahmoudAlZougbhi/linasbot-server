@@ -368,7 +368,9 @@ def test_pending_counts_union_memory_and_sql(monkeypatch: pytest.MonkeyPatch) ->
         "services.membership.pending_settlement_pg.pg_counts",
         lambda *_a, **_k: {"reserved": 0, "pending_settlement": 1, "settled": 0, "released": 0, "unresolved": 0},
     )
-    monkeypatch.setattr("services.membership.pending_settlement_pg.pg_settlement_ids", lambda *_a, **_k: {"sql-count:rid"})
+    monkeypatch.setattr(
+        "services.membership.pending_settlement_pg.pg_settlement_ids", lambda *_a, **_k: {"sql-count:rid"}
+    )
     counts = pending_counts()
     assert counts["reserved"] == 1
     assert counts["pending_settlement"] == 1
@@ -416,9 +418,7 @@ def test_get_pending_matches_conversation_alias() -> None:
     assert get_pending("alias-shop", "", "conv-alias") is not None
 
 
-def test_hydrate_skips_disk_reserved_when_sql_already_has_id(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_hydrate_skips_disk_reserved_when_sql_already_has_id(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     import json
     from contextlib import contextmanager
 

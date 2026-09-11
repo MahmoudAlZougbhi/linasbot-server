@@ -172,8 +172,7 @@ async def smart_followup_preview(request: Request, body: dict[str, Any] = Body(d
         "uses_credits": False,
         "uses_messages": False,
         "disclosure": (
-            "Preview never sends a WhatsApp message and does not consume leftover credits "
-            "or customer message units."
+            "Preview never sends a WhatsApp message and does not consume leftover credits or customer message units."
         ),
     }
     try:

@@ -15,7 +15,9 @@ def _destination(channel: str) -> str:
 
 
 def _tokens(text: str) -> list[str]:
-    return [part for part in "".join(ch if ch.isalnum() else " " for ch in (text or "").lower()).split() if len(part) > 2]
+    return [
+        part for part in "".join(ch if ch.isalnum() else " " for ch in (text or "").lower()).split() if len(part) > 2
+    ]
 
 
 def match_resource_refs(

@@ -68,7 +68,9 @@ async def embed_document_rows(rows: list[dict[str, Any]]) -> list[list[float]]:
     return vectors.vectors
 
 
-def _persist_index(session: Any | None, rows: list[dict[str, Any]], vectors: list[list[float]], *, tenant_id: str, revision: str) -> dict[str, Any]:
+def _persist_index(
+    session: Any | None, rows: list[dict[str, Any]], vectors: list[list[float]], *, tenant_id: str, revision: str
+) -> dict[str, Any]:
     written = write_documents(session, rows, vectors)
     if not written.get("ok"):
         return {"ready": False, "reason": written.get("reason") or "index_not_ready", "count": len(rows)}

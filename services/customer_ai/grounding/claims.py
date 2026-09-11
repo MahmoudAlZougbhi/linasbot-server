@@ -93,9 +93,7 @@ def verify_claims(
         elif overlap >= 0.3:
             verdicts.append(ClaimVerdict(sentence, "PARTIALLY_SUPPORTED", evidence_ids=corpus_ids))
         else:
-            verdicts.append(
-                ClaimVerdict(sentence, "UNSUPPORTED", evidence_ids=corpus_ids, reason="weak_overlap")
-            )
+            verdicts.append(ClaimVerdict(sentence, "UNSUPPORTED", evidence_ids=corpus_ids, reason="weak_overlap"))
     return verdicts
 
 

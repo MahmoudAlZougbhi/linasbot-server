@@ -434,7 +434,7 @@ def test_omni_conversation_id_prefers_payload() -> None:
 
     phase2 = getsource(text_handlers_respond_phase2)
     assert "conversation_id_from_user_data" in phase2
-    assert "fallback=str(current_conversation_id or user_id or \"\")" in phase2
+    assert 'fallback=str(current_conversation_id or user_id or "")' in phase2
     assert message_id_for_brain({"provider_message_id": "mid-9"}) == "mid-9"
     assert message_id_for_brain({"_combine_mid": "mid-ig"}) == "mid-ig"
     assert message_id_for_brain({"_batch_inbound_mids": ["old", "mid-last"]}) == "mid-last"

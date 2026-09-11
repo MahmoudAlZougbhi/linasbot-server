@@ -37,9 +37,7 @@ async def run_customer_reply_v2_comment(
     context = comment_context if isinstance(comment_context, dict) else {}
     from services.customer_ai.history_ids import conversation_id_for_brain
 
-    thread = conversation_id_for_brain(payload=context) or str(
-        context.get("thread_id") or comment_id or post_id or ""
-    )
+    thread = conversation_id_for_brain(payload=context) or str(context.get("thread_id") or comment_id or post_id or "")
     return await run_customer_ai_comment(
         tenant_id=tenant_id,
         comment_text=comment_text,

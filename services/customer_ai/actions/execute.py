@@ -27,9 +27,7 @@ async def execute_actions(
     )
     for proposal in proposals.actions:
         if proposal.action_type == "no_op":
-            receipts.append(
-                ActionReceipt(action_id=f"noop:{proposal.task_id}", action_type="no_op", state="success")
-            )
+            receipts.append(ActionReceipt(action_id=f"noop:{proposal.task_id}", action_type="no_op", state="success"))
             continue
         if proposal.action_type == "escalate_to_human":
             receipts.append(

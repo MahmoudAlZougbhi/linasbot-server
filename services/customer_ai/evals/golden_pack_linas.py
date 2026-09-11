@@ -36,7 +36,9 @@ def run_golden_pack_linas() -> dict[str, Any]:
     # Price query should retrieve service cards when present.
     price_hits = search_cards(cards, "laser hair removal price", families={"services"}, limit=3)
     price_ok = bool(price_hits) and price_hits[0].card.source_family == "services"
-    cases.append(_case("price_lexical_hit", ok=price_ok, detail={"top": price_hits[0].card.item_id if price_hits else ""}))
+    cases.append(
+        _case("price_lexical_hit", ok=price_ok, detail={"top": price_hits[0].card.item_id if price_hits else ""})
+    )
 
     # Hours expand must carry clock times when corpus has them.
     hours_hits = search_cards(cards, "opening hours", families={"hours"}, limit=3) or search_cards(
@@ -50,7 +52,8 @@ def run_golden_pack_linas() -> dict[str, Any]:
     cases.append(
         _case(
             "hours_evidence",
-            ok=hours_bundle.outcome in {"found", "not_found"} and (":" in hours_text or hours_bundle.outcome != "found"),
+            ok=hours_bundle.outcome in {"found", "not_found"}
+            and (":" in hours_text or hours_bundle.outcome != "found"),
             detail={"outcome": hours_bundle.outcome, "chars": len(hours_text)},
         )
     )

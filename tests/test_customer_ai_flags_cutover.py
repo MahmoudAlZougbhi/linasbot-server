@@ -26,6 +26,6 @@ def test_tenant_gate_allows_any_tenant() -> None:
 
 @pytest.mark.asyncio
 async def test_dm_uses_brain_without_enable_flag(monkeypatch: pytest.MonkeyPatch) -> None:
-        # Missing inbound ids → fail closed from Brain, not engine_removed from a flag.
+    # Missing inbound ids → fail closed from Brain, not engine_removed from a flag.
     out = await run_customer_reply_v2_dm(tenant_id="linas", message="hi", conversation_id="", message_id="")
     assert out.metadata.get("customer_engine") == "brain" or out.reason != "engine_removed"

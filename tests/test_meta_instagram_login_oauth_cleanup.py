@@ -34,7 +34,8 @@ from tests.meta_instagram_login_oauth_support import (
     _transport,
 )
 
-pytest_plugins = ('tests.meta_instagram_login_oauth_support',)
+pytest_plugins = ("tests.meta_instagram_login_oauth_support",)
+
 
 @pytest.mark.asyncio
 async def test_stale_cleanup_marker_repairs_new_active_owner_without_restoring_old_preimage(

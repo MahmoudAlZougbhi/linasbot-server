@@ -121,7 +121,18 @@ def test_finalize_delivery_captures_on_success(monkeypatch) -> None:
     monkeypatch.setattr("services.customer_ai.billing.settle_after_send", lambda **k: None)
     monkeypatch.setattr(
         "services.ai_reply_turn_runtime.get_turn",
-        lambda _lid: type("T", (), {"state": "DELIVERED", "delivery_evidence": {"success": True}, "outbound_state": "sent", "credit_captured": True, "generated_reply": "hi", "logical_reply_id": "lid-4"})(),
+        lambda _lid: type(
+            "T",
+            (),
+            {
+                "state": "DELIVERED",
+                "delivery_evidence": {"success": True},
+                "outbound_state": "sent",
+                "credit_captured": True,
+                "generated_reply": "hi",
+                "logical_reply_id": "lid-4",
+            },
+        )(),
     )
     monkeypatch.setattr("services.ai_reply_turn_runtime.record_delivery_outcome", lambda *a, **k: None)
     monkeypatch.setattr("services.ai_reply_turn_runtime.maybe_record_product_outbound", lambda *a, **k: None)

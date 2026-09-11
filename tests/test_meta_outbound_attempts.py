@@ -19,7 +19,8 @@ from tests.meta_outbound_attempts_support import (
     _prepare_notice,
 )
 
-pytest_plugins = ('tests.meta_outbound_attempts_support',)
+pytest_plugins = ("tests.meta_outbound_attempts_support",)
+
 
 @pytest.mark.asyncio
 async def test_production_send_requires_binding_for_deletion_fence(

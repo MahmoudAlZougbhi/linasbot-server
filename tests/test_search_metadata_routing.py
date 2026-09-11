@@ -116,4 +116,3 @@ def test_request_rules_only_selected_reach_terra() -> None:
     empty = format_request_rules_for_ai(payload, selected_ids=[])
     assert "Do not assume" in empty
     assert "Rule 1" not in empty
-

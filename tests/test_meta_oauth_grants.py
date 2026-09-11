@@ -24,7 +24,8 @@ from tests.meta_oauth_support import (
     _transport,
 )
 
-pytest_plugins = ('tests.meta_oauth_support',)
+pytest_plugins = ("tests.meta_oauth_support",)
+
 
 @pytest.mark.asyncio
 async def test_webhook_compensation_refuses_state_not_owned_by_callback(

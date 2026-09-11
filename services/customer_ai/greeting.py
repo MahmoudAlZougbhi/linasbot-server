@@ -101,8 +101,7 @@ def _history_already_greeted(
     if not texts:
         return False
     return any(
-        item.role in {"assistant", "ai", "bot"} and (item.text or "").strip() in texts
-        for item in history.messages
+        item.role in {"assistant", "ai", "bot"} and (item.text or "").strip() in texts for item in history.messages
     )
 
 
@@ -117,7 +116,9 @@ def _trigger_ok(rule: DynamicMessageRecord, message: str, *, session_start: bool
         needle = (rule.trigger_pattern or "").strip()
         return bool(needle) and hay.lower().startswith(needle.lower())
     if mode == "any_keyword":
-        return any(normalize_search_text(k) and normalize_search_text(k) in normalize_search_text(hay) for k in rule.keywords)
+        return any(
+            normalize_search_text(k) and normalize_search_text(k) in normalize_search_text(hay) for k in rule.keywords
+        )
     return False
 
 

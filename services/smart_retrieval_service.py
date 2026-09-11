@@ -10,8 +10,7 @@ from typing import Any
 
 DEAD_FOR_CUSTOMER_BRAIN = True
 _DEAD_MSG = (
-    "smart_retrieval_service is DEAD for Customer Brain. "
-    "Use services.customer_ai.retrieve hybrid/lexical instead."
+    "smart_retrieval_service is DEAD for Customer Brain. Use services.customer_ai.retrieve hybrid/lexical instead."
 )
 
 

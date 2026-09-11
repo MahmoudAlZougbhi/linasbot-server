@@ -44,9 +44,7 @@ def _published_human_request_rule_enabled(sections: dict) -> bool | None:
     if not isinstance(rules, list):
         return None
     human_rules = [
-        rule
-        for rule in rules
-        if isinstance(rule, dict) and str(rule.get("type") or "").strip().upper() == "HUMAN"
+        rule for rule in rules if isinstance(rule, dict) and str(rule.get("type") or "").strip().upper() == "HUMAN"
     ]
     if not human_rules:
         return None

@@ -11,7 +11,9 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def stamp(extra: dict[str, Any] | None, stage: str, *, title: str, detail: dict[str, Any] | None = None) -> dict[str, Any]:
+def stamp(
+    extra: dict[str, Any] | None, stage: str, *, title: str, detail: dict[str, Any] | None = None
+) -> dict[str, Any]:
     out = dict(extra or {})
     timeline = list(out.get("stage_timeline") or [])
     row: dict[str, Any] = {

@@ -49,28 +49,44 @@ def load_relations(tenant_id: str) -> dict[str, Any]:
     for row in services:
         sid = str(row.get("id") or "")
         relations["service_prices"].append(
-            {"service_id": sid, "price": str(row.get("base_price") or row.get("price") or ""), "currency": str(row.get("currency") or "USD")}
+            {
+                "service_id": sid,
+                "price": str(row.get("base_price") or row.get("price") or ""),
+                "currency": str(row.get("currency") or "USD"),
+            }
         )
         for bid in row.get("branch_ids") or row.get("branches") or []:
             relations["service_branches"].append({"service_id": sid, "branch_id": str(bid)})
     for row in products:
         pid = str(row.get("id") or "")
         relations["product_prices"].append(
-            {"product_id": pid, "price": str(row.get("base_price") or row.get("price") or ""), "currency": str(row.get("currency") or "USD")}
+            {
+                "product_id": pid,
+                "price": str(row.get("base_price") or row.get("price") or ""),
+                "currency": str(row.get("currency") or "USD"),
+            }
         )
     for row in branches:
         bid = str(row.get("id") or "")
-        relations["branch_hours"].append({"branch_id": bid, "hours": str(row.get("hours") or row.get("opening_hours") or "")})
+        relations["branch_hours"].append(
+            {"branch_id": bid, "hours": str(row.get("hours") or row.get("opening_hours") or "")}
+        )
         phone = str(row.get("phone") or row.get("whatsapp") or "")
         if phone:
             relations["branch_contacts"].append({"branch_id": bid, "phone": phone})
     for row in faqs:
-        relations["faq_entities"].append({"faq_id": str(row.get("id") or row.get("qa_group_id") or ""), "title": _label(row)})
+        relations["faq_entities"].append(
+            {"faq_id": str(row.get("id") or row.get("qa_group_id") or ""), "title": _label(row)}
+        )
     for row in knowledge:
         for att in row.get("attachments") or []:
             if isinstance(att, dict):
                 relations["resource_links"].append(
-                    {"knowledge_id": str(row.get("id") or ""), "resource_id": str(att.get("id") or ""), "title": _label(row)}
+                    {
+                        "knowledge_id": str(row.get("id") or ""),
+                        "resource_id": str(att.get("id") or ""),
+                        "title": _label(row),
+                    }
                 )
     return {"ok": True, "relations": relations}
 

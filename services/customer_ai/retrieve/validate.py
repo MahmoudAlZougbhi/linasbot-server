@@ -52,5 +52,7 @@ def validate_evidence(bundle: EvidenceBundle, *, sections: dict[str, Any] | None
             continue
         kept.append(item)
     if not kept:
-        return EvidenceBundle(outcome="not_found", ambiguities=list(bundle.ambiguities), conflicts=list(bundle.conflicts))
+        return EvidenceBundle(
+            outcome="not_found", ambiguities=list(bundle.ambiguities), conflicts=list(bundle.conflicts)
+        )
     return bundle.model_copy(update={"items": kept, "outcome": "found"})

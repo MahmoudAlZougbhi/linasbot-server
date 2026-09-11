@@ -87,6 +87,6 @@ def merge_fields_for_persist(
     collected: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Re-attach published graph keys at confirm. Incoming values win; never invent values."""
-    published = dict((published_request_fields(tenant_id, request_type).get("collected_fields") or {}))
+    published = dict(published_request_fields(tenant_id, request_type).get("collected_fields") or {})
     incoming = dict(collected or {})
     return {**published, **incoming}

@@ -28,4 +28,3 @@ def test_live_chat_service_preserves_public_api() -> None:
         "send_operator_message",
     ):
         assert callable(getattr(live_chat_service, name))
-

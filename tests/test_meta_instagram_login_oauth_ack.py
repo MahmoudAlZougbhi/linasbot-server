@@ -34,7 +34,8 @@ from tests.meta_instagram_login_oauth_support import (
     _transport,
 )
 
-pytest_plugins = ('tests.meta_instagram_login_oauth_support',)
+pytest_plugins = ("tests.meta_instagram_login_oauth_support",)
+
 
 @pytest.mark.asyncio
 async def test_activation_commit_ack_loss_keeps_new_exact_owner_without_compensation(

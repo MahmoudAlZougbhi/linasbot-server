@@ -88,10 +88,7 @@ def test_comment_alias_normalization() -> None:
     assert normalize_comment_mode(action="reply_comment_static") == "static_comment"
     assert normalize_comment_mode(action="send_dm_static") == "static_dm"
     assert normalize_comment_mode(action="reply_comment_and_dm_static") == "static_both"
-    assert (
-        normalize_comment_mode(action="reply_comment", rule_mode="ai_guidance", ai_action_mode="send_dm")
-        == "ai_dm"
-    )
+    assert normalize_comment_mode(action="reply_comment", rule_mode="ai_guidance", ai_action_mode="send_dm") == "ai_dm"
     assert normalize_comment_mode(action="unknown_thing") is None
 
 
@@ -181,7 +178,7 @@ async def test_lab_turn_echoes_ids_and_receipts(monkeypatch: pytest.MonkeyPatch)
     from services.customer_ai.test_lab import run_lab_turn
 
     monkeypatch.setenv("LINAS_CUSTOMER_AI_LAB", "true")
-    
+
     async def fake_dm(**_kwargs):
         return SimpleNamespace(
             reply="ok",

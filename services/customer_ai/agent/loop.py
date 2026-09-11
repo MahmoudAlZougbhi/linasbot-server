@@ -155,7 +155,9 @@ async def _maybe_tool_calls(
             )
         elif result.get("ok") and result.get("data") is not None:
             receipts.append(f"tool:{name}:ok")
-            for fact in facts_from_tool_data(name, result.get("data"), tenant_id=turn.tenant_id, task_id=str(proposal.get("task_id") or "")):
+            for fact in facts_from_tool_data(
+                name, result.get("data"), tenant_id=turn.tenant_id, task_id=str(proposal.get("task_id") or "")
+            ):
                 receipts.append(f"fact:{fact.kind}:{fact.entity_id}:{fact.value}")
     return tool_rows, receipts, used
 
@@ -243,9 +245,7 @@ async def run_agentic_turn(
     retrieve_timer = StageTimer()
     max_rounds = 1 if _fast_path_eligible(plan) else DEFAULT_BUDGETS.max_retrieval_rounds
     agent_trace.append({"step": "RETRIEVE", "n": steps, "max_rounds": max_rounds, "fast_path": max_rounds == 1})
-    bundle, retrieve_trace, structured_facts = await multi_round_retrieve(
-        turn, plan, message, max_rounds=max_rounds
-    )
+    bundle, retrieve_trace, structured_facts = await multi_round_retrieve(turn, plan, message, max_rounds=max_rounds)
     agent_trace.extend({"step": "OBSERVE", **row} for row in retrieve_trace)
     evidence = evidence_preview(bundle)
     extra = _flow_extra(
@@ -259,7 +259,12 @@ async def run_agentic_turn(
 
     steps += 1
     tool_rows, tool_receipts, tools_used = await _maybe_tool_calls(
-        turn, plan, message, budget=tool_budget, trace=agent_trace, coverage=evaluate_task_coverage(plan, bundle, structured_facts)
+        turn,
+        plan,
+        message,
+        budget=tool_budget,
+        trace=agent_trace,
+        coverage=evaluate_task_coverage(plan, bundle, structured_facts),
     )
     coverage = evaluate_task_coverage(plan, bundle, structured_facts)
     agent_trace.append({"step": "DECIDE", "n": steps, "tools_used": tools_used, "coverage": coverage})
@@ -321,7 +326,11 @@ async def run_agentic_turn(
                     "tool_calls": tool_rows,
                     **extra,
                 },
-                ("search_empty", "No published evidence found for this question", {"retrieval_outcome": bundle.outcome}),
+                (
+                    "search_empty",
+                    "No published evidence found for this question",
+                    {"retrieval_outcome": bundle.outcome},
+                ),
             ),
         )
 

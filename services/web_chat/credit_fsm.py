@@ -113,9 +113,7 @@ class WebChatCreditHandle:
                 complete_leftover_release(
                     self.tenant_id,
                     rid,
-                    extra_ids=tuple(
-                        item for item in (self.request_id, self.conversation_id) if item
-                    ),
+                    extra_ids=tuple(item for item in (self.request_id, self.conversation_id) if item),
                 )
                 return
         except Exception:

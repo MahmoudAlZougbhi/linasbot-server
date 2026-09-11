@@ -24,7 +24,10 @@ async def test_comment_ai_loads_history_and_parent(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr("services.customer_ai.runtime.load_history_snapshot", fake_history)
     monkeypatch.setattr("services.customer_ai.runtime.winning_comment_mode", lambda **_k: (None, None))
-    monkeypatch.setattr("services.customer_ai.runtime.evaluate_gates", lambda *_a, **_k: type("G", (), {"allow": True, "reason": "", "detail": {}})())
+    monkeypatch.setattr(
+        "services.customer_ai.runtime.evaluate_gates",
+        lambda *_a, **_k: type("G", (), {"allow": True, "reason": "", "detail": {}})(),
+    )
     monkeypatch.setattr("services.customer_ai.runtime.apply_live_control", lambda turn: turn)
 
     captured = {}

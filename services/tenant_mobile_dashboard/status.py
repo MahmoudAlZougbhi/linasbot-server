@@ -57,8 +57,7 @@ def derive_workspace_status(
             "reason_code": "credits_depleted",
             "title": "Messages depleted",
             "explanation": (
-                "No messages remain. Message top-ups are not for sale yet. "
-                "Upgrade your plan to continue AI operations."
+                "No messages remain. Message top-ups are not for sale yet. Upgrade your plan to continue AI operations."
             ),
             "primary_action": {"code": "upgrade_plan", "label": "See plans"},
         }
@@ -93,8 +92,7 @@ def derive_workspace_status(
                 "reason_code": "credits_low",
                 "title": "Messages low",
                 "explanation": (
-                    "Message balance is running low for this billing period. "
-                    "Message top-ups are not for sale yet."
+                    "Message balance is running low for this billing period. Message top-ups are not for sale yet."
                 ),
                 "primary_action": {"code": "upgrade_plan", "label": "See plans"},
             }

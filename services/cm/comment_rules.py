@@ -199,11 +199,7 @@ def _specificity(rule: CommentRule) -> int:
 
 def _pick_winner(matches: list[CommentRule]) -> CommentRule:
     best = max((_specificity(rule), int(getattr(rule, "priority", 0) or 0)) for rule in matches)
-    finalists = [
-        rule
-        for rule in matches
-        if (_specificity(rule), int(getattr(rule, "priority", 0) or 0)) == best
-    ]
+    finalists = [rule for rule in matches if (_specificity(rule), int(getattr(rule, "priority", 0) or 0)) == best]
     return sorted(finalists, key=lambda rule: str(rule.id or ""))[0]
 
 

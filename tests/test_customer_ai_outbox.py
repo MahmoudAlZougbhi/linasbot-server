@@ -182,7 +182,10 @@ def test_outbox_counts_and_recover_union_memory_and_sql(monkeypatch) -> None:
 
     monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
     monkeypatch.setattr("services.customer_ai.outbox_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.customer_ai.outbox_pg.pg_counts", lambda *_a, **_k: {"accepted": 1, "sent": 0, "pending_settlement": 0, "failed": 0})
+    monkeypatch.setattr(
+        "services.customer_ai.outbox_pg.pg_counts",
+        lambda *_a, **_k: {"accepted": 1, "sent": 0, "pending_settlement": 0, "failed": 0},
+    )
     monkeypatch.setattr("services.customer_ai.outbox_pg.pg_outbox_ids", lambda *_a, **_k: {sql_item.outbox_id})
     monkeypatch.setattr("services.customer_ai.outbox_pg.pg_tenant_ids", lambda *_a, **_k: ["sql-out"])
     monkeypatch.setattr("services.customer_ai.outbox_pg.pg_list", lambda *_a, **_k: [sql_item])

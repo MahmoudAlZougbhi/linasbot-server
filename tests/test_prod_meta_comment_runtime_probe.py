@@ -22,7 +22,8 @@ from tests.prod_meta_comment_runtime_probe_support import (
     _marker,
 )
 
-pytest_plugins = ('tests.prod_meta_comment_runtime_probe_support',)
+pytest_plugins = ("tests.prod_meta_comment_runtime_probe_support",)
+
 
 def test_strict_evidence_gate_accepts_all_redacted_markers() -> None:
     counts = scan_evidence(_complete_evidence_lines())

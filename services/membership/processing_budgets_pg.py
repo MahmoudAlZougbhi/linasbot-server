@@ -91,10 +91,7 @@ def pg_attempt_used(session: Any, *, tenant_id: str = "", day_id: str) -> int:
 def pg_begin_job(session: Any, *, tenant_id: str, limit: int) -> str | None:
     job_id = uuid4().hex
     session.execute(
-        text(
-            "INSERT INTO customer_ai_processing_jobs (job_id, tenant_id, created_at) "
-            "VALUES (:jid, :tid, :ts)"
-        ),
+        text("INSERT INTO customer_ai_processing_jobs (job_id, tenant_id, created_at) VALUES (:jid, :tid, :ts)"),
         {"jid": job_id, "tid": tenant_id, "ts": _now()},
     )
     current = pg_job_count(session, tenant_id=tenant_id)
@@ -142,10 +139,7 @@ def pg_tenant_ids(session: Any) -> list[str]:
 def pg_tenants_with_jobs(session: Any) -> int:
     return int(
         session.execute(
-            text(
-                "SELECT COUNT(DISTINCT tenant_id) FROM customer_ai_processing_jobs "
-                "WHERE created_at > :cutoff"
-            ),
+            text("SELECT COUNT(DISTINCT tenant_id) FROM customer_ai_processing_jobs WHERE created_at > :cutoff"),
             {"cutoff": _cutoff()},
         ).scalar_one()
         or 0

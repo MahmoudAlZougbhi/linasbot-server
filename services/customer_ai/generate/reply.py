@@ -132,9 +132,7 @@ async def generate_grounded_reply(
                 decision="reply",
                 messages=[OutboundMessage(destination=destination, text=text)],
                 used_evidence_ids=_used_evidence_ids(bundle),
-                dispositions={
-                    task.id: "answered" for task in plan.tasks if task.type in _ANSWERED_TASK_TYPES
-                },
+                dispositions={task.id: "answered" for task in plan.tasks if task.type in _ANSWERED_TASK_TYPES},
             )
         feedback = grounding_feedback(reasons or [v.reason or v.status for v in verdicts if v.status != "SUPPORTED"])
     return _clarify()

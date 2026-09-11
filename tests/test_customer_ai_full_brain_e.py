@@ -135,10 +135,21 @@ def test_tool_registry_includes_contact_and_request_state() -> None:
 @pytest.mark.asyncio
 async def test_multimodal_pdf_fail_visible_without_library() -> None:
     assert classify_media("x.pdf", "application/pdf") == "pdf"
-    with patch("services.customer_ai.ingest.multimodal.extract_pdf_text", new=AsyncMock(return_value={
-        "ok": False, "status": "FAILED", "reason": "pdf_extract_unavailable:ImportError", "text": "", "pages": 0
-    })):
-        out = await process_knowledge_media(tenant_id="t1", filename="x.pdf", content_type="application/pdf", data=b"%PDF")
+    with patch(
+        "services.customer_ai.ingest.multimodal.extract_pdf_text",
+        new=AsyncMock(
+            return_value={
+                "ok": False,
+                "status": "FAILED",
+                "reason": "pdf_extract_unavailable:ImportError",
+                "text": "",
+                "pages": 0,
+            }
+        ),
+    ):
+        out = await process_knowledge_media(
+            tenant_id="t1", filename="x.pdf", content_type="application/pdf", data=b"%PDF"
+        )
     assert out["status"] == "FAILED"
     assert out["ok"] is False
 
@@ -154,6 +165,7 @@ def test_probe_pgvector_uses_sqlalchemy_text() -> None:
     class _Session:
         def execute(self, statement, *args, **kwargs):  # noqa: ANN001
             assert hasattr(statement, "text") or "SELECT EXISTS" in str(statement)
+
             class _Result:
                 def scalar(self):
                     return True
@@ -200,8 +212,22 @@ async def test_get_price_is_branch_scoped() -> None:
         "prices": {
             "catalog": [{"id": "laser", "labels": {"en": "Laser"}, "active": True}],
             "price_entries": [
-                {"id": "a", "catalog_item_id": "laser", "branch_id": "antelias", "amount": 60, "currency": "USD", "active": True},
-                {"id": "b", "catalog_item_id": "laser", "branch_id": "verdun", "amount": 75, "currency": "USD", "active": True},
+                {
+                    "id": "a",
+                    "catalog_item_id": "laser",
+                    "branch_id": "antelias",
+                    "amount": 60,
+                    "currency": "USD",
+                    "active": True,
+                },
+                {
+                    "id": "b",
+                    "catalog_item_id": "laser",
+                    "branch_id": "verdun",
+                    "amount": 75,
+                    "currency": "USD",
+                    "active": True,
+                },
             ],
         }
     }

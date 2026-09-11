@@ -56,7 +56,9 @@ def import_csv_rows(svc: Any, *, tenant_id: str, csv_text: str) -> dict[str, Any
     reject_oversized_import(len(valid_rows))
     created = 0
     errors = list(preview.get("errors") or [])
-    with guarded_edit(tenant_id=tenant_id, kind="product:import", payload={"format": "csv", "count": len(valid_rows), "csv": csv_text}):
+    with guarded_edit(
+        tenant_id=tenant_id, kind="product:import", payload={"format": "csv", "count": len(valid_rows), "csv": csv_text}
+    ):
         for row in valid_rows:
             try:
                 body = _body_from_preview(row)

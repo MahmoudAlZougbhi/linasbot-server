@@ -177,7 +177,12 @@ def retrieval_eval_cases() -> list[dict[str, Any]]:
         {"id": "hours_arabizi", "q": "shu aw2at el dawem", "relevant": {"antelias_hours"}, "families": {"hours"}},
         {"id": "faq", "q": "Is parking available?", "relevant": {"faq_parking"}, "families": {"faq"}},
         {"id": "knowledge", "q": "after laser can I wash?", "relevant": {"aftercare_laser"}, "families": {"knowledge"}},
-        {"id": "product_fr", "q": "politique de remboursement", "relevant": {"refund_policy"}, "families": {"knowledge"}},
+        {
+            "id": "product_fr",
+            "q": "politique de remboursement",
+            "relevant": {"refund_policy"},
+            "families": {"knowledge"},
+        },
         {"id": "mixed", "q": "بدي laser aftercare", "relevant": {"aftercare_laser"}, "families": {"knowledge"}},
         {"id": "botox_care", "q": "botox aftercare lie down", "relevant": {"botox_care"}, "families": {"care"}},
     ]

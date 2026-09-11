@@ -90,7 +90,5 @@ async def public_plans() -> Any:
             "Smart FAQ answers do not use your monthly messages. "
             "Included messages refresh each paid billing month."
         ),
-        "credits_note": (
-            "Historical credit purchases remain on file. New plans are measured in messages."
-        ),
+        "credits_note": ("Historical credit purchases remain on file. New plans are measured in messages."),
     }

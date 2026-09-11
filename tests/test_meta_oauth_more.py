@@ -21,7 +21,8 @@ from tests.meta_oauth_support import (
     _transport,
 )
 
-pytest_plugins = ('tests.meta_oauth_support',)
+pytest_plugins = ("tests.meta_oauth_support",)
+
 
 @pytest.mark.asyncio
 async def test_facebook_page_accepts_new_pages_experience_task_names(

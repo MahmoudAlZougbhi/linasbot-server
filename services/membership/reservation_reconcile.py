@@ -169,8 +169,7 @@ def watch_stale_legacy_credits(*, limit: int = DEFAULT_BATCH, max_age_seconds: i
     for item in list_stale_open(older_than_seconds=max_age_seconds, limit=limit):
         existing = get_pending(item.tenant_id, item.reservation_id, item.request_id)
         if existing and (
-            existing.send_status == "sent"
-            or existing.state in {"pending_settlement", "settled", "released"}
+            existing.send_status == "sent" or existing.state in {"pending_settlement", "settled", "released"}
         ):
             continue
         upsert(
@@ -249,9 +248,7 @@ def hold_failed_capture_after_send(
         reason="capture_failed_after_send",
         extra={
             "candidate_ids": [
-                item
-                for item in (operation_id, reservation_id, provider_message_id)
-                if str(item or "").strip()
+                item for item in (operation_id, reservation_id, provider_message_id) if str(item or "").strip()
             ]
         },
     )

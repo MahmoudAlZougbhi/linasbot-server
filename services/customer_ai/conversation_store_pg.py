@@ -86,12 +86,14 @@ def pg_tenant_ids(session: Any) -> list[str]:
 
 
 def pg_get(session: Any, store_key: str) -> dict[str, Any] | None:
-    row = session.execute(
-        text(
-            "SELECT state, pending, history FROM customer_ai_conversations WHERE store_key = :key"
-        ),
-        {"key": store_key},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text("SELECT state, pending, history FROM customer_ai_conversations WHERE store_key = :key"),
+            {"key": store_key},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         return None
     return {

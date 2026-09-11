@@ -47,7 +47,11 @@ class ServiceCatalogService:
         except SlotLimitError as exc:
             raise ServiceCatalogError(code=exc.code, message=str(exc), http_status=402) from exc
         try:
-            with guarded_edit(tenant_id=tenant_id, kind="service:create", payload={"name": body.name, "options": [opt.model_dump() for opt in body.options]}):
+            with guarded_edit(
+                tenant_id=tenant_id,
+                kind="service:create",
+                payload={"name": body.name, "options": [opt.model_dump() for opt in body.options]},
+            ):
                 return self._create_service(tenant_id=tenant_id, body=body)
         except DailyEditLimitError as exc:
             raise ServiceCatalogError(code=exc.code, message=exc.code, http_status=429) from exc

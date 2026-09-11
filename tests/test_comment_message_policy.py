@@ -44,7 +44,9 @@ def _result(*, text: str, extra: dict, ai_called: bool = False, decision: str = 
 
 
 def test_static_and_ignore_are_zero_units() -> None:
-    static = classify_result(_turn(), _result(text="Thanks", extra={"path": "comment_rule", "comment_mode": "static_comment"}))
+    static = classify_result(
+        _turn(), _result(text="Thanks", extra={"path": "comment_rule", "comment_mode": "static_comment"})
+    )
     ignore = classify_result(
         _turn(),
         TurnResult(

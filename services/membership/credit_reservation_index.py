@@ -11,7 +11,7 @@ from pathlib import Path
 from storage.persistent_storage import _DATA_ROOT
 
 _LOCK = threading.Lock()
-_ITEMS: dict[str, "OpenCreditReservation"] = {}
+_ITEMS: dict[str, OpenCreditReservation] = {}
 _HYDRATED = False
 
 
@@ -240,9 +240,7 @@ def seed_from_pending_settlements(*, limit: int = 200) -> int:
                 tenant_id=item.tenant_id,
                 reservation_id=item.reservation_id,
                 request_id=item.operation_id or item.reservation_id,
-                operation_type=str(
-                    (item.extra or {}).get("operation_type") or item.channel or "legacy_credits"
-                ),
+                operation_type=str((item.extra or {}).get("operation_type") or item.channel or "legacy_credits"),
                 created_at=item.created_at,
             )
             seeded += 1
@@ -326,7 +324,9 @@ def open_counts(*, tenant_id: str = "", stale_after_seconds: int = 3600) -> dict
     return {"open": len(rows), "stale": len(stale)}
 
 
-def list_stale_open(*, older_than_seconds: int = 3600, limit: int = 50, after_id: str = "") -> list[OpenCreditReservation]:
+def list_stale_open(
+    *, older_than_seconds: int = 3600, limit: int = 50, after_id: str = ""
+) -> list[OpenCreditReservation]:
     cap = max(1, min(int(limit), 200))
     cutoff = datetime.now(UTC).timestamp() - max(1, int(older_than_seconds))
     _hydrate()

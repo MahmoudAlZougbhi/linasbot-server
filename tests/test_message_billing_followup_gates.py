@@ -173,9 +173,7 @@ def test_omni_and_request_persist_stay_honest() -> None:
     assert "message_billing_enabled" in web_src
     deliver_src = getsource(deliver._finish_success)
     assert "message_billing_enabled" in deliver_src
-    assert deliver_src.index("if not message_billing_enabled()") < deliver_src.index(
-        "capture_leftover_reply"
-    )
+    assert deliver_src.index("if not message_billing_enabled()") < deliver_src.index("capture_leftover_reply")
 
 
 def test_live_and_preview_gates_are_wired() -> None:

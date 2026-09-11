@@ -40,7 +40,8 @@ from tests.meta_instagram_login_oauth_support import (
     _transport,
 )
 
-pytest_plugins = ('tests.meta_instagram_login_oauth_support',)
+pytest_plugins = ("tests.meta_instagram_login_oauth_support",)
+
 
 @pytest.mark.asyncio
 async def test_uncertain_post_acknowledgement_stays_durable_until_lifecycle(

@@ -15,8 +15,7 @@ def table_ready(session: Any) -> bool:
         if bind.dialect.name == "sqlite":
             row = session.execute(
                 text(
-                    "SELECT name FROM sqlite_master WHERE type='table' "
-                    "AND name='customer_ai_credit_reservation_index'"
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='customer_ai_credit_reservation_index'"
                 )
             ).first()
             return bool(row and row[0])
@@ -63,13 +62,17 @@ def _row(raw: Any) -> OpenCreditReservation:
 
 
 def pg_get(session: Any, reservation_id: str) -> OpenCreditReservation | None:
-    row = session.execute(
-        text(
-            "SELECT reservation_id, tenant_id, request_id, operation_type, created_at, state "
-            "FROM customer_ai_credit_reservation_index WHERE reservation_id = :rid"
-        ),
-        {"rid": reservation_id},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "SELECT reservation_id, tenant_id, request_id, operation_type, created_at, state "
+                "FROM customer_ai_credit_reservation_index WHERE reservation_id = :rid"
+            ),
+            {"rid": reservation_id},
+        )
+        .mappings()
+        .first()
+    )
     return _row(dict(row)) if row else None
 
 

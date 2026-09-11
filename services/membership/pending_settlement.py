@@ -389,9 +389,7 @@ def get_pending(tenant_id: str, reservation_id: str, operation_id: str = "") -> 
 
         if not table_ready(session):
             return None
-        return pg_get_by_reservation(session, tenant_id, reservation_id) or pg_get_by_alias(
-            session, tenant_id, wanted
-        )
+        return pg_get_by_reservation(session, tenant_id, reservation_id) or pg_get_by_alias(session, tenant_id, wanted)
 
 
 def policy_for_operation(tenant_id: str, *operation_ids: str) -> BillingPolicy | None:

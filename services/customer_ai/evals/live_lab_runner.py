@@ -248,7 +248,13 @@ async def tool_registry_probe() -> dict[str, Any]:
         "registry+branch_price+unsupported_booking",
         missing=missing,
         booking_unsupported_clear=booking_clear,
-        sample={"antelias": price, "verdun": price_verdun, "other_tenant": other, "bad_args": bad_args, "booking": booking},
+        sample={
+            "antelias": price,
+            "verdun": price_verdun,
+            "other_tenant": other,
+            "bad_args": bad_args,
+            "booking": booking,
+        },
     )
 
 

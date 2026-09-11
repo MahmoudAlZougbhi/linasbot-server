@@ -24,9 +24,7 @@ def table_ready(session: Any) -> bool:
 
 
 def pg_load_limits(session: Any) -> tuple[int | None, dict[str, int]]:
-    rows = session.execute(
-        text("SELECT tenant_id, limit_value FROM customer_ai_daily_edit_policies")
-    ).mappings().all()
+    rows = session.execute(text("SELECT tenant_id, limit_value FROM customer_ai_daily_edit_policies")).mappings().all()
     baseline = None
     overrides: dict[str, int] = {}
     for row in rows:

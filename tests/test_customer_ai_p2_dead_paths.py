@@ -81,7 +81,5 @@ async def test_retrieve_published_fails_closed_on_stale_products(monkeypatch: py
         "services.customer_ai.retrieve.orchestrate.load_published_content",
         lambda _tid: (_ for _ in ()).throw(RuntimeError("should not load")),
     )
-    bundle = await retrieve_published(
-        RetrieveContext(tenant_id="t-prod", query="cream price", families={"products"})
-    )
+    bundle = await retrieve_published(RetrieveContext(tenant_id="t-prod", query="cream price", families={"products"}))
     assert bundle.outcome == "product_index_stale"

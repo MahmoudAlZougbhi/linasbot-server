@@ -189,7 +189,7 @@ def test_whatsapp_photo_and_voice_stamp_inbound_media() -> None:
     assert 'user_data["_source_message_id"] = str(image_id)' in webhook
     assert "user_image_base64=base64_image" in webhook
     voice = getsource(voice_handlers.handle_voice_message)
-    assert "mark_inbound_attachment(user_data, \"audio\", transcript=user_text_input)" in voice
+    assert 'mark_inbound_attachment(user_data, "audio", transcript=user_text_input)' in voice
     assert "record_pending_provider" in voice
     assert 'category="stt"' in voice
     assert "0.006" not in voice
@@ -212,7 +212,7 @@ def test_whatsapp_photo_and_voice_stamp_inbound_media() -> None:
     assert "inbound_from_attachment_type" in wa
     assert "inbound_media=inbound_media or None" in wa
     assert 'inbound_media["image_media_id"]' in wa
-    assert "snapshot.get(\"transcript\")" in wa
+    assert 'snapshot.get("transcript")' in wa
     assert "extract=extract" in wa
     assert "reserve_leftover_reply" in wa
     assert "credit_ledger_service.capture" not in wa
@@ -227,8 +227,8 @@ def test_whatsapp_photo_and_voice_stamp_inbound_media() -> None:
     assert "inbound_media=inbound_media or None" in omni
     tt = getsource(tiktok_messaging.handle_messaging_webhook)
     assert "hydrate_tiktok_inbound_media" in tt
-    assert "inbound_media.get(\"attachment_types\")" in tt
-    assert "snapshot[\"text\"]" in tt
+    assert 'inbound_media.get("attachment_types")' in tt
+    assert 'snapshot["text"]' in tt
 
 
 @pytest.mark.asyncio

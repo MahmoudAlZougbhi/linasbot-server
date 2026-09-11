@@ -123,9 +123,7 @@ async def multi_round_retrieve(
                     query_bits.append(part.strip())
             query = " ".join(query_bits[:3]) or message
             families = _families(task)
-            bundle = await retrieve_published(
-                RetrieveContext(tenant_id=turn.tenant_id, query=query, families=families)
-            )
+            bundle = await retrieve_published(RetrieveContext(tenant_id=turn.tenant_id, query=query, families=families))
             tagged = _tag_task(bundle, task.id) if bundle.items else bundle
             merged = _merge_items(merged, list(tagged.items))
             if tagged.outcome == "found" or merged:

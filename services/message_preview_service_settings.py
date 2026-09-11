@@ -125,9 +125,7 @@ class MessagePreviewSettingsMixin:
             print(f"⚠️ Could not write template_header_image_url.txt: {ex}")
 
     def _whatsapp_cloud_templates_config_path(self) -> str:
-        envp = (
-            os.getenv("WHATSAPP_CLOUD_TEMPLATES_CONFIG_PATH", "").strip()
-        )
+        envp = os.getenv("WHATSAPP_CLOUD_TEMPLATES_CONFIG_PATH", "").strip()
         if envp:
             return envp
         return os.path.join(

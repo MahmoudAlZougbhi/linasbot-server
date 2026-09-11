@@ -231,4 +231,3 @@ def test_human_handoff_still_allowed_when_capture_active(monkeypatch):
     out = route_social_contact_request("I want to speak with a human agent", ud, "en")
     assert out is not None
     assert out.intent == "human"
-

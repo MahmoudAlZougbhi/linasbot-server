@@ -133,7 +133,7 @@ def test_preflight_script_fails_closed_on_activation_flags() -> None:
 def test_activation_flags_report_requires_all_off() -> None:
     ok = activation_flags_report(
         {
-                        "MESSAGE_BILLING_ENABLED": "",
+            "MESSAGE_BILLING_ENABLED": "",
             "MESSAGE_BILLING_CUTOVER": "0",
             "FREE_PLAN_ENFORCEMENT_ENABLED": "false",
             "LINAS_CUSTOMER_AI_LAB": "false",

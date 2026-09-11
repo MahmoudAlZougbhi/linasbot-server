@@ -61,7 +61,7 @@ def evidence_from_product(row: Any) -> EvidenceItem | None:
     price = _attr(row, "price")
     if price:
         parts.append(f"listed_price {price}")
-    parts.append(f"availability { _attr(row, 'availability') }")
+    parts.append(f"availability {_attr(row, 'availability')}")
     text = "\n".join(p.strip() for p in parts if str(p).strip())
     if not text:
         return None

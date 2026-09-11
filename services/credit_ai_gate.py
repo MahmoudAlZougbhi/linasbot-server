@@ -74,9 +74,7 @@ def owner_credits_paused_payload(tenant_id: str | None) -> dict[str, Any]:
     show_upgrade = upgrade_plan_allowed(plan_id)
     return {
         "code": "insufficient_credits",
-        "message": (
-            "Not enough leftover credits. Owner Copilot is paused until you add leftover credits or upgrade."
-        ),
+        "message": ("Not enough leftover credits. Owner Copilot is paused until you add leftover credits or upgrade."),
         "remaining": remaining,
         "plan_id": plan_id,
         "show_upgrade": show_upgrade,

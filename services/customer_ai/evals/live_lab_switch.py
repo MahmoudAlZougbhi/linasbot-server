@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from services.customer_ai.flags import voyage_configured
 from services.customer_ai.providers.spaces import KNOWLEDGE_DOCUMENT
@@ -26,9 +27,10 @@ async def atomic_switch_live(
 
     try:
         with session_factory() as session:
-            row = session.execute(
-                text(
-                    """
+            row = (
+                session.execute(
+                    text(
+                        """
                     SELECT space_id, index_version, COUNT(*) AS n
                     FROM customer_ai_search_documents
                     WHERE tenant_id = :tenant_id
@@ -39,9 +41,12 @@ async def atomic_switch_live(
                     ORDER BY n DESC
                     LIMIT 1
                     """
-                ),
-                {"tenant_id": tenant_id, "space_id": KNOWLEDGE_DOCUMENT.space_id},
-            ).mappings().first()
+                    ),
+                    {"tenant_id": tenant_id, "space_id": KNOWLEDGE_DOCUMENT.space_id},
+                )
+                .mappings()
+                .first()
+            )
             if not row or int(row["n"] or 0) < 1:
                 if not voyage_configured():
                     return gate("BLOCKED", "VOYAGE_API_KEY")

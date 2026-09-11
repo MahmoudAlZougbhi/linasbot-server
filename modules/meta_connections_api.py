@@ -340,9 +340,9 @@ async def meta_oauth_callback(
 
 # Register disconnect/reconnect/activate/rollback/comment-replies routes
 # and re-export lifecycle handlers for tests / direct callers.
-from modules import (
-    meta_connections_api_lifecycle,  # noqa: E402, F401
-    meta_connections_api_recovery,  # noqa: E402, F401
+from modules import (  # noqa: E402
+    meta_connections_api_lifecycle,  # noqa: F401
+    meta_connections_api_recovery,  # noqa: F401
 )
 from modules.meta_connections_api_lifecycle import (  # noqa: E402, F401
     activate_meta_connection,

@@ -161,11 +161,7 @@ def _filters(**kwargs: Any) -> dict[str, Any]:
 
 
 def _from_snapshot(snap: dict[str, Any]) -> dict[str, int]:
-    allocated = sum(
-        int(lot.get("granted") or 0)
-        for lot in snap.get("lots") or []
-        if lot.get("live", True)
-    )
+    allocated = sum(int(lot.get("granted") or 0) for lot in snap.get("lots") or [] if lot.get("live", True))
     remaining = int(snap.get("remaining") or 0)
     reserved = int(snap.get("reserved") or 0)
     return {

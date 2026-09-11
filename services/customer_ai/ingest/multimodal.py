@@ -42,9 +42,22 @@ async def extract_pdf_text(data: bytes) -> dict[str, Any]:
         text = "\n\n".join(p for p in pages if p)
         if not text.strip():
             return {"ok": False, "status": "FAILED", "reason": "pdf_no_text_layer", "text": "", "pages": len(pages)}
-        return {"ok": True, "status": "READY", "reason": "ok", "text": text, "pages": len(pages), "headings_preserved": True}
+        return {
+            "ok": True,
+            "status": "READY",
+            "reason": "ok",
+            "text": text,
+            "pages": len(pages),
+            "headings_preserved": True,
+        }
     except Exception as exc:
-        return {"ok": False, "status": "FAILED", "reason": f"pdf_extract_unavailable:{type(exc).__name__}", "text": "", "pages": 0}
+        return {
+            "ok": False,
+            "status": "FAILED",
+            "reason": f"pdf_extract_unavailable:{type(exc).__name__}",
+            "text": "",
+            "pages": 0,
+        }
 
 
 async def extract_image_text(data: bytes, *, filename: str = "") -> dict[str, Any]:

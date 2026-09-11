@@ -58,8 +58,7 @@ def _refuse_unsupported_provider(provider: str) -> None:
             "Legacy WhatsApp BSPs are not available as runtime fallback."
         )
     raise ValueError(
-        f"Unknown WhatsApp provider: {provider!r}. "
-        "Supported: meta (Cloud). Legacy BSP names are disabled."
+        f"Unknown WhatsApp provider: {provider!r}. Supported: meta (Cloud). Legacy BSP names are disabled."
     )
 
 

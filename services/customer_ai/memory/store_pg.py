@@ -157,16 +157,20 @@ def upsert_summary(
 
 
 def get_summary(session: Any, *, tenant_id: str, conversation_id: str) -> dict[str, Any] | None:
-    row = session.execute(
-        text(
-            """
+    row = (
+        session.execute(
+            text(
+                """
             SELECT summary_text, source_message_ids, updated_at
             FROM customer_ai_memory_summaries
             WHERE tenant_id = :tenant_id AND conversation_id = :conversation_id
             """
-        ),
-        {"tenant_id": tenant_id, "conversation_id": conversation_id},
-    ).mappings().first()
+            ),
+            {"tenant_id": tenant_id, "conversation_id": conversation_id},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         return None
     refs = row.get("source_message_ids")

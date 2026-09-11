@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 # Inspected against CM section families used by retrieve/cards.py.
 # Higher wins. Do not invent families not present in product model.

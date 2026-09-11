@@ -11,9 +11,7 @@ from fastapi.testclient import TestClient
 
 from services.dashboard_session_service import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, SESSION_COOKIE_NAME, session_service
 
-_ROUTE_MODULES = (
-    "modules.cm_faq_api",
-)
+_ROUTE_MODULES = ("modules.cm_faq_api",)
 
 
 @pytest.fixture(scope="module")

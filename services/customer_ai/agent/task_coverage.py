@@ -76,9 +76,7 @@ def evaluate_task_coverage(
 
 def missing_tasks(plan: PlannerPlan, coverage: dict[str, TaskCoverageStatus]) -> list[str]:
     return [
-        task.id
-        for task in plan.tasks
-        if task.type in _INFO_TYPES and coverage.get(task.id) in {"missing", "partial"}
+        task.id for task in plan.tasks if task.type in _INFO_TYPES and coverage.get(task.id) in {"missing", "partial"}
     ]
 
 

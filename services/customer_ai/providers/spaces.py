@@ -36,9 +36,7 @@ class EmbeddingSpace:
 
 def _space(*, family: str, model: str, endpoint: str, input_mode: str) -> EmbeddingSpace:
     dims = DEFAULT_BUDGETS.embedding_dimensions
-    space_id = "|".join(
-        (PROVIDER, model, endpoint, str(dims), "fp32", DISTANCE, PREPROCESS_VERSION, input_mode)
-    )
+    space_id = "|".join((PROVIDER, model, endpoint, str(dims), "fp32", DISTANCE, PREPROCESS_VERSION, input_mode))
     return EmbeddingSpace(
         space_id=space_id,
         provider=PROVIDER,

@@ -35,10 +35,7 @@ def pg_tenant_ids(session: Any, window_id: str = "") -> list[str]:
 
 def pg_operation_ids(session: Any, tenant_id: str, window_id: str) -> dict[str, str]:
     rows = session.execute(
-        text(
-            "SELECT operation_id, status FROM customer_ai_daily_edits "
-            "WHERE tenant_id = :tid AND window_id = :wid"
-        ),
+        text("SELECT operation_id, status FROM customer_ai_daily_edits WHERE tenant_id = :tid AND window_id = :wid"),
         {"tid": tenant_id, "wid": window_id},
     ).all()
     return {str(row[0]): str(row[1]) for row in rows if row and row[0]}
@@ -77,7 +74,9 @@ def pg_reserve(session: Any, *, tenant_id: str, operation_id: str, window_id: st
         return DailyEditDecision(True, used, reserved, remaining, limit, window_id, reset_at, source=source)
     if used + reserved >= limit:
         raise DailyEditLimitError(
-            DailyEditDecision(False, used, reserved, 0, limit, window_id, reset_at, source=source, reason="AI_SETUP_DAILY_LIMIT")
+            DailyEditDecision(
+                False, used, reserved, 0, limit, window_id, reset_at, source=source, reason="AI_SETUP_DAILY_LIMIT"
+            )
         )
     session.execute(
         text(
@@ -99,13 +98,16 @@ def pg_commit(session: Any, *, tenant_id: str, operation_id: str, window_id: str
         ),
         {"tid": tenant_id, "wid": window_id, "op": operation_id},
     )
-    if session.execute(
-        text(
-            "SELECT 1 FROM customer_ai_daily_edits "
-            "WHERE tenant_id = :tid AND window_id = :wid AND operation_id = :op"
-        ),
-        {"tid": tenant_id, "wid": window_id, "op": operation_id},
-    ).first() is None:
+    if (
+        session.execute(
+            text(
+                "SELECT 1 FROM customer_ai_daily_edits "
+                "WHERE tenant_id = :tid AND window_id = :wid AND operation_id = :op"
+            ),
+            {"tid": tenant_id, "wid": window_id, "op": operation_id},
+        ).first()
+        is None
+    ):
         session.execute(
             text(
                 "INSERT INTO customer_ai_daily_edits (tenant_id, window_id, operation_id, status) "

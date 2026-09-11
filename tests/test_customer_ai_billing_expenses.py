@@ -122,7 +122,9 @@ def test_cost_dashboard_exposes_pending_breakdown() -> None:
     assert dash["pending_or_unpriced"] >= 1
     assert dash["pending_by_category"].get("llm_generation", 0) >= 1
     assert dash["pending_by_provider"].get("openai", 0) >= 1
-    assert "pending provider events" in dash["attribution_note"].lower() or "pending" in dash["attribution_note"].lower()
+    assert (
+        "pending provider events" in dash["attribution_note"].lower() or "pending" in dash["attribution_note"].lower()
+    )
     assert any(row["tenant_id"] == "dash-shop" for row in dash["tenants"])
 
 

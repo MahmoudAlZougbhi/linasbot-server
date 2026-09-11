@@ -147,9 +147,7 @@ def test_sql_miss_does_not_revive_stale_reserved_lookup(monkeypatch: pytest.Monk
     assert persisted == ["reserved"]
 
 
-def test_hydrate_skips_disk_reserved_when_sql_already_has_id(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_hydrate_skips_disk_reserved_when_sql_already_has_id(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     import json
     from contextlib import contextmanager
 

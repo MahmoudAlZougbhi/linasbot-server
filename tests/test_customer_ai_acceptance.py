@@ -95,9 +95,7 @@ def test_seven_comment_modes_normalize() -> None:
 
 
 def test_ignore_comment_is_policy_suppressed(monkeypatch: pytest.MonkeyPatch) -> None:
-    section = CommentsSection(
-        rules=[CommentRule(id="ig", action="ignore", trigger_type="all_comments", keywords=[])]
-    )
+    section = CommentsSection(rules=[CommentRule(id="ig", action="ignore", trigger_type="all_comments", keywords=[])])
     monkeypatch.setattr(
         "services.customer_ai.comments.pipeline.load_published_comments_section",
         lambda _tid: section,

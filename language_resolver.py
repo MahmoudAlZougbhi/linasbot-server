@@ -19,7 +19,6 @@ Helpers/signals: language_resolver_text, language_resolver_signals (LOC split).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
 
 from language_resolver_signals import (  # noqa: F401
     ARABIZI_DIGITS_RE,
@@ -59,7 +58,7 @@ class LangState:
     lang_locked: str = "en"
     confidence: float = 0.0
     expecting_full_name: bool = False
-    last_reasons: List[str] = field(default_factory=list)
+    last_reasons: list[str] = field(default_factory=list)
 
 class LanguageResolver:
     """
@@ -92,7 +91,7 @@ class LanguageResolver:
     LANGDETECT_CONF_THRESHOLD = 0.70
 
     def __init__(self):
-        self._cache: Dict[str, LangState] = {}
+        self._cache: dict[str, LangState] = {}
 
     def set_expecting_full_name(self, conversation_id: str, expecting: bool) -> None:
         state = self._cache.get(conversation_id) or LangState()
@@ -103,8 +102,8 @@ class LanguageResolver:
         self,
         conversation_id: str,
         user_text: str,
-        accept_language: Optional[str] = None,
-        user_lang_override: Optional[str] = None,
+        accept_language: str | None = None,
+        user_lang_override: str | None = None,
     ) -> str:
         state = self._cache.get(conversation_id) or LangState(
             lang_locked=self._from_accept_language(accept_language) or "en"
@@ -244,7 +243,7 @@ class LanguageResolver:
         self._cache[conversation_id] = state
         return state.lang_locked
 
-    def _from_accept_language(self, header: Optional[str]) -> Optional[str]:
+    def _from_accept_language(self, header: str | None) -> str | None:
         if not header:
             return None
         token = header.split(",")[0].strip()

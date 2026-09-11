@@ -38,7 +38,9 @@ def propose_tools_from_plan(plan: PlannerPlan, message: str) -> list[dict[str, A
     return out
 
 
-async def propose_tools_dynamic(plan: PlannerPlan, message: str, *, coverage: dict[str, str] | None = None) -> list[dict[str, Any]]:
+async def propose_tools_dynamic(
+    plan: PlannerPlan, message: str, *, coverage: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
     """Bounded dynamic tool proposals. Falls back to plan map if LLM unavailable."""
     base = propose_tools_from_plan(plan, message)
     missing = [tid for tid, state in (coverage or {}).items() if state in {"missing", "partial"}]

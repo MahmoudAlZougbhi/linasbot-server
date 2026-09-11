@@ -92,10 +92,6 @@ def search_cards(
         query_tokens,
         [tokenize(prepare_query_text(card.search_text)) for card in scoped],
     )
-    hits = [
-        LexicalHit(card=card, score=score)
-        for card, score in zip(scoped, scores, strict=True)
-        if score > 0
-    ]
+    hits = [LexicalHit(card=card, score=score) for card, score in zip(scoped, scores, strict=True) if score > 0]
     hits.sort(key=lambda item: (-item.score, item.card.item_id))
     return hits[:cap]

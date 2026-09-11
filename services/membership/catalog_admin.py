@@ -190,8 +190,7 @@ def _apply_draft(base: dict[str, Any], draft: dict[str, Any]) -> dict[str, Any]:
             remaining = [
                 field
                 for field in UNCONFIGURED_FREE_FIELDS
-                if field != "free_ai_message_allowance"
-                and not (out["free"].get("configured") or {}).get(field)
+                if field != "free_ai_message_allowance" and not (out["free"].get("configured") or {}).get(field)
             ]
             out["free"]["unconfigured_fields"] = remaining
     plans = draft.get("plans")
@@ -263,7 +262,7 @@ def published_offer_overlay(plan_id: str) -> dict[str, Any]:
         _refresh_unlocked()
         if not _PUBLISHED:
             return {}
-        overlay = ((_DRAFT.get("plans") or {}).get(pid) or {})
+        overlay = (_DRAFT.get("plans") or {}).get(pid) or {}
         return {key: overlay[key] for key in (*_PLAN_OVERLAY_KEYS, "intended_price_micro_usd") if key in overlay}
 
 

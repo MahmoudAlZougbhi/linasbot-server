@@ -108,14 +108,18 @@ def pg_list(
 
 
 def pg_get(session: Any, outbox_id: str) -> OutboxItem | None:
-    row = session.execute(
-        text(
-            "SELECT outbox_id, tenant_id, operation_id, reservation_id, billing_policy, state, "
-            "envelope, provider_message_id, attempts, updated_at, extra "
-            "FROM customer_ai_outbox WHERE outbox_id = :oid"
-        ),
-        {"oid": outbox_id},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "SELECT outbox_id, tenant_id, operation_id, reservation_id, billing_policy, state, "
+                "envelope, provider_message_id, attempts, updated_at, extra "
+                "FROM customer_ai_outbox WHERE outbox_id = :oid"
+            ),
+            {"oid": outbox_id},
+        )
+        .mappings()
+        .first()
+    )
     return _row(dict(row)) if row else None
 
 

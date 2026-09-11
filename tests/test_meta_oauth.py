@@ -31,7 +31,8 @@ from tests.meta_oauth_support import (
     _transport,
 )
 
-pytest_plugins = ('tests.meta_oauth_support',)
+pytest_plugins = ("tests.meta_oauth_support",)
+
 
 def test_oauth_flow_channel_keeps_facebook_and_instagram_separate() -> None:
     assert normalize_oauth_flow_channel("instagram") == "instagram"

@@ -51,9 +51,7 @@ def iap_config_status() -> dict[str, Any]:
 
     return {
         "plans": PLAN_PRICES_USD,
-        "intended_message_prices_usd": {
-            pid: intended_price_usd(pid) for pid in PUBLIC_PAID_PLAN_IDS
-        },
+        "intended_message_prices_usd": {pid: intended_price_usd(pid) for pid in PUBLIC_PAID_PLAN_IDS},
         "product_map": _product_map(),
         "apple": {
             "configured": bool(apple_key and apple_bundle),

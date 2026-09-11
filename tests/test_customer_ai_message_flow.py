@@ -44,11 +44,15 @@ def test_message_flow_exposes_human_stages_and_cost() -> None:
                     "at": "2026-09-11T00:00:00+00:00",
                     "detail": {
                         "ms": 12,
-                        "evidence": [{"id": "knowledge:laser", "family": "knowledge", "title": "Laser", "preview": "price"}],
+                        "evidence": [
+                            {"id": "knowledge:laser", "family": "knowledge", "title": "Laser", "preview": "price"}
+                        ],
                     },
                 }
             ],
-            "evidence_preview": [{"id": "knowledge:laser", "family": "knowledge", "title": "Laser", "preview": "price"}],
+            "evidence_preview": [
+                {"id": "knowledge:laser", "family": "knowledge", "title": "Laser", "preview": "price"}
+            ],
         },
     )
     billed = apply_message_billing(turn, result)

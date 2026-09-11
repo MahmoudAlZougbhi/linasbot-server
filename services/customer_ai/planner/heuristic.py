@@ -93,7 +93,6 @@ def plan_message(message: str) -> PlannerPlan:
     if not tasks:
         tasks.append(_task("t_info", "information", text, ["knowledge", "care", "services", "faq", "branches"]))
     read_only = all(
-        item.type in {"information", "comparison", "hours", "acknowledgement", "draft_correction"}
-        for item in tasks
+        item.type in {"information", "comparison", "hours", "acknowledgement", "draft_correction"} for item in tasks
     )
     return PlannerPlan(tasks=tasks, read_only=read_only)

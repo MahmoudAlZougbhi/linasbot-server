@@ -16,7 +16,8 @@ from tests.meta_outbound_attempts_support import (
     _prepare_notice,
 )
 
-pytest_plugins = ('tests.meta_outbound_attempts_support',)
+pytest_plugins = ("tests.meta_outbound_attempts_support",)
+
 
 @pytest.mark.asyncio
 async def test_quota_phases_remain_deletion_active_until_provider_terminal(

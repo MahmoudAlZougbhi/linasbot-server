@@ -253,7 +253,9 @@ async def approve_diagnosis_fix(
         answer = str((corr.get("patch") or corr.get("patch_hint") or {}).get("answer") or "").strip()
         question = str((corr.get("patch") or corr.get("patch_hint") or {}).get("question") or "").strip()
         if qa_group_id and answer:
-            with guarded_edit(tenant_id=tenant_id, kind="faq:diagnosis-update", payload={"id": qa_group_id, "answer": answer}):
+            with guarded_edit(
+                tenant_id=tenant_id, kind="faq:diagnosis-update", payload={"id": qa_group_id, "answer": answer}
+            ):
                 updated = await update_cm_faq_variant(
                     qa_group_id=str(qa_group_id),
                     language=str(corr.get("language") or "ar"),
@@ -265,7 +267,9 @@ async def approve_diagnosis_fix(
                 )
             applied["faq"] = {"qa_group_id": qa_group_id, "updated": True, "result": updated.get("success", True)}
         elif question and answer:
-            with guarded_edit(tenant_id=tenant_id, kind="faq:diagnosis-create", payload={"question": question, "answer": answer}):
+            with guarded_edit(
+                tenant_id=tenant_id, kind="faq:diagnosis-create", payload={"question": question, "answer": answer}
+            ):
                 created = await create_faq_pair(
                     question=question,
                     answer=answer,

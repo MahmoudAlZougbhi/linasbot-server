@@ -219,7 +219,9 @@ async def tool_approve_smart_answer(
                 tags=["smart_answer", "owner_copilot"],
             )
     except DailyEditLimitError as exc:
-        return ToolResult(ok=False, name="approve_smart_answer", data={"reset_at": exc.decision.reset_at}, error=exc.code)
+        return ToolResult(
+            ok=False, name="approve_smart_answer", data={"reset_at": exc.decision.reset_at}, error=exc.code
+        )
     from services.owner_ai_cm_approval import activate_cm_after_save
 
     # Same Approve→Live path as CM patches (#171): draft mirror is already in faq section.

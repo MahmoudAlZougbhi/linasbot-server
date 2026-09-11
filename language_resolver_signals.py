@@ -8,7 +8,6 @@ heuristics, and langdetect EN/FR. (LOC split from language_resolver.)
 from __future__ import annotations
 
 import re
-from typing import List, Optional, Tuple
 
 from language_resolver_text import alpha_len, clean, mask_times, tokenize
 
@@ -43,8 +42,7 @@ ARABIZI_WORDS = {
     "le", "leh", "lesh", "leish", "ليش",
     "sho", "shu", "shou", "chou",
     "wen", "wein", "wayn", "fein", "fain",
-    "aya", "ayya", "ayya",
-    "adesh", "addesh", "2adesh", "2addesh", "adde", "2adde",
+    "aya", "ayya", "adesh", "addesh", "2adesh", "2addesh", "adde", "2adde",
 
     # Gender words (CRITICAL for gender detection)
     "shab", "chab", "shabb",  # male
@@ -116,7 +114,7 @@ def arabizi_score(text: str) -> int:
 
     return score
 
-def is_arabizi(text: str, threshold: int) -> Tuple[bool, int]:
+def is_arabizi(text: str, threshold: int) -> tuple[bool, int]:
     s = arabizi_score(text)
     return (s >= threshold), s
 
@@ -146,10 +144,10 @@ ENGLISH_MARKERS = {
     "what", "when", "where", "how", "why",
 }
 
-def _marker_hits(tokens: List[str], marker_set: set) -> int:
+def _marker_hits(tokens: list[str], marker_set: set) -> int:
     return len(set(tokens) & marker_set)
 
-def french_features(text: str) -> Tuple[int, int, bool]:
+def french_features(text: str) -> tuple[int, int, bool]:
     raw = clean(text)
     toks = tokenize(raw)
     hits = _marker_hits(toks, FRENCH_MARKERS)
@@ -163,7 +161,7 @@ def french_features(text: str) -> Tuple[int, int, bool]:
         score += 2
     return score, hits, has_diacritics
 
-def english_features(text: str) -> Tuple[int, int]:
+def english_features(text: str) -> tuple[int, int]:
     raw = clean(text)
     toks = tokenize(raw)
     hits = _marker_hits(toks, ENGLISH_MARKERS)
@@ -175,7 +173,7 @@ def english_features(text: str) -> Tuple[int, int]:
 # 6) Language detection for English/French (langdetect)
 # ============================================================
 
-def detect_en_fr(text: str) -> Optional[Tuple[str, float]]:
+def detect_en_fr(text: str) -> tuple[str, float] | None:
     """
     Returns ("en"|"fr", probability) or None.
     Uses langdetect for detection.

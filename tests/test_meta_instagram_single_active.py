@@ -31,7 +31,8 @@ from tests.meta_instagram_single_active_support import (
     _stage_direct_instagram,
 )
 
-pytest_plugins = ('tests.meta_instagram_single_active_support', 'tests.meta_app_registry_fixtures')
+pytest_plugins = ("tests.meta_instagram_single_active_support", "tests.meta_app_registry_fixtures")
+
 
 def test_history_key_stays_flow_specific_but_active_key_does_not() -> None:
     linked_key = binding_asset_key("tenant-a", APP_A_KEY, "instagram", INSTAGRAM_ID, "facebook_login")

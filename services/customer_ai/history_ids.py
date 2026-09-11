@@ -8,10 +8,7 @@ from typing import Any
 def conversation_id_for_brain(*, payload: dict[str, Any] | None = None, conversation_key: str = "") -> str:
     data = payload or {}
     explicit = str(
-        data.get("conversation_id")
-        or data.get("current_conversation_id")
-        or data.get("active_conversation_id")
-        or ""
+        data.get("conversation_id") or data.get("current_conversation_id") or data.get("active_conversation_id") or ""
     ).strip()
     if explicit:
         return explicit

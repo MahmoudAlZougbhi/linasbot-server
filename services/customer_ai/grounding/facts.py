@@ -44,9 +44,7 @@ def _hours_reasons(reply_text: str, corpus: str) -> list[str]:
 def _phone_reasons(reply_text: str, corpus: str) -> list[str]:
     allowed = extract.phones(corpus)
     return [
-        f"phone:{claim}"
-        for claim in sorted(extract.phones(reply_text))
-        if not extract.phone_grounded(claim, allowed)
+        f"phone:{claim}" for claim in sorted(extract.phones(reply_text)) if not extract.phone_grounded(claim, allowed)
     ]
 
 

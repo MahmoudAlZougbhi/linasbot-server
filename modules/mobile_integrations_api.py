@@ -103,11 +103,7 @@ async def mobile_integration_toggles(
     from services.membership.daily_edits import DailyEditLimitError
     from services.membership.edit_http import guarded_edit, limit_response
 
-    kind = (
-        f"safety:toggle:{platform_key}:{toggle}"
-        if not enabled
-        else f"integration:toggle:{platform_key}:{toggle}"
-    )
+    kind = f"safety:toggle:{platform_key}:{toggle}" if not enabled else f"integration:toggle:{platform_key}:{toggle}"
 
     if platform_key == "tiktok":
         from services.tiktok_business.toggles import TikTokToggleError, set_tiktok_toggle

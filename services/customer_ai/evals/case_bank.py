@@ -6,7 +6,8 @@ No live provider spend.
 
 from __future__ import annotations
 
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 from services.customer_ai.evals.case_schema import EvalCase
 from services.customer_ai.evals.fixtures import (

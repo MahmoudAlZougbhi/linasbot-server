@@ -181,7 +181,12 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
 
 def reserve_generative(turn: CustomerTurn, *, mixed: bool = False) -> TurnResult | None:
     op = operation_id_for_turn(turn)
-    if not message_billing_enabled() or owner_preview_turn(turn) or lab_turn(turn) or _pinned_policy(turn, op) == "legacy_credits":
+    if (
+        not message_billing_enabled()
+        or owner_preview_turn(turn)
+        or lab_turn(turn)
+        or _pinned_policy(turn, op) == "legacy_credits"
+    ):
         return None
     ensure_included_grant(turn.tenant_id)
     if turn.invocation_kind == "followup":

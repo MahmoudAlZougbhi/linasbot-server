@@ -80,10 +80,14 @@ def pg_upsert(
 
 
 def pg_load(session: Any) -> dict[str, Any] | None:
-    row = session.execute(
-        text("SELECT draft, revision, published, audit FROM customer_ai_catalog_admin WHERE row_id = :rid"),
-        {"rid": ROW_ID},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text("SELECT draft, revision, published, audit FROM customer_ai_catalog_admin WHERE row_id = :rid"),
+            {"rid": ROW_ID},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         return None
     return {
