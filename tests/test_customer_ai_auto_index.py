@@ -106,7 +106,9 @@ def result_not_inlined(out: dict[str, object]) -> bool:
 
 
 @pytest.mark.asyncio
-async def test_embed_failure_keeps_old_active_and_retries(tenant_fs: Path, mock_voyage: None, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_embed_failure_keeps_old_active_and_retries(
+    tenant_fs: Path, mock_voyage: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from services.cm.publish import publish_draft
     from services.customer_ai.evals.auto_index_e2e import seed_minimal_setup
     from services.customer_ai.search.index_job import index_published_tenant

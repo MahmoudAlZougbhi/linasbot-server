@@ -111,9 +111,7 @@ def write_entity_candidate(
     }
 
 
-def activate_entity_index(
-    session: Any | None, *, tenant_id: str, revision: str, count: int
-) -> dict[str, Any]:
+def activate_entity_index(session: Any | None, *, tenant_id: str, revision: str, count: int) -> dict[str, Any]:
     pointer = activate_pointer(
         session,
         tenant_id=tenant_id,
@@ -155,9 +153,7 @@ async def index_published_tenant(
         end_job(tid)
 
 
-async def _index_published_body(
-    tid: str, *, revision: str, session: Any | None, activate: bool
-) -> dict[str, Any]:
+async def _index_published_body(tid: str, *, revision: str, session: Any | None, activate: bool) -> dict[str, Any]:
     cards = [*load_published_cards(tid), *load_product_cards(tid)]
     rows = document_rows(cards, tenant_id=tid, version=revision or "unpublished")
     if not voyage_configured():
@@ -196,7 +192,9 @@ async def _index_published_body(
         return await _persist_candidate_and_maybe_activate(
             session, tid=tid, revision=revision, rows=rows, vectors=vectors, cards=cards, activate=activate
         )
-    return await _index_with_resolved_session(tid, revision=revision, rows=rows, vectors=vectors, cards=cards, activate=activate)
+    return await _index_with_resolved_session(
+        tid, revision=revision, rows=rows, vectors=vectors, cards=cards, activate=activate
+    )
 
 
 async def _index_with_resolved_session(
@@ -221,7 +219,13 @@ async def _index_with_resolved_session(
             from services.customer_ai.search.index_lifecycle import mark_failed
 
             mark_failed(tid, revision=revision, reason="index_not_ready")
-            return {"ready": False, "reason": "index_not_ready", "count": len(rows), "store": "unavailable", "health": "FAILED"}
+            return {
+                "ready": False,
+                "reason": "index_not_ready",
+                "count": len(rows),
+                "store": "unavailable",
+                "health": "FAILED",
+            }
         return await _persist_candidate_and_maybe_activate(
             None, tid=tid, revision=revision, rows=rows, vectors=vectors, cards=cards, activate=activate
         )
@@ -229,7 +233,13 @@ async def _index_with_resolved_session(
         from services.customer_ai.search.index_lifecycle import mark_failed
 
         mark_failed(tid, revision=revision, reason="index_not_ready")
-        return {"ready": False, "reason": "index_not_ready", "count": len(rows), "store": "unavailable", "health": "FAILED"}
+        return {
+            "ready": False,
+            "reason": "index_not_ready",
+            "count": len(rows),
+            "store": "unavailable",
+            "health": "FAILED",
+        }
 
 
 async def _persist_candidate_and_maybe_activate(
@@ -310,7 +320,9 @@ async def _persist_candidate_and_maybe_activate(
     if session is None:
         ready = bool(entity_act.get("ok"))
     if not ready:
-        mark_failed(tid, revision=revision, reason=str(ctx_act.get("reason") or entity_act.get("reason") or "activate_failed"))
+        mark_failed(
+            tid, revision=revision, reason=str(ctx_act.get("reason") or entity_act.get("reason") or "activate_failed")
+        )
         return {**meta, "ready": False, "reason": "activate_failed", "health": "FAILED", "contextual": ctx_act}
     mark_active(
         tid,

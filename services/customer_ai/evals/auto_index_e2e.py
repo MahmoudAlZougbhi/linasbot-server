@@ -154,7 +154,9 @@ async def run_new_tenant_auto_index_e2e(*, tenant_id: str = "") -> dict[str, Any
     cards3 = load_published_cards(tid)
     ids3 = {card.item_id.split(":", 1)[-1] for card in cards3}
     life3 = get_lifecycle(tid)
-    delete_ok = "faq_parking" not in ids3 and str(life3.get("status") or "") == "ACTIVE" and bool(third_index.get("ready"))
+    delete_ok = (
+        "faq_parking" not in ids3 and str(life3.get("status") or "") == "ACTIVE" and bool(third_index.get("ready"))
+    )
 
     return {
         "ok": first_ok and edit_ok and delete_ok,

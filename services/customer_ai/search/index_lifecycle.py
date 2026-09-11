@@ -158,9 +158,10 @@ def _load_sql(tenant_id: str) -> dict[str, Any] | None:
         from db.session import whatsapp_session
 
         with whatsapp_session(require=True) as session:
-            row = session.execute(
-                text(
-                    """
+            row = (
+                session.execute(
+                    text(
+                        """
                     SELECT tenant_id, status, content_revision, active_version, candidate_version,
                            rollback_version, embedding_model, contextual_model,
                            contextualization_version, chunker_version, compiler_version,
@@ -168,9 +169,12 @@ def _load_sql(tenant_id: str) -> dict[str, Any] | None:
                     FROM customer_ai_tenant_index
                     WHERE tenant_id = :tenant_id
                     """
-                ),
-                {"tenant_id": tenant_id},
-            ).mappings().first()
+                    ),
+                    {"tenant_id": tenant_id},
+                )
+                .mappings()
+                .first()
+            )
         if not row:
             return None
         data = dict(row)

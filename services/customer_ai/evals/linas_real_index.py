@@ -166,7 +166,9 @@ async def run_real_linas_index() -> dict[str, Any]:
         candidate = await index_published_tenant(tid, revision=revision, session=session, activate=False)
     gates["CANDIDATE"] = _gate("PASS" if candidate.get("ready") else "FAIL", str(candidate.get("reason") or ""))
     retrieval = await retrieval_eval_for_tenant(tid)
-    gates["RETRIEVAL_EVAL"] = _gate(str(retrieval.get("status") or "FAIL"), str(retrieval.get("detail") or ""), **retrieval)
+    gates["RETRIEVAL_EVAL"] = _gate(
+        str(retrieval.get("status") or "FAIL"), str(retrieval.get("detail") or ""), **retrieval
+    )
     iso = isolation_probe(tid)
     gates["ISOLATION"] = iso
 
@@ -241,7 +243,12 @@ async def run_real_linas_index() -> dict[str, Any]:
 
 def main() -> int:
     report = asyncio.run(run_real_linas_index())
-    print(json.dumps({"ok": report.get("ok"), "activated": report.get("activated"), "tenant": report.get("tenant_id")}, sort_keys=True))
+    print(
+        json.dumps(
+            {"ok": report.get("ok"), "activated": report.get("activated"), "tenant": report.get("tenant_id")},
+            sort_keys=True,
+        )
+    )
     gates = report.get("gates") or {}
     for name, row in sorted(gates.items()):
         print(f"[linas-real-index] gate {name}={row.get('status')} detail={str(row.get('detail') or '')[:120]}")
