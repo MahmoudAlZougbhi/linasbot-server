@@ -44,14 +44,16 @@ def brain_readiness_report(*, tenant_id: str = "linas") -> dict[str, Any]:
         "RETRIEVAL_EVAL": _gate("NOT_RUN"),
         "GROUNDING": _gate("NOT_RUN"),
         "MULTILINGUAL": _gate("PASS", "normalize+voyage"),
-        "TOOLS": _gate("PASS", "customer_registry"),
-        "MEMORY": _gate("PASS", "process+pg_optional"),
-        "MULTIMODAL": _gate("PASS", "async_ingest_api"),
-        "ATOMIC_SWITCH": _gate("PASS", "pointer_activate_rollback"),
+        "TOOLS": _gate("NOT_RUN", "needs live tool loop"),
+        "MEMORY": _gate("NOT_RUN", "needs durable PG proof"),
+        "MULTIMODAL": _gate("NOT_RUN", "needs live extractors"),
+        "ATOMIC_SWITCH": _gate("NOT_RUN", "needs live pointer flip"),
         "LOAD": _gate("NOT_RUN"),
         "LATENCY": _gate("NOT_RUN"),
         "COST": _gate("NOT_RUN"),
         "CHANNEL_SMOKE": _gate("NOT_RUN"),
+        "BILLING": _gate("NOT_RUN"),
+        "SECURITY": _gate("NOT_RUN"),
     }
 
     try:
@@ -72,6 +74,26 @@ def brain_readiness_report(*, tenant_id: str = "linas") -> dict[str, Any]:
             artifact = None
     except Exception:
         artifact = None
+
+    # Live lab artifact overrides offline NOT_RUN / code-only PASS where executed.
+    try:
+        from pathlib import Path
+        import json
+
+        live_path = Path("services/customer_ai/evals/artifacts/live_lab_latest.json")
+        live = json.loads(live_path.read_text(encoding="utf-8")) if live_path.exists() else None
+        live_gates = (live or {}).get("gates") if isinstance(live, dict) else None
+        if isinstance(live_gates, dict):
+            for name, row in live_gates.items():
+                if name not in gates:
+                    gates[name] = _gate(str(row.get("status") or "NOT_RUN"), str(row.get("detail") or "live_lab"))
+                    continue
+                status = str(row.get("status") or "")
+                # Never promote BLOCKED/NOT_RUN/FAIL into PASS via offline; live is authoritative.
+                if status in {"PASS", "FAIL", "BLOCKED", "NOT_RUN"}:
+                    gates[name] = _gate(status, str(row.get("detail") or "live_lab"))
+    except Exception:
+        live = None
 
     checks: dict[str, bool] = {
         "openai_configured": openai_configured(),

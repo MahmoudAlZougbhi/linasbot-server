@@ -126,10 +126,11 @@ async def build_and_activate_contextual_index(
     try:
         vectors = await embed_contextual_rows(rows, groups)
     except Exception as exc:
-        log.warning("contextual embed failed tenant=%s err=%s", tid, type(exc).__name__)
+        log.warning("contextual embed failed tenant=%s err=%s detail=%s", tid, type(exc).__name__, str(exc)[:200])
         return {
             "ready": False,
             "reason": "provider_error",
+            "error": f"{type(exc).__name__}:{str(exc)[:160]}",
             "count": len(rows),
             "space_id": KNOWLEDGE_DOCUMENT.space_id,
             "model": KNOWLEDGE_MODEL,

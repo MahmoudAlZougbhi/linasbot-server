@@ -21,8 +21,10 @@ def probe_pgvector(session: Any | None = None) -> bool:
     if session is None:
         return False
     try:
+        from sqlalchemy import text
+
         row = session.execute(
-            "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')"
+            text("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')")
         ).scalar()
         return bool(row)
     except Exception:

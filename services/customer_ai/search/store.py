@@ -131,7 +131,10 @@ def activate_pointer(
     try:
         from sqlalchemy import text
 
-        pointer_id = f"{tenant_id}:{source_family}"[:64]
+        import hashlib
+
+        space_digest = hashlib.sha1(space_id.encode("utf-8")).hexdigest()[:10]
+        pointer_id = f"{tenant_id}:{source_family}:{space_digest}"[:64]
         session.execute(
             text(
                 """
@@ -176,6 +179,26 @@ def rollback_pointer(
 ) -> dict[str, Any]:
     key = _pointer_key(tenant_id, space_id, source_family)
     current = _POINTERS.get(key)
+    if session is not None and (not current or not current.get("rollback_version")):
+        try:
+            from sqlalchemy import text
+
+            row = session.execute(
+                text(
+                    """
+                    SELECT tenant_id, space_id, source_family, active_version, rollback_version,
+                           ready, reason, source_revision, record_count
+                    FROM customer_ai_index_pointers
+                    WHERE tenant_id = :tenant_id AND space_id = :space_id AND source_family = :source_family
+                    """
+                ),
+                {"tenant_id": tenant_id, "space_id": space_id, "source_family": source_family},
+            ).mappings().first()
+            if row:
+                current = dict(row)
+                _POINTERS[key] = current
+        except Exception:
+            current = current
     if not current or not current.get("rollback_version"):
         return {"ok": False, "reason": "no_rollback"}
     rolled = {
@@ -186,8 +209,34 @@ def rollback_pointer(
         "reason": "rollback",
     }
     _POINTERS[key] = rolled
-    _ = session
-    return {"ok": True, "pointer": rolled}
+    if session is None:
+        return {"ok": True, "pointer": rolled, "backend": "memory"}
+    try:
+        from sqlalchemy import text
+
+        session.execute(
+            text(
+                """
+                UPDATE customer_ai_index_pointers
+                SET active_version = :active_version,
+                    rollback_version = :rollback_version,
+                    ready = true,
+                    reason = 'rollback',
+                    updated_at = now()
+                WHERE tenant_id = :tenant_id AND space_id = :space_id AND source_family = :source_family
+                """
+            ),
+            {
+                "tenant_id": tenant_id,
+                "space_id": space_id,
+                "source_family": source_family,
+                "active_version": rolled["active_version"],
+                "rollback_version": rolled["rollback_version"],
+            },
+        )
+        return {"ok": True, "pointer": rolled, "backend": "pgvector"}
+    except Exception:
+        return {"ok": False, "reason": "index_not_ready"}
 
 
 def tenant_pointer_ready(session: Any | None, tenant_id: str) -> bool:
@@ -366,8 +415,13 @@ def _write_sql(session: Any, rows: list[dict[str, Any]], vectors: list[list[floa
                 },
             )
         return {"ok": True, "reason": "ok", "count": len(rows), "backend": "pgvector"}
-    except Exception:
-        return {"ok": False, "reason": "index_not_ready", "count": 0}
+    except Exception as exc:
+        import logging
+
+        logging.getLogger("customer_ai.search.store").warning(
+            "write_documents sql failed: %s:%s", type(exc).__name__, str(exc)[:200]
+        )
+        return {"ok": False, "reason": "index_not_ready", "count": 0, "error": f"{type(exc).__name__}:{str(exc)[:160]}"}
 
 
 def _query_sql(

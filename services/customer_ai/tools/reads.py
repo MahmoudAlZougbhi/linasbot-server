@@ -138,8 +138,65 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
         return {"ok": True, "data": _card_search(tenant_id, query, {"products"})}
 
     if name == "get_price":
-        prices = _items(sections, "prices") or _items(sections, "services")
-        rows = [_match_id(prices, item_id)] if item_id else _search_rows(prices, query, limit=5)
+        prices_section = sections.get("prices") if isinstance(sections.get("prices"), dict) else {}
+        catalog = _items(sections, "prices") or _items(sections, "services")
+        entries = [
+            row
+            for row in list(prices_section.get("price_entries") or [])
+            if isinstance(row, dict) and row.get("active") is not False
+        ]
+        branch_id = str(args.get("branch_id") or "").strip()
+        service_id = str(args.get("service_id") or item_id or "").strip()
+        if entries and (service_id or query or branch_id):
+            matched_entries: list[dict[str, Any]] = []
+            for entry in entries:
+                catalog_id = str(entry.get("catalog_item_id") or entry.get("service_id") or "").strip()
+                entry_branch = str(entry.get("branch_id") or "").strip()
+                if service_id and catalog_id not in {service_id, f"services:{service_id}"}:
+                    if catalog_id != service_id and not catalog_id.endswith(f":{service_id}"):
+                        continue
+                if branch_id and entry_branch and entry_branch != branch_id:
+                    continue
+                if query and not service_id:
+                    cat_row = _match_id(catalog, catalog_id)
+                    blob = normalize_search_text(
+                        " ".join(
+                            [
+                                catalog_id,
+                                _label(cat_row or {}),
+                                str((cat_row or {}).get("description") or ""),
+                                " ".join(str(a) for a in ((cat_row or {}).get("aliases") or [])),
+                            ]
+                        )
+                    )
+                    if normalize_search_text(query) not in blob and not any(
+                        tok and tok in blob for tok in normalize_search_text(query).split()
+                    ):
+                        continue
+                cat = _match_id(catalog, catalog_id) or {"id": catalog_id}
+                matched_entries.append(
+                    {
+                        "id": entry.get("id") or catalog_id,
+                        "service_id": catalog_id,
+                        "branch_id": entry_branch or None,
+                        "title": _label(cat),
+                        "price": entry.get("amount") if entry.get("amount") is not None else entry.get("price"),
+                        "amount": entry.get("amount"),
+                        "currency": entry.get("currency") or "USD",
+                        "unit": entry.get("unit") or "",
+                    }
+                )
+            if matched_entries:
+                # Prefer exact branch match when multiple remain.
+                if branch_id:
+                    branch_hits = [row for row in matched_entries if row.get("branch_id") == branch_id]
+                    if branch_hits:
+                        matched_entries = branch_hits
+                data = matched_entries[0] if (service_id or branch_id) and len(matched_entries) == 1 else matched_entries
+                if isinstance(data, list) and service_id and branch_id and data:
+                    data = data[0]
+                return {"ok": True, "data": data}
+        rows = [_match_id(catalog, service_id or item_id)] if (service_id or item_id) else _search_rows(catalog, query, limit=5)
         rows = [row for row in rows if row]
         if not rows:
             hits = _card_search(tenant_id, query or item_id, {"services", "prices"})
@@ -153,7 +210,7 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
             }
             for row in rows
         ]
-        return {"ok": True, "data": data[0] if item_id else data}
+        return {"ok": True, "data": data[0] if item_id or service_id else data}
 
     if name == "get_branch":
         branches = _items(sections, "branches")

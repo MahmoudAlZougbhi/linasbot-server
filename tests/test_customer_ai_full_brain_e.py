@@ -146,3 +146,80 @@ async def test_multimodal_pdf_fail_visible_without_library() -> None:
 def test_relations_loader_handles_unpublished() -> None:
     out = load_relations("definitely-missing-tenant-xyz")
     assert "relations" in out
+
+
+def test_probe_pgvector_uses_sqlalchemy_text() -> None:
+    from services.customer_ai.search.readiness import probe_pgvector
+
+    class _Session:
+        def execute(self, statement, *args, **kwargs):  # noqa: ANN001
+            assert hasattr(statement, "text") or "SELECT EXISTS" in str(statement)
+            class _Result:
+                def scalar(self):
+                    return True
+
+            return _Result()
+
+    assert probe_pgvector(_Session()) is True
+    assert probe_pgvector(None) is False
+
+
+def test_cards_include_all_label_languages() -> None:
+    from services.customer_ai.retrieve.cards import cards_from_sections
+    from services.customer_ai.retrieve.lexical import search_cards
+
+    sections = {
+        "prices": {
+            "catalog": [
+                {
+                    "id": "laser",
+                    "labels": {"en": "Laser hair removal", "ar": "إزالة الشعر"},
+                    "aliases": ["lazer"],
+                    "active": True,
+                }
+            ]
+        }
+    }
+    cards = cards_from_sections(sections)
+    hits = search_cards(cards, "قدي سعر إزالة الشعر", families={"services"}, limit=3)
+    assert hits
+    assert hits[0].card.item_id.endswith("laser")
+
+
+@pytest.mark.asyncio
+async def test_get_price_is_branch_scoped() -> None:
+    from services.cm.paths import ensure_cm_dirs
+    from services.cm.schemas import PublishedPointer, utc_now
+    from services.cm.version_store import write_published_pointer, write_version_content
+    from services.customer_ai.contracts.turn import CustomerTurn
+    from services.customer_ai.tools.registry import execute_tool
+
+    tid = "lab-price-branch"
+    ensure_cm_dirs(tid)
+    sections = {
+        "prices": {
+            "catalog": [{"id": "laser", "labels": {"en": "Laser"}, "active": True}],
+            "price_entries": [
+                {"id": "a", "catalog_item_id": "laser", "branch_id": "antelias", "amount": 60, "currency": "USD", "active": True},
+                {"id": "b", "catalog_item_id": "laser", "branch_id": "verdun", "amount": 75, "currency": "USD", "active": True},
+            ],
+        }
+    }
+    write_version_content(tid, "v1", sections)
+    write_published_pointer(
+        tid,
+        PublishedPointer(
+            content_version_id="v1",
+            checksums={},
+            embedding_provider="voyage",
+            embedding_model="voyage-context-4",
+            embedding_version="t",
+            embedding_dimensions=1024,
+            updated_at=utc_now(),
+        ),
+    )
+    turn = CustomerTurn(tenant_id=tid, customer_id="c1", conversation_id="x", channel="lab")
+    ant = await execute_tool("get_price", {"service_id": "laser", "branch_id": "antelias"}, turn)
+    verd = await execute_tool("get_price", {"service_id": "laser", "branch_id": "verdun"}, turn)
+    assert ant.get("ok") and ant["data"]["amount"] == 60
+    assert verd.get("ok") and verd["data"]["amount"] == 75

@@ -83,12 +83,20 @@ def _from_items(
                 block = format_attachments_block(list(attachments), tenant_id=tenant_id)
                 if block:
                     body = f"{body}\n\n{block}".strip() if body else block
+        label_langs: list[str] = []
+        labels = raw.get("labels")
+        if isinstance(labels, dict):
+            for key in ("en", "ar", "fr", "franco"):
+                value = str(labels.get(key) or "").strip()
+                if value:
+                    label_langs.append(value)
         extra = [
             str(raw.get("ai_search_title") or ""),
             str(raw.get("ai_search_description") or ""),
             str(raw.get("description") or ""),
             " ".join(str(a) for a in (raw.get("aliases") or [])),
             " ".join(str(t) for t in (raw.get("tags") or [])),
+            " ".join(label_langs),
         ]
         if family == "faq":
             for variant in raw.get("variants") or []:

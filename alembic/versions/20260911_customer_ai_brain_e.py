@@ -72,6 +72,30 @@ def upgrade() -> None:
         sa.Column("candidate_version", sa.String(length=64), nullable=False, server_default=sa.text("''")),
     )
 
+    # ANN index for live pgvector retrieval (avoid sequential scan under load).
+    bind = op.get_bind()
+    try:
+        has_vector = bool(
+            bind.execute(
+                sa.text("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')")
+            ).scalar()
+        )
+    except Exception:
+        has_vector = False
+    if has_vector:
+        op.execute(
+            sa.text(
+                "CREATE INDEX IF NOT EXISTS ix_customer_ai_search_embedding_hnsw "
+                "ON customer_ai_search_documents USING hnsw (embedding vector_cosine_ops)"
+            )
+        )
+        op.execute(
+            sa.text(
+                "CREATE INDEX IF NOT EXISTS ix_customer_ai_search_active_version "
+                "ON customer_ai_search_documents (tenant_id, space_id, index_version, visible)"
+            )
+        )
+
 
 def downgrade() -> None:
     op.drop_column("customer_ai_index_pointers", "candidate_version")
