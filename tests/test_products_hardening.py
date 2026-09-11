@@ -130,6 +130,10 @@ def test_inactive_excluded_from_luna_candidates(products_env: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_luna_chunks_all_titles(products_env: Path) -> None:
+    from services.membership.daily_edits import reset_daily_edits_for_tests, set_platform_baseline
+
+    reset_daily_edits_for_tests()
+    set_platform_baseline(TITLES_PER_CHUNK + 10)
     with whatsapp_session(require=True) as session:
         svc = ProductsService(session)
         for i in range(TITLES_PER_CHUNK + 5):

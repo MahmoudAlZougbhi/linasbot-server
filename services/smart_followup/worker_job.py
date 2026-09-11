@@ -20,6 +20,14 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def _utc_dt(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 def _release(tenant_id: str, reservation_id: str | None) -> None:
     if not reservation_id:
         return
@@ -300,8 +308,8 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
         from services.customer_ai.control import live_handoff_active
         from services.customer_ai.followup.revalidate import revalidate_followup_send
 
-        trigger_at = getattr(sequence, "trigger_ai_sent_at", None) if sequence else None
-        last_inbound = getattr(conv, "last_inbound_at", None)
+        trigger_at = _utc_dt(getattr(sequence, "trigger_ai_sent_at", None) if sequence else None)
+        last_inbound = _utc_dt(getattr(conv, "last_inbound_at", None))
         customer_replied = bool(trigger_at and last_inbound and last_inbound > trigger_at)
         recheck = revalidate_followup_send(
             takeover=live_handoff_active(user_id=conv.user_id or conv.social_sender_id)
@@ -350,6 +358,22 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
 
         if send_result.status == "sent":
             from services.smart_followup.billing_ids import settle_followup_from_snapshot
+
+            if send_result.reason == "duplicate_delivery" and not send_result.billing_captured:
+                sfu.mark_job_terminal(
+                    job,
+                    status="reconciliation_required",
+                    reason="billing_pending",
+                    provider_wamid=send_result.provider_message_id,
+                    credits_captured=0,
+                )
+                sfu.maybe_complete_sequence(job.sequence_id)
+                return {
+                    "job_id": job_id,
+                    "status": job.status,
+                    "provider_message_id": send_result.provider_message_id,
+                    "channel": snapshot["channel"],
+                }
 
             settle_followup_from_snapshot(tenant_id, snapshot, accepted=True)
             leftover_captured = _capture(tenant_id, reservation_id)

@@ -45,7 +45,7 @@ export default function OwnerActivationBanner() {
       </p>
       <p className="mt-1 opacity-90">
         testing_ready={String(testingReady)} · ready_to_enable=
-        {String(Boolean(report.ready_to_enable))} (production cutover stays off). Store{' '}
+        {String(Boolean(report.ready_to_enable))} — Activation stays off until readiness passes; production cutover stays off). Store{' '}
         {report.store || '—'} · alembic {report.alembic?.ok ? 'ok' : 'check'}.
         {report.outbox
           ? ` Outbox accepted ${report.outbox.accepted || 0} · pending settlement ${

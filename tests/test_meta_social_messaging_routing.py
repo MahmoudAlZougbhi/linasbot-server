@@ -426,7 +426,8 @@ class SocialCanonicalAiPathTests(unittest.TestCase):
             self.assertNotIn(blocked_tool, orchestrator)
         self.assertIn("LEGACY_BOOKING_TOOL_NAMES", features)
         self.assertFalse(Path("services/customer_reply_v2/policy.py").exists())
-        self.assertIn("ENGINE_REMOVED", orchestrator)
+        self.assertIn("run_customer_ai_dm", orchestrator)
+        self.assertIn("Brain only", orchestrator)
 
 
 if __name__ == "__main__":

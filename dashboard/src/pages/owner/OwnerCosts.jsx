@@ -133,6 +133,22 @@ export default function OwnerCosts() {
         <Metric label="Generative settled units" value={dashboard?.usage_classes?.generative?.settled_units} />
         <Metric label="FAQ / static turns" value={dashboard?.usage_classes?.faq_or_static?.count} />
         <Metric
+          label="Usage classes (detail)"
+          value={
+            dashboard?.usage_classes?.by_class
+              ? Object.keys(dashboard.usage_classes.by_class).length
+              : '—'
+          }
+        />
+        <Metric
+          label="Daily edits (tenants)"
+          value={
+            dashboard?.daily_edits?.tenants
+              ? `${dashboard.daily_edits.tenants.length} tracked`
+              : '—'
+          }
+        />
+        <Metric
           label="Pending settlements"
           value={
             dashboard?.pending_settlements

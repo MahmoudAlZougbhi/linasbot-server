@@ -247,9 +247,11 @@ def test_cm_env_restart_phases_are_explicitly_blocked_but_db_data_phases_remain_
 def test_guard_inventory_blocks_every_unsafe_single_node_env_entrypoint() -> None:
     expected = {
         "scripts/prod_apply_copilot_v2_flags.sh",
+        "scripts/prod_apply_customer_brain_flags.sh",
         "scripts/prod_apply_dashboard_auth.sh",
         "scripts/prod_apply_model_routing_policy.sh",
         "scripts/prod_apply_openai_api_key.sh",
+        "scripts/prod_apply_voyage_api_key.sh",
         "scripts/prod_apply_resend_secrets.sh",
         "scripts/prod_cm_apply_flags.sh",
         "scripts/prod_cm_cutover.sh",
