@@ -45,22 +45,34 @@ OPEN_MARKERS: tuple[str, ...] = (
     "بنسكر",
 )
 
-DAY_NAMES: tuple[str, ...] = (
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-    "sunday",
-    "الاثنين",
-    "الثلاثاء",
-    "الاربعاء",
-    "الخميس",
-    "الجمعه",
-    "السبت",
-    "الاحد",
-)
+# Day surfaces map to one canonical day so an Arabic reply about English evidence (and the
+# reverse) is compared by day, not by spelling.
+DAY_ALIASES: dict[str, str] = {
+    "monday": "monday",
+    "mon": "monday",
+    "الاثنين": "monday",
+    "الاتنين": "monday",
+    "tuesday": "tuesday",
+    "tue": "tuesday",
+    "الثلاثاء": "tuesday",
+    "الثلاثا": "tuesday",
+    "wednesday": "wednesday",
+    "wed": "wednesday",
+    "الاربعاء": "wednesday",
+    "الاربعا": "wednesday",
+    "thursday": "thursday",
+    "thu": "thursday",
+    "الخميس": "thursday",
+    "friday": "friday",
+    "fri": "friday",
+    "الجمعه": "friday",
+    "saturday": "saturday",
+    "sat": "saturday",
+    "السبت": "saturday",
+    "sunday": "sunday",
+    "sun": "sunday",
+    "الاحد": "sunday",
+}
 
 STOCK_CLAIMS: tuple[str, ...] = (
     "in stock",
@@ -215,10 +227,17 @@ def clock_surfaces(text: str) -> set[str]:
     return surfaces
 
 
+def days(text: str) -> set[str]:
+    """Canonical day names claimed by the text, in any supported spelling."""
+    normalized = marker_text(text)
+    return {canonical for alias, canonical in DAY_ALIASES.items() if has_marker(normalized, (alias,))}
+
+
 def phones(text: str) -> set[str]:
-    """Digit-only phone surfaces, 7..15 digits."""
+    """Digit-only phone surfaces, 7..15 digits. Clock times are removed first."""
     found: set[str] = set()
-    for match in _PHONE.finditer(text or ""):
+    body = _CLOCK.sub(" ", text or "")
+    for match in _PHONE.finditer(body):
         digits = _DIGITS.sub("", match.group(0))
         if 7 <= len(digits) <= 15:
             found.add(digits)

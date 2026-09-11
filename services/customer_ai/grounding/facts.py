@@ -32,15 +32,12 @@ def _hours_reasons(reply_text: str, corpus: str) -> list[str]:
     for variants in claims:
         if not (variants & allowed):
             reasons.append(f"hours:{min(variants)}")
-    reply_markers = extract.marker_text(reply_text)
-    corpus_markers = extract.marker_text(corpus)
-    open_claim = extract.has_marker(reply_markers, extract.OPEN_MARKERS)
+    open_claim = extract.has_marker(extract.marker_text(reply_text), extract.OPEN_MARKERS)
     if open_claim and not allowed:
         reasons.append("hours:no_hours_evidence")
     if claims or open_claim:
-        for day in extract.DAY_NAMES:
-            if extract.has_marker(reply_markers, (day,)) and not extract.has_marker(corpus_markers, (day,)):
-                reasons.append(f"hours:day:{day}")
+        for day in sorted(extract.days(reply_text) - extract.days(corpus)):
+            reasons.append(f"hours:day:{day}")
     return reasons
 
 
