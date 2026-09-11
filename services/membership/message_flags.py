@@ -5,11 +5,12 @@ from __future__ import annotations
 import os
 from typing import Any
 
+# Commerce/billing cutover only. LINAS_CUSTOMER_AI_LAB is Owner Lab UI and is
+# allowed on during controlled Customer Brain production validation.
 ACTIVATION_FLAG_NAMES = (
     "MESSAGE_BILLING_ENABLED",
     "MESSAGE_BILLING_CUTOVER",
     "FREE_PLAN_ENFORCEMENT_ENABLED",
-    "LINAS_CUSTOMER_AI_LAB",
 )
 
 

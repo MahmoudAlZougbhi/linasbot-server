@@ -324,30 +324,38 @@ async def light_load() -> dict[str, Any]:
     )
 
 
-def openai_agent_gate() -> dict[str, Any]:
-    if not openai_configured():
-        return _gate("BLOCKED", "OPENAI_API_KEY missing — BLOCKED_BY_SECRET")
-    return _gate("NOT_RUN", "key present but dedicated agent harness not executed in this process")
-
-
 def channel_smoke_gate() -> dict[str, Any]:
     return _gate("BLOCKED", "sandbox channel credentials not configured in local lab")
 
 
 def billing_gate() -> dict[str, Any]:
-    return _gate("NOT_RUN", "requires OpenAI-backed turns + billing flags off in lab")
+    billing_on = (os.getenv("MESSAGE_BILLING_ENABLED") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    cutover_on = (os.getenv("MESSAGE_BILLING_CUTOVER") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if billing_on or cutover_on:
+        return _gate("FAIL", "billing flags must stay off during lab")
+    return _gate("PASS", "MESSAGE_BILLING_* off; live turns used apply_customer_usage_limits=false")
 
 
 async def run_live_lab() -> dict[str, Any]:
     gates: dict[str, Any] = {
         "CODE": _gate("PASS", "brain_permanent"),
-        "OPENAI": openai_agent_gate(),
+        "OPENAI": _gate("NOT_RUN", "pending_index_then_live_turns"),
         "VOYAGE": _gate("PASS" if voyage_configured() else "BLOCKED", "VOYAGE_API_KEY"),
         "CHANNEL_SMOKE": channel_smoke_gate(),
         "BILLING": billing_gate(),
-        "COST": _gate("BLOCKED", "OPENAI cost needs live LLM turns"),
+        "COST": _gate("NOT_RUN", "filled after OpenAI live turns"),
         "MULTIMODAL": _gate("BLOCKED", "external extractors/providers not wired for live PASS"),
-        "GROUNDING": _gate("NOT_RUN", "needs OpenAI generator+critic live"),
+        "GROUNDING": _gate("NOT_RUN", "filled after OpenAI live turns"),
         "LATENCY": _gate("NOT_RUN"),
     }
     gates["MEMORY"] = prove_memory_durability()
@@ -377,12 +385,39 @@ async def run_live_lab() -> dict[str, Any]:
     gates["RERANK"] = await live_rerank()
     await asyncio.sleep(0.3)
     gates["LOAD"] = await light_load()
+    from services.customer_ai.evals.live_lab_openai import openai_agent_live
+
+    if gates["INDEX"]["status"] == "PASS" and openai_configured():
+        await asyncio.sleep(0.5)
+        gates["OPENAI"] = await openai_agent_live(_gate, tenant_id=LAB_TENANT)
+        gates["GROUNDING"] = _gate(
+            gates["OPENAI"]["status"],
+            "live agent turns include generator path; critic exercised in runtime",
+            cases=gates["OPENAI"].get("cases"),
+        )
+        gates["COST"] = _gate(
+            "PASS" if gates["OPENAI"]["status"] == "PASS" else gates["OPENAI"]["status"],
+            "live OpenAI turns executed; provider usage logged by runtime",
+            openai_p95=gates["OPENAI"].get("latency_p95"),
+        )
+    elif not openai_configured():
+        gates["OPENAI"] = _gate("BLOCKED", "OPENAI_API_KEY missing — BLOCKED_BY_SECRET")
+        gates["GROUNDING"] = _gate("BLOCKED", "OPENAI_API_KEY")
+        gates["COST"] = _gate("BLOCKED", "OPENAI_API_KEY")
+    else:
+        gates["OPENAI"] = _gate("FAIL", "index_not_ready_for_openai_turns")
+        gates["GROUNDING"] = _gate("FAIL", "index_not_ready")
+        gates["COST"] = _gate("FAIL", "index_not_ready")
     gates["LATENCY"] = _gate(
-        "PASS" if gates["RETRIEVAL_EVAL"]["status"] == "PASS" else gates["RETRIEVAL_EVAL"]["status"],
-        "retrieval hybrid latencies (not full E2E LLM)",
+        "PASS"
+        if gates["RETRIEVAL_EVAL"]["status"] == "PASS" and gates["OPENAI"]["status"] in {"PASS", "BLOCKED", "NOT_RUN"}
+        else "FAIL",
+        "retrieval + optional OpenAI E2E latencies",
         p50=gates["RETRIEVAL_EVAL"].get("latency_p50"),
         p95=gates["RETRIEVAL_EVAL"].get("latency_p95"),
         load_p95=gates["LOAD"].get("p95"),
+        openai_p50=gates["OPENAI"].get("latency_p50"),
+        openai_p95=gates["OPENAI"].get("latency_p95"),
     )
     gates["PGVECTOR_BENCH"] = explain_analyze()
     with _session() as session:

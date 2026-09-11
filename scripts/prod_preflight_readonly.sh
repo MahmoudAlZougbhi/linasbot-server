@@ -185,8 +185,12 @@ required = [
     report("META_WEBHOOK_VERIFY_TOKEN", min_len=8),
     report("META_APP_ID", min_len=3),
 ]
-# Present for later Customer Brain enablement; missing Voyage must not fail current production.
-report("VOYAGE_API_KEY", min_len=20)
+voyage_ok = report("VOYAGE_API_KEY", min_len=20)
+lab_raw = (values.get("LINAS_CUSTOMER_AI_LAB") or "").strip().lower()
+lab_on = lab_raw in {"1", "true", "yes", "on"}
+print(f"[preflight] LINAS_CUSTOMER_AI_LAB: set={str(bool(lab_raw)).lower()} enabled={str(lab_on).lower()} allowed=true")
+if not voyage_ok:
+    raise SystemExit("[preflight] VOYAGE_API_KEY_REQUIRED_FOR_CUSTOMER_BRAIN")
 
 firebase_json_candidates = []
 for root in (

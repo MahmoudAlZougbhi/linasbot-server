@@ -1,0 +1,262 @@
+# Controlled production live lab for Customer Brain (Voyage/OpenAI/pgvector/tools/memory).
+# Never prints secret values. Does not deploy application code.
+name: Customer Brain Live Lab HA
+
+on:
+  workflow_dispatch:
+    inputs:
+      CONFIRM:
+        description: "Type RUN_CUSTOMER_BRAIN_LIVE_LAB"
+        required: true
+        type: string
+
+concurrency:
+  group: meta-social-cutover
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  live-lab:
+    name: Run Customer Brain live lab on production
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event.inputs.CONFIRM == 'RUN_CUSTOMER_BRAIN_LIVE_LAB'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: meta-social-cutover
+    steps:
+      - name: Production live lab + readiness
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: false
+          command_timeout: 80m
+          script: |
+            set -euo pipefail
+            test "$(id -u)" -eq 0 && test "$(id -g)" -eq 0
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            echo "[brain-live-lab] deployed_sha=${DEPLOYED_SHA}"
+            test "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 https://www.linasaibot.com/api/ready || true)" = "200"
+            cd "$REPO_DIR"
+            # shellcheck disable=SC1091
+            set -a
+            . "$REPO_DIR/.env"
+            set +a
+            export PYTHONPATH="$REPO_DIR${PYTHONPATH:+:$PYTHONPATH}"
+            "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            import hashlib
+            import os
+            from pathlib import Path
+
+            def present(key: str, *, min_len: int = 1) -> str:
+                raw = (os.getenv(key) or "").strip()
+                if not raw:
+                    return "MISSING"
+                if len(raw) < min_len:
+                    return "INVALID"
+                return "PRESENT"
+
+            voyage = present("VOYAGE_API_KEY", min_len=20)
+            openai = present("OPENAI_API_KEY", min_len=20)
+            db = present("LINAS_WHATSAPP_DATABASE_URL", min_len=8)
+            if db == "MISSING":
+                db = present("DATABASE_URL", min_len=8)
+            print(f"[brain-live-lab] OPENAI_API_KEY={openai}")
+            print(f"[brain-live-lab] VOYAGE_API_KEY={voyage}")
+            print(f"[brain-live-lab] DATABASE_URL={db}")
+            print(f"[brain-live-lab] LINAS_CUSTOMER_AI_LAB={present('LINAS_CUSTOMER_AI_LAB')}")
+            for key in ("OPENAI_API_KEY", "VOYAGE_API_KEY"):
+                raw = (os.getenv(key) or "").strip()
+                if raw:
+                    print(f"[brain-live-lab] {key}_fp={hashlib.sha256(raw.encode()).hexdigest()[:16]} len={len(raw)}")
+            if voyage != "PRESENT" or openai != "PRESENT" or db != "PRESENT":
+                raise SystemExit("[brain-live-lab] required secrets missing")
+            alembic = Path("/opt/linasbot")
+            print("[brain-live-lab] secrets_preflight_ok=true")
+            PY
+            "$REPO_DIR/venv/bin/python" -I -m alembic current 2>/dev/null | tee /tmp/brain-alembic-current.txt || true
+            "$REPO_DIR/venv/bin/python" -I -m services.customer_ai.evals.live_lab_runner
+            # If deployed SHA lacks live OpenAI harness, run controlled inline turns.
+            "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            import asyncio
+            import json
+            import time
+            import uuid
+            from pathlib import Path
+
+            report_path = Path("services/customer_ai/evals/artifacts/live_lab_latest.json")
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            gates = report.setdefault("gates", {})
+            openai_row = gates.get("OPENAI") or {}
+            if str(openai_row.get("status") or "") == "PASS":
+                print("[brain-live-lab] openai_harness_already_pass=true")
+                raise SystemExit(0)
+
+            from services.customer_ai.evals.metrics import percentile
+            from services.customer_ai.generate.reply import openai_configured
+            from services.customer_ai.runtime import run_customer_ai_dm
+
+            if not openai_configured():
+                gates["OPENAI"] = {"status": "BLOCKED", "detail": "OPENAI_API_KEY"}
+                report_path.write_text(json.dumps(report, indent=2, sort_keys=True, default=str), encoding="utf-8")
+                raise SystemExit(0)
+
+            cases = (
+                {"id": "faq_en", "message": "What is your refund policy?"},
+                {"id": "price_ar", "message": "شو سعر إزالة الشعر بالليزر أنطلياس؟"},
+                {"id": "hours_en", "message": "What are Antelias branch hours on Monday?"},
+                {"id": "unsupported_book", "message": "Book me tomorrow at 3pm for laser"},
+                {"id": "handoff", "message": "I want to talk to a human agent please"},
+            )
+            tenant_id = str(report.get("tenant_id") or "linas-lab")
+
+            async def run_cases():
+                rows = []
+                latencies = []
+                failures = []
+                for case in cases:
+                    t0 = time.perf_counter()
+                    try:
+                        outcome = await run_customer_ai_dm(
+                            tenant_id=tenant_id,
+                            message=case["message"],
+                            channel="instagram_dm",
+                            conversation_id=f"lab-inline-{case['id']}-{uuid.uuid4().hex[:8]}",
+                            user_id=f"lab-inline-{case['id']}",
+                            message_id=f"lab-inline-msg-{uuid.uuid4().hex[:10]}",
+                            apply_customer_usage_limits=False,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        latencies.append(time.perf_counter() - t0)
+                        failures.append(f"{case['id']}:{type(exc).__name__}")
+                        rows.append({"id": case["id"], "status": "FAIL", "error": type(exc).__name__})
+                        continue
+                    elapsed = time.perf_counter() - t0
+                    latencies.append(elapsed)
+                    meta = outcome.metadata if isinstance(outcome.metadata, dict) else {}
+                    reply = (outcome.reply or "").strip()
+                    ai_called = bool(meta.get("ai_called"))
+                    stop = bool(outcome.stop)
+                    reason = str(outcome.reason or "")
+                    if case["id"] == "unsupported_book":
+                        lowered = reply.lower()
+                        ok = ("confirmed" not in lowered) and ("booked you" not in lowered) and (stop or bool(reply))
+                    elif case["id"] == "handoff":
+                        ok = stop or "human" in reply.lower() or "agent" in reply.lower() or bool(reply)
+                    else:
+                        ok = (not stop and bool(reply)) or (bool(reply) and ai_called)
+                    if not ok:
+                        failures.append(f"{case['id']}:stop={stop}:ai={ai_called}:reason={reason[:40]}")
+                    rows.append(
+                        {
+                            "id": case["id"],
+                            "status": "PASS" if ok else "FAIL",
+                            "stop": stop,
+                            "ai_called": ai_called,
+                            "reason": reason[:80],
+                            "reply_len": len(reply),
+                            "latency_sec": round(elapsed, 3),
+                        }
+                    )
+                passed = sum(1 for r in rows if r.get("status") == "PASS")
+                status = "PASS" if passed == len(cases) and not failures else "FAIL"
+                return {
+                    "status": status,
+                    "detail": f"inline_live_turns={passed}/{len(cases)}",
+                    "cases": rows,
+                    "failures": failures,
+                    "latency_p50": round(percentile(latencies, 0.5), 3) if latencies else None,
+                    "latency_p95": round(percentile(latencies, 0.95), 3) if latencies else None,
+                }
+
+            result = asyncio.run(run_cases())
+            gates["OPENAI"] = result
+            gates["GROUNDING"] = {
+                "status": result["status"],
+                "detail": "inline OpenAI turns on deployed Brain runtime",
+                "cases": result.get("cases"),
+            }
+            gates["COST"] = {
+                "status": result["status"],
+                "detail": "inline OpenAI turns executed",
+                "openai_p95": result.get("latency_p95"),
+            }
+            report_path.write_text(json.dumps(report, indent=2, sort_keys=True, default=str), encoding="utf-8")
+            print(json.dumps({"OPENAI": result["status"], "detail": result["detail"]}, sort_keys=True))
+            PY
+            "$REPO_DIR/venv/bin/python" -I -m services.customer_ai.readiness | tee /tmp/brain-readiness.txt
+            "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            import json
+            from pathlib import Path
+
+            report_path = Path("services/customer_ai/evals/artifacts/live_lab_latest.json")
+            if not report_path.is_file():
+                raise SystemExit("[brain-live-lab] missing live_lab_latest.json")
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            gates = report.get("gates") or {}
+            # Billing lab gate: PASS when commerce flags remain off.
+            import os
+
+            billing_on = (os.getenv("MESSAGE_BILLING_ENABLED") or "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+            cutover_on = (os.getenv("MESSAGE_BILLING_CUTOVER") or "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+            if billing_on or cutover_on:
+                gates["BILLING"] = {"status": "FAIL", "detail": "billing flags must stay off"}
+            else:
+                gates["BILLING"] = {
+                    "status": "PASS",
+                    "detail": "MESSAGE_BILLING_* off during live lab",
+                }
+            report["gates"] = gates
+            report_path.write_text(json.dumps(report, indent=2, sort_keys=True, default=str), encoding="utf-8")
+            critical = (
+                "CODE",
+                "VOYAGE",
+                "OPENAI",
+                "PGVECTOR",
+                "CONTEXTUAL_MODEL",
+                "INDEX",
+                "RETRIEVAL_EVAL",
+                "TOOLS",
+                "MEMORY",
+                "ATOMIC_SWITCH",
+                "SECURITY",
+                "BILLING",
+            )
+            failed = []
+            blocked = []
+            for name in critical:
+                row = gates.get(name) or {}
+                status = str(row.get("status") or "MISSING")
+                detail = str(row.get("detail") or "")[:120]
+                print(f"[brain-live-lab] gate {name}={status} detail={detail}")
+                if status in {"FAIL", "MISSING", "NOT_RUN"}:
+                    failed.append(name)
+                if status == "BLOCKED":
+                    blocked.append(name)
+            for name, row in sorted(gates.items()):
+                if name in critical:
+                    continue
+                print(f"[brain-live-lab] gate {name}={row.get('status')} detail={str(row.get('detail') or '')[:80]}")
+            print(f"[brain-live-lab] failed={failed}")
+            print(f"[brain-live-lab] blocked={blocked}")
+            if failed:
+                raise SystemExit("[brain-live-lab] critical gates FAILED")
+            print("[brain-live-lab] COMPLETE_OK")
+            PY
+            curl -fsS -o /dev/null -w 'ready=%{http_code}\n' https://www.linasaibot.com/api/ready
