@@ -189,7 +189,7 @@ async def test_request_confirm_survives_next_turn(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr("services.customer_ai.turn_pipeline._semantic_faq_result", no_semantic)
 
-    async def plan(text, _hist, tenant_id=""):
+    async def plan(text, _hist, tenant_id="", **_kwargs):
         _ = tenant_id
         return PlannerPlan(
             read_only=False,

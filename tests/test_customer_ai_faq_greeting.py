@@ -196,7 +196,7 @@ async def test_flag_on_exact_faq_is_deterministic(monkeypatch: pytest.MonkeyPatc
         lambda turn, apply_credits=True, message="": GateDecision(True, "ok"),
     )
     monkeypatch.setattr(
-        "services.customer_ai.turn_pipeline.find_published_exact_faq",
+        "services.customer_ai.faq_turn.find_published_exact_faq",
         lambda _tid, _msg: FaqExactHit("faq1", "en", "hours?", "We reply within one business day.", 1),
     )
     out = await run_customer_reply_v2_dm(

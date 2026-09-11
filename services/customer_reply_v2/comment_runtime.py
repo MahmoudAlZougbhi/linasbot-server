@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.customer_reply_v2.models import ENGINE_REMOVED, CustomerReplyOutcome
+from services.customer_reply_v2.models import CustomerReplyOutcome
 
 
 async def run_customer_reply_v2_comment(
@@ -36,13 +36,9 @@ async def run_customer_reply_v2_comment(
     if not comments_enabled:
         return CustomerReplyOutcome(stop=True, reason="comments_toggle_off", reply=None)
     if not customer_brain_enabled():
-        return CustomerReplyOutcome(
-            stop=True,
-            reply=None,
-            reason=ENGINE_REMOVED,
-            evidence_status="policy_stop",
-            metadata={"ai_called": False, "cost_status": "none", "customer_engine": "removed"},
-        )
+        from services.customer_ai.brain_off import brain_off_outcome
+
+        return brain_off_outcome()
     context = comment_context if isinstance(comment_context, dict) else {}
     from services.customer_ai.history_ids import conversation_id_for_brain
 

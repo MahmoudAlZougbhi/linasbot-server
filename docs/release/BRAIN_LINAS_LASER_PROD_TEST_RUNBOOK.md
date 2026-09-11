@@ -104,5 +104,6 @@ MESSAGE_BILLING_CUTOVER=false
 
 ## 6) After a good live window
 
-- [ ] Leave cutover flags off until commercial readiness passes.
+- [ ] Leave cutover flags off until commercial readiness gates pass.
 - [ ] Record known-good Brain deploy SHA for the next rollback point.
+- [ ] Do **not** market or enable for all customers until gates above are green.

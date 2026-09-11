@@ -4,17 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.customer_reply_v2.models import ENGINE_REMOVED, CustomerReplyOutcome
-
-
-def _removed_outcome() -> CustomerReplyOutcome:
-    return CustomerReplyOutcome(
-        stop=True,
-        reply=None,
-        reason=ENGINE_REMOVED,
-        evidence_status="policy_stop",
-        metadata={"ai_called": False, "cost_status": "none", "customer_engine": "removed"},
-    )
+from services.customer_ai.brain_off import brain_off_outcome
+from services.customer_reply_v2.models import CustomerReplyOutcome
 
 
 async def run_customer_reply_v2_dm(
@@ -45,7 +36,7 @@ async def run_customer_reply_v2_dm(
     from services.customer_ai.runtime import run_customer_ai_dm
 
     if not customer_brain_enabled():
-        return _removed_outcome()
+        return brain_off_outcome()
     return await run_customer_ai_dm(
         tenant_id=tenant_id,
         message=message,

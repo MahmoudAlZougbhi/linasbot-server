@@ -49,7 +49,13 @@ def _outcome(result: TurnResult, *, comment_surface: bool = False) -> CustomerRe
 
 
 def _disabled(reason: str = ENGINE_REMOVED) -> TurnResult:
-    return TurnResult(stop_reason="engine_removed" if reason == ENGINE_REMOVED else "brain_disabled")
+    from services.customer_ai.flags import emergency_legacy_reply_enabled
+
+    if reason == ENGINE_REMOVED and emergency_legacy_reply_enabled():
+        return TurnResult(stop_reason="emergency_legacy_unavailable")
+    if reason == ENGINE_REMOVED:
+        return TurnResult(stop_reason="engine_removed")
+    return TurnResult(stop_reason="brain_disabled")
 
 
 def _destination_for(turn: CustomerTurn, channel: str) -> str:
@@ -168,6 +174,22 @@ async def run_customer_ai_dm(
 ) -> CustomerReplyOutcome:
     if not customer_brain_enabled():
         return _outcome(_disabled())
+    from services.customer_ai.tenant_gate import evaluate_brain_tenant_gate
+
+    gate_tenant = evaluate_brain_tenant_gate(tenant_id)
+    if not gate_tenant.get("allow"):
+        return CustomerReplyOutcome(
+            stop=True,
+            reply=None,
+            reason=str(gate_tenant.get("reason") or "brain_gates_incomplete"),
+            evidence_status="policy_stop",
+            metadata={
+                "ai_called": False,
+                "cost_status": "none",
+                "customer_engine": "brain",
+                "tenant_gate": gate_tenant,
+            },
+        )
     try:
         assert_channel_plan_allowed(tenant_id, channel)
         if followup_goal or _kwargs.get("followup_goal"):
@@ -230,6 +252,22 @@ async def run_customer_ai_comment(
         return CustomerReplyOutcome(stop=True, reason="comments_toggle_off", reply=None)
     if not customer_brain_enabled():
         return _outcome(_disabled())
+    from services.customer_ai.tenant_gate import evaluate_brain_tenant_gate
+
+    gate_tenant = evaluate_brain_tenant_gate(tenant_id)
+    if not gate_tenant.get("allow"):
+        return CustomerReplyOutcome(
+            stop=True,
+            reply=None,
+            reason=str(gate_tenant.get("reason") or "brain_gates_incomplete"),
+            evidence_status="policy_stop",
+            metadata={
+                "ai_called": False,
+                "cost_status": "none",
+                "customer_engine": "brain",
+                "tenant_gate": gate_tenant,
+            },
+        )
     try:
         from services.membership.comment_gate import assert_comment_automation_allowed
 

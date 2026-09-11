@@ -283,38 +283,66 @@ async def _handle_published_cm_runtime(
         }
 
     reply = (v2_outcome.reply or "").strip()
-    if v2_outcome.reason in {"insufficient_credits", "insufficient_messages", ENGINE_REMOVED}:
-        return "", {
-            "reason": v2_outcome.reason,
+    meta_in = dict(v2_outcome.metadata or {})
+    reason = (v2_outcome.reason or "").strip()
+    fail_closed_reasons = {
+        "insufficient_credits",
+        "insufficient_messages",
+        ENGINE_REMOVED,
+        "emergency_legacy_unavailable",
+        "brain_gates_incomplete",
+        "brain_disabled",
+        "failed_closed",
+        "index_not_ready",
+        "provider_not_configured",
+        "product_index_stale",
+        "unpublished",
+        "policy_suppressed",
+        "human_control",
+        "restricted",
+        "no_reply",
+        "clarify",
+        "context_overflow",
+        "comments_toggle_off",
+    }
+    brain_stopped = bool(v2_outcome.stop) or not reply or reason in fail_closed_reasons
+    if brain_stopped:
+        # Preserve Brain stop/empty honestly — never invent validation-failed success.
+        ai_called = bool(meta_in.get("ai_called")) and bool(reply)
+        decision = reason or ("brain_no_reply" if not reply else "brain_stopped")
+        if not reply:
+            decision = "brain_no_reply"
+        return reply, {
+            "reason": reason or "brain_no_reply",
             "customer_reply_ai_v2": True,
             "classic_fallback": False,
             "v2_evidence_status": v2_outcome.evidence_status,
-            "ai_called": False,
-            "cost_status": "none",
-            **(v2_outcome.metadata or {}),
+            "ai_called": ai_called,
+            "cost_status": meta_in.get("cost_status") or "none",
+            **meta_in,
             "pipeline_decisions": [
                 {
                     "step": "customer_reply_v2",
-                    "decision": v2_outcome.reason,
-                    "ai_called": False,
+                    "decision": decision,
+                    "ai_called": ai_called,
                 },
             ],
         }
-    if not reply:
-        reply = get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, response_language)
+    ai_called = bool(meta_in.get("ai_called")) and bool(reply)
+    decision = "ai_generated" if ai_called else "brain_no_reply"
     meta = {
-        "reason": v2_outcome.reason or "v2_generated",
+        "reason": reason or ("v2_generated" if ai_called else "brain_no_reply"),
         "customer_reply_ai_v2": True,
         "classic_fallback": False,
         "v2_evidence_status": v2_outcome.evidence_status,
-        "ai_called": True,
-        "cost_status": "estimated",
-        **(v2_outcome.metadata or {}),
+        "ai_called": ai_called,
+        "cost_status": meta_in.get("cost_status") or ("estimated" if ai_called else "none"),
+        **meta_in,
         "pipeline_decisions": [
             {
                 "step": "customer_reply_v2",
-                "decision": v2_outcome.reason or "v2_generated",
-                "ai_called": True,
+                "decision": decision,
+                "ai_called": ai_called,
             },
         ],
     }
