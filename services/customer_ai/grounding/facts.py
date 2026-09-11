@@ -57,27 +57,21 @@ def _url_reasons(reply_text: str, corpus: str) -> list[str]:
 
 
 def _stock_reasons(reply_text: str, corpus: str) -> list[str]:
-    claim = extract.has_marker(extract.marker_text(reply_text), extract.STOCK_CLAIMS)
-    if not claim:
+    """Stock claims must match evidence polarity: "in stock" never supports "out of stock"."""
+    claimed = extract.marker_text(reply_text)
+    supported = extract.marker_text(corpus)
+    negative = extract.has_marker(claimed, extract.STOCK_NEGATIVE_CLAIMS)
+    if negative:
+        if extract.has_marker(supported, extract.STOCK_NEGATIVE_SUPPORT):
+            return []
+        return [f"stock:{negative}"]
+    positive = extract.has_marker(claimed, extract.STOCK_POSITIVE_CLAIMS)
+    if not positive:
         return []
-    corpus_markers = extract.marker_text(corpus)
-    negative = ("out of stock", "sold out", "unavailable", "غير متوفر")
-    positive = ("in stock", "back in stock", "available now", "we have it available", "متوفر", "موجود بالمخزن")
-    claim_l = claim.casefold()
-    if claim_l in {item.casefold() for item in negative} or "out of stock" in claim_l or "sold out" in claim_l:
-        if extract.has_marker(corpus_markers, negative):
-            return []
-        return [f"stock:{claim}"]
-    if claim_l in {item.casefold() for item in positive} or claim_l == "متوفر":
-        if extract.has_marker(corpus_markers, positive):
-            return []
-        # Broad availability wording in evidence still grounds a positive claim.
-        if extract.has_marker(corpus_markers, ("available", "availability", "inventory", "stock", "متوفر", "الكميه", "المخزن")):
-            return []
-        return [f"stock:{claim}"]
-    if extract.has_marker(corpus_markers, extract.STOCK_SUPPORT):
+    in_stock_only = extract.without_markers(supported, extract.STOCK_NEGATIVE_SUPPORT)
+    if extract.has_marker(in_stock_only, extract.STOCK_POSITIVE_SUPPORT):
         return []
-    return [f"stock:{claim}"]
+    return [f"stock:{positive}"]
 
 
 def _booking_reasons(reply_text: str, receipts: list[str]) -> list[str]:

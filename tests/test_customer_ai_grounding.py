@@ -94,6 +94,15 @@ def test_stock_claims_need_stock_evidence() -> None:
     assert ungrounded_claims("The serum is in stock", stocked) == []
 
 
+def test_stock_claims_must_match_evidence_polarity() -> None:
+    stocked = _bundle("Vitamin C Serum\n30 USD\nin stock")
+    assert _kinds(ungrounded_claims("The serum is out of stock", stocked)) == {"stock"}
+    empty_shelf = _bundle("Vitamin C Serum\n30 USD\nout of stock")
+    assert ungrounded_claims("The serum is out of stock", empty_shelf) == []
+    # "out of stock" evidence must not ground a positive claim through the word "stock".
+    assert _kinds(ungrounded_claims("The serum is in stock", empty_shelf)) == {"stock"}
+
+
 def test_booking_success_needs_a_receipt() -> None:
     bundle = _bundle("Laser session\n99.0 USD")
     assert _kinds(ungrounded_claims("I booked your session", bundle)) == {"booking"}

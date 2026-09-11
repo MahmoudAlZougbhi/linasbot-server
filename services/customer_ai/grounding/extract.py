@@ -74,27 +74,48 @@ DAY_ALIASES: dict[str, str] = {
     "الاحد": "sunday",
 }
 
-STOCK_CLAIMS: tuple[str, ...] = (
-    "in stock",
+# Stock claims carry a polarity: evidence saying "in stock" does not support "out of stock".
+# Negative surfaces are matched first because they contain the positive ones as substrings.
+STOCK_NEGATIVE_CLAIMS: tuple[str, ...] = (
     "out of stock",
+    "sold out",
+    "not available",
+    "unavailable",
+    "no longer available",
+    "غير متوفر",
+    "مش متوفر",
+    "خلص من المخزن",
+)
+
+STOCK_POSITIVE_CLAIMS: tuple[str, ...] = (
+    "in stock",
     "back in stock",
     "available now",
-    "sold out",
+    "still available",
     "we have it available",
     "متوفر",
-    "غير متوفر",
     "موجود بالمخزن",
 )
 
-STOCK_SUPPORT: tuple[str, ...] = (
+STOCK_NEGATIVE_SUPPORT: tuple[str, ...] = (
+    "out of stock",
+    "sold out",
+    "not available",
+    "unavailable",
+    "no longer available",
+    "0 in stock",
+    "غير متوفر",
+    "مش متوفر",
+)
+
+STOCK_POSITIVE_SUPPORT: tuple[str, ...] = (
+    "in stock",
     "stock",
     "availability",
     "available",
-    "unavailable",
     "inventory",
     "quantity",
     "qty",
-    "sold out",
     "متوفر",
     "الكميه",
     "المخزن",
@@ -230,6 +251,14 @@ def clock_surfaces(text: str) -> set[str]:
     for variants in clock_claims(text):
         surfaces |= set(variants)
     return surfaces
+
+
+def without_markers(normalized: str, markers: tuple[str, ...]) -> str:
+    """Blank out phrases so a longer negative phrase cannot support its own substring."""
+    out = normalized
+    for marker in markers:
+        out = out.replace(marker, " ")
+    return out
 
 
 def days(text: str) -> set[str]:
