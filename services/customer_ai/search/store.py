@@ -133,7 +133,7 @@ def activate_pointer(
 
         from sqlalchemy import text
 
-        space_digest = hashlib.sha1(space_id.encode("utf-8")).hexdigest()[:10]
+        space_digest = hashlib.sha1(space_id.encode("utf-8"), usedforsecurity=False).hexdigest()[:10]
         pointer_id = f"{tenant_id}:{source_family}:{space_digest}"[:64]
         session.execute(
             text(
