@@ -410,8 +410,7 @@ async def run_live_lab() -> dict[str, Any]:
         gates["COST"] = _gate("FAIL", "index_not_ready")
     gates["LATENCY"] = _gate(
         "PASS"
-        if gates["RETRIEVAL_EVAL"]["status"] == "PASS"
-        and gates["OPENAI"]["status"] in {"PASS", "BLOCKED", "NOT_RUN"}
+        if gates["RETRIEVAL_EVAL"]["status"] == "PASS" and gates["OPENAI"]["status"] in {"PASS", "BLOCKED", "NOT_RUN"}
         else "FAIL",
         "retrieval + optional OpenAI E2E latencies",
         p50=gates["RETRIEVAL_EVAL"].get("latency_p50"),

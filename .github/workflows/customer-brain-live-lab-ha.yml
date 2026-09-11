@@ -200,6 +200,30 @@ jobs:
                 raise SystemExit("[brain-live-lab] missing live_lab_latest.json")
             report = json.loads(report_path.read_text(encoding="utf-8"))
             gates = report.get("gates") or {}
+            # Billing lab gate: PASS when commerce flags remain off.
+            import os
+
+            billing_on = (os.getenv("MESSAGE_BILLING_ENABLED") or "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+            cutover_on = (os.getenv("MESSAGE_BILLING_CUTOVER") or "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+            if billing_on or cutover_on:
+                gates["BILLING"] = {"status": "FAIL", "detail": "billing flags must stay off"}
+            else:
+                gates["BILLING"] = {
+                    "status": "PASS",
+                    "detail": "MESSAGE_BILLING_* off during live lab",
+                }
+            report["gates"] = gates
+            report_path.write_text(json.dumps(report, indent=2, sort_keys=True, default=str), encoding="utf-8")
             critical = (
                 "CODE",
                 "VOYAGE",
