@@ -5395,7 +5395,15 @@ node_preflight() {
   validate_sha "$head"
   assert_target_object "$target_sha" "$expected_helper_hash"
   assert_integration_capability_preflight "$target_sha"
-  git -C "$REPO_DIR" diff --quiet "$head" -- || die "live tracked tree is dirty"
+  # Live-lab / index runners must not leave tracked eval JSON dirty vs HEAD.
+  git -C "$REPO_DIR" checkout --quiet "$head" -- \
+    services/customer_ai/evals/artifacts/live_lab_latest.json \
+    services/customer_ai/evals/artifacts/offline_suite_latest.json \
+    2>/dev/null || true
+  if ! git -C "$REPO_DIR" diff --quiet "$head" --; then
+    echo "[ha-deploy] dirty_tracked=$(git -C "$REPO_DIR" diff --name-only "$head" -- | tr '\n' ',')"
+    die "live tracked tree is dirty"
+  fi
   git -C "$REPO_DIR" diff --cached --quiet "$head" -- || die "live index is dirty"
   schema_compatibility_evidence="$(release_schema_compatibility_evidence "$target_sha" "$head")"
   if [ -n "$expected_lb_attestation_sha" ]; then

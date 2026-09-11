@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from pathlib import Path
 from typing import Any
 
 from services.cm.constants import DEFAULT_TENANT_ID
 from services.cm.version_store import read_published_pointer
+from services.customer_ai.evals.artifacts import durable_report_path
 from services.customer_ai.flags import voyage_configured
 from services.customer_ai.providers.spaces import ENTITY_MODEL, KNOWLEDGE_MODEL
 from services.customer_ai.retrieve.cards import load_published_cards
@@ -17,7 +17,7 @@ from services.customer_ai.search.index_backfill import enqueue_stale_or_missing
 from services.customer_ai.search.index_lifecycle import owner_status
 from services.customer_ai.search.store import query_similar, tenant_pointer_ready
 
-REPORT_PATH = Path("services/customer_ai/evals/artifacts/linas_real_index_latest.json")
+REPORT_PATH = durable_report_path("linas_real_index_latest.json")
 LAB_TENANTS = frozenset({"linas-lab", "linas-lab-b"})
 
 

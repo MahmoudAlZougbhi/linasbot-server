@@ -78,9 +78,10 @@ def brain_readiness_report(*, tenant_id: str = "linas") -> dict[str, Any]:
     # Live lab artifact overrides offline NOT_RUN / code-only PASS where executed.
     try:
         import json
-        from pathlib import Path
 
-        live_path = Path("services/customer_ai/evals/artifacts/live_lab_latest.json")
+        from services.customer_ai.evals.artifacts import durable_report_path
+
+        live_path = durable_report_path("live_lab_latest.json")
         live = json.loads(live_path.read_text(encoding="utf-8")) if live_path.exists() else None
         live_gates = (live or {}).get("gates") if isinstance(live, dict) else None
         if isinstance(live_gates, dict):
