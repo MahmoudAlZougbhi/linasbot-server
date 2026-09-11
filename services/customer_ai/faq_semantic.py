@@ -1,4 +1,7 @@
-"""Semantic FAQ after exact match. Close-but-wrong answers stay out."""
+"""Semantic FAQ after exact match. Close-but-wrong answers stay out.
+
+Ambiguous multi-hit results never auto-answer — callers must clarify.
+"""
 
 from __future__ import annotations
 
@@ -15,8 +18,12 @@ async def semantic_faq_bundle(sections: dict, query: str, *, tenant_id: str = ""
     if not cards:
         return EvidenceBundle(outcome="not_found")
     bundle = await retrieve_cards(cards, query, families={"faq"}, sections=sections, tenant_id=tenant_id)
+    if len(bundle.items) > 1:
+        # Fail closed: never pick one FAQ when several remain plausible.
+        return EvidenceBundle(
+            outcome="ambiguous",
+            ambiguities=[item.evidence_id for item in bundle.items],
+        )
     if len(bundle.items) != 1:
-        if len(bundle.items) > 1:
-            return EvidenceBundle(outcome="ambiguous", ambiguities=[item.evidence_id for item in bundle.items])
         return bundle
     return bundle

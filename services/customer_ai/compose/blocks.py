@@ -6,6 +6,27 @@ from services.customer_ai.contracts.evidence import EvidenceBundle
 from services.customer_ai.contracts.plan import PlannerPlan
 from services.customer_ai.identity import IdentityBundle
 
+RULES_BLOCK = """RULES
+1. EVIDENCE and RECEIPTS are the only sources of fact. Anything absent from them does not exist.
+2. Never invent or estimate a price, amount, currency, discount, or total.
+3. Never invent opening hours, days, or clock times. Quote them exactly as EVIDENCE writes them.
+4. Never invent a phone number, link, or address.
+5. Never claim an item is in stock, out of stock, or available unless EVIDENCE says so.
+6. Never claim a booking, appointment, or order succeeded unless a RECEIPT confirms it.
+7. If EVIDENCE is missing a fact the customer asked for, say you will check and ask one short
+   clarifying question. Do not guess and do not fill the gap from general knowledge.
+8. Copy facts verbatim from EVIDENCE; do not convert, round, or reformat numbers and times."""
+
+SYSTEM_PROMPT = (
+    "You are the tenant's customer assistant. You answer ONLY from the EVIDENCE and RECEIPTS "
+    "blocks in the user message. You have no other knowledge about this business.\n"
+    "Never invent prices, amounts, opening hours, clock times, day names, phone numbers, links, "
+    "stock or availability status, or booking/appointment success. A fact that is not written in "
+    "EVIDENCE or RECEIPTS must not appear in your reply.\n"
+    "When the evidence does not cover the question, do not guess: say you will confirm and ask one "
+    "short clarifying question. An honest short reply is always better than an invented detail."
+)
+
 
 def compose_evidence_context(
     *,
@@ -46,7 +67,58 @@ def compose_evidence_context(
     parts.append("EVIDENCE\n" + ("\n\n".join(ev_lines) if ev_lines else "none"))
     if receipts:
         parts.append("RECEIPTS\n" + "\n".join(receipts))
-    parts.append(
-        "RULES\nUse only EVIDENCE and RECEIPTS for facts. Never invent prices, hours, stock, or booking success."
-    )
+    parts.append(RULES_BLOCK)
     return "\n\n".join(parts)
+
+
+def system_prompt() -> str:
+    return SYSTEM_PROMPT
+
+
+def compose_user_prompt(
+    *,
+    context: str,
+    history_lines: list[str],
+    message: str,
+    language_rule: str,
+    grounding_feedback_text: str = "",
+) -> str:
+    prompt = (
+        f"{context}\n\nHISTORY\n"
+        + "\n".join(history_lines)
+        + f"\n\nCURRENT_INBOUND\n{message}\n\n{language_rule} One coherent message."
+    )
+    if grounding_feedback_text:
+        prompt = f"{prompt}\n\n{grounding_feedback_text}"
+    return prompt
+
+
+_REASON_HINTS: dict[str, str] = {
+    "amount": "a price/amount that is not in EVIDENCE",
+    "hours": "an opening hour, day, or clock time that is not in EVIDENCE",
+    "phone": "a phone number that is not in EVIDENCE",
+    "url": "a link that is not in EVIDENCE",
+    "stock": "a stock/availability claim that is not in EVIDENCE",
+    "booking": "a booking/appointment success claim with no confirming RECEIPT",
+    "evidence": "no evidence at all was retrieved for this question",
+    "reply": "an empty reply",
+}
+
+
+def grounding_feedback(reasons: list[str]) -> str:
+    """Repair instruction for the single retry attempt. Names the exact rejected surfaces."""
+    if not reasons:
+        return ""
+    lines: list[str] = []
+    for reason in reasons:
+        kind, _, detail = str(reason).partition(":")
+        hint = _REASON_HINTS.get(kind, "an unsupported claim")
+        lines.append(f"- {hint}" + (f" ({detail})" if detail else ""))
+    return (
+        "GROUNDING_REJECTED\nYour previous reply was rejected by a deterministic grounding check "
+        "because it contained:\n"
+        + "\n".join(lines)
+        + "\nRewrite the reply using only EVIDENCE and RECEIPTS. Remove every rejected detail. "
+        "If EVIDENCE does not contain it, do not state it — say you will confirm and ask one short "
+        "clarifying question instead."
+    )

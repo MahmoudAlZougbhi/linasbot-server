@@ -1,13 +1,23 @@
-"""Lexical / fuzzy title-card search (not BM25; Postgres FTS comes later)."""
+"""Okapi BM25 lexical search over published title cards.
+
+Scoring is real BM25 (term saturation + length normalization + idf) computed over the scoped
+card set, not substring matching. Scores are unbounded, so consumers must compare ranks (see
+retrieve/hybrid.py RRF) and never treat a score as a probability or an exact-match signal.
+"""
 
 from __future__ import annotations
 
+import math
+from collections import Counter
 from dataclasses import dataclass
 
 from services.customer_ai.budgets import DEFAULT_BUDGETS
 from services.customer_ai.contracts.enums import SourceFamily
 from services.customer_ai.normalize import normalize_search_text
 from services.customer_ai.retrieve.cards import TitleCard
+
+BM25_K1 = 1.5
+BM25_B = 0.75
 
 
 @dataclass(frozen=True)
@@ -16,22 +26,36 @@ class LexicalHit:
     score: float
 
 
-def _score(query: str, card: TitleCard) -> float:
-    if not query:
-        return 0.0
-    hay = card.search_text
-    if query == hay:
-        return 1.0
-    if query in hay:
-        return 0.85
-    q_tokens = set(query.split())
-    h_tokens = set(hay.split())
-    if not q_tokens or not h_tokens:
-        return 0.0
-    overlap = len(q_tokens & h_tokens) / len(q_tokens)
-    if overlap <= 0:
-        return 0.0
-    return 0.4 + (0.4 * overlap)
+def tokenize(text: str) -> list[str]:
+    return [token for token in (text or "").split() if token]
+
+
+def _idf(total_docs: int, doc_freq: int) -> float:
+    """Okapi idf with the +1 smoothing that keeps common terms positive instead of negative."""
+    return math.log(1.0 + ((total_docs - doc_freq + 0.5) / (doc_freq + 0.5)))
+
+
+def bm25_scores(query_tokens: list[str], documents: list[list[str]]) -> list[float]:
+    total = len(documents)
+    if not total or not query_tokens:
+        return [0.0] * total
+    lengths = [len(doc) for doc in documents]
+    avg_len = (sum(lengths) / total) or 1.0
+    counts = [Counter(doc) for doc in documents]
+    terms = list(dict.fromkeys(query_tokens))
+    doc_freq = {term: sum(1 for count in counts if term in count) for term in terms}
+    idf = {term: _idf(total, doc_freq[term]) for term in terms if doc_freq[term]}
+    scores: list[float] = []
+    for index, count in enumerate(counts):
+        norm = BM25_K1 * (1.0 - BM25_B + (BM25_B * (lengths[index] / avg_len)))
+        score = 0.0
+        for term, weight in idf.items():
+            freq = count.get(term, 0)
+            if not freq:
+                continue
+            score += weight * ((freq * (BM25_K1 + 1.0)) / (freq + norm))
+        scores.append(score)
+    return scores
 
 
 def search_cards(
@@ -41,14 +65,16 @@ def search_cards(
     families: set[SourceFamily] | None = None,
     limit: int | None = None,
 ) -> list[LexicalHit]:
-    needle = normalize_search_text(query)
     cap = limit if limit is not None else DEFAULT_BUDGETS.lexical_candidates_per_source
-    hits: list[LexicalHit] = []
-    for card in cards:
-        if families is not None and card.source_family not in families:
-            continue
-        score = _score(needle, card)
-        if score > 0:
-            hits.append(LexicalHit(card=card, score=score))
+    scoped = [card for card in cards if families is None or card.source_family in families]
+    query_tokens = tokenize(normalize_search_text(query))
+    if not scoped or not query_tokens:
+        return []
+    scores = bm25_scores(query_tokens, [tokenize(card.search_text) for card in scoped])
+    hits = [
+        LexicalHit(card=card, score=score)
+        for card, score in zip(scoped, scores, strict=True)
+        if score > 0
+    ]
     hits.sort(key=lambda item: (-item.score, item.card.item_id))
     return hits[:cap]
