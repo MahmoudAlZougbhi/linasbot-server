@@ -9,6 +9,8 @@ With this branch deployed, `CUSTOMER_BRAIN_ENABLED=false` returns `engine_remove
 **Instant AI restore = redeploy the rollback tag**, not only flipping the flag off.  
 `EMERGENCY_LEGACY_REPLY_ENABLED` (default **false**) does **not** restore Luna/Terra — it fails closed with `emergency_legacy_unavailable`.
 
+**Not customer-ready.** Do not claim production customer readiness until the gates below pass.
+
 ## Flag matrix (deploy gate)
 
 | `CUSTOMER_BRAIN_ENABLED` | `EMERGENCY_LEGACY_REPLY_ENABLED` | Customer outcome | Luna/Terra? |
@@ -42,8 +44,10 @@ Helper: `services.customer_ai.flags.assert_safe_brain_cutover()` →
 - [ ] Alembic head includes customer AI search tables + pointers.
 - [ ] pgvector extension present on the WhatsApp/Postgres DB used by hybrid search.
 - [ ] `VOYAGE_API_KEY` set on app nodes.
-- [ ] Force-reindex Linas Laser after publish (Owner lab reindex / admin search API).
+- [ ] Force-reindex Linas Laser after publish (Owner lab reindex / admin search API). Publish returns `brain_index_status`; if `ready=false`, retry force-reindex — index failure is best-effort and retryable, not silent success.
 - [ ] Confirm tenant index pointer `ready=true` for Linas Laser (`tenant_id=linas` by default).
+- [ ] Product catalog edits mark products stale; product questions fail closed with `product_index_stale` until reindex.
+- [ ] Visual path stays honest: multimodal disabled / resource-by-id only — no fake photo reading UX.
 - [ ] Missing Voyage / extension / pointer ⇒ Brain fail-closed with `provider_not_configured` or `index_not_ready` (no silent lexical “success”).
 
 ## 3) Tenant / activation gates
@@ -70,10 +74,21 @@ MESSAGE_BILLING_CUTOVER=false
 
 - [ ] Owner Portal → **Message flow**: open a live turn and confirm stages (receive → plan → search → evidence → reply → cost).
 - [ ] Owner Portal → Brain lab: turn on tenant `lab` (capture-only).
+- [ ] Owner Portal → Brain lab → **Run fixture evals** and **Run verification exercises** (confirmation copy, index readiness, retrieval; no live billing).
+- [ ] Offline golden pack (optional on node): `python3.11 -c "from services.customer_ai.evals.golden_pack_linas import run_golden_pack_linas; print(run_golden_pack_linas())"`
 - [ ] Owner Portal → Costs: pending events appear for lab / Linas Laser tenant_id.
-- [ ] Force reindex for Linas Laser after publish.
+- [ ] Force reindex for Linas Laser after publish (confirm `brain_index_status.ready` or Owner force-reindex recovery).
 - [ ] Live channel smoke on Linas Laser only: WA / IG / FB / TikTok / Web as connected.
 - [ ] Empty Brain stops must **not** show fake validation-failed success (`ai_called` stays false; pipeline `brain_no_reply` vs `ai_generated`).
+
+### Gates (must pass before any customer-ready claim)
+
+- [ ] Live pgvector write/query on provisioned DB
+- [ ] Voyage + OpenAI live turns with measured cost
+- [ ] Publish → index `brain_index_status.ready=true` (or documented force-reindex recovery)
+- [ ] Product stale fail-closed verified after a catalog edit
+- [ ] Channel plan gates + settle/outbox smoke on connected channels
+- [ ] Rollback drill: tag `rollback/pre-brain-2026-09-11` restores prior engine
 
 ## 5) If AI breaks during Meta testing — rollback
 
