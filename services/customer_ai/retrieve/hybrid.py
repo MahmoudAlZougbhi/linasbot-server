@@ -52,6 +52,8 @@ async def _semantic_from_store(
     scoped: list[TitleCard],
     families: set[SourceFamily] | None,
     limit: int,
+    *,
+    operation_id: str = "",
 ) -> list[tuple[float, TitleCard]] | None:
     if not tenant_id.strip():
         return None
@@ -69,7 +71,7 @@ async def _semantic_from_store(
         feature="customer_chat",
         provider="voyage",
         model=ENTITY_QUERY.model,
-        operation_id="query",
+        operation_id=(operation_id or "query").strip() or "query",
     )
 
     def _map(result) -> list[tuple[float, TitleCard]] | None:
@@ -117,6 +119,7 @@ async def search_hybrid(
     families: set[SourceFamily] | None = None,
     limit: int | None = None,
     tenant_id: str = "",
+    operation_id: str = "",
 ) -> list[HybridHit]:
     if not compatible(ENTITY_DOCUMENT, ENTITY_QUERY):
         raise RuntimeError("entity_space_mismatch")
@@ -132,6 +135,7 @@ async def search_hybrid(
         scoped,
         families,
         DEFAULT_BUDGETS.semantic_candidates_per_source,
+        operation_id=operation_id,
     )
     if stored is None:
         semantic = []

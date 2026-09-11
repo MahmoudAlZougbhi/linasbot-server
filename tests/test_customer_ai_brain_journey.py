@@ -17,7 +17,7 @@ async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytes
     assert any(task.type == "resource_request" for task in plan.tasks)
     assert plan.read_only is False
 
-    async def fake_plan(_message, _history, *, tenant_id=""):
+    async def fake_plan(_message, _history, **_kwargs):
         return plan
 
     async def fake_retrieve(ctx):
@@ -80,7 +80,7 @@ async def test_booking_still_asks_confirmation(monkeypatch: pytest.MonkeyPatch) 
     plan = plan_message("I want to book a laser appointment")
     assert any(task.type == "service_request" for task in plan.tasks)
 
-    async def fake_plan(_message, _history, *, tenant_id=""):
+    async def fake_plan(_message, _history, **_kwargs):
         return plan
 
     async def _no_confirm(*_a, **_k):
@@ -122,7 +122,7 @@ async def test_handoff_executes_receipt(monkeypatch: pytest.MonkeyPatch) -> None
         read_only=False,
     )
 
-    async def fake_plan(_message, _history, *, tenant_id=""):
+    async def fake_plan(_message, _history, **_kwargs):
         return plan
 
     async def fake_escalate(**_k):

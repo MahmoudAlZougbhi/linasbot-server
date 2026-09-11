@@ -54,7 +54,13 @@ async def plan_with_openai(message: str, history: str = "") -> PlannerPlan | Non
         return None
 
 
-async def plan_turn(message: str, history: str = "", *, tenant_id: str = "") -> PlannerPlan:
+async def plan_turn(
+    message: str,
+    history: str = "",
+    *,
+    tenant_id: str = "",
+    operation_id: str = "",
+) -> PlannerPlan:
     planned = await plan_with_openai(message, history)
     if planned is not None and tenant_id.strip():
         from datetime import datetime, timezone
@@ -62,13 +68,14 @@ async def plan_turn(message: str, history: str = "", *, tenant_id: str = "") -> 
         from services.customer_ai.providers.config import planner_model
         from services.membership.provider_expense import record_pending_provider
 
+        op = (operation_id or "planner").strip() or "planner"
         record_pending_provider(
-            event_id=f"llm-plan:{tenant_id}:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}",
+            event_id=f"llm-plan:{tenant_id}:{op}:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}",
             tenant_id=tenant_id,
             category="llm_generation",
             feature="planning",
             provider="openai",
             model=planner_model(),
-            operation_id="planner",
+            operation_id=op,
         )
     return planned or plan_message(message)

@@ -1,10 +1,10 @@
 import { NavLink, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import OwnerActivationBanner from './OwnerActivationBanner';
 
 const links = [
   { to: '/owner', label: 'Overview' },
   { to: '/owner/users', label: 'Users' },
-  { to: '/owner/copilot-setup', label: 'Owner Copilot Setup' },
   { to: '/owner/catalog', label: 'Message catalog' },
   { to: '/owner/costs', label: 'Costs' },
   { to: '/owner/lab', label: 'Brain lab' },
@@ -44,7 +44,8 @@ export default function OwnerPortalShell() {
           Sign out
         </button>
       </aside>
-      <main className="min-w-0 flex-1 p-5 md:p-8">
+      <main className="min-w-0 flex-1 space-y-5 p-5 md:p-8">
+        <OwnerActivationBanner />
         <Outlet />
       </main>
     </div>

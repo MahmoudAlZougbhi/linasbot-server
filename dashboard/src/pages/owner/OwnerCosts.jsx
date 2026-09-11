@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import OwnerActivationBanner from './OwnerActivationBanner';
+import { useSearchParams } from 'react-router-dom';
 import { ownerApi } from './ownerApi';
 
 /** @param {{ label: string, value?: string | number }} props */
@@ -24,8 +24,9 @@ const emptyFilters = {
 };
 
 export default function OwnerCosts() {
+  const [searchParams] = useSearchParams();
   const [dashboard, setDashboard] = useState(/** @type {any} */ (null));
-  const [tenantId, setTenantId] = useState('');
+  const [tenantId, setTenantId] = useState(searchParams.get('tenant') || '');
   const [tenant, setTenant] = useState(/** @type {any} */ (null));
   const [ledger, setLedger] = useState(/** @type {any} */ (null));
   const [dryRun, setDryRun] = useState(/** @type {any} */ (null));
@@ -43,14 +44,29 @@ export default function OwnerCosts() {
     };
   }, [filters]);
 
-  async function loadTenant() {
-    if (!tenantId.trim()) return;
+  useEffect(() => {
+    const fromQuery = (searchParams.get('tenant') || '').trim();
+    if (!fromQuery) return;
+    setTenantId(fromQuery);
+    setError('');
+    Promise.all([ownerApi.tenantCosts(fromQuery, filters), ownerApi.messageLedger(fromQuery)])
+      .then(([data, ledgerData]) => {
+        setTenant(data.dashboard);
+        setLedger(ledgerData);
+      })
+      .catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)));
+  }, [searchParams, filters]);
+
+  async function loadTenant(id = tenantId) {
+    const tid = String(id || '').trim();
+    if (!tid) return;
     setError('');
     try {
       const [data, ledgerData] = await Promise.all([
-        ownerApi.tenantCosts(tenantId.trim(), filters),
-        ownerApi.messageLedger(tenantId.trim()),
+        ownerApi.tenantCosts(tid, filters),
+        ownerApi.messageLedger(tid),
       ]);
+      setTenantId(tid);
       setTenant(data.dashboard);
       setLedger(ledgerData);
     } catch (reason) {
@@ -65,19 +81,19 @@ export default function OwnerCosts() {
       <header>
         <h2 className="text-2xl font-semibold">Provider costs</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Internal expense journal. These dollars are not billed to tenants as messages. Translation
-          is a separate category and is not added into LLM totals. Environment defaults to all
-          recorded rows; production expenses are stamped prod, not test. Message remaining on this
-          page is ledger rows for operators — tenants do not see remaining until message billing is
-          on.
+          Expense journal attributed per tenant_id. Pending events are the testing signal; Known USD
+          stays 0 until invoice finalization (no invented prices). Message ledger is separate from
+          provider USD.
         </p>
+        {dashboard?.attribution_note ? (
+          <p className="mt-2 text-sm text-teal-300/90">{dashboard.attribution_note}</p>
+        ) : null}
       </header>
-      <OwnerActivationBanner />
-      {error && (
+      {error ? (
         <p role="alert" className="rounded-lg bg-red-950 p-3 text-sm text-red-200">
           {error}
         </p>
-      )}
+      ) : null}
       <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         {Object.entries(emptyFilters).map(([name]) =>
           name === 'period' ? (
@@ -104,32 +120,18 @@ export default function OwnerCosts() {
           ),
         )}
       </section>
-      {messages.note ? <p className="text-sm text-slate-400">{messages.note}</p> : null}
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Ledger store" value={dashboard?.store} />
-        <Metric label="Expense environment" value={dashboard?.environment || 'all'} />
-        <Metric label="Known USD" value={dashboard?.known_usd} />
-        <Metric label="Tenant USD" value={dashboard?.tenant_known_usd} />
-        <Metric label="Platform / shared" value={dashboard?.platform_shared_usd} />
-        <Metric label="Pending / unpriced" value={dashboard?.pending_or_unpriced} />
+        <Metric label="Pending / unpriced (primary)" value={dashboard?.pending_or_unpriced} />
+        <Metric label="Known USD (finalized only)" value={dashboard?.known_usd} />
         <Metric label="Message billing" value={messages.message_billing_active ? 'on' : 'off'} />
-        <Metric label="Messages allocated (ledger)" value={messages.allocated} />
-        <Metric label="Messages used (ledger)" value={messages.used} />
-        <Metric label="Messages reserved (ledger)" value={messages.reserved} />
         <Metric label="Messages remaining (ledger)" value={messages.remaining} />
+        <Metric label="Generative settled units" value={dashboard?.usage_classes?.generative?.settled_units} />
+        <Metric label="FAQ / static turns" value={dashboard?.usage_classes?.faq_or_static?.count} />
         <Metric
           label="Pending settlements"
           value={
             dashboard?.pending_settlements
               ? `${dashboard.pending_settlements.pending_settlement || 0} hold · ${dashboard.pending_settlements.unresolved || 0} review`
-              : '—'
-          }
-        />
-        <Metric
-          label="Legacy credit holds (not messages)"
-          value={
-            dashboard?.leftover_credit_holds
-              ? `${dashboard.leftover_credit_holds.open || 0} open · ${dashboard.leftover_credit_holds.stale || 0} stale`
               : '—'
           }
         />
@@ -141,88 +143,66 @@ export default function OwnerCosts() {
               : '—'
           }
         />
-        <Metric
-          label="Processing budgets"
-          value={
-            dashboard?.processing_budgets
-              ? `${dashboard.processing_budgets.daily_attempts}/${dashboard.processing_budgets.daily_attempt_limit} attempts`
-              : '—'
-          }
-        />
-        <Metric
-          label="Generative messages"
-          value={dashboard?.usage_classes?.generative?.settled_units ?? dashboard?.usage_classes?.generative?.units}
-        />
-        <Metric
-          label="FAQ / static turns"
-          value={dashboard?.usage_classes?.faq_or_static?.count}
-        />
-        <Metric
-          label="Daily edits used"
-          value={
-            dashboard?.daily_edits
-              ? `${dashboard.daily_edits.used} · ${dashboard.daily_edits.tenants_at_limit || 0} at limit`
-              : '—'
-          }
-        />
       </section>
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <h3 className="font-semibold">By category</h3>
+        <h3 className="font-semibold">Pending by category / provider</h3>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {Object.entries(dashboard?.pending_by_category || {}).map(([name, count]) => (
+            <p key={`pc-${name}`} className="text-sm text-slate-300">
+              {name}: {count}
+            </p>
+          ))}
+          {Object.entries(dashboard?.pending_by_provider || {}).map(([name, count]) => (
+            <p key={`pp-${name}`} className="text-sm text-slate-400">
+              {name}: {count}
+            </p>
+          ))}
+          {!Object.keys(dashboard?.pending_by_category || {}).length ? (
+            <p className="text-sm text-slate-500">No pending provider events yet.</p>
+          ) : null}
+        </div>
+        <h3 className="mt-5 font-semibold">Tenants with expense activity</h3>
+        <div className="mt-3 space-y-2">
+          {(dashboard?.tenants || []).map((row) => (
+            <button
+              key={row.tenant_id}
+              type="button"
+              onClick={() => void loadTenant(row.tenant_id)}
+              className="flex w-full items-center justify-between rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-left text-sm hover:border-teal-700"
+            >
+              <span>{row.tenant_id}</span>
+              <span className="text-slate-400">
+                pending {row.pending} · events {row.event_count} · known ${row.known_usd}
+                {row.top_category ? ` · ${row.top_category}` : ''}
+              </span>
+            </button>
+          ))}
+          {(dashboard?.tenants || []).length === 0 ? (
+            <p className="text-sm text-slate-500">No tenant expense rows yet.</p>
+          ) : null}
+        </div>
+        <h3 className="mt-5 font-semibold">Recent events</h3>
+        <div className="mt-3 max-h-56 space-y-1 overflow-auto text-xs text-slate-400">
+          {(dashboard?.events || []).slice(0, 40).map((event) => (
+            <p key={event.event_id || `${event.tenant_id}-${event.operation_id}-${event.category}`}>
+              {event.tenant_id} · {event.status} · {event.category}/{event.feature} · {event.provider}{' '}
+              {event.model} · op {event.operation_id || '—'} · {event.amount_usd ?? 'unpriced'}
+            </p>
+          ))}
+        </div>
+        <h3 className="mt-5 font-semibold">Known USD by category (finalized only)</h3>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {Object.entries(categories).map(([name, amount]) => (
             <p key={name} className="text-sm text-slate-300">
               {name}: {amount}
             </p>
           ))}
-          {Object.keys(categories).length === 0 ? <p className="text-sm text-slate-500">No events yet.</p> : null}
-        </div>
-        <h3 className="mt-5 font-semibold">By feature</h3>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {Object.entries(dashboard?.by_feature || {}).map(([name, amount]) => (
-            <p key={`f-${name}`} className="text-sm text-slate-300">
-              {name}: {amount}
-            </p>
-          ))}
-        </div>
-        <h3 className="mt-5 font-semibold">By response class</h3>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {Object.entries(dashboard?.usage_classes?.by_class || {}).map(([name, row]) => (
-            <p key={`c-${name}`} className="text-sm text-slate-300">
-              {name}: {row.settled_units ?? row.units ?? 0} settled · {row.count ?? 0} turns
-            </p>
-          ))}
-          {Object.keys(dashboard?.usage_classes?.by_class || {}).length === 0 ? (
-            <p className="text-sm text-slate-500">No ledger classes yet.</p>
-          ) : null}
-        </div>
-        <h3 className="mt-5 font-semibold">Daily edits by tenant</h3>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {(dashboard?.daily_edits?.tenants || []).map((row) => (
-            <p key={row.tenant_id} className="text-sm text-slate-300">
-              {row.tenant_id}: {row.used}/{row.limit} used · {row.remaining} remaining
-            </p>
-          ))}
-          {(dashboard?.daily_edits?.tenants || []).length === 0 ? (
-            <p className="text-sm text-slate-500">No tenant edit rows yet.</p>
-          ) : null}
-        </div>
-        <h3 className="mt-5 font-semibold">By provider / model</h3>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {Object.entries(dashboard?.by_provider || {}).map(([name, amount]) => (
-            <p key={`p-${name}`} className="text-sm text-slate-300">
-              {name}: {amount}
-            </p>
-          ))}
-          {Object.entries(dashboard?.by_model || {}).map(([name, amount]) => (
-            <p key={`m-${name}`} className="text-sm text-slate-400">
-              {name}: {amount}
-            </p>
-          ))}
+          {Object.keys(categories).length === 0 ? <p className="text-sm text-slate-500">None finalized.</p> : null}
         </div>
       </section>
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <h3 className="font-semibold">Tenant detail</h3>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           <input
             className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
             placeholder="tenant id"
@@ -247,49 +227,29 @@ export default function OwnerCosts() {
         </div>
         {dryRun ? (
           <p className="mt-3 text-sm text-amber-200">
-            Conversion blocked ({dryRun.reason}). Tenants inventoried: {dryRun.tenant_count}. Rate is not assumed.
+            Conversion blocked ({dryRun.reason}). Tenants inventoried: {dryRun.tenant_count}.
           </p>
         ) : null}
         {ledger?.health ? (
           <p className="mt-3 text-sm text-slate-300">
-            Ledger health: {ledger.health.ok ? 'ok' : 'check'} · store {ledger.health.store || tenant?.store || '—'} ·
-            remaining {ledger.health.remaining} · stale included {(ledger.health.stale_included || []).length}
+            Ledger health: {ledger.health.ok ? 'ok' : 'check'} · remaining {ledger.health.remaining}
           </p>
         ) : null}
         {tenant ? (
           <div className="mt-4 space-y-2 text-sm">
             <p>
               Messages allocated {tenant.messages?.allocated ?? '—'} · used {tenant.messages?.used ?? '—'} ·
-              remaining {tenant.messages?.remaining ?? '—'} · reserved {tenant.messages?.reserved ?? '—'}
-            </p>
-            <p>
-              Generative settled {tenant.usage_classes?.generative?.settled_units ?? 0} · FAQ/static turns{' '}
-              {tenant.usage_classes?.faq_or_static?.count ?? 0} (0 message units)
+              remaining {tenant.messages?.remaining ?? '—'}
             </p>
             <p>
               Known USD: {tenant.known_usd} · status {tenant.cost_status} · pending {tenant.pending_or_unpriced}
             </p>
-            <p>Top category: {tenant.top_category || '—'}</p>
-            <p>
-              Daily edits: {tenant.daily_edits?.used}/{tenant.daily_edits?.limit} used, reset {tenant.daily_edits?.reset_at}
-            </p>
-            <p>
-              Processing: {tenant.processing_budgets?.daily_attempts ?? 0}/
-              {tenant.processing_budgets?.daily_attempt_limit ?? 0} attempts · concurrent{' '}
-              {tenant.processing_budgets?.concurrent ?? 0}
-            </p>
-            <p>
-              Pending settlements: {tenant.pending_settlements?.pending_settlement ?? 0} · unresolved{' '}
-              {tenant.pending_settlements?.unresolved ?? 0}
-            </p>
-            <p>
-              Legacy credit holds (not messages): {tenant.leftover_credit_holds?.open ?? 0} open ·{' '}
-              {tenant.leftover_credit_holds?.stale ?? 0} stale
-            </p>
+            <p>{tenant.attribution_note}</p>
             <ul className="mt-2 list-disc pl-5">
               {(tenant.events || []).map((event) => (
                 <li key={event.event_id}>
-                  {event.created_at} · {event.category} · {event.provider}/{event.model} · {event.amount_usd ?? event.status} · {event.feature} · {event.operation_id}
+                  {event.created_at} · {event.category} · {event.provider}/{event.model} ·{' '}
+                  {event.amount_usd ?? event.status} · {event.operation_id}
                 </li>
               ))}
             </ul>

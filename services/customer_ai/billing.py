@@ -23,6 +23,12 @@ def owner_preview_turn(turn: CustomerTurn) -> bool:
     return cid.startswith("preview:") or op.startswith("sfu:preview:") or op.startswith("sfu-preview:")
 
 
+def lab_turn(turn: CustomerTurn) -> bool:
+    tid = (turn.tenant_id or "").strip().lower()
+    cid = (turn.conversation_id or "").strip().lower()
+    return tid == "lab" or tid.startswith("lab_") or cid.startswith("lab:")
+
+
 _STATIC_COMMENT_MODES = frozenset({"ignore", "static_comment", "static_dm", "static_both", "manual"})
 _AI_COMMENT_MODES = frozenset({"ai_comment", "ai_dm", "ai_both"})
 
@@ -61,6 +67,7 @@ def accepted_for_delivery(result: TurnResult) -> bool:
 
 
 def _record_pending_llm(turn: CustomerTurn, operation_id: str) -> None:
+    from services.customer_ai.providers.config import answer_model
     from services.membership.provider_expense import record_pending_provider
 
     record_pending_provider(
@@ -69,7 +76,7 @@ def _record_pending_llm(turn: CustomerTurn, operation_id: str) -> None:
         category="llm_generation",
         feature="customer_chat" if turn.invocation_kind != "followup" else "followup",
         provider="openai",
-        model="answer",
+        model=answer_model(),
         operation_id=operation_id,
     )
 
@@ -133,7 +140,7 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
     extra["billing_policy"] = pinned or ("message_units" if message_billing_enabled() else "legacy_credits")
     if result.ai_called:
         _record_pending_llm(turn, op)
-    if owner_preview_turn(turn):
+    if owner_preview_turn(turn) or lab_turn(turn):
         return result.model_copy(update={"extra": extra})
     if extra["billing_policy"] != "legacy_credits":
         ensure_included_grant(turn.tenant_id)
@@ -162,7 +169,7 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
 
 def reserve_generative(turn: CustomerTurn, *, mixed: bool = False) -> TurnResult | None:
     op = operation_id_for_turn(turn)
-    if not message_billing_enabled() or owner_preview_turn(turn) or _pinned_policy(turn, op) == "legacy_credits":
+    if not message_billing_enabled() or owner_preview_turn(turn) or lab_turn(turn) or _pinned_policy(turn, op) == "legacy_credits":
         return None
     ensure_included_grant(turn.tenant_id)
     if turn.invocation_kind == "followup":

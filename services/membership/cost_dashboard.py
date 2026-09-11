@@ -28,6 +28,15 @@ def _sum_known(events: list[ExpenseEvent], key: str) -> dict[str, str]:
     return {name: str(value) for name, value in sorted(totals.items())}
 
 
+def _count_pending(events: list[ExpenseEvent], key: str) -> dict[str, int]:
+    totals: dict[str, int] = defaultdict(int)
+    for event in events:
+        if event.status not in {"pending", "unpriced"}:
+            continue
+        totals[str(getattr(event, key) or "unspecified")] += 1
+    return dict(sorted(totals.items()))
+
+
 def _by_category(events: list[ExpenseEvent]) -> dict[str, str]:
     return _sum_known(events, "category")
 
@@ -91,17 +100,28 @@ def _by_tenant(events: list[ExpenseEvent]) -> list[dict[str, Any]]:
     rows = []
     for tenant_id, items in grouped.items():
         known = known_total(items)
+        pending = sum(1 for item in items if item.status in {"pending", "unpriced"})
         rows.append(
             {
                 "tenant_id": tenant_id,
                 "known_usd": str(known),
                 "event_count": len(items),
-                "pending": sum(1 for item in items if item.status in {"pending", "unpriced"}),
-                "top_category": _largest_category(items),
+                "pending": pending,
+                "top_category": _largest_category(items) or _top_pending_category(items),
             }
         )
-    rows.sort(key=lambda row: Decimal(row["known_usd"]), reverse=True)
+    rows.sort(key=lambda row: (int(row["pending"]), Decimal(row["known_usd"])), reverse=True)
     return rows
+
+
+def _top_pending_category(events: list[ExpenseEvent]) -> str:
+    totals: dict[str, int] = defaultdict(int)
+    for event in events:
+        if event.status in {"pending", "unpriced"}:
+            totals[event.category] += 1
+    if not totals:
+        return ""
+    return max(totals, key=totals.get)
 
 
 def _largest_category(events: list[ExpenseEvent]) -> str:
@@ -296,6 +316,12 @@ def global_dashboard(
         "tenant_known_usd": str(tenant_known),
         "platform_shared_usd": str(platform_known),
         "pending_or_unpriced": sum(1 for item in events if item.status in {"pending", "unpriced"}),
+        "pending_by_category": _count_pending(events, "category"),
+        "pending_by_provider": _count_pending(events, "provider"),
+        "attribution_note": (
+            "Live Brain traffic journals pending provider events per tenant_id. "
+            "known_usd stays 0 until invoice/finalization exists — do not invent USD."
+        ),
         "by_category": by_category,
         "by_feature": _by_feature(events),
         "by_provider": _sum_known(events, "provider"),
@@ -348,6 +374,12 @@ def tenant_dashboard(
         "usage_classes": usage_classes(tid, since=since, until=until),
         "known_usd": str(known_total(events)),
         "pending_or_unpriced": sum(1 for item in events if item.status in {"pending", "unpriced"}),
+        "pending_by_category": _count_pending(events, "category"),
+        "pending_by_provider": _count_pending(events, "provider"),
+        "attribution_note": (
+            "Pending provider events are attributed to this tenant_id. "
+            "known_usd stays 0 until invoice/finalization exists."
+        ),
         "cost_status": "pending" if any(item.status in {"pending", "unpriced"} for item in events) else "known",
         "by_category": _by_category(events),
         "by_feature": _by_feature(events),

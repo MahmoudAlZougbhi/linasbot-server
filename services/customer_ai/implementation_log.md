@@ -207,6 +207,8 @@ rule / window immediately before send.
 - Knowledge semantic winners expand the indexed chunk text when shorter than the full article
 - Knowledge/care cards include attachment caption/excerpt blocks at index time
 - Post-retrieve validate drops empty or non-visible section winners
+- Testing readiness: `testing_ready` on activation report; lab turns skip message reserve but keep pending expenses; semantic FAQ stamps tenant_id; Owner Costs shows pending/tenant tables; Owner Lab surfaces brain_disabled; shell shows readiness banner
+
 
 ## Rollout / rollback
 

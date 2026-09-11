@@ -16,7 +16,7 @@ from services.customer_ai.identity import load_identity_bundle
 from services.customer_ai.planner.openai_plan import plan_turn
 from services.customer_ai.retrieve.orchestrate import RetrieveContext, retrieve_published
 from services.customer_ai.actions.pending import attach_confirmation, try_confirm_pending
-from services.customer_ai.billing import reserve_generative
+from services.customer_ai.billing import operation_id_for_turn, reserve_generative
 from services.customer_ai.conversation_store import remember_turn
 
 
@@ -105,7 +105,7 @@ async def _semantic_faq_result(turn: CustomerTurn, message: str, channel: str) -
         from services.customer_ai.faq_semantic import semantic_faq_bundle
 
         _pointer, sections = load_published_content(turn.tenant_id)
-        bundle = await semantic_faq_bundle(sections, message)
+        bundle = await semantic_faq_bundle(sections, message, tenant_id=turn.tenant_id)
     except Exception:
         return None
     if bundle.outcome != "found" or len(bundle.items) != 1:
@@ -186,7 +186,12 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
         requires_visual_reading=bool(turn.media.image_media_id),
     )
     task_text = inbound_task_text(turn, message)
-    plan = await plan_turn(task_text, _history_blob(turn), tenant_id=turn.tenant_id)
+    plan = await plan_turn(
+        task_text,
+        _history_blob(turn),
+        tenant_id=turn.tenant_id,
+        operation_id=operation_id_for_turn(turn),
+    )
     if any(task.type == "human_request" for task in plan.tasks):
         from services.customer_ai.actions.execute import execute_actions
 

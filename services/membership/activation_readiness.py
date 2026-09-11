@@ -145,8 +145,14 @@ def activation_readiness() -> dict[str, Any]:
 
     catalog = current_catalog()
     ready = False
+    testing_ready = all(imports.values())
+    testing_blockers: list[str] = []
+    if not testing_ready:
+        testing_blockers.append("brain_import")
     return {
         "ready_to_enable": ready,
+        "testing_ready": testing_ready,
+        "testing_blockers": testing_blockers,
         "enabled_now": flags.get("enabled") or [],
         "flags": flags,
         "store": store,
@@ -178,7 +184,9 @@ def activation_readiness() -> dict[str, Any]:
         },
         "blockers": blockers,
         "note": (
-            "Authorization is valid only after readiness passes. "
+            "testing_ready means Brain/admin code paths import and are ready for staging lab tests "
+            "with LINAS_CUSTOMER_AI_LAB + CUSTOMER_BRAIN_ENABLED on a non-customer tenant. "
+            "ready_to_enable stays false until commercial/live verification blockers clear. "
             "This report never enables CUSTOMER_BRAIN_ENABLED or message billing."
         ),
     }

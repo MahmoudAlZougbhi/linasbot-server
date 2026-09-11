@@ -29,17 +29,26 @@ export default function OwnerLab() {
   async function runTurn() {
     setError('');
     try {
-      setTurn(
-        await ownerApi.labTurn({
-          tenant_id: tenantId.trim() || 'lab',
-          message,
-          conversation_id: conversationId.trim() || 'lab:conv',
-          user_id: userId.trim() || 'lab:user',
-          channel: channel.trim() || 'web_chat',
-          message_id: messageId.trim(),
-          history: parseHistory(history),
-        }),
-      );
+      const result = await ownerApi.labTurn({
+        tenant_id: tenantId.trim() || 'lab',
+        message,
+        conversation_id: conversationId.trim() || 'lab:conv',
+        user_id: userId.trim() || 'lab:user',
+        channel: channel.trim() || 'web_chat',
+        message_id: messageId.trim(),
+        history: parseHistory(history),
+      });
+      setTurn(result);
+      if (result?.ok === false) {
+        const reason = String(result.reason || 'lab_turn_failed');
+        if (reason === 'brain_disabled') {
+          setError('Brain disabled: set CUSTOMER_BRAIN_ENABLED=true and LINAS_CUSTOMER_AI_LAB=true on staging.');
+        } else if (reason === 'lab_disabled') {
+          setError('Lab API disabled: set LINAS_CUSTOMER_AI_LAB=true on staging.');
+        } else {
+          setError(reason);
+        }
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -83,7 +92,8 @@ export default function OwnerLab() {
       <header>
         <h2 className="text-2xl font-semibold">Customer Brain lab</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Capture-only. Requires LINAS_CUSTOMER_AI_LAB and a lab / lab_* tenant. No live channel send.
+          Capture-only. Requires LINAS_CUSTOMER_AI_LAB=true and CUSTOMER_BRAIN_ENABLED=true on staging,
+          plus a lab / lab_* tenant. No live channel send. Force reindex needs published CM content.
           Conversation, channel, and inbound id are for confirmation and request-source checks.
         </p>
       </header>

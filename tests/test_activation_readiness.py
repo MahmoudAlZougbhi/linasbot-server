@@ -9,10 +9,13 @@ from services.membership.message_catalog import UNCONFIGURED_FREE_FIELDS
 def test_readiness_stays_blocked_and_does_not_enable() -> None:
     report = activation_readiness()
     assert report["ready_to_enable"] is False
+    assert report["testing_ready"] is True
+    assert report["testing_blockers"] == []
     assert report["daily_edit_default"] == 30
     assert report["conversion"]["blocked"] is True
     assert report["conversion"]["assumed_rate"] is None
     assert report["lab_isolated"] is True
+    assert "staging lab tests" in report["note"]
     for field in UNCONFIGURED_FREE_FIELDS:
         assert field in report["catalog_unconfigured"]
         assert field in report["blockers"]

@@ -8,13 +8,13 @@ from services.customer_ai.retrieve.cards import cards_from_sections
 from services.customer_ai.retrieve.orchestrate import retrieve_cards
 
 
-async def semantic_faq_bundle(sections: dict, query: str) -> EvidenceBundle:
+async def semantic_faq_bundle(sections: dict, query: str, *, tenant_id: str = "") -> EvidenceBundle:
     if not faq_fast_path_safe(query):
         return EvidenceBundle(outcome="not_found")
     cards = [card for card in cards_from_sections(sections) if card.source_family == "faq"]
     if not cards:
         return EvidenceBundle(outcome="not_found")
-    bundle = await retrieve_cards(cards, query, families={"faq"}, sections=sections)
+    bundle = await retrieve_cards(cards, query, families={"faq"}, sections=sections, tenant_id=tenant_id)
     if len(bundle.items) != 1:
         if len(bundle.items) > 1:
             return EvidenceBundle(outcome="ambiguous", ambiguities=[item.evidence_id for item in bundle.items])

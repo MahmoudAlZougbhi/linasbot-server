@@ -78,6 +78,54 @@ def test_expenses_record_when_billing_is_off() -> None:
     assert events[0].amount_usd is None
 
 
+def test_lab_turn_journals_expense_without_message_reserve(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
+    from services.membership.message_ledger import remaining_messages
+    from services.membership.period_grants import ensure_included_grant
+
+    ensure_included_grant("lab_shop")
+    before = remaining_messages("lab_shop")
+    result = apply_message_billing(
+        _turn(tenant_id="lab_shop", conversation_id="lab:conv", event_ids=["lab-evt-1"]),
+        TurnResult(
+            stop_reason="ok",
+            envelope=FinalReplyEnvelope(
+                decision="reply",
+                messages=[OutboundMessage(destination="dm", text="Lab hello")],
+            ),
+            ai_called=True,
+            extra={"phase": "generate"},
+        ),
+    )
+    assert result.extra.get("billing_pending_send") is not True
+    assert remaining_messages("lab_shop") == before
+    events = list_events(tenant_id="lab_shop")
+    assert events
+    assert events[0].status == "pending"
+    assert events[0].tenant_id == "lab_shop"
+
+
+def test_cost_dashboard_exposes_pending_breakdown() -> None:
+    from services.membership.cost_dashboard import global_dashboard
+    from services.membership.provider_expense import record_pending_provider
+
+    record_pending_provider(
+        event_id="llm:dash-1",
+        tenant_id="dash-shop",
+        category="llm_generation",
+        feature="customer_chat",
+        provider="openai",
+        model="answer",
+        operation_id="dash-1",
+    )
+    dash = global_dashboard()
+    assert dash["pending_or_unpriced"] >= 1
+    assert dash["pending_by_category"].get("llm_generation", 0) >= 1
+    assert dash["pending_by_provider"].get("openai", 0) >= 1
+    assert "pending provider events" in dash["attribution_note"].lower() or "pending" in dash["attribution_note"].lower()
+    assert any(row["tenant_id"] == "dash-shop" for row in dash["tenants"])
+
+
 def test_faq_only_does_not_open_a_lot_when_billing_off() -> None:
     from services.membership.message_ledger import remaining_messages
 
