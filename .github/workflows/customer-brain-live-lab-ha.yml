@@ -105,13 +105,13 @@ jobs:
             import os
             import time
             import uuid
-            from pathlib import Path
 
             from dotenv import load_dotenv
+            from services.customer_ai.evals.artifacts import durable_report_path
 
             load_dotenv(os.environ.get("LINAS_DOTENV_PATH") or "/opt/linasbot/.env", override=True)
 
-            report_path = Path("services/customer_ai/evals/artifacts/live_lab_latest.json")
+            report_path = durable_report_path("live_lab_latest.json")
             report = json.loads(report_path.read_text(encoding="utf-8"))
             gates = report.setdefault("gates", {})
             openai_row = gates.get("OPENAI") or {}
@@ -222,13 +222,13 @@ jobs:
             run_py <<'PY'
             import json
             import os
-            from pathlib import Path
 
             from dotenv import load_dotenv
+            from services.customer_ai.evals.artifacts import durable_report_path
 
             load_dotenv(os.environ.get("LINAS_DOTENV_PATH") or "/opt/linasbot/.env", override=True)
 
-            report_path = Path("services/customer_ai/evals/artifacts/live_lab_latest.json")
+            report_path = durable_report_path("live_lab_latest.json")
             if not report_path.is_file():
                 raise SystemExit("[brain-live-lab] missing live_lab_latest.json")
             report = json.loads(report_path.read_text(encoding="utf-8"))

@@ -11,10 +11,10 @@ import json
 import os
 import time
 from contextlib import AbstractContextManager
-from pathlib import Path
 from typing import Any
 
 from db.session import whatsapp_session
+from services.customer_ai.evals.artifacts import durable_report_path
 from services.customer_ai.evals.live_lab_corpus import retrieval_eval_cases
 from services.customer_ai.evals.live_lab_publish import publish_lab_tenant
 from services.customer_ai.evals.live_lab_switch import atomic_switch_live as _atomic_switch_live
@@ -31,7 +31,7 @@ from services.customer_ai.tools.registry import list_tools
 
 LAB_TENANT = "linas-lab"
 OTHER_TENANT = "linas-lab-b"
-REPORT_PATH = Path("services/customer_ai/evals/artifacts/live_lab_latest.json")
+REPORT_PATH = durable_report_path("live_lab_latest.json")
 
 
 def _gate(status: str, detail: str = "", **extra: Any) -> dict[str, Any]:

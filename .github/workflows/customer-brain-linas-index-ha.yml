@@ -93,11 +93,12 @@ jobs:
             run_py <<'PY'
             import json
             import os
-            from pathlib import Path
             from dotenv import load_dotenv
+            from services.customer_ai.evals.artifacts import durable_report_path
+            from services.customer_ai.evals.artifacts import durable_report_path
 
             load_dotenv(os.environ.get("LINAS_DOTENV_PATH") or "/opt/linasbot/.env", override=True)
-            path = Path("services/customer_ai/evals/artifacts/linas_real_index_latest.json")
+            path = durable_report_path("linas_real_index_latest.json")
             if not path.is_file():
                 raise SystemExit("[linas-real-index] missing report")
             report = json.loads(path.read_text(encoding="utf-8"))
