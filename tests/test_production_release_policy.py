@@ -30,6 +30,7 @@ ALL_WORKFLOWS = frozenset(
     {
         "cm-linas-content-audit.yml",
         "cm-production-cutover.yml",
+        "customer-brain-env-apply-ha.yml",
         "bootstrap-meta-ha.yml",
         "copilot-v2-flags-apply.yml",
         "dashboard-auth-secret-apply.yml",
@@ -76,6 +77,7 @@ REMOTE_WORKFLOWS = frozenset(
     {
         "cm-linas-content-audit.yml",
         "cm-production-cutover.yml",
+        "customer-brain-env-apply-ha.yml",
         "bootstrap-meta-ha.yml",
         "deploy.yml",
         "instagram-login-secrets-apply.yml",
