@@ -100,23 +100,20 @@ STOCK_SUPPORT: tuple[str, ...] = (
     "المخزن",
 )
 
-BOOKING_CLAIMS: tuple[str, ...] = (
-    "booked",
-    "booking is confirmed",
-    "booking confirmed",
-    "appointment is confirmed",
-    "appointment confirmed",
-    "confirmed your appointment",
-    "confirmed your booking",
-    "reservation confirmed",
-    "reserved your",
-    "you are all set",
-    "you re all set",
-    "youre all set",
-    "تم الحجز",
-    "تم تثبيت",
-    "حجزتلك",
-    "محجوز",
+# Success claims only. "we are fully booked" is an availability statement, not a receipt claim,
+# so the patterns require the assistant to assert that a booking now exists.
+BOOKING_CLAIM_PATTERNS: tuple[str, ...] = (
+    r"\b(?:i|we|i ?ve|we ?ve|i have|we have)\s+(?:just\s+)?(?:booked|reserved|scheduled|confirmed)\b",
+    r"\b(?:your|the)\s+(?:booking|appointment|reservation|slot)\s+(?:is|has been|was)\s+"
+    r"(?:booked|confirmed|reserved|scheduled|created)\b",
+    r"\b(?:booking|appointment|reservation)\s+confirmed\b",
+    r"\bconfirmed\s+your\s+(?:booking|appointment|reservation)\b",
+    r"\b(?:you are|you re|youre)\s+(?:all\s+)?(?:set|booked)\b",
+    r"\bhas been booked\b",
+    r"تم الحجز",
+    r"تم تثبيت",
+    r"حجزتلك",
+    r"حجزنالك",
 )
 
 RECEIPT_SUCCESS: tuple[str, ...] = (
@@ -139,6 +136,14 @@ def flat(text: str) -> str:
 def marker_text(text: str) -> str:
     """Punctuation-free, Arabic-normalized surface for phrase markers."""
     return normalize_search_text(text)
+
+
+def matched_pattern(normalized: str, patterns: tuple[str, ...]) -> str:
+    for pattern in patterns:
+        match = re.search(pattern, normalized)
+        if match:
+            return _SPACE.sub(" ", match.group(0)).strip()
+    return ""
 
 
 def has_marker(normalized: str, markers: tuple[str, ...]) -> str:
