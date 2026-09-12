@@ -1,3 +1,4 @@
+import { liveChatMessageFromSseData } from './liveChatSseParse';
 import type { LiveChatMessage } from './liveChatTypes';
 
 const LOCAL_PREFIX = 'local-';
@@ -118,4 +119,14 @@ export function mergeThreadMessages(
   const merged = [...leftover, ...incomingWithKeys, ...keptLocals];
   merged.sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
   return dedupeThreadMessages(merged);
+}
+
+/** Append or replace one SSE message without dropping the rest of the open thread. */
+export function mergeSseThreadMessage(
+  prev: LiveChatMessage[],
+  data: Record<string, unknown>,
+): LiveChatMessage[] {
+  const incoming = liveChatMessageFromSseData(data);
+  if (!incoming) return prev;
+  return mergeThreadMessages(prev, [incoming]);
 }

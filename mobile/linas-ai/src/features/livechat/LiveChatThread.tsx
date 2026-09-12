@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -29,16 +29,38 @@ import {
   previousUserQuestion,
 } from './liveChatTypes';
 import { useLiveChatThread } from './useLiveChatThread';
+import type { LiveChatSseEvent } from './liveChatSseParse';
 
 type Props = {
   chat: LiveChatItem;
   onChatUpdated: () => void;
+  realtimeEvent?: { seq: number; event: LiveChatSseEvent } | null;
+  sseConnectedAt?: number;
 };
 
-export function LiveChatThread({ chat, onChatUpdated }: Props) {
+export function LiveChatThread({
+  chat,
+  onChatUpdated,
+  realtimeEvent = null,
+  sseConnectedAt = 0,
+}: Props) {
   const { tr } = useI18n();
   const insets = useSafeAreaInsets();
   const thread = useLiveChatThread(chat, onChatUpdated);
+
+  useEffect(() => {
+    if (!realtimeEvent) return;
+    thread.applyRealtime(realtimeEvent.event.data);
+    // Apply each pushed event once; do not depend on applyRealtime identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realtimeEvent?.seq]);
+
+  useEffect(() => {
+    if (!sseConnectedAt) return;
+    thread.reloadQuiet();
+    // Catch-up after SSE connect/reconnect only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sseConnectedAt]);
   const [assignOpen, setAssignOpen] = useState(false);
   const [likeTarget, setLikeTarget] = useState<LiveChatMessage | null>(null);
   const [likeBusy, setLikeBusy] = useState(false);
@@ -138,7 +160,7 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
       <LiveChatComposer
         onSend={(text) => thread.sendText(text)}
         onSendMedia={(base64, type, mime) => thread.sendMedia(base64, type, mime)}
-        busy={thread.busy || thread.sending || (thread.loading && !thread.messages.length)}
+        busy={thread.busy || (thread.loading && !thread.messages.length)}
       />
 
       <LiveChatAssignSheet

@@ -168,6 +168,7 @@ class LiveChatSSEBroadcaster:
         self,
         request: Request,
         initial_payload_loader: Callable[[], Awaitable[dict[str, Any] | None]] | None = None,
+        allow_event: Callable[[dict[str, Any]], bool] | None = None,
     ) -> Any:
         """Yield a resilient SSE stream for one connected client."""
         client_queue = await self._register()
@@ -190,6 +191,8 @@ class LiveChatSSEBroadcaster:
 
                 try:
                     event = await asyncio.wait_for(client_queue.get(), timeout=self.HEARTBEAT_SECONDS)
+                    if allow_event is not None and not allow_event(event):
+                        continue
                     event_data = json.dumps(event.get("data", {}), default=_json_serializer)
                     event_type = event.get("type", "message")
                     yield f"event: {event_type}\ndata: {event_data}\n\n"

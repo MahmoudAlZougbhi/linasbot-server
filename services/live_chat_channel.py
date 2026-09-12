@@ -86,6 +86,15 @@ def live_chat_channel_matches(chat: dict[str, Any], channel_filter: str) -> bool
     return resolve_live_chat_channel(chat.get("user_id"), chat) == wanted
 
 
+def live_chat_event_tenant_id(user_id: Any) -> str:
+    """Tenant for SSE fanout. Prefixed social IDs carry the tenant; linas threads omit it."""
+    uid = str(user_id or "").strip()
+    parts = [p.strip() for p in uid.split(":") if p.strip()]
+    if len(parts) >= 4 and parts[1].lower() in {"instagram", "facebook", "tiktok"}:
+        return parts[0].lower()
+    return "linas"
+
+
 def coerce_live_chat_user_id(payload: dict[str, Any] | None, *, conversation_id: Any = None) -> str:
     """Never emit a blank user_id — mobile Zod drops those inbox rows."""
     data: dict[str, Any] = payload or {}

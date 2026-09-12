@@ -11,13 +11,15 @@ import logging
 from typing import Any
 
 from fastapi import Query, Request
+from fastapi.responses import StreamingResponse
 
 from modules.core import app
-from modules.live_chat_api_helpers import (  # noqa: F401
+from modules.live_chat_api_helpers import (
     _run_endpoint,
     broadcast_sse_event,
     require_chat_channel,
     resolve_takeover_assignee,
+    session_allows_live_chat_sse_event,
 )
 from modules.models import (
     MarkConversationReadRequest,
@@ -27,10 +29,26 @@ from modules.models import (
     TakeoverRequest,
 )
 from services.live_chat_service import live_chat_service
+from services.live_chat_sse_broadcaster import live_chat_sse_broadcaster
 from services.takeover_customer_notice import public_staff_label
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
 _log = logging.getLogger(__name__)
+
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
+
+
+def _conversations_sse_data(session: Any, user_id: str, conversation_id: str) -> dict[str, Any]:
+    return {
+        "trigger_refresh": True,
+        "tenant_id": str(getattr(session, "tenant_id", "") or ""),
+        "user_id": user_id,
+        "conversation_id": conversation_id,
+    }
 
 
 @app.get("/api/live-chat/unified-chats")
@@ -102,8 +120,10 @@ async def takeover_conversation(request: TakeoverRequest, http_request: Request)
                 tenant_id=getattr(session, "tenant_id", None),
             )
         if result.get("success"):
-            # Broadcast so all clients (including other tabs) refresh and move conv from Waiting to Active
-            await broadcast_sse_event("conversations", {"trigger_refresh": True})
+            await broadcast_sse_event(
+                "conversations",
+                _conversations_sse_data(session, request.user_id, request.conversation_id),
+            )
         return result
 
     return await _run_endpoint(_handler)
@@ -131,10 +151,29 @@ async def release_conversation(request: ReleaseRequest, http_request: Request) -
                 tenant_id=getattr(session, "tenant_id", None),
             )
         if result.get("success"):
-            await broadcast_sse_event("conversations", {"trigger_refresh": True})
+            await broadcast_sse_event(
+                "conversations",
+                _conversations_sse_data(session, request.user_id, request.conversation_id),
+            )
         return result
 
     return await _run_endpoint(_handler)
+
+
+@app.get("/api/live-chat/events")
+async def live_chat_events(http_request: Request) -> Any:
+    """WhatsApp-style operator stream. Auth is session/Bearer; token is never in the query string."""
+    from modules.api_security import require_session
+
+    session = require_session(http_request)
+    return StreamingResponse(
+        live_chat_sse_broadcaster.stream(
+            http_request,
+            allow_event=lambda event: session_allows_live_chat_sse_event(session, event),
+        ),
+        media_type="text/event-stream",
+        headers=_SSE_HEADERS,
+    )
 
 
 @app.post("/api/live-chat/mark-read")
