@@ -4,7 +4,7 @@ import { markConversationRead } from './liveChatApi';
 
 const HEARTBEAT_MS = 30_000;
 
-/** Pause AI once when the operator opens a bot thread; heartbeat while it stays open. */
+/** Mark the thread read on open; heartbeat while it stays open. Does not pause AI. */
 export function useLiveChatOperatorPresence(
   userId: string,
   conversationId: string,

@@ -210,6 +210,15 @@ async def process_meta_comment_event(
     if not comment_text:
         return CommentReplyResult(status="ignored", reason="empty_comment")
 
+    from services.meta_comment_post_context import enrich_comment_event_post
+
+    event = await enrich_comment_event_post(
+        dict(event),
+        binding=binding,
+        token=str(settings.page_access_token or ""),
+        graph_api_version=str(settings.graph_api_version or "v24.0"),
+        allow_graph=not simulation,
+    )
     post_id = str(event.get("post_id") or event.get("media_id") or "").strip()
     from services.cm.comment_rules import evaluate_published_comment_rules
     from services.cm.constants import tenant_uses_cm_runtime
