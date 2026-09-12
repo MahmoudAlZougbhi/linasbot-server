@@ -282,6 +282,14 @@ test('thread hook ignores stale polls and sends without locking the composer', (
   assert.doesNotMatch(hook, /setInterval/);
   assert.doesNotMatch(hook, /sendingRef\.current/);
   assert.match(thread, /thread\.loading && !thread\.messages\.length/);
+  assert.match(thread, /busy=\{thread\.busy\}/);
+  assert.doesNotMatch(thread, /thread\.busy \|\| \(thread\.loading && !thread\.messages\.length\)/);
+  assert.match(hook, /previewMessagesFromInbox/);
+  const inboxHook = read('features/livechat/useLiveChatInbox.ts');
+  const screen = read('features/livechat/LiveChatScreen.tsx');
+  assert.match(inboxHook, /mode === 'event'/);
+  assert.match(inboxHook, /reloadFromEvent/);
+  assert.match(screen, /inbox.reloadFromEvent\(\)/);
   assert.doesNotMatch(thread, /thread\.sending/);
 });
 
@@ -321,6 +329,14 @@ test('applyInboxNewMessage bumps the row to the top and unread unless open', () 
   const unknown = applyInboxNewMessage(prev, { conversation_id: 'missing', user_id: 'x' });
   assert.equal(unknown.matched, false);
   assert.equal(unknown.chats, prev);
+});
+
+test('inbox preview seeds a thread bubble without waiting on history', () => {
+  const helpers = read('features/livechat/liveChatHelpers.ts');
+  const hook = read('features/livechat/useLiveChatThread.ts');
+  assert.match(helpers, /export function previewMessagesFromInbox/);
+  assert.match(hook, /previewMessagesFromInbox\(chat/);
+  assert.match(hook, /setMessages\(previewMessagesFromInbox/);
 });
 
 test('SSE parser and thread merge apply a new_message without duplicating', () => {

@@ -231,6 +231,19 @@ async def maybe_send_takeover_autoreply(
                     was_in_takeover = config.user_in_human_takeover_mode.get(user_id, False)
                     new_takeover = conv_data.get("human_takeover_active", False)
                     if new_takeover:
+                        from services.live_chat_operator_idle import auto_resume_if_operator_idle
+
+                        if await auto_resume_if_operator_idle(
+                            conv_data=conv_data,
+                            user_id=user_id,
+                            conversation_id=conv_for_takeover_check,
+                            tenant_id=user_data.get("tenant_id"),
+                            source_channel=user_data.get("channel") or user_data.get("source_channel"),
+                        ):
+                            new_takeover = False
+                            conv_data["human_takeover_active"] = False
+                            conv_data["operator_id"] = None
+                    if new_takeover:
                         config.user_in_human_takeover_mode[user_id] = True
                     else:
                         from utils.utils import _clear_takeover_flags_for_user

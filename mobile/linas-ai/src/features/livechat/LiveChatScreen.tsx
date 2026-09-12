@@ -56,12 +56,12 @@ export function LiveChatScreen({ initialOpen = null, active = true }: Props) {
         }
       }
       if (event.type === 'connected' || event.type === 'conversations') {
-        if (canChatsRef.current) inbox.catchUpIfStale();
+        if (canChatsRef.current) inbox.reloadFromEvent();
         if (event.type === 'connected') setSseConnectedAt(Date.now());
         return;
       }
       if (event.type === 'new_conversation') {
-        if (canChatsRef.current) inbox.reloadQuiet();
+        if (canChatsRef.current) inbox.reloadFromEvent();
         return;
       }
       if (event.type === 'comment_update') {

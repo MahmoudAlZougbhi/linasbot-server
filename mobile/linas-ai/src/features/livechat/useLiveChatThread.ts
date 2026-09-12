@@ -8,14 +8,19 @@ import {
   sendOperatorMessage,
   takeoverConversation,
 } from './liveChatApi';
-import { clientSendId } from './liveChatHelpers';
+import { clientSendId, previewMessagesFromInbox } from './liveChatHelpers';
 import { sseEventMatchesChat } from './liveChatSseParse';
 import { hasPendingOperatorSend, applyMessageStatus, mergeSseThreadMessage, mergeThreadMessages } from './liveChatThreadMerge';
 import type { LiveChatItem, LiveChatMessage } from './liveChatTypes';
-import { isSocialChannelUser } from './liveChatTypes';
+import { isSocialChannelUser, normalizeStatus } from './liveChatTypes';
+
+function isBotThreadStatus(status: string | undefined): boolean {
+  if (!status) return false;
+  return normalizeStatus({ conversation_id: 'x', user_id: 'x', status } as LiveChatItem) === 'bot';
+}
 
 export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () => void) {
-  const [messages, setMessages] = useState<LiveChatMessage[]>([]);
+  const [messages, setMessages] = useState<LiveChatMessage[]>(() => previewMessagesFromInbox(chat));
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -26,8 +31,22 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
   const conversationId = chat?.conversation_id || '';
   const loadingMoreRef = useRef(false);
   const requestIdRef = useRef(0);
+  const holdHumanRef = useRef(false);
+  const claimGenRef = useRef(0);
+  const localStatusRef = useRef(localStatus);
+  localStatusRef.current = localStatus;
+  const chatRef = useRef(chat);
+  chatRef.current = chat;
+  const onChatUpdatedRef = useRef(onChatUpdated);
+  onChatUpdatedRef.current = onChatUpdated;
 
   const social = chat ? isSocialChannelUser(chat.user_id, chat.channel) : false;
+
+  const applyServerStatus = useCallback((incoming: string | null | undefined) => {
+    if (!incoming) return;
+    if (holdHumanRef.current && isBotThreadStatus(incoming)) return;
+    setLocalStatus(incoming);
+  }, []);
 
   const load = useCallback(
     async (mode: 'initial' | 'poll' = 'initial') => {
@@ -39,7 +58,6 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
       }
       try {
         const data = await fetchConversation(userId, conversationId, {
-          days: 1,
           limit: 50,
         });
         if (requestId !== requestIdRef.current) return;
@@ -51,7 +69,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         if (mode === 'initial') {
           setHasMore(Boolean(data.has_more) || next.length >= 50);
         }
-        if (data.status) setLocalStatus(data.status);
+        applyServerStatus(data.status);
         if (mode === 'initial') {
           void markConversationRead(userId, conversationId);
         }
@@ -60,18 +78,20 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         if (requestId !== requestIdRef.current) return;
         if (mode === 'initial') {
           setError(err instanceof Error ? err.message : 'Could not load messages.');
-          setMessages((prev) => (hasPendingOperatorSend(prev) ? prev : []));
+          setMessages((prev) => (prev.length || hasPendingOperatorSend(prev) ? prev : []));
         }
       } finally {
         if (mode === 'initial' && requestId === requestIdRef.current) setLoading(false);
       }
     },
-    [userId, conversationId],
+    [userId, conversationId, applyServerStatus],
   );
 
   useEffect(() => {
-    setLocalStatus(chat?.status ?? 'bot');
-    setMessages([]);
+    holdHumanRef.current = false;
+    claimGenRef.current = 0;
+    setLocalStatus(chatRef.current?.status ?? 'bot');
+    setMessages(previewMessagesFromInbox(chatRef.current));
     setHasMore(false);
     void load('initial');
   }, [userId, conversationId, load]);
@@ -117,10 +137,9 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     setError(null);
     try {
       const result = await fn();
-      if (result.status) setLocalStatus(result.status);
+      applyServerStatus(result.status);
       if (!result.success) throw new Error(result.error || result.message || 'Action failed');
-      await load('initial');
-      onChatUpdated?.();
+      onChatUpdatedRef.current?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed.');
     } finally {
@@ -156,6 +175,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     const sendId = String(optimistic.client_send_id || optimistic.message_id || '');
     const idempotency = String(optimistic.idempotency_key || sendId);
     setError(null);
+    holdHumanRef.current = true;
     setMessages((prev) => {
       const exists = prev.some((msg) => (msg.client_send_id || msg.message_id) === sendId);
       if (exists) {
@@ -170,7 +190,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     setLocalStatus('human');
     void sendOperatorMessage(target, payload, messageType, { idempotencyKey: idempotency })
       .then((result) => {
-        if (result.status) setLocalStatus(result.status);
+        if (result.status) applyServerStatus(result.status);
         const status = String(result.delivery_status || (result.success ? 'sending' : 'failed'));
         if (!result.success) {
           patchOptimistic(sendId, { delivery_status: 'failed', delivery_error: result.error || 'Send failed' });
@@ -180,7 +200,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         patchOptimistic(sendId, {
           delivery_status: status === 'sent' ? 'sent' : 'sending',
         });
-        onChatUpdated?.();
+        onChatUpdatedRef.current?.();
       })
       .catch((err) => {
         patchOptimistic(sendId, {
@@ -191,6 +211,32 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
       });
     return true;
   }
+
+  const claimOnOpen = useCallback(() => {
+    const target = chatRef.current;
+    if (!target) return;
+    const gen = ++claimGenRef.current;
+    void markConversationRead(target.user_id, target.conversation_id);
+    const status = normalizeStatus({ ...target, status: localStatusRef.current });
+    if (status !== 'bot') return;
+    holdHumanRef.current = true;
+    setLocalStatus('human');
+    void takeoverConversation(target).then(async (result) => {
+      if (claimGenRef.current !== gen) {
+        if (result.success) {
+          void releaseConversation(target);
+        }
+        return;
+      }
+      if (result.status) applyServerStatus(result.status);
+      if (!result.success) {
+        holdHumanRef.current = false;
+        setLocalStatus(target.status ?? 'bot');
+        return;
+      }
+      onChatUpdatedRef.current?.();
+    });
+  }, [applyServerStatus]);
 
   return {
     messages,
@@ -205,6 +251,7 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     reload: () => load('initial'),
     reloadQuiet: () => void load('poll'),
     applyRealtime,
+    claimOnOpen,
     retryFailedSend: (msg: LiveChatMessage) => {
       if (!chat) return false;
       const type = String(msg.type || 'text').toLowerCase();
@@ -225,9 +272,25 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
       });
     },
     loadOlder,
-    takeover: (assignToUserId?: string) =>
-      runAction(() => takeoverConversation(chat!, assignToUserId)),
-    release: () => runAction(() => releaseConversation(chat!)),
+    takeover: (assignToUserId?: string) => {
+      holdHumanRef.current = true;
+      setLocalStatus('human');
+      return runAction(() => takeoverConversation(chat!, assignToUserId));
+    },
+    release: () => {
+      const previous = localStatusRef.current;
+      holdHumanRef.current = false;
+      claimGenRef.current += 1;
+      setLocalStatus('bot');
+      return runAction(async () => {
+        const result = await releaseConversation(chat!);
+        if (!result.success) {
+          holdHumanRef.current = true;
+          setLocalStatus(previous);
+        }
+        return result;
+      });
+    },
     end: () => runAction(() => endConversation(chat!)),
     sendText: (text: string) => {
       if (!chat || !text.trim()) return false;

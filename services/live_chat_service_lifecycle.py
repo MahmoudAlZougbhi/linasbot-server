@@ -297,6 +297,7 @@ class LiveChatLifecycleMixin:
                     {
                         "conversation_state": self.STATE_ASSIGNED,
                         "last_updated": utc_now(),
+                        "operator_viewed_at": utc_now(),
                     },
                 )
 
@@ -429,13 +430,15 @@ class LiveChatLifecycleMixin:
                 return {"success": False, "error": "Conversation not found"}
 
             current = conv_snap.to_dict() or {}
-            if int(current.get("unread_count") or 0) == 0:
-                return {"success": True, "message": "Already read"}
-
-            await asyncio.to_thread(conv_ref.update, {"unread_count": 0})
-            await self._refresh_index_for_conversation(canonical_user_id, conversation_id)
-            self.invalidate_cache()
-            return {"success": True, "message": "Marked as read"}
+            unread = int(current.get("unread_count") or 0)
+            update = {"operator_viewed_at": utc_now()}
+            if unread != 0:
+                update["unread_count"] = 0
+            await asyncio.to_thread(conv_ref.update, update)
+            if unread != 0:
+                await self._refresh_index_for_conversation(canonical_user_id, conversation_id)
+                self.invalidate_cache()
+            return {"success": True, "message": "Marked as read" if unread else "Already read"}
         except Exception as e:
             print(f"❌ Error marking conversation read: {e}")
             return {"success": False, "error": str(e)}
