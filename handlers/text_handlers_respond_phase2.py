@@ -165,6 +165,32 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
                 "event_type": "response_sent",
             },
         ]
+        if not str(cm_reply or "").strip():
+            print(
+                f"[_process_and_respond] INFO: Brain produced no outbound text "
+                f"reason={cm_metadata.get('reason')} — skip empty channel send"
+            )
+            settle_reserved_credits(user_data)
+            log_interaction(
+                user_id,
+                user_input_to_process,
+                "",
+                cm_metadata.get("reason", "brain_no_reply"),
+                user_name=user_name,
+                user_phone=user_data.get("phone_number"),
+                user_gender=current_gender,
+                customer_exists=user_data.get("crm_customer_exists"),
+                customer_file_status=user_data.get("customer_file_status"),
+                user_data=user_data,
+                conversation_id=current_conversation_id,
+                handler_path="cm_runtime_pipeline",
+                outcome=cm_metadata.get("reason", "brain_no_reply"),
+                pipeline_decisions=list(cm_metadata.get("pipeline_decisions") or []),
+                cm_diagnostics=cm_diag,
+                ai_called=bool(cm_metadata.get("ai_called")),
+                flow_steps=cm_steps,
+            )
+            return _PHASE_HALT
         await send_message_func(user_id, cm_reply)
         settle_after_outbound(user_data, reply=cm_reply or "", flow_meta=cm_metadata)
         await save_conversation_message_to_firestore(

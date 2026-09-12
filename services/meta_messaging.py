@@ -409,8 +409,16 @@ class MetaMessagingAdapter:
         return cast(dict[str, Any], response.json())
 
     async def send_text_message(self, recipient_id: str, text: str) -> dict[str, Any]:
+        chunks = [chunk for chunk in split_meta_text(text) if chunk]
+        if not chunks:
+            return {
+                "success": False,
+                "provider": "meta",
+                "skipped": True,
+                "error": "empty_text",
+            }
         message_ids: list[str] = []
-        for chunk in split_meta_text(text):
+        for chunk in chunks:
             payload: dict[str, Any] = {
                 "recipient": {"id": str(recipient_id)},
                 "message": {"text": chunk},

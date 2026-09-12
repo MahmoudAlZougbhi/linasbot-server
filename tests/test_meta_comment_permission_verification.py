@@ -83,6 +83,26 @@ def test_granted_allows_reply(registry: MetaAppRegistry, monkeypatch: pytest.Mon
     assert decision["reason"] == "ok"
 
 
+def test_granted_when_per_asset_stale_off(registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_cm_comments(monkeypatch)
+    binding = _binding(
+        registry,
+        auth_flow="instagram_login",
+        webhook_fields=("messages", "messaging_postbacks", "comments"),
+    )
+    credential = registry.get_credential(binding)
+    decision = comments_enforcement_decision(
+        tenant_id="tenant-a",
+        channel="instagram",
+        per_asset_enabled=False,
+        binding=binding,
+        credential=credential,
+        registry=registry,
+    )
+    assert decision["allow"] is True
+    assert decision["reason"] == "ok"
+
+
 def test_explicitly_missing_denies_with_clear_reason(
     registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:

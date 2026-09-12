@@ -90,8 +90,7 @@ async def _delayed_process_messages(
                 return
             redis_chunks = drain_if_due(user_id)
             if redis_chunks is None:
-                user_data["_combine_outcome"] = "superseded"
-                return
+                redis_chunks = drain_if_due(user_id, force=True)
             if redis_chunks:
                 combined_message = " ".join(
                     str(item.get("text") or "") for item in redis_chunks if str(item.get("text") or "").strip()

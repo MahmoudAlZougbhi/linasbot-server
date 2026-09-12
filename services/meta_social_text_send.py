@@ -55,8 +55,9 @@ async def send_meta_social_outbound(
         return {"success": True, "simulated": True, "delivered_externally": False}
     if adapter is None:
         return {"success": False, "error": "Meta adapter unavailable"}
-    if not message_text:
-        return {"success": False, "error": "Only text replies are enabled for Meta social DMs"}
+    outbound_text = str(message_text or "").strip()
+    if not outbound_text:
+        return {"success": False, "skipped": True, "error": "empty_text"}
 
     if inbound_event_id:
         from services.meta_controlled_evidence import meta_evidence_surface
@@ -70,10 +71,10 @@ async def send_meta_social_outbound(
             surface=meta_evidence_surface(kind="meta_dm", channel=channel),
             binding_id=binding_id,
             purpose=current_meta_outbound_send_purpose(),
-            send=lambda: adapter.send_text_message(sender_id, message_text),
+            send=lambda: adapter.send_text_message(sender_id, outbound_text),
         )
     else:
-        text_result = await adapter.send_text_message(sender_id, message_text)
+        text_result = await adapter.send_text_message(sender_id, outbound_text)
 
     from services.customer_reply_v2.product_media_outbound import send_pending_product_media
 

@@ -123,11 +123,6 @@ async def trigger_human_takeover(
     for vid in merge_conversation_user_id_variants("", user_id):
         config.user_in_human_takeover_mode[vid] = True
 
-    escalation_messages = {
-        "ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
-        "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
-        "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏",
-    }
     calm_handover_messages = {
         "ar": "أسف/ة إنك مش راضي/ة، رح حوّلك عند واحد من موظفينا يتواصل معك 🙏",
         "en": "Sorry you're not satisfied. I'll transfer you to one of our staff to connect with you 🙏",
@@ -135,12 +130,13 @@ async def trigger_human_takeover(
     }
     issues = set(detected_issues or [])
     should_use_calm_handover = bool(issues.intersection({"offensive_language", "anger_detected"}))
-    escalation_msg = escalation_messages.get(user_data.get("user_preferred_lang", "ar"), escalation_messages["ar"])
+    user_lang = user_data.get("user_preferred_lang", "ar")
     if should_use_calm_handover:
-        escalation_msg = calm_handover_messages.get(
-            user_data.get("user_preferred_lang", "ar"),
-            calm_handover_messages["ar"],
-        )
+        escalation_msg = calm_handover_messages.get(user_lang, calm_handover_messages["ar"])
+    else:
+        from services.takeover_customer_notice import customer_human_handover_notice
+
+        escalation_msg = customer_human_handover_notice(user_lang)
     await send_message_func(user_id, escalation_msg)
     await save_conversation_message_to_firestore(
         user_id,
@@ -262,30 +258,13 @@ async def maybe_send_takeover_autoreply(
                             conv_id_for_save = user_data.get("current_conversation_id") or conv_for_takeover_check
 
                             if operator_id:
-                                # User has an operator — never stay silent.
-                                # Send assignment notice once, then send a short reminder on each user turn.
                                 print(
                                     f"[handle_message] INFO: User ...{str(user_id)[-4:]} has operator. AI will not respond."
                                 )
                                 if not user_data.get("notified_human_takeover"):
-                                    operator_name = conv_data.get("operator_name")
-                                    if not operator_name:
-                                        if operator_id and "@" in str(operator_id):
-                                            operator_name = (
-                                                str(operator_id)
-                                                .split("@")[0]
-                                                .replace(".", " ")
-                                                .replace("_", " ")
-                                                .title()
-                                            )
-                                        else:
-                                            operator_name = operator_id
-                                    handover_messages = {
-                                        "ar": f"📞 تم تحويل المحادثة إلى {operator_name}. سيقوم بالرد عليك قريباً.",
-                                        "en": f"📞 The conversation has been transferred to {operator_name}. They will respond to you shortly.",
-                                        "fr": f"📞 La conversation a été transférée à {operator_name}. Il vous répondra sous peu.",
-                                    }
-                                    handover_msg = handover_messages.get(user_lang, handover_messages["ar"])
+                                    from services.takeover_customer_notice import customer_human_handover_notice
+
+                                    handover_msg = customer_human_handover_notice(user_lang)
                                     await send_message_func(user_id, handover_msg)
                                     await save_conversation_message_to_firestore(
                                         user_id,

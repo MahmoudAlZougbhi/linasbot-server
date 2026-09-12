@@ -26,6 +26,7 @@ PATTERNS = {
     "meta_comment_completed": r"\[meta-comment\] event_processing_completed",
     "meta_comment_failed": r"\[meta-comment\] event_processing_failed",
     "meta_comment_reply_sent": r"\[meta-comment\] reply_sent",
+    "meta_comment_reply_ignored": r"\[meta-comment\] event_processing_completed .* status=ignored",
     "meta_comment_reply_failed": r"\[meta-comment\] reply_failed",
     "meta_comment_private_reply": r"\[meta-comment\] private_reply",
     "ig_login_background_fail": r"\[instagram-login\] background_processing_failed",

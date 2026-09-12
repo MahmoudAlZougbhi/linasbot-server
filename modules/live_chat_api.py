@@ -27,6 +27,7 @@ from modules.models import (
     TakeoverRequest,
 )
 from services.live_chat_service import live_chat_service
+from services.takeover_customer_notice import public_staff_label
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
 _log = logging.getLogger(__name__)
@@ -166,7 +167,7 @@ async def send_operator_message(request: SendOperatorMessageRequest, http_reques
             adapter=adapter,
             idempotency_key=request.idempotency_key,
             tenant_id=getattr(session, "tenant_id", None),
-            operator_name=getattr(session, "email", None),
+            operator_name=public_staff_label(getattr(session, "email", None)) or None,
             request_id=getattr(request, "request_id", None),
             source_channel=getattr(request, "source_channel", None),
         )

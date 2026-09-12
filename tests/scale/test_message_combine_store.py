@@ -57,6 +57,14 @@ def test_drain_waits_until_due() -> None:
     assert drain_if_due("t:ig:u1", now=105.0) == []
 
 
+def test_drain_force_keeps_chunks_when_due_not_elapsed() -> None:
+    append_chunk("t:ig:u1", text="keep-me", event_id="k1", delay_seconds=3, now=100.0)
+    assert drain_if_due("t:ig:u1", now=101.0) is None
+    forced = drain_if_due("t:ig:u1", now=101.0, force=True)
+    assert forced is not None
+    assert [row["text"] for row in forced] == ["keep-me"]
+
+
 def test_forget_seen_allows_same_event_to_append_again() -> None:
     from services.scale.message_combine_store import forget_seen
 
