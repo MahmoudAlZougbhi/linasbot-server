@@ -45,6 +45,8 @@ test('Live Chat has Chats / Comments switch and comment grid', () => {
 
 test('thread shows a large post image above comments and optional Linas reply', () => {
   const thread = read('features/livechat/comments/CommentThreadScreen.tsx');
+  const screen = read('features/livechat/LiveChatScreen.tsx');
+  const inbox = read('features/livechat/comments/CommentsInbox.tsx');
   assert.match(thread, /post.thumbnail/);
   assert.match(thread, /aspectRatio: tall \? 4 \/ 5 : 1/);
   assert.match(thread, /liveCommentsAiReply/);
@@ -52,4 +54,9 @@ test('thread shows a large post image above comments and optional Linas reply', 
   assert.match(thread, /liveCommentsNoComments/);
   assert.match(thread, /item.comment/);
   assert.match(thread, /item.ai_reply/);
+  assert.match(screen, /comment_update/);
+  assert.match(screen, /canChats \|\| access.canComments/);
+  assert.match(inbox, /applyCommentGridEvent/);
+  assert.match(thread, /applyCommentThreadEvent/);
+  assert.match(thread, /sseConnectedAt/);
 });

@@ -6,12 +6,16 @@ import { EmptyState } from '../../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../../components/LinasLoadingIndicator';
 import { useI18n } from '../../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../../theme';
+import type { LiveChatSseEvent } from '../liveChatSseParse';
 import { fetchCommentThreads } from './commentsInboxApi';
+import { applyCommentThreadEvent } from './commentsSseMerge';
 import type { CommentMediaItem, CommentPlatform, CommentThreadItem } from './commentsInboxTypes';
 
 type Props = {
   platform: CommentPlatform;
   post: CommentMediaItem;
+  realtimeEvent?: { seq: number; event: LiveChatSseEvent } | null;
+  sseConnectedAt?: number;
 };
 
 function PostHero({ post }: { post: CommentMediaItem }) {
@@ -28,7 +32,12 @@ function PostHero({ post }: { post: CommentMediaItem }) {
   return <Image source={{ uri: post.thumbnail }} style={[styles.hero, size]} accessibilityIgnoresInvertColors />;
 }
 
-export function CommentThreadScreen({ platform, post }: Props) {
+export function CommentThreadScreen({
+  platform,
+  post,
+  realtimeEvent = null,
+  sseConnectedAt = 0,
+}: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
@@ -56,7 +65,14 @@ export function CommentThreadScreen({ platform, post }: Props) {
     return () => {
       alive = false;
     };
-  }, [platform, post.id, tr]);
+  }, [platform, post.id, tr, sseConnectedAt]);
+
+  useEffect(() => {
+    if (!realtimeEvent || realtimeEvent.event.type !== 'comment_update') return;
+    setItems((current) => applyCommentThreadEvent(current, realtimeEvent.event.data, post.id, platform));
+    // Apply each pushed event once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realtimeEvent?.seq]);
 
   return (
     <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>

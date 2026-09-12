@@ -60,7 +60,13 @@ def session_allows_live_chat_sse_event(session: Any, event: dict[str, Any] | Non
         return False
     user_id = str(data.get("user_id") or "")
     if not user_id:
-        return event_type == "conversations"
+        if event_type == "conversations":
+            return True
+        from services.access_channels import session_can_use_channel
+        from services.live_chat_channel import normalize_comment_inbox_channel
+
+        channel = normalize_comment_inbox_channel(data.get("channel") or data.get("platform"))
+        return event_type == "comment_update" and bool(channel) and session_can_use_channel(session, channel)
     from services.access_channels import session_can_use_channel
     from services.live_chat_channel import resolve_live_chat_channel
 

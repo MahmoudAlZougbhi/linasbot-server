@@ -295,4 +295,16 @@ async def process_tiktok_comment_ai(
         cost=cost,
         diagnostics=ctx_diag,
     )
+    from services.live_chat_comment_sse import schedule_comment_inbox_sse
+
+    schedule_comment_inbox_sse(
+        tenant_id=tenant_id,
+        channel="tiktok",
+        post_id=video_id,
+        comment_id=comment_id,
+        author=author,
+        comment=text,
+        ai_reply=reply_text,
+        delivery_status="sent",
+    )
     return {"ok": True, "request_id": str(published.get("request_id") or "")}

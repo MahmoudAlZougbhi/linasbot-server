@@ -1,7 +1,7 @@
 """Durable Live Chat operator delivery: enqueue when Redis/workers are ready.
 
-When Redis is not required (current production), callers keep the honest
-in-request provider send. Never fire-and-forget. Never guess a channel.
+When Redis is not required, callers keep the honest in-request provider send.
+When Redis is required, never silently fall back to sync adapter send.
 """
 
 from __future__ import annotations
@@ -68,6 +68,17 @@ def enqueue_live_chat_operator_text(
     return result
 
 
+def _whatsapp_enqueue_failed(error: str) -> dict[str, Any]:
+    return {
+        "success": False,
+        "delivered": False,
+        "queued": False,
+        "error": error,
+        "channel": "whatsapp",
+        "delivery_status": "failed",
+    }
+
+
 def try_enqueue_live_chat_whatsapp(
     *,
     tenant_id: str | None,
@@ -79,7 +90,8 @@ def try_enqueue_live_chat_whatsapp(
 ) -> dict[str, Any] | None:
     """Enqueue WA Cloud when Redis is ready and a connected WABA exists.
 
-    None means the caller must use the existing Live Chat WhatsApp adapter.
+    None only when Redis is not required (honest in-request adapter) or the
+    user is not WhatsApp. Redis-required never returns None for a WA thread.
     """
     mode = live_chat_durable_mode()
     if mode == "sync":
@@ -90,13 +102,13 @@ def try_enqueue_live_chat_whatsapp(
         return queue_unavailable_result(channel="whatsapp")
     tenant = str(tenant_id or "").strip()
     if not tenant:
-        return None
+        return _whatsapp_enqueue_failed("tenant_required")
     connection_id = _active_whatsapp_connection_id(tenant)
     if not connection_id:
-        return None
+        return _whatsapp_enqueue_failed("whatsapp_not_connected")
     wa_id = _whatsapp_customer_wa_id(user_id, canonical_user_id)
     if not wa_id:
-        return None
+        return _whatsapp_enqueue_failed("whatsapp_recipient_unknown")
     return enqueue_live_chat_operator_text(
         tenant_id=tenant,
         channel="whatsapp",

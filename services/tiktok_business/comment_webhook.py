@@ -104,8 +104,22 @@ async def handle_comment_webhook(
             connected_at=connected_at,
         )
         stored_comment_id = row.comment_id
+        stored_text = str(row.text or "")
+        stored_author = str(row.author_username or row.author_user_id or "")
         session.commit()
 
+    if created:
+        from services.live_chat_comment_sse import schedule_comment_inbox_sse
+
+        schedule_comment_inbox_sse(
+            tenant_id=tenant_id,
+            channel="tiktok",
+            post_id=video_id,
+            comment_id=stored_comment_id,
+            author=stored_author,
+            comment=stored_text,
+            delivery_status="none",
+        )
     if enqueue:
         enqueue_tiktok_comment_ai(
             tenant_id=tenant_id,

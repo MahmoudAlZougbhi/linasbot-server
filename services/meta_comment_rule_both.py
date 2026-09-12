@@ -180,7 +180,7 @@ async def _guarded_public_reply(
             return {"success": False, "provider": "meta", "error": "meta_send_missing_message_id"}
         return {"success": True, "provider": "meta", "message_id": reply_id}
 
-    return await _run_guarded(
+    result = await _run_guarded(
         send=_send,
         inbound_event_id=inbound_event_id,
         binding=binding,
@@ -188,6 +188,17 @@ async def _guarded_public_reply(
         fail_prefix="public_reply",
         definitive=_provider_rejection_is_definitive,
     )
+    if result.get("ok"):
+        from services.live_chat_comment_sse import schedule_comment_inbox_sse
+
+        schedule_comment_inbox_sse(
+            tenant_id=str(binding.tenant_id or ""),
+            channel=str(binding.channel or ""),
+            comment_id=comment_id,
+            ai_reply=message,
+            delivery_status="sent",
+        )
+    return result
 
 
 async def _guarded_private_dm(
