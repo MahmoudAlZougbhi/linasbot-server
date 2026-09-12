@@ -40,6 +40,8 @@ function renderAuth(initialRoute = "/") {
         <Routes>
           <Route path="/login" element={<div>login-page</div>} />
           <Route path="/" element={<AuthProbe />} />
+          <Route path="/app" element={<AuthProbe />} />
+          <Route path="/owner" element={<div data-testid="owner-dest">owner-page</div>} />
         </Routes>
       </AuthProvider>
     </MemoryRouter>
@@ -187,6 +189,43 @@ describe("AuthContext", () => {
     });
     expect(localStorage.getItem("csrf_token")).toBe("fresh-csrf");
     expect(localStorage.getItem("auth_session")).toContain("a@test.com");
+  });
+
+  it("sends platform_owner login to /owner instead of the mobile stub", async () => {
+    mockFetch(async (url, options) => {
+      if (String(url).includes("/login")) {
+        expect(/** @type {RequestInit} */ (options).credentials).toBe("include");
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            csrf_token: "owner-csrf",
+            user: {
+              id: "owner-1",
+              email: "owner@linas.ai",
+              role: "platform_owner",
+              tenantId: "linas",
+              status: "active",
+            },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ success: false }),
+      };
+    });
+
+    renderAuth();
+    await waitFor(() => expect(screen.queryByText("auth-loading")).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "login" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("owner-dest")).toHaveTextContent("owner-page");
+    });
   });
 
   it("surfaces login failure for forbidden credentials", async () => {

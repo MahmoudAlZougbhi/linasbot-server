@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildUserData, withAuthFetch } from "./AuthContext.helpers";
+import { buildUserData, postLoginPath, withAuthFetch } from "./AuthContext.helpers";
 import { createAuthUserManagement } from "./AuthContext.users";
 import { AuthProvider, useAuth } from "./AuthContext";
 
@@ -26,6 +26,7 @@ describe("AuthContext LOC split", () => {
     expect(typeof buildUserData).toBe("function");
     expect(typeof withAuthFetch).toBe("function");
     expect(typeof createAuthUserManagement).toBe("function");
+    expect(typeof postLoginPath).toBe("function");
     expect(buildUserData(null)).toBeNull();
     expect(buildUserData({ id: "1", email: "a@test.com", role: "admin" })).toBeNull();
     expect(buildUserData({ id: "1", email: "a@test.com", tenantId: "linas" })).toBeNull();
