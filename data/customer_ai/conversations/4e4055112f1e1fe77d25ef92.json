@@ -1,0 +1,1 @@
+{"state": {"discussed_entity_ids": [], "branch_id": "", "active_draft_id": "", "confirmed_fields": [], "missing_fields": [], "greeted": false, "control_epoch": 0, "handoff_active": false, "draft_revision": ""}, "pending": [], "history": [{"id": "m1", "role": "user", "text": "hello", "timestamp": "2026-09-11T15:02:51.761736+00:00", "visible_to_customer": true}]}
