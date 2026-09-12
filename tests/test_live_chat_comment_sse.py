@@ -75,6 +75,13 @@ def test_comment_sse_acl() -> None:
         )
         is False
     )
+    assert (
+        session_allows_live_chat_sse_event(
+            session,
+            {"type": COMMENT_SSE_EVENT, "data": {"tenant_id": "linas", "comment_id": "c1"}},
+        )
+        is False
+    )
 
 
 @pytest.mark.asyncio

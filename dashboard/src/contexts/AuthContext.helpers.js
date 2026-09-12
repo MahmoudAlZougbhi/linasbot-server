@@ -58,7 +58,12 @@ export const buildUserData = (user) => {
   };
 };
 
-/** After web login: platform owner portal, everyone else the mobile-app stub. */
+/**
+ * After web login: platform owner portal, everyone else the mobile-app stub.
+ * @param {{ role?: string } | null | undefined} user
+ * @param {string} [redirectTo]
+ * @returns {string}
+ */
 export function postLoginPath(user, redirectTo = '/app') {
   const role = String(user?.role || '').trim().toLowerCase();
   const wanted = String(redirectTo || '').trim() || '/app';
