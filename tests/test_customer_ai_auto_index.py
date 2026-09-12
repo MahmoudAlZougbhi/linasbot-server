@@ -191,6 +191,16 @@ def test_gate_accepts_retrieval_payload_with_status_key() -> None:
     assert row["tenant_id"] == "linas"
 
 
+def test_isolation_probe_passes_before_first_active_pointer(tenant_fs: Path) -> None:
+    from services.customer_ai.evals.linas_real_index import isolation_probe
+
+    row = isolation_probe("brand-new-shop")
+    assert row["status"] == "PASS"
+    assert row["leak"] is False
+    assert row["mixed"] is False
+    assert row["pointer_ready"] is False
+
+
 def test_real_linas_resolver_refuses_lab(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.customer_ai.evals.linas_real_index import resolve_real_tenant_id
 

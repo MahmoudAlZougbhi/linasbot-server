@@ -46,30 +46,59 @@ def isolation_probe(tenant_id: str) -> dict[str, Any]:
     from services.customer_ai.providers.spaces import ENTITY_DOCUMENT
 
     other = "linas-lab-isolation"
-    probe = query_similar(
-        None,
-        tenant_id=other,
-        space_id=ENTITY_DOCUMENT.space_id,
-        vector=[0.1, 0.0, 0.0, 0.0],
-        limit=5,
-    )
-    leak = any(hit.tenant_id == tenant_id for hit in probe.items)
+    session: Any | None = None
     live = False
+    other_ready = False
     try:
         from db.session import whatsapp_session
 
-        with whatsapp_session(require=True) as session:
-            live = tenant_pointer_ready(session, tenant_id)
-            other_ready = tenant_pointer_ready(session, other)
+        with whatsapp_session(require=True) as db:
+            live = tenant_pointer_ready(db, tenant_id)
+            other_ready = tenant_pointer_ready(db, other)
+            session = db
+            foreign = query_similar(
+                db,
+                tenant_id=other,
+                space_id=ENTITY_DOCUMENT.space_id,
+                vector=[0.1, 0.0, 0.0, 0.0],
+                limit=5,
+            )
+            own = query_similar(
+                db,
+                tenant_id=tenant_id,
+                space_id=ENTITY_DOCUMENT.space_id,
+                vector=[0.1, 0.0, 0.0, 0.0],
+                limit=5,
+            )
     except Exception:
+        session = None
         live = tenant_pointer_ready(None, tenant_id)
-        other_ready = False
+        foreign = query_similar(
+            None,
+            tenant_id=other,
+            space_id=ENTITY_DOCUMENT.space_id,
+            vector=[0.1, 0.0, 0.0, 0.0],
+            limit=5,
+        )
+        own = query_similar(
+            None,
+            tenant_id=tenant_id,
+            space_id=ENTITY_DOCUMENT.space_id,
+            vector=[0.1, 0.0, 0.0, 0.0],
+            limit=5,
+        )
+    leak = any(hit.tenant_id == tenant_id for hit in foreign.items)
+    mixed = any(hit.tenant_id != tenant_id for hit in own.items)
+    # First-time tenants have no active pointer yet; isolation is leak-only.
+    ok = (not leak) and (not mixed)
     return _gate(
-        "PASS" if (live and not leak) else "FAIL",
-        "tenant_isolated",
+        "PASS" if ok else "FAIL",
+        f"tenant_isolated leak={leak} mixed={mixed} pointer_ready={live}",
         pointer_ready=live,
         leak=leak,
+        mixed=mixed,
         other_pointer_ready=other_ready,
+        backend="pgvector" if session is not None else "memory",
     )
 
 
