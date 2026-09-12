@@ -1,10 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { ApiError } from '../../api/client';
-import { cacheGet, cacheInvalidate, cacheSet, isCacheFresh } from '../../cache/queryCache';
-import { queryKeys } from '../../cache/queryKeys';
-import { QUERY_TTL } from '../../cache/queryTtl';
 import { faqWriteErrorMessage } from './faqWriteError';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -20,25 +16,17 @@ import {
   archiveFaq,
   createFaq,
   deleteSmartAnswerLanguage,
-  listFaq,
   patchFaqVariant,
   regenerateFaq,
   saveSmartAnswerLanguages,
-  type FaqEntitlement,
   type FaqGroup,
 } from './faqApi';
-import type { FaqLangId, SmartAnswerLang } from './faqLanguages';
-import { langNativeLabel, setSmartAnswerLanguageCatalog } from './faqLanguages';
+import type { FaqLangId } from './faqLanguages';
+import { langNativeLabel } from './faqLanguages';
 import { variantForLang } from './faqPreview';
+import { useFaqList } from './useFaqList';
 
 type Mode = 'list' | 'create' | 'detail';
-
-type FaqSnapshot = {
-  items: FaqGroup[];
-  entitlement: FaqEntitlement | null;
-  smartAnswerLanguages: string[];
-  catalog: SmartAnswerLang[];
-};
 
 type Props = {
   onAskLinas?: () => void;
@@ -47,21 +35,9 @@ type Props = {
 
 export function FaqScreen({ proposalReview }: Props) {
   const { tr } = useI18n();
-  const cached = cacheGet<FaqSnapshot>(queryKeys.faq(''));
-  const [loading, setLoading] = useState(!cached);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(Boolean(cached));
-  const hasLoadedOnceRef = useRef(Boolean(cached));
+  const list = useFaqList(tr);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [items, setItems] = useState<FaqGroup[]>(cached?.data.items ?? []);
-  const [entitlement, setEntitlement] = useState<FaqEntitlement | null>(cached?.data.entitlement ?? null);
-  const [smartAnswerLanguages, setSmartAnswerLanguages] = useState<string[]>(
-    cached?.data.smartAnswerLanguages ?? [],
-  );
-  const [languageCatalog, setLanguageCatalog] = useState<SmartAnswerLang[]>(cached?.data.catalog ?? []);
-  const [query, setQuery] = useState('');
   const [mode, setMode] = useState<Mode>('list');
-  const [selected, setSelected] = useState<FaqGroup | null>(null);
   const [activeLang, setActiveLang] = useState<FaqLangId>('en');
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
@@ -69,81 +45,22 @@ export function FaqScreen({ proposalReview }: Props) {
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [pendingLangSave, setPendingLangSave] = useState<string[] | null>(null);
 
-  const load = useCallback(async (opts?: { force?: boolean }) => {
-    const q = query.trim();
-    const key = queryKeys.faq(q);
-    const hit = cacheGet<FaqSnapshot>(key);
-    if (hit) {
-      setItems(hit.data.items);
-      setEntitlement(hit.data.entitlement);
-      setSmartAnswerLanguages(hit.data.smartAnswerLanguages);
-      if (hit.data.catalog.length) {
-        setLanguageCatalog(hit.data.catalog);
-        setSmartAnswerLanguageCatalog(hit.data.catalog);
-      }
-      hasLoadedOnceRef.current = true;
-      setHasLoadedOnce(true);
-      setLoading(false);
-    }
-    if (!opts?.force && hit && isCacheFresh(key, QUERY_TTL.faq)) return;
-    if (!hasLoadedOnceRef.current) setLoading(true);
-    setError(null);
-    try {
-      const data = await listFaq({ q: q || undefined });
-      setItems(data.items);
-      setEntitlement(data.entitlement);
-      setSmartAnswerLanguages(data.smartAnswerLanguages);
-      if (data.catalog.length) {
-        setLanguageCatalog(data.catalog);
-        setSmartAnswerLanguageCatalog(data.catalog);
-      }
-      cacheSet(key, {
-        items: data.items,
-        entitlement: data.entitlement,
-        smartAnswerLanguages: data.smartAnswerLanguages,
-        catalog: data.catalog,
-      });
-      setSelected((prev) => {
-        if (!prev) return null;
-        return data.items.find((g) => g.qa_group_id === prev.qa_group_id) || null;
-      });
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : tr('faqLoadError'));
-    } finally {
-      hasLoadedOnceRef.current = true;
-      setLoading(false);
-      setHasLoadedOnce(true);
-    }
-  }, [query, tr]);
-
   useEffect(() => {
-    const handle = setTimeout(() => {
-      void load();
-    }, query ? 280 : 0);
-    return () => clearTimeout(handle);
-  }, [load, query]);
-
-  async function reloadAfterWrite() {
-    cacheInvalidate(queryKeys.faqAll());
-    await load({ force: true });
-  }
-
-  useEffect(() => {
-    if (!selected) return;
-    const variant = variantForLang(selected, activeLang);
+    if (!list.selected) return;
+    const variant = variantForLang(list.selected, activeLang);
     setQuestion(typeof variant?.question === 'string' ? variant.question : '');
     setAnswer(typeof variant?.answer === 'string' ? variant.answer : '');
-  }, [selected, activeLang]);
+  }, [list.selected, activeLang]);
 
   async function handleCreate() {
     const q = question.trim();
     const a = answer.trim();
     if (!q || !a) {
-      setError(tr('likeFaqNeedBoth'));
+      list.setError(tr('likeFaqNeedBoth'));
       return;
     }
     setSaving(true);
-    setError(null);
+    list.setError(null);
     try {
       await createFaq({ question: q, answer: a });
       setQuestion('');
@@ -151,9 +68,9 @@ export function FaqScreen({ proposalReview }: Props) {
       setMode('list');
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2500);
-      await reloadAfterWrite();
+      await list.reloadAfterWrite();
     } catch (err) {
-      setError(faqWriteErrorMessage(err, tr));
+      list.setError(faqWriteErrorMessage(err, tr));
     } finally {
       setSaving(false);
     }
@@ -161,23 +78,23 @@ export function FaqScreen({ proposalReview }: Props) {
 
   async function commitLanguageSave(languages: string[], translateExisting: boolean) {
     setSaving(true);
-    setError(null);
+    list.setError(null);
     try {
       await saveSmartAnswerLanguages({ languages, translateExisting });
-      setSmartAnswerLanguages(languages);
+      list.setSmartAnswerLanguages(languages);
       setLangPickerOpen(false);
       setPendingLangSave(null);
-      await reloadAfterWrite();
+      await list.reloadAfterWrite();
     } catch (err) {
-      setError(faqWriteErrorMessage(err, tr));
+      list.setError(faqWriteErrorMessage(err, tr));
     } finally {
       setSaving(false);
     }
   }
 
   function handleLanguageSave(languages: string[]) {
-    const added = languages.filter((lang) => !smartAnswerLanguages.includes(lang));
-    if (added.length && items.length > 0) {
+    const added = languages.filter((lang) => !list.smartAnswerLanguages.includes(lang));
+    if (added.length && list.items.length > 0) {
       setPendingLangSave(languages);
       Alert.alert(
         tr('faqTranslateExistingTitle'),
@@ -193,62 +110,58 @@ export function FaqScreen({ proposalReview }: Props) {
   }
 
   function handleRemoveLanguage(langId: string) {
-    if (smartAnswerLanguages.length <= 1) return;
+    if (list.smartAnswerLanguages.length <= 1) return;
     const langName = langNativeLabel(langId);
-    Alert.alert(
-      tr('faqRemoveLangTitle'),
-      tr('faqRemoveLangBody').replace('{lang}', langName),
-      [
-        { text: tr('usersCancel'), style: 'cancel' },
-        {
-          text: tr('faqRemoveLangConfirm'),
-          style: 'destructive',
-          onPress: () => {
-            setSaving(true);
-            setError(null);
-            void deleteSmartAnswerLanguage(langId)
-              .then(() => {
-                setSmartAnswerLanguages((prev) => prev.filter((id) => id !== langId));
-                return load();
-              })
-              .catch((err) => {
-                setError(faqWriteErrorMessage(err, tr));
-              })
-              .finally(() => setSaving(false));
-          },
+    Alert.alert(tr('faqRemoveLangTitle'), tr('faqRemoveLangBody').replace('{lang}', langName), [
+      { text: tr('usersCancel'), style: 'cancel' },
+      {
+        text: tr('faqRemoveLangConfirm'),
+        style: 'destructive',
+        onPress: () => {
+          setSaving(true);
+          list.setError(null);
+          void deleteSmartAnswerLanguage(langId)
+            .then(() => {
+              list.setSmartAnswerLanguages((prev) => prev.filter((id) => id !== langId));
+              return list.reloadAfterWrite();
+            })
+            .catch((err) => {
+              list.setError(faqWriteErrorMessage(err, tr));
+            })
+            .finally(() => setSaving(false));
         },
-      ],
-    );
+      },
+    ]);
   }
 
   async function handleSaveVariant() {
-    if (!selected) return;
+    if (!list.selected) return;
     setSaving(true);
-    setError(null);
+    list.setError(null);
     try {
-      await patchFaqVariant(selected.qa_group_id, activeLang, {
+      await patchFaqVariant(list.selected.qa_group_id, activeLang, {
         question: question.trim(),
         answer: answer.trim(),
       });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
-      await reloadAfterWrite();
+      await list.reloadAfterWrite();
     } catch (err) {
-      setError(faqWriteErrorMessage(err, tr));
+      list.setError(faqWriteErrorMessage(err, tr));
     } finally {
       setSaving(false);
     }
   }
 
   async function handleRegenerate() {
-    if (!selected) return;
+    if (!list.selected) return;
     setSaving(true);
-    setError(null);
+    list.setError(null);
     try {
-      await regenerateFaq(selected.qa_group_id);
-      await reloadAfterWrite();
+      await regenerateFaq(list.selected.qa_group_id);
+      await list.reloadAfterWrite();
     } catch (err) {
-      setError(faqWriteErrorMessage(err, tr));
+      list.setError(faqWriteErrorMessage(err, tr));
     } finally {
       setSaving(false);
     }
@@ -256,22 +169,17 @@ export function FaqScreen({ proposalReview }: Props) {
 
   async function handleArchiveId(qaGroupId: string) {
     setSaving(true);
-    setError(null);
+    list.setError(null);
     try {
       await archiveFaq(qaGroupId);
-      setSelected((prev) => (prev?.qa_group_id === qaGroupId ? null : prev));
+      list.setSelected((prev) => (prev?.qa_group_id === qaGroupId ? null : prev));
       setMode('list');
-      await reloadAfterWrite();
+      await list.reloadAfterWrite();
     } catch (err) {
-      setError(faqWriteErrorMessage(err, tr));
+      list.setError(faqWriteErrorMessage(err, tr));
     } finally {
       setSaving(false);
     }
-  }
-
-  function handleArchive() {
-    if (!selected) return;
-    void handleArchiveId(selected.qa_group_id);
   }
 
   function confirmDelete(group: FaqGroup) {
@@ -304,34 +212,34 @@ export function FaqScreen({ proposalReview }: Props) {
       subtitle={mode === 'list' ? tr('faqSub') : undefined}
       compactTitle
     >
-      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" /> : null}
-      {hasLoadedOnce && error ? <Text style={styles.error}>{error}</Text> : null}
-      {hasLoadedOnce && savedFlash ? <Text style={styles.ok}>{tr('faqSaved')}</Text> : null}
-      {hasLoadedOnce && proposalBits ? (
+      {list.loading && !list.hasLoadedOnce ? <LinasLoadingIndicator variant="screen" /> : null}
+      {list.hasLoadedOnce && list.error ? <Text style={styles.error}>{list.error}</Text> : null}
+      {list.hasLoadedOnce && savedFlash ? <Text style={styles.ok}>{tr('faqSaved')}</Text> : null}
+      {list.hasLoadedOnce && proposalBits ? (
         <View style={[styles.card, { borderColor: colors.accent, marginBottom: spacing.sm }]}>
           <Text style={styles.section}>AI proposal preview — not saved</Text>
           <Text style={styles.hint}>{proposalBits}</Text>
         </View>
       ) : null}
 
-      {hasLoadedOnce ? (
+      {list.hasLoadedOnce ? (
       <ScrollView contentContainerStyle={styles.list}>
         {mode === 'list' ? (
           <FaqListView
-            items={items}
-            entitlement={entitlement}
-            smartAnswerLanguages={smartAnswerLanguages}
-            query={query}
-            onQueryChange={setQuery}
+            items={list.items}
+            entitlement={list.entitlement}
+            smartAnswerLanguages={list.smartAnswerLanguages}
+            query={list.query}
+            onQueryChange={list.setQuery}
             onCreate={() => {
               setQuestion('');
               setAnswer('');
               setMode('create');
             }}
             onSelect={(group) => {
-              setSelected(group);
+              list.setSelected(group);
               setActiveLang(
-                (smartAnswerLanguages.includes('en') ? 'en' : smartAnswerLanguages[0]) || 'en',
+                (list.smartAnswerLanguages.includes('en') ? 'en' : list.smartAnswerLanguages[0]) || 'en',
               );
               setMode('detail');
             }}
@@ -353,11 +261,11 @@ export function FaqScreen({ proposalReview }: Props) {
             tr={tr}
           />
         ) : null}
-        {mode === 'detail' && selected ? (
+        {mode === 'detail' && list.selected ? (
           <FaqDetailView
-            group={selected}
+            group={list.selected}
             activeLang={activeLang}
-            smartAnswerLanguages={smartAnswerLanguages}
+            smartAnswerLanguages={list.smartAnswerLanguages}
             question={question}
             answer={answer}
             saving={saving}
@@ -366,16 +274,16 @@ export function FaqScreen({ proposalReview }: Props) {
             onAnswer={setAnswer}
             onSaveVariant={() => void handleSaveVariant()}
             onRegenerate={() => void handleRegenerate()}
-            onArchive={() => void handleArchive()}
+            onArchive={() => void handleArchiveId(list.selected!.qa_group_id)}
             onBack={() => {
-              setSelected(null);
+              list.setSelected(null);
               setMode('list');
             }}
             tr={tr}
           >
             <FaqResourcesEditor
-              group={selected}
-              onUpdated={(next) => setSelected(next)}
+              group={list.selected}
+              onUpdated={(next) => list.setSelected(next)}
               tr={tr}
             />
           </FaqDetailView>
@@ -385,8 +293,8 @@ export function FaqScreen({ proposalReview }: Props) {
 
       <FaqLanguagePickerModal
         visible={langPickerOpen}
-        selected={pendingLangSave || smartAnswerLanguages}
-        catalog={languageCatalog}
+        selected={pendingLangSave || list.smartAnswerLanguages}
+        catalog={list.languageCatalog}
         saving={saving}
         onClose={() => {
           setLangPickerOpen(false);
