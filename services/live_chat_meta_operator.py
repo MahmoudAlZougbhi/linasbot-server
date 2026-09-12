@@ -109,13 +109,21 @@ async def deliver_live_chat_meta_operator_text(
             text=text,
         )
 
-    result = await deliver_meta_dm(
-        tenant_id=tenant,
-        source_channel=_source_channel_for_meta(channel),
-        source_account_id=account,
-        external_customer_id=sender_id,
-        text=text,
-    )
+    import asyncio
+
+    try:
+        result = await asyncio.wait_for(
+            deliver_meta_dm(
+                tenant_id=tenant,
+                source_channel=_source_channel_for_meta(channel),
+                source_account_id=account,
+                external_customer_id=sender_id,
+                text=text,
+            ),
+            timeout=20,
+        )
+    except TimeoutError:
+        return {"success": False, "delivered": False, "error": "meta_delivery_timeout", "channel": channel}
     if result.status == "sent":
         return {
             "success": True,

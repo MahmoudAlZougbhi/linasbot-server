@@ -119,8 +119,8 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     setError(null);
     try {
       const result = await fn();
-      if (!result.success) throw new Error(result.error || result.message || 'Action failed');
       if (result.status) setLocalStatus(result.status);
+      if (!result.success) throw new Error(result.error || result.message || 'Action failed');
       await load('initial');
       onChatUpdated?.();
     } catch (err) {
@@ -144,8 +144,10 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     setSending(true);
     setError(null);
     appendOptimisticOperatorMessage(optimistic);
+    setLocalStatus('human');
     try {
       const result = await sendOperatorMessage(chat, payload, messageType);
+      if (result.status) setLocalStatus(result.status);
       if (!result.success) throw new Error(result.error || 'Send failed');
       await load('poll');
       onChatUpdated?.();

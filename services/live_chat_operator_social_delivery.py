@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.live_chat_meta_operator import deliver_live_chat_meta_operator_text, is_meta_dm_live_chat_user
+from services.live_chat_meta_operator import (
+    deliver_live_chat_meta_operator_text,
+    is_meta_dm_live_chat_user,
+    parse_meta_live_chat_user_id,
+)
 from services.live_chat_meta_operator_media import (
     decode_operator_media_payload,
     deliver_live_chat_meta_operator_media,
@@ -14,10 +18,46 @@ from services.live_chat_tiktok_operator import (
     is_tiktok_live_chat_user,
     tiktok_operator_media_not_supported,
 )
+from services.requests.constants import (
+    SOURCE_CHANNEL_FACEBOOK_MESSENGER,
+    SOURCE_CHANNEL_INSTAGRAM_DM,
+    SOURCE_CHANNEL_WHATSAPP_CLOUD,
+)
 
 
 def is_social_live_chat_user(user_id: str | None) -> bool:
     return is_meta_dm_live_chat_user(user_id) or is_tiktok_live_chat_user(user_id)
+
+
+def infer_live_chat_source_channel(user_id: str | None, explicit: str | None = None) -> str | None:
+    """Resolve Requests source_channel so Meta/TikTok threads never open WhatsApp Postgres."""
+    if explicit and str(explicit).strip():
+        return str(explicit).strip().lower()
+    uid = str(user_id or "")
+    if is_meta_dm_live_chat_user(uid):
+        channel, _sender, _asset, _tenant = parse_meta_live_chat_user_id(uid)
+        if channel == "facebook":
+            return SOURCE_CHANNEL_FACEBOOK_MESSENGER
+        return SOURCE_CHANNEL_INSTAGRAM_DM
+    if is_tiktok_live_chat_user(uid):
+        return "tiktok"
+    return None
+
+
+def live_chat_needs_whatsapp_session(
+    *,
+    user_id: str | None,
+    tenant_id: str | None,
+    source_channel: str | None,
+) -> bool:
+    if not str(tenant_id or "").strip():
+        return False
+    channel = infer_live_chat_source_channel(user_id, source_channel)
+    if channel == SOURCE_CHANNEL_WHATSAPP_CLOUD:
+        return True
+    if is_social_live_chat_user(user_id):
+        return False
+    return True
 
 
 async def deliver_social_operator_text(

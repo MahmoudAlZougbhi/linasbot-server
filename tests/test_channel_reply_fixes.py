@@ -48,6 +48,20 @@ def test_live_chat_hides_empty_text_only_bubbles() -> None:
     assert visible[1]["type"] == "image"
 
 
+def test_thread_status_uses_takeover_not_stale_active_label() -> None:
+    status = live_chat_service._conversation_state_to_status(
+        live_chat_service._normalize_conversation_state(
+            {
+                "status": "active",
+                "conversation_state": "bot_active",
+                "human_takeover_active": True,
+                "operator_id": "op1",
+            }
+        )
+    )
+    assert status == "human"
+
+
 def test_meta_adapter_skips_whitespace_only_send() -> None:
     import asyncio
 
@@ -66,3 +80,20 @@ def test_meta_adapter_skips_whitespace_only_send() -> None:
     result = asyncio.run(adapter.send_text_message("PSID1", "   "))
     assert result["success"] is False
     assert result["error"] == "empty_text"
+
+
+def test_clear_takeover_clears_merged_user_id_variants(monkeypatch) -> None:
+    cleared: list[str] = []
+    monkeypatch.setattr(
+        "utils.utils_takeover.merge_conversation_user_id_variants",
+        lambda *seeds: ["instagram:1", "instagram:1:extra"],
+    )
+    monkeypatch.setattr(
+        "services.scale.conversation_state_redis.set_takeover",
+        lambda key, enabled: cleared.append(key) or True,
+    )
+    from utils.utils_takeover import _clear_takeover_flags_for_user
+
+    _clear_takeover_flags_for_user("instagram:1", "instagram:1", "instagram:1")
+    assert "instagram:1" in cleared
+    assert "instagram:1:extra" in cleared

@@ -268,18 +268,14 @@ class LiveChatLifecycleMixin:
                     return {"success": False, "error": "Conversation not found. Check user_id and conversation_id."}
 
             # Pause AI before operator owns the thread (Firestore + WA Cloud epoch when tenant bound).
-            from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+            from services.live_chat_operator_pause_session import live_chat_manual_mode_db_session
             from services.requests.manual_mode import activate_manual_mode
 
-            wa_cm = None
-            wa_session = None
-            try:
-                if tenant_id:
-                    try:
-                        wa_cm = whatsapp_session()
-                        wa_session = wa_cm.__enter__()
-                    except WhatsAppDatabaseUnavailable:
-                        wa_session = None
+            with live_chat_manual_mode_db_session(
+                user_id=resolved_user_id,
+                tenant_id=tenant_id,
+                source_channel=source_channel,
+            ) as (wa_session, control_source):
                 pause_result = await activate_manual_mode(
                     conversation_id=conversation_id,
                     user_id=resolved_user_id,
@@ -287,14 +283,9 @@ class LiveChatLifecycleMixin:
                     tenant_id=tenant_id,
                     operator_name=operator_name,
                     request_id=request_id,
-                    source_channel=source_channel,
+                    source_channel=control_source,
                     session=wa_session,
                 )
-                if wa_session is not None:
-                    wa_session.commit()
-            finally:
-                if wa_cm is not None:
-                    wa_cm.__exit__(None, None, None)
 
             config.user_in_human_takeover_mode[resolved_user_id] = True
             self.operator_sessions[conversation_id] = operator_id

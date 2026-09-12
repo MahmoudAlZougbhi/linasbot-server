@@ -233,10 +233,18 @@ async def deliver_meta_dm(
     )
     try:
         result = await adapter.send_text_message(recipient, text.strip())
+        if isinstance(result, dict) and result.get("success") is False:
+            return DeliveryResult(
+                status="failed",
+                error_redacted=redact_delivery_error(str(result.get("error") or "meta_send_failed")),
+                channel_used=source_channel,
+            )
         mid = None
-        data = result.get("data") if isinstance(result, dict) else None
-        if isinstance(data, list) and data:
-            mid = str((data[0] or {}).get("message_id") or (data[0] or {}).get("id") or "") or None
+        if isinstance(result, dict):
+            mid = str(result.get("message_id") or "").strip() or None
+            data = result.get("data")
+            if not mid and isinstance(data, list) and data:
+                mid = str((data[0] or {}).get("message_id") or (data[0] or {}).get("id") or "") or None
         return DeliveryResult(status="sent", provider_message_id=mid, channel_used=source_channel)
     except Exception as exc:
         from services.meta_session_invalidated import mark_if_session_invalidated
