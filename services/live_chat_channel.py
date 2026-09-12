@@ -24,6 +24,24 @@ _ALIASES = {
     "website": "web",
 }
 
+_COMMENT_INBOX_CHANNELS = {
+    "instagram": "instagram",
+    "instagram_comment": "instagram",
+    "facebook": "facebook",
+    "facebook_comment": "facebook",
+    "tiktok": "tiktok",
+    "tiktok_comment": "tiktok",
+}
+
+
+def normalize_comment_inbox_channel(raw: Any) -> str | None:
+    """Instagram / Facebook / TikTok comment surfaces only. Never WhatsApp or web."""
+    key = str(raw or "").strip().lower()
+    if not key:
+        return None
+    return _COMMENT_INBOX_CHANNELS.get(key)
+
+
 _PREFIX_CHANNELS = {
     "web": "web",
     "tiktok": "tiktok",

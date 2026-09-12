@@ -6,6 +6,7 @@ import {
   API_BASE,
   SESSION_VALIDATE_MIN_INTERVAL_MS,
   buildUserData,
+  postLoginPath,
   withAuthFetch,
 } from './AuthContext.helpers';
 import { createAuthUserManagement } from './AuthContext.users';
@@ -190,7 +191,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('auth_session', JSON.stringify(session));
       setUser(userData);
       toast.success('Welcome back!');
-      navigate(redirectTo || '/app');
+      navigate(postLoginPath(userData, redirectTo));
 
       return userData;
     } catch (error) {

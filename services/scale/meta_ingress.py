@@ -271,6 +271,14 @@ def persist_meta_comment_accepted(resolved: ResolvedMetaCommentEvent, *, global_
     persisted, created = create_inbound_event(record, enforce_binding_deletion_fence=True)
     _mirror_unless_soak(persisted)
     _remember_persisted(persisted)
+    if created and not _payload_is_soak(resolved.event):
+        from services.live_chat_comment_sse import schedule_meta_comment_inbound
+
+        schedule_meta_comment_inbound(
+            tenant_id=tenant_id,
+            channel=str(resolved.binding.channel or ""),
+            event=dict(resolved.event),
+        )
     return event_id, created
 
 

@@ -35,16 +35,19 @@ export const buildUserData = (user) => {
     console.warn('[AuthContext] buildUserData incomplete session: missing role or tenantId');
     return null;
   }
+  const normalizedRole = role.toLowerCase();
   const email = typeof record.email === 'string' ? record.email : '';
   const name =
     (typeof record.name === 'string' && record.name) ||
     (email ? (email.split('@')[0] ?? 'user') : 'user');
-  const permissions = resolveUserPermissions(/** @type {AuthUser} */ (/** @type {unknown} */ (record)));
+  const permissions = resolveUserPermissions(
+    /** @type {AuthUser} */ (/** @type {unknown} */ ({ ...record, role: normalizedRole })),
+  );
   return {
     id: typeof record.id === 'string' ? record.id : undefined,
     email,
     name,
-    role,
+    role: normalizedRole,
     permissions: /** @type {AuthUser['permissions']} */ (record.permissions ?? null),
     resolvedPermissions: permissions,
     status: typeof record.status === 'string' ? record.status : 'active',
@@ -54,3 +57,19 @@ export const buildUserData = (user) => {
     emailVerified: record.emailVerified === true,
   };
 };
+
+/**
+ * After web login: platform owner portal, everyone else the mobile-app stub.
+ * @param {{ role?: string } | null | undefined} user
+ * @param {string} [redirectTo]
+ * @returns {string}
+ */
+export function postLoginPath(user, redirectTo = '/app') {
+  const role = String(user?.role || '').trim().toLowerCase();
+  const wanted = String(redirectTo || '').trim() || '/app';
+  if (role === 'platform_owner') {
+    if (wanted.startsWith('/owner')) return wanted;
+    return '/owner';
+  }
+  return wanted === '/owner' || wanted.startsWith('/owner/') ? '/app' : wanted;
+}

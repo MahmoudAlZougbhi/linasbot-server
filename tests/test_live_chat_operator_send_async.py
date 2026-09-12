@@ -233,6 +233,49 @@ def test_whatsapp_enqueue_skipped_in_sync_mode(monkeypatch: pytest.MonkeyPatch) 
     )
 
 
+def test_whatsapp_enqueue_fail_closed_without_waba(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.live_chat_operator_queue import try_enqueue_live_chat_whatsapp
+
+    monkeypatch.setattr("services.live_chat_operator_queue.live_chat_durable_mode", lambda: "enqueue")
+    monkeypatch.setattr("services.live_chat_operator_queue._active_whatsapp_connection_id", lambda _tenant: None)
+    result = try_enqueue_live_chat_whatsapp(
+        tenant_id="linas",
+        user_id="+96170123456",
+        canonical_user_id="+96170123456",
+        conversation_id="c1",
+        text="hello",
+    )
+    assert result is not None
+    assert result["success"] is False
+    assert result["error"] == "whatsapp_not_connected"
+    assert result["delivery_status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_whatsapp_redis_required_does_not_sync_adapter() -> None:
+    adapter = MagicMock()
+    adapter.send_text_message = AsyncMock(side_effect=AssertionError("adapter must not run when Redis required"))
+    with ExitStack() as stack:
+        for cm in _send_patches(
+            patch("services.live_chat_operator_queue.live_chat_durable_mode", lambda: "enqueue"),
+            patch("services.live_chat_operator_queue._active_whatsapp_connection_id", lambda _tenant: None),
+            user_id="+96170123456",
+        ):
+            stack.enter_context(cm)
+        result = await live_chat_service.send_operator_message(
+            conversation_id="c-wa",
+            user_id="+96170123456",
+            message="hello",
+            operator_id="op1",
+            adapter=adapter,
+            tenant_id="linas",
+            idempotency_key="local-wa-failclosed",
+        )
+    assert result.get("success") is False
+    assert "whatsapp_not_connected" in str(result.get("error") or "")
+    adapter.send_text_message.assert_not_called()
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("user_id", "channel"),

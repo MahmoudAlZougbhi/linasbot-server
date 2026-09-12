@@ -98,6 +98,10 @@ def test_sse_filter_allows_same_tenant_whatsapp_and_conversations() -> None:
         session,
         _event("message_status", {"tenant_id": "linas", "user_id": "+96170123456", "delivery_status": "sent"}),
     )
+    assert session_allows_live_chat_sse_event(
+        session,
+        _event("comment_update", {"tenant_id": "linas", "channel": "instagram", "comment_id": "c1"}),
+    )
 
 
 def test_sse_filter_channel_acl_fail_closed() -> None:

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import type { LiveChatSseEvent } from '../liveChatSseParse';
+
 import { EmptyState } from '../../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../../components/LinasLoadingIndicator';
 import { useI18n } from '../../../i18n/LanguageContext';
@@ -8,14 +10,16 @@ import { fonts, useTheme } from '../../../theme';
 import { CommentsMediaGrid } from './CommentsMediaGrid';
 import { allowedCommentPlatforms, CommentsPlatformChips } from './CommentsPlatformChips';
 import { fetchCommentMedia } from './commentsInboxApi';
+import { applyCommentGridEvent } from './commentsSseMerge';
 import type { CommentMediaItem, CommentPlatform } from './commentsInboxTypes';
 
 type Props = {
   onOpenThread: (platform: CommentPlatform, post: CommentMediaItem) => void;
   allowedChannels?: string[] | null;
+  realtimeEvent?: { seq: number; event: LiveChatSseEvent } | null;
 };
 
-export function CommentsInbox({ onOpenThread, allowedChannels = null }: Props) {
+export function CommentsInbox({ onOpenThread, allowedChannels = null, realtimeEvent = null }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
   const allowedKey = allowedChannels ? allowedChannels.join(',') : '*';
@@ -66,6 +70,13 @@ export function CommentsInbox({ onOpenThread, allowedChannels = null }: Props) {
     setPosts([]);
     void load();
   }, [load, allowedKey, allowedChannels]);
+
+  useEffect(() => {
+    if (!realtimeEvent || realtimeEvent.event.type !== 'comment_update') return;
+    setPosts((current) => applyCommentGridEvent(current, realtimeEvent.event.data, platform));
+    // Apply each pushed event once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realtimeEvent?.seq, platform]);
 
   async function refresh() {
     setRefreshing(true);

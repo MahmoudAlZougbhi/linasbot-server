@@ -31,15 +31,18 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
   const [commentPost, setCommentPost] = useState<{ platform: CommentPlatform; post: CommentMediaItem } | null>(null);
   const [deepLinkTried, setDeepLinkTried] = useState(false);
   const [threadEvent, setThreadEvent] = useState<{ seq: number; event: LiveChatSseEvent } | null>(null);
+  const [commentEvent, setCommentEvent] = useState<{ seq: number; event: LiveChatSseEvent } | null>(null);
   const [sseConnectedAt, setSseConnectedAt] = useState(0);
   const focusNonceSeen = useRef(nav.areaFocusNonce);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  const canChatsRef = useRef(access.canChats);
+  canChatsRef.current = access.canChats;
 
   const seenEventIds = useRef(new Set<string>());
 
   useLiveChatEvents({
-    enabled: access.canChats,
+    enabled: access.canChats || access.canComments,
     onEvent: (event) => {
       const eventId = String(event.data.event_id || '');
       if (eventId) {
@@ -51,8 +54,12 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
         }
       }
       if (event.type === 'connected' || event.type === 'conversations' || event.type === 'new_conversation') {
-        inbox.reloadQuiet();
+        if (canChatsRef.current) inbox.reloadQuiet();
         if (event.type === 'connected') setSseConnectedAt(Date.now());
+        return;
+      }
+      if (event.type === 'comment_update') {
+        setCommentEvent({ seq: Date.now(), event });
         return;
       }
       if (event.type === 'new_message') {
@@ -137,7 +144,12 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
         subtitle={tr('liveCommentsThreadTitle')}
         onBack={() => setCommentPost(null)}
       >
-        <CommentThreadScreen platform={commentPost.platform} post={commentPost.post} />
+        <CommentThreadScreen
+          platform={commentPost.platform}
+          post={commentPost.post}
+          realtimeEvent={commentEvent}
+          sseConnectedAt={sseConnectedAt}
+        />
       </ScreenChrome>
     );
   }
@@ -162,6 +174,7 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
       {surface === 'comments' && access.canComments ? (
         <CommentsInbox
           allowedChannels={access.allowedChannels}
+          realtimeEvent={commentEvent}
           onOpenThread={(platform, post) => setCommentPost({ platform, post })}
         />
       ) : (

@@ -12,7 +12,7 @@ import Pricing from './pages/public/Pricing';
 import Features from './pages/public/Features';
 import { AuthProvider } from './contexts/AuthContext';
 import { PublicLandingLocaleProvider } from './contexts/PublicLandingLocaleContext';
-import { useAuth } from './contexts/AuthContext';
+import AppEntry from './pages/AppEntry';
 import OwnerPortalShell from './pages/owner/OwnerPortalShell';
 import OwnerOverview from './pages/owner/OwnerOverview';
 import OwnerUsers from './pages/owner/OwnerUsers';
@@ -27,35 +27,6 @@ import OwnerMessages from './pages/owner/OwnerMessages';
  * Day-to-day ops live in Expo (mobile/linas-ai). Web keeps marketing + thin auth.
  */
 
-/** Minimal stub for bookmarks that still hit former operator paths. */
-function UseMobileAppPage() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6">
-      <div className="max-w-md text-center space-y-4">
-        <h1 className="text-2xl font-semibold text-slate-900">Use the Linas AI mobile app</h1>
-        <p className="text-sm text-slate-600">
-          Operator tools (AI Setup, Live Chat, billing, settings) run in the Linas AI app.
-          This web surface is marketing and account recovery only.
-        </p>
-        <a
-          href="/#get-app"
-          className="inline-flex items-center justify-center rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
-        >
-          Get the app
-        </a>
-      </div>
-      <Toaster position="top-right" />
-    </div>
-  );
-}
-
-function AppEntry() {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen grid place-items-center">Loading…</div>;
-  if (user?.role === 'platform_owner') return <Navigate to="/owner" replace />;
-  return <UseMobileAppPage />;
-}
-
 function PublicMarketingShell() {
   return (
     <PublicLandingLocaleProvider>
@@ -68,6 +39,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
+        <Toaster position="top-right" />
         <Routes>
           <Route element={<PublicMarketingShell />}>
             <Route path="/" element={<Landing />} />
@@ -107,7 +79,7 @@ function App() {
           <Route path="/settings" element={<Navigate to="/#get-app" replace />} />
           <Route path="/testing" element={<Navigate to="/#get-app" replace />} />
           <Route path="/api-debug" element={<Navigate to="/#get-app" replace />} />
-          <Route path="/*" element={<UseMobileAppPage />} />
+          <Route path="/*" element={<AppEntry />} />
         </Routes>
       </AuthProvider>
     </Router>
