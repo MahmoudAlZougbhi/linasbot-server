@@ -48,6 +48,7 @@ DISABLED_ENV_WORKFLOWS = (
 DISABLED_PRIVILEGED_WORKFLOWS = ("ha-infra-ssh-bootstrap.yml",)
 READ_ONLY_SSH_WORKFLOWS = (
     "cm-linas-content-audit.yml",
+    "prod-brain-linas-smoke.yml",
     "prod-preflight-readonly.yml",
     "subscription-exempt-probe.yml",
     "wa-cloud-webhook-readonly-probe.yml",
