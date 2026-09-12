@@ -88,7 +88,7 @@ export function HistoryRows({
                 }}
                 autoFocus
                 style={{
-                  color: drawer ? colors.drawerChats : colors.text,
+                  color: colors.text,
                   flex: 1,
                   ...(drawer ? typography.chatAi : null),
                 }}
@@ -98,7 +98,7 @@ export function HistoryRows({
                 style={[
                   styles.rowTitle,
                   drawer && styles.rowTitleDrawer,
-                  { color: drawer ? colors.drawerChats : colors.text },
+                  { color: colors.text },
                 ]}
                 numberOfLines={drawer ? 1 : 2}
               >

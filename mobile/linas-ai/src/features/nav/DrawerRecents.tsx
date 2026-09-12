@@ -55,7 +55,7 @@ export function DrawerRecents(props: Props) {
       <View style={styles.sectionBlock}>
         <View style={styles.headingRow}>
           <Text
-            style={[styles.heading, styles.chatsHeading, { color: colors.drawerChats }]}
+            style={[styles.heading, { color: colors.text }]}
             accessibilityRole="header"
           >
             {tr('drawerRecents')}
@@ -67,7 +67,7 @@ export function DrawerRecents(props: Props) {
             hitSlop={10}
             style={styles.newChatHit}
           >
-            <AppIcon icon={NEW_CHAT_ICON} size={20} color={colors.drawerChats} />
+            <AppIcon icon={NEW_CHAT_ICON} size={20} color={colors.text} />
           </Pressable>
         </View>
         <HistoryRows {...rowProps} items={recent} />
@@ -87,9 +87,6 @@ const styles = StyleSheet.create({
   },
   heading: {
     ...typography.title,
-  },
-  chatsHeading: {
-    ...typography.chatAi,
   },
   newChatHit: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
 });
