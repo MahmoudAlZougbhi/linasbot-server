@@ -4,14 +4,14 @@ export const bootSplashTokens = {
   background: '#083A37',
   /** Matches expo-splash-screen `imageWidth` so JS and native paint the same mark. */
   markSize: 220,
-  minDisplayMs: 900,
-  minDisplayReducedMs: 320,
-  exitFadeMs: 220,
+  minDisplayMs: 480,
+  minDisplayReducedMs: 200,
+  exitFadeMs: 180,
   /**
    * Hard cap: leave splash even if auth/SecureStore never settles.
    * Chat may still be hydrating; do not block the first screen on API.
    */
-  maxHoldMs: 2500,
+  maxHoldMs: 1800,
 } as const;
 
 /** Delay until the branded splash may unmount. Never exceeds maxHoldMs. */

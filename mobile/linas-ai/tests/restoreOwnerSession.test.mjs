@@ -44,21 +44,29 @@ async function bootPersistedAuth(store, rotateGuest) {
     }
     return false;
   }
+  if (store.getUser) {
+    await store.getUser().catch(() => null);
+  }
   void rotateGuest().catch(() => {});
   return true;
 }
 
 function memoryStore(access = null) {
   let token = access;
+  let user = access ? { id: 'u1', tenantId: 't1' } : null;
   return {
     async getAccessToken() {
       return token;
+    },
+    async getUser() {
+      return user;
     },
     async setTokens(next) {
       token = next;
     },
     async clear() {
       token = null;
+      user = null;
     },
   };
 }
@@ -136,6 +144,18 @@ describe('bootPersistedAuth', () => {
     await store.clear();
     assert.equal(await restoreOwnerSession(store), false);
   });
+
+  it('hydrates getUser after owner restore so cache keys are tenant-scoped', async () => {
+    let userReads = 0;
+    const store = memoryStore('owner-access-token');
+    store.getUser = async () => {
+      userReads += 1;
+      return { id: 'u1', tenantId: 't1' };
+    };
+    const hasAccess = await bootPersistedAuth(store, async () => {});
+    assert.equal(hasAccess, true);
+    assert.equal(userReads, 1);
+  });
 });
 
 describe('session persist source contracts', () => {
@@ -157,7 +177,7 @@ describe('session persist source contracts', () => {
     const restoreAt = boot.indexOf('const hasAccess = await restoreOwnerSession(store)');
     const rotateAt = boot.indexOf('await rotateGuest()');
     assert.ok(restoreAt >= 0 && rotateAt > restoreAt, 'owner restore must run before guest rotate');
-    assert.match(boot, /void rotateGuest\(\)\.catch/);
+    assert.match(boot, /store\.getUser/);
   });
 
   it('owner tokens use AFTER_FIRST_UNLOCK SecureStore options', () => {
@@ -166,6 +186,8 @@ describe('session persist source contracts', () => {
     assert.match(opts, /AFTER_FIRST_UNLOCK/);
     assert.match(tokens, /SECURE_STORE_OPTIONS/);
     assert.match(tokens, /getItemAsync\(ACCESS_KEY, SECURE_STORE_OPTIONS\)/);
+    assert.match(tokens, /rememberAccessToken/);
+    assert.match(tokens, /resetSessionCaches/);
   });
 
   it('logout still clears the token store before dropping hasAccess', () => {

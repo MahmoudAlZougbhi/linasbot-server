@@ -8,6 +8,9 @@ import {
   View,
 } from 'react-native';
 
+import { cacheGet, cacheSet, isCacheFresh } from '../../cache/queryCache';
+import { queryKeys } from '../../cache/queryKeys';
+import { QUERY_TTL } from '../../cache/queryTtl';
 import { EmptyState } from '../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../components/PrimaryButton';
@@ -42,6 +45,8 @@ type Props = {
 
 type Gate = 'none' | 'auth' | 'forbidden';
 
+type NotificationsSnapshot = { items: OwnerNotification[]; unread: number };
+
 function formatWhen(ts: number | null | undefined, locale: string): string {
   if (!ts) return '';
   try {
@@ -75,10 +80,11 @@ export function NotificationsScreen({
   const { tr, language } = useI18n();
   const nav = useModuleNav();
   const dismissGate = onDismissGate ?? nav.goChat;
-  const [items, setItems] = useState<OwnerNotification[]>([]);
-  const [unread, setUnread] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const cached = cacheGet<NotificationsSnapshot>(queryKeys.notifications());
+  const [items, setItems] = useState<OwnerNotification[]>(cached?.data.items ?? []);
+  const [unread, setUnread] = useState(cached?.data.unread ?? 0);
+  const [loading, setLoading] = useState(isAuthenticated && !cached);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(Boolean(cached));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gate, setGate] = useState<Gate>(isAuthenticated ? 'none' : 'auth');
@@ -91,19 +97,31 @@ export function NotificationsScreen({
         setHasLoadedOnce(true);
         return;
       }
-      if (!quiet) setLoading(true);
+      const key = queryKeys.notifications();
+      const hit = cacheGet<NotificationsSnapshot>(key);
+      if (hit) {
+        setItems(hit.data.items);
+        setUnread(hit.data.unread);
+        setHasLoadedOnce(true);
+        setLoading(false);
+      }
+      if (!quiet && hit && isCacheFresh(key, QUERY_TTL.notifications)) return;
+      if (!quiet && !hit) setLoading(true);
       setError(null);
       try {
         const data = await listOwnerNotifications({ limit: 80 });
         setItems(data.notifications);
         setUnread(data.unreadCount);
+        cacheSet(key, { items: data.notifications, unread: data.unreadCount });
         setGate('none');
       } catch (err) {
         const kind = classifyNotificationsError(err);
         if (kind === 'auth') {
           setGate('auth');
+          if (!hit) setItems([]);
         } else if (kind === 'forbidden') {
           setGate('forbidden');
+          if (!hit) setItems([]);
         } else {
           setError(tr('notificationsLoadError'));
         }
@@ -124,7 +142,11 @@ export function NotificationsScreen({
     if (!n.read) {
       try {
         await markNotificationRead(n.id);
-        setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+        setItems((prev) => {
+          const next = prev.map((x) => (x.id === n.id ? { ...x, read: true } : x));
+          cacheSet(queryKeys.notifications(), { items: next, unread: Math.max(0, unread - 1) });
+          return next;
+        });
         setUnread((u) => Math.max(0, u - 1));
       } catch {
         // Still open conversation.
@@ -140,7 +162,11 @@ export function NotificationsScreen({
   async function onMarkAll() {
     try {
       await markAllNotificationsRead();
-      setItems((prev) => prev.map((x) => ({ ...x, read: true })));
+      setItems((prev) => {
+        const next = prev.map((x) => ({ ...x, read: true }));
+        cacheSet(queryKeys.notifications(), { items: next, unread: 0 });
+        return next;
+      });
       setUnread(0);
     } catch {
       setError(tr('notificationsLoadError'));

@@ -19,9 +19,10 @@ import { useLiveChatInbox } from './useLiveChatInbox';
 
 type Props = {
   initialOpen?: { userId: string; conversationId: string } | null;
+  active?: boolean;
 };
 
-export function LiveChatScreen({ initialOpen = null }: Props) {
+export function LiveChatScreen({ initialOpen = null, active = true }: Props) {
   const { tr } = useI18n();
   const access = useLiveChatAccess();
   const inbox = useLiveChatInbox(access.canChats);
@@ -38,6 +39,7 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
   selectedRef.current = selected;
   const canChatsRef = useRef(access.canChats);
   canChatsRef.current = access.canChats;
+  const wasActive = useRef(active);
 
   const seenEventIds = useRef(new Set<string>());
 
@@ -53,9 +55,13 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
           if (first) seenEventIds.current.delete(first);
         }
       }
-      if (event.type === 'connected' || event.type === 'conversations' || event.type === 'new_conversation') {
-        if (canChatsRef.current) inbox.reloadQuiet();
+      if (event.type === 'connected' || event.type === 'conversations') {
+        if (canChatsRef.current) inbox.catchUpIfStale();
         if (event.type === 'connected') setSseConnectedAt(Date.now());
+        return;
+      }
+      if (event.type === 'new_conversation') {
+        if (canChatsRef.current) inbox.reloadQuiet();
         return;
       }
       if (event.type === 'comment_update') {
@@ -85,14 +91,17 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
   }, [access.canChats, access.canComments]);
 
   useEffect(() => {
-    if (nav.activeArea !== 'livechat') return;
-    if (focusNonceSeen.current === nav.areaFocusNonce) return;
+    if (nav.activeArea !== 'livechat' || !active) {
+      wasActive.current = false;
+      return;
+    }
+    const nonceChanged = focusNonceSeen.current !== nav.areaFocusNonce;
+    const resumed = !wasActive.current;
     focusNonceSeen.current = nav.areaFocusNonce;
-    setSelected(null);
-    setCommentPost(null);
-    inbox.reloadQuiet();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadQuiet is stable enough; avoid inbox object churn
-  }, [nav.areaFocusNonce, nav.activeArea]);
+    wasActive.current = true;
+    if (nonceChanged || resumed) inbox.catchUpIfStale();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keep the open thread; SSE patches the list
+  }, [nav.areaFocusNonce, nav.activeArea, active]);
 
   useEffect(() => {
     if (!initialOpen || deepLinkTried || inbox.loading) {

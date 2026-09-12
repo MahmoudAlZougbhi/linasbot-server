@@ -9,7 +9,8 @@ import {
 } from './cmProposalReview';
 import { getCmDraft, putCmDraft } from './cmApi';
 import { isDraftDirty, stableSerialize } from './cmDraftDirty';
-import { peekCmDraftCache, writeCmDraftCache } from './cmDraftCache';
+import { QUERY_TTL } from '../../cache/queryTtl';
+import { isCmDraftFresh, peekCmDraftCache, writeCmDraftCache } from './cmDraftCache';
 import { prepareCmDraftPayload } from './prepareCmDraftPayload';
 
 export function useCmDraft(section: string, proposalReview?: CmProposalReview | null) {
@@ -28,7 +29,13 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
   const payloadRef = useRef<Record<string, unknown>>(cached?.payload ?? {});
 
   const load = useCallback(async () => {
-    if (!peekCmDraftCache(section)) setLoading(true);
+    const hit = peekCmDraftCache(section);
+    if (!hit) setLoading(true);
+    if (!proposalReview && hit && isCmDraftFresh(section, QUERY_TTL.cmDraft)) {
+      setError(null);
+      setLoading(false);
+      return;
+    }
     setError(null);
     setConflict(null);
     try {

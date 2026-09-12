@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { ApiError, isDailyEditLimitError } from '../../api/client';
+import { cacheGet, cacheSet, dedupeFetch, isCacheFresh } from '../../cache/queryCache';
+import { queryKeys } from '../../cache/queryKeys';
+import { QUERY_TTL } from '../../cache/queryTtl';
 import { EmptyState } from '../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -27,39 +30,69 @@ type Props = {
   onContinueSetup?: (prompt: string) => void;
 };
 
+type CmHubSnapshot = {
+  meta: CmMeta;
+  rows: CmProgressRow[];
+  productsComplete: boolean;
+  live: boolean;
+};
+
 /** CM overview — design handoff layout with live progress + section grid. */
 export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
-  const [loading, setLoading] = useState(true);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  const hasLoadedOnceRef = useRef(false);
-  const [hydrated, setHydrated] = useState(false);
+  const cached = cacheGet<CmHubSnapshot>(queryKeys.cmHub());
+  const [loading, setLoading] = useState(!cached);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(Boolean(cached));
+  const hasLoadedOnceRef = useRef(Boolean(cached));
+  const [hydrated, setHydrated] = useState(Boolean(cached));
   const [error, setError] = useState<string | null>(null);
-  const [meta, setMeta] = useState<CmMeta | null>(null);
-  const [rows, setRows] = useState<CmProgressRow[]>([]);
-  const [productsComplete, setProductsComplete] = useState(false);
-  const [live, setLive] = useState(false);
+  const [meta, setMeta] = useState<CmMeta | null>(cached?.data.meta ?? null);
+  const [rows, setRows] = useState<CmProgressRow[]>(cached?.data.rows ?? []);
+  const [productsComplete, setProductsComplete] = useState(cached?.data.productsComplete ?? false);
+  const [live, setLive] = useState(cached?.data.live ?? false);
   const [liveBusy, setLiveBusy] = useState(false);
   const [filter, setFilter] = useState<AiSetupFilter>('all');
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (opts?: { force?: boolean }) => {
+    const key = queryKeys.cmHub();
+    const hit = cacheGet<CmHubSnapshot>(key);
+    if (hit) {
+      setMeta(hit.data.meta);
+      setRows(hit.data.rows);
+      setProductsComplete(hit.data.productsComplete);
+      setLive(hit.data.live);
+      setHydrated(true);
+      hasLoadedOnceRef.current = true;
+      setHasLoadedOnce(true);
+      setLoading(false);
+    }
+    if (!opts?.force && hit && isCacheFresh(key, QUERY_TTL.cmHub)) return;
     if (!hasLoadedOnceRef.current) setLoading(true);
     try {
-      const [metaRes, prog, productsRes] = await Promise.all([
-        fetchCmMeta(),
-        fetchCmSetupProgress(),
-        fetchProducts().catch(() => ({ products: [], total: 0 })),
-      ]);
-      setMeta(metaRes);
-      const progressRows = prog.progress ?? [];
+      const snapshot = await dedupeFetch(key, async () => {
+        const [metaRes, prog, productsRes] = await Promise.all([
+          fetchCmMeta(),
+          fetchCmSetupProgress(),
+          fetchProducts().catch(() => ({ products: [], total: 0 })),
+        ]);
+        return {
+          meta: metaRes,
+          rows: prog.progress ?? [],
+          productsComplete: (productsRes.total ?? productsRes.products.length) > 0,
+          live: Boolean(prog.summary?.published ?? metaRes.has_published_content),
+        } satisfies CmHubSnapshot;
+      });
+      cacheSet(key, snapshot);
+      setMeta(snapshot.meta);
+      const progressRows = snapshot.rows;
       setRows(progressRows);
-      setProductsComplete((productsRes.total ?? productsRes.products.length) > 0);
-      setLive(Boolean(prog.summary?.published ?? metaRes.has_published_content));
+      setProductsComplete(snapshot.productsComplete);
+      setLive(snapshot.live);
       setHydrated(true);
       setError(null);
     } catch {
-      setError(tr('aiSetupLoadError'));
+      if (!hit) setError(tr('aiSetupLoadError'));
     } finally {
       hasLoadedOnceRef.current = true;
       setLoading(false);

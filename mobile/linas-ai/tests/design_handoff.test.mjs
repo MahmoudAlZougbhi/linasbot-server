@@ -249,9 +249,9 @@ test('cold open is branded star splash then chat (no character mash / progress b
   assert.match(boot, /bootSplashTokens/);
   assert.match(tokens, /background:\s*'#083A37'/);
   assert.match(tokens, /markSize:\s*220/);
-  assert.match(tokens, /minDisplayMs:\s*900/);
-  assert.match(tokens, /maxHoldMs:\s*2500/);
-  assert.match(tokens, /exitFadeMs:\s*220/);
+  assert.match(tokens, /minDisplayMs:\s*480/);
+  assert.match(tokens, /maxHoldMs:\s*1800/);
+  assert.match(tokens, /exitFadeMs:\s*180/);
   assert.match(boot, /appReady/);
   assert.match(boot, /splashExitDelayMs/);
   assert.match(boot, /isReduceMotionEnabled|reduceMotionChanged/);

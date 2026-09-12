@@ -16,7 +16,7 @@ type Props = {
 
 /**
  * Operator Requests module — list + detail against `/api/requests*`.
- * Re-tapping Requests in the drawer returns to the list (keep-mounted safe).
+ * Unmounts when left; the list paints from the query cache on reopen.
  */
 export function RequestsScreen({ onOpenLiveChat }: Props) {
   const { tr } = useI18n();

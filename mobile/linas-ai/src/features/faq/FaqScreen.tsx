@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ApiError } from '../../api/client';
+import { cacheGet, cacheInvalidate, cacheSet, isCacheFresh } from '../../cache/queryCache';
+import { queryKeys } from '../../cache/queryKeys';
+import { QUERY_TTL } from '../../cache/queryTtl';
 import { faqWriteErrorMessage } from './faqWriteError';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -30,6 +33,13 @@ import { variantForLang } from './faqPreview';
 
 type Mode = 'list' | 'create' | 'detail';
 
+type FaqSnapshot = {
+  items: FaqGroup[];
+  entitlement: FaqEntitlement | null;
+  smartAnswerLanguages: string[];
+  catalog: SmartAnswerLang[];
+};
+
 type Props = {
   onAskLinas?: () => void;
   proposalReview?: CmProposalReview | null;
@@ -37,15 +47,18 @@ type Props = {
 
 export function FaqScreen({ proposalReview }: Props) {
   const { tr } = useI18n();
-  const [loading, setLoading] = useState(true);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  const hasLoadedOnceRef = useRef(false);
+  const cached = cacheGet<FaqSnapshot>(queryKeys.faq(''));
+  const [loading, setLoading] = useState(!cached);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(Boolean(cached));
+  const hasLoadedOnceRef = useRef(Boolean(cached));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [items, setItems] = useState<FaqGroup[]>([]);
-  const [entitlement, setEntitlement] = useState<FaqEntitlement | null>(null);
-  const [smartAnswerLanguages, setSmartAnswerLanguages] = useState<string[]>([]);
-  const [languageCatalog, setLanguageCatalog] = useState<SmartAnswerLang[]>([]);
+  const [items, setItems] = useState<FaqGroup[]>(cached?.data.items ?? []);
+  const [entitlement, setEntitlement] = useState<FaqEntitlement | null>(cached?.data.entitlement ?? null);
+  const [smartAnswerLanguages, setSmartAnswerLanguages] = useState<string[]>(
+    cached?.data.smartAnswerLanguages ?? [],
+  );
+  const [languageCatalog, setLanguageCatalog] = useState<SmartAnswerLang[]>(cached?.data.catalog ?? []);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<Mode>('list');
   const [selected, setSelected] = useState<FaqGroup | null>(null);
@@ -56,11 +69,27 @@ export function FaqScreen({ proposalReview }: Props) {
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [pendingLangSave, setPendingLangSave] = useState<string[] | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { force?: boolean }) => {
+    const q = query.trim();
+    const key = queryKeys.faq(q);
+    const hit = cacheGet<FaqSnapshot>(key);
+    if (hit) {
+      setItems(hit.data.items);
+      setEntitlement(hit.data.entitlement);
+      setSmartAnswerLanguages(hit.data.smartAnswerLanguages);
+      if (hit.data.catalog.length) {
+        setLanguageCatalog(hit.data.catalog);
+        setSmartAnswerLanguageCatalog(hit.data.catalog);
+      }
+      hasLoadedOnceRef.current = true;
+      setHasLoadedOnce(true);
+      setLoading(false);
+    }
+    if (!opts?.force && hit && isCacheFresh(key, QUERY_TTL.faq)) return;
     if (!hasLoadedOnceRef.current) setLoading(true);
     setError(null);
     try {
-      const data = await listFaq({ q: query.trim() || undefined });
+      const data = await listFaq({ q: q || undefined });
       setItems(data.items);
       setEntitlement(data.entitlement);
       setSmartAnswerLanguages(data.smartAnswerLanguages);
@@ -68,6 +97,12 @@ export function FaqScreen({ proposalReview }: Props) {
         setLanguageCatalog(data.catalog);
         setSmartAnswerLanguageCatalog(data.catalog);
       }
+      cacheSet(key, {
+        items: data.items,
+        entitlement: data.entitlement,
+        smartAnswerLanguages: data.smartAnswerLanguages,
+        catalog: data.catalog,
+      });
       setSelected((prev) => {
         if (!prev) return null;
         return data.items.find((g) => g.qa_group_id === prev.qa_group_id) || null;
@@ -87,6 +122,11 @@ export function FaqScreen({ proposalReview }: Props) {
     }, query ? 280 : 0);
     return () => clearTimeout(handle);
   }, [load, query]);
+
+  async function reloadAfterWrite() {
+    cacheInvalidate(queryKeys.faqAll());
+    await load({ force: true });
+  }
 
   useEffect(() => {
     if (!selected) return;
@@ -111,7 +151,7 @@ export function FaqScreen({ proposalReview }: Props) {
       setMode('list');
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2500);
-      await load();
+      await reloadAfterWrite();
     } catch (err) {
       setError(faqWriteErrorMessage(err, tr));
     } finally {
@@ -127,7 +167,7 @@ export function FaqScreen({ proposalReview }: Props) {
       setSmartAnswerLanguages(languages);
       setLangPickerOpen(false);
       setPendingLangSave(null);
-      await load();
+      await reloadAfterWrite();
     } catch (err) {
       setError(faqWriteErrorMessage(err, tr));
     } finally {
@@ -192,7 +232,7 @@ export function FaqScreen({ proposalReview }: Props) {
       });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
-      await load();
+      await reloadAfterWrite();
     } catch (err) {
       setError(faqWriteErrorMessage(err, tr));
     } finally {
@@ -206,7 +246,7 @@ export function FaqScreen({ proposalReview }: Props) {
     setError(null);
     try {
       await regenerateFaq(selected.qa_group_id);
-      await load();
+      await reloadAfterWrite();
     } catch (err) {
       setError(faqWriteErrorMessage(err, tr));
     } finally {
@@ -221,7 +261,7 @@ export function FaqScreen({ proposalReview }: Props) {
       await archiveFaq(qaGroupId);
       setSelected((prev) => (prev?.qa_group_id === qaGroupId ? null : prev));
       setMode('list');
-      await load();
+      await reloadAfterWrite();
     } catch (err) {
       setError(faqWriteErrorMessage(err, tr));
     } finally {

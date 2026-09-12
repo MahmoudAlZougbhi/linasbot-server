@@ -20,10 +20,7 @@ describe('Requests mobile module', () => {
     assert.match(read('app/moduleNav.ts'), /case 'requests'/);
     const tree = read('app/AppScreenTree.tsx');
     assert.match(tree, /RequestsScreen/);
-    assert.ok(
-      tree.includes("KeepMountedPane key={`requests-${authEpoch}`}"),
-      'missing keep-mounted pane for requests',
-    );
+    assert.match(tree, /isKeepMountedScreen\('requests'\)/);
   });
 
   it('API client hits /api/requests* endpoints without mock success', () => {

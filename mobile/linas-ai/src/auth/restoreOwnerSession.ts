@@ -1,5 +1,6 @@
 export type TokenReader = {
   getAccessToken(): Promise<string | null>;
+  getUser?: () => Promise<unknown>;
 };
 
 export type RestoreOwnerSessionOptions = {
@@ -56,6 +57,9 @@ export async function bootPersistedAuth(
       /* Guest mint failed; guest hook will getOrCreate. Owner session unchanged. */
     }
     return false;
+  }
+  if (store.getUser) {
+    await store.getUser().catch(() => null);
   }
   void rotateGuest().catch(() => {});
   return true;

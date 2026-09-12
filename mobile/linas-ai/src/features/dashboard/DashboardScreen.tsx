@@ -27,14 +27,14 @@ type Props = {
 export function DashboardScreen({ onNavigate, active = true }: Props) {
   const { colors } = useTheme();
   const { tr, language } = useI18n();
-  const { period, setPeriod, resetToDefaultPeriod, state, refreshing, refresh } = useTenantDashboard();
+  const { period, setPeriod, refreshIfStale, state, refreshing, refresh } = useTenantDashboard();
   const queryRange = dashboardQueryRange(period);
   const [copilotExpanded, setCopilotExpanded] = useState(false);
   const credits = useBuyCreditsFlow(refresh);
 
   useEffect(() => {
-    if (active) resetToDefaultPeriod();
-  }, [active, resetToDefaultPeriod]);
+    if (active) void refreshIfStale();
+  }, [active, refreshIfStale]);
 
   return (
     <ScreenChrome

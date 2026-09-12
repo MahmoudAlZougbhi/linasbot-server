@@ -75,7 +75,9 @@ async function authorizeHeaders(headers: Headers): Promise<void> {
   headers.set('Authorization', `Bearer ${access}`);
 }
 
-export async function apiFetch<T>(
+const getInflight = new Map<string, Promise<unknown>>();
+
+async function apiFetchOnce<T>(
   path: string,
   options: RequestInit & { schema: z.ZodType<T>; auth?: boolean },
 ): Promise<T> {
@@ -102,6 +104,26 @@ export async function apiFetch<T>(
     throw new ApiError('Request failed', response.status, body);
   }
   return options.schema.parse(body);
+}
+
+export async function apiFetch<T>(
+  path: string,
+  options: RequestInit & { schema: z.ZodType<T>; auth?: boolean },
+): Promise<T> {
+  const method = String(options.method || 'GET').toUpperCase();
+  const dedupe = options.auth !== false && method === 'GET';
+  if (dedupe) {
+    const existing = getInflight.get(path);
+    if (existing) return existing as Promise<T>;
+  }
+  const pending = apiFetchOnce(path, options);
+  if (dedupe) {
+    getInflight.set(path, pending);
+    void pending.finally(() => {
+      if (getInflight.get(path) === pending) getInflight.delete(path);
+    });
+  }
+  return pending;
 }
 
 /** Multipart upload with bearer auth + refresh. Do not set Content-Type (boundary). */

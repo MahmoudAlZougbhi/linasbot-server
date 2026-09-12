@@ -141,9 +141,9 @@ test('refresh keeps the last snapshot and does not treat missing activity as zer
   assert.match(format, /dashboardPeriodKey/);
   assert.match(hook, /snapshotPeriodKeyRef/);
   assert.match(hook, /hasMatchingSnapshot/);
-  assert.match(hook, /const soft = Boolean\(opts\?\.soft\) && hasMatchingSnapshot/);
+  assert.match(hook, /const soft = Boolean\(opts\?\.soft \|\| cached\) && hasMatchingSnapshot/);
   assert.match(hook, /snapshotPeriodKeyRef\.current = selectedKey/);
-  assert.match(hook, /refresh: \(\) => load\(\{ soft: true \}\)/);
+  assert.match(hook, /refresh: \(\) => load\(\{ soft: true, force: true \}\)/);
   assert.match(hook, /periodRef\.current/);
   assert.match(hook, /requestId !== requestIdRef\.current/);
   assert.match(hook, /\[load, periodKey\]/);
@@ -159,16 +159,15 @@ test('changing the date range clears the snapshot and refetches for the new key'
   assert.match(format, /preset:\$\{period\.id\}/);
   assert.match(hook, /const applyPeriod = useCallback/);
   assert.match(hook, /setPeriod: applyPeriod/);
-  assert.match(hook, /if \(nextKey !== dashboardPeriodKey\(periodRef\.current\)\)/);
+  assert.match(hook, /if \(nextKey === dashboardPeriodKey\(periodRef\.current\)\) return/);
+  assert.match(hook, /paintFromCache/);
   assert.match(hook, /setState\(\{ kind: 'loading' \}\)/);
   assert.match(hook, /periodKey: selectedKey/);
   assert.match(hook, /state\.periodKey !== periodKey/);
   assert.match(hook, /stateForPeriod/);
-  assert.match(hook, /if \(!hasMatchingSnapshot\)/);
   assert.match(hook, /snapshotRef\.current = null/);
   assert.match(hook, /snapshotPeriodKeyRef\.current = null/);
   assert.match(hook, /const periodKey = dashboardPeriodKey\(period\)/);
-  assert.doesNotMatch(hook, /else if \(!snapshotRef\.current\) setState/);
 });
 
 test('date filter i18n covers EN AR FR and drops billing / last 30 days', () => {

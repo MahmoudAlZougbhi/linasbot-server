@@ -29,7 +29,8 @@ import { SmartFollowUpScreen } from '../features/smartFollowUp/SmartFollowUpScre
 import { SimpleResourceScreen } from '../features/shared/SimpleResourceScreen';
 import { UsersScreen } from '../features/users/UsersScreen';
 import { EphemeralRoute } from './EphemeralRoute';
-import { KeepMountedPane } from './KeepMountedPane';
+import { isKeepMountedScreen } from './keepMountedPolicy';
+import { ModulePane } from './ModulePane';
 import type { Screen } from './navigation';
 
 type Props = {
@@ -96,7 +97,7 @@ export function AppScreenTree({
         />
       ) : null}
 
-      <KeepMountedPane key={`chat-${authEpoch}`} active={chatActive}>
+      <ModulePane keep={isKeepMountedScreen('chat')} name="chat" active={chatActive} authEpoch={authEpoch}>
         <ChatScreen
           isAuthenticated={hasAccess}
           onOpenArea={onOpenArea}
@@ -104,20 +105,20 @@ export function AppScreenTree({
           onRequestLogin={() => setScreen({ name: 'login' })}
           onRequestRegister={() => setScreen({ name: 'register' })}
         />
-      </KeepMountedPane>
-      <KeepMountedPane key={`settings-${authEpoch}`} active={name === 'settings'}>
+      </ModulePane>
+      <ModulePane keep={isKeepMountedScreen('settings')} name="settings" active={name === 'settings'} authEpoch={authEpoch}>
         <SettingsScreen
           onLogout={() => void logout()}
           onOpenNotifications={() => setScreen({ name: 'notifications', backTo: 'settings' })}
         />
-      </KeepMountedPane>
-      <KeepMountedPane key={`integrations-${authEpoch}`} active={name === 'integrations'}>
+      </ModulePane>
+      <ModulePane keep={isKeepMountedScreen('integrations')} name="integrations" active={name === 'integrations'} authEpoch={authEpoch}>
         <IntegrationsScreen
           onRequestLogin={() => setScreen({ name: 'login' })}
           onRequestRegister={() => setScreen({ name: 'register' })}
         />
-      </KeepMountedPane>
-      <KeepMountedPane key={`users-${authEpoch}`} active={name === 'users'}>
+      </ModulePane>
+      <ModulePane keep={isKeepMountedScreen('users')} name="users" active={name === 'users'} authEpoch={authEpoch}>
         <UsersScreen
           onRequestLogin={() => {
             setResumeArea('users');
@@ -125,27 +126,30 @@ export function AppScreenTree({
           }}
           onRequestRegister={() => setScreen({ name: 'register' })}
         />
-      </KeepMountedPane>
-      <KeepMountedPane key={`dashboard-${authEpoch}`} active={name === 'dashboard'}>
+      </ModulePane>
+      <ModulePane keep={isKeepMountedScreen('dashboard')} name="dashboard" active={name === 'dashboard'} authEpoch={authEpoch}>
         <DashboardScreen
           active={name === 'dashboard'}
           onNavigate={(target) => setScreen(screenForDashboardTarget(target))}
         />
-      </KeepMountedPane>
-      <KeepMountedPane key={`billing-${authEpoch}`} active={name === 'billing'}>
+      </ModulePane>
+      <ModulePane keep={isKeepMountedScreen('billing')} name="billing" active={name === 'billing'} authEpoch={authEpoch}>
         <BillingScreen
           openChoosePlan={name === 'billing' && 'browsePlans' in screen && screen.browsePlans === true}
         />
-      </KeepMountedPane>
-      <KeepMountedPane key={`livechat-${authEpoch}`} active={name === 'livechat'}>
-        <LiveChatScreen initialOpen={name === 'livechat' ? (screen.open ?? null) : null} />
-      </KeepMountedPane>
-      <KeepMountedPane key={`requests-${authEpoch}`} active={name === 'requests'}>
+      </ModulePane>
+      <ModulePane keep={isKeepMountedScreen('livechat')} name="livechat" active={name === 'livechat'} authEpoch={authEpoch}>
+        <LiveChatScreen
+          active={name === 'livechat'}
+          initialOpen={name === 'livechat' ? (screen.open ?? null) : null}
+        />
+      </ModulePane>
+      <ModulePane keep={isKeepMountedScreen('requests')} name="requests" active={name === 'requests'} authEpoch={authEpoch}>
         <RequestsScreen
           onOpenLiveChat={(target) => setScreen({ name: 'livechat', open: target })}
         />
-      </KeepMountedPane>
-      <KeepMountedPane key={`notifications-${authEpoch}`} active={name === 'notifications'}>
+      </ModulePane>
+      <ModulePane keep={isKeepMountedScreen('notifications')} name="notifications" active={name === 'notifications'} authEpoch={authEpoch}>
         <NotificationsScreen
           isAuthenticated={hasAccess}
           sectionTitle={name === 'notifications' && screen.backTo === 'settings'}
@@ -163,8 +167,8 @@ export function AppScreenTree({
           }}
           onRequestRegister={() => setScreen({ name: 'register' })}
         />
-      </KeepMountedPane>
-      <KeepMountedPane key={`cm-${authEpoch}`} active={name === 'cm'}>
+      </ModulePane>
+      <ModulePane keep={isKeepMountedScreen('cm')} name="cm" active={name === 'cm'} authEpoch={authEpoch}>
         <CmScreen
           onOpenSection={(section) => {
             if (section === 'prices') {
@@ -187,19 +191,19 @@ export function AppScreenTree({
             setScreen({ name: 'chat' });
           }}
         />
-      </KeepMountedPane>
-      <KeepMountedPane key={`faq-${authEpoch}`} active={name === 'faq'}>
+      </ModulePane>
+      <ModulePane keep={isKeepMountedScreen('faq')} name="faq" active={name === 'faq'} authEpoch={authEpoch}>
         <FaqRoute
           onGoChat={() => setScreen({ name: 'chat' })}
           proposalReview={name === 'faq' ? (screen.proposalReview ?? null) : null}
         />
-      </KeepMountedPane>
-      <KeepMountedPane key={`smartFollowUp-${authEpoch}`} active={name === 'smartFollowUp'}>
+      </ModulePane>
+      <ModulePane keep={isKeepMountedScreen('smartFollowUp')} name="smartFollowUp" active={name === 'smartFollowUp'} authEpoch={authEpoch}>
         <SmartFollowUpScreen />
-      </KeepMountedPane>
-      <KeepMountedPane key={`owner-${authEpoch}`} active={name === 'owner'}>
+      </ModulePane>
+      <ModulePane keep={isKeepMountedScreen('owner')} name="owner" active={name === 'owner'} authEpoch={authEpoch}>
         <OwnerPortalScreen />
-      </KeepMountedPane>
+      </ModulePane>
 
       {name === 'products' ? (
         <EphemeralRoute>

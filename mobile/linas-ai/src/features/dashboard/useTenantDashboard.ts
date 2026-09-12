@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { cacheGet, cacheSet, dedupeFetch, isCacheFresh } from '../../cache/queryCache';
+import { queryKeys } from '../../cache/queryKeys';
+import { QUERY_TTL } from '../../cache/queryTtl';
 import {
   classifyDashboardError,
   dashboardErrorMessage,
@@ -34,40 +37,73 @@ function defaultTz(): string {
   }
 }
 
+function paintFromCache(
+  periodKey: string,
+  tz: string,
+): { data: TenantDashboard; stale: boolean } | null {
+  const key = queryKeys.dashboard(periodKey, tz);
+  const hit = cacheGet<TenantDashboard>(key);
+  if (!hit) return null;
+  return { data: hit.data, stale: !isCacheFresh(key, QUERY_TTL.dashboard) };
+}
+
 export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
   const [period, setPeriod] = useState<DashboardPeriodSelection>(
     initialPeriod ?? DEFAULT_DASHBOARD_PERIOD,
   );
-  const [state, setState] = useState<DashboardLoadState>({ kind: 'loading' });
+  const [tz] = useState(defaultTz);
+  const periodKey = dashboardPeriodKey(period);
+  const seeded = paintFromCache(periodKey, tz);
+  const [state, setState] = useState<DashboardLoadState>(() =>
+    seeded
+      ? {
+          kind: 'ready',
+          data: seeded.data,
+          periodKey,
+          stale: seeded.stale,
+          refreshError: null,
+          refreshErrorCode: null,
+        }
+      : { kind: 'loading' },
+  );
   const [refreshing, setRefreshing] = useState(false);
-  const snapshotRef = useRef<TenantDashboard | null>(null);
-  const snapshotPeriodKeyRef = useRef<string | null>(null);
+  const snapshotRef = useRef<TenantDashboard | null>(seeded?.data ?? null);
+  const snapshotPeriodKeyRef = useRef<string | null>(seeded ? periodKey : null);
   const requestIdRef = useRef(0);
   const periodRef = useRef(period);
   periodRef.current = period;
-  const periodKey = dashboardPeriodKey(period);
-  const [tz] = useState(defaultTz);
 
   const load = useCallback(
-    async (opts?: { soft?: boolean }) => {
+    async (opts?: { soft?: boolean; force?: boolean }) => {
       const requestId = ++requestIdRef.current;
       const selected = periodRef.current;
       const selectedKey = dashboardPeriodKey(selected);
+      const key = queryKeys.dashboard(selectedKey, tz);
+      const cached = cacheGet<TenantDashboard>(key);
+      if (cached) {
+        snapshotRef.current = cached.data;
+        snapshotPeriodKeyRef.current = selectedKey;
+        setState({
+          kind: 'ready',
+          data: cached.data,
+          periodKey: selectedKey,
+          stale: !isCacheFresh(key, QUERY_TTL.dashboard),
+          refreshError: null,
+          refreshErrorCode: null,
+        });
+      }
       const hasMatchingSnapshot =
         snapshotRef.current != null && snapshotPeriodKeyRef.current === selectedKey;
-      const soft = Boolean(opts?.soft) && hasMatchingSnapshot;
-      if (soft) {
-        setRefreshing(true);
-      } else {
-        if (!hasMatchingSnapshot) {
-          snapshotRef.current = null;
-          snapshotPeriodKeyRef.current = null;
-        }
-        setState({ kind: 'loading' });
+      if (!opts?.force && hasMatchingSnapshot && isCacheFresh(key, QUERY_TTL.dashboard)) {
+        return;
       }
+      const soft = Boolean(opts?.soft || cached) && hasMatchingSnapshot;
+      if (soft) setRefreshing(true);
+      else if (!hasMatchingSnapshot) setState({ kind: 'loading' });
       try {
-        const data = await fetchTenantDashboard(selected, tz);
+        const data = await dedupeFetch(key, () => fetchTenantDashboard(selected, tz));
         if (requestId !== requestIdRef.current) return;
+        cacheSet(key, data);
         snapshotRef.current = data;
         snapshotPeriodKeyRef.current = selectedKey;
         setState({
@@ -106,18 +142,31 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
   );
 
   useEffect(() => {
-    void load();
+    void load({ soft: true });
   }, [load, periodKey]);
 
   const applyPeriod = useCallback((next: DashboardPeriodSelection) => {
     const nextKey = dashboardPeriodKey(next);
-    if (nextKey !== dashboardPeriodKey(periodRef.current)) {
+    if (nextKey === dashboardPeriodKey(periodRef.current)) return;
+    const painted = paintFromCache(nextKey, tz);
+    if (painted) {
+      snapshotRef.current = painted.data;
+      snapshotPeriodKeyRef.current = nextKey;
+      setState({
+        kind: 'ready',
+        data: painted.data,
+        periodKey: nextKey,
+        stale: painted.stale,
+        refreshError: null,
+        refreshErrorCode: null,
+      });
+    } else {
       snapshotRef.current = null;
       snapshotPeriodKeyRef.current = null;
       setState({ kind: 'loading' });
     }
     setPeriod(next);
-  }, []);
+  }, [tz]);
 
   const resetToDefaultPeriod = useCallback(() => {
     if (isAllTimePeriod(periodRef.current)) return;
@@ -131,10 +180,11 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
     period,
     setPeriod: applyPeriod,
     resetToDefaultPeriod,
+    refreshIfStale: () => load({ soft: true }),
     state: stateForPeriod,
     refreshing,
-    refresh: () => load({ soft: true }),
-    reload: () => load({ soft: false }),
+    refresh: () => load({ soft: true, force: true }),
+    reload: () => load({ soft: false, force: true }),
     tz,
   };
 }

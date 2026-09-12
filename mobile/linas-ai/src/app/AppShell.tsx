@@ -7,6 +7,8 @@ import { onAuthCleared } from '../api/client';
 import { rotateGuestSessionId, rotateGuestSessionOnAppLaunch } from '../auth/guestSession';
 import { bootPersistedAuth } from '../auth/restoreOwnerSession';
 import { tokenStore } from '../auth/tokenStore';
+import { scheduleIdlePrefetch } from '../cache/idlePrefetch';
+import '../cache/bindSessionCaches';
 import { API_BASE } from '../config';
 import { AppUpdateBanner } from '../features/appVersion/AppUpdateBanner';
 import { AppUpdateGateScreen } from '../features/appVersion/AppUpdateGateScreen';
@@ -24,8 +26,9 @@ import { buildModuleNavValue, makeChatNavActions, useAreaFocusNonce } from './mo
 import { parseIntegrationsDeepLink, parseLiveChatDeepLink, type Screen } from './navigation';
 
 /**
- * Root navigation shell. Module screens stay mounted after first visit so
- * leave→reopen does not remount/refetch; auth epoch remounts on login/logout.
+ * Root navigation shell. Chat, Live Chat, Dashboard, and CM stay mounted after
+ * first visit (hidden). Other tools unmount and paint from the query cache.
+ * Auth epoch remounts keep-mounted panes on login/logout.
  */
 export function AppShell() {
   const { resolved } = useTheme();
@@ -63,6 +66,16 @@ export function AppShell() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!bootDone || !hasAccess) return;
+    const ac = new AbortController();
+    const cancelIdle = scheduleIdlePrefetch(ac.signal);
+    return () => {
+      ac.abort();
+      cancelIdle();
+    };
+  }, [bootDone, hasAccess, authEpoch]);
 
   useEffect(() => {
     return onAuthCleared(() => {
@@ -106,7 +119,6 @@ export function AppShell() {
   }, [bootDone]);
 
   function openAreaAuthed(area: ControlArea) {
-    bumpAreaFocus();
     if (subGate.blocked && area !== 'subscription') {
       setScreen({ name: 'chat' });
       return;
@@ -238,17 +250,14 @@ export function AppShell() {
       return;
     }
     if (area === 'integrations') {
-      bumpAreaFocus();
       setScreen({ name: 'integrations' });
       return;
     }
     if (area === 'users') {
-      bumpAreaFocus();
       setScreen({ name: 'users' });
       return;
     }
     if (area === 'notifications') {
-      bumpAreaFocus();
       setScreen({ name: 'notifications', backTo: 'chat' });
       return;
     }

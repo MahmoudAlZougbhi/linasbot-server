@@ -41,7 +41,7 @@ test('Dashboard rebuild uses typed mobile dashboard API', () => {
   assert.match(screen, /credits\.open && !credits\.messageBillingActive/);
   assert.match(screen, /credits\.setOpen\(true\)/);
   assert.match(screen, /headerRight/);
-  assert.match(screen, /resetToDefaultPeriod/);
+  assert.match(screen, /refreshIfStale/);
   assert.match(read('app/AppScreenTree.tsx'), /active=\{name === 'dashboard'\}/);
   assert.doesNotMatch(screen, /stackedHeader/);
   assert.doesNotMatch(screen, /isPlatformOwner|Platform metrics|Owner only|Owner access only/);
