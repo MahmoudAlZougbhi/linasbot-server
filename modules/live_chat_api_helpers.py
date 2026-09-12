@@ -52,7 +52,8 @@ def session_allows_live_chat_sse_event(session: Any, event: dict[str, Any] | Non
     event_type = str(rec.get("type") or "")
     if event_type in {"heartbeat", "connected"}:
         return True
-    data = rec.get("data") if isinstance(rec.get("data"), dict) else {}
+    raw_data = rec.get("data")
+    data: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
     tenant = str(data.get("tenant_id") or "").strip().lower()
     session_tenant = str(getattr(session, "tenant_id", "") or "").strip().lower()
     if not tenant or not session_tenant or tenant != session_tenant:

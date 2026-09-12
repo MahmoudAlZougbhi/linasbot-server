@@ -65,6 +65,7 @@ def test_sse_filter_allows_heartbeat_and_connected() -> None:
 
 def test_sse_filter_drops_missing_or_mismatched_tenant() -> None:
     session = SimpleNamespace(tenant_id="linas", role="admin", permissions=None)
+    assert session_allows_live_chat_sse_event(session, {"type": "new_message", "data": None}) is False
     assert session_allows_live_chat_sse_event(session, _event("new_message", {})) is False
     assert (
         session_allows_live_chat_sse_event(

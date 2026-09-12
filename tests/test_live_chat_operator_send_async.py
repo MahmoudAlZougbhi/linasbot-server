@@ -231,3 +231,70 @@ def test_whatsapp_enqueue_skipped_in_sync_mode(monkeypatch: pytest.MonkeyPatch) 
         )
         is None
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("user_id", "channel"),
+    (
+        ("facebook:page:psid", "facebook"),
+        ("tiktok:open:id", "tiktok"),
+    ),
+)
+async def test_social_queued_send_does_not_wait_for_provider(user_id: str, channel: str) -> None:
+    enqueue = MagicMock(
+        return_value={"success": True, "queued": True, "delivered": False, "delivery_status": "sending"}
+    )
+    slow = AsyncMock(side_effect=AssertionError("provider must not run on HTTP path"))
+    extra = [
+        patch("services.live_chat_operator_queue.live_chat_durable_mode", lambda: "enqueue"),
+        patch("services.live_chat_operator_queue.enqueue_live_chat_operator_text", enqueue),
+    ]
+    if channel == "facebook":
+        extra.append(patch("services.requests.delivery.deliver_meta_dm", slow))
+    else:
+        extra.append(patch("services.live_chat_tiktok_operator.deliver_live_chat_tiktok_operator_text", slow))
+    with ExitStack() as stack:
+        for cm in _send_patches(*extra, user_id=user_id):
+            stack.enter_context(cm)
+        started = time.monotonic()
+        result = await live_chat_service.send_operator_message(
+            conversation_id=f"c-{channel}",
+            user_id=user_id,
+            message="hello tester",
+            operator_id="op1",
+            adapter=MagicMock(),
+            tenant_id="linas",
+            idempotency_key=f"local-{channel}",
+        )
+        elapsed = time.monotonic() - started
+    assert elapsed < 1.5
+    assert result.get("success") is True
+    assert result.get("queued") is True
+    assert result.get("delivered") is False
+    enqueue.assert_called_once()
+    slow.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_notify_skips_reconciliation_and_publishes_sent(monkeypatch: pytest.MonkeyPatch) -> None:
+    published: list[tuple[str, str]] = []
+
+    async def fake_notify(payload: dict, delivery_status: str, **_k: object) -> None:
+        published.append((str(payload.get("live_chat_user_id")), delivery_status))
+
+    monkeypatch.setattr(
+        "services.live_chat_operator_delivery_status.notify_live_chat_operator_job",
+        fake_notify,
+    )
+    from services.omnichannel.deliver import _notify_live_chat
+
+    payload = {"live_chat_user_id": "instagram:1"}
+    await _notify_live_chat(payload, "reconciliation_required")
+    await _notify_live_chat(payload, "rate_limited")
+    await _notify_live_chat(payload, "delivered")
+    await _notify_live_chat(payload, "dead_letter", error="meta_400")
+    assert published == [
+        ("instagram:1", "sent"),
+        ("instagram:1", "failed"),
+    ]

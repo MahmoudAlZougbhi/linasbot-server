@@ -190,6 +190,28 @@ async def test_operator_takeover_suppresses_racing_ai(omni_db, durable_jobs, fak
     assert sends["op"] == 1
 
 
+def test_operator_duplicate_idempotency_does_not_enqueue_twice(omni_db, durable_jobs):
+    kwargs = dict(
+        tenant_id="tenant-a",
+        channel="instagram",
+        surface="operator",
+        account_id="acct-1",
+        conversation_key="tenant-a:instagram:u1",
+        text="human reply",
+        idempotency_key="client-msg-1",
+        live_chat={"user_id": "instagram:1", "conversation_id": "c1", "client_message_id": "client-msg-1"},
+    )
+    first = enqueue_operator_reply(**kwargs)
+    second = enqueue_operator_reply(**kwargs)
+    assert first["queued"] is True
+    assert first["delivery_status"] == "sending"
+    assert second["duplicate"] is True
+    assert second["queued"] is True
+    assert second["delivered"] is False
+    assert second["delivery_status"] == "sending"
+    assert len([job for job in durable_jobs if job.job_type == "omni_deliver"]) == 1
+
+
 @pytest.mark.asyncio
 async def test_permanent_400_does_not_retry_forever(omni_db, fake_limiter, monkeypatch):
     with whatsapp_session(require=True) as db:
