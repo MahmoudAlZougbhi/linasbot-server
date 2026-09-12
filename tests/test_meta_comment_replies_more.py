@@ -197,7 +197,15 @@ class MetaCommentProcessorTests(unittest.IsolatedAsyncioTestCase):
         event = parse_meta_comment_events(_facebook_comment_payload(), channel="facebook", page_id="111")[0]
         resolved = ResolvedMetaCommentEvent(event=event, settings=_settings(binding), binding=binding)
 
+        async def _no_graph(event, **_kwargs):
+            return dict(event)
+
         with (
+            mock.patch(
+                "services.meta_comment_post_context.enrich_comment_event_post",
+                new_callable=mock.AsyncMock,
+                side_effect=_no_graph,
+            ),
             mock.patch(
                 "services.meta_comment_replies._comment_has_page_reply",
                 new_callable=mock.AsyncMock,

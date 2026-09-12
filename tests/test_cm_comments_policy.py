@@ -158,3 +158,24 @@ def test_selected_posts_scope_without_post_ids() -> None:
     hit = evaluate_comment_rules(section, comment_text="price please", post_id="IG_1")
     assert hit.matched is True
     assert hit.action == "ignore"
+
+
+def test_facebook_compound_post_id_matches_selected_page_post() -> None:
+    from services.cm.schemas import CommentRuleSelectedPost
+
+    section = CommentsSection(
+        rules=[
+            CommentRule(
+                id="r8",
+                keywords=["price"],
+                action="ignore",
+                scope="specific_post",
+                selected_posts=[CommentRuleSelectedPost(id="111_222", platform="facebook")],
+            )
+        ]
+    )
+    nested = evaluate_comment_rules(section, comment_text="price please", post_id="111_222_999")
+    assert nested.matched is True
+    assert nested.action == "ignore"
+    miss = evaluate_comment_rules(section, comment_text="price please", post_id="111_888")
+    assert miss.matched is False

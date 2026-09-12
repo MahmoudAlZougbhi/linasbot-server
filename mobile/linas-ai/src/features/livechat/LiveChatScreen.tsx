@@ -137,7 +137,11 @@ export function LiveChatScreen({ initialOpen = null, active = true }: Props) {
 
   if (selected) {
     return (
-      <ScreenChrome title={chatTitle(selected)} subtitle={channelLabel(selected)}>
+      <ScreenChrome
+        title={chatTitle(selected)}
+        subtitle={channelLabel(selected)}
+        onBack={() => setSelected(null)}
+      >
         <LiveChatThread
           chat={selected}
           onChatUpdated={inbox.reloadQuiet}

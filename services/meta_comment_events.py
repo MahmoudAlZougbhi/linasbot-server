@@ -15,6 +15,7 @@ from services.meta_app_registry import (
     MetaBindingCredential,
     get_meta_app_registry,
 )
+from services.meta_comment_post_ids import facebook_post_id_from_feed_value
 from services.meta_graph_routing import build_messaging_settings_for_binding
 from services.meta_instagram_login_capabilities import (
     binding_ready_for_comments,
@@ -90,7 +91,7 @@ def _parse_facebook_comment_changes(
             if verb not in {"add", "edited"}:
                 continue
             comment_id = str(value.get("comment_id") or value.get("id") or "").strip()
-            post_id = str(value.get("post_id") or value.get("parent_id") or "").strip()
+            post_id = facebook_post_id_from_feed_value(value)
             parent_id = str(value.get("parent_id") or "").strip()
             from_raw = value.get("from")
             from_dict = from_raw if isinstance(from_raw, dict) else {}
