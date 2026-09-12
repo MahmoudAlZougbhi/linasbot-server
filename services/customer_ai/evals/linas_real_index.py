@@ -21,11 +21,14 @@ REPORT_PATH = durable_report_path("linas_real_index_latest.json")
 LAB_TENANTS = frozenset({"linas-lab", "linas-lab-b"})
 
 
-def _gate(status: str, detail: str = "", **extra: Any) -> dict[str, Any]:
-    extra.pop("status", None)
-    extra.pop("detail", None)
-    row = {"status": status, "detail": detail}
-    row.update(extra)
+def _gate(*parts: Any, **extra: Any) -> dict[str, Any]:
+    # Do not name status/detail parameters: retrieval payloads also carry those
+    # keys, and `_gate("PASS", "...", **retrieval)` would TypeError at the call.
+    payload = dict(extra)
+    status = payload.pop("status", parts[0] if parts else "FAIL")
+    detail = payload.pop("detail", parts[1] if len(parts) > 1 else "")
+    row: dict[str, Any] = {"status": str(status or "FAIL"), "detail": str(detail or "")}
+    row.update(payload)
     return row
 
 
