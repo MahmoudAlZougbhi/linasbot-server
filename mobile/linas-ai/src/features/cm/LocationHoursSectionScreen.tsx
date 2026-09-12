@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Alert, Text } from 'react-native';
 
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { asRecordList, newId, primaryLabel } from './cmApi';
@@ -105,7 +105,7 @@ export function LocationHoursSectionScreen({ proposalReview, onBack }: Props) {
       subtitle={!selected ? tr('aiSetupLocSubtitle') : undefined}
       onBack={handleBack}
     >
-      {draft.loading ? <LinasLoadingIndicator variant="screen" /> : null}
+      {draft.loading ? <ScreenSkeleton variant="list" /> : null}
       {draft.error ? <Text style={cmFormStyles.error}>{draft.error}</Text> : null}
       {draft.conflict ? <Text style={cmFormStyles.warn}>{draft.conflict}</Text> : null}
       {!draft.loading && !selected ? (

@@ -39,7 +39,7 @@ describe('AppModal chrome', () => {
       'features/settings/SettingsChrome.tsx',
       'features/requests/RequestFilterSheet.tsx',
       'features/dashboard/sections/DashboardDateRangeSheet.tsx',
-      'features/users/UsersScreen.tsx',
+      'features/users/UsersScreenOverlays.tsx',
       'features/chat/ComposerPlusMenu.tsx',
     ];
     for (const file of offenders) {

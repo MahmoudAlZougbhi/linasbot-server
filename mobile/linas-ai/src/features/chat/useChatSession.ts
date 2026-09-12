@@ -58,7 +58,7 @@ export function useChatSession(enabled = true) {
   const [title, setTitle] = useState('Linas AI');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(enabled);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [sending, setSending] = useState(false);
@@ -230,13 +230,22 @@ export function useChatSession(enabled = true) {
     setPendingConfirm(null);
     setProposedPatch(null);
     setSeedTypewriterMessageId(null);
-    const created = await createOwnerConversation();
-    if (requestId !== openRequestIdRef.current) return;
-    setConversationId(created.conversation.id);
-    setTitle(created.conversation.title);
-    setMessages(created.conversation.messages);
-    setHasMore(false);
-    setSeedTypewriterMessageId(seedTypewriterId(created.conversation.messages));
+    setLoading(true);
+    setError(null);
+    try {
+      const created = await createOwnerConversation();
+      if (requestId !== openRequestIdRef.current) return;
+      setConversationId(created.conversation.id);
+      setTitle(created.conversation.title);
+      setMessages(created.conversation.messages);
+      setHasMore(false);
+      setSeedTypewriterMessageId(seedTypewriterId(created.conversation.messages));
+    } catch {
+      if (requestId !== openRequestIdRef.current) return;
+      setError('retry');
+    } finally {
+      if (requestId === openRequestIdRef.current) setLoading(false);
+    }
   }
 
   const loadOlder = useCallback(async () => {

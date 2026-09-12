@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '../../../components/EmptyState';
-import { LinasLoadingIndicator } from '../../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../../components/ScreenSkeleton';
 import type { StringKey } from '../../../i18n';
 import { fonts, useTheme } from '../../../theme';
 import { CommentsMediaGrid } from '../../livechat/comments/CommentsMediaGrid';
@@ -101,7 +101,7 @@ export function CommentRulePostsPicker({ selected, onChange, tr }: Props) {
             {error && status !== 'disconnected' ? (
               <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>
             ) : null}
-            {status === 'loading' && posts.length === 0 ? <LinasLoadingIndicator variant="inline" /> : null}
+            {status === 'loading' && posts.length === 0 ? <ScreenSkeleton variant="cards" rows={4} /> : null}
           </View>
         }
         empty={status === 'loading' ? null : <EmptyState title={emptyTitle} body={tr('liveCommentsEmptyBody')} />}

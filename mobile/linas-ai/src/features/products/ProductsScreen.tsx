@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon, feather } from '../../components/AppIcon';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { isDailyEditLimitError } from '../../api/client';
 import { cacheGet, cacheSet, dedupeFetch, isCacheFresh } from '../../cache/queryCache';
 import { queryKeys } from '../../cache/queryKeys';
@@ -52,7 +52,7 @@ export function ProductsScreen({ onBack, onAdd, onImport, onOpenDetails }: Props
       setProducts(res.products);
       setError(null);
     } catch {
-      if (!hit) setError(tr('productsLoadError'));
+      setError(tr('productsLoadError'));
     } finally {
       setLoading(false);
       setHasLoadedOnce(true);
@@ -106,14 +106,15 @@ export function ProductsScreen({ onBack, onAdd, onImport, onOpenDetails }: Props
         </Pressable>
       }
     >
-      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" style={styles.loader} /> : null}
-      {hasLoadedOnce && error ? <Text style={styles.error}>{error}</Text> : null}
-      {hasLoadedOnce ? (
-        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-          <View style={styles.hero}>
-            <Text style={styles.title}>{tr('productsTitle')}</Text>
-            <Text style={styles.subtitle}>{tr('productsSubtitle')}</Text>
-          </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <Text style={styles.title}>{tr('productsTitle')}</Text>
+          <Text style={styles.subtitle}>{tr('productsSubtitle')}</Text>
+        </View>
+        {!hasLoadedOnce && products.length === 0 ? (
+          <ScreenSkeleton variant="list" />
+        ) : (
           <ProductListView
             items={products}
             query={query}
@@ -125,14 +126,13 @@ export function ProductsScreen({ onBack, onAdd, onImport, onOpenDetails }: Props
             togglingId={togglingId}
             tr={tr}
           />
-        </ScrollView>
-      ) : null}
+        )}
+      </ScrollView>
     </ScreenChrome>
   );
 }
 
 const styles = StyleSheet.create({
-  loader: { marginVertical: spacing.sm },
   list: { flexGrow: 1, paddingBottom: spacing.xl },
   hero: { gap: 6, marginBottom: 14 },
   title: {

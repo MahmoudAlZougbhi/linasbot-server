@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { ApiError, apiFetch } from '../../api/client';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { StringKey } from '../../i18n/locales/en';
 import { colors, fonts, spacing } from '../../theme';
@@ -253,8 +253,9 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     >
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {showInitialLoader ? <LinasLoadingIndicator variant="screen" /> : null}
-      {!showInitialLoader ? (
+      {showInitialLoader ? (
+        <ScreenSkeleton variant="cards" />
+      ) : (
       <ScrollView contentContainerStyle={styles.list}>
         {metaRows.map((row) => (
           <IntegrationChannelCard
@@ -316,7 +317,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
           />
         ) : null}
       </ScrollView>
-      ) : null}
+      )}
 
       <IntegrationAccountSheet
         target={sheet}

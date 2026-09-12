@@ -171,6 +171,6 @@ test('composer and live chat wire the same helper', () => {
   assert.match(composer, /draftEmpty \? idleAlign/);
   assert.match(composer, /isRtl \? 'right' : 'left'/);
   assert.match(live, /textDirectionStyle\(body\)/);
-  assert.match(thinking, /textDirectionStyle\(label\)/);
+  assert.match(thinking, /aiMessageColStyle\(label\)/);
   assert.match(thinking, /styles\.rowAi/);
 });

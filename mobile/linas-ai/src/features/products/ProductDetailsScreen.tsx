@@ -12,7 +12,7 @@ import {
 
 import { isDailyEditLimitError } from '../../api/client';
 import { AppIcon, feather } from '../../components/AppIcon';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts } from '../../theme';
 import { confirmAiSetupDelete } from '../cm/confirmAiSetupDelete';
@@ -90,7 +90,7 @@ export function ProductDetailsScreen({ productId, onBack, onEdit, onDeleted }: P
   if (loading || !product) {
     return (
       <ScreenChrome title={tr('productsDetailsTitle')} onBack={onBack} canvasColor={PR_CANVAS}>
-        {loading ? <LinasLoadingIndicator variant="screen" /> : null}
+        {loading ? <ScreenSkeleton variant="form" /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </ScreenChrome>
     );

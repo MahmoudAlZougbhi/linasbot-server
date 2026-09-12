@@ -56,6 +56,43 @@ def _build_saved_message_payload(text: Any, metadata: dict | None, channel: str,
     return payload
 
 
+def _sse_new_message_payload(
+    *,
+    canonical_user_id: str,
+    conversation_id: str,
+    role: str,
+    text: str,
+    customer_info: dict,
+    message_data: dict,
+    unread_count: int | None = None,
+) -> dict[str, Any]:
+    """Operator inbox fields for WhatsApp-style list updates (name, preview, unread)."""
+    from services.live_chat_service_common import _live_chat_display_name
+
+    info = customer_info or {}
+    dash_msg = _message_to_dashboard_format(message_data)
+    preview = text[:100] + "..." if len(text) > 100 else text
+    name = _live_chat_display_name(
+        info.get("name"),
+        info.get("display_name"),
+        info.get("profile_name"),
+        info.get("phone_full"),
+        fallback="",
+    )
+    payload: dict[str, Any] = {
+        "user_id": canonical_user_id,
+        "conversation_id": conversation_id,
+        "role": role,
+        "text": preview,
+        "phone": info.get("phone_full"),
+        "user_name": name or None,
+        "message": dash_msg,
+    }
+    if unread_count is not None:
+        payload["unread_count"] = int(unread_count)
+    return payload
+
+
 def _broadcast_saved_message_sse(
     *,
     canonical_user_id: str,
@@ -64,29 +101,26 @@ def _broadcast_saved_message_sse(
     text: str,
     customer_info: dict,
     message_data: dict,
+    unread_count: int | None = None,
 ) -> None:
     try:
         from modules.live_chat_api import broadcast_sse_event
 
-        dash_msg = _message_to_dashboard_format(message_data)
+        payload = _sse_new_message_payload(
+            canonical_user_id=canonical_user_id,
+            conversation_id=conversation_id,
+            role=role,
+            text=text,
+            customer_info=customer_info,
+            message_data=message_data,
+            unread_count=unread_count,
+        )
         _log.info(
             "live_chat save_message broadcast conv_id=%s role=%s msg_id=%s",
             conversation_id,
             role,
-            dash_msg.get("message_id", ""),
+            (payload.get("message") or {}).get("message_id", ""),
         )
-        asyncio.create_task(
-            broadcast_sse_event(
-                "new_message",
-                {
-                    "user_id": canonical_user_id,
-                    "conversation_id": conversation_id,
-                    "role": role,
-                    "text": text[:100] + "..." if len(text) > 100 else text,
-                    "phone": customer_info.get("phone_full"),
-                    "message": dash_msg,
-                },
-            )
-        )
+        asyncio.create_task(broadcast_sse_event("new_message", payload))
     except Exception as sse_err:
         _log.exception("SSE broadcast error after save: %s", sse_err)

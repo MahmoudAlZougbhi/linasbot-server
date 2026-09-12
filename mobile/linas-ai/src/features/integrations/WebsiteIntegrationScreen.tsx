@@ -12,7 +12,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 
 import { ApiError } from '../../api/client';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { StringKey } from '../../i18n';
 import { colors, fonts, radii, spacing } from '../../theme';
@@ -196,7 +196,7 @@ export function WebsiteIntegrationScreen({ onBack, onError, onNotice }: Props) {
 
   return (
     <ScreenChrome title={tr('platformWeb')} subtitle={tr('webChatSubtitle')} onBack={onBack}>
-      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" /> : null}
+      {loading && !hasLoadedOnce ? <ScreenSkeleton variant="form" /> : null}
       {hasLoadedOnce ? (
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {planBlocked ? <Text style={styles.warn}>{tr('webChatPlanRequired')}</Text> : null}

@@ -6,7 +6,6 @@ import {
 } from 'react-native';
 
 import { GradientBackground } from '../../components/GradientBackground';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import type { ControlArea } from '../control/controlAreas';
 import type { CmProposalReview } from '../cm/cmProposalReview';
 import { BuyCreditsSheet } from '../billing/BuyCreditsSheet';
@@ -97,12 +96,7 @@ export function ChatScreen({
           }}
         />
 
-        {c.loading && c.messages.length === 0 ? (
-          <View style={styles.center} accessibilityLabel="Loading conversation">
-            <LinasLoadingIndicator variant="screen" />
-          </View>
-        ) : (
-          <ChatMessageList
+        <ChatMessageList
             listRef={c.listRef}
             listKey={c.listKey}
             messages={c.messages}
@@ -111,7 +105,7 @@ export function ChatScreen({
             scrollToBottom={c.scrollToBottom}
             followBottomIfStuck={c.followBottomIfStuck}
             imagePreviewByContent={c.imagePreviewByContent}
-            thinking={c.turn.thinking || (!isAuthenticated && c.guest.sending)}
+            thinking={c.turn.thinking || c.awaitingGreeting || (!isAuthenticated && c.guest.sending)}
             thinkingLabel={c.tr('chatThinking')}
             statusRows={c.turn.statusRows}
             liveText={c.turn.liveText}
@@ -161,8 +155,7 @@ export function ChatScreen({
             }}
             seedTypewriterMessageId={isAuthenticated ? c.owner.seedTypewriterMessageId : null}
             onSeedTypewriterDone={c.owner.clearSeedTypewriter}
-          />
-        )}
+        />
 
         {isAuthenticated ? (
           <ChoiceChips

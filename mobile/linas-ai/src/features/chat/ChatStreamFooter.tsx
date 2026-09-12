@@ -37,7 +37,7 @@ export function ChatStreamFooter({
   onOpenCm,
   onRetryLast,
 }: Props) {
-  // Same live turn slot: Thinking… until first delta, then one accumulating bubble.
+  // Same live turn slot: typing dots until first delta, then one accumulating bubble.
   const showThinking = thinking && !liveText;
 
   return (

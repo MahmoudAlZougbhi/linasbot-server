@@ -96,6 +96,7 @@ describe('mobile performance pass contracts', () => {
     assert.match(read('cache/bindSessionCaches.ts'), /clearAuthImageCache/);
     assert.match(read('cache/bindSessionCaches.ts'), /clearCmDraftCache/);
     assert.match(read('cache/bindSessionCaches.ts'), /clearDrawerSessionCache/);
+    assert.match(read('cache/bindSessionCaches.ts'), /clearQueryPersist/);
   });
 
   it('swr screens paint cache and do not blank on remount', () => {
@@ -111,6 +112,7 @@ describe('mobile performance pass contracts', () => {
     assert.match(read('cache/idlePrefetch.ts'), /prefetchLiveChatInbox/);
     assert.match(read('cache/idlePrefetch.ts'), /prefetchCmHub/);
     assert.match(read('cache/idlePrefetch.ts'), /prefetchIntegrations/);
+    assert.match(read('cache/idlePrefetch.ts'), /prefetchProducts/);
     assert.doesNotMatch(read('cache/idlePrefetch.ts'), /prefetchUsers/);
     assert.match(read('app/ModulePane.tsx'), /if \(!active\) return null/);
     assert.match(read('app/KeepMountedPane.tsx'), /const \[mounted, setMounted\] = useState\(active\)/);

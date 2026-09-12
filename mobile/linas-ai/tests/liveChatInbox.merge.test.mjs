@@ -281,7 +281,8 @@ test('thread hook ignores stale polls and sends without locking the composer', (
   assert.match(hook, /reloadQuiet/);
   assert.doesNotMatch(hook, /setInterval/);
   assert.doesNotMatch(hook, /sendingRef\.current/);
-  assert.match(thread, /thread\.loading && !thread\.messages\.length/);
+  assert.doesNotMatch(thread, /LinasLoadingIndicator variant="screen"/);
+  assert.match(thread, /<FlatList/);
   assert.match(thread, /busy=\{thread\.busy\}/);
   assert.doesNotMatch(thread, /thread\.busy \|\| \(thread\.loading && !thread\.messages\.length\)/);
   assert.match(hook, /previewMessagesFromInbox/);
@@ -289,7 +290,8 @@ test('thread hook ignores stale polls and sends without locking the composer', (
   const screen = read('features/livechat/LiveChatScreen.tsx');
   assert.match(inboxHook, /mode === 'event'/);
   assert.match(inboxHook, /reloadFromEvent/);
-  assert.match(screen, /inbox.reloadFromEvent\(\)/);
+  assert.match(screen, /inbox.applyNewMessage/);
+  assert.match(screen, /event.type === 'new_conversation'/);
   assert.doesNotMatch(thread, /thread\.sending/);
 });
 
@@ -326,9 +328,28 @@ test('applyInboxNewMessage bumps the row to the top and unread unless open', () 
   const open = applyInboxNewMessage(prev, data, { openConversationId: '2' });
   assert.equal(open.chats[0].unread_count, 0);
 
-  const unknown = applyInboxNewMessage(prev, { conversation_id: 'missing', user_id: 'x' });
-  assert.equal(unknown.matched, false);
-  assert.equal(unknown.chats, prev);
+  const unknown = applyInboxNewMessage(prev, { conversation_id: 'missing', user_id: 'x', text: 'new', role: 'user' });
+  assert.equal(unknown.matched, true);
+  assert.equal(unknown.chats[0].conversation_id, 'missing');
+  assert.equal(unknown.chats[0].last_message_text, 'new');
+  assert.equal(unknown.chats[0].unread_count, 1);
+});
+
+test('applyInboxNewMessage matches by user_id and keeps the customer name', () => {
+  const prev = [{ conversation_id: 'conv-1', user_id: '+96170123456', user_name: 'Sara', unread_count: 0 }];
+  const data = {
+    conversation_id: 'conv-other-id',
+    user_id: '+96170123456',
+    user_name: 'Sara K.',
+    unread_count: 3,
+    message: { content: 'كم السعر؟', text: 'كم السعر؟', is_user: true, timestamp: '2026-09-12T16:00:00.000Z' },
+  };
+  const next = applyInboxNewMessage(prev, data);
+  assert.equal(next.matched, true);
+  assert.equal(next.chats[0].conversation_id, 'conv-1');
+  assert.equal(next.chats[0].user_name, 'Sara K.');
+  assert.equal(next.chats[0].last_message_text, 'كم السعر؟');
+  assert.equal(next.chats[0].unread_count, 3);
 });
 
 test('inbox preview seeds a thread bubble without waiting on history', () => {

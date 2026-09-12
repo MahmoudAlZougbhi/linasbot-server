@@ -35,6 +35,8 @@ test('inbox is a flat list with channel chips and no section headers', () => {
   assert.match(inbox, /styles\.toolbar/);
   assert.match(inbox, /styles\.listWrap/);
   assert.doesNotMatch(inbox, /if \(loading\) \{/);
+  assert.match(inbox, /ScreenSkeleton variant="inbox"/);
+  assert.doesNotMatch(inbox, /variant="screen"/);
   const chips = read('features/livechat/InboxChannelChips.tsx');
   assert.match(chips, /flexGrow:\s*0/);
   assert.match(chips, /height:\s*CHIP_ROW_H/);

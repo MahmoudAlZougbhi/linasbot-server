@@ -52,8 +52,9 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     async (mode: 'initial' | 'poll' = 'initial') => {
       if (!userId || !conversationId) return;
       const requestId = ++requestIdRef.current;
+      const seeded = previewMessagesFromInbox(chatRef.current).length > 0;
       if (mode === 'initial') {
-        setLoading(true);
+        if (!seeded) setLoading(true);
         setError(null);
       }
       try {

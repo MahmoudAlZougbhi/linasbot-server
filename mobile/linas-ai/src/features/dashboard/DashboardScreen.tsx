@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '../../components/EmptyState';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../theme';
 import { BuyCreditsSheet } from '../billing/BuyCreditsSheet';
@@ -74,7 +74,7 @@ export function DashboardScreen({ onNavigate, active = true }: Props) {
             onPeriodChange={setPeriod}
           />
 
-          {state.kind === 'loading' ? <LinasLoadingIndicator variant="screen" /> : null}
+          {state.kind === 'loading' ? <ScreenSkeleton variant="chart" /> : null}
 
           {state.kind === 'ready' && (state.stale || state.refreshError) ? (
             <View style={[styles.banner, { backgroundColor: colors.banner, borderColor: colors.bannerBorder }]}>

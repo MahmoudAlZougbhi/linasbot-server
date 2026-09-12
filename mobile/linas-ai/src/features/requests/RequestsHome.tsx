@@ -11,6 +11,7 @@ import {
 import { EmptyState } from '../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../theme';
 import { RequestCardRow } from './RequestCardRow';
@@ -135,20 +136,13 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup, onOpenLiveChat }: Pr
     });
   }
 
-  if (list.loading && !list.hasLoadedOnce) {
-    return (
-      <View style={styles.center}>
-        <LinasLoadingIndicator variant="screen" />
-      </View>
-    );
-  }
   if (list.errorKind === 'forbidden') {
     return <EmptyState title={tr('reqPermissionTitle')} body={tr('reqPermissionBody')} />;
   }
   if (list.errorKind === 'auth') {
     return <EmptyState title={tr('reqPermissionTitle')} body={tr('reqAuthBody')} />;
   }
-  if (list.errorKind === 'offline') {
+  if (list.errorKind === 'offline' && list.items.length === 0 && list.hasLoadedOnce) {
     return (
       <View style={styles.centerPad}>
         <EmptyState title={tr('reqOffline')} />
@@ -165,7 +159,7 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup, onOpenLiveChat }: Pr
       </View>
     );
   }
-  if (list.errorKind === 'other' || list.error) {
+  if ((list.errorKind === 'other' || list.error) && list.items.length === 0 && list.hasLoadedOnce) {
     return (
       <View style={styles.centerPad}>
         <EmptyState title={tr('reqLoadError')} />
@@ -173,6 +167,8 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup, onOpenLiveChat }: Pr
       </View>
     );
   }
+
+  const cold = list.loading && !list.hasLoadedOnce && list.items.length === 0;
 
   return (
     <View style={styles.flex}>
@@ -188,6 +184,9 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup, onOpenLiveChat }: Pr
         onOpenFilter={() => setFilterOpen(true)}
       />
       <Text style={[styles.summaryLine, { color: colors.textDim }]}>{filterSummary(list)}</Text>
+      {list.error && list.items.length > 0 ? (
+        <Text style={[styles.err, { color: colors.danger }]}>{tr('reqLoadError')}</Text>
+      ) : null}
       {actionError ? <Text style={[styles.err, { color: colors.danger }]}>{actionError}</Text> : null}
 
       <FlatList
@@ -209,11 +208,13 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup, onOpenLiveChat }: Pr
         )}
         contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl refreshing={list.refreshing} onRefresh={() => void list.refresh()} tintColor={colors.accent} />
+          <RefreshControl refreshing={list.refreshing} onRefresh={() => void list.refresh({ force: true })} tintColor={colors.accent} />
         }
         onEndReached={() => void list.loadMore()}
         onEndReachedThreshold={0.4}
-        ListEmptyComponent={<EmptyState title={tr('reqEmptyTitle')} body={tr('reqEmptyBody')} />}
+        ListEmptyComponent={
+          cold ? <ScreenSkeleton variant="list" /> : <EmptyState title={tr('reqEmptyTitle')} body={tr('reqEmptyBody')} />
+        }
         ListFooterComponent={
           list.loadingMore ? <LinasLoadingIndicator variant="inline" /> : null
         }

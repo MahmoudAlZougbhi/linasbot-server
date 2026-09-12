@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { apiFetch } from '../../api/client';
 import { EmptyState } from '../../components/EmptyState';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { colors, fonts, spacing } from '../../theme';
 import { ScreenChrome } from './ScreenChrome';
 
@@ -52,7 +52,7 @@ export function SimpleResourceScreen({ title, path }: Props) {
 
   return (
     <ScreenChrome title={title}>
-      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" /> : null}
+      {loading && !hasLoadedOnce ? <ScreenSkeleton variant="form" /> : null}
       {hasLoadedOnce && error ? <Text style={styles.error}>{error}</Text> : null}
       {hasLoadedOnce ? (
       <ScrollView>

@@ -3,6 +3,8 @@ import { Platform } from 'react-native';
 import { z } from 'zod';
 
 import { apiFetch } from '../../api/client';
+import { cacheGet, cacheSet } from '../../cache/queryCache';
+import { queryKeys } from '../../cache/queryKeys';
 import { splitCreditRemaining } from '../dashboard/creditSplit';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { BillingPeriod } from './appleProductIds';
@@ -42,11 +44,10 @@ export type BillingEntitlementState = {
   raw: string;
 };
 
-export function useBillingEntitlement() {
-  const { tr } = useI18n();
-  const [state, setState] = useState<BillingEntitlementState>({
-    loading: true,
-    error: null,
+type BillingSnapshot = Omit<BillingEntitlementState, 'loading' | 'error' | 'raw'>;
+
+function emptyBilling(): BillingSnapshot {
+  return {
     planId: null,
     status: null,
     periodEnd: null,
@@ -61,11 +62,31 @@ export function useBillingEntitlement() {
     includedRemaining: null,
     purchasedMessages: null,
     pendingDowngrade: null,
-    raw: '',
-  });
+  };
+}
+
+function seedBillingState(): BillingEntitlementState {
+  const hit = cacheGet<BillingSnapshot>(queryKeys.billing());
+  if (hit?.data) {
+    return { ...emptyBilling(), ...hit.data, loading: false, error: null, raw: '' };
+  }
+  return { ...emptyBilling(), loading: true, error: null, raw: '' };
+}
+
+function persistBilling(state: BillingEntitlementState): void {
+  const { loading: _loading, error: _error, raw: _raw, ...snap } = state;
+  cacheSet(queryKeys.billing(), snap);
+}
+
+export function useBillingEntitlement() {
+  const { tr } = useI18n();
+  const [state, setState] = useState<BillingEntitlementState>(seedBillingState);
 
   const refresh = useCallback(async () => {
-    setState((s) => ({ ...s, loading: true }));
+    setState((s) => ({
+      ...s,
+      loading: cacheGet(queryKeys.billing()) == null && s.planId == null && s.status == null,
+    }));
     try {
       try {
         const catalog = await apiFetch('/api/public/plans', { schema: EntitlementsSchema });
@@ -118,7 +139,7 @@ export function useBillingEntitlement() {
       const pendingDowngrade = parsePendingDowngrade(entitlement.pending_downgrade);
       const messageBillingActive =
         entitlement.message_billing_active === true || usage.message_billing_active === true;
-      setState({
+      const next: BillingEntitlementState = {
         loading: false,
         error: null,
         planId: isPlanId(p) ? p : null,
@@ -149,26 +170,17 @@ export function useBillingEntitlement() {
           : null,
         pendingDowngrade,
         raw: __DEV__ ? JSON.stringify(data, null, 2) : '',
-      });
+      };
+      persistBilling(next);
+      setState(next);
     } catch {
-      setState({
-        loading: false,
-        error: tr('subLoadError'),
-        planId: null,
-        status: null,
-        periodEnd: null,
-        includedCredits: null,
-        purchasedCredits: null,
-        creditBalance: null,
-        membershipRemaining: null,
-        boughtRemaining: null,
-        messageBillingActive: false,
-        includedMessages: null,
-        availableMessages: null,
-        includedRemaining: null,
-        purchasedMessages: null,
-        pendingDowngrade: null,
-        raw: '',
+      setState((s) => {
+        const painted =
+          cacheGet(queryKeys.billing()) != null || s.planId != null || s.status != null;
+        if (painted) {
+          return { ...s, loading: false, error: tr('subLoadError') };
+        }
+        return { ...emptyBilling(), loading: false, error: tr('subLoadError'), raw: '' };
       });
     }
   }, [tr]);

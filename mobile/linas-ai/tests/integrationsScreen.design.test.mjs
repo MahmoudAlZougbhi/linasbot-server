@@ -114,7 +114,7 @@ test('TikTok card is shown from product list without faking a connection', () =>
   assert.doesNotMatch(screen, /connected:\s*true.*tiktok/);
 });
 
-test('initial load shows unified Linas loader until integrations are ready', () => {
+test('initial load shows card skeleton until integrations are ready', () => {
   const screen = read('features/integrations/IntegrationsScreen.tsx');
   const loadHook = read('features/integrations/useIntegrationsLoad.ts');
   const web = read('features/integrations/WebChatCard.tsx');
@@ -124,7 +124,8 @@ test('initial load shows unified Linas loader until integrations are ready', () 
   assert.match(screen, /hasLoadedOnce/);
   assert.match(screen, /webChatReady/);
   assert.match(screen, /showInitialLoader/);
-  assert.match(screen, /LinasLoadingIndicator/);
+  assert.match(screen, /ScreenSkeleton variant="cards"/);
+  assert.doesNotMatch(screen, /LinasLoadingIndicator/);
   assert.match(loadHook, /skipNextAreaFocusLoad/);
   assert.match(loadHook, /prefetchWebChatCardSnapshot/);
   assert.match(web, /if \(!ready\)/);

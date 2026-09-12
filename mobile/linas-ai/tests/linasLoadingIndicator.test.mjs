@@ -1,5 +1,5 @@
 /**
- * Linas branded loading indicator — design contract (no device required).
+ * Screen loaders: sparkle stays for inline work; first paint uses ScreenSkeleton.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -27,9 +27,10 @@ test('useScreenLoadGate exposes initial-load vs refresh semantics', () => {
   assert.match(gate, /showInitialLoader/);
   assert.match(gate, /hasLoadedOnce/);
   assert.match(gate, /isRefreshing/);
+  assert.match(gate, /ScreenSkeleton/);
 });
 
-const SCREEN_SURFACES = [
+const SHELL_SURFACES = [
   'features/integrations/IntegrationsScreen.tsx',
   'features/users/UsersScreen.tsx',
   'features/dashboard/DashboardScreen.tsx',
@@ -38,22 +39,21 @@ const SCREEN_SURFACES = [
   'features/notifications/NotificationsScreen.tsx',
   'features/requests/RequestsHome.tsx',
   'features/livechat/LiveChatInbox.tsx',
-  'features/livechat/LiveChatThread.tsx',
   'features/cm/CmScreen.tsx',
   'features/cm/CmSectionScreen.tsx',
   'features/smartFollowUp/SmartFollowUpScreen.tsx',
   'features/billing/BillingScreen.tsx',
   'features/integrations/WebsiteIntegrationScreen.tsx',
-  'features/chat/ChatScreen.tsx',
   'features/control/OwnerPortalScreen.tsx',
   'features/products/AddProductScreen.tsx',
+  'features/services/ServicesScreen.tsx',
 ];
 
-test('screen loaders use LinasLoadingIndicator on feature surfaces', () => {
-  for (const rel of SCREEN_SURFACES) {
+test('module first paint uses ScreenSkeleton, not full-screen sparkle', () => {
+  for (const rel of SHELL_SURFACES) {
     const source = read(rel);
-    assert.match(source, /LinasLoadingIndicator/, `${rel} should import LinasLoadingIndicator`);
-    assert.match(source, /variant="screen"/, `${rel} should use screen variant for initial load`);
+    assert.match(source, /ScreenSkeleton/, `${rel} should use ScreenSkeleton`);
+    assert.doesNotMatch(source, /variant="screen"/, `${rel} must not wait behind a screen spinner`);
     assert.doesNotMatch(source, /<ActivityIndicator/, `${rel} should not use ActivityIndicator`);
   }
 });
@@ -65,11 +65,20 @@ test('integrations gates content until first load; web chat can arrive after', (
   assert.match(integrations, /webChatReady/);
   assert.match(integrations, /headerRefreshing/);
   assert.match(integrations, /showInitialLoader = !hasLoadedOnce/);
+  assert.match(integrations, /ScreenSkeleton variant="cards"/);
   assert.doesNotMatch(integrations, /showInitialLoader = !hasLoadedOnce \|\| !webChatReady/);
 });
 
-test('dashboard hides content until ready state', () => {
+test('Owner Copilot chat never uses a full-screen loader', () => {
+  const chat = read('features/chat/ChatScreen.tsx');
+  assert.doesNotMatch(chat, /LinasLoadingIndicator/);
+  assert.doesNotMatch(chat, /<ActivityIndicator/);
+  assert.match(chat, /ChatMessageList/);
+});
+
+test('dashboard keeps header visible and uses chart skeleton while loading', () => {
   const dashboard = read('features/dashboard/DashboardScreen.tsx');
-  assert.match(dashboard, /state\.kind === 'loading' \? <LinasLoadingIndicator variant="screen" \/> : null/);
-  assert.match(dashboard, /state\.kind === 'ready' \? \([\s\S]*<DashboardHeader/);
+  assert.match(dashboard, /<DashboardHeader/);
+  assert.match(dashboard, /state\.kind === 'loading' \|\| state\.kind === 'ready'/);
+  assert.match(dashboard, /state\.kind === 'loading' \? <ScreenSkeleton variant="chart" \/> : null/);
 });

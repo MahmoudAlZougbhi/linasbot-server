@@ -1,31 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { PublicUser } from '../../api/types';
-import { AppModal } from '../../components/AppModal';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
-import { ModalScrim } from '../../components/ModalScrim';
 import { EmptyState } from '../../components/EmptyState';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { cacheGet, cacheInvalidate, cacheSet, dedupeFetch, isCacheFresh } from '../../cache/queryCache';
 import { queryKeys } from '../../cache/queryKeys';
 import { QUERY_TTL } from '../../cache/queryTtl';
 import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
-import { AuthGateModal } from '../auth/AuthGateModal';
 import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
-import { UserActionSheet } from './UserActionSheet';
 import { UserFormScreen } from './UserFormScreen';
 import { UserListRow } from './UserListRow';
-import { UserResetPasswordSheet } from './UserResetPasswordSheet';
+import { UsersScreenOverlays } from './UsersScreenOverlays';
 import { UsersSearchBar } from './UsersSearchBar';
 import {
   classifyUsersError,
@@ -270,7 +259,21 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
 
   return (
     <ScreenChrome title={tr('usersTitle')} subtitle={tr('usersSub')}>
-      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" style={styles.spinner} /> : null}
+      {loading && !hasLoadedOnce ? (
+        <>
+          <UsersSearchBar
+            value={query}
+            onChange={setQuery}
+            addDisabled={busy || loading}
+            onAdd={() => {
+              setEditing(null);
+              setFormError(null);
+              setFormOpen(true);
+            }}
+          />
+          <ScreenSkeleton variant="list" />
+        </>
+      ) : null}
       {hasLoadedOnce && authGate ? <EmptyState title={tr('authGateTitle')} body={tr('usersAuthBody')} /> : null}
       {hasLoadedOnce && gate === 'forbidden' ? (
         <EmptyState title={tr('usersForbiddenTitle')} body={tr('usersForbiddenBody')} />
@@ -319,55 +322,46 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
         </>
       ) : null}
 
-      <AppModal visible={menuUser !== null} animationType="fade" onRequestClose={() => setMenuUser(null)}>
-        <ModalScrim onPress={() => setMenuUser(null)}>
-          {menuUser ? (
-            <Pressable style={styles.sheetWrap} onPress={(e) => e.stopPropagation()}>
-              <UserActionSheet
-                user={menuUser}
-                roles={roles}
-                busy={busy}
-                onClose={() => setMenuUser(null)}
-                onEdit={() => {
-                  setEditing(menuUser);
-                  setFormError(null);
-                  setMenuUser(null);
-                  setFormOpen(true);
-                }}
-                onResetPassword={() => {
-                  setResetUser(menuUser);
-                  setResetPassword('');
-                  setResetError(null);
-                  setMenuUser(null);
-                }}
-                onToggleBlock={() => void toggleBlock(menuUser)}
-                onDelete={() => confirmDelete(menuUser)}
-              />
-            </Pressable>
-          ) : null}
-        </ModalScrim>
-      </AppModal>
-
-      <UserResetPasswordSheet
-        visible={resetUser !== null}
+      <UsersScreenOverlays
+        menuUser={menuUser}
+        roles={roles}
         busy={busy}
-        error={resetError}
-        password={resetPassword}
-        onPassword={setResetPassword}
-        onSave={() => void saveReset()}
-        onClose={() => {
+        resetUser={resetUser}
+        resetPassword={resetPassword}
+        resetError={resetError}
+        authGate={authGate}
+        authBody={tr('usersAuthBody')}
+        onCloseMenu={() => setMenuUser(null)}
+        onEdit={() => {
+          if (!menuUser) return;
+          setEditing(menuUser);
+          setFormError(null);
+          setMenuUser(null);
+          setFormOpen(true);
+        }}
+        onResetPassword={() => {
+          if (!menuUser) return;
+          setResetUser(menuUser);
+          setResetPassword('');
+          setResetError(null);
+          setMenuUser(null);
+        }}
+        onToggleBlock={() => {
+          if (menuUser) void toggleBlock(menuUser);
+        }}
+        onDelete={() => {
+          if (menuUser) confirmDelete(menuUser);
+        }}
+        onResetPasswordChange={setResetPassword}
+        onSaveReset={() => void saveReset()}
+        onCloseReset={() => {
           if (!busy) {
             setResetUser(null);
             setResetPassword('');
             setResetError(null);
           }
         }}
-      />
-
-      <AuthGateModal
-        visible={authGate}
-        reason={tr('usersAuthBody')}
-        onClose={nav.goChat}
+        onCloseAuth={nav.goChat}
         onLogin={() => {
           setAuthGate(false);
           onRequestLogin?.();
@@ -382,7 +376,6 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
 }
 
 const styles = StyleSheet.create({
-  spinner: { marginTop: spacing.xl },
   summary: { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted, marginBottom: 12 },
   activeCount: { color: colors.accent, fontFamily: fonts.bodyMedium },
   list: { paddingBottom: 40, paddingTop: 12, gap: spacing.md },
@@ -394,6 +387,4 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   error: { color: colors.danger, fontFamily: fonts.body, fontSize: 14, marginTop: 8 },
-  sheetWrap: { width: '100%' },
-  pressed: { opacity: 0.55 },
 });

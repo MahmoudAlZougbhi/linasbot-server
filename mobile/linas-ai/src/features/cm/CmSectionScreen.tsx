@@ -20,7 +20,7 @@ import { ServicesEditor } from './editors/ServicesEditor';
 import { useCmDraft } from './useCmDraft';
 import { useState } from 'react';
 import { ScrollView } from 'react-native';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
@@ -147,7 +147,7 @@ function StandardCmSectionScreen({ section, proposalReview, onBack }: Props) {
 
   return (
     <ScreenChrome title={title} subtitle={subtitle} sectionTitle={isAiLimits} onBack={onBack}>
-      {draft.loading ? <LinasLoadingIndicator variant="screen" /> : null}
+      {draft.loading ? <ScreenSkeleton variant="form" /> : null}
       {draft.error ? <Text style={cmFormStyles.error}>{draft.error}</Text> : null}
       {draft.conflict ? <Text style={cmFormStyles.warn}>{draft.conflict}</Text> : null}
       {draft.proposalActive ? (

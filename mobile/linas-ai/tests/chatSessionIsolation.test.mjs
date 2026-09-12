@@ -72,9 +72,12 @@ describe('chat session isolation', () => {
     const chat = read('features/chat/ChatScreen.tsx');
     const session = read('features/chat/useChatSession.ts');
     const controller = read('features/chat/useChatScreenController.ts');
-    assert.match(chat, /c\.loading && c\.messages\.length === 0/);
+    assert.doesNotMatch(chat, /c\.loading && c\.messages\.length === 0/);
+    assert.doesNotMatch(chat, /LinasLoadingIndicator/);
     assert.match(session, /Promise\.all\(/);
+    assert.match(session, /const blocking = !conversationIdRef\.current && messagesRef\.current\.length === 0/);
     assert.match(controller, /sessionReady = isAuthenticated && Boolean\(owner\.conversationId\)/);
+    assert.match(controller, /awaitingGreeting/);
     assert.doesNotMatch(controller, /turn\.streaming \|\| owner\.loading/);
   });
 

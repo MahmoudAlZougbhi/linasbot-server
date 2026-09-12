@@ -9,8 +9,8 @@ import {
 
 import type { PublicUser } from '../../api/types';
 import { EmptyState } from '../../components/EmptyState';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { StatusChip } from '../../components/StatusChip';
 import { TextField } from '../../components/TextField';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -114,7 +114,7 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
   if (loading && !detail) {
     return (
       <View style={styles.center}>
-        <LinasLoadingIndicator variant="screen" />
+        <ScreenSkeleton variant="form" />
       </View>
     );
   }
