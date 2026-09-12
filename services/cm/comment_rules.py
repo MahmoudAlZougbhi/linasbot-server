@@ -12,6 +12,7 @@ from typing import Any, Literal
 
 from services.cm.schemas import CommentRule, CommentsSection
 from services.cm.version_store import PublishedVersionError, load_published_content
+from services.meta_comment_post_ids import comment_post_ids_match
 
 CommentAction = Literal["reply_comment", "reply_dm", "ignore", "reply_comment_and_dm"]
 
@@ -78,7 +79,10 @@ def _post_ok(rule: CommentRule, post_id: str) -> bool:
     wanted = _wanted_post_ids(rule)
     if not wanted:
         return True
-    return (post_id or "").strip() in wanted
+    incoming = (post_id or "").strip()
+    if not incoming:
+        return False
+    return any(comment_post_ids_match(incoming, item) for item in wanted)
 
 
 def _trigger_all_comments(rule: CommentRule) -> bool:

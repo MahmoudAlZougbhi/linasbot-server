@@ -32,7 +32,6 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
   const loadingMoreRef = useRef(false);
   const requestIdRef = useRef(0);
   const holdHumanRef = useRef(false);
-  const claimGenRef = useRef(0);
   const localStatusRef = useRef(localStatus);
   localStatusRef.current = localStatus;
   const chatRef = useRef(chat);
@@ -90,7 +89,6 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
 
   useEffect(() => {
     holdHumanRef.current = false;
-    claimGenRef.current = 0;
     setLocalStatus(chatRef.current?.status ?? 'bot');
     setMessages(previewMessagesFromInbox(chatRef.current));
     setHasMore(false);
@@ -216,28 +214,9 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
   const claimOnOpen = useCallback(() => {
     const target = chatRef.current;
     if (!target) return;
-    const gen = ++claimGenRef.current;
+    // Viewing must not pause AI. Take over / sending still pause. Assign to AI stays bot.
     void markConversationRead(target.user_id, target.conversation_id);
-    const status = normalizeStatus({ ...target, status: localStatusRef.current });
-    if (status !== 'bot') return;
-    holdHumanRef.current = true;
-    setLocalStatus('human');
-    void takeoverConversation(target).then(async (result) => {
-      if (claimGenRef.current !== gen) {
-        if (result.success) {
-          void releaseConversation(target);
-        }
-        return;
-      }
-      if (result.status) applyServerStatus(result.status);
-      if (!result.success) {
-        holdHumanRef.current = false;
-        setLocalStatus(target.status ?? 'bot');
-        return;
-      }
-      onChatUpdatedRef.current?.();
-    });
-  }, [applyServerStatus]);
+  }, []);
 
   return {
     messages,
@@ -281,7 +260,6 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     release: () => {
       const previous = localStatusRef.current;
       holdHumanRef.current = false;
-      claimGenRef.current += 1;
       setLocalStatus('bot');
       return runAction(async () => {
         const result = await releaseConversation(chat!);

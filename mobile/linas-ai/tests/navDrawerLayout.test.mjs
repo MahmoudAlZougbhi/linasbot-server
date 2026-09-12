@@ -33,17 +33,18 @@ describe('drawer layout and selected state', () => {
     assert.match(nav, /case 'cm':\s*\n\s*case 'cm_section':\s*\n\s*return 'cm'/);
   });
 
-  it('Chats heading is yellow Owner Copilot chat type', () => {
+  it('Chats heading matches Pin; titles use Copilot chat type in body ink', () => {
     const recents = read('features/nav/DrawerRecents.tsx');
     const type = read('theme/typography.ts');
-    const tokens = read('theme/tokens.ts');
-    const heading = recents.match(/chatsHeading:\s*\{([\s\S]*?)\},/);
-    assert.ok(heading, 'Chats heading style missing');
-    assert.match(heading[1], /\.\.\.typography\.chatAi/);
-    assert.match(recents, /color: colors\.drawerChats/);
+    const heading = recents.match(/heading:\s*\{([\s\S]*?)\},/);
+    assert.ok(heading, 'section heading style missing');
+    assert.match(heading[1], /\.\.\.typography\.title/);
+    assert.doesNotMatch(recents, /chatsHeading/);
+    assert.doesNotMatch(recents, /colors\.drawerChats/);
+    assert.match(recents, /tr\('drawerRecents'\)/);
+    assert.match(recents, /styles\.heading, \{ color: colors\.text \}/);
     assert.match(type, /chatAi:[\s\S]*?fontSize:\s*17/);
-    assert.match(tokens, /drawerChats:/);
-    assert.doesNotMatch(heading[1], /typography\.title/);
+    assert.doesNotMatch(heading[1], /typography\.chatAi/);
     assert.doesNotMatch(heading[1], /typography\.drawerItem/);
   });
 
@@ -88,7 +89,8 @@ describe('drawer layout and selected state', () => {
     assert.match(type, /drawerItem:[\s\S]*?lineHeight:\s*22/);
     assert.match(grid, /label:\s*\{\s*\.\.\.typography\.drawerItem,/);
     assert.match(rows, /rowTitleDrawer:\s*\{\s*\.\.\.typography\.chatAi,/);
-    assert.match(rows, /drawer \? colors\.drawerChats : colors\.text/);
+    assert.match(rows, /\{ color: colors\.text \}/);
+    assert.doesNotMatch(rows, /colors\.drawerChats/);
     assert.match(modules, /titleKey:\s*'navTeam'/);
   });
 
