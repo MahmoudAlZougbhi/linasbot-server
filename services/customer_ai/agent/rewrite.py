@@ -1,8 +1,7 @@
-"""Query rewrite for Customer Brain: deterministic first, optional light LLM."""
+"""Query rewrite for Customer Brain: deterministic (no extra LLM on the live path)."""
 
 from __future__ import annotations
 
-import os
 import re
 from typing import Any
 
@@ -74,52 +73,14 @@ def _deterministic(message: str, history: list[Any] | None, language: str) -> di
     }
 
 
-async def _optional_llm(message: str, history: list[Any] | None, language: str) -> str | None:
-    if not (os.getenv("OPENAI_API_KEY") or "").strip():
-        return None
-    try:
-        from services.customer_ai.providers.config import answer_model
-        from services.llm_core_service import create_chat_completion
-
-        hist = "\n".join(
-            f"{getattr(m, 'role', m.get('role') if isinstance(m, dict) else '')}: "
-            f"{getattr(m, 'text', m.get('text') if isinstance(m, dict) else '')}"
-            for m in list(history or [])[-4:]
-        )
-        response = await create_chat_completion(
-            model=answer_model(),
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Rewrite for search only. Keep phones, prices, URLs, IDs unchanged. "
-                        f"Language: {language or 'auto'}\nHistory:\n{hist}\nQuery: {message}"
-                    ),
-                }
-            ],
-            max_tokens=120,
-        )
-        text = str(response.choices[0].message.content or "").strip()
-        return text or None
-    except Exception:
-        return None
-
-
 async def rewrite_queries(
     message: str,
     history: list[Any] | tuple[Any, ...] | None = None,
     language: str = "",
 ) -> dict[str, Any]:
-    """Return {original, rewritten, variants}. LLM optional; failures stay deterministic."""
+    """Return {original, rewritten, variants}. Live path is deterministic (no extra LLM)."""
     base = _deterministic(message, list(history or []), language)
-    held_surfaces = base.pop("held", [])
-    llm = await _optional_llm(base["original"], list(history or []), language)
-    if llm:
-        ok = all((surface in llm) for surface in held_surfaces if surface.strip())
-        if ok:
-            base["rewritten"] = llm
-            if llm not in base["variants"] and llm != base["original"]:
-                base["variants"] = [llm, *base["variants"]]
+    base.pop("held", None)
     return {
         "original": base["original"],
         "rewritten": base["rewritten"],

@@ -15,6 +15,17 @@ def lab_enabled() -> bool:
     return (os.getenv("LINAS_CUSTOMER_AI_LAB") or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def lab_turn_tenant_allowed(tenant_id: str) -> bool:
+    from services.cm.constants import DEFAULT_TENANT_ID
+
+    tid = (tenant_id or "").strip()
+    if not tid:
+        return False
+    if tid == "lab" or tid.startswith("lab_"):
+        return True
+    return tid == DEFAULT_TENANT_ID
+
+
 async def run_lab_turn(
     *,
     tenant_id: str,

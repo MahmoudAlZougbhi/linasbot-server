@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from services.customer_ai.agent.normalize_query import normalize_query
@@ -47,6 +48,70 @@ def _tag_task(bundle: EvidenceBundle, task_id: str) -> EvidenceBundle:
         for item in bundle.items
     ]
     return bundle.model_copy(update={"items": items})
+
+
+def _task_query(
+    *,
+    task: PlannerTask,
+    message: str,
+    normalized: dict[str, Any],
+    rewritten: dict[str, Any],
+    variants: list[str],
+    round_idx: int,
+) -> tuple[str, set[SourceFamily] | None]:
+    parts = [
+        normalized.get("primary") or message,
+        rewritten.get("rewritten") or message,
+        (task.span.text or "").strip(),
+        *variants[:1],
+    ]
+    if round_idx > 1:
+        parts.append(f"{task.span.text or task.type}")
+    seen: set[str] = set()
+    query_bits: list[str] = []
+    for part in parts:
+        key = (part or "").strip().casefold()
+        if key and key not in seen:
+            seen.add(key)
+            query_bits.append(part.strip())
+    return " ".join(query_bits[:3]) or message, _families(task)
+
+
+def _fold_round_bundle(
+    *,
+    merged: list[EvidenceItem],
+    outcome: str,
+    tagged: EvidenceBundle,
+) -> tuple[list[EvidenceItem], str]:
+    merged = _merge_items(merged, list(tagged.items))
+    if tagged.outcome == "found" or merged:
+        return merged, "found"
+    if outcome == "not_found" and tagged.outcome not in {"not_found", "found"}:
+        return merged, str(tagged.outcome)
+    return merged, outcome
+
+
+async def _retrieve_task(
+    turn: CustomerTurn,
+    task: PlannerTask,
+    *,
+    message: str,
+    normalized: dict[str, Any],
+    rewritten: dict[str, Any],
+    variants: list[str],
+    round_idx: int,
+) -> tuple[PlannerTask, str, set[SourceFamily] | None, EvidenceBundle]:
+    query, families = _task_query(
+        task=task,
+        message=message,
+        normalized=normalized,
+        rewritten=rewritten,
+        variants=variants,
+        round_idx=round_idx,
+    )
+    bundle = await retrieve_published(RetrieveContext(tenant_id=turn.tenant_id, query=query, families=families))
+    tagged = _tag_task(bundle, task.id) if bundle.items else bundle
+    return task, query, families, tagged
 
 
 def _structured_facts(bundle: EvidenceBundle) -> dict[str, Any]:
@@ -105,31 +170,22 @@ async def multi_round_retrieve(
             targets = [task for task in info_tasks if task.id in missing_ids]
             if not targets:
                 break
-        for task in targets:
-            parts = [
-                normalized.get("primary") or message,
-                rewritten.get("rewritten") or message,
-                (task.span.text or "").strip(),
-                *variants[:1],
+        retrieved = await asyncio.gather(
+            *[
+                _retrieve_task(
+                    turn,
+                    task,
+                    message=message,
+                    normalized=normalized,
+                    rewritten=rewritten,
+                    variants=variants,
+                    round_idx=round_idx,
+                )
+                for task in targets
             ]
-            if round_idx > 1:
-                parts.append(f"{task.span.text or task.type}")
-            seen: set[str] = set()
-            query_bits: list[str] = []
-            for part in parts:
-                key = (part or "").strip().casefold()
-                if key and key not in seen:
-                    seen.add(key)
-                    query_bits.append(part.strip())
-            query = " ".join(query_bits[:3]) or message
-            families = _families(task)
-            bundle = await retrieve_published(RetrieveContext(tenant_id=turn.tenant_id, query=query, families=families))
-            tagged = _tag_task(bundle, task.id) if bundle.items else bundle
-            merged = _merge_items(merged, list(tagged.items))
-            if tagged.outcome == "found" or merged:
-                outcome = "found"
-            elif outcome == "not_found" and tagged.outcome not in {"not_found", "found"}:
-                outcome = tagged.outcome
+        )
+        for task, query, families, tagged in retrieved:
+            merged, outcome = _fold_round_bundle(merged=merged, outcome=outcome, tagged=tagged)
             trace.append(
                 {
                     "round": round_idx,
