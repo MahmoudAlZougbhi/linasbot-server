@@ -180,6 +180,17 @@ async def test_tenant_isolation_and_product_change_enqueues(tenant_fs: Path, moc
     assert get_lifecycle("iso-a")["status"] == "ACTIVE"
 
 
+def test_gate_accepts_retrieval_payload_with_status_key() -> None:
+    from services.customer_ai.evals.linas_real_index import _gate
+
+    retrieval = {"status": "PASS", "detail": "recall_ok", "recall": 1.0, "tenant_id": "linas"}
+    row = _gate(str(retrieval.get("status") or "FAIL"), str(retrieval.get("detail") or ""), **retrieval)
+    assert row["status"] == "PASS"
+    assert row["detail"] == "recall_ok"
+    assert row["recall"] == 1.0
+    assert row["tenant_id"] == "linas"
+
+
 def test_real_linas_resolver_refuses_lab(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.customer_ai.evals.linas_real_index import resolve_real_tenant_id
 
