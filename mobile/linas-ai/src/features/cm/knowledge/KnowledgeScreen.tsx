@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon, feather } from '../../../components/AppIcon';
-import { LinasLoadingIndicator } from '../../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../../components/ScreenSkeleton';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { useI18n } from '../../../i18n/LanguageContext';
 import { fonts } from '../../../theme';
@@ -114,7 +114,7 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
       onBack={mode === 'edit' ? goList : onBack}
       canvasColor={KN_CANVAS}
     >
-      {draft.loading ? <LinasLoadingIndicator variant="screen" /> : null}
+      {draft.loading ? <ScreenSkeleton variant={mode === 'list' ? 'list' : 'form'} /> : null}
       {draft.error ? <Text style={styles.error}>{draft.error}</Text> : null}
       {draft.conflict ? <Text style={styles.warn}>{draft.conflict}</Text> : null}
       {draft.proposalActive ? (

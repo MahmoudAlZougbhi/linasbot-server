@@ -122,69 +122,63 @@ export function LiveChatThread({
 
       {thread.error ? <Text style={styles.error}>{thread.error}</Text> : null}
 
-      {thread.loading && !thread.messages.length ? (
-        <View style={styles.center}>
-          <LinasLoadingIndicator variant="screen" />
-        </View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          style={styles.flex}
-          inverted
-          data={listData}
-          keyExtractor={(m, i) => messageKey(m, i)}
-          contentContainerStyle={styles.messages}
-          keyboardShouldPersistTaps="handled"
-          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-          onScroll={(e) => {
-            const away = e.nativeEvent.contentOffset.y > 140;
-            setAwayFromLatest(away);
-            if (!away) setUnseenIncoming(false);
-          }}
-          scrollEventThrottle={64}
-          onEndReached={() => {
-            if (thread.hasMore && !thread.loadingMore) void thread.loadOlder();
-          }}
-          onEndReachedThreshold={0.2}
-          ListEmptyComponent={
-            <View style={styles.emptyFlip}>
-              <EmptyState
-                title="No messages yet"
-                body="This conversation has no messages in the loaded window."
-              />
-            </View>
-          }
-          ListFooterComponent={
-            thread.loadingMore ? (
-              <LinasLoadingIndicator variant="inline" style={styles.olderSpinner} />
-            ) : thread.hasMore ? (
-              <Text style={styles.olderHint}>Scroll up for older messages</Text>
-            ) : thread.messages.length > 0 ? (
-              <Text style={styles.olderHint}>Beginning of conversation</Text>
-            ) : null
-          }
-          renderItem={({ item }) => (
-            <LiveChatMessageBubble
-              message={item}
-              onRetry={
-                item.delivery_status === 'failed' && !item.is_user
-                  ? () => {
-                      thread.retryFailedSend(item);
-                    }
-                  : undefined
-              }
-              onLike={
-                isLikeableAiReply(item)
-                  ? () => {
-                      setLikeError(null);
-                      setLikeTarget(item);
-                    }
-                  : undefined
-              }
+      <FlatList
+        ref={listRef}
+        style={styles.flex}
+        inverted
+        data={listData}
+        keyExtractor={(m, i) => messageKey(m, i)}
+        contentContainerStyle={styles.messages}
+        keyboardShouldPersistTaps="handled"
+        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+        onScroll={(e) => {
+          const away = e.nativeEvent.contentOffset.y > 140;
+          setAwayFromLatest(away);
+          if (!away) setUnseenIncoming(false);
+        }}
+        scrollEventThrottle={64}
+        onEndReached={() => {
+          if (thread.hasMore && !thread.loadingMore) void thread.loadOlder();
+        }}
+        onEndReachedThreshold={0.2}
+        ListEmptyComponent={
+          <View style={styles.emptyFlip}>
+            <EmptyState
+              title="No messages yet"
+              body="This conversation has no messages in the loaded window."
             />
-          )}
-        />
-      )}
+          </View>
+        }
+        ListFooterComponent={
+          thread.loadingMore ? (
+            <LinasLoadingIndicator variant="inline" style={styles.olderSpinner} />
+          ) : thread.hasMore ? (
+            <Text style={styles.olderHint}>Scroll up for older messages</Text>
+          ) : thread.messages.length > 0 ? (
+            <Text style={styles.olderHint}>Beginning of conversation</Text>
+          ) : null
+        }
+        renderItem={({ item }) => (
+          <LiveChatMessageBubble
+            message={item}
+            onRetry={
+              item.delivery_status === 'failed' && !item.is_user
+                ? () => {
+                    thread.retryFailedSend(item);
+                  }
+                : undefined
+            }
+            onLike={
+              isLikeableAiReply(item)
+                ? () => {
+                    setLikeError(null);
+                    setLikeTarget(item);
+                  }
+                : undefined
+            }
+          />
+        )}
+      />
 
       {unseenIncoming && awayFromLatest ? (
         <Text

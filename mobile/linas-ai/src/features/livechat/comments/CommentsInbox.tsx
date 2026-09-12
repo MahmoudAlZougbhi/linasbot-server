@@ -7,7 +7,7 @@ import { cacheGet, cacheSet, isCacheFresh } from '../../../cache/queryCache';
 import { queryKeys } from '../../../cache/queryKeys';
 import { QUERY_TTL } from '../../../cache/queryTtl';
 import { EmptyState } from '../../../components/EmptyState';
-import { LinasLoadingIndicator } from '../../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../../components/ScreenSkeleton';
 import { useI18n } from '../../../i18n/LanguageContext';
 import { fonts, useTheme } from '../../../theme';
 import { CommentsMediaGrid } from './CommentsMediaGrid';
@@ -157,7 +157,7 @@ export function CommentsInbox({ onOpenThread, allowedChannels = null, realtimeEv
             <Text style={[styles.hint, { color: colors.textMuted }]}>{tr('liveCommentsSelectHint')}</Text>
             {accountName ? <Text style={[styles.account, { color: colors.text }]}>{accountName}</Text> : null}
             {error && status !== 'disconnected' ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
-            {status === 'loading' && posts.length === 0 ? <LinasLoadingIndicator variant="inline" /> : null}
+            {status === 'loading' && posts.length === 0 ? <ScreenSkeleton variant="cards" rows={4} /> : null}
           </View>
         }
         empty={status === 'loading' ? null : <EmptyState title={emptyTitle} body={tr('liveCommentsEmptyBody')} />}

@@ -3,8 +3,8 @@ import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
 
 import { ApiError, apiFetch } from '../../api/client';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, spacing } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
@@ -110,7 +110,7 @@ export function OwnerPortalScreen() {
 
   return (
     <ScreenChrome title={tr('waOwnerPortalTitle')} subtitle={tr('waOwnerPortalSub')}>
-      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" /> : null}
+      {loading && !hasLoadedOnce ? <ScreenSkeleton variant="form" /> : null}
       {hasLoadedOnce && notice ? <Text style={styles.notice}>{notice}</Text> : null}
       {hasLoadedOnce && error ? <Text style={styles.error}>{error}</Text> : null}
       {hasLoadedOnce ? (

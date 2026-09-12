@@ -39,6 +39,8 @@ export type ThemeColors = {
   activeIndicator: string;
   /** Side drawer panel background. */
   drawerSurface: string;
+  /** Drawer “Chats” heading + Owner Copilot history titles. */
+  drawerChats: string;
   /** AI Setup active tile icon square — neutral light grey, not mint. */
   featuredIconBg: string;
   /** AI Setup active icon square border — neutral grey, not teal borderSoft. */
@@ -82,6 +84,7 @@ export const lightColors: ThemeColors = {
   activeRow: '#ECEEEE',
   activeIndicator: '#0D9488',
   drawerSurface: '#F2F4F4',
+  drawerChats: '#C6A000',
   featuredIconBg: '#F4F6F6',
   featuredIconBorder: '#D0D4D4',
   lavender: '#CCFBF1',
@@ -122,6 +125,7 @@ export const darkColors: ThemeColors = {
   activeRow: '#1E2C2A',
   activeIndicator: '#2DD4BF',
   drawerSurface: '#121C1B',
+  drawerChats: '#F5D76E',
   featuredIconBg: '#1E2C2A',
   featuredIconBorder: '#2A3B39',
   lavender: '#134E4A',

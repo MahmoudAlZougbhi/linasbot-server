@@ -9,6 +9,7 @@ import {
 
 import { EmptyState } from '../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { fonts, spacing, useTheme } from '../../theme';
 import { ConversationRow } from './ConversationRow';
 import { InboxChannelChips } from './InboxChannelChips';
@@ -67,13 +68,7 @@ export function LiveChatInbox({ onOpenChat, inbox, allowedChannels = null }: Pro
     );
   }
 
-  if (!hasLoadedOnce && loading) {
-    return (
-      <View style={styles.flex}>
-        <LinasLoadingIndicator variant="screen" />
-      </View>
-    );
-  }
+  const cold = !hasLoadedOnce && loading && chats.length === 0;
 
   const visibleChats = chats
     .filter((item) => matchesAllowedChannels(item, allowedChannels))
@@ -114,7 +109,11 @@ export function LiveChatInbox({ onOpenChat, inbox, allowedChannels = null }: Pro
           }}
           onEndReachedThreshold={0.4}
           ListEmptyComponent={
-            <EmptyState title={emptyTitle} body={emptyBody} />
+            cold ? (
+              <ScreenSkeleton variant="inbox" />
+            ) : (
+              <EmptyState title={emptyTitle} body={emptyBody} />
+            )
           }
           ListFooterComponent={
             loadingMore ? (

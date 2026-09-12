@@ -33,15 +33,17 @@ describe('drawer layout and selected state', () => {
     assert.match(nav, /case 'cm':\s*\n\s*case 'cm_section':\s*\n\s*return 'cm'/);
   });
 
-  it('Chats heading matches the Live Chat screen title size', () => {
+  it('Chats heading is yellow Owner Copilot chat type', () => {
     const recents = read('features/nav/DrawerRecents.tsx');
-    const chrome = read('features/shared/ScreenChrome.tsx');
     const type = read('theme/typography.ts');
-    const heading = recents.match(/heading:\s*\{([\s\S]*?)\},/);
+    const tokens = read('theme/tokens.ts');
+    const heading = recents.match(/chatsHeading:\s*\{([\s\S]*?)\},/);
     assert.ok(heading, 'Chats heading style missing');
-    assert.match(heading[1], /\.\.\.typography\.title/);
-    assert.match(type, /title:[\s\S]*?fontSize:\s*26/);
-    assert.match(chrome, /: typography\.title/);
+    assert.match(heading[1], /\.\.\.typography\.chatAi/);
+    assert.match(recents, /color: colors\.drawerChats/);
+    assert.match(type, /chatAi:[\s\S]*?fontSize:\s*17/);
+    assert.match(tokens, /drawerChats:/);
+    assert.doesNotMatch(heading[1], /typography\.title/);
     assert.doesNotMatch(heading[1], /typography\.drawerItem/);
   });
 
@@ -76,7 +78,7 @@ describe('drawer layout and selected state', () => {
     assert.doesNotMatch(nav, /DrawerFooter/);
   });
 
-  it('module tiles and chat titles share drawerItem size and medium fill', () => {
+  it('module tiles keep drawerItem; chat titles use Owner Copilot chat type', () => {
     const type = read('theme/typography.ts');
     const grid = read('features/nav/DrawerNavGrid.tsx');
     const rows = read('features/nav/HistoryRows.tsx');
@@ -85,7 +87,8 @@ describe('drawer layout and selected state', () => {
     assert.match(type, /drawerItem:[\s\S]*?fontSize:\s*16/);
     assert.match(type, /drawerItem:[\s\S]*?lineHeight:\s*22/);
     assert.match(grid, /label:\s*\{\s*\.\.\.typography\.drawerItem,/);
-    assert.match(rows, /rowTitleDrawer:\s*\{\s*\.\.\.typography\.drawerItem,/);
+    assert.match(rows, /rowTitleDrawer:\s*\{\s*\.\.\.typography\.chatAi,/);
+    assert.match(rows, /drawer \? colors\.drawerChats : colors\.text/);
     assert.match(modules, /titleKey:\s*'navTeam'/);
   });
 

@@ -163,3 +163,24 @@ async def test_broadcast_publishes_when_no_local_clients(monkeypatch: pytest.Mon
     )
     assert published[0][1]["tenant_id"] == "shop"
     assert published[0][1]["channel"] == "instagram"
+
+
+def test_sse_new_message_payload_includes_inbox_preview_fields() -> None:
+    from utils.utils_conversation_save_common import _sse_new_message_payload
+
+    payload = _sse_new_message_payload(
+        canonical_user_id="+96170123456",
+        conversation_id="conv-1",
+        role="user",
+        text="كم السعر؟",
+        customer_info={"name": "Sara", "phone_full": "+96170123456"},
+        message_data={"role": "user", "text": "كم السعر؟", "message_id": "m1"},
+        unread_count=2,
+    )
+    assert payload["user_id"] == "+96170123456"
+    assert payload["conversation_id"] == "conv-1"
+    assert payload["user_name"] == "Sara"
+    assert payload["text"] == "كم السعر؟"
+    assert payload["unread_count"] == 2
+    assert payload["message"]["is_user"] is True
+    assert payload["message"]["content"] == "كم السعر؟"

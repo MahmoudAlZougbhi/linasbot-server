@@ -48,7 +48,8 @@ describe('splash hang: always reach chat', () => {
 
   it('AppShell leaves splash on bootDone alone and always flips authReady', () => {
     const shell = readSrc('app/AppShell.tsx');
-    assert.match(shell, /if \(!bootDone\)/);
+    assert.match(shell, /const showApp = bootDone \|\| authReady/);
+    assert.match(shell, /!bootDone \?/);
     assert.doesNotMatch(
       shell,
       /if \(!bootDone \|\| !authReady \|\| screen\.name === 'boot'\)/,
@@ -61,5 +62,17 @@ describe('splash hang: always reach chat', () => {
     );
     assert.match(shell, /AppScreenTree/);
     assert.match(shell, /<BootSplash appReady=\{authReady\} onDone=\{finishBoot\} \/>/);
+  });
+
+  it('hydrates Owner Copilot under splash so chat opens on the welcome, not a loader', () => {
+    const shell = readSrc('app/AppShell.tsx');
+    const chat = readSrc('features/chat/ChatScreen.tsx');
+    const controller = readSrc('features/chat/useChatScreenController.ts');
+    assert.match(shell, /treeScreen/);
+    assert.match(shell, /splashOverlay/);
+    assert.doesNotMatch(chat, /LinasLoadingIndicator/);
+    assert.doesNotMatch(chat, /Loading conversation/);
+    assert.match(controller, /awaitingGreeting/);
+    assert.match(chat, /c\.awaitingGreeting/);
   });
 });

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
 import { pickImageAttachment } from '../chat/v2/pickAttachment';
 import { isDailyEditLimitError, isMetadataPreparationFailure } from '../../api/client';
@@ -178,7 +178,12 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
         canvasColor={PR_CANVAS}
         headerLead={<LinasSparkleIcon size={22} color={PR_TEAL} />}
       >
-        <LinasLoadingIndicator variant="screen" />
+        <ProductStepper
+          step={1}
+          detailsLabel={tr('productsStepDetails')}
+          mediaLabel={tr('productsStepMedia')}
+        />
+        <ScreenSkeleton variant="form" />
       </ScreenChrome>
     );
   }

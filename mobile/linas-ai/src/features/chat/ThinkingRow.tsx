@@ -1,66 +1,29 @@
-import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { LinasStarMark } from '../../components/LinasStarMark';
 import {
   aiMessageColStyle,
   aiMessageHeaderStyle,
   aiMessageRowStyle,
-  textDirectionStyle,
+  isRtlText,
 } from '../../lib/textDirection';
-import { fonts, spacing, typography, useTheme } from '../../theme';
+import { spacing, useTheme } from '../../theme';
+import { TYPING_DOT_COLOR, TypingDots } from './TypingDots';
 
 type Props = {
   label: string;
 };
 
 /**
- * Linas-side Thinking… placeholder for the live turn slot.
+ * Live-turn placeholder: landing Here typing bubble (white, 3 bouncing dots).
  * Replaced by streamed liveText in the same footer when deltas start.
  */
 export function ThinkingRow({ label }: Props) {
-  const { colors } = useTheme();
-  const dirStyle = textDirectionStyle(label);
-  const opacity = useRef(new Animated.Value(1)).current;
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then((v) => {
-      if (mounted) setReduceMotion(v);
-    });
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => {
-      mounted = false;
-      sub.remove();
-    };
-  }, []);
-
-  useEffect(() => {
-    opacity.stopAnimation();
-    if (reduceMotion) {
-      opacity.setValue(1);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 0.35,
-          duration: 700,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 700,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [opacity, reduceMotion]);
+  const { colors, resolved } = useTheme();
+  const rtl = isRtlText(label);
+  const corner = 18;
+  const tail = 6;
+  const dotColor = resolved === 'dark' ? colors.accent : TYPING_DOT_COLOR;
 
   return (
     <View
@@ -80,9 +43,23 @@ export function ThinkingRow({ label }: Props) {
           />
         </View>
         <View style={[styles.bodyCol, aiMessageColStyle(label)]}>
-          <Animated.Text style={[styles.text, { color: colors.textMuted, opacity }, dirStyle]}>
-            {label}
-          </Animated.Text>
+          <View
+            style={[
+              styles.bubble,
+              {
+                backgroundColor: colors.bubbleAi,
+                borderColor: colors.borderSoft,
+                borderTopLeftRadius: corner,
+                borderTopRightRadius: corner,
+                borderBottomLeftRadius: rtl ? corner : tail,
+                borderBottomRightRadius: rtl ? tail : corner,
+                shadowOpacity: resolved === 'dark' ? 0 : 0.06,
+                elevation: resolved === 'dark' ? 0 : 2,
+              },
+            ]}
+          >
+            <TypingDots color={dotColor} />
+          </View>
         </View>
       </View>
     </View>
@@ -107,10 +84,13 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'stretch',
   },
-  text: {
-    ...typography.chatAi,
-    fontFamily: fonts.body,
-    paddingHorizontal: 2,
-    paddingVertical: 2,
+  bubble: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    shadowColor: '#171A19',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
   },
 });

@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
 
 /**
- * Gates screen content until the first fetch completes.
- * - `showInitialLoader`: full-screen LinasLoadingIndicator only (no partial UI).
- * - `isRefreshing`: subsequent loads while content stays visible (pull-to-refresh, header refresh).
+ * First-fetch vs refresh flags. Chrome always paints; cold body uses ScreenSkeleton.
+ * - `showInitialLoader`: cold body has no cache yet (skeleton, never a blank spinner screen).
+ * - `isRefreshing`: subsequent loads while cached content stays visible.
  */
 export function useScreenLoadGate(initialLoading = true) {
   const [loading, setLoading] = useState(initialLoading);

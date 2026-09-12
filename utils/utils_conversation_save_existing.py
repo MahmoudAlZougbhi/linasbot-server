@@ -225,6 +225,7 @@ async def save_message_when_conversation_id(
             text=text,
             customer_info=customer_info,
             message_data=message_data,
+            unread_count=update_payload.get("unread_count"),
         )
     else:
         message_data = _build_saved_message_payload(text, metadata, channel, role)
@@ -284,4 +285,13 @@ async def save_message_when_conversation_id(
         _invalidate_live_chat_cache()
         await _ensure_live_chat_index_after_save(canonical_user_id, saved_conv_id, None, {})
         print(f"✅ Created conversation {conversation_id} for user {canonical_user_id}")
+        _broadcast_saved_message_sse(
+            canonical_user_id=canonical_user_id,
+            conversation_id=conversation_id,
+            role=role,
+            text=text,
+            customer_info=customer_info,
+            message_data=message_data,
+            unread_count=0 if role != "user" else 1,
+        )
     return saved_conv_id, conversations_collection_for_user

@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { Linking } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { onAuthCleared } from '../api/client';
@@ -114,9 +114,10 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (!bootDone) return;
-    setScreen((current) => (current.name === 'boot' ? { name: 'chat' } : current));
-  }, [bootDone]);
+    if (bootDone || authReady) {
+      setScreen((current) => (current.name === 'boot' ? { name: 'chat' } : current));
+    }
+  }, [authReady, bootDone]);
 
   function openAreaAuthed(area: ControlArea) {
     if (subGate.blocked && area !== 'subscription') {
@@ -283,16 +284,10 @@ export function AppShell() {
     screen,
   });
 
-  if (!bootDone) {
-    return (
-      <SafeAreaProvider>
-        <StatusBar style="light" />
-        <BootSplash appReady={authReady} onDone={finishBoot} />
-      </SafeAreaProvider>
-    );
-  }
+  const showApp = bootDone || authReady;
+  const treeScreen = screen.name === 'boot' ? { name: 'chat' as const } : screen;
 
-  if (versionCheck.forceUpdate && versionCheck.result) {
+  if (bootDone && versionCheck.forceUpdate && versionCheck.result) {
     return (
       <SafeAreaProvider>
         <StatusBar style={resolved === 'dark' ? 'light' : 'dark'} />
@@ -302,33 +297,59 @@ export function AppShell() {
   }
 
   const showUpdateBanner =
-    versionCheck.updateAvailable && versionCheck.result !== null && !updateBannerDismissed;
+    bootDone &&
+    versionCheck.updateAvailable &&
+    versionCheck.result !== null &&
+    !updateBannerDismissed;
 
   return (
     <SafeAreaProvider>
-      <StatusBar style={resolved === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style={!bootDone ? 'light' : resolved === 'dark' ? 'light' : 'dark'} />
       {showUpdateBanner ? (
         <AppUpdateBanner
           check={versionCheck.result!}
           onDismiss={() => setUpdateBannerDismissed(true)}
         />
       ) : null}
-      <ModuleNavProvider value={moduleNav}>
-        <AppScreenTree
-          screen={screen}
-          authEpoch={authEpoch}
-          hasAccess={hasAccess}
-          showSubGate={showSubGate}
-          subGateLoading={subGate.loading}
-          onOpenArea={openArea}
-          onOpenCmReview={openCmReview}
-          setScreen={setScreen}
-          setResumeArea={setResumeArea}
-          afterLogin={() => void afterLogin()}
-          logout={() => void logout()}
-          refreshSubGate={() => subGate.refresh()}
-        />
-      </ModuleNavProvider>
+      {showApp ? (
+        <View
+          style={styles.tree}
+          accessibilityElementsHidden={!bootDone}
+          importantForAccessibility={bootDone ? 'auto' : 'no-hide-descendants'}
+        >
+          <ModuleNavProvider value={moduleNav}>
+            <AppScreenTree
+              screen={treeScreen}
+              authEpoch={authEpoch}
+              hasAccess={hasAccess}
+              showSubGate={showSubGate}
+              subGateLoading={subGate.loading}
+              onOpenArea={openArea}
+              onOpenCmReview={openCmReview}
+              setScreen={setScreen}
+              setResumeArea={setResumeArea}
+              afterLogin={() => void afterLogin()}
+              logout={() => void logout()}
+              refreshSubGate={() => subGate.refresh()}
+            />
+          </ModuleNavProvider>
+        </View>
+      ) : (
+        <View style={styles.tree} />
+      )}
+      {!bootDone ? (
+        <View style={styles.splashOverlay} pointerEvents="auto">
+          <BootSplash appReady={authReady} onDone={finishBoot} />
+        </View>
+      ) : null}
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  tree: { flex: 1 },
+  splashOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 20,
+  },
+});

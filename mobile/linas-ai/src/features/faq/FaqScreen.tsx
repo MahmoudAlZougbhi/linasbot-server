@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { faqWriteErrorMessage } from './faqWriteError';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, spacing } from '../../theme';
 import type { CmProposalReview } from '../cm/cmProposalReview';
@@ -212,7 +212,7 @@ export function FaqScreen({ proposalReview }: Props) {
       subtitle={mode === 'list' ? tr('faqSub') : undefined}
       compactTitle
     >
-      {list.loading && !list.hasLoadedOnce ? <LinasLoadingIndicator variant="screen" /> : null}
+      {list.loading && !list.hasLoadedOnce ? <ScreenSkeleton variant="list" /> : null}
       {list.hasLoadedOnce && list.error ? <Text style={styles.error}>{list.error}</Text> : null}
       {list.hasLoadedOnce && savedFlash ? <Text style={styles.ok}>{tr('faqSaved')}</Text> : null}
       {list.hasLoadedOnce && proposalBits ? (

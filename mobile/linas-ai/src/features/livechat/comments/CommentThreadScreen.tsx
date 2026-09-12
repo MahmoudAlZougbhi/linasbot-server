@@ -3,7 +3,7 @@ import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon, feather } from '../../../components/AppIcon';
 import { EmptyState } from '../../../components/EmptyState';
-import { LinasLoadingIndicator } from '../../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../../components/ScreenSkeleton';
 import { useI18n } from '../../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../../theme';
 import type { LiveChatSseEvent } from '../liveChatSseParse';
@@ -77,7 +77,7 @@ export function CommentThreadScreen({
   return (
     <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
       <PostHero post={post} />
-      {loading ? <LinasLoadingIndicator variant="inline" /> : null}
+      {loading ? <ScreenSkeleton variant="list" rows={4} /> : null}
       {!loading && error && !items.length ? (
         <EmptyState title={tr('liveCommentsThreadError')} body={tr('liveCommentsThreadErrorBody')} />
       ) : null}

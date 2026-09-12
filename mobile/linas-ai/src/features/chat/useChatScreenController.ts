@@ -91,6 +91,8 @@ export function useChatScreenController(
 
   const loading = isAuthenticated ? owner.loading : guest.loading;
   const messages = isAuthenticated ? owner.messages : guest.messages;
+  const awaitingGreeting =
+    isAuthenticated && owner.loading && messages.length === 0 && !owner.error;
   const sessionReady = isAuthenticated && Boolean(owner.conversationId);
   const sending = isAuthenticated ? turn.streaming : guest.sending;
   const error = isAuthenticated ? owner.error : guest.error;
@@ -174,6 +176,7 @@ export function useChatScreenController(
     goToLoginPreservingDraft,
     archivedIds,
     loading,
+    awaitingGreeting,
     messages,
     sessionReady,
     sending,

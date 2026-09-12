@@ -281,7 +281,8 @@ test('cold open is branded star splash then chat (no character mash / progress b
     chat,
     /if \(loading\) \{\s*return \(\s*<GradientBackground>\s*<View style=\{styles\.center\}>/,
   );
-  assert.match(chat, /c\.loading && c\.messages\.length === 0 \? \(/);
+  assert.doesNotMatch(chat, /c\.loading && c\.messages\.length === 0 \? \(/);
+  assert.doesNotMatch(chat, /LinasLoadingIndicator/);
   assert.match(login, /AuthChrome/);
   assert.match(authChrome, /LinasSparkleIcon/);
   assert.doesNotMatch(login, /linasAssets|authHero|LinasAvatar|avatarAssets/);
@@ -328,9 +329,12 @@ test('owner stream shows Thinking then live bubble in the same footer slot', () 
   assert.match(chat, /thinkingLabel=\{c\.tr\('chatThinking'\)\}/);
   assert.match(footer, /id: 'live-stream'/);
   assert.match(list, /thinking=\{thinking\}/);
-  // Guest send also shows Thinking in the same footer slot.
-  assert.match(chat, /thinking=\{c\.turn\.thinking \|\| \(!isAuthenticated && c\.guest\.sending\)\}/);
-  assert.match(thinking, /isReduceMotionEnabled|reduceMotionChanged/);
+  // Guest send and new-chat seed wait share the same footer slot (typing bubble, not a screen loader).
+  assert.match(
+    chat,
+    /thinking=\{c\.turn\.thinking \|\| c\.awaitingGreeting \|\| \(!isAuthenticated && c\.guest\.sending\)\}/,
+  );
+  assert.match(thinking, /TypingDots/);
   assert.match(thinking, /LinasStarMark/);
 });
 

@@ -43,7 +43,7 @@ export function RequestsScreen({ onOpenLiveChat }: Props) {
           user={list.user}
           onBack={() => {
             setSelectedId(null);
-            void list.refresh();
+            void list.refresh({ force: true });
           }}
           onOpenLiveChat={onOpenLiveChat}
         />

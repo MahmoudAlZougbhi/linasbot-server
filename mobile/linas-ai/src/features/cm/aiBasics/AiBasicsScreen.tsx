@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon, feather } from '../../../components/AppIcon';
-import { LinasLoadingIndicator } from '../../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../../components/ScreenSkeleton';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { useI18n } from '../../../i18n/LanguageContext';
 import { fonts } from '../../../theme';
@@ -138,7 +138,20 @@ export function AiBasicsScreen({ proposalReview, onBack }: Props) {
       onBack={editingGreeting ? goHub : onBack}
       canvasColor={AB_CANVAS}
     >
-      {multi.loading ? <LinasLoadingIndicator variant="screen" /> : null}
+      {multi.loading && !editingGreeting ? (
+        <View style={styles.flex}>
+          <AiBasicsTabBar
+            tab={tab}
+            labels={{
+              identity: tr('aiSetupBasicsIdentityHeading'),
+              style: tr('aiSetupBasicsStyleTab'),
+              greetings: tr('aiSetupGreetingsHeading'),
+            }}
+            onChange={setTab}
+          />
+          <ScreenSkeleton variant="form" />
+        </View>
+      ) : null}
       {multi.error ? <Text style={styles.error}>{multi.error}</Text> : null}
       {multi.conflict ? <Text style={styles.warn}>{multi.conflict}</Text> : null}
 

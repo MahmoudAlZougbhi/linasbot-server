@@ -17,4 +17,5 @@ export const queryKeys = {
   faq: (q: string) => scopedCacheKey(['faq', q]),
   faqAll: () => scopedCacheKey(['faq']),
   smartFollowUp: () => scopedCacheKey(['smartFollowUp']),
+  billing: () => scopedCacheKey(['billing']),
 };

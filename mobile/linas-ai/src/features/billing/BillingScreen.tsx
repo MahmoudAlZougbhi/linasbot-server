@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../theme';
@@ -160,7 +160,7 @@ export function BillingScreen({ openChoosePlan = false }: Props) {
         <Text style={[styles.note, { color: colors.warning }]}>{store.purchaseNote}</Text>
       ) : null}
       {entitlement.loading ? (
-        <LinasLoadingIndicator variant="screen" style={styles.spinner} />
+        <ScreenSkeleton variant="form" />
       ) : view === 'current' && planId && isPlanId(planId) ? (
         <CurrentPlanScreen
           planId={planId}
@@ -272,7 +272,6 @@ function formatUsd(amount: number): string {
 }
 
 const styles = StyleSheet.create({
-  spinner: { marginBottom: spacing.sm },
   error: { fontFamily: fonts.body, marginBottom: spacing.sm },
   note: { fontFamily: fonts.body, fontSize: 13, marginBottom: spacing.sm },
 });

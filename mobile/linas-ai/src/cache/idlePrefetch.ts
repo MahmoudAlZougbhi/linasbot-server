@@ -50,7 +50,12 @@ async function prefetchCmHub(signal: AbortSignal): Promise<void> {
     const [meta, prog, productsRes] = await Promise.all([
       fetchCmMeta(),
       fetchCmSetupProgress(),
-      fetchProducts().catch(() => ({ products: [], total: 0 })),
+      dedupeFetch(queryKeys.products(), fetchProducts)
+        .then((res) => {
+          cacheSet(queryKeys.products(), res.products);
+          return res;
+        })
+        .catch(() => ({ products: [], total: 0 })),
     ]);
     return {
       meta,
@@ -72,12 +77,27 @@ async function prefetchIntegrations(signal: AbortSignal): Promise<void> {
   cacheSet(key, data);
 }
 
+async function prefetchProducts(signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return;
+  const key = queryKeys.products();
+  if (isCacheFresh(key, QUERY_TTL.products)) return;
+  const data = await dedupeFetch(key, () => fetchProducts());
+  if (signal.aborted) return;
+  cacheSet(key, data.products);
+}
+
 /**
  * After first screen is up: low-priority, cancellable, skips fresh keys.
- * Does not mount extra screens.
+ * Does not mount extra screens. Sequential so chat first paint is not contended.
  */
 export async function prefetchEssentials(signal: AbortSignal): Promise<void> {
-  const jobs = [prefetchDashboard, prefetchLiveChatInbox, prefetchCmHub, prefetchIntegrations];
+  const jobs = [
+    prefetchDashboard,
+    prefetchLiveChatInbox,
+    prefetchCmHub,
+    prefetchIntegrations,
+    prefetchProducts,
+  ];
   for (const job of jobs) {
     if (signal.aborted) return;
     try {

@@ -61,6 +61,12 @@ export async function bootPersistedAuth(
   if (store.getUser) {
     await store.getUser().catch(() => null);
   }
+  try {
+    const { hydrateQueryPersist } = await import('../cache/queryPersist');
+    await hydrateQueryPersist();
+  } catch {
+    /* RAM cache still works */
+  }
   void rotateGuest().catch(() => {});
   return true;
 }

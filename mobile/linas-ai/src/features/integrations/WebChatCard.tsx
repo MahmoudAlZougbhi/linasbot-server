@@ -91,7 +91,7 @@ export function WebChatCard({ onError, onNotice }: Props) {
     );
   }
 
-  // Parent screen already shows LinasLoadingIndicator until webChatReady.
+  // Parent screen already shows ScreenSkeleton until webChatReady.
   if (!ready) {
     return null;
   }

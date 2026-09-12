@@ -6,7 +6,7 @@ import { cacheGet, cacheSet, dedupeFetch, isCacheFresh } from '../../cache/query
 import { queryKeys } from '../../cache/queryKeys';
 import { QUERY_TTL } from '../../cache/queryTtl';
 import { EmptyState } from '../../components/EmptyState';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { spacing, useTheme } from '../../theme';
 import { fetchProducts } from '../products/productsApi';
@@ -198,7 +198,16 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
 
   return (
     <ScreenChrome title={tr('aiSetupTitle')}>
-      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" style={styles.loader} /> : null}
+      {loading && !hasLoadedOnce ? (
+        <>
+          <AiSetupFilterTabs
+            filter={filter}
+            missingCount={0}
+            onChange={setFilter}
+          />
+          <ScreenSkeleton variant="cards" rows={6} />
+        </>
+      ) : null}
       {hasLoadedOnce && error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
       {hasLoadedOnce && hydrated ? (
         <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
@@ -247,5 +256,4 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
 
 const styles = StyleSheet.create({
   list: { paddingBottom: 48, gap: spacing.md },
-  loader: { marginVertical: spacing.sm },
 });

@@ -48,7 +48,7 @@ export type RequestsListState = {
   staff: StaffPick[];
   user: PublicUser | null;
   patchItem: (item: RequestCard) => void;
-  refresh: () => Promise<void>;
+  refresh: (opts?: { force?: boolean }) => Promise<void>;
   loadMore: () => Promise<void>;
 };
 
@@ -265,7 +265,13 @@ export function useRequestsList(enabled: boolean): RequestsListState {
     patchItem: (item) => {
       setItems((prev) => prev.map((row) => (row.request_id === item.request_id ? { ...row, ...item } : row)));
     },
-    refresh: () => load('quiet'),
+    refresh: (opts?: { force?: boolean }) => {
+      if (!opts?.force) {
+        const key = listCacheKey(filters, statusBucket, debouncedQ);
+        if (isCacheFresh(key, QUERY_TTL.requests)) return Promise.resolve();
+      }
+      return load('quiet');
+    },
     loadMore: async () => {
       if (!hasMore || loadingMore) return;
       await load('append');

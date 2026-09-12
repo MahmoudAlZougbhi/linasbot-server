@@ -25,8 +25,22 @@ export function cacheGet<T>(key: string): Entry<T> | null {
   return row as Entry<T>;
 }
 
+type PersistWriter = (key: string, data: unknown, updatedAt: number) => void;
+
+let persistWriter: PersistWriter | null = null;
+
+export function setQueryCachePersistWriter(writer: PersistWriter | null): void {
+  persistWriter = writer;
+}
+
 export function cacheSet<T>(key: string, data: T, now = Date.now()): void {
   touch(key, { data, updatedAt: now });
+  persistWriter?.(key, data, now);
+}
+
+/** Restore a disk snapshot without scheduling another persist write. */
+export function cacheRestore<T>(key: string, data: T, updatedAt: number): void {
+  touch(key, { data, updatedAt });
 }
 
 export function cacheInvalidate(prefix: string): void {

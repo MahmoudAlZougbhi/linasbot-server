@@ -61,7 +61,9 @@ export function LiveChatScreen({ initialOpen = null, active = true }: Props) {
         return;
       }
       if (event.type === 'new_conversation') {
-        if (canChatsRef.current) inbox.reloadFromEvent();
+        if (canChatsRef.current) {
+          inbox.applyNewMessage(event.data, selectedRef.current?.conversation_id ?? null);
+        }
         return;
       }
       if (event.type === 'comment_update') {

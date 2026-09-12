@@ -165,6 +165,31 @@ test('chat thread starts high; sparkle slightly larger than Linas name; send is 
   assert.match(composer, /isRtl/);
 });
 
+test('thinking row uses the landing Here typing bubble, not Thinking… text', () => {
+  const row = read('features/chat/ThinkingRow.tsx');
+  const dots = read('features/chat/TypingDots.tsx');
+  const landing = readFileSync(join(root, '..', '..', 'dashboard', 'src', 'styles', 'landing.css'), 'utf8');
+  assert.match(row, /TypingDots/);
+  assert.match(row, /colors\.bubbleAi/);
+  assert.match(row, /LinasStarMark/);
+  assert.match(row, /borderBottomLeftRadius/);
+  assert.match(row, /accessibilityLabel=\{label\}/);
+  assert.doesNotMatch(row, /Animated\.Text/);
+  assert.doesNotMatch(row, /<Text[\s\S]*\{label\}/);
+  assert.match(dots, /TYPING_DOT_CYCLE_MS = 1000/);
+  assert.match(dots, /TYPING_DOT_STAGGER_MS = 150/);
+  assert.match(dots, /TYPING_DOT_SIZE = 6/);
+  assert.match(dots, /TYPING_DOT_COLOR = '#06715F'/);
+  assert.match(dots, /translateY/);
+  assert.match(dots, /0\.25/);
+  assert.match(landing, /@keyframes lp-dots/);
+  assert.match(landing, /animation: lp-dots 1s infinite/);
+  assert.match(landing, /width: 6px/);
+  assert.match(landing, /background: #06715f/);
+  assert.match(landing, /animation-delay: 0\.15s/);
+  assert.match(landing, /animation-delay: 0\.3s/);
+});
+
 test('bubbles: You / Linas labels, mint user bubble, teal AI bullets', () => {
   const bubble = read('features/chat/ChatBubble.tsx');
   const body = read('features/chat/AiMessageBody.tsx');

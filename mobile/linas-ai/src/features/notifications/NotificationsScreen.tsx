@@ -12,7 +12,7 @@ import { cacheGet, cacheSet, isCacheFresh } from '../../cache/queryCache';
 import { queryKeys } from '../../cache/queryKeys';
 import { QUERY_TTL } from '../../cache/queryTtl';
 import { EmptyState } from '../../components/EmptyState';
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
@@ -198,7 +198,7 @@ export function NotificationsScreen({
   return (
     <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')} sectionTitle={sectionTitle}>
       {loading && !hasLoadedOnce ? (
-        <LinasLoadingIndicator variant="screen" />
+        <ScreenSkeleton variant="list" />
       ) : (
         <ScrollView
           contentContainerStyle={styles.list}

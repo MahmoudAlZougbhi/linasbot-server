@@ -87,14 +87,18 @@ export function HistoryRows({
                   setRenameId(null);
                 }}
                 autoFocus
-                style={{ color: colors.text, flex: 1 }}
+                style={{
+                  color: drawer ? colors.drawerChats : colors.text,
+                  flex: 1,
+                  ...(drawer ? typography.chatAi : null),
+                }}
               />
             ) : (
               <Text
                 style={[
                   styles.rowTitle,
                   drawer && styles.rowTitleDrawer,
-                  { color: colors.text },
+                  { color: drawer ? colors.drawerChats : colors.text },
                 ]}
                 numberOfLines={drawer ? 1 : 2}
               >
@@ -266,7 +270,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   rowTitleDrawer: {
-    ...typography.drawerItem,
+    ...typography.chatAi,
   },
   emptyDrawer: {
     fontFamily: fonts.body,

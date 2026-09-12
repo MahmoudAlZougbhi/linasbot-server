@@ -217,6 +217,7 @@ async def save_message_without_conversation_id(
             text=text,
             customer_info=customer_info,
             message_data=message_data,
+            unread_count=update_payload.get("unread_count"),
         )
     else:
         # No existing conversation found — create a new one
@@ -245,7 +246,6 @@ async def save_message_without_conversation_id(
         await _ensure_live_chat_index_after_save(canonical_user_id, saved_conv_id, None, {})
         print(f"✅ Created conversation {new_doc_ref.id} for user {canonical_user_id}")
 
-        # 📡 Broadcast SSE event for new conversation - include smart messages for Live Chat
         try:
             from modules.live_chat_api import broadcast_sse_event
 
@@ -257,9 +257,19 @@ async def save_message_without_conversation_id(
                         "conversation_id": new_doc_ref.id,
                         "phone": customer_info.get("phone_full"),
                         "name": customer_name,
+                        "user_name": customer_name,
                     },
                 )
             )
         except Exception:
             pass
+        _broadcast_saved_message_sse(
+            canonical_user_id=canonical_user_id,
+            conversation_id=new_doc_ref.id,
+            role=role,
+            text=text,
+            customer_info=customer_info,
+            message_data=message_data,
+            unread_count=0 if role != "user" else 1,
+        )
     return saved_conv_id, conversations_collection_for_user
