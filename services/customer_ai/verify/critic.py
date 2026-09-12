@@ -1,8 +1,7 @@
-"""Deterministic-first answer critic. Optional LLM only when OpenAI is configured."""
+"""Deterministic answer critic. Live turns do not add a second LLM round-trip."""
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -83,45 +82,6 @@ def _deterministic(
     return VerifierResult(verdict="PASS", coverage={k: str(v) for k, v in coverage.items()})
 
 
-async def _optional_llm(*, text: str, plan: PlannerPlan, bundle: EvidenceBundle) -> VerifierResult | None:
-    if not (os.getenv("OPENAI_API_KEY") or "").strip():
-        return None
-    try:
-        from services.customer_ai.providers.config import answer_model
-        from services.llm_core_service import create_chat_completion
-
-        evidence = "\n".join(f"- {item.title}: {item.text[:240]}" for item in bundle.items[:8])
-        tasks = ", ".join(f"{t.id}:{t.type}" for t in plan.tasks)
-        response = await create_chat_completion(
-            model=answer_model(),
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Strict grounding critic. First line PASS or FAIL. Never invent.\n"
-                        f"Tasks: {tasks}\nEvidence:\n{evidence}\nAnswer:\n{text}"
-                    ),
-                }
-            ],
-            max_tokens=200,
-        )
-        body = str(response.choices[0].message.content or "").strip()
-        if not body:
-            return None
-        first = body.splitlines()[0].strip().upper()
-        if first.startswith("PASS"):
-            return VerifierResult(verdict="PASS", source="llm")
-        claims = [line.strip("- ").strip() for line in body.splitlines()[1:] if line.strip()]
-        return VerifierResult(
-            verdict="FAIL",
-            unsupported_claims=claims,
-            repair_instruction="Revise using only published evidence; drop unsupported claims.",
-            source="llm",
-        )
-    except Exception:
-        return None
-
-
 async def verify_answer(
     *,
     reply_text: str = "",
@@ -132,7 +92,7 @@ async def verify_answer(
     receipts: list[str] | None = None,
     message: str = "",
 ) -> VerifierResult:
-    """Structured PASS/FAIL. Deterministic first; on LLM failure use deterministic only."""
+    """Structured PASS/FAIL from published evidence. No extra LLM critic on the live path."""
     text = (reply_text or draft or "").strip()
     det = _deterministic(
         text=text,
@@ -144,9 +104,6 @@ async def verify_answer(
     )
     if det.verdict == "FAIL":
         return det
-    llm = await _optional_llm(text=text, plan=plan, bundle=bundle)
-    if llm is None:
-        return det
-    if llm.verdict == "FAIL":
-        return llm
+    # Deterministic PASS is the live authority. Optional LLM critic was adding a
+    # full extra round-trip and could FAIL a grounded reply into empty outbound.
     return det

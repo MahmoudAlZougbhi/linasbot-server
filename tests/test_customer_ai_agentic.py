@@ -130,3 +130,49 @@ async def test_budget_exhaustion() -> None:
     budgets = TurnBudgets()
     assert budgets.max_retrieval_rounds == 3
     assert budgets.extra_retrieval_rounds == 2
+
+
+@pytest.mark.asyncio
+async def test_verify_pass_stays_deterministic() -> None:
+    plan = _plan(_task("t1", "information", families=["knowledge"], span="laser"))
+    bundle = EvidenceBundle(
+        items=[_item("knowledge:laser", text="Laser hair removal is available.")],
+        outcome="found",
+    )
+    verdict = await verify_answer(
+        reply_text="Laser hair removal is available.",
+        plan=plan,
+        bundle=bundle,
+        structured_facts={"knowledge": [{"id": "laser", "task_id": "t1"}]},
+        message="laser?",
+    )
+    assert verdict.verdict == "PASS"
+    assert verdict.source == "deterministic"
+
+
+@pytest.mark.asyncio
+async def test_multi_round_covers_two_tasks_in_one_round() -> None:
+    plan = _plan(
+        _task("t1", "information", families=["knowledge"], span="laser"),
+        _task("t2", "hours", families=["hours"], span="antelias"),
+    )
+    turn = _turn()
+    found_k = EvidenceBundle(items=[_item("knowledge:laser")], outcome="found")
+    found_h = EvidenceBundle(
+        items=[_item("hours:antelias", family="hours", text="Antelias is open 10 to 8.")],
+        outcome="found",
+    )
+    calls = {"n": 0}
+
+    async def _retrieve(ctx):
+        calls["n"] += 1
+        families = set(ctx.families or [])
+        if "hours" in families:
+            return found_h
+        return found_k
+
+    with patch("services.customer_ai.agent.multi_retrieve.retrieve_published", new=AsyncMock(side_effect=_retrieve)):
+        bundle, trace, _facts = await multi_round_retrieve(turn, plan, "laser hours antelias?", max_rounds=3)
+    assert bundle.outcome == "found"
+    assert calls["n"] == 2
+    assert any(row.get("reason") == "early_stop_covered" for row in trace)

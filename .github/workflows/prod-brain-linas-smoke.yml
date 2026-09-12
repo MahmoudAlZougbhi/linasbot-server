@@ -1,0 +1,146 @@
+# Capture-only Linas Laser Brain turn on production. Does not send WhatsApp/IG.
+name: Prod Brain Linas Smoke
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: prod-brain-linas-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Capture-only Linas Laser Brain turn
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Run on-server capture-only Brain turn
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: false
+          command_timeout: 10m
+          script: |
+            set -e
+            echo "[brain-smoke] git_head=$(git -C /opt/linasbot rev-parse HEAD)"
+            APP_DIR="/opt/linasbot"
+            PYTHON_BIN="$APP_DIR/venv/bin/python3"
+            if [ ! -x "$PYTHON_BIN" ]; then
+              PYTHON_BIN="$(command -v python3)"
+            fi
+            echo "[brain-smoke] python_bin=$PYTHON_BIN"
+            cd "$APP_DIR"
+            if [ -f venv/bin/activate ]; then
+              # shellcheck disable=SC1091
+              source venv/bin/activate
+            fi
+            export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
+            "$PYTHON_BIN" - <<'PY'
+            from __future__ import annotations
+
+            import asyncio
+            import json
+            import os
+            import time
+            from pathlib import Path
+
+            APP_DIR = "/opt/linasbot"
+            os.chdir(APP_DIR)
+
+            for env_path in (Path("/opt/linasbot/.env"), Path(APP_DIR) / ".env"):
+                if not env_path.exists():
+                    continue
+                for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                    if not line or line.lstrip().startswith("#") or "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    os.environ.setdefault(key.strip(), value.strip().strip("'").strip('"'))
+
+            from services.customer_ai.readiness import brain_readiness_report
+            from services.customer_ai.runtime import run_customer_ai_dm
+
+            report = brain_readiness_report(tenant_id="linas")
+            search = report.get("search") or {}
+            checks = report.get("checks") or {}
+            gates = {
+                name: (row or {}).get("status")
+                for name, row in (report.get("gates") or {}).items()
+            }
+            print(
+                "[brain-smoke] readiness "
+                + json.dumps(
+                    {
+                        "ok": report.get("ok"),
+                        "search_ready": search.get("ready"),
+                        "search_reason": search.get("reason"),
+                        "pgvector": search.get("pgvector"),
+                        "pointer_ready": search.get("pointer_ready"),
+                        "openai_configured": checks.get("openai_configured"),
+                        "voyage_configured": checks.get("voyage_configured"),
+                        "lab_page_flag": checks.get("lab_page_flag"),
+                        "tenant_gate_allow": checks.get("tenant_gate_allow"),
+                        "gates": gates,
+                    },
+                    sort_keys=True,
+                )
+            )
+
+            message = "شو ساعات عمل فرع أنطلياس؟"
+            started = time.perf_counter()
+
+            async def _run():
+                return await run_customer_ai_dm(
+                    tenant_id="linas",
+                    message=message,
+                    channel="web_chat",
+                    conversation_id="brain-smoke:cursor",
+                    user_id="brain-smoke:cursor",
+                    message_id=f"brain-smoke:{int(time.time())}",
+                    apply_customer_usage_limits=False,
+                )
+
+            outcome = asyncio.run(_run())
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
+            meta = getattr(outcome, "metadata", None) or {}
+            extra = meta if isinstance(meta, dict) else {}
+            timeline = extra.get("stage_timeline") or extra.get("flow") or []
+            stages = []
+            if isinstance(timeline, list):
+                for row in timeline:
+                    if not isinstance(row, dict):
+                        continue
+                    stages.append(
+                        {
+                            "stage": row.get("stage") or row.get("id"),
+                            "ms": (row.get("detail") or {}).get("ms")
+                            if isinstance(row.get("detail"), dict)
+                            else row.get("ms"),
+                            "title": row.get("title"),
+                        }
+                    )
+            reply = str(getattr(outcome, "reply", None) or "")
+            print(
+                "[brain-smoke] turn "
+                + json.dumps(
+                    {
+                        "elapsed_ms": elapsed_ms,
+                        "stop": bool(getattr(outcome, "stop", False)),
+                        "reason": str(getattr(outcome, "reason", "") or extra.get("phase") or ""),
+                        "ai_called": extra.get("ai_called"),
+                        "retrieval_outcome": extra.get("retrieval_outcome"),
+                        "reply_len": len(reply),
+                        "reply_preview": reply[:220],
+                        "operation_id": extra.get("operation_id") or "",
+                        "stages": stages,
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+            )
+            PY

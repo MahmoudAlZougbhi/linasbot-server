@@ -10,7 +10,12 @@ from pydantic import BaseModel, Field
 from modules.api_security import require_platform_owner
 from modules.core import app
 from services.customer_ai.evals.runner import run_fixture_corpus
-from services.customer_ai.test_lab import lab_enabled, run_lab_turn, run_lab_verification_exercises
+from services.customer_ai.test_lab import (
+    lab_enabled,
+    lab_turn_tenant_allowed,
+    run_lab_turn,
+    run_lab_verification_exercises,
+)
 from services.membership.message_policy import classify_turn, message_units_for
 
 
@@ -29,7 +34,7 @@ async def platform_customer_ai_lab_turn(body: LabTurnBody, request: Request) -> 
     require_platform_owner(request)
     if not lab_enabled():
         raise HTTPException(status_code=404, detail="lab_disabled")
-    if not str(body.tenant_id).startswith("lab_") and body.tenant_id != "lab":
+    if not lab_turn_tenant_allowed(body.tenant_id):
         raise HTTPException(status_code=400, detail="lab_tenant_required")
     result = await run_lab_turn(
         tenant_id=body.tenant_id,
@@ -81,6 +86,6 @@ async def platform_customer_ai_lab_exercises(request: Request, tenant_id: str = 
     if not lab_enabled():
         raise HTTPException(status_code=404, detail="lab_disabled")
     tid = (tenant_id or "lab").strip() or "lab"
-    if not tid.startswith("lab_") and tid != "lab":
+    if not lab_turn_tenant_allowed(tid):
         raise HTTPException(status_code=400, detail="lab_tenant_required")
     return {"success": True, **run_lab_verification_exercises(tenant_id=tid)}

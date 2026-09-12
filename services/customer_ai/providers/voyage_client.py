@@ -14,6 +14,10 @@ from services.customer_ai.providers.spaces import EmbeddingSpace
 
 VOYAGE_BASE = "https://api.voyageai.com/v1"
 _RETRY_STATUSES = {429, 502, 503, 504}
+QUERY_TIMEOUT_SECONDS = 12.0
+QUERY_ATTEMPTS = 2
+INDEX_TIMEOUT_SECONDS = 45.0
+INDEX_ATTEMPTS = 3
 
 
 class VoyageNotConfiguredError(RuntimeError):
@@ -47,21 +51,35 @@ def _validate(space: EmbeddingSpace, vectors: list[list[float]]) -> None:
             raise VoyageContractError("non_finite_embedding")
 
 
-def _retry_delay(response: httpx.Response, attempt: int) -> float:
+def _request_budget(space: EmbeddingSpace) -> tuple[float, int, float]:
+    if space.input_mode == "query":
+        return QUERY_TIMEOUT_SECONDS, QUERY_ATTEMPTS, 2.0
+    return INDEX_TIMEOUT_SECONDS, INDEX_ATTEMPTS, 8.0
+
+
+def _retry_delay(response: httpx.Response, attempt: int, *, cap: float) -> float:
     raw = (response.headers.get("Retry-After") or "").strip()
     if raw.isdigit():
-        return min(float(raw), 45.0)
-    return float(min(1.5 * (2**attempt), 30.0))
+        return min(float(raw), cap)
+    return float(min(1.5 * (2**attempt), cap))
 
 
-async def _post(path: str, payload: dict[str, Any]) -> dict[str, Any]:
+async def _post(
+    path: str,
+    payload: dict[str, Any],
+    *,
+    timeout: float,
+    attempts: int,
+    retry_cap: float,
+) -> dict[str, Any]:
     headers = _headers()
-    async with httpx.AsyncClient(timeout=90.0) as client:
+    tries = max(1, attempts)
+    async with httpx.AsyncClient(timeout=timeout) as client:
         response: httpx.Response | None = None
-        for attempt in range(8):
+        for attempt in range(tries):
             response = await client.post(f"{VOYAGE_BASE}{path}", headers=headers, json=payload)
-            if response.status_code in _RETRY_STATUSES and attempt < 7:
-                await asyncio.sleep(_retry_delay(response, attempt))
+            if response.status_code in _RETRY_STATUSES and attempt < tries - 1:
+                await asyncio.sleep(_retry_delay(response, attempt, cap=retry_cap))
                 continue
             break
     assert response is not None
@@ -82,7 +100,14 @@ async def embed_texts(space: EmbeddingSpace, texts: list[str]) -> VoyageVectors:
         "input_type": space.input_mode,
         "output_dimension": space.dimensions,
     }
-    data = await _post("/embeddings", payload)
+    timeout, attempts, retry_cap = _request_budget(space)
+    data = await _post(
+        "/embeddings",
+        payload,
+        timeout=timeout,
+        attempts=attempts,
+        retry_cap=retry_cap,
+    )
     vectors = [list(item.get("embedding") or []) for item in data.get("data") or []]
     _validate(space, vectors)
     return VoyageVectors(space_id=space.space_id, vectors=vectors)
@@ -97,7 +122,14 @@ async def embed_contextual_groups(space: EmbeddingSpace, groups: list[list[str]]
         "input_type": space.input_mode,
         "output_dimension": space.dimensions,
     }
-    data = await _post("/contextualizedembeddings", payload)
+    timeout, attempts, retry_cap = _request_budget(space)
+    data = await _post(
+        "/contextualizedembeddings",
+        payload,
+        timeout=timeout,
+        attempts=attempts,
+        retry_cap=retry_cap,
+    )
     out: list[VoyageVectors] = []
     for group in data.get("data") or []:
         rows = group.get("data") if isinstance(group, dict) else None
@@ -119,7 +151,13 @@ async def rerank_texts(*, query: str, documents: list[str], model: str, top_k: i
     payload: dict[str, Any] = {"query": query, "documents": documents, "model": model}
     if top_k is not None:
         payload["top_k"] = top_k
-    data = await _post("/rerank", payload)
+    data = await _post(
+        "/rerank",
+        payload,
+        timeout=QUERY_TIMEOUT_SECONDS,
+        attempts=QUERY_ATTEMPTS,
+        retry_cap=2.0,
+    )
     hits: list[RerankHit] = []
     for item in data.get("data") or data.get("results") or []:
         if not isinstance(item, dict):
