@@ -35,15 +35,19 @@ def _cache_put(key: str, caption: str) -> None:
         _CAPTION_CACHE.pop(item, None)
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def _caption_from_payload(payload: dict[str, Any]) -> str:
     return str(payload.get("caption") or payload.get("message") or payload.get("story") or "").strip()
 
 
 def _post_id_from_comment_payload(payload: dict[str, Any], *, channel: str) -> str:
     if channel == "instagram":
-        media = payload.get("media") if isinstance(payload.get("media"), dict) else {}
+        media = _as_dict(payload.get("media"))
         return str(media.get("id") or payload.get("media_id") or "").strip()
-    post = payload.get("post") if isinstance(payload.get("post"), dict) else {}
+    post = _as_dict(payload.get("post"))
     return str(post.get("id") or payload.get("post_id") or "").strip()
 
 
@@ -161,8 +165,8 @@ async def enrich_comment_event_post(
             if graph_post:
                 post_id = graph_post
             if not caption:
-                media = comment_payload.get("media") if isinstance(comment_payload.get("media"), dict) else {}
-                post_obj = comment_payload.get("post") if isinstance(comment_payload.get("post"), dict) else {}
+                media = _as_dict(comment_payload.get("media"))
+                post_obj = _as_dict(comment_payload.get("post"))
                 caption = _caption_from_payload(media) or _caption_from_payload(post_obj)
             if not parent_comment:
                 parent_comment = _parent_text_from_payload(comment_payload)
