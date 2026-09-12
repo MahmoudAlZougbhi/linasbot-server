@@ -12,8 +12,10 @@ from services.customer_ai.faq_freshness import faq_static_allowed
 from services.customer_ai.templates import brain_template
 
 
-def _destination(channel: str) -> str:
-    return "web_chat" if "web" in (channel or "") else "dm"
+def _destination(channel: str, turn: object | None = None) -> str:
+    from services.customer_ai.outbound_destination import outbound_destination
+
+    return outbound_destination(turn, channel)
 
 
 def _response_language(turn: CustomerTurn) -> str:
@@ -29,7 +31,7 @@ def faq_envelope(
     extra: dict[str, Any],
     apply_greeting: Callable[[CustomerTurn, str, str, FinalReplyEnvelope], FinalReplyEnvelope],
 ) -> TurnResult:
-    destination = _destination(channel)
+    destination = _destination(channel, turn)
     envelope = apply_greeting(
         turn,
         message,
@@ -97,7 +99,7 @@ async def semantic_faq_result(
                 decision="clarify",
                 messages=[
                     OutboundMessage(
-                        destination=_destination(channel),
+                        destination=_destination(channel, turn),
                         text=brain_template("faq_ambiguous", lang),
                     )
                 ],

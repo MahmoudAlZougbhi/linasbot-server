@@ -48,9 +48,9 @@ def _outcome(result: TurnResult, *, comment_surface: bool = False) -> CustomerRe
 
 
 def _destination_for(turn: CustomerTurn, channel: str) -> str:
-    if turn.surface == "comment":
-        return "comment"
-    return "web_chat" if "web" in (channel or turn.channel or "") else "dm"
+    from services.customer_ai.outbound_destination import outbound_destination
+
+    return outbound_destination(turn, channel or turn.channel)
 
 
 def _gate_result(turn: CustomerTurn, gate: GateDecision, channel: str) -> TurnResult:

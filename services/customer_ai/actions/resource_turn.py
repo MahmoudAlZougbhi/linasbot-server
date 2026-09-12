@@ -10,8 +10,10 @@ from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMes
 from services.customer_ai.contracts.turn import CustomerTurn
 
 
-def _destination(channel: str) -> str:
-    return "web_chat" if "web" in (channel or "") else "dm"
+def _destination(channel: str, turn: object | None = None) -> str:
+    from services.customer_ai.outbound_destination import outbound_destination
+
+    return outbound_destination(turn, channel)
 
 
 def _tokens(text: str) -> list[str]:
@@ -138,7 +140,7 @@ async def resource_request_result(
                 decision="clarify",
                 messages=[
                     OutboundMessage(
-                        destination=_destination(channel),
+                        destination=_destination(channel, turn),
                         text="I could not find an authorized photo or link for that yet.",
                         protected=True,
                     )
@@ -158,7 +160,7 @@ async def resource_request_result(
         stop_reason="ok",
         envelope=FinalReplyEnvelope(
             decision="deterministic" if ok else "clarify",
-            messages=[OutboundMessage(destination=_destination(channel), text=text, protected=True)],
+            messages=[OutboundMessage(destination=_destination(channel, turn), text=text, protected=True)],
             dispositions={
                 task.id: ("pending_delivery" if ok else "not_found")
                 for task in plan.tasks

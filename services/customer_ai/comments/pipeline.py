@@ -105,8 +105,20 @@ def deterministic_comment_result(
 
 
 def apply_ai_comment_destinations(result: TurnResult, mode: CommentMode | None) -> TurnResult:
-    if not mode or not str(mode).startswith("ai") or not result.envelope.messages:
+    if not result.envelope.messages:
         return result
+    if not mode or not str(mode).startswith("ai"):
+        messages = [
+            item.model_copy(update={"destination": "comment"}) if item.destination == "dm" else item
+            for item in result.envelope.messages
+        ]
+        if messages == list(result.envelope.messages):
+            return result
+        extra = dict(result.extra)
+        extra.setdefault("comment_mode", "ai_comment")
+        return result.model_copy(
+            update={"envelope": result.envelope.model_copy(update={"messages": messages}), "extra": extra}
+        )
     messages = list(result.envelope.messages)
     if mode == "ai_comment":
         messages = [item.model_copy(update={"destination": "comment"}) for item in messages]

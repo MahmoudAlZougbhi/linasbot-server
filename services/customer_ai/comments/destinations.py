@@ -50,6 +50,12 @@ def destinations_from_outcome(outcome: Any) -> CommentDestinations:
             depends = True
     if not public and not private:
         public = str(getattr(outcome, "reply", None) or "").strip()
+    # Default comment AI shares the DM generate path, which labels replies
+    # destination=dm. Without an explicit private-comment rule that must
+    # become a public comment, not a Graph private_replies call.
+    explicit_private = mode in {"ai_dm", "static_dm", "ai_both", "static_both"}
+    if not public and private and not explicit_private and not depends:
+        public, private = private, ""
     return CommentDestinations(
         public_text=public[:900],
         private_text=private[:900],
