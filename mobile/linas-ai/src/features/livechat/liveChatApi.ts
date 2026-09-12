@@ -142,6 +142,7 @@ export async function sendOperatorMessage(
   chat: LiveChatItem,
   message: string,
   messageType: 'text' | 'voice' | 'image' = 'text',
+  opts?: { idempotencyKey?: string },
 ) {
   try {
     return await apiFetch('/api/live-chat/send-message', {
@@ -152,7 +153,7 @@ export async function sendOperatorMessage(
         message,
         operator_id: await operatorId(),
         message_type: messageType,
-        idempotency_key: idempotencyKey(messageType),
+        idempotency_key: opts?.idempotencyKey || idempotencyKey(messageType),
       }),
       schema: ActionResultSchema,
     });

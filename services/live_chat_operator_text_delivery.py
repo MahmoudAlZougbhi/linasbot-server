@@ -58,6 +58,7 @@ async def deliver_saved_operator_text(
             user_id=user_id,
             conversation_id=conversation_id,
             text=text,
+            idempotency_key=idempotency_key,
         )
         if delivery is None:
             return {"success": False, "delivered": False, "error": "social_delivery_failed"}
@@ -72,6 +73,19 @@ async def deliver_saved_operator_text(
             "channel": channel or "unknown",
         }
 
+    from services.live_chat_operator_queue import try_enqueue_live_chat_whatsapp
+
+    queued = try_enqueue_live_chat_whatsapp(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        canonical_user_id=canonical_user_id,
+        conversation_id=conversation_id,
+        text=text,
+        idempotency_key=idempotency_key,
+    )
+    if queued is not None:
+        return queued
+
     try:
         result = await adapter.send_text_message(canonical_user_id, text)
     except Exception as send_error:
@@ -82,9 +96,7 @@ async def deliver_saved_operator_text(
             "channel": "whatsapp",
         }
     if not isinstance(result, dict) or not result.get("success"):
-        send_err = (
-            str((result or {}).get("error") or "send failed") if isinstance(result, dict) else "send failed"
-        )
+        send_err = str((result or {}).get("error") or "send failed") if isinstance(result, dict) else "send failed"
         return {
             "success": False,
             "delivered": False,

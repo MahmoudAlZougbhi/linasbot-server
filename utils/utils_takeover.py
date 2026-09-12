@@ -177,11 +177,7 @@ def sync_post_release_cooldown_from_conv_payload(user_data: dict, conv_data: dic
 
 def _clear_takeover_flags_for_user(resolved_user_id: str, raw_user_id: str, canonical_user_id: str) -> None:
     """Clear takeover flags for every id pause may have written (same variant union)."""
-    variants = {
-        v
-        for v in merge_conversation_user_id_variants(resolved_user_id, raw_user_id, canonical_user_id)
-        if v
-    }
+    variants = {v for v in merge_conversation_user_id_variants(resolved_user_id, raw_user_id, canonical_user_id) if v}
     for v in variants:
         config.user_in_human_takeover_mode.pop(v, None)
         try:

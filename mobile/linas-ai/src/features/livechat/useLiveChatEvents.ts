@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 
 import { API_BASE, ensureAccessToken, refreshAccessToken } from '../../api/client';
 import { getStoredAppLanguage } from '../../i18n/languageStore';
@@ -123,10 +124,17 @@ export function useLiveChatEvents(opts: { enabled: boolean; onEvent: (event: Liv
     };
 
     void run();
+    const appSub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || signal.cancelled) return;
+      delay = BACKOFF_START_MS;
+      signal.xhr?.abort();
+      signal.wake?.();
+    });
     return () => {
       signal.cancelled = true;
       signal.wake?.();
       signal.xhr?.abort();
+      appSub.remove();
     };
   }, [opts.enabled]);
 }

@@ -76,23 +76,34 @@ def accept_and_enqueue(event: NormalizedInbound) -> tuple[str, bool]:
         return inbound_id, True
 
 
-def enqueue_deliver_job(*, outbox_id: str, tenant_id: str, channel: str, surface: str, conversation_key: str) -> str:
+def enqueue_deliver_job(
+    *,
+    outbox_id: str,
+    tenant_id: str,
+    channel: str,
+    surface: str,
+    conversation_key: str,
+    extra_payload: dict | None = None,
+    job_idempotency_key: str | None = None,
+) -> str:
     from services.omnichannel.enqueue import AMBIGUOUS_ENQUEUE, enqueue_job
     from services.omnichannel.queues import outbound_logical
 
     logical = outbound_logical(channel=channel, surface=surface)
+    extra = {key: value for key, value in (extra_payload or {}).items() if value not in (None, "")}
     job_id = enqueue_job(
         logical_queue=logical,
         job_type="omni_deliver",
         tenant_id=tenant_id,
         payload={
+            **extra,
             "outbox_id": outbox_id,
             "channel": channel,
             "surface": surface,
             "_priority": "customer_conversation",
             "_queue_class": logical,
         },
-        idempotency_key=f"omni_del:{outbox_id}",
+        idempotency_key=job_idempotency_key or f"omni_del:{outbox_id}",
         conversation_key=conversation_key,
         provider=channel if channel != "web_chat" else "openai",
     )

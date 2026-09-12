@@ -22,15 +22,27 @@ def _log_sse(action: str, **kwargs: Any) -> None:
 
 async def broadcast_sse_event(event_type: str, data: dict) -> None:
     """Fan out to this node and Redis. Never skip Redis because this process has no local clients."""
+    import uuid
+
+    from services.live_chat_contracts import utc_now
+
     payload = dict(data or {})
+    payload.setdefault("event_id", str(uuid.uuid4()))
+    payload.setdefault("event_ts", utc_now().isoformat())
     if not str(payload.get("tenant_id") or "").strip() and payload.get("user_id"):
         from services.live_chat_channel import live_chat_event_tenant_id
 
         payload["tenant_id"] = live_chat_event_tenant_id(payload.get("user_id"))
+    if not payload.get("channel") and payload.get("user_id"):
+        from services.live_chat_channel import resolve_live_chat_channel
+
+        payload["channel"] = resolve_live_chat_channel(payload.get("user_id"), payload)
     client_count = await live_chat_sse_broadcaster.active_clients_count()
     _log_sse("broadcast", event_type=event_type, client_count=client_count, conv_id=payload.get("conversation_id"))
     if event_type == "new_message":
-        print(f"📡 [SSE] broadcast new_message conv_id={payload.get('conversation_id')} user_id={payload.get('user_id')}")
+        print(
+            f"📡 [SSE] broadcast new_message conv_id={payload.get('conversation_id')} user_id={payload.get('user_id')}"
+        )
     await live_chat_sse_broadcaster.publish(event_type, payload)
 
 

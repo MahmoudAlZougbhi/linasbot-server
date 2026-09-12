@@ -148,6 +148,9 @@ export const LiveChatMessageSchema = z
     audio_url: z.string().optional().nullable(),
     image_url: z.string().optional().nullable(),
     media_url: z.string().optional().nullable(),
+    delivery_status: z.string().optional().nullable(),
+    delivery_error: z.string().optional().nullable(),
+    idempotency_key: z.string().optional().nullable(),
   })
   .passthrough();
 

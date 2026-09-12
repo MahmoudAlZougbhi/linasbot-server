@@ -73,6 +73,8 @@ async def deliver_live_chat_meta_operator_text(
     tenant_id: str | None,
     user_id: str,
     text: str,
+    conversation_id: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     channel, sender_id, asset_id, _embedded_tenant = parse_meta_live_chat_user_id(user_id)
     tenant = resolve_meta_live_chat_tenant(tenant_id, user_id)
@@ -95,18 +97,25 @@ async def deliver_live_chat_meta_operator_text(
     if not account:
         return {"success": False, "error": "meta_account_not_found", "delivered": False}
 
-    from services.job_queue import job_queue
-    from services.omnichannel.operator_enqueue import enqueue_operator_reply
-    from services.queues.config import redis_required
+    from services.live_chat_operator_queue import (
+        enqueue_live_chat_operator_text,
+        live_chat_durable_mode,
+        queue_unavailable_result,
+    )
 
-    if redis_required() and getattr(job_queue, "production_ready", False):
-        return enqueue_operator_reply(
+    mode = live_chat_durable_mode()
+    if mode == "unavailable":
+        return queue_unavailable_result(channel=channel)
+    if mode == "enqueue":
+        return enqueue_live_chat_operator_text(
             tenant_id=tenant,
             channel=channel,
-            surface="operator",
             account_id=account,
             conversation_key=f"{tenant}:{channel}:{sender_id}",
             text=text,
+            user_id=user_id,
+            conversation_id=str(conversation_id or sender_id),
+            idempotency_key=idempotency_key,
         )
 
     import asyncio

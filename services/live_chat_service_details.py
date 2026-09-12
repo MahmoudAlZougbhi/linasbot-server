@@ -83,9 +83,7 @@ class LiveChatDetailsMixin:
                                 "returned_messages": len(formatted_recent),
                                 "has_more": msg_count > len(formatted_recent),
                                 "sentiment": str(data.get("sentiment") or "neutral"),
-                                "status": self._conversation_state_to_status(
-                                    self._normalize_conversation_state(data)
-                                ),
+                                "status": self._conversation_state_to_status(self._normalize_conversation_state(data)),
                             }
                 except TimeoutError:
                     pass

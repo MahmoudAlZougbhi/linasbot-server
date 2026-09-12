@@ -69,19 +69,29 @@ async def deliver_social_operator_text(
     user_id: str,
     conversation_id: str,
     text: str,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any] | None:
-    from services.queues.config import redis_required
+    from services.live_chat_operator_queue import live_chat_durable_mode, queue_unavailable_result
 
     if is_meta_dm_live_chat_user(user_id):
         return await deliver_live_chat_meta_operator_text(
             tenant_id=tenant_id,
             user_id=user_id,
             text=text,
+            conversation_id=conversation_id,
+            idempotency_key=idempotency_key,
         )
     if is_tiktok_live_chat_user(user_id):
-        if redis_required():
+        mode = live_chat_durable_mode()
+        if mode == "unavailable":
+            return queue_unavailable_result(channel="tiktok")
+        if mode == "enqueue":
             return _enqueue_operator_text(
-                tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id, text=text
+                tenant_id=tenant_id,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                text=text,
+                idempotency_key=idempotency_key,
             )
         return await deliver_live_chat_tiktok_operator_text(
             tenant_id=tenant_id,
@@ -92,33 +102,44 @@ async def deliver_social_operator_text(
     return None
 
 
-def _enqueue_operator_text(*, tenant_id: str | None, user_id: str, conversation_id: str, text: str) -> dict[str, Any]:
-    from services.omnichannel.operator_enqueue import enqueue_operator_reply
+def _enqueue_operator_text(
+    *,
+    tenant_id: str | None,
+    user_id: str,
+    conversation_id: str,
+    text: str,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    from services.live_chat_operator_queue import enqueue_live_chat_operator_text
 
     if is_meta_dm_live_chat_user(user_id):
         from services.live_chat_meta_operator import parse_meta_live_chat_user_id, resolve_meta_live_chat_tenant
 
         channel, sender_id, asset_id, _embedded = parse_meta_live_chat_user_id(user_id)
         tenant = resolve_meta_live_chat_tenant(tenant_id, user_id)
-        return enqueue_operator_reply(
+        return enqueue_live_chat_operator_text(
             tenant_id=tenant,
             channel=channel,
-            surface="operator",
             account_id=str(asset_id or ""),
             conversation_key=f"{tenant}:{channel}:{sender_id}",
             text=text,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            idempotency_key=idempotency_key,
         )
     from services.live_chat_tiktok_operator import parse_tiktok_live_chat_user_id
 
     sender_id, connection_id, embedded_tenant = parse_tiktok_live_chat_user_id(user_id)
     tenant = str(tenant_id or embedded_tenant or "linas").strip()
-    return enqueue_operator_reply(
+    return enqueue_live_chat_operator_text(
         tenant_id=tenant,
         channel="tiktok",
-        surface="operator",
         account_id=str(connection_id or ""),
         conversation_key=f"{tenant}:tiktok:{conversation_id or sender_id}",
         text=text,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        idempotency_key=idempotency_key,
     )
 
 

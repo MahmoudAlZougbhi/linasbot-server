@@ -93,6 +93,10 @@ def test_sse_filter_allows_same_tenant_whatsapp_and_conversations() -> None:
         session,
         _event("conversations", {"tenant_id": "linas", "trigger_refresh": True}),
     )
+    assert session_allows_live_chat_sse_event(
+        session,
+        _event("message_status", {"tenant_id": "linas", "user_id": "+96170123456", "delivery_status": "sent"}),
+    )
 
 
 def test_sse_filter_channel_acl_fail_closed() -> None:
@@ -118,6 +122,13 @@ def test_sse_filter_channel_acl_fail_closed() -> None:
         )
         is False
     )
+    assert (
+        session_allows_live_chat_sse_event(
+            session,
+            _event("message_status", {"tenant_id": "linas", "user_id": "+96170123456"}),
+        )
+        is False
+    )
 
 
 @pytest.mark.asyncio
@@ -131,12 +142,14 @@ async def test_broadcast_publishes_when_no_local_clients(monkeypatch: pytest.Mon
     monkeypatch.setattr(live_chat_sse_broadcaster, "active_clients_count", AsyncMock(return_value=0))
 
     await broadcast_sse_event("new_message", {"user_id": "+96170123456", "conversation_id": "c1"})
-    assert published == [
-        (
-            "new_message",
-            {"user_id": "+96170123456", "conversation_id": "c1", "tenant_id": "linas"},
-        )
-    ]
+    assert published[0][0] == "new_message"
+    body = published[0][1]
+    assert body["user_id"] == "+96170123456"
+    assert body["conversation_id"] == "c1"
+    assert body["tenant_id"] == "linas"
+    assert body["channel"] == "whatsapp"
+    assert body["event_id"]
+    assert body["event_ts"]
 
     published.clear()
     await broadcast_sse_event(
@@ -144,3 +157,4 @@ async def test_broadcast_publishes_when_no_local_clients(monkeypatch: pytest.Mon
         {"user_id": "shop:instagram:ig:psid", "conversation_id": "c2"},
     )
     assert published[0][1]["tenant_id"] == "shop"
+    assert published[0][1]["channel"] == "instagram"

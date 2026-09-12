@@ -19,6 +19,7 @@ import {
   sseEventMatchesChat,
 } from '../src/features/livechat/liveChatSseParse.ts';
 import {
+  applyMessageStatus,
   hasPendingOperatorSend,
   mergeSseThreadMessage,
   mergeThreadMessages,
@@ -341,6 +342,38 @@ test('SSE parser and thread merge apply a new_message without duplicating', () =
     again.map((m) => m.message_id),
     ['old', 'm1'],
   );
+});
+
+test('message_status updates the optimistic bubble without duplicating', () => {
+  const local = {
+    message_id: 'local-1',
+    client_send_id: 'local-1',
+    idempotency_key: 'local-1',
+    timestamp: '2026-09-12T10:00:00.000Z',
+    is_user: false,
+    content: 'hello',
+    text: 'hello',
+    role: 'operator',
+    delivery_status: 'sending',
+  };
+  const failed = applyMessageStatus([local], {
+    client_message_id: 'local-1',
+    delivery_status: 'failed',
+    error: 'meta_delivery_timeout',
+  });
+  assert.equal(failed.length, 1);
+  assert.equal(failed[0].delivery_status, 'failed');
+  assert.equal(failed[0].delivery_error, 'meta_delivery_timeout');
+  const sent = applyMessageStatus(failed, {
+    client_send_id: 'local-1',
+    delivery_status: 'sent',
+  });
+  assert.equal(sent[0].delivery_status, 'sent');
+  const again = mergeSseThreadMessage(sent, {
+    client_message_id: 'local-1',
+    delivery_status: 'sent',
+  });
+  assert.equal(again.length, 1);
 });
 
 test('live chat uses SSE instead of inbox/thread polling', () => {

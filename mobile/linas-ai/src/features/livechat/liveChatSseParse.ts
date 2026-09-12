@@ -78,6 +78,8 @@ export function liveChatMessageFromSseData(data: Record<string, unknown>): LiveC
   const audio = firstText(rec.audio_url);
   const image = firstText(rec.image_url);
   if (!text && !messageId && !audio && !image) return null;
+  const clientId = firstText(rec.client_send_id, rec.client_message_id, data.client_message_id, data.client_send_id);
+  const delivery = firstText(rec.delivery_status, data.delivery_status);
   return {
     message_id: messageId || undefined,
     timestamp,
@@ -89,5 +91,7 @@ export function liveChatMessageFromSseData(data: Record<string, unknown>): LiveC
     role: role || undefined,
     audio_url: audio || undefined,
     image_url: image || undefined,
+    client_send_id: clientId || undefined,
+    delivery_status: delivery || undefined,
   };
 }

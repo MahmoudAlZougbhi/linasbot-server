@@ -13,7 +13,10 @@ function isLocalMessage(msg: LiveChatMessage): boolean {
 }
 
 export function hasPendingOperatorSend(rows: LiveChatMessage[]): boolean {
-  return rows.some((msg) => isLocalMessage(msg));
+  return rows.some(
+    (msg) =>
+      isLocalMessage(msg) || msg.delivery_status === 'sending' || msg.delivery_status === 'failed',
+  );
 }
 
 function preservedClientSendId(msg: LiveChatMessage): string {
@@ -33,16 +36,25 @@ function timestampsClose(a?: string | null, b?: string | null): boolean {
   return Math.abs(left - right) <= ECHO_WINDOW_MS;
 }
 
+function clientSendKey(msg: LiveChatMessage): string {
+  return String(
+    msg.client_send_id || msg.idempotency_key || (isLocalMessage(msg) ? messageId(msg) : '') || '',
+  );
+}
+
+function deliveryStatusOf(msg: LiveChatMessage): string {
+  return String(msg.delivery_status || '').trim();
+}
+
 /** Same outbound bubble the server persisted after an optimistic send. */
 export function isOperatorEcho(local: LiveChatMessage, server: LiveChatMessage): boolean {
   if (local.is_user || server.is_user) return false;
   if (isLocalMessage(server)) return false;
+  const localClient = clientSendKey(local);
+  const serverClient = clientSendKey(server);
+  if (localClient && serverClient && localClient === serverClient) return true;
   if (messageBody(local) !== messageBody(server)) return false;
   return timestampsClose(local.timestamp, server.timestamp);
-}
-
-function clientSendKey(msg: LiveChatMessage): string {
-  return String(msg.client_send_id || (isLocalMessage(msg) ? messageId(msg) : '') || '');
 }
 
 function dedupeThreadMessages(rows: LiveChatMessage[]): LiveChatMessage[] {
@@ -59,6 +71,26 @@ function dedupeThreadMessages(rows: LiveChatMessage[]): LiveChatMessage[] {
     out.push(msg);
   }
   return out;
+}
+
+function withPreservedDelivery(prev: LiveChatMessage, incoming: LiveChatMessage): LiveChatMessage {
+  const incomingStatus = deliveryStatusOf(incoming);
+  if (incomingStatus) {
+    return {
+      ...incoming,
+      idempotency_key: incoming.idempotency_key || prev.idempotency_key,
+      client_send_id: incoming.client_send_id || prev.client_send_id,
+    };
+  }
+  const priorStatus = deliveryStatusOf(prev);
+  if (!priorStatus) return incoming;
+  return {
+    ...incoming,
+    delivery_status: priorStatus,
+    delivery_error: incoming.delivery_error || prev.delivery_error,
+    idempotency_key: incoming.idempotency_key || prev.idempotency_key,
+    client_send_id: incoming.client_send_id || prev.client_send_id,
+  };
 }
 
 /**
@@ -78,6 +110,7 @@ export function mergeThreadMessages(
   const claimed = new Set<number>();
   const keptLocals: LiveChatMessage[] = [];
   const echoClientIds = new Map<number, string>();
+  const echoPrior = new Map<number, LiveChatMessage>();
 
   for (const prior of prev) {
     if (!isLocalMessage(prior)) continue;
@@ -86,21 +119,28 @@ export function mergeThreadMessages(
       claimed.add(match);
       const clientId = clientSendKey(prior);
       if (clientId) echoClientIds.set(match, clientId);
+      echoPrior.set(match, prior);
     } else {
       keptLocals.push(prior);
     }
   }
 
   const prevClientById = new Map<string, string>();
+  const prevById = new Map<string, LiveChatMessage>();
   for (const prior of prev) {
     const id = messageId(prior);
     const clientId = preservedClientSendId(prior);
     if (id && !id.startsWith(LOCAL_PREFIX) && clientId) prevClientById.set(id, clientId);
+    if (id) prevById.set(id, prior);
   }
 
   const incomingWithKeys = incoming.map((msg, index) => {
     const clientId = echoClientIds.get(index) || prevClientById.get(messageId(msg));
-    return clientId ? { ...msg, client_send_id: clientId } : msg;
+    const prior = echoPrior.get(index) || prevById.get(messageId(msg));
+    const next = clientId
+      ? { ...msg, client_send_id: clientId, idempotency_key: msg.idempotency_key || prior?.idempotency_key }
+      : msg;
+    return prior ? withPreservedDelivery(prior, next) : next;
   });
 
   const oldestIncoming = incoming[0]?.timestamp;
@@ -121,12 +161,40 @@ export function mergeThreadMessages(
   return dedupeThreadMessages(merged);
 }
 
+export function applyMessageStatus(
+  prev: LiveChatMessage[],
+  data: Record<string, unknown>,
+): LiveChatMessage[] {
+  const status = String(data.delivery_status || '').trim();
+  if (!status) return prev;
+  const clientId = String(data.client_message_id || data.client_send_id || '').trim();
+  const messageIdValue = String(data.message_id || '').trim();
+  const error = data.error != null ? String(data.error) : undefined;
+  let matched = false;
+  const next = prev.map((msg) => {
+    const msgClient = clientSendKey(msg);
+    const hit =
+      (clientId && (msgClient === clientId || messageId(msg) === clientId)) ||
+      (messageIdValue && messageId(msg) === messageIdValue);
+    if (!hit) return msg;
+    matched = true;
+    return {
+      ...msg,
+      delivery_status: status,
+      delivery_error: status === 'failed' ? error || msg.delivery_error : undefined,
+    };
+  });
+  return matched ? next : prev;
+}
+
 /** Append or replace one SSE message without dropping the rest of the open thread. */
 export function mergeSseThreadMessage(
   prev: LiveChatMessage[],
   data: Record<string, unknown>,
 ): LiveChatMessage[] {
   const incoming = liveChatMessageFromSseData(data);
-  if (!incoming) return prev;
+  if (!incoming || (!messageBody(incoming) && !incoming.message_id && data.delivery_status)) {
+    return applyMessageStatus(prev, data);
+  }
   return mergeThreadMessages(prev, [incoming]);
 }

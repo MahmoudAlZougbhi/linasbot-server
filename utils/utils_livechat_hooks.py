@@ -79,6 +79,13 @@ def _message_to_dashboard_format(msg: dict) -> dict:
         val = msg.get(key) or meta.get(key)
         if val:
             out[key] = val
+    client_id = meta.get("client_message_id") or msg.get("client_message_id")
+    if client_id:
+        out["client_send_id"] = str(client_id)
+        out["client_message_id"] = str(client_id)
+    delivery_status = meta.get("delivery_status") or msg.get("delivery_status")
+    if delivery_status:
+        out["delivery_status"] = str(delivery_status)
     if meta.get("reply_source"):
         out["reply_source"] = meta["reply_source"]
     if meta.get("faq_match"):
@@ -118,6 +125,22 @@ async def _update_customer_name_from_external_after_save(
             if external_id is not None:
                 update_data["external_id"] = external_id
             await asyncio.to_thread(user_doc_ref.update, update_data)
+        try:
+            from modules.live_chat_api import broadcast_sse_event
+
+            asyncio.create_task(
+                broadcast_sse_event(
+                    "conversations",
+                    {
+                        "user_id": canonical_user_id,
+                        "conversation_id": conversation_id,
+                        "user_name": customer_name,
+                        "trigger_refresh": True,
+                    },
+                )
+            )
+        except Exception as sse_err:
+            _log.warning("customer name SSE failed: %s", sse_err)
         _log.info(
             "Background customer name updated for %s: name=%s", canonical_user_id, customer_name or "(phone only)"
         )

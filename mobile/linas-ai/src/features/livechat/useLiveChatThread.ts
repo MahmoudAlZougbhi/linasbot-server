@@ -10,7 +10,7 @@ import {
 } from './liveChatApi';
 import { clientSendId } from './liveChatHelpers';
 import { sseEventMatchesChat } from './liveChatSseParse';
-import { hasPendingOperatorSend, mergeSseThreadMessage, mergeThreadMessages } from './liveChatThreadMerge';
+import { hasPendingOperatorSend, applyMessageStatus, mergeSseThreadMessage, mergeThreadMessages } from './liveChatThreadMerge';
 import type { LiveChatItem, LiveChatMessage } from './liveChatTypes';
 import { isSocialChannelUser } from './liveChatTypes';
 
@@ -128,9 +128,22 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     }
   }
 
-  function applyRealtime(data: Record<string, unknown>) {
+  function applyRealtime(data: Record<string, unknown>, eventType?: string) {
     if (!sseEventMatchesChat(data, { user_id: userId, conversation_id: conversationId })) return;
+    if (eventType === 'message_status' || eventType === 'message_updated') {
+      setMessages((prev) => applyMessageStatus(prev, data));
+      return;
+    }
     setMessages((prev) => mergeSseThreadMessage(prev, data));
+  }
+
+  function patchOptimistic(
+    sendId: string,
+    patch: Partial<LiveChatMessage>,
+  ) {
+    setMessages((prev) =>
+      prev.map((msg) => ((msg.client_send_id || msg.message_id) === sendId ? { ...msg, ...patch } : msg)),
+    );
   }
 
   function dispatchOperatorSend(
@@ -140,20 +153,40 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
   ) {
     if (!chat || !payload) return false;
     const target = chat;
+    const sendId = String(optimistic.client_send_id || optimistic.message_id || '');
+    const idempotency = String(optimistic.idempotency_key || sendId);
     setError(null);
-    setMessages((prev) => [...prev, optimistic]);
+    setMessages((prev) => {
+      const exists = prev.some((msg) => (msg.client_send_id || msg.message_id) === sendId);
+      if (exists) {
+        return prev.map((msg) =>
+          (msg.client_send_id || msg.message_id) === sendId
+            ? { ...msg, ...optimistic, delivery_status: 'sending', delivery_error: undefined }
+            : msg,
+        );
+      }
+      return [...prev, optimistic];
+    });
     setLocalStatus('human');
-    void sendOperatorMessage(target, payload, messageType)
+    void sendOperatorMessage(target, payload, messageType, { idempotencyKey: idempotency })
       .then((result) => {
         if (result.status) setLocalStatus(result.status);
-        if (!result.success) throw new Error(result.error || 'Send failed');
+        const status = String(result.delivery_status || (result.success ? 'sending' : 'failed'));
+        if (!result.success) {
+          patchOptimistic(sendId, { delivery_status: 'failed', delivery_error: result.error || 'Send failed' });
+          setError(result.error || 'Send failed.');
+          return;
+        }
+        patchOptimistic(sendId, {
+          delivery_status: status === 'sent' ? 'sent' : 'sending',
+        });
         onChatUpdated?.();
       })
       .catch((err) => {
-        const dropped = optimistic.client_send_id || optimistic.message_id;
-        setMessages((prev) =>
-          prev.filter((msg) => (msg.client_send_id || msg.message_id) !== dropped),
-        );
+        patchOptimistic(sendId, {
+          delivery_status: 'failed',
+          delivery_error: err instanceof Error ? err.message : 'Send failed.',
+        });
         setError(err instanceof Error ? err.message : 'Send failed.');
       });
     return true;
@@ -172,6 +205,25 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     reload: () => load('initial'),
     reloadQuiet: () => void load('poll'),
     applyRealtime,
+    retryFailedSend: (msg: LiveChatMessage) => {
+      if (!chat) return false;
+      const type = String(msg.type || 'text').toLowerCase();
+      if (type === 'voice' || type === 'image' || type === 'audio') return false;
+      const payload = String(msg.content || msg.text || '').trim();
+      if (!payload) return false;
+      const sendId = String(msg.client_send_id || msg.idempotency_key || msg.message_id || clientSendId());
+      return dispatchOperatorSend(payload, 'text', {
+        ...msg,
+        message_id: msg.message_id || sendId,
+        client_send_id: sendId,
+        idempotency_key: String(msg.idempotency_key || sendId),
+        delivery_status: 'sending',
+        delivery_error: undefined,
+        is_user: false,
+        role: 'operator',
+        handled_by: 'human',
+      });
+    },
     loadOlder,
     takeover: (assignToUserId?: string) =>
       runAction(() => takeoverConversation(chat!, assignToUserId)),
@@ -190,6 +242,8 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         handled_by: 'human',
         message_id: sendId,
         client_send_id: sendId,
+        idempotency_key: sendId,
+        delivery_status: 'sending',
       });
     },
     sendMedia: (base64: string, type: 'voice' | 'image', mime?: string) => {
@@ -206,6 +260,8 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
         handled_by: 'human',
         message_id: sendId,
         client_send_id: sendId,
+        idempotency_key: sendId,
+        delivery_status: 'sending',
         audio_url: type === 'voice' ? `data:${mime || 'audio/mp4'};base64,${base64}` : undefined,
       });
     },

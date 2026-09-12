@@ -18,10 +18,7 @@ class WebChatTakeoverState:
 def _waiting_notice(lang: str = "ar") -> str:
     from services.dynamic_messages_service import get_dynamic_message
 
-    return (
-        get_dynamic_message("waiting_queue_message", lang)
-        or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
-    )
+    return get_dynamic_message("waiting_queue_message", lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
 
 
 async def read_web_chat_takeover_state(*, user_id: str, conversation_id: str) -> WebChatTakeoverState:
@@ -116,10 +113,7 @@ async def maybe_silence_web_chat_for_takeover(
     if not state.active:
         return False
     if state.operator_id:
-        print(
-            f"[web_chat] takeover assigned operator={state.operator_id}; skipping AI for "
-            f"...{str(user_id)[-4:]}"
-        )
+        print(f"[web_chat] takeover assigned operator={state.operator_id}; skipping AI for ...{str(user_id)[-4:]}")
         return True
     print(f"[web_chat] waiting queue; skipping AI for ...{str(user_id)[-4:]}")
     await _persist_web_projection(

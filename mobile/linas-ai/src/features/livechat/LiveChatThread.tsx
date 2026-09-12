@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -51,7 +51,7 @@ export function LiveChatThread({
 
   useEffect(() => {
     if (!realtimeEvent) return;
-    thread.applyRealtime(realtimeEvent.event.data);
+    thread.applyRealtime(realtimeEvent.event.data, realtimeEvent.event.type);
     // Apply each pushed event once; do not depend on applyRealtime identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [realtimeEvent?.seq]);
@@ -66,8 +66,18 @@ export function LiveChatThread({
   const [likeTarget, setLikeTarget] = useState<LiveChatMessage | null>(null);
   const [likeBusy, setLikeBusy] = useState(false);
   const [likeError, setLikeError] = useState<string | null>(null);
+  const [awayFromLatest, setAwayFromLatest] = useState(false);
+  const [unseenIncoming, setUnseenIncoming] = useState(false);
+  const listRef = useRef<FlatList<LiveChatMessage>>(null);
+  const messageCountRef = useRef(0);
 
   const listData = useMemo(() => [...thread.messages].reverse(), [thread.messages]);
+  useEffect(() => {
+    if (thread.messages.length > messageCountRef.current && awayFromLatest) {
+      setUnseenIncoming(true);
+    }
+    messageCountRef.current = thread.messages.length;
+  }, [thread.messages.length, awayFromLatest]);
   const allowOperatorMedia = chatChannel(chat) !== 'tiktok' && chatChannel(chat) !== 'web';
   const likeInitialQuestion = likeTarget
     ? previousUserQuestion(thread.messages, likeTarget)
@@ -116,12 +126,20 @@ export function LiveChatThread({
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           style={styles.flex}
           inverted
           data={listData}
           keyExtractor={(m, i) => messageKey(m, i)}
           contentContainerStyle={styles.messages}
           keyboardShouldPersistTaps="handled"
+          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+          onScroll={(e) => {
+            const away = e.nativeEvent.contentOffset.y > 140;
+            setAwayFromLatest(away);
+            if (!away) setUnseenIncoming(false);
+          }}
+          scrollEventThrottle={64}
           onEndReached={() => {
             if (thread.hasMore && !thread.loadingMore) void thread.loadOlder();
           }}
@@ -146,6 +164,13 @@ export function LiveChatThread({
           renderItem={({ item }) => (
             <LiveChatMessageBubble
               message={item}
+              onRetry={
+                item.delivery_status === 'failed' && !item.is_user
+                  ? () => {
+                      thread.retryFailedSend(item);
+                    }
+                  : undefined
+              }
               onLike={
                 isLikeableAiReply(item)
                   ? () => {
@@ -158,6 +183,19 @@ export function LiveChatThread({
           )}
         />
       )}
+
+      {unseenIncoming && awayFromLatest ? (
+        <Text
+          onPress={() => {
+            listRef.current?.scrollToOffset({ offset: 0, animated: true });
+            setUnseenIncoming(false);
+            setAwayFromLatest(false);
+          }}
+          style={styles.newMsg}
+        >
+          New messages
+        </Text>
+      ) : null}
 
       <LiveChatComposer
         onSend={(text) => thread.sendText(text)}
@@ -210,4 +248,16 @@ const styles = StyleSheet.create({
   },
   emptyFlip: { transform: [{ scaleY: -1 }] },
   error: { color: colors.danger, fontFamily: fonts.body, fontSize: 13, marginBottom: spacing.sm },
+  newMsg: {
+    alignSelf: 'center',
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: colors.accent,
+    color: colors.onAccent,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+  },
 });

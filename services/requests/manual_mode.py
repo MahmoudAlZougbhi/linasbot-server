@@ -80,6 +80,17 @@ def _resume_whatsapp_cloud(
     return True, int(conv.control_epoch)
 
 
+def _memory_takeover_already_active(user_id: str) -> bool:
+    import config
+    from utils.utils import get_canonical_user_id_and_phone
+
+    canonical, _ = get_canonical_user_id_and_phone(user_id)
+    for vid in {canonical, user_id}:
+        if vid and config.user_in_human_takeover_mode.get(vid):
+            return True
+    return False
+
+
 async def _pause_firestore(
     *,
     conversation_id: str,
@@ -87,15 +98,18 @@ async def _pause_firestore(
     actor_user_id: str,
     operator_name: str | None,
 ) -> bool:
-    """Set Firestore + in-memory takeover. Returns True when write attempted."""
+    """Set Firestore + in-memory takeover. False when already paused in this process."""
     import config
     from utils.utils import get_canonical_user_id_and_phone, set_human_takeover_status
 
+    already = _memory_takeover_already_active(user_id)
     canonical, _ = get_canonical_user_id_and_phone(user_id)
     # In-memory first so same-process in-flight AI sees pause before Firestore round-trip.
     for vid in {canonical, user_id}:
         if vid:
             config.user_in_human_takeover_mode[vid] = True
+    if already:
+        return False
     await set_human_takeover_status(
         user_id,
         conversation_id,
@@ -189,10 +203,11 @@ async def activate_manual_mode(
         if control_epoch is not None:
             channel = SOURCE_CHANNEL_WHATSAPP_CLOUD
 
-    # Firestore / Meta social path always — same SoT used by Live Chat AI guards.
-    # WA Cloud may also have a Firestore mirror; dual write is intentional when both exist.
+    # Firestore / Meta social path: skip the expensive write when this process
+    # already owns the conversation in manual mode. First send still writes.
+    wrote_firestore = False
     try:
-        await _pause_firestore(
+        wrote_firestore = await _pause_firestore(
             conversation_id=conversation_id,
             user_id=user_id,
             actor_user_id=actor_user_id,
@@ -203,7 +218,10 @@ async def activate_manual_mode(
         if control_epoch is None:
             raise
 
-    activated = wa_changed or not already_active
+    if not wrote_firestore and not wa_changed:
+        already_active = True
+
+    activated = wa_changed or wrote_firestore
     audit_recorded = False
     if session is not None and tenant_id and request_id:
         row = CustomerRequestsRepository(session).get_for_tenant(tenant_id=tenant_id, request_id=request_id)

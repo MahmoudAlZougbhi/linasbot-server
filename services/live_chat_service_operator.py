@@ -74,6 +74,8 @@ class LiveChatOperatorMixin:
                     "success": True,
                     "message": "Already processed (duplicate request)",
                     "deduplicated": True,
+                    "delivery_status": "sending",
+                    "client_message_id": fingerprint,
                 }
 
             from services.live_chat_operator_social_delivery import is_social_live_chat_user
@@ -220,7 +222,12 @@ class LiveChatOperatorMixin:
                     text=message,
                     conversation_id=conversation_id,
                     phone_number=phone_number,
-                    metadata={"operator_id": operator_id, "handled_by": "human"},
+                    metadata={
+                        "operator_id": operator_id,
+                        "handled_by": "human",
+                        "client_message_id": fingerprint,
+                        "delivery_status": "sending",
+                    },
                 )
                 print("✅ Saved operator message to Firestore")
 
@@ -231,16 +238,31 @@ class LiveChatOperatorMixin:
                     conversation_id=conversation_id,
                     text=message,
                     adapter=adapter,
-                    idempotency_key=idempotency_key,
+                    idempotency_key=idempotency_key or fingerprint,
                 )
+                from services.live_chat_operator_delivery_status import (
+                    compose_operator_text_result,
+                    finalize_operator_delivery_state,
+                )
+
                 if not delivery.get("success"):
                     err = str(delivery.get("error") or "delivery_failed")
                     print(f"⚠️ Operator send failed after save: {err}")
+                    await finalize_operator_delivery_state(
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        client_message_id=fingerprint,
+                        delivery_status="failed",
+                        error=err,
+                        tenant_id=tenant_id,
+                    )
                     return await self._finish_operator_send(
                         {
                             "success": False,
                             "error": f"Message saved locally but delivery failed: {err}",
                             "delivered": False,
+                            "delivery_status": "failed",
+                            "client_message_id": fingerprint,
                         },
                         manual_meta=manual_meta,
                         paused_this_send=paused_this_send,
@@ -253,15 +275,14 @@ class LiveChatOperatorMixin:
                         source_channel=control_source_channel,
                     )
                 completed_ok = True
-                payload = {
-                    "success": True,
-                    "message": "Message sent successfully",
-                    "delivered": True,
-                    **manual_meta,
-                    **delivery,
-                }
-                payload["success"] = True
-                payload["status"] = operator_thread_status(paused=True)
+                payload = compose_operator_text_result(delivery, manual_meta, client_message_id=fingerprint)
+                await finalize_operator_delivery_state(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    client_message_id=fingerprint,
+                    delivery_status=str(payload.get("delivery_status") or "sent"),
+                    tenant_id=tenant_id,
+                )
                 return payload
 
         except Exception as e:
