@@ -1,4 +1,4 @@
-"""WhatsApp Postgres is only for WA Cloud Live Chat — never Meta/TikTok operator sends."""
+"""WhatsApp Postgres is only for WA Cloud Live Chat — never Meta/TikTok/Web operator sends."""
 
 from __future__ import annotations
 

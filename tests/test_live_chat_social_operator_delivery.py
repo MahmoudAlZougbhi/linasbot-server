@@ -13,6 +13,7 @@ from services.live_chat_tiktok_operator import (
 from services.requests.constants import (
     SOURCE_CHANNEL_FACEBOOK_MESSENGER,
     SOURCE_CHANNEL_INSTAGRAM_DM,
+    SOURCE_CHANNEL_WEB_CHAT,
     SOURCE_CHANNEL_WHATSAPP_CLOUD,
 )
 
@@ -51,14 +52,17 @@ def test_infer_live_chat_source_channel() -> None:
     assert infer_live_chat_source_channel("instagram:1761") == SOURCE_CHANNEL_INSTAGRAM_DM
     assert infer_live_chat_source_channel("facebook:page:user") == SOURCE_CHANNEL_FACEBOOK_MESSENGER
     assert infer_live_chat_source_channel("tiktok:cust") == "tiktok"
+    assert infer_live_chat_source_channel("web:visitor-1") == SOURCE_CHANNEL_WEB_CHAT
     assert infer_live_chat_source_channel("+96170123456") is None
-    assert infer_live_chat_source_channel("instagram:1", SOURCE_CHANNEL_WHATSAPP_CLOUD) == SOURCE_CHANNEL_WHATSAPP_CLOUD
+    assert infer_live_chat_source_channel("instagram:1", SOURCE_CHANNEL_WHATSAPP_CLOUD) == SOURCE_CHANNEL_INSTAGRAM_DM
 
 
 def test_live_chat_needs_whatsapp_session() -> None:
     assert live_chat_needs_whatsapp_session(user_id="instagram:1", tenant_id="linas", source_channel=None) is False
     assert live_chat_needs_whatsapp_session(user_id="facebook:p:u", tenant_id="linas", source_channel=None) is False
     assert live_chat_needs_whatsapp_session(user_id="tiktok:c", tenant_id="linas", source_channel=None) is False
+    assert live_chat_needs_whatsapp_session(user_id="web:visitor", tenant_id="linas", source_channel=None) is False
+    assert live_chat_needs_whatsapp_session(user_id="unlabeled", tenant_id="linas", source_channel=None) is False
     assert live_chat_needs_whatsapp_session(user_id="+96170123456", tenant_id="linas", source_channel=None) is True
     assert live_chat_needs_whatsapp_session(user_id="instagram:1", tenant_id=None, source_channel=None) is False
 

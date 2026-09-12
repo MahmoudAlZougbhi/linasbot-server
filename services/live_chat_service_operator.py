@@ -76,9 +76,10 @@ class LiveChatOperatorMixin:
                     "deduplicated": True,
                 }
 
-            from services.live_chat_operator_social_delivery import (
-                deliver_social_operator_text,
-                is_social_live_chat_user,
+            from services.live_chat_operator_social_delivery import is_social_live_chat_user
+            from services.live_chat_operator_text_delivery import (
+                deliver_saved_operator_text,
+                operator_media_not_supported,
             )
 
             if is_social_live_chat_user(user_id) and message_type not in {"text", "voice", "image"}:
@@ -86,9 +87,12 @@ class LiveChatOperatorMixin:
                     "success": False,
                     "error": "Unsupported message type for social Live Chat",
                 }
+            media_block = operator_media_not_supported(user_id, message_type)
+            if media_block is not None:
+                return media_block
 
             # Server-authoritative: pause AI before outbound so in-flight AI cannot win the race.
-            # Meta/TikTok must not open WhatsApp Postgres (pool wait + hold during Firestore).
+            # Meta/TikTok/Web must not open WhatsApp Postgres (pool wait + hold during Firestore).
             manual_meta: dict[str, Any] = {}
             try:
                 from services.requests.manual_mode import activate_manual_mode
@@ -215,82 +219,27 @@ class LiveChatOperatorMixin:
                     role="operator",
                     text=message,
                     conversation_id=conversation_id,
-                    phone_number=phone_number,  # NOW PASSING PHONE_NUMBER
+                    phone_number=phone_number,
                     metadata={"operator_id": operator_id, "handled_by": "human"},
                 )
                 print("✅ Saved operator message to Firestore")
 
-                if is_social_live_chat_user(user_id):
-                    delivery = await deliver_social_operator_text(
-                        tenant_id=tenant_id,
-                        user_id=user_id,
-                        conversation_id=conversation_id,
-                        text=message,
-                    )
-                    if delivery and not delivery.get("success"):
-                        err = str(delivery.get("error") or "social_delivery_failed")
-                        print(f"⚠️ Social operator send failed after save: {err}")
-                        return await self._finish_operator_send(
-                            {
-                                "success": False,
-                                "error": f"Message saved locally but delivery failed: {err}",
-                                "delivered": False,
-                            },
-                            manual_meta=manual_meta,
-                            paused_this_send=paused_this_send,
-                            already_paused=already_paused,
-                            conversation_id=conversation_id,
-                            user_id=user_id,
-                            operator_id=operator_id,
-                            tenant_id=tenant_id,
-                            request_id=request_id,
-                            source_channel=control_source_channel,
-                        )
-                    completed_ok = True
-                    payload = {
-                        "success": True,
-                        "message": "Message sent successfully",
-                        "delivered": True,
-                        **manual_meta,
-                        **(delivery or {}),
-                    }
-                    payload["success"] = True
-                    payload["status"] = operator_thread_status(paused=True)
-                    return payload
-
-                # Await WhatsApp send (single delivery; avoids duplicate background tasks)
-                try:
-                    result = await adapter.send_text_message(canonical_user_id, message)
-                    if not isinstance(result, dict) or not result.get("success"):
-                        send_err: str = (
-                            str((result or {}).get("error") or "send failed")
-                            if isinstance(result, dict)
-                            else "send failed"
-                        )
-                        print(f"⚠️ WhatsApp send failed after save: {send_err}")
-                        return await self._finish_operator_send(
-                            {
-                                "success": False,
-                                "error": f"Message saved locally but delivery failed: {send_err}",
-                                "delivered": False,
-                            },
-                            manual_meta=manual_meta,
-                            paused_this_send=paused_this_send,
-                            already_paused=already_paused,
-                            conversation_id=conversation_id,
-                            user_id=user_id,
-                            operator_id=operator_id,
-                            tenant_id=tenant_id,
-                            request_id=request_id,
-                            source_channel=control_source_channel,
-                        )
-                    print(f"✅ Operator {operator_id} sent message to ...{str(user_id)[-4:]} via WhatsApp")
-                except Exception as send_error:
-                    print(f"⚠️ WhatsApp adapter error after save: {send_error}")
+                delivery = await deliver_saved_operator_text(
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    canonical_user_id=canonical_user_id,
+                    conversation_id=conversation_id,
+                    text=message,
+                    adapter=adapter,
+                    idempotency_key=idempotency_key,
+                )
+                if not delivery.get("success"):
+                    err = str(delivery.get("error") or "delivery_failed")
+                    print(f"⚠️ Operator send failed after save: {err}")
                     return await self._finish_operator_send(
                         {
                             "success": False,
-                            "error": f"Message saved locally but delivery failed: {send_error}",
+                            "error": f"Message saved locally but delivery failed: {err}",
                             "delivered": False,
                         },
                         manual_meta=manual_meta,
@@ -303,15 +252,17 @@ class LiveChatOperatorMixin:
                         request_id=request_id,
                         source_channel=control_source_channel,
                     )
-
                 completed_ok = True
-                return {
+                payload = {
                     "success": True,
                     "message": "Message sent successfully",
                     "delivered": True,
-                    "status": operator_thread_status(paused=True),
                     **manual_meta,
+                    **delivery,
                 }
+                payload["success"] = True
+                payload["status"] = operator_thread_status(paused=True)
+                return payload
 
         except Exception as e:
             print(f"❌ Error sending operator message: {e}")

@@ -35,6 +35,17 @@ async def generate_web_chat_reply_text(
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
     from services.web_chat.operation_heartbeat import OperationLeaseHeartbeat
     from services.web_chat.processor import WebChatError
+    from services.web_chat.takeover_gate import maybe_silence_web_chat_for_takeover
+
+    if await maybe_silence_web_chat_for_takeover(
+        tenant_id=tid,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        visitor_id=visitor_id,
+        inbound_text=text,
+        widget=widget,
+    ):
+        return ""
 
     reply_text = ""
     heartbeat = OperationLeaseHeartbeat(runtime)

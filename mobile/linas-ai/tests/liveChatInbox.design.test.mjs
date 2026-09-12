@@ -70,6 +70,10 @@ test('thread restores WhatsApp handoff, assign, and composer', () => {
   const hook = read('features/livechat/useLiveChatThread.ts');
   assert.match(thread, /LiveChatComposer/);
   assert.match(thread, /onSendMedia/);
+  assert.match(thread, /allowOperatorMedia/);
+  assert.match(thread, /chatChannel\(chat\)/);
+  assert.match(thread, /tiktok/);
+  assert.match(composer, /onSendMedia/);
   assert.match(composer, /onSendMedia/);
   assert.match(composer, /useSafeAreaInsets/);
   assert.match(composer, /Math.max\(insets.bottom, 12\)/);

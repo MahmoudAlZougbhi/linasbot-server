@@ -8,6 +8,7 @@ from services.live_chat_operator_social_delivery import (
     deliver_social_operator_media,
     is_social_live_chat_user,
 )
+from services.live_chat_operator_text_delivery import operator_media_not_supported
 from services.media_service import build_whatsapp_audio_delivery_url
 
 
@@ -25,6 +26,10 @@ async def send_operator_voice_message(
 ) -> dict[str, Any]:
     from utils.utils import save_conversation_message_to_firestore
     from utils.utils_voice_convert import prepare_operator_voice_upload
+
+    blocked = operator_media_not_supported(user_id, "voice")
+    if blocked is not None:
+        return {**blocked, **manual_meta}
 
     print(f"🎙️ Operator {operator_id} recorded voice message for ...{str(user_id)[-4:]}")
     prepared = prepare_operator_voice_upload(message, user_id=user_id)
@@ -135,6 +140,10 @@ async def send_operator_image_message(
     manual_meta: dict[str, Any],
 ) -> dict[str, Any]:
     from utils.utils import save_conversation_message_to_firestore
+
+    blocked = operator_media_not_supported(user_id, "image")
+    if blocked is not None:
+        return {**blocked, **manual_meta}
 
     print(f"🖼️ Operator {operator_id} uploaded image for ...{str(user_id)[-4:]}")
     storage_url = None

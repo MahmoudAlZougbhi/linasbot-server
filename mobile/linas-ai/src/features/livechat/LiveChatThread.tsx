@@ -20,6 +20,7 @@ import { LiveChatComposer } from './LiveChatComposer';
 import { LiveChatMessageBubble } from './LiveChatMessageBubble';
 import { LiveChatThreadActions } from './LiveChatThreadActions';
 import { saveFaqFromLiveChat } from './liveChatApi';
+import { chatChannel } from './liveChatHelpers';
 import {
   type LiveChatItem,
   type LiveChatMessage,
@@ -67,6 +68,7 @@ export function LiveChatThread({
   const [likeError, setLikeError] = useState<string | null>(null);
 
   const listData = useMemo(() => [...thread.messages].reverse(), [thread.messages]);
+  const allowOperatorMedia = chatChannel(chat) !== 'tiktok' && chatChannel(chat) !== 'web';
   const likeInitialQuestion = likeTarget
     ? previousUserQuestion(thread.messages, likeTarget)
     : '';
@@ -159,7 +161,11 @@ export function LiveChatThread({
 
       <LiveChatComposer
         onSend={(text) => thread.sendText(text)}
-        onSendMedia={(base64, type, mime) => thread.sendMedia(base64, type, mime)}
+        onSendMedia={
+          allowOperatorMedia
+            ? (base64, type, mime) => thread.sendMedia(base64, type, mime)
+            : undefined
+        }
         busy={thread.busy || (thread.loading && !thread.messages.length)}
       />
 

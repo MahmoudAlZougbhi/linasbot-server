@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const InboxFilterSchema = z.enum(['all', 'waiting', 'with_operator', 'bot', 'closed']);
 export type InboxFilter = z.infer<typeof InboxFilterSchema>;
 
-export type ChatChannel = 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'web';
+export type ChatChannel = 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'web' | 'unknown';
 export const ChannelFilterSchema = z.enum(['all', 'whatsapp', 'instagram', 'facebook', 'tiktok', 'web']);
 export type ChannelFilter = z.infer<typeof ChannelFilterSchema>;
 
