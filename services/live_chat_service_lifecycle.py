@@ -431,7 +431,7 @@ class LiveChatLifecycleMixin:
 
             current = conv_snap.to_dict() or {}
             unread = int(current.get("unread_count") or 0)
-            update = {"operator_viewed_at": utc_now()}
+            update: dict[str, Any] = {"operator_viewed_at": utc_now()}
             if unread != 0:
                 update["unread_count"] = 0
             await asyncio.to_thread(conv_ref.update, update)
