@@ -202,3 +202,29 @@ export function clientSendId(): string {
 export function idempotencyKey(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
+
+/** Seed the thread from the inbox row so open is instant, like WhatsApp. */
+export function previewMessagesFromInbox(item: LiveChatItem | null | undefined): LiveChatMessage[] {
+  if (!item) return [];
+  const last = item.last_message;
+  let content = String(item.last_message_text || '').trim();
+  let isUser = false;
+  let timestamp = String(item.last_message_at || item.last_activity || '');
+  if (last && typeof last === 'object') {
+    content = String(last.content || last.text || content).trim();
+    isUser = Boolean(last.is_user);
+    timestamp = String(last.timestamp || timestamp);
+  } else if (typeof last === 'string' && last.trim()) {
+    content = last.trim();
+  }
+  if (!content) return [];
+  return [
+    {
+      timestamp: timestamp || new Date().toISOString(),
+      is_user: isUser,
+      content,
+      text: content,
+      role: isUser ? 'user' : 'ai',
+    },
+  ];
+}

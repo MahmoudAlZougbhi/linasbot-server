@@ -45,9 +45,9 @@ export function LiveChatThreadActions({
               disabled={busy}
               style={[styles.btn, { borderColor: colors.border, backgroundColor: colors.surface }]}
               accessibilityRole="button"
-              accessibilityLabel="Resume AI"
+              accessibilityLabel="Assign to AI"
             >
-              <Text style={[styles.ghost, { color: colors.text }]}>Resume AI</Text>
+              <Text style={[styles.ghost, { color: colors.text }]}>Assign to AI</Text>
             </Pressable>
           )}
           <Pressable

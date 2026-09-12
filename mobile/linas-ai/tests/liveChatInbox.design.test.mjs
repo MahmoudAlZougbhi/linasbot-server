@@ -80,6 +80,7 @@ test('thread restores WhatsApp handoff, assign, and composer', () => {
   assert.match(thread, /insets.top \+ 68/);
   assert.match(composer, /feather\('image'\)/);
   assert.match(composer, /feather\('mic'\)/);
+  assert.match(read('features/livechat/LiveChatThreadActions.tsx'), /Assign to AI/);
   assert.match(thread, /LiveChatAssignSheet/);
   assert.match(thread, /thread\.takeover\(staff\.id\)/);
   assert.match(api, /assignToUserId/);
@@ -91,7 +92,12 @@ test('thread restores WhatsApp handoff, assign, and composer', () => {
   assert.doesNotMatch(hook, /sendingRef/);
   assert.match(hook, /audio_url: type === 'voice'/);
   assert.doesNotMatch(hook, /sendText:[\s\S]*setBusy\(true\)/);
-  assert.match(thread, /thread\.busy \|\| \(thread\.loading && !thread\.messages\.length\)/);
+  assert.match(thread, /busy=\{thread\.busy\}/);
+  assert.doesNotMatch(thread, /thread\.busy \|\| \(thread\.loading && !thread\.messages\.length\)/);
+  assert.match(thread, /useLiveChatOperatorPresence/);
+  assert.match(hook, /claimOnOpen/);
+  assert.match(hook, /previewMessagesFromInbox/);
+  assert.doesNotMatch(hook, /days:\s*1/);
   assert.doesNotMatch(thread, /thread\.sending/);
   assert.doesNotMatch(hook, /WhatsApp-only for now/);
   assert.match(hook, /retryFailedSend/);

@@ -68,7 +68,7 @@ export function useLiveChatInbox(enabled = true) {
   }, [search]);
 
   const load = useCallback(
-    async (mode: 'initial' | 'refresh' | 'poll' = 'initial') => {
+    async (mode: 'initial' | 'refresh' | 'poll' | 'event' = 'initial') => {
       const requestId = ++requestIdRef.current;
       const key = queryKeys.liveChatInbox(filter, channel, debouncedSearch);
       const hit = cacheGet<InboxSnapshot>(key);
@@ -112,7 +112,8 @@ export function useLiveChatInbox(enabled = true) {
         if (rows.length === 0 && data.success === false && !rebuild) {
           throw new Error(data.error || 'Could not load conversations.');
         }
-        if (mode === 'poll' && paginatedBeyondFirstRef.current) {
+        const mergePoll = (mode === 'poll' || mode === 'event') && paginatedBeyondFirstRef.current;
+        if (mergePoll) {
           setChats((prev) => mergeInboxPollPage(prev, rows));
         } else {
           paginatedBeyondFirstRef.current = false;
@@ -130,7 +131,7 @@ export function useLiveChatInbox(enabled = true) {
         setError(null);
         setErrorKind(null);
         cacheSet(key, {
-          chats: mode === 'poll' && paginatedBeyondFirstRef.current ? chatsRef.current : rows,
+          chats: mergePoll ? chatsRef.current : rows,
           total: typeof data.total === 'number' ? data.total : rows.length,
           waitingCount: waitingCountFromResponse(data, filter, rows),
           hasMore: Boolean(data.has_more),
@@ -139,7 +140,7 @@ export function useLiveChatInbox(enabled = true) {
         });
       } catch (err) {
         if (requestId !== requestIdRef.current) return;
-        if (mode !== 'poll') {
+        if (mode !== 'poll' && mode !== 'event') {
           const kind = classifyLiveChatError(err);
           setErrorKind(kind);
           setError(
@@ -220,7 +221,7 @@ export function useLiveChatInbox(enabled = true) {
     (data: Record<string, unknown>, openConversationId?: string | null) => {
       const result = applyInboxNewMessage(chatsRef.current, data, { openConversationId });
       if (!result.matched) {
-        void load('poll');
+        void load('event');
         return;
       }
       chatsRef.current = result.chats;
@@ -258,6 +259,7 @@ export function useLiveChatInbox(enabled = true) {
     refresh: () => void load('refresh'),
     loadMore,
     reloadQuiet: () => void load('poll'),
+    reloadFromEvent: () => void load('event'),
     catchUpIfStale: () => {
       const key = queryKeys.liveChatInbox(filter, channel, debouncedSearch);
       if (!isCacheFresh(key, QUERY_TTL.liveChatInbox)) void load('poll');

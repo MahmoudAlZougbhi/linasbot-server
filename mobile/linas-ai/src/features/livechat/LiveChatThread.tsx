@@ -29,6 +29,7 @@ import {
   messageKey,
   previousUserQuestion,
 } from './liveChatTypes';
+import { useLiveChatOperatorPresence } from './useLiveChatOperatorPresence';
 import { useLiveChatThread } from './useLiveChatThread';
 import type { LiveChatSseEvent } from './liveChatSseParse';
 
@@ -48,6 +49,7 @@ export function LiveChatThread({
   const { tr } = useI18n();
   const insets = useSafeAreaInsets();
   const thread = useLiveChatThread(chat, onChatUpdated);
+  useLiveChatOperatorPresence(chat.user_id, chat.conversation_id, thread.claimOnOpen);
 
   useEffect(() => {
     if (!realtimeEvent) return;
@@ -204,7 +206,7 @@ export function LiveChatThread({
             ? (base64, type, mime) => thread.sendMedia(base64, type, mime)
             : undefined
         }
-        busy={thread.busy || (thread.loading && !thread.messages.length)}
+        busy={thread.busy}
       />
 
       <LiveChatAssignSheet
