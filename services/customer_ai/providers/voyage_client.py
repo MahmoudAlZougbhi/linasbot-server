@@ -50,17 +50,17 @@ def _validate(space: EmbeddingSpace, vectors: list[list[float]]) -> None:
 def _retry_delay(response: httpx.Response, attempt: int) -> float:
     raw = (response.headers.get("Retry-After") or "").strip()
     if raw.isdigit():
-        return min(float(raw), 8.0)
-    return float(min(0.6 * (2**attempt), 6.0))
+        return min(float(raw), 45.0)
+    return float(min(1.5 * (2**attempt), 30.0))
 
 
 async def _post(path: str, payload: dict[str, Any]) -> dict[str, Any]:
     headers = _headers()
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with httpx.AsyncClient(timeout=90.0) as client:
         response: httpx.Response | None = None
-        for attempt in range(4):
+        for attempt in range(8):
             response = await client.post(f"{VOYAGE_BASE}{path}", headers=headers, json=payload)
-            if response.status_code in _RETRY_STATUSES and attempt < 3:
+            if response.status_code in _RETRY_STATUSES and attempt < 7:
                 await asyncio.sleep(_retry_delay(response, attempt))
                 continue
             break

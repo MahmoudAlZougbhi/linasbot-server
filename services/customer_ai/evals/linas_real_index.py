@@ -22,6 +22,8 @@ LAB_TENANTS = frozenset({"linas-lab", "linas-lab-b"})
 
 
 def _gate(status: str, detail: str = "", **extra: Any) -> dict[str, Any]:
+    extra.pop("status", None)
+    extra.pop("detail", None)
     row = {"status": status, "detail": detail}
     row.update(extra)
     return row
@@ -164,11 +166,24 @@ async def run_real_linas_index() -> dict[str, Any]:
 
     with whatsapp_session(require=True) as session:
         candidate = await index_published_tenant(tid, revision=revision, session=session, activate=False)
+    for attempt in range(3):
+        if candidate.get("ready"):
+            break
+        reason = str(candidate.get("reason") or "")
+        blob = f"{reason} {candidate.get('error') or ''}"
+        if reason != "provider_error" and "429" not in blob:
+            break
+        await asyncio.sleep(min(20 * (2**attempt), 90))
+        with whatsapp_session(require=True) as session:
+            candidate = await index_published_tenant(tid, revision=revision, session=session, activate=False)
     gates["CANDIDATE"] = _gate("PASS" if candidate.get("ready") else "FAIL", str(candidate.get("reason") or ""))
-    retrieval = await retrieval_eval_for_tenant(tid)
-    gates["RETRIEVAL_EVAL"] = _gate(
-        str(retrieval.get("status") or "FAIL"), str(retrieval.get("detail") or ""), **retrieval
-    )
+    if candidate.get("ready"):
+        retrieval = await retrieval_eval_for_tenant(tid)
+        gates["RETRIEVAL_EVAL"] = _gate(
+            str(retrieval.get("status") or "FAIL"), str(retrieval.get("detail") or ""), **retrieval
+        )
+    else:
+        gates["RETRIEVAL_EVAL"] = _gate("NOT_RUN", "candidate_not_ready")
     iso = isolation_probe(tid)
     gates["ISOLATION"] = iso
 
