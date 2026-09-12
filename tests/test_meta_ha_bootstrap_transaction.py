@@ -831,8 +831,10 @@ def test_bootstrap_old_stable_plan_accepts_fresh_matching_apply_attestation(
     ready = _ready_projection()
     ready_sha = bootstrap._digest(ready)
     first_payload = lb._attestation_payload(ready, None)
+    # The dry-run plan binds stable LB identity/projection, not a short-lived
+    # observation. The later apply must still provide a fresh observation.
     first_payload["observed_at"] = (
-        (datetime.now(UTC) - timedelta(minutes=2)).isoformat(timespec="seconds").replace("+00:00", "Z")
+        (datetime.now(UTC) - timedelta(minutes=6)).isoformat(timespec="seconds").replace("+00:00", "Z")
     )
     args, path, _ = _patch_bootstrap_plan_context(monkeypatch, tmp_path, first_payload)
     first_plan, _, _, first_evidence = bootstrap._combined_plan(args)
