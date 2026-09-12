@@ -7,7 +7,6 @@ import { useI18n } from '../../i18n/LanguageContext';
 import type { AppLanguage } from '../../i18n';
 import { spacing, useTheme } from '../../theme';
 import { deleteAccount } from '../auth/appleAccount';
-import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import {
   SETTINGS_CANVAS,
@@ -21,12 +20,10 @@ import {
   SettingsSection,
 } from './SettingsChrome';
 import { SettingsEmailSheet, SettingsLanguageSheet, SettingsNameSheet } from './SettingsEditors';
-import {
-  fetchOwnerSettingsProfile,
-  patchOwnerDisplayName,
-  requestOwnerEmailChange,
-  settingsApiErrorMessage,
-} from './settingsProfileApi';
+import { fetchOwnerSettingsProfile, patchOwnerDisplayName, requestOwnerEmailChange, settingsApiErrorMessage } from './settingsProfileApi';
+import { cacheGet, cacheSet, isCacheFresh } from '../../cache/queryCache';
+import { queryKeys } from '../../cache/queryKeys';
+import { QUERY_TTL } from '../../cache/queryTtl';
 
 type Props = {
   onLogout: () => void;
@@ -52,7 +49,6 @@ export function SettingsScreen({
 }: Props) {
   const { tr, language, setLanguage } = useI18n();
   const { resolved, setMode } = useTheme();
-  const nav = useModuleNav();
   const [sheet, setSheet] = useState<Sheet>('none');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
@@ -63,14 +59,22 @@ export function SettingsScreen({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailNotice, setEmailNotice] = useState<string | null>(null);
 
-  const loadProfile = useCallback(async () => {
+  const loadProfile = useCallback(async (opts?: { force?: boolean }) => {
     const stored = await tokenStore.getUser();
     if (stored) {
       setDisplayName(stored.displayName || stored.name || '');
       setEmail(stored.email);
     }
+    const key = queryKeys.settingsProfile();
+    const hit = cacheGet<{ displayName: string; email?: string }>(key);
+    if (hit) {
+      setDisplayName(hit.data.displayName);
+      if (hit.data.email) setEmail(hit.data.email);
+    }
+    if (!opts?.force && hit && isCacheFresh(key, QUERY_TTL.settings)) return;
     try {
       const profile = await fetchOwnerSettingsProfile();
+      cacheSet(key, { displayName: profile.displayName, email: profile.email });
       setDisplayName(profile.displayName);
       if (profile.email) setEmail(profile.email);
     } catch {
@@ -80,7 +84,7 @@ export function SettingsScreen({
 
   useEffect(() => {
     void loadProfile();
-  }, [loadProfile, nav.areaFocusNonce]);
+  }, [loadProfile]);
 
   function confirmDeleteAccount() {
     if (deleteBusy) return;

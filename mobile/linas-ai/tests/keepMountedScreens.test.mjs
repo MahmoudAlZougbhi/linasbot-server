@@ -15,30 +15,21 @@ describe('keep-mounted module screens', () => {
     const shell = read('app/AppShell.tsx');
     const tree = read('app/AppScreenTree.tsx');
     const pane = read('app/KeepMountedPane.tsx');
+    const policy = read('app/keepMountedPolicy.ts');
     assert.match(shell, /authEpoch/);
     assert.match(shell, /bumpAuthEpoch/);
     assert.match(shell, /AppScreenTree/);
     assert.match(pane, /display:\s*'none'/);
     assert.match(pane, /Mount children on first activation/);
-    for (const name of [
-      'chat',
-      'settings',
-      'integrations',
-      'users',
-      'dashboard',
-      'billing',
-      'livechat',
-      'notifications',
-      'cm',
-      'faq',
-      'smartFollowUp',
-      'requests',
-    ]) {
+    assert.match(policy, /KEEP_MOUNTED_LIMIT/);
+    for (const name of ['chat', 'livechat', 'dashboard', 'cm']) {
       assert.ok(
-        tree.includes('KeepMountedPane key={`' + name + '-${authEpoch}`}'),
+        tree.includes("isKeepMountedScreen('" + name + "')"),
         'missing keep-mounted pane for ' + name,
       );
     }
+    assert.doesNotMatch(policy, /'settings'/);
+    assert.doesNotMatch(policy, /'requests'/);
     // Dynamic/ephemeral routes still unmount (not keep-mounted).
     assert.equal(tree.includes('KeepMountedPane key={`cm_section'), false);
     assert.equal(tree.includes('KeepMountedPane key={`resource'), false);

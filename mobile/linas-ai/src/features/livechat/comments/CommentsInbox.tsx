@@ -3,6 +3,9 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { LiveChatSseEvent } from '../liveChatSseParse';
 
+import { cacheGet, cacheSet, isCacheFresh } from '../../../cache/queryCache';
+import { queryKeys } from '../../../cache/queryKeys';
+import { QUERY_TTL } from '../../../cache/queryTtl';
 import { EmptyState } from '../../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../../components/LinasLoadingIndicator';
 import { useI18n } from '../../../i18n/LanguageContext';
@@ -19,6 +22,14 @@ type Props = {
   realtimeEvent?: { seq: number; event: LiveChatSseEvent } | null;
 };
 
+type CommentsSnapshot = {
+  posts: CommentMediaItem[];
+  nextAfter: string;
+  accountName: string;
+  status: string;
+  error: string;
+};
+
 export function CommentsInbox({ onOpenThread, allowedChannels = null, realtimeEvent = null }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
@@ -26,27 +37,51 @@ export function CommentsInbox({ onOpenThread, allowedChannels = null, realtimeEv
   const [platform, setPlatform] = useState<CommentPlatform>(
     () => allowedCommentPlatforms(allowedChannels)[0] || 'instagram',
   );
-  const [posts, setPosts] = useState<CommentMediaItem[]>([]);
-  const [nextAfter, setNextAfter] = useState('');
-  const [accountName, setAccountName] = useState('');
-  const [status, setStatus] = useState('loading');
-  const [error, setError] = useState('');
+  const seeded = cacheGet<CommentsSnapshot>(queryKeys.commentsInbox(platform));
+  const [posts, setPosts] = useState<CommentMediaItem[]>(seeded?.data.posts ?? []);
+  const [nextAfter, setNextAfter] = useState(seeded?.data.nextAfter ?? '');
+  const [accountName, setAccountName] = useState(seeded?.data.accountName ?? '');
+  const [status, setStatus] = useState(seeded?.data.status ?? 'loading');
+  const [error, setError] = useState(seeded?.data.error ?? '');
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(
-    async (after = '', append = false) => {
+    async (after = '', append = false, force = false) => {
+      const key = queryKeys.commentsInbox(platform);
+      const hit = cacheGet<CommentsSnapshot>(key);
+      if (hit && !append) {
+        setPosts(hit.data.posts);
+        setNextAfter(hit.data.nextAfter);
+        setAccountName(hit.data.accountName);
+        setStatus(hit.data.status);
+        setError(hit.data.error);
+      }
+      if (!append && !after && !force && hit && isCacheFresh(key, QUERY_TTL.commentsInbox)) return;
+      if (!append && !hit) setStatus('loading');
       if (!append) setError('');
       try {
         const result = await fetchCommentMedia({ platform, after });
-        setPosts((current) => (append ? [...current, ...result.posts] : result.posts));
+        setPosts((current) => {
+          const rows = append ? [...current, ...result.posts] : result.posts;
+          if (!append) {
+            cacheSet(key, {
+              posts: rows,
+              nextAfter: result.nextAfter,
+              accountName: result.accountName,
+              status: result.status,
+              error: result.error,
+            });
+          }
+          return rows;
+        });
         setNextAfter(result.nextAfter);
         setAccountName(result.accountName);
         setStatus(result.status);
         if (result.error) setError(result.error);
       } catch {
-        setStatus('error');
+        setStatus(hit?.data.posts.length ? hit.data.status : 'error');
         setError(tr('liveCommentsError'));
-        if (!append) setPosts([]);
+        if (!append && !hit) setPosts([]);
       }
     },
     [platform, tr],
@@ -66,14 +101,22 @@ export function CommentsInbox({ onOpenThread, allowedChannels = null, realtimeEv
       setPosts([]);
       return;
     }
-    setStatus('loading');
-    setPosts([]);
     void load();
   }, [load, allowedKey, allowedChannels]);
 
   useEffect(() => {
     if (!realtimeEvent || realtimeEvent.event.type !== 'comment_update') return;
-    setPosts((current) => applyCommentGridEvent(current, realtimeEvent.event.data, platform));
+    setPosts((current) => {
+      const rows = applyCommentGridEvent(current, realtimeEvent.event.data, platform);
+      cacheSet(queryKeys.commentsInbox(platform), {
+        posts: rows,
+        nextAfter,
+        accountName,
+        status,
+        error,
+      });
+      return rows;
+    });
     // Apply each pushed event once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [realtimeEvent?.seq, platform]);
@@ -81,7 +124,7 @@ export function CommentsInbox({ onOpenThread, allowedChannels = null, realtimeEv
   async function refresh() {
     setRefreshing(true);
     try {
-      await load();
+      await load('', false, true);
     } finally {
       setRefreshing(false);
     }

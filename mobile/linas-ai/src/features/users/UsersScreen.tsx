@@ -13,6 +13,9 @@ import { AppModal } from '../../components/AppModal';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { ModalScrim } from '../../components/ModalScrim';
 import { EmptyState } from '../../components/EmptyState';
+import { cacheGet, cacheInvalidate, cacheSet, dedupeFetch, isCacheFresh } from '../../cache/queryCache';
+import { queryKeys } from '../../cache/queryKeys';
+import { QUERY_TTL } from '../../cache/queryTtl';
 import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
@@ -48,12 +51,14 @@ type Gate = 'none' | 'auth' | 'forbidden';
 export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
   const { tr } = useI18n();
   const nav = useModuleNav();
-  const [loading, setLoading] = useState(true);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  const hasLoadedOnceRef = useRef(false);
+  const cachedUsers = cacheGet<TeamUser[]>(queryKeys.users());
+  const cachedRoles = cacheGet<TenantRole[]>(queryKeys.roles());
+  const [loading, setLoading] = useState(!cachedUsers);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(Boolean(cachedUsers));
+  const hasLoadedOnceRef = useRef(Boolean(cachedUsers));
   const [busy, setBusy] = useState(false);
-  const [users, setUsers] = useState<TeamUser[]>([]);
-  const [roles, setRoles] = useState<TenantRole[]>([]);
+  const [users, setUsers] = useState<TeamUser[]>(cachedUsers?.data ?? []);
+  const [roles, setRoles] = useState<TenantRole[]>(cachedRoles?.data ?? []);
   const [me, setMe] = useState<PublicUser | null>(null);
   const [gate, setGate] = useState<Gate>('none');
   const [error, setError] = useState<string | null>(null);
@@ -67,30 +72,43 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
   const [resetError, setResetError] = useState<string | null>(null);
   const [authGate, setAuthGate] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { force?: boolean }) => {
+    const usersKey = queryKeys.users();
+    const rolesKey = queryKeys.roles();
+    const cachedList = cacheGet<TeamUser[]>(usersKey);
+    if (cachedList) {
+      setUsers(cachedList.data);
+      hasLoadedOnceRef.current = true;
+      setHasLoadedOnce(true);
+      setLoading(false);
+    }
     if (!hasLoadedOnceRef.current) setLoading(true);
     setError(null);
     try {
-      const access = await tokenStore.getAccessToken();
-      const user = await tokenStore.getUser();
+      const [access, user] = await Promise.all([tokenStore.getAccessToken(), tokenStore.getUser()]);
       setMe(user);
       if (!access) {
         setAuthGate(true);
         setGate('auth');
-        setUsers([]);
+        if (!cachedList) setUsers([]);
         return;
       }
       if (!canManageUsers(user)) {
         setGate('forbidden');
-        setUsers([]);
+        if (!cachedList) setUsers([]);
         return;
       }
       setGate('none');
-      // Roles are optional chrome for forms; never blank the member list if roles fail.
-      const list = await listUsers();
+      if (!opts?.force && cachedList && isCacheFresh(usersKey, QUERY_TTL.users)) {
+        return;
+      }
+      const list = await dedupeFetch(usersKey, () => listUsers());
+      cacheSet(usersKey, list);
       setUsers(list);
       try {
-        setRoles(await listRoles());
+        const nextRoles = await dedupeFetch(rolesKey, () => listRoles());
+        cacheSet(rolesKey, nextRoles);
+        setRoles(nextRoles);
       } catch {
         setRoles([]);
       }
@@ -99,16 +117,16 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
       if (kind === 'auth') {
         setAuthGate(true);
         setGate('auth');
-        setUsers([]);
+        if (!cachedList) setUsers([]);
         setError(null);
       } else if (kind === 'forbidden') {
         setGate('forbidden');
-        setUsers([]);
+        if (!cachedList) setUsers([]);
         setError(null);
       } else {
         setGate('none');
         setError(usersErrorMessage(err, tr('usersLoadError')));
-        setUsers([]);
+        if (!cachedList) setUsers([]);
       }
     } finally {
       hasLoadedOnceRef.current = true;
@@ -142,7 +160,8 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
     try {
       await createUser(input);
       setFormOpen(false);
-      await load();
+      cacheInvalidate(queryKeys.users());
+      await load({ force: true });
     } catch (err) {
       setFormError(usersErrorMessage(err, tr('usersCreateError')));
     } finally {
@@ -157,7 +176,8 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
       await updateUser(userId, input);
       setFormOpen(false);
       setEditing(null);
-      await load();
+      cacheInvalidate(queryKeys.users());
+      await load({ force: true });
     } catch (err) {
       setFormError(usersErrorMessage(err, tr('usersUpdateError')));
     } finally {
@@ -182,7 +202,8 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
     try {
       await deleteUser(userId);
       setMenuUser(null);
-      await load();
+      cacheInvalidate(queryKeys.users());
+      await load({ force: true });
     } catch (err) {
       setError(usersErrorMessage(err, tr('usersDeleteError')));
     } finally {
@@ -196,7 +217,8 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
       const blocked = user.status === 'suspended' || user.status === 'inactive';
       await updateUser(user.id, { status: blocked ? 'active' : 'suspended' });
       setMenuUser(null);
-      await load();
+      cacheInvalidate(queryKeys.users());
+      await load({ force: true });
     } catch (err) {
       setError(usersErrorMessage(err, tr('usersUpdateError')));
     } finally {

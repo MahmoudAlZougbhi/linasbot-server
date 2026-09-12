@@ -24,11 +24,11 @@ function splashExitDelayMs(appReady, elapsedMs, minDisplayMs, maxHoldMs) {
 describe('splash hang: always reach chat', () => {
   it('exit delay is capped so splash hides without appReady', () => {
     const tokens = readSrc('features/boot/bootSplashTokens.ts');
-    assert.match(tokens, /maxHoldMs:\s*2500/);
+    assert.match(tokens, /maxHoldMs:\s*1800/);
     assert.match(tokens, /export function splashExitDelayMs/);
     assert.match(tokens, /return appReady \? minWait : maxWait/);
-    const minMs = 900;
-    const maxHoldMs = 2500;
+    const minMs = 480;
+    const maxHoldMs = 1800;
     assert.equal(splashExitDelayMs(false, 0, minMs, maxHoldMs), maxHoldMs);
     assert.equal(splashExitDelayMs(false, maxHoldMs, minMs, maxHoldMs), 0);
     assert.equal(splashExitDelayMs(false, maxHoldMs + 500, minMs, maxHoldMs), 0);

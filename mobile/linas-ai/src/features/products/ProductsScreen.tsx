@@ -5,6 +5,9 @@ import { AppIcon, feather } from '../../components/AppIcon';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
 import { isDailyEditLimitError } from '../../api/client';
+import { cacheGet, cacheSet, dedupeFetch, isCacheFresh } from '../../cache/queryCache';
+import { queryKeys } from '../../cache/queryKeys';
+import { QUERY_TTL } from '../../cache/queryTtl';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
@@ -25,21 +28,31 @@ type Props = {
 
 export function ProductsScreen({ onBack, onAdd, onImport, onOpenDetails }: Props) {
   const { tr } = useI18n();
-  const [loading, setLoading] = useState(true);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const cached = cacheGet<Product[]>(queryKeys.products());
+  const [loading, setLoading] = useState(!cached);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(Boolean(cached));
   const [error, setError] = useState<string | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(cached?.data ?? []);
   const [query, setQuery] = useState('');
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  const reload = useCallback(async (opts?: { force?: boolean }) => {
+    const key = queryKeys.products();
+    const hit = cacheGet<Product[]>(key);
+    if (hit) {
+      setProducts(hit.data);
+      setHasLoadedOnce(true);
+      setLoading(false);
+    }
+    if (!hit && !cached) setLoading(true);
+    if (!opts?.force && hit && isCacheFresh(key, QUERY_TTL.products)) return;
     try {
-      const res = await fetchProducts();
+      const res = await dedupeFetch(key, () => fetchProducts());
+      cacheSet(key, res.products);
       setProducts(res.products);
       setError(null);
     } catch {
-      setError(tr('productsLoadError'));
+      if (!hit) setError(tr('productsLoadError'));
     } finally {
       setLoading(false);
       setHasLoadedOnce(true);
@@ -59,7 +72,11 @@ export function ProductsScreen({ onBack, onAdd, onImport, onOpenDetails }: Props
     );
     try {
       const updated = await updateProductAvailability(product, next);
-      setProducts((rows) => rows.map((row) => (row.id === product.id ? updated : row)));
+      setProducts((rows) => {
+        const nextRows = rows.map((row) => (row.id === product.id ? updated : row));
+        cacheSet(queryKeys.products(), nextRows);
+        return nextRows;
+      });
       setError(null);
     } catch (err) {
       setProducts((rows) =>

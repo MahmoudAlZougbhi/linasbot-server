@@ -9,6 +9,9 @@ import {
 
 import { ApiError, isDailyEditLimitError } from '../../api/client';
 import { isNetworkFailure } from '../../api/networkError';
+import { cacheGet, cacheSet, isCacheFresh } from '../../cache/queryCache';
+import { queryKeys } from '../../cache/queryKeys';
+import { QUERY_TTL } from '../../cache/queryTtl';
 import { EmptyState } from '../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../components/PrimaryButton';
@@ -74,13 +77,22 @@ export function SmartFollowUpScreen() {
   const { colors } = useTheme();
   const { tr } = useI18n();
   const nav = useModuleNav();
-  const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  const hasLoadedOnceRef = useRef(false);
-  const [businessHoursOnly, setBusinessHoursOnly] = useState(true);
-  const [channels, setChannels] = useState<FollowUpChannelsEnabled>(DEFAULT_CHANNELS_ENABLED);
-  const [steps, setSteps] = useState<SmartFollowUpStep[]>(defaultSteps);
-  const [settingsVersion, setSettingsVersion] = useState(0);
+  const cached = cacheGet<SmartFollowUpSettings>(queryKeys.smartFollowUp());
+  const [load, setLoad] = useState<LoadState>(
+    cached ? { kind: 'ready', data: cached.data } : { kind: 'loading' },
+  );
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(Boolean(cached));
+  const hasLoadedOnceRef = useRef(Boolean(cached));
+  const [businessHoursOnly, setBusinessHoursOnly] = useState(cached?.data.business_hours_only ?? true);
+  const [channels, setChannels] = useState<FollowUpChannelsEnabled>(
+    cached ? normalizeChannelsEnabled(cached.data.channels_enabled) : DEFAULT_CHANNELS_ENABLED,
+  );
+  const [steps, setSteps] = useState<SmartFollowUpStep[]>(
+    cached?.data.steps?.length
+      ? [...cached.data.steps].sort((a, b) => a.step_index - b.step_index)
+      : defaultSteps(),
+  );
+  const [settingsVersion, setSettingsVersion] = useState(cached?.data.settings_version ?? 0);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -93,35 +105,45 @@ export function SmartFollowUpScreen() {
     setSettingsVersion(data.settings_version);
   }, []);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (opts?: { force?: boolean }) => {
+    const key = queryKeys.smartFollowUp();
+    const hit = cacheGet<SmartFollowUpSettings>(key);
+    if (hit) {
+      applySettings(hit.data);
+      setLoad({ kind: 'ready', data: hit.data });
+      hasLoadedOnceRef.current = true;
+      setHasLoadedOnce(true);
+    }
+    if (!opts?.force && hit && isCacheFresh(key, QUERY_TTL.smartFollowUp)) return;
     if (!hasLoadedOnceRef.current) setLoad({ kind: 'loading' });
     setError(null);
     setNotice(null);
     try {
       const data = await fetchSmartFollowUpSettings();
       applySettings(data);
+      cacheSet(key, data);
       setLoad({ kind: 'ready', data });
       hasLoadedOnceRef.current = true;
       setHasLoadedOnce(true);
     } catch (err) {
+      hasLoadedOnceRef.current = true;
+      setHasLoadedOnce(true);
+      if (hit) {
+        setError(isNetworkFailure(err) ? tr('sfuOffline') : tr('sfuLoadError'));
+        return;
+      }
       if (isNetworkFailure(err)) {
         setLoad({ kind: 'offline' });
-        hasLoadedOnceRef.current = true;
-        setHasLoadedOnce(true);
         return;
       }
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
         setLoad({ kind: 'forbidden' });
-        hasLoadedOnceRef.current = true;
-        setHasLoadedOnce(true);
         return;
       }
       setLoad({
         kind: 'error',
         message: err instanceof Error ? err.message : tr('sfuLoadError'),
       });
-      hasLoadedOnceRef.current = true;
-      setHasLoadedOnce(true);
     }
   }, [applySettings, tr]);
 
@@ -129,10 +151,12 @@ export function SmartFollowUpScreen() {
     void reload();
   }, [reload]);
 
+  const focusNonceSeen = useRef(nav.areaFocusNonce);
   useEffect(() => {
-    if (nav.activeArea === 'smartFollowUp') {
-      void reload();
-    }
+    if (nav.activeArea !== 'smartFollowUp') return;
+    if (focusNonceSeen.current === nav.areaFocusNonce) return;
+    focusNonceSeen.current = nav.areaFocusNonce;
+    void reload();
   }, [nav.areaFocusNonce, nav.activeArea, reload]);
 
   const formDisabled = useMemo(() => saving || load.kind !== 'ready', [load.kind, saving]);
@@ -162,6 +186,7 @@ export function SmartFollowUpScreen() {
         steps,
       });
       applySettings(data);
+      cacheSet(queryKeys.smartFollowUp(), data);
       setLoad({ kind: 'ready', data });
       setNotice(tr('sfuSaveSuccess'));
     } catch (err) {
@@ -197,7 +222,7 @@ export function SmartFollowUpScreen() {
       {hasLoadedOnce && load.kind === 'error' ? <EmptyState title={tr('sfuLoadError')} body={load.message} /> : null}
 
       {hasLoadedOnce && (load.kind === 'offline' || load.kind === 'error') ? (
-        <PrimaryButton label={tr('proposalRetry')} onPress={() => void reload()} variant="ghost" />
+        <PrimaryButton label={tr('proposalRetry')} onPress={() => void reload({ force: true })} variant="ghost" />
       ) : null}
       {hasLoadedOnce && load.kind === 'forbidden' ? (
         <PrimaryButton label={tr('loginOrRegister')} onPress={() => nav.requestLogin()} variant="ghost" />

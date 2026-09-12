@@ -5,6 +5,7 @@ import { ActivityIndicator, Image, StyleSheet, View, type ImageStyle, type Style
 
 import { API_BASE } from '../../api/client';
 import { tokenStore } from '../../auth/tokenStore';
+import { peekAuthImageUri, rememberAuthImageUri } from '../../cache/authImageCache';
 import { PR_TEAL, PR_TEAL_SOFT } from './productChrome';
 
 type Props = {
@@ -27,6 +28,12 @@ export function ProductAuthImage({ mediaId, style, placeholderIcon }: Props) {
       setFailed(false);
       return;
     }
+    const cached = peekAuthImageUri(mediaId);
+    if (cached) {
+      setUri(cached);
+      setFailed(false);
+      return;
+    }
     let cancelled = false;
     setUri(null);
     setFailed(false);
@@ -43,7 +50,9 @@ export function ProductAuthImage({ mediaId, style, placeholderIcon }: Props) {
         for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
         const b64 = globalThis.btoa(binary);
         const ct = res.headers.get('content-type') || 'image/jpeg';
-        if (!cancelled) setUri(`data:${ct};base64,${b64}`);
+        const dataUri = `data:${ct};base64,${b64}`;
+        rememberAuthImageUri(mediaId, dataUri);
+        if (!cancelled) setUri(dataUri);
       } catch {
         if (!cancelled) setFailed(true);
       }

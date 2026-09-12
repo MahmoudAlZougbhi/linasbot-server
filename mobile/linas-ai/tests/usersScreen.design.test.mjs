@@ -45,8 +45,9 @@ test('listUsers keeps valid members when one row is legacy-shaped', () => {
 
 test('Users load does not blank list when roles fail', () => {
   const screen = read('features/users/UsersScreen.tsx');
-  assert.match(screen, /const list = await listUsers\(\)/);
-  assert.match(screen, /setRoles\(await listRoles\(\)\)/);
+  assert.match(screen, /dedupeFetch\(usersKey, \(\) => listUsers\(\)\)/);
+  assert.match(screen, /dedupeFetch\(rolesKey, \(\) => listRoles\(\)\)/);
+  assert.match(screen, /if \(!cachedList\) setUsers\(\[\]\)/);
   assert.doesNotMatch(screen, /Promise\.all\(\[listUsers\(\), listRoles\(\)\]\)/);
 });
 

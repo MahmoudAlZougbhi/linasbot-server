@@ -4,6 +4,9 @@ import { AppState, Linking } from 'react-native';
 import { ApiError, apiFetch } from '../../api/client';
 import { parseIntegrationsDeepLink, metaOAuthFailureMessage } from '../../app/navigation';
 import { tokenStore } from '../../auth/tokenStore';
+import { cacheGet, cacheSet, dedupeFetch, isCacheFresh } from '../../cache/queryCache';
+import { queryKeys } from '../../cache/queryKeys';
+import { QUERY_TTL } from '../../cache/queryTtl';
 import type { StringKey } from '../../i18n/locales/en';
 import {
   errorAfterIntegrationLoadFailure,
@@ -31,35 +34,48 @@ export function useIntegrationsLoad({
   setError,
   setAuthGate,
 }: Args) {
-  const [loading, setLoading] = useState(false);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  const hasLoadedOnceRef = useRef(false);
+  const cached = cacheGet<{ integrations: IntegrationListRow[] }>(queryKeys.integrations());
+  const [loading, setLoading] = useState(!cached);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(Boolean(cached));
+  const hasLoadedOnceRef = useRef(Boolean(cached));
   const [notice, setNotice] = useState<string | null>(null);
-  const [rows, setRows] = useState<IntegrationListRow[]>([]);
+  const [rows, setRows] = useState<IntegrationListRow[]>(cached?.data.integrations ?? []);
   const [webChatReady, setWebChatReady] = useState(hasWebChatCardSnapshot);
   const skipNextAreaFocusLoad = useRef(false);
   const metaResultSequence = useRef(0);
+  const activeAreaRef = useRef(activeArea);
+  activeAreaRef.current = activeArea;
 
-  const load = useCallback(async (): Promise<IntegrationsLoadResult> => {
+  const load = useCallback(async (opts?: { force?: boolean }): Promise<IntegrationsLoadResult> => {
+    const key = queryKeys.integrations();
+    const hit = cacheGet<{ integrations: IntegrationListRow[] }>(key);
+    if (hit) {
+      setRows(hit.data.integrations);
+      hasLoadedOnceRef.current = true;
+      setHasLoadedOnce(true);
+      setLoading(false);
+    }
     if (!hasLoadedOnceRef.current) setLoading(true);
     try {
       const access = await tokenStore.getAccessToken();
       if (!access) {
         setAuthGate(true);
-        setRows([]);
+        if (!hit) setRows([]);
         setWebChatReady(true);
         setError((current) =>
           errorAfterIntegrationLoadSuccess(current, tr('integrationsLoadError')),
         );
-        return { ok: false, rows: [] };
+        return { ok: false, rows: hit?.data.integrations ?? [] };
       }
-      const data = await apiFetch('/api/mobile/integrations', { schema: ListSchema });
+      if (!opts?.force && hit && isCacheFresh(key, QUERY_TTL.integrations)) {
+        return { ok: true, rows: hit.data.integrations };
+      }
+      const data = await dedupeFetch(key, () => apiFetch('/api/mobile/integrations', { schema: ListSchema }));
+      cacheSet(key, data);
       setRows(data.integrations);
-      // List succeeded — never keep a stale "could not load" while channels render.
       setError((current) =>
         errorAfterIntegrationLoadSuccess(current, tr('integrationsLoadError')),
       );
-      // WhatsApp / Website chat are separate cards; their failures must not fail the list.
       await Promise.all([refreshWhatsApp(), prefetchWebChatCardSnapshot()]);
       setWebChatReady(true);
       return { ok: true, rows: data.integrations };
@@ -75,7 +91,7 @@ export function useIntegrationsLoad({
         );
       }
       setWebChatReady(true);
-      return { ok: false, rows: [] };
+      return { ok: false, rows: hit?.data.integrations ?? [] };
     } finally {
       hasLoadedOnceRef.current = true;
       setLoading(false);
@@ -99,7 +115,7 @@ export function useIntegrationsLoad({
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void load();
+      if (state === 'active' && activeAreaRef.current === 'integrations') void load();
     });
     return () => sub.remove();
   }, [load]);
@@ -125,7 +141,7 @@ export function useIntegrationsLoad({
           } else setError(tr('waOAuthFailed'));
         } else setError(metaOAuthFailureMessage(tr, parsed.metaReason, parsed.metaChannel));
       }
-      void load();
+      void load({ force: true });
     };
     void Linking.getInitialURL().then(applyMetaResult);
     const sub = Linking.addEventListener('url', (event) => applyMetaResult(event.url));

@@ -66,10 +66,7 @@ describe('nav drawer Smart Follow-Up + AI Setup featured tile', () => {
     assert.match(read('app/moduleNav.ts'), /case 'smartFollowUp'/);
     const tree = read('app/AppScreenTree.tsx');
     assert.match(tree, /SmartFollowUpScreen/);
-    assert.ok(
-      tree.includes("KeepMountedPane key={`smartFollowUp-${authEpoch}`}"),
-      'missing keep-mounted pane for smartFollowUp',
-    );
+    assert.match(tree, /isKeepMountedScreen\('smartFollowUp'\)/);
   });
 
   it('Smart Follow-Up screen uses channels grid and save changes', () => {

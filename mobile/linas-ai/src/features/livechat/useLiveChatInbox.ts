@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { cacheGet, cacheSet, dedupeFetch, isCacheFresh } from '../../cache/queryCache';
+import { queryKeys } from '../../cache/queryKeys';
+import { QUERY_TTL } from '../../cache/queryTtl';
 import { classifyLiveChatError, fetchUnifiedChats, setOperatorAvailable } from './liveChatApi';
 import { appendInboxPage, applyInboxNewMessage, mergeInboxPollPage } from './inboxListMerge';
 import {
@@ -19,25 +22,36 @@ function waitingCountFromResponse(data: UnifiedChats, filter: InboxFilter, rows:
 
 const PAGE_SIZE = 30;
 
+type InboxSnapshot = {
+  chats: LiveChatItem[];
+  total: number;
+  waitingCount: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+  indexRebuild: boolean;
+};
+
 export function useLiveChatInbox(enabled = true) {
-  const [chats, setChats] = useState<LiveChatItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  const hasLoadedOnceRef = useRef(false);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<InboxFilter>('all');
+  const [channel, setChannel] = useState<ChannelFilter>('all');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const inboxKey = queryKeys.liveChatInbox(filter, channel, debouncedSearch);
+  const cached = enabled ? cacheGet<InboxSnapshot>(inboxKey) : null;
+  const [chats, setChats] = useState<LiveChatItem[]>(cached?.data.chats ?? []);
+  const [loading, setLoading] = useState(enabled && !cached);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(!enabled || Boolean(cached));
+  const hasLoadedOnceRef = useRef(!enabled || Boolean(cached));
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<'forbidden' | 'auth' | 'other' | null>(null);
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<InboxFilter>('all');
-  const [channel, setChannel] = useState<ChannelFilter>('all');
-  const [hasMore, setHasMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [total, setTotal] = useState(0);
-  const [indexRebuild, setIndexRebuild] = useState(false);
-  const [waitingCount, setWaitingCount] = useState(0);
+  const [hasMore, setHasMore] = useState(cached?.data.hasMore ?? false);
+  const [nextCursor, setNextCursor] = useState<string | null>(cached?.data.nextCursor ?? null);
+  const [total, setTotal] = useState(cached?.data.total ?? 0);
+  const [indexRebuild, setIndexRebuild] = useState(cached?.data.indexRebuild ?? false);
+  const [waitingCount, setWaitingCount] = useState(cached?.data.waitingCount ?? 0);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const requestIdRef = useRef(0);
   const nextCursorRef = useRef<string | null>(null);
   const hasMoreRef = useRef(false);
@@ -56,16 +70,40 @@ export function useLiveChatInbox(enabled = true) {
   const load = useCallback(
     async (mode: 'initial' | 'refresh' | 'poll' = 'initial') => {
       const requestId = ++requestIdRef.current;
+      const key = queryKeys.liveChatInbox(filter, channel, debouncedSearch);
+      const hit = cacheGet<InboxSnapshot>(key);
+      if (hit) {
+        setChats(hit.data.chats);
+        setTotal(hit.data.total);
+        setWaitingCount(hit.data.waitingCount);
+        setHasMore(hit.data.hasMore);
+        setNextCursor(hit.data.nextCursor);
+        nextCursorRef.current = hit.data.nextCursor;
+        hasMoreRef.current = hit.data.hasMore;
+        setIndexRebuild(hit.data.indexRebuild);
+        hasLoadedOnceRef.current = true;
+        setHasLoadedOnce(true);
+        setLoading(false);
+      }
+      if (
+        (mode === 'poll' || mode === 'initial') &&
+        hasLoadedOnceRef.current &&
+        isCacheFresh(key, QUERY_TTL.liveChatInbox)
+      ) {
+        return;
+      }
       if (mode === 'initial' && !hasLoadedOnceRef.current) setLoading(true);
       if (mode === 'refresh') setRefreshing(true);
       try {
-        const data = await fetchUnifiedChats({
-          search: debouncedSearch,
-          page: 1,
-          pageSize: PAGE_SIZE,
-          filter,
-          channel,
-        });
+        const data = await dedupeFetch(key, () =>
+          fetchUnifiedChats({
+            search: debouncedSearch,
+            page: 1,
+            pageSize: PAGE_SIZE,
+            filter,
+            channel,
+          }),
+        );
         if (requestId !== requestIdRef.current) return;
         const rows = data.chats ?? [];
         const rebuild = Boolean(data.requires_index_rebuild || data.index_empty);
@@ -91,6 +129,14 @@ export function useLiveChatInbox(enabled = true) {
         setIndexRebuild(rebuild);
         setError(null);
         setErrorKind(null);
+        cacheSet(key, {
+          chats: mode === 'poll' && paginatedBeyondFirstRef.current ? chatsRef.current : rows,
+          total: typeof data.total === 'number' ? data.total : rows.length,
+          waitingCount: waitingCountFromResponse(data, filter, rows),
+          hasMore: Boolean(data.has_more),
+          nextCursor: data.next_cursor ?? null,
+          indexRebuild: rebuild,
+        });
       } catch (err) {
         if (requestId !== requestIdRef.current) return;
         if (mode !== 'poll') {
@@ -103,7 +149,7 @@ export function useLiveChatInbox(enabled = true) {
                 ? err.message
                 : 'Could not load conversations.',
           );
-          if (mode === 'initial') setChats([]);
+          if (mode === 'initial' && chatsRef.current.length === 0) setChats([]);
         }
       } finally {
         if (requestId === requestIdRef.current) {
@@ -179,8 +225,16 @@ export function useLiveChatInbox(enabled = true) {
       }
       chatsRef.current = result.chats;
       setChats(result.chats);
+      cacheSet(queryKeys.liveChatInbox(filter, channel, debouncedSearch), {
+        chats: result.chats,
+        total,
+        waitingCount,
+        hasMore,
+        nextCursor,
+        indexRebuild,
+      });
     },
-    [load],
+    [load, filter, channel, debouncedSearch, total, waitingCount, hasMore, nextCursor, indexRebuild],
   );
 
   return {
@@ -204,6 +258,10 @@ export function useLiveChatInbox(enabled = true) {
     refresh: () => void load('refresh'),
     loadMore,
     reloadQuiet: () => void load('poll'),
+    catchUpIfStale: () => {
+      const key = queryKeys.liveChatInbox(filter, channel, debouncedSearch);
+      if (!isCacheFresh(key, QUERY_TTL.liveChatInbox)) void load('poll');
+    },
     applyNewMessage,
   };
 }

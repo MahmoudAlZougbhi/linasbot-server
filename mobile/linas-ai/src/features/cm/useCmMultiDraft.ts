@@ -9,7 +9,8 @@ import {
 } from './cmProposalReview';
 import { getCmDraft, putCmDraft } from './cmApi';
 import { isDraftDirty, stableSerialize } from './cmDraftDirty';
-import { peekCmDraftCache, writeCmDraftCache } from './cmDraftCache';
+import { QUERY_TTL } from '../../cache/queryTtl';
+import { isCmDraftFresh, peekCmDraftCache, writeCmDraftCache } from './cmDraftCache';
 import { prepareCmDraftPayload } from './prepareCmDraftPayload';
 
 type SectionDraft = {
@@ -54,7 +55,17 @@ export function useCmMultiDraft(
 
   const load = useCallback(async () => {
     const names = sectionKey.split(',').filter(Boolean);
-    if (!names.every((s) => peekCmDraftCache(s))) setLoading(true);
+    const allCached = names.every((s) => peekCmDraftCache(s));
+    if (!allCached) setLoading(true);
+    if (
+      !proposalReview &&
+      allCached &&
+      names.every((s) => isCmDraftFresh(s, QUERY_TTL.cmDraft))
+    ) {
+      setError(null);
+      setLoading(false);
+      return;
+    }
     setError(null);
     setConflict(null);
     try {
