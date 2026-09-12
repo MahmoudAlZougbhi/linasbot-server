@@ -202,6 +202,23 @@ def count_raw_comment_changes(payload: dict[str, Any]) -> int:
     return count
 
 
+def _comment_binding_account_ids(binding: MetaAssetBinding) -> set[str]:
+    ids = {
+        str(binding.asset_id or "").strip(),
+        str(binding.page_id or "").strip(),
+        str(binding.instagram_account_id or "").strip(),
+    }
+    ids.discard("")
+    return ids
+
+
+def _instagram_id_for_comment_parse(binding: MetaAssetBinding) -> str:
+    instagram_account_id = str(binding.instagram_account_id or "").strip()
+    if binding.channel == "instagram" and not instagram_account_id:
+        return str(binding.asset_id or "").strip()
+    return instagram_account_id
+
+
 def comment_binding_skip_reason(
     binding: MetaAssetBinding,
     *,
@@ -276,15 +293,14 @@ def resolve_registry_comment_events(
             payload,
             channel=active_binding.channel,
             page_id=active_binding.page_id,
-            instagram_account_id=active_binding.instagram_account_id or active_binding.asset_id,
+            instagram_account_id=_instagram_id_for_comment_parse(active_binding),
         )
         for event in events:
             if str(event.get("channel") or "") != active_binding.channel:
                 continue
-            event_asset = (
-                active_binding.instagram_account_id if active_binding.channel == "instagram" else active_binding.page_id
-            )
-            if event_asset != active_binding.asset_id:
+            event_account = str(event.get("account_id") or "").strip()
+            allowed = _comment_binding_account_ids(active_binding)
+            if event_account and allowed and event_account not in allowed:
                 continue
             comment_id = str(event.get("comment_id") or "")
             if not comment_id:

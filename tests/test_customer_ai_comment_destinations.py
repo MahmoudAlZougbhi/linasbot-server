@@ -12,8 +12,96 @@ from services.customer_ai.comments.destinations import (
     destinations_from_outcome,
     public_text_for_channel,
 )
+from services.customer_ai.comments.pipeline import apply_ai_comment_destinations
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.customer_ai.contracts.turn import CustomerTurn
+from services.customer_ai.outbound_destination import outbound_destination
 from services.customer_ai.runtime import _outcome
+
+
+def test_outbound_destination_labels_comments_not_dms() -> None:
+    comment_turn = CustomerTurn(tenant_id="t1", surface="comment", channel="instagram")
+    assert outbound_destination(comment_turn, "instagram") == "comment"
+    assert outbound_destination(comment_turn, "facebook") == "comment"
+    assert outbound_destination(CustomerTurn(tenant_id="t1"), "instagram_comment") == "comment"
+    assert outbound_destination(CustomerTurn(tenant_id="t1"), "facebook_comment") == "comment"
+    dm_turn = CustomerTurn(tenant_id="t1", surface="dm", channel="instagram")
+    assert outbound_destination(dm_turn, "instagram") == "dm"
+    assert outbound_destination(dm_turn, "facebook") == "dm"
+    assert outbound_destination(CustomerTurn(tenant_id="t1", surface="web_chat"), "web_chat") == "web_chat"
+
+
+def test_faq_comment_turn_uses_comment_destination() -> None:
+    from services.customer_ai.faq_turn import faq_envelope
+
+    turn = CustomerTurn(
+        tenant_id="t1",
+        surface="comment",
+        channel="instagram_comment",
+        invocation_kind="comment",
+    )
+    result = faq_envelope(
+        turn,
+        "hours?",
+        "instagram_comment",
+        text="10-8 daily",
+        extra={},
+        apply_greeting=lambda _turn, _msg, _ch, envelope: envelope,
+    )
+    assert result.envelope.messages[0].destination == "comment"
+    dm = faq_envelope(
+        CustomerTurn(tenant_id="t1", surface="dm", channel="instagram"),
+        "hours?",
+        "instagram",
+        text="10-8 daily",
+        extra={},
+        apply_greeting=lambda _turn, _msg, _ch, envelope: envelope,
+    )
+    assert dm.envelope.messages[0].destination == "dm"
+
+
+def test_dm_labeled_comment_reply_becomes_public() -> None:
+    result = TurnResult(
+        stop_reason="ok",
+        envelope=FinalReplyEnvelope(
+            decision="reply",
+            messages=[OutboundMessage(destination="dm", text="We open at 10.")],
+        ),
+    )
+    outcome = _outcome(result, comment_surface=True)
+    plan = destinations_from_outcome(outcome)
+    assert plan.public_text == "We open at 10."
+    assert plan.private_text == ""
+
+
+def test_explicit_ai_dm_mode_stays_private() -> None:
+    result = TurnResult(
+        stop_reason="ok",
+        envelope=FinalReplyEnvelope(
+            decision="reply",
+            messages=[OutboundMessage(destination="dm", text="Private hours")],
+        ),
+        extra={"comment_mode": "ai_dm"},
+    )
+    plan = destinations_from_outcome(_outcome(result, comment_surface=True))
+    assert plan.public_text == ""
+    assert plan.private_text == "Private hours"
+
+
+def test_missing_comment_mode_rewrites_ai_dm_destination_to_comment() -> None:
+    generated = TurnResult(
+        stop_reason="ok",
+        envelope=FinalReplyEnvelope(
+            decision="reply",
+            messages=[OutboundMessage(destination="dm", text="We open at 10.")],
+        ),
+        ai_called=True,
+    )
+    rewritten = apply_ai_comment_destinations(generated, None)
+    assert [item.destination for item in rewritten.envelope.messages] == ["comment"]
+    assert rewritten.envelope.messages[0].text == "We open at 10."
+    dual = apply_ai_comment_destinations(generated, "ai_both")
+    assert [item.destination for item in dual.envelope.messages] == ["dm", "comment"]
 
 
 def test_mixed_outcome_keeps_public_and_private_separate() -> None:

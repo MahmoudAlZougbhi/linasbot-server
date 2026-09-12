@@ -25,8 +25,10 @@ from services.customer_ai.templates import brain_template
 from services.customer_ai.tools.registry import execute_tool
 
 
-def _destination(channel: str) -> str:
-    return "web_chat" if "web" in (channel or "") else "dm"
+def _destination(channel: str, turn: object | None = None) -> str:
+    from services.customer_ai.outbound_destination import outbound_destination
+
+    return outbound_destination(turn, channel)
 
 
 def _response_language(turn: CustomerTurn) -> str:
@@ -173,7 +175,7 @@ async def run_agentic_turn(
     flow_extra: dict[str, Any] | None = None,
     visual_reason: str = "",
 ) -> TurnResult:
-    dest = destination or _destination(channel)
+    dest = destination or _destination(channel, turn)
     lang = _response_language(turn)
     agent_trace: list[dict[str, Any]] = []
     extra = dict(flow_extra or {})
@@ -421,6 +423,7 @@ async def run_agentic_dm_path(
         turn,
         task_text,
         channel,
+        destination=_destination(channel, turn),
         plan=plan,
         flow_extra=flow_base,
         visual_reason=visual_reason,

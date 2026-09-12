@@ -16,8 +16,10 @@ from services.customer_ai.stage_timeline import stamp
 from services.customer_ai.verify.critic import verify_answer
 
 
-def _destination(channel: str) -> str:
-    return "web_chat" if "web" in (channel or "") else "dm"
+def _destination(channel: str, turn: object | None = None) -> str:
+    from services.customer_ai.outbound_destination import outbound_destination
+
+    return outbound_destination(turn, channel)
 
 
 def _flow_extra(extra: dict | None, *rows: tuple[str, str, dict | None]) -> dict:
@@ -44,7 +46,7 @@ def apply_greeting(turn: CustomerTurn, message: str, channel: str, envelope: Fin
         return envelope
     turn.state = turn.state.model_copy(update={"greeted": True})
     remember_turn(turn)
-    destination = envelope.messages[0].destination or _destination(channel)
+    destination = envelope.messages[0].destination or _destination(channel, turn)
     greeting = OutboundMessage(destination=destination, text=greet.text, protected=True)
     return envelope.model_copy(update={"messages": [greeting, *list(envelope.messages)]})
 

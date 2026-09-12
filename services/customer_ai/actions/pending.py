@@ -88,7 +88,9 @@ async def try_confirm_pending(turn: CustomerTurn, message: str, channel: str) ->
     if ok:
         remember_turn(turn, [])
     text = _confirm_reply(ok, receipts)
-    destination = "web_chat" if "web" in (channel or turn.channel or "") else "dm"
+    from services.customer_ai.outbound_destination import outbound_destination
+
+    destination = outbound_destination(turn, channel)
     return TurnResult(
         stop_reason="ok",
         envelope=FinalReplyEnvelope(

@@ -19,8 +19,10 @@ def _flow_extra(extra: dict | None, *rows: tuple[str, str, dict | None]) -> dict
     return out
 
 
-def _destination(channel: str) -> str:
-    return "web_chat" if "web" in (channel or "") else "dm"
+def _destination(channel: str, turn: object | None = None) -> str:
+    from services.customer_ai.outbound_destination import outbound_destination
+
+    return outbound_destination(turn, channel)
 
 
 def _response_language(turn: CustomerTurn) -> str:
@@ -58,7 +60,7 @@ def _apply_greeting(
         return envelope
     turn.state = turn.state.model_copy(update={"greeted": True})
     remember_turn(turn)
-    destination = envelope.messages[0].destination or _destination(channel)
+    destination = envelope.messages[0].destination or _destination(channel, turn)
     greeting = OutboundMessage(destination=destination, text=greet.text, protected=True)
     return envelope.model_copy(update={"messages": [greeting, *list(envelope.messages)]})
 
@@ -108,7 +110,7 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
                 decision="clarify",
                 messages=[
                     OutboundMessage(
-                        destination=_destination(channel),
+                        destination=_destination(channel, turn),
                         text=brain_template("visual_disabled", lang),
                     )
                 ],
