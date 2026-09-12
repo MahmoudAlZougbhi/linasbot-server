@@ -10,10 +10,18 @@ import test from 'node:test';
 
 import {
   appendInboxPage,
+  applyInboxNewMessage,
   mergeInboxPollPage,
 } from '../src/features/livechat/inboxListMerge.ts';
 import {
+  drainLiveChatSse,
+  liveChatMessageFromSseData,
+  sseEventMatchesChat,
+} from '../src/features/livechat/liveChatSseParse.ts';
+import {
+  applyMessageStatus,
   hasPendingOperatorSend,
+  mergeSseThreadMessage,
   mergeThreadMessages,
 } from '../src/features/livechat/liveChatThreadMerge.ts';
 
@@ -261,17 +269,20 @@ test('duplicate webhook rows collapse to one bubble', () => {
   );
 });
 
-test('thread hook ignores stale polls and locks in-flight sends', () => {
+test('thread hook ignores stale polls and sends without locking the composer', () => {
   const hook = read('features/livechat/useLiveChatThread.ts');
   const thread = read('features/livechat/LiveChatThread.tsx');
   assert.match(hook, /requestIdRef/);
   assert.match(hook, /if \(requestId !== requestIdRef\.current\) return/);
-  assert.match(hook, /sendingRef/);
   assert.match(hook, /hasPendingOperatorSend/);
-  assert.match(hook, /async function dispatchOperatorSend/);
+  assert.match(hook, /function dispatchOperatorSend/);
   assert.match(hook, /mode === 'poll' \|\| prev.length/);
-  assert.match(hook, /if \(!chat \|\| !payload \|\| sendingRef\.current\) return false/);
+  assert.match(hook, /applyRealtime/);
+  assert.match(hook, /reloadQuiet/);
+  assert.doesNotMatch(hook, /setInterval/);
+  assert.doesNotMatch(hook, /sendingRef\.current/);
   assert.match(thread, /thread\.loading && !thread\.messages\.length/);
+  assert.doesNotMatch(thread, /thread\.sending/);
 });
 
 test('drawer history refresh ignores out-of-order list responses', () => {
@@ -281,3 +292,101 @@ test('drawer history refresh ignores out-of-order list responses', () => {
   assert.match(history, /if \(requestId !== requestIdRef\.current\) return/);
   assert.doesNotMatch(history, /inFlight/);
 });
+
+test('applyInboxNewMessage bumps the row to the top and unread unless open', () => {
+  const prev = [
+    row('1', 'A'),
+    { conversation_id: '2', user_id: '2', user_name: 'B', unread_count: 0 },
+  ];
+  const data = {
+    conversation_id: '2',
+    user_id: '2',
+    message: {
+      message_id: 'm1',
+      content: 'hello',
+      text: 'hello',
+      is_user: true,
+      timestamp: '2026-09-12T10:00:00.000Z',
+    },
+  };
+  const closed = applyInboxNewMessage(prev, data, { openConversationId: null });
+  assert.equal(closed.matched, true);
+  assert.equal(closed.chats[0].conversation_id, '2');
+  assert.equal(closed.chats[0].unread_count, 1);
+  assert.equal(closed.chats[0].last_message_text, 'hello');
+
+  const open = applyInboxNewMessage(prev, data, { openConversationId: '2' });
+  assert.equal(open.chats[0].unread_count, 0);
+
+  const unknown = applyInboxNewMessage(prev, { conversation_id: 'missing', user_id: 'x' });
+  assert.equal(unknown.matched, false);
+  assert.equal(unknown.chats, prev);
+});
+
+test('SSE parser and thread merge apply a new_message without duplicating', () => {
+  const chunk =
+    'event: new_message\ndata: {"user_id":"u1","conversation_id":"c1","message":{"message_id":"m1","content":"hi","text":"hi","is_user":true,"timestamp":"2026-09-12T10:00:00.000Z"}}\n\n';
+  const drained = drainLiveChatSse('', chunk);
+  assert.equal(drained.events[0].type, 'new_message');
+  assert.equal(sseEventMatchesChat(drained.events[0].data, { user_id: 'u1', conversation_id: 'c1' }), true);
+  const msg = liveChatMessageFromSseData(drained.events[0].data);
+  assert.equal(msg?.message_id, 'm1');
+  const older = { message_id: 'old', timestamp: '2026-09-12T09:00:00.000Z', is_user: true, content: 'yo' };
+  const merged = mergeSseThreadMessage([older], drained.events[0].data);
+  assert.deepEqual(
+    merged.map((m) => m.message_id),
+    ['old', 'm1'],
+  );
+  const again = mergeSseThreadMessage(merged, drained.events[0].data);
+  assert.deepEqual(
+    again.map((m) => m.message_id),
+    ['old', 'm1'],
+  );
+});
+
+test('message_status updates the optimistic bubble without duplicating', () => {
+  const local = {
+    message_id: 'local-1',
+    client_send_id: 'local-1',
+    idempotency_key: 'local-1',
+    timestamp: '2026-09-12T10:00:00.000Z',
+    is_user: false,
+    content: 'hello',
+    text: 'hello',
+    role: 'operator',
+    delivery_status: 'sending',
+  };
+  const failed = applyMessageStatus([local], {
+    client_message_id: 'local-1',
+    delivery_status: 'failed',
+    error: 'meta_delivery_timeout',
+  });
+  assert.equal(failed.length, 1);
+  assert.equal(failed[0].delivery_status, 'failed');
+  assert.equal(failed[0].delivery_error, 'meta_delivery_timeout');
+  const sent = applyMessageStatus(failed, {
+    client_send_id: 'local-1',
+    delivery_status: 'sent',
+  });
+  assert.equal(sent[0].delivery_status, 'sent');
+  const again = mergeSseThreadMessage(sent, {
+    client_message_id: 'local-1',
+    delivery_status: 'sent',
+  });
+  assert.equal(again.length, 1);
+});
+
+test('live chat uses SSE instead of inbox/thread polling', () => {
+  const inbox = read('features/livechat/useLiveChatInbox.ts');
+  const screen = read('features/livechat/LiveChatScreen.tsx');
+  const events = read('features/livechat/useLiveChatEvents.ts');
+  const composer = read('features/livechat/LiveChatComposer.tsx');
+  assert.match(inbox, /applyNewMessage/);
+  assert.doesNotMatch(inbox, /setInterval/);
+  assert.match(screen, /useLiveChatEvents/);
+  assert.match(events, /\/api\/live-chat\/events/);
+  assert.match(events, /text\/event-stream/);
+  assert.match(events, /XMLHttpRequest/);
+  assert.match(composer, /setDraft\(''\)/);
+});
+

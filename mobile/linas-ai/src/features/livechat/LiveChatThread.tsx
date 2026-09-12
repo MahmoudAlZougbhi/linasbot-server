@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -20,6 +20,7 @@ import { LiveChatComposer } from './LiveChatComposer';
 import { LiveChatMessageBubble } from './LiveChatMessageBubble';
 import { LiveChatThreadActions } from './LiveChatThreadActions';
 import { saveFaqFromLiveChat } from './liveChatApi';
+import { chatChannel } from './liveChatHelpers';
 import {
   type LiveChatItem,
   type LiveChatMessage,
@@ -29,22 +30,55 @@ import {
   previousUserQuestion,
 } from './liveChatTypes';
 import { useLiveChatThread } from './useLiveChatThread';
+import type { LiveChatSseEvent } from './liveChatSseParse';
 
 type Props = {
   chat: LiveChatItem;
   onChatUpdated: () => void;
+  realtimeEvent?: { seq: number; event: LiveChatSseEvent } | null;
+  sseConnectedAt?: number;
 };
 
-export function LiveChatThread({ chat, onChatUpdated }: Props) {
+export function LiveChatThread({
+  chat,
+  onChatUpdated,
+  realtimeEvent = null,
+  sseConnectedAt = 0,
+}: Props) {
   const { tr } = useI18n();
   const insets = useSafeAreaInsets();
   const thread = useLiveChatThread(chat, onChatUpdated);
+
+  useEffect(() => {
+    if (!realtimeEvent) return;
+    thread.applyRealtime(realtimeEvent.event.data, realtimeEvent.event.type);
+    // Apply each pushed event once; do not depend on applyRealtime identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realtimeEvent?.seq]);
+
+  useEffect(() => {
+    if (!sseConnectedAt) return;
+    thread.reloadQuiet();
+    // Catch-up after SSE connect/reconnect only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sseConnectedAt]);
   const [assignOpen, setAssignOpen] = useState(false);
   const [likeTarget, setLikeTarget] = useState<LiveChatMessage | null>(null);
   const [likeBusy, setLikeBusy] = useState(false);
   const [likeError, setLikeError] = useState<string | null>(null);
+  const [awayFromLatest, setAwayFromLatest] = useState(false);
+  const [unseenIncoming, setUnseenIncoming] = useState(false);
+  const listRef = useRef<FlatList<LiveChatMessage>>(null);
+  const messageCountRef = useRef(0);
 
   const listData = useMemo(() => [...thread.messages].reverse(), [thread.messages]);
+  useEffect(() => {
+    if (thread.messages.length > messageCountRef.current && awayFromLatest) {
+      setUnseenIncoming(true);
+    }
+    messageCountRef.current = thread.messages.length;
+  }, [thread.messages.length, awayFromLatest]);
+  const allowOperatorMedia = chatChannel(chat) !== 'tiktok' && chatChannel(chat) !== 'web';
   const likeInitialQuestion = likeTarget
     ? previousUserQuestion(thread.messages, likeTarget)
     : '';
@@ -92,12 +126,20 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           style={styles.flex}
           inverted
           data={listData}
           keyExtractor={(m, i) => messageKey(m, i)}
           contentContainerStyle={styles.messages}
           keyboardShouldPersistTaps="handled"
+          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+          onScroll={(e) => {
+            const away = e.nativeEvent.contentOffset.y > 140;
+            setAwayFromLatest(away);
+            if (!away) setUnseenIncoming(false);
+          }}
+          scrollEventThrottle={64}
           onEndReached={() => {
             if (thread.hasMore && !thread.loadingMore) void thread.loadOlder();
           }}
@@ -122,6 +164,13 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
           renderItem={({ item }) => (
             <LiveChatMessageBubble
               message={item}
+              onRetry={
+                item.delivery_status === 'failed' && !item.is_user
+                  ? () => {
+                      thread.retryFailedSend(item);
+                    }
+                  : undefined
+              }
               onLike={
                 isLikeableAiReply(item)
                   ? () => {
@@ -135,10 +184,27 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
         />
       )}
 
+      {unseenIncoming && awayFromLatest ? (
+        <Text
+          onPress={() => {
+            listRef.current?.scrollToOffset({ offset: 0, animated: true });
+            setUnseenIncoming(false);
+            setAwayFromLatest(false);
+          }}
+          style={styles.newMsg}
+        >
+          New messages
+        </Text>
+      ) : null}
+
       <LiveChatComposer
         onSend={(text) => thread.sendText(text)}
-        onSendMedia={(base64, type, mime) => thread.sendMedia(base64, type, mime)}
-        busy={thread.busy || thread.sending || (thread.loading && !thread.messages.length)}
+        onSendMedia={
+          allowOperatorMedia
+            ? (base64, type, mime) => thread.sendMedia(base64, type, mime)
+            : undefined
+        }
+        busy={thread.busy || (thread.loading && !thread.messages.length)}
       />
 
       <LiveChatAssignSheet
@@ -182,4 +248,16 @@ const styles = StyleSheet.create({
   },
   emptyFlip: { transform: [{ scaleY: -1 }] },
   error: { color: colors.danger, fontFamily: fonts.body, fontSize: 13, marginBottom: spacing.sm },
+  newMsg: {
+    alignSelf: 'center',
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: colors.accent,
+    color: colors.onAccent,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+  },
 });

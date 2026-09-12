@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.live_chat_meta_operator import deliver_live_chat_meta_operator_text, is_meta_dm_live_chat_user
+from services.live_chat_meta_operator import (
+    deliver_live_chat_meta_operator_text,
+    is_meta_dm_live_chat_user,
+    parse_meta_live_chat_user_id,
+)
 from services.live_chat_meta_operator_media import (
     decode_operator_media_payload,
     deliver_live_chat_meta_operator_media,
@@ -14,10 +18,49 @@ from services.live_chat_tiktok_operator import (
     is_tiktok_live_chat_user,
     tiktok_operator_media_not_supported,
 )
+from services.requests.constants import (
+    SOURCE_CHANNEL_FACEBOOK_MESSENGER,
+    SOURCE_CHANNEL_INSTAGRAM_DM,
+)
 
 
 def is_social_live_chat_user(user_id: str | None) -> bool:
     return is_meta_dm_live_chat_user(user_id) or is_tiktok_live_chat_user(user_id)
+
+
+def infer_live_chat_source_channel(user_id: str | None, explicit: str | None = None) -> str | None:
+    """Resolve Requests source_channel so Meta/TikTok/Web threads never open WhatsApp Postgres."""
+    from services.live_chat_channel import is_web_live_chat_user, resolve_live_chat_channel
+    from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
+
+    uid = str(user_id or "")
+    if is_web_live_chat_user(uid) or resolve_live_chat_channel(uid) == "web":
+        return SOURCE_CHANNEL_WEB_CHAT
+    if is_meta_dm_live_chat_user(uid):
+        channel, _sender, _asset, _tenant = parse_meta_live_chat_user_id(uid)
+        if channel == "facebook":
+            return SOURCE_CHANNEL_FACEBOOK_MESSENGER
+        return SOURCE_CHANNEL_INSTAGRAM_DM
+    if is_tiktok_live_chat_user(uid):
+        return "tiktok"
+    if explicit and str(explicit).strip():
+        return str(explicit).strip().lower()
+    return None
+
+
+def live_chat_needs_whatsapp_session(
+    *,
+    user_id: str | None,
+    tenant_id: str | None,
+    source_channel: str | None,
+) -> bool:
+    from services.live_chat_channel import is_web_live_chat_user, resolve_live_chat_channel
+
+    if not str(tenant_id or "").strip():
+        return False
+    if is_social_live_chat_user(user_id) or is_web_live_chat_user(user_id):
+        return False
+    return resolve_live_chat_channel(user_id) == "whatsapp"
 
 
 async def deliver_social_operator_text(
@@ -26,19 +69,29 @@ async def deliver_social_operator_text(
     user_id: str,
     conversation_id: str,
     text: str,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any] | None:
-    from services.queues.config import redis_required
+    from services.live_chat_operator_queue import live_chat_durable_mode, queue_unavailable_result
 
     if is_meta_dm_live_chat_user(user_id):
         return await deliver_live_chat_meta_operator_text(
             tenant_id=tenant_id,
             user_id=user_id,
             text=text,
+            conversation_id=conversation_id,
+            idempotency_key=idempotency_key,
         )
     if is_tiktok_live_chat_user(user_id):
-        if redis_required():
+        mode = live_chat_durable_mode()
+        if mode == "unavailable":
+            return queue_unavailable_result(channel="tiktok")
+        if mode == "enqueue":
             return _enqueue_operator_text(
-                tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id, text=text
+                tenant_id=tenant_id,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                text=text,
+                idempotency_key=idempotency_key,
             )
         return await deliver_live_chat_tiktok_operator_text(
             tenant_id=tenant_id,
@@ -49,33 +102,44 @@ async def deliver_social_operator_text(
     return None
 
 
-def _enqueue_operator_text(*, tenant_id: str | None, user_id: str, conversation_id: str, text: str) -> dict[str, Any]:
-    from services.omnichannel.operator_enqueue import enqueue_operator_reply
+def _enqueue_operator_text(
+    *,
+    tenant_id: str | None,
+    user_id: str,
+    conversation_id: str,
+    text: str,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    from services.live_chat_operator_queue import enqueue_live_chat_operator_text
 
     if is_meta_dm_live_chat_user(user_id):
         from services.live_chat_meta_operator import parse_meta_live_chat_user_id, resolve_meta_live_chat_tenant
 
         channel, sender_id, asset_id, _embedded = parse_meta_live_chat_user_id(user_id)
         tenant = resolve_meta_live_chat_tenant(tenant_id, user_id)
-        return enqueue_operator_reply(
+        return enqueue_live_chat_operator_text(
             tenant_id=tenant,
             channel=channel,
-            surface="operator",
             account_id=str(asset_id or ""),
             conversation_key=f"{tenant}:{channel}:{sender_id}",
             text=text,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            idempotency_key=idempotency_key,
         )
     from services.live_chat_tiktok_operator import parse_tiktok_live_chat_user_id
 
     sender_id, connection_id, embedded_tenant = parse_tiktok_live_chat_user_id(user_id)
     tenant = str(tenant_id or embedded_tenant or "linas").strip()
-    return enqueue_operator_reply(
+    return enqueue_live_chat_operator_text(
         tenant_id=tenant,
         channel="tiktok",
-        surface="operator",
         account_id=str(connection_id or ""),
         conversation_key=f"{tenant}:tiktok:{conversation_id or sender_id}",
         text=text,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        idempotency_key=idempotency_key,
     )
 
 

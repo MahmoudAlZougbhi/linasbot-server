@@ -16,8 +16,8 @@ import { fonts, radii, spacing, useTheme } from '../../theme';
 import { useLiveChatOperatorMedia } from './useLiveChatOperatorMedia';
 
 type Props = {
-  onSend: (text: string) => Promise<boolean>;
-  onSendMedia?: (base64: string, type: 'voice' | 'image', mime?: string) => Promise<boolean>;
+  onSend: (text: string) => boolean | Promise<boolean>;
+  onSendMedia?: (base64: string, type: 'voice' | 'image', mime?: string) => boolean | Promise<boolean>;
   busy: boolean;
   disabled?: boolean;
 };
@@ -44,9 +44,10 @@ export function LiveChatComposer({ onSend, onSendMedia, busy, disabled }: Props)
 
   const submit = async () => {
     const text = draft.trim();
-    if (!text || busy || disabled) return;
+    if (!text || disabled || busy) return;
+    setDraft('');
     const ok = await onSend(text);
-    if (ok) setDraft('');
+    if (!ok) setDraft((current) => (current.trim() ? current : text));
   };
 
   const sendImage = async () => {

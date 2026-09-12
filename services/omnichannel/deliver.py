@@ -42,7 +42,8 @@ def _limiter_provider(channel: str) -> str:
 
 
 async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
-    outbox_id = str((job.payload or {}).get("outbox_id") or "").strip()
+    payload = dict(job.payload or {})
+    outbox_id = str(payload.get("outbox_id") or "").strip()
     if not outbox_id:
         raise PermanentJobError("missing outbox_id")
     with whatsapp_session(require=True) as session:
@@ -50,6 +51,8 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
         if row is None:
             raise PermanentJobError("outbox_missing")
         if row.state in {"delivered", "dead_letter", "needs_owner_action", "reconciliation_required"}:
+            if row.state != "reconciliation_required":
+                await _notify_live_chat(payload, row.state)
             return {"skipped": True, "reason": row.state}
         if row.regenerated:
             raise PermanentJobError("canonical_body_must_not_regenerate")
@@ -143,6 +146,7 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
             mark_needs_owner_action(event_id=outbox_id, kind="deliver", reason="accepted_local_state_update_failed")
             return {"ok": False, "reason": "reconciliation_required"}
         incr("delivered")
+        await _notify_live_chat(payload, "delivered", provider_message_id=str(result.get("message_id") or ""))
         return {"ok": True, "provider_message_id": result.get("message_id")}
     if decision.kind == "transient":
         limiter.record_throttle(
@@ -165,11 +169,13 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
             _mark(outbox_id, state="dead_letter", reason=decision.reason)
             mark_dead_letter(event_id=outbox_id, kind="deliver", reason=decision.reason)
             _release_credits_if_never_submitted(snapshot, submitted=bool(result.get("submitted")))
+            await _notify_live_chat(payload, "dead_letter", error=decision.reason)
             raise PermanentJobError(decision.reason)
         _defer(outbox_id, delay=decision.retry_after_seconds or 5.0, state="failed", reason=decision.reason)
         raise RuntimeError(decision.reason)
     _mark(outbox_id, state="needs_owner_action", reason=decision.reason)
     mark_needs_owner_action(event_id=outbox_id, kind="deliver", reason=decision.reason)
+    await _notify_live_chat(payload, "needs_owner_action", error=decision.reason)
     return {"ok": False, "reason": decision.reason}
 
 
@@ -271,6 +277,31 @@ def _release_credits_if_never_submitted(snapshot: dict[str, Any], *, submitted: 
     from services.customer_ai.leftover_reserve import release_leftover_reply
 
     release_leftover_reply(tenant_id, str(reservation))
+
+
+async def _notify_live_chat(
+    payload: dict[str, Any],
+    state: str,
+    *,
+    error: str | None = None,
+    provider_message_id: str | None = None,
+) -> None:
+    if not payload.get("live_chat_user_id"):
+        return
+    if state in {"delivered", "sent"}:
+        status = "sent"
+    elif state in {"dead_letter", "needs_owner_action", "failed"}:
+        status = "failed"
+    else:
+        return
+    from services.live_chat_operator_delivery_status import notify_live_chat_operator_job
+
+    await notify_live_chat_operator_job(
+        payload,
+        delivery_status=status,
+        error=error,
+        provider_message_id=provider_message_id,
+    )
 
 
 async def _send(snapshot: dict[str, Any]) -> dict[str, Any]:

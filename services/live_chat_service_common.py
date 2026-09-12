@@ -116,6 +116,30 @@ async def _release_operator_idempotency_lock(db: Any, lock_ref: Any) -> None:
         print(f"⚠️ Could not release operator idempotency lock: {e}")
 
 
+async def release_operator_send_idempotency(fingerprint: str) -> None:
+    """Allow a failed send to be retried with the same client key."""
+    key = str(fingerprint or "").strip()
+    if not key:
+        return
+    _operator_send_idempotency_keys.pop(key, None)
+    try:
+        from utils.utils_firestore import get_firestore_db
+
+        db = get_firestore_db()
+        if not db:
+            return
+        app_id = "linas-ai-bot-backend"
+        ref = (
+            db.collection("artifacts")
+            .document(app_id)
+            .collection("operator_outbound_idempotency")
+            .document(_operator_idempotency_doc_id(key))
+        )
+        await asyncio.to_thread(ref.delete)
+    except Exception as e:
+        print(f"⚠️ Could not release operator idempotency fingerprint: {e}")
+
+
 def _env_int(name: str, default: int) -> int:
     try:
         return int(os.getenv(name, str(default)))

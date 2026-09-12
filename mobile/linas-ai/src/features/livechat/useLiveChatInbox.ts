@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { classifyLiveChatError, fetchUnifiedChats, setOperatorAvailable } from './liveChatApi';
-import { appendInboxPage, mergeInboxPollPage } from './inboxListMerge';
+import { appendInboxPage, applyInboxNewMessage, mergeInboxPollPage } from './inboxListMerge';
 import {
   type InboxFilter,
   type ChannelFilter,
@@ -17,7 +17,6 @@ function waitingCountFromResponse(data: UnifiedChats, filter: InboxFilter, rows:
   return rows.filter((chat) => normalizeStatus(chat) === 'waiting_human').length;
 }
 
-const POLL_MS = 20_000;
 const PAGE_SIZE = 30;
 
 export function useLiveChatInbox(enabled = true) {
@@ -44,6 +43,7 @@ export function useLiveChatInbox(enabled = true) {
   const hasMoreRef = useRef(false);
   const paginatedBeyondFirstRef = useRef(false);
   const loadingMoreRef = useRef(false);
+  const chatsRef = useRef<LiveChatItem[]>([]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -157,6 +157,8 @@ export function useLiveChatInbox(enabled = true) {
     }
   }, [debouncedSearch, filter, channel]);
 
+  chatsRef.current = chats;
+
   useEffect(() => {
     if (!enabled) {
       setLoading(false);
@@ -168,11 +170,18 @@ export function useLiveChatInbox(enabled = true) {
     void load('initial');
   }, [load, enabled]);
 
-  useEffect(() => {
-    if (!enabled) return;
-    const id = setInterval(() => void load('poll'), POLL_MS);
-    return () => clearInterval(id);
-  }, [load, enabled]);
+  const applyNewMessage = useCallback(
+    (data: Record<string, unknown>, openConversationId?: string | null) => {
+      const result = applyInboxNewMessage(chatsRef.current, data, { openConversationId });
+      if (!result.matched) {
+        void load('poll');
+        return;
+      }
+      chatsRef.current = result.chats;
+      setChats(result.chats);
+    },
+    [load],
+  );
 
   return {
     chats,
@@ -195,5 +204,6 @@ export function useLiveChatInbox(enabled = true) {
     refresh: () => void load('refresh'),
     loadMore,
     reloadQuiet: () => void load('poll'),
+    applyNewMessage,
   };
 }

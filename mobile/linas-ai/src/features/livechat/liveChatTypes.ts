@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const InboxFilterSchema = z.enum(['all', 'waiting', 'with_operator', 'bot', 'closed']);
 export type InboxFilter = z.infer<typeof InboxFilterSchema>;
 
-export type ChatChannel = 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'web';
+export type ChatChannel = 'whatsapp' | 'instagram' | 'facebook' | 'tiktok' | 'web' | 'unknown';
 export const ChannelFilterSchema = z.enum(['all', 'whatsapp', 'instagram', 'facebook', 'tiktok', 'web']);
 export type ChannelFilter = z.infer<typeof ChannelFilterSchema>;
 
@@ -148,6 +148,9 @@ export const LiveChatMessageSchema = z
     audio_url: z.string().optional().nullable(),
     image_url: z.string().optional().nullable(),
     media_url: z.string().optional().nullable(),
+    delivery_status: z.string().optional().nullable(),
+    delivery_error: z.string().optional().nullable(),
+    idempotency_key: z.string().optional().nullable(),
   })
   .passthrough();
 

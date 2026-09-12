@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.live_chat_operator_pause_session import (
+    live_chat_manual_mode_db_session,
+    operator_thread_status,
+)
 from services.live_chat_service_common import (
     _build_operator_idempotency_fingerprint,
     _release_operator_idempotency_lock,
@@ -46,6 +50,9 @@ class LiveChatOperatorMixin:
         lock_ref = None
         completed_ok = False
         db = None
+        paused_this_send = False
+        already_paused = False
+        control_source_channel = source_channel
         try:
             from utils.utils import (
                 get_canonical_user_id_and_phone,
@@ -67,11 +74,14 @@ class LiveChatOperatorMixin:
                     "success": True,
                     "message": "Already processed (duplicate request)",
                     "deduplicated": True,
+                    "delivery_status": "sending",
+                    "client_message_id": fingerprint,
                 }
 
-            from services.live_chat_operator_social_delivery import (
-                deliver_social_operator_text,
-                is_social_live_chat_user,
+            from services.live_chat_operator_social_delivery import is_social_live_chat_user
+            from services.live_chat_operator_text_delivery import (
+                deliver_saved_operator_text,
+                operator_media_not_supported,
             )
 
             if is_social_live_chat_user(user_id) and message_type not in {"text", "voice", "image"}:
@@ -79,22 +89,21 @@ class LiveChatOperatorMixin:
                     "success": False,
                     "error": "Unsupported message type for social Live Chat",
                 }
+            media_block = operator_media_not_supported(user_id, message_type)
+            if media_block is not None:
+                return media_block
 
             # Server-authoritative: pause AI before outbound so in-flight AI cannot win the race.
+            # Meta/TikTok/Web must not open WhatsApp Postgres (pool wait + hold during Firestore).
             manual_meta: dict[str, Any] = {}
             try:
-                from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
                 from services.requests.manual_mode import activate_manual_mode
 
-                wa_session = None
-                wa_cm = None
-                try:
-                    if tenant_id:
-                        wa_cm = whatsapp_session()
-                        wa_session = wa_cm.__enter__()
-                except WhatsAppDatabaseUnavailable:
-                    wa_session = None
-                try:
+                with live_chat_manual_mode_db_session(
+                    user_id=user_id,
+                    tenant_id=tenant_id,
+                    source_channel=source_channel,
+                ) as (wa_session, control_source_channel):
                     pause_result = await activate_manual_mode(
                         conversation_id=conversation_id,
                         user_id=user_id,
@@ -102,24 +111,29 @@ class LiveChatOperatorMixin:
                         tenant_id=tenant_id,
                         operator_name=operator_name,
                         request_id=request_id,
-                        source_channel=source_channel,
+                        source_channel=control_source_channel,
                         session=wa_session,
                     )
-                    if wa_session is not None:
-                        wa_session.commit()
-                    manual_meta = {
-                        "manual_mode_activated": pause_result.activated,
-                        "manual_mode_already_active": pause_result.already_active,
-                        "control_epoch": pause_result.control_epoch,
-                    }
-                finally:
-                    if wa_cm is not None:
-                        wa_cm.__exit__(None, None, None)
+                manual_meta = {
+                    "manual_mode_activated": pause_result.activated,
+                    "manual_mode_already_active": pause_result.already_active,
+                    "control_epoch": pause_result.control_epoch,
+                    "status": operator_thread_status(
+                        paused=bool(pause_result.activated or pause_result.already_active)
+                    ),
+                }
+                paused_this_send = bool(pause_result.activated and not pause_result.already_active)
+                already_paused = bool(pause_result.already_active)
             except Exception as pause_err:
                 print(f"⚠️ manual_mode pause before send failed: {pause_err}")
-                return {"success": False, "error": f"Failed to pause AI before send: {pause_err}"}
+                return {
+                    "success": False,
+                    "error": f"Failed to pause AI before send: {pause_err}",
+                    "status": "bot",
+                }
 
             canonical_user_id, normalized_phone = get_canonical_user_id_and_phone(user_id)
+            await self._refresh_operator_thread_index(canonical_user_id, conversation_id)
             # For Qiscus, we need to fetch the phone_number from Firebase
             phone_number = None
             if db:
@@ -156,8 +170,20 @@ class LiveChatOperatorMixin:
                     adapter=adapter,
                     manual_meta=manual_meta,
                 )
-                completed_ok = bool(result.get("success"))
-                return result
+                finished = await self._finish_operator_send(
+                    result,
+                    manual_meta=manual_meta,
+                    paused_this_send=paused_this_send,
+                    already_paused=already_paused,
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    operator_id=operator_id,
+                    tenant_id=tenant_id,
+                    request_id=request_id,
+                    source_channel=control_source_channel,
+                )
+                completed_ok = bool(finished.get("success"))
+                return finished
 
             elif message_type == "image":
                 from services.live_chat_operator_media_handlers import send_operator_image_message
@@ -173,8 +199,20 @@ class LiveChatOperatorMixin:
                     adapter=adapter,
                     manual_meta=manual_meta,
                 )
-                completed_ok = bool(result.get("success"))
-                return result
+                finished = await self._finish_operator_send(
+                    result,
+                    manual_meta=manual_meta,
+                    paused_this_send=paused_this_send,
+                    already_paused=already_paused,
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    operator_id=operator_id,
+                    tenant_id=tenant_id,
+                    request_id=request_id,
+                    source_channel=control_source_channel,
+                )
+                completed_ok = bool(finished.get("success"))
+                return finished
 
             else:  # Default to text
                 # Save to Firestore first (SSE broadcasts immediately → message appears in UI fast)
@@ -183,89 +221,140 @@ class LiveChatOperatorMixin:
                     role="operator",
                     text=message,
                     conversation_id=conversation_id,
-                    phone_number=phone_number,  # NOW PASSING PHONE_NUMBER
-                    metadata={"operator_id": operator_id, "handled_by": "human"},
+                    phone_number=phone_number,
+                    metadata={
+                        "operator_id": operator_id,
+                        "handled_by": "human",
+                        "client_message_id": fingerprint,
+                        "delivery_status": "sending",
+                    },
                 )
                 print("✅ Saved operator message to Firestore")
 
-                if is_social_live_chat_user(user_id):
-                    delivery = await deliver_social_operator_text(
-                        tenant_id=tenant_id,
+                delivery = await deliver_saved_operator_text(
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    canonical_user_id=canonical_user_id,
+                    conversation_id=conversation_id,
+                    text=message,
+                    adapter=adapter,
+                    idempotency_key=idempotency_key or fingerprint,
+                )
+                from services.live_chat_operator_delivery_status import (
+                    compose_operator_text_result,
+                    finalize_operator_delivery_state,
+                )
+
+                if not delivery.get("success"):
+                    err = str(delivery.get("error") or "delivery_failed")
+                    print(f"⚠️ Operator send failed after save: {err}")
+                    await finalize_operator_delivery_state(
                         user_id=user_id,
                         conversation_id=conversation_id,
-                        text=message,
+                        client_message_id=fingerprint,
+                        delivery_status="failed",
+                        error=err,
+                        tenant_id=tenant_id,
                     )
-                    if delivery and not delivery.get("success"):
-                        err = str(delivery.get("error") or "social_delivery_failed")
-                        print(f"⚠️ Social operator send failed after save: {err}")
-                        if manual_meta.get("manual_mode_activated") and not manual_meta.get(
-                            "manual_mode_already_active"
-                        ):
-                            await self._undo_manual_pause_after_failed_send(
-                                conversation_id=conversation_id,
-                                user_id=user_id,
-                                operator_id=operator_id,
-                                tenant_id=tenant_id,
-                                request_id=request_id,
-                                source_channel=source_channel,
-                            )
-                            manual_meta["manual_mode_undone_after_failed_delivery"] = True
-                        return {
+                    return await self._finish_operator_send(
+                        {
                             "success": False,
                             "error": f"Message saved locally but delivery failed: {err}",
                             "delivered": False,
-                            **manual_meta,
-                        }
-                    completed_ok = True
-                    return {
-                        "success": True,
-                        "message": "Message sent successfully",
-                        "delivered": True,
-                        **manual_meta,
-                        **(delivery or {}),
-                    }
-
-                # Await WhatsApp send (single delivery; avoids duplicate background tasks)
-                try:
-                    result = await adapter.send_text_message(canonical_user_id, message)
-                    if not isinstance(result, dict) or not result.get("success"):
-                        send_err: str = (
-                            str((result or {}).get("error") or "send failed")
-                            if isinstance(result, dict)
-                            else "send failed"
-                        )
-                        print(f"⚠️ WhatsApp send failed after save: {send_err}")
-                        return {
-                            "success": False,
-                            "error": f"Message saved locally but delivery failed: {send_err}",
-                            "delivered": False,
-                        }
-                    print(f"✅ Operator {operator_id} sent message to ...{str(user_id)[-4:]} via WhatsApp")
-                except Exception as send_error:
-                    print(f"⚠️ WhatsApp adapter error after save: {send_error}")
-                    return {
-                        "success": False,
-                        "error": f"Message saved locally but delivery failed: {send_error}",
-                        "delivered": False,
-                    }
-
+                            "delivery_status": "failed",
+                            "client_message_id": fingerprint,
+                        },
+                        manual_meta=manual_meta,
+                        paused_this_send=paused_this_send,
+                        already_paused=already_paused,
+                        conversation_id=conversation_id,
+                        user_id=user_id,
+                        operator_id=operator_id,
+                        tenant_id=tenant_id,
+                        request_id=request_id,
+                        source_channel=control_source_channel,
+                    )
                 completed_ok = True
-                return {
-                    "success": True,
-                    "message": "Message sent successfully",
-                    "delivered": True,
-                    **manual_meta,
-                }
+                payload = compose_operator_text_result(delivery, manual_meta, client_message_id=fingerprint)
+                await finalize_operator_delivery_state(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    client_message_id=fingerprint,
+                    delivery_status=str(payload.get("delivery_status") or "sent"),
+                    tenant_id=tenant_id,
+                )
+                return payload
 
         except Exception as e:
             print(f"❌ Error sending operator message: {e}")
             import traceback
 
             traceback.print_exc()
-            return {"success": False, "error": str(e)}
+            if paused_this_send:
+                await self._undo_manual_pause_after_failed_send(
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    operator_id=operator_id,
+                    tenant_id=tenant_id,
+                    request_id=request_id,
+                    source_channel=control_source_channel,
+                )
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "status": "bot",
+                    "manual_mode_undone_after_failed_delivery": True,
+                }
+            return {
+                "success": False,
+                "error": str(e),
+                "status": operator_thread_status(paused=already_paused),
+            }
         finally:
             if lock_ref is not None and not completed_ok:
                 await _release_operator_idempotency_lock(db, lock_ref)
+
+    async def _refresh_operator_thread_index(self, user_id: str, conversation_id: str) -> None:
+        refresh = getattr(self, "_refresh_index_for_conversation", None)
+        if not callable(refresh):
+            return
+        try:
+            await refresh(user_id, conversation_id)
+        except Exception as refresh_err:
+            print(f"⚠️ live-chat index refresh after operator control failed: {refresh_err}")
+
+    async def _finish_operator_send(
+        self,
+        result: dict[str, Any],
+        *,
+        manual_meta: dict[str, Any],
+        paused_this_send: bool,
+        already_paused: bool,
+        conversation_id: str,
+        user_id: str,
+        operator_id: str,
+        tenant_id: str | None,
+        request_id: str | None,
+        source_channel: str | None,
+    ) -> dict[str, Any]:
+        payload = {**manual_meta, **(result or {})}
+        if payload.get("success"):
+            payload["status"] = operator_thread_status(paused=True)
+            return payload
+        if paused_this_send:
+            await self._undo_manual_pause_after_failed_send(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                operator_id=operator_id,
+                tenant_id=tenant_id,
+                request_id=request_id,
+                source_channel=source_channel,
+            )
+            payload["manual_mode_undone_after_failed_delivery"] = True
+            payload["status"] = "bot"
+            return payload
+        payload["status"] = operator_thread_status(paused=already_paused)
+        return payload
 
     async def _undo_manual_pause_after_failed_send(
         self,
@@ -277,34 +366,24 @@ class LiveChatOperatorMixin:
         request_id: str | None,
         source_channel: str | None,
     ) -> None:
-        """Undo a pause we just set because Meta never accepted the outbound."""
+        """Undo a pause we just set because the outbound never reached the customer."""
         try:
-            from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
             from services.requests.manual_mode import resume_manual_mode
 
-            wa_cm = None
-            wa_session = None
-            try:
-                if tenant_id:
-                    wa_cm = whatsapp_session()
-                    wa_session = wa_cm.__enter__()
-            except WhatsAppDatabaseUnavailable:
-                wa_session = None
-            try:
+            with live_chat_manual_mode_db_session(
+                user_id=user_id,
+                tenant_id=tenant_id,
+                source_channel=source_channel,
+            ) as (wa_session, channel):
                 await resume_manual_mode(
                     conversation_id=conversation_id,
                     user_id=user_id,
                     actor_user_id=operator_id,
                     tenant_id=tenant_id,
                     request_id=request_id,
-                    source_channel=source_channel,
+                    source_channel=channel,
                     session=wa_session,
                 )
-                if wa_session is not None:
-                    wa_session.commit()
-            finally:
-                if wa_cm is not None:
-                    wa_cm.__exit__(None, None, None)
         except Exception as undo_err:
             print(f"⚠️ undo manual pause after failed social send failed: {undo_err}")
 
@@ -319,44 +398,34 @@ class LiveChatOperatorMixin:
     ) -> dict[str, Any]:
         """Explicit Resume AI — clears server pause (Firestore + WA Cloud epoch)."""
         try:
-            from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
             from services.requests.manual_mode import resume_manual_mode
 
-            wa_cm = None
-            wa_session = None
-            try:
-                if tenant_id:
-                    wa_cm = whatsapp_session()
-                    wa_session = wa_cm.__enter__()
-            except WhatsAppDatabaseUnavailable:
-                wa_session = None
-            try:
+            with live_chat_manual_mode_db_session(
+                user_id=user_id,
+                tenant_id=tenant_id,
+                source_channel=source_channel,
+            ) as (wa_session, channel):
                 result = await resume_manual_mode(
                     conversation_id=conversation_id,
                     user_id=user_id,
                     actor_user_id=operator_id,
                     tenant_id=tenant_id,
                     request_id=request_id,
-                    source_channel=source_channel,
+                    source_channel=channel,
                     session=wa_session,
                 )
-                if wa_session is not None:
-                    wa_session.commit()
-            finally:
-                if wa_cm is not None:
-                    wa_cm.__exit__(None, None, None)
 
-            # Best-effort Live Chat index / canonical state refresh.
-            # release_conversation lives on LiveChatLifecycleMixin (composed on LiveChatService).
             release_fn = getattr(self, "release_conversation", None)
             if callable(release_fn):
                 release = await release_fn(conversation_id, user_id)
             else:
                 release = {"success": False, "error": "release_conversation unavailable"}
+            await self._refresh_operator_thread_index(user_id, conversation_id)
             return {
                 "success": True,
                 "message": "AI resumed for conversation",
                 "conversation_id": conversation_id,
+                "status": "bot",
                 "control_epoch": result.control_epoch,
                 "already_active": result.already_active,
                 "audit_recorded": result.audit_recorded,

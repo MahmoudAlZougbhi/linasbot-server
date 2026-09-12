@@ -433,6 +433,13 @@ class LiveChatIndexMixin:
         image_url = msg.get("image_url") or meta.get("image_url")
         if image_url:
             msg_data["image_url"] = image_url
+        client_id = meta.get("client_message_id") or msg.get("client_message_id")
+        if client_id:
+            msg_data["client_send_id"] = str(client_id)
+            msg_data["client_message_id"] = str(client_id)
+        delivery_status = meta.get("delivery_status") or msg.get("delivery_status")
+        if delivery_status:
+            msg_data["delivery_status"] = str(delivery_status)
         if meta.get("reply_source"):
             msg_data["reply_source"] = meta["reply_source"]
         if meta.get("faq_match"):

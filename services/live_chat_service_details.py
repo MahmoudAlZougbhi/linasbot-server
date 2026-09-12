@@ -20,6 +20,7 @@ class LiveChatDetailsMixin:
     ENABLE_INDEX_BACKFILL_ON_READ: Any
     INDEX_READ_TIMEOUT_SECONDS: Any
     _conversation_state_to_status: Any
+    _normalize_conversation_state: Any
     _format_single_message: Any
     _get_doc_with_timeout: Any
     _index_collection: Any
@@ -82,7 +83,7 @@ class LiveChatDetailsMixin:
                                 "returned_messages": len(formatted_recent),
                                 "has_more": msg_count > len(formatted_recent),
                                 "sentiment": str(data.get("sentiment") or "neutral"),
-                                "status": self._conversation_state_to_status(str(data.get("conversation_state") or "")),
+                                "status": self._conversation_state_to_status(self._normalize_conversation_state(data)),
                             }
                 except TimeoutError:
                     pass
@@ -129,7 +130,7 @@ class LiveChatDetailsMixin:
             raw_messages = list(payload.get("messages") or [])
             total_messages = len(raw_messages)
             sentiment = str(payload.get("sentiment") or "neutral")
-            status = str(payload.get("status") or "active")
+            status = self._conversation_state_to_status(self._normalize_conversation_state(payload))
 
             # Fast path for initial open (days=0, before not set):
             # avoid scanning/normalizing the full conversation history on every open.

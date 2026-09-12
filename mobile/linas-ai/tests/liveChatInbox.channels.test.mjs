@@ -32,15 +32,13 @@ test('inbox defaults to All channels, not WhatsApp-only', () => {
   assert.match(chips, /id: 'all'/);
 });
 
-test('chatChannel maps IG/FB/WA/TikTok and never invents TikTok', () => {
+test('chatChannel maps IG/FB/WA/TikTok/web prefixes and never invents TikTok or WhatsApp', () => {
   const helpers = read('features/livechat/liveChatHelpers.ts');
-  assert.match(helpers, /Never invents TikTok rows/);
-  assert.match(helpers, /ch === 'tiktok'/);
-  assert.match(helpers, /instagram_dm/);
-  assert.match(helpers, /facebook_messenger/);
-  assert.match(helpers, /blobHasChannelToken\(blob, 'tiktok'\)/);
-  assert.match(helpers, /return 'whatsapp'/);
+  assert.match(helpers, /Never invents TikTok/);
+  assert.match(helpers, /user_id prefixes first/);
+  assert.match(helpers, /return 'unknown'/);
   assert.doesNotMatch(helpers, /fakeTikTok|placeholderTikTok|tiktokThreads\s*=\s*\[/);
+  assert.match(helpers, /web: 'web'/);
   const inbox = read('features/livechat/LiveChatInbox.tsx');
   assert.match(inbox, /No TikTok conversations/);
   assert.match(inbox, /None are created as placeholders/);

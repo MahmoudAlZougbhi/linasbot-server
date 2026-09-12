@@ -9,6 +9,7 @@ const SPEC: Record<ChatChannel, { icon: AppIconName; color: string; bg: string }
   facebook: { icon: mci('facebook-messenger'), color: '#0084FF', bg: '#E8F1FF' },
   tiktok: { icon: ion('logo-tiktok'), color: '#111111', bg: '#F3F4F6' },
   web: { icon: ion('globe-outline'), color: '#0D9488', bg: '#E6F7F4' },
+  unknown: { icon: ion('chatbubble-ellipses-outline'), color: '#6B7280', bg: '#F3F4F6' },
 };
 
 type Props = {
@@ -18,7 +19,7 @@ type Props = {
 
 /** Brand-accurate circular platform mark for inbox rows and request cards. */
 export function PlatformChannelIcon({ channel, size = 48 }: Props) {
-  const spec = SPEC[channel] ?? SPEC.whatsapp;
+  const spec = SPEC[channel] ?? SPEC.unknown;
   return (
     <View
       style={[

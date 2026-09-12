@@ -12,15 +12,51 @@ function customerInfoChannel(item: LiveChatItem): string {
   return String(rec.channel || rec.platform || '').toLowerCase().trim();
 }
 
-/** Infer platform from API channel, customer_info, or user_id. Never invents TikTok rows. */
-export function chatChannel(item: LiveChatItem): ChatChannel {
-  const ch = String(item.channel || customerInfoChannel(item) || '').toLowerCase().trim();
+const PREFIX_CHANNELS: Record<string, ChatChannel> = {
+  web: 'web',
+  tiktok: 'tiktok',
+  instagram: 'instagram',
+  facebook: 'facebook',
+  messenger: 'facebook',
+  whatsapp: 'whatsapp',
+};
+
+function channelFromUserId(userId: string | null | undefined): ChatChannel | null {
+  const uid = String(userId || '').trim().toLowerCase();
+  if (!uid) return null;
+  const parts = uid.split(':').filter(Boolean);
+  if (!parts.length) return null;
+  if (PREFIX_CHANNELS[parts[0]]) return PREFIX_CHANNELS[parts[0]];
+  if (parts[1] && PREFIX_CHANNELS[parts[1]]) return PREFIX_CHANNELS[parts[1]];
+  return null;
+}
+
+function isWhatsAppUserId(userId: string | null | undefined): boolean {
+  const uid = String(userId || '').trim();
+  if (!uid) return false;
+  if (uid.toLowerCase().startsWith('whatsapp:')) return true;
+  if (/^\+[0-9]{8,15}$/.test(uid)) return true;
+  const digits = uid.replace(/\D/g, '');
+  return /^961[0-9]{7,9}$/.test(digits);
+}
+
+function normalizeKnownChannel(raw: string): ChatChannel | null {
+  const ch = String(raw || '').toLowerCase().trim();
   if (ch === 'tiktok') return 'tiktok';
   if (ch === 'web' || ch === 'web_chat' || ch === 'website') return 'web';
   if (ch === 'instagram' || ch === 'instagram_dm' || ch === 'ig') return 'instagram';
   if (ch === 'facebook' || ch === 'messenger' || ch === 'facebook_messenger') return 'facebook';
   if (ch === 'whatsapp' || ch === 'whatsapp_cloud' || ch === 'wa') return 'whatsapp';
-  const blob = [item.channel, item.user_id, item.user_phone, item.phone_number, item.phone_clean]
+  return null;
+}
+
+/** Infer platform from user_id prefixes first. Never invents TikTok. Never labels web/tiktok as WhatsApp. */
+export function chatChannel(item: LiveChatItem): ChatChannel {
+  const fromId = channelFromUserId(item.user_id);
+  if (fromId) return fromId;
+  const fromPayload = normalizeKnownChannel(String(item.channel || customerInfoChannel(item) || ''));
+  if (fromPayload) return fromPayload;
+  const blob = [item.user_id, item.user_phone, item.phone_number, item.phone_clean]
     .map((v) => String(v || '').toLowerCase())
     .join(' ');
   if (blobHasChannelToken(blob, 'tiktok')) return 'tiktok';
@@ -28,7 +64,10 @@ export function chatChannel(item: LiveChatItem): ChatChannel {
   if (blobHasChannelToken(blob, 'instagram')) return 'instagram';
   if (blobHasChannelToken(blob, 'facebook') || blobHasChannelToken(blob, 'messenger')) return 'facebook';
   if (blobHasChannelToken(blob, 'whatsapp')) return 'whatsapp';
-  return 'whatsapp';
+  if (isWhatsAppUserId(item.user_id) || isWhatsAppUserId(item.user_phone) || isWhatsAppUserId(item.phone_number)) {
+    return 'whatsapp';
+  }
+  return 'unknown';
 }
 
 /** All keeps every parsed row, including unlabeled (missing channel). */
@@ -49,6 +88,7 @@ export function channelLabel(item: LiveChatItem): string {
   if (ch === 'facebook') return 'Messenger';
   if (ch === 'tiktok') return 'TikTok';
   if (ch === 'web') return 'Website';
+  if (ch === 'unknown') return 'Chat';
   return 'WhatsApp';
 }
 

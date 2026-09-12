@@ -176,15 +176,8 @@ def sync_post_release_cooldown_from_conv_payload(user_data: dict, conv_data: dic
 
 
 def _clear_takeover_flags_for_user(resolved_user_id: str, raw_user_id: str, canonical_user_id: str) -> None:
-    """Clear config.user_in_human_takeover_mode for all user_id variants so release works regardless of message format."""
-    variants = {v for v in (resolved_user_id, raw_user_id, canonical_user_id) if v}
-    if is_phone_like_user_id(resolved_user_id or raw_user_id):
-        normalized = normalize_phone(resolved_user_id or raw_user_id)
-        if normalized:
-            variants.add(normalized)
-            variants.add(normalized.lstrip("+"))
-            if normalized.startswith("+961") and len(normalized) > 4:
-                variants.add(normalized[4:])  # 3956607
+    """Clear takeover flags for every id pause may have written (same variant union)."""
+    variants = {v for v in merge_conversation_user_id_variants(resolved_user_id, raw_user_id, canonical_user_id) if v}
     for v in variants:
         config.user_in_human_takeover_mode.pop(v, None)
         try:

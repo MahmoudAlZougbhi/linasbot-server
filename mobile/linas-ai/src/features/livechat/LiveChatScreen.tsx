@@ -12,7 +12,9 @@ import { LiveChatInbox } from './LiveChatInbox';
 import { LiveChatThread } from './LiveChatThread';
 import type { LiveChatItem } from './liveChatTypes';
 import { channelLabel, chatTitle } from './liveChatTypes';
+import { sseEventMatchesChat, type LiveChatSseEvent } from './liveChatSseParse';
 import { useLiveChatAccess } from './useLiveChatAccess';
+import { useLiveChatEvents } from './useLiveChatEvents';
 import { useLiveChatInbox } from './useLiveChatInbox';
 
 type Props = {
@@ -28,7 +30,46 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
   const [selected, setSelected] = useState<LiveChatItem | null>(null);
   const [commentPost, setCommentPost] = useState<{ platform: CommentPlatform; post: CommentMediaItem } | null>(null);
   const [deepLinkTried, setDeepLinkTried] = useState(false);
+  const [threadEvent, setThreadEvent] = useState<{ seq: number; event: LiveChatSseEvent } | null>(null);
+  const [sseConnectedAt, setSseConnectedAt] = useState(0);
   const focusNonceSeen = useRef(nav.areaFocusNonce);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+
+  const seenEventIds = useRef(new Set<string>());
+
+  useLiveChatEvents({
+    enabled: access.canChats,
+    onEvent: (event) => {
+      const eventId = String(event.data.event_id || '');
+      if (eventId) {
+        if (seenEventIds.current.has(eventId)) return;
+        seenEventIds.current.add(eventId);
+        if (seenEventIds.current.size > 400) {
+          const first = seenEventIds.current.values().next().value;
+          if (first) seenEventIds.current.delete(first);
+        }
+      }
+      if (event.type === 'connected' || event.type === 'conversations' || event.type === 'new_conversation') {
+        inbox.reloadQuiet();
+        if (event.type === 'connected') setSseConnectedAt(Date.now());
+        return;
+      }
+      if (event.type === 'new_message') {
+        inbox.applyNewMessage(event.data, selectedRef.current?.conversation_id ?? null);
+        if (sseEventMatchesChat(event.data, selectedRef.current)) {
+          setThreadEvent({ seq: Date.now(), event });
+        }
+        return;
+      }
+      if (
+        (event.type === 'message_updated' || event.type === 'message_status') &&
+        sseEventMatchesChat(event.data, selectedRef.current)
+      ) {
+        setThreadEvent({ seq: Date.now(), event });
+      }
+    },
+  });
 
   useEffect(() => {
     if (access.canChats && access.canComments) return;
@@ -79,7 +120,12 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
   if (selected) {
     return (
       <ScreenChrome title={chatTitle(selected)} subtitle={channelLabel(selected)}>
-        <LiveChatThread chat={selected} onChatUpdated={inbox.reloadQuiet} />
+        <LiveChatThread
+          chat={selected}
+          onChatUpdated={inbox.reloadQuiet}
+          realtimeEvent={threadEvent}
+          sseConnectedAt={sseConnectedAt}
+        />
       </ScreenChrome>
     );
   }

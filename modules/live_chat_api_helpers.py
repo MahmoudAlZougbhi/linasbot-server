@@ -21,17 +21,50 @@ def _log_sse(action: str, **kwargs: Any) -> None:
 
 
 async def broadcast_sse_event(event_type: str, data: dict) -> None:
-    """
-    Broadcast an event to all connected SSE clients.
-    Called when new messages arrive or conversations change.
-    """
+    """Fan out to this node and Redis. Never skip Redis because this process has no local clients."""
+    import uuid
+
+    from services.live_chat_contracts import utc_now
+
+    payload = dict(data or {})
+    payload.setdefault("event_id", str(uuid.uuid4()))
+    payload.setdefault("event_ts", utc_now().isoformat())
+    if not str(payload.get("tenant_id") or "").strip() and payload.get("user_id"):
+        from services.live_chat_channel import live_chat_event_tenant_id
+
+        payload["tenant_id"] = live_chat_event_tenant_id(payload.get("user_id"))
+    if not payload.get("channel") and payload.get("user_id"):
+        from services.live_chat_channel import resolve_live_chat_channel
+
+        payload["channel"] = resolve_live_chat_channel(payload.get("user_id"), payload)
     client_count = await live_chat_sse_broadcaster.active_clients_count()
-    if client_count == 0:
-        return
-    _log_sse("broadcast", event_type=event_type, client_count=client_count, conv_id=data.get("conversation_id"))
+    _log_sse("broadcast", event_type=event_type, client_count=client_count, conv_id=payload.get("conversation_id"))
     if event_type == "new_message":
-        print(f"📡 [SSE] broadcast new_message conv_id={data.get('conversation_id')} user_id={data.get('user_id')}")
-    await live_chat_sse_broadcaster.publish(event_type, data)
+        print(
+            f"📡 [SSE] broadcast new_message conv_id={payload.get('conversation_id')} user_id={payload.get('user_id')}"
+        )
+    await live_chat_sse_broadcaster.publish(event_type, payload)
+
+
+def session_allows_live_chat_sse_event(session: Any, event: dict[str, Any] | None) -> bool:
+    """Tenant + channel ACL for operator SSE. Missing tenant is dropped (fail closed)."""
+    rec = event if isinstance(event, dict) else {}
+    event_type = str(rec.get("type") or "")
+    if event_type in {"heartbeat", "connected"}:
+        return True
+    raw_data = rec.get("data")
+    data: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
+    tenant = str(data.get("tenant_id") or "").strip().lower()
+    session_tenant = str(getattr(session, "tenant_id", "") or "").strip().lower()
+    if not tenant or not session_tenant or tenant != session_tenant:
+        return False
+    user_id = str(data.get("user_id") or "")
+    if not user_id:
+        return event_type == "conversations"
+    from services.access_channels import session_can_use_channel
+    from services.live_chat_channel import resolve_live_chat_channel
+
+    return session_can_use_channel(session, resolve_live_chat_channel(user_id, data))
 
 
 def require_chat_channel(http_request: Any, user_id: str) -> Any:

@@ -83,6 +83,36 @@ async def test_deliver_meta_dm_sends_with_instagram_login_host(
 
 
 @pytest.mark.asyncio
+async def test_deliver_meta_dm_honors_adapter_success_false(
+    registry: MetaAppRegistry, instagram_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _instagram_binding(registry, auth_flow="instagram_login")
+
+    class FakeAdapter:
+        def __init__(self, **kwargs: Any) -> None:
+            return None
+
+        async def send_text_message(self, recipient: str, text: str) -> dict[str, Any]:
+            return {"success": False, "error": "empty_text", "skipped": True}
+
+        async def close(self) -> None:
+            return None
+
+    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.meta_messaging.MetaMessagingAdapter", FakeAdapter)
+
+    result = await deliver_meta_dm(
+        tenant_id="tenant-a",
+        source_channel=SOURCE_CHANNEL_INSTAGRAM_DM,
+        source_account_id=INSTAGRAM_ID,
+        external_customer_id="igsid-tester",
+        text="hello from live chat",
+    )
+    assert result.status == "failed"
+    assert result.error_redacted == "empty_text"
+
+
+@pytest.mark.asyncio
 async def test_instagram_login_send_omits_messaging_type() -> None:
     captured: list[dict[str, Any]] = []
 

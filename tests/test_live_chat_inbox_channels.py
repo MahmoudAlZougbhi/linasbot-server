@@ -48,13 +48,19 @@ def test_non_mapping_nested_channel_data_falls_back_safely() -> None:
             "unlabeled",
             {"customer_info": None, "recent_messages": [{"metadata": None}]},
         )
-        == "whatsapp"
+        == "unknown"
     )
-    assert resolve_live_chat_channel("unlabeled", {"customer_info": [], "messages": [None]}) == "whatsapp"
+    assert resolve_live_chat_channel("unlabeled", {"customer_info": [], "messages": [None]}) == "unknown"
     assert coerce_live_chat_user_id({"customer_info": None}, conversation_id="conv-1") == "conv-1"
 
 
-def test_never_invents_tiktok_for_whatsapp_or_meta() -> None:
+def test_web_and_tiktok_prefixes_never_labeled_whatsapp() -> None:
+    assert resolve_live_chat_channel("web:visitor123") == "web"
+    assert resolve_live_chat_channel("web:visitor123", {"customer_info": {"channel": "whatsapp"}}) == "web"
+    assert resolve_live_chat_channel("tiktok:open_id", {"channel": "whatsapp"}) == "tiktok"
+    assert resolve_live_chat_channel("someoneweb:foo") == "unknown"
+    assert resolve_live_chat_channel("unlabeled") != "whatsapp"
+    assert resolve_live_chat_channel("unlabeled") != "tiktok"
     assert resolve_live_chat_channel("+96170123456") != "tiktok"
     assert resolve_live_chat_channel("instagram:1") != "tiktok"
     assert resolve_live_chat_channel("facebook:1") != "tiktok"

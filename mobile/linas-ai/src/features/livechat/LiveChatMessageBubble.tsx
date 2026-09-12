@@ -15,9 +15,10 @@ import { formatBubbleTime, isLikeableAiReply, isVoiceMessage, messageBody } from
 type Props = {
   message: LiveChatMessage;
   onLike?: () => void;
+  onRetry?: () => void;
 };
 
-export function LiveChatMessageBubble({ message, onLike }: Props) {
+export function LiveChatMessageBubble({ message, onLike, onRetry }: Props) {
   const { tr } = useI18n();
   const isCustomer = Boolean(message.is_user);
   const handled = String(message.handled_by || message.role || '').toLowerCase();
@@ -30,6 +31,11 @@ export function LiveChatMessageBubble({ message, onLike }: Props) {
   const dirStyle = textDirectionStyle(body);
   const time = formatBubbleTime(message.timestamp || undefined);
   const showLike = Boolean(onLike) && isLikeableAiReply(message);
+  const delivery = String(message.delivery_status || '').toLowerCase();
+  const failed = isOperator && delivery === 'failed';
+  const sending = isOperator && (delivery === 'sending' || delivery === 'pending');
+  const sent = isOperator && (delivery === 'sent' || delivery === 'delivered');
+  const tick = failed ? '!' : sending ? '…' : sent ? '✓' : '';
 
   return (
     <View style={[styles.wrap, isCustomer ? styles.inWrap : styles.outWrap]}>
@@ -39,6 +45,7 @@ export function LiveChatMessageBubble({ message, onLike }: Props) {
           isCustomer && styles.inBubble,
           !isCustomer && isOperator && styles.opBubble,
           !isCustomer && !isOperator && styles.aiBubble,
+          failed && styles.failedBubble,
         ]}
       >
         {imageUrl ? <LiveChatAuthImage url={imageUrl} /> : null}
@@ -54,8 +61,20 @@ export function LiveChatMessageBubble({ message, onLike }: Props) {
         <Text style={[styles.meta, isOperator && styles.opMeta]}>
           {isCustomer ? 'Customer' : isOperator ? 'You' : 'AI'}
           {time ? ` · ${time}` : ''}
+          {tick ? ` · ${tick}` : ''}
         </Text>
       </View>
+      {failed && onRetry ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={tr('tapToRetry')}
+          hitSlop={8}
+          onPress={onRetry}
+          style={styles.retryBtn}
+        >
+          <Text style={styles.retryLabel}>{tr('tapToRetry')}</Text>
+        </Pressable>
+      ) : null}
       {showLike ? (
         <Pressable
           accessibilityRole="button"
@@ -112,4 +131,16 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   likeLabel: { color: colors.accentDeep, fontFamily: fonts.bodyMedium, fontSize: 12 },
+  failedBubble: { borderColor: colors.danger, opacity: 0.92 },
+  retryBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: radii.sm,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  retryLabel: { color: colors.accentDeep, fontFamily: fonts.bodyMedium, fontSize: 12 },
 });

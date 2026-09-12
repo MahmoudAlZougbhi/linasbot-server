@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from utils.phone_utils import is_phone_like_user_id
+
 LIVE_CHAT_CHANNELS = ("whatsapp", "instagram", "facebook", "tiktok", "web")
 
 _ALIASES = {
@@ -22,6 +24,15 @@ _ALIASES = {
     "website": "web",
 }
 
+_PREFIX_CHANNELS = {
+    "web": "web",
+    "tiktok": "tiktok",
+    "instagram": "instagram",
+    "facebook": "facebook",
+    "messenger": "facebook",
+    "whatsapp": "whatsapp",
+}
+
 
 def normalize_live_chat_channel(raw: Any) -> str | None:
     """Return a canonical inbox channel, or None when the value is empty/unknown/all."""
@@ -35,25 +46,41 @@ def _channel_from_user_id(user_id: Any) -> str | None:
     uid = str(user_id or "").strip().lower()
     if not uid:
         return None
-    if "tiktok:" in uid:
-        return "tiktok"
-    if "web:" in uid:
-        return "web"
-    if "instagram:" in uid:
-        return "instagram"
-    if "facebook:" in uid or "messenger:" in uid:
-        return "facebook"
-    if "whatsapp:" in uid:
-        return "whatsapp"
+    parts = [p for p in uid.split(":") if p]
+    if not parts:
+        return None
+    if parts[0] in _PREFIX_CHANNELS:
+        return _PREFIX_CHANNELS[parts[0]]
+    if len(parts) >= 2 and parts[1] in _PREFIX_CHANNELS:
+        return _PREFIX_CHANNELS[parts[1]]
     return None
+
+
+def is_web_live_chat_user(user_id: str | None) -> bool:
+    return _channel_from_user_id(user_id) == "web"
+
+
+def is_whatsapp_live_chat_user_id(user_id: Any) -> bool:
+    """Phone-like / WhatsApp ids only — never unlabeled web/tiktok/psid strings."""
+    uid = str(user_id or "").strip()
+    if not uid:
+        return False
+    if _channel_from_user_id(uid) == "whatsapp":
+        return True
+    if uid.startswith("+") and uid[1:].isdigit() and 8 <= len(uid[1:]) <= 15:
+        return True
+    return is_phone_like_user_id(uid)
 
 
 def resolve_live_chat_channel(user_id: Any, payload: dict[str, Any] | None = None) -> str:
     """
     WhatsApp / Instagram / Facebook / TikTok / Web for inbox rows.
-    TikTok only when the payload or user_id actually says TikTok — never as a default.
+    user_id prefixes win. Unknown is never labeled WhatsApp. Never invents TikTok.
     """
     data: dict[str, Any] = payload or {}
+    from_id = _channel_from_user_id(user_id) or _channel_from_user_id(data.get("user_id"))
+    if from_id:
+        return from_id
     customer_value = data.get("customer_info")
     customer: dict[str, Any] = customer_value if isinstance(customer_value, dict) else {}
     for raw in (
@@ -65,9 +92,6 @@ def resolve_live_chat_channel(user_id: Any, payload: dict[str, Any] | None = Non
         ch = normalize_live_chat_channel(raw)
         if ch:
             return ch
-    from_id = _channel_from_user_id(user_id) or _channel_from_user_id(data.get("user_id"))
-    if from_id:
-        return from_id
     messages = data.get("recent_messages") or data.get("messages") or []
     if isinstance(messages, list) and messages:
         last: dict[str, Any] = messages[-1] if isinstance(messages[-1], dict) else {}
@@ -76,7 +100,9 @@ def resolve_live_chat_channel(user_id: Any, payload: dict[str, Any] | None = Non
         ch = normalize_live_chat_channel(meta.get("channel") or last.get("channel"))
         if ch:
             return ch
-    return "whatsapp"
+    if is_whatsapp_live_chat_user_id(user_id) or is_whatsapp_live_chat_user_id(data.get("user_id")):
+        return "whatsapp"
+    return "unknown"
 
 
 def live_chat_channel_matches(chat: dict[str, Any], channel_filter: str) -> bool:
@@ -84,6 +110,15 @@ def live_chat_channel_matches(chat: dict[str, Any], channel_filter: str) -> bool
     if not wanted:
         return True
     return resolve_live_chat_channel(chat.get("user_id"), chat) == wanted
+
+
+def live_chat_event_tenant_id(user_id: Any) -> str:
+    """Tenant for SSE fanout. Prefixed social IDs carry the tenant; linas threads omit it."""
+    uid = str(user_id or "").strip()
+    parts = [p.strip() for p in uid.split(":") if p.strip()]
+    if len(parts) >= 4 and parts[1].lower() in {"instagram", "facebook", "tiktok"}:
+        return parts[0].lower()
+    return "linas"
 
 
 def coerce_live_chat_user_id(payload: dict[str, Any] | None, *, conversation_id: Any = None) -> str:
