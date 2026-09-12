@@ -166,7 +166,9 @@ class LiveChatIndexMixin:
         out["last_activity"] = last_at
         out["last_message_at"] = last_at
         out["last_message"] = (
-            {"content": str(last_text or ""), "timestamp": last_at, "is_user": False} if last_text or last_at else None
+            {"content": str(last_text or ""), "timestamp": last_at, "is_user": False}
+            if str(last_text or "").strip()
+            else None
         )
         out["channel"] = resolve_live_chat_channel(out.get("user_id"), out)
         return out

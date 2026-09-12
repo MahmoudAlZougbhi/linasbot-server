@@ -55,8 +55,8 @@ async def send_meta_social_outbound(
         return {"success": True, "simulated": True, "delivered_externally": False}
     if adapter is None:
         return {"success": False, "error": "Meta adapter unavailable"}
-    if not message_text:
-        return {"success": False, "error": "Only text replies are enabled for Meta social DMs"}
+    if not str(message_text or "").strip():
+        return {"success": False, "skipped": True, "error": "empty_text"}
 
     if inbound_event_id:
         from services.meta_controlled_evidence import meta_evidence_surface

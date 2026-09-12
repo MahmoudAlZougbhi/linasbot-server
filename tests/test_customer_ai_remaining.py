@@ -130,6 +130,18 @@ def test_shared_redis_takeover_blocks_without_local_flag(monkeypatch: pytest.Mon
     assert live_handoff_active(user_id="cust-1", conversation_id="c1") is True
 
 
+def test_shared_redis_unavailable_does_not_invent_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.customer_ai.control import live_handoff_active
+
+    monkeypatch.setattr("services.customer_ai.control._local_takeover", lambda _uid: False)
+    monkeypatch.setattr("services.scale.conversation_state_redis.get_takeover", lambda _key: None)
+    monkeypatch.setattr(
+        "services.scale.conversation_state_redis.shared_conv_state_fail_closed",
+        lambda: True,
+    )
+    assert live_handoff_active(user_id="cust-1", conversation_id="c1") is False
+
+
 def test_stale_stored_handoff_clears_after_release(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.customer_ai.control import apply_live_control
 

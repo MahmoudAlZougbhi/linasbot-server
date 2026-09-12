@@ -14,14 +14,15 @@ def test_takeover_assignee_defaults_to_session() -> None:
     session = SimpleNamespace(user_id="op-self", email="self@linas.ai", tenant_id="t1")
     operator_id, name = resolve_takeover_assignee(session, None)
     assert operator_id == "op-self"
-    assert name == "self@linas.ai"
+    assert name == "Self"
+    assert "@" not in str(name)
 
 
 def test_takeover_assignee_same_user_skips_lookup() -> None:
     session = SimpleNamespace(user_id="op-self", email="self@linas.ai", tenant_id="t1")
     operator_id, name = resolve_takeover_assignee(session, "op-self")
     assert operator_id == "op-self"
-    assert name == "self@linas.ai"
+    assert name == "Self"
 
 
 def test_takeover_assignee_other_same_tenant(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -36,10 +36,9 @@ def _local_takeover(user_id: str) -> bool:
 
 def _shared_takeover(user_id: str) -> bool:
     try:
-        from services.scale.conversation_state_redis import get_takeover, shared_conv_state_fail_closed
+        from services.scale.conversation_state_redis import get_takeover
     except Exception:
         return False
-    unknown = False
     for key in _id_variants(user_id):
         try:
             remote = get_takeover(key)
@@ -47,9 +46,7 @@ def _shared_takeover(user_id: str) -> bool:
             remote = None
         if remote is True:
             return True
-        if remote is None:
-            unknown = True
-    return bool(unknown and shared_conv_state_fail_closed())
+    return False
 
 
 def live_handoff_active(*, user_id: str, conversation_id: str = "") -> bool:

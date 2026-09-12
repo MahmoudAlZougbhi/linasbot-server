@@ -140,15 +140,19 @@ def generation_is_current(user_key: str, generation: int) -> bool:
     return current_generation(user_key) == int(generation)
 
 
-def drain_if_due(user_key: str, *, now: float | None = None) -> list[dict[str, Any]] | None:
-    """Return chunks when the quiet period elapsed; None if still waiting."""
+def drain_if_due(user_key: str, *, now: float | None = None, force: bool = False) -> list[dict[str, Any]] | None:
+    """Return chunks when the quiet period elapsed; None if still waiting.
+
+    force=True drains after the sleeper already waited. A due_at race must not
+    drop the customer turn (None used to be treated as superseded).
+    """
     client = _client()
     ts = time.time() if now is None else float(now)
     if client is None:
         return []
     pending, _seen, _gen, due_key, _ctx = _keys(user_key)
     due = float(client.get(due_key) or 0)
-    if due > ts:
+    if not force and due > ts:
         return None
     items = list(client.lrange(pending, 0, -1) or [])
     client.delete(pending)

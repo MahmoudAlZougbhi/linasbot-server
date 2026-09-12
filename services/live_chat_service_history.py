@@ -40,11 +40,21 @@ class LiveChatHistoryMixin:
         return metadata.get("source") == "smart_message"
 
     def _visible_chat_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """
-        Live Chat UI shows all messages including smart messages (scheduled/sent from Smart Messaging).
-        Operators need to see the full conversation including automated messages.
-        """
-        return list(messages or [])
+        """Show real conversation rows. Skip empty text-only bubbles (no media)."""
+        visible: list[dict[str, Any]] = []
+        for msg in messages or []:
+            if not isinstance(msg, dict):
+                continue
+            meta = msg.get("metadata") or {}
+            text = str(msg.get("text") or msg.get("content") or "").strip()
+            has_media = bool(
+                msg.get("audio_url") or msg.get("image_url") or meta.get("audio_url") or meta.get("image_url")
+            )
+            msg_type = str(msg.get("type") or meta.get("type") or "text").lower()
+            if not text and not has_media and msg_type in {"", "text"}:
+                continue
+            visible.append(msg)
+        return visible
 
     def _is_cache_fresh(self, cache_time: datetime.datetime | None, ttl_seconds: int | None = None) -> bool:
         if cache_time is None:

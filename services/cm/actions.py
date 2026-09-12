@@ -160,12 +160,16 @@ def comments_enforcement_decision(
         persist_comment_permission_from_credential,
     )
 
-    if tenant_uses_cm_runtime(tenant_id):
+    uses_cm = tenant_uses_cm_runtime(tenant_id)
+    if uses_cm:
         action_on = comments_action_enabled(tenant_id, channel)
+        switch_on = bool(action_on)
     elif tenant_allows_legacy_bridge(tenant_id):
         action_on = True
+        switch_on = bool(per_asset_enabled)
     else:
         action_on = False
+        switch_on = False
 
     resolved_binding = binding
     resolved_credential = credential
@@ -189,14 +193,16 @@ def comments_enforcement_decision(
     readiness = evaluate_comments_meta_readiness(
         channel=channel,
         cm_action_enabled=action_on,
-        per_asset_switch_enabled=per_asset_enabled,
+        per_asset_switch_enabled=switch_on,
         binding=resolved_binding,
         credential=resolved_credential,
     )
-    if not per_asset_enabled:
-        return {"allow": False, "reason": "feature_disabled", "readiness": readiness}
-    if not action_on:
-        return {"allow": False, "reason": "cm_action_disabled", "readiness": readiness}
+    if not switch_on:
+        if uses_cm or not tenant_allows_legacy_bridge(tenant_id):
+            disabled_reason = "cm_action_disabled"
+        else:
+            disabled_reason = "feature_disabled"
+        return {"allow": False, "reason": disabled_reason, "readiness": readiness}
     if resolved_binding is None or resolved_credential is None:
         return {
             "allow": False,
@@ -220,7 +226,7 @@ def comments_enforcement_decision(
             readiness = evaluate_comments_meta_readiness(
                 channel=channel,
                 cm_action_enabled=action_on,
-                per_asset_switch_enabled=per_asset_enabled,
+                per_asset_switch_enabled=switch_on,
                 binding=resolved_binding,
                 credential=resolved_credential,
             )

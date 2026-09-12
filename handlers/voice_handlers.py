@@ -134,34 +134,10 @@ async def handle_voice_message(
                         f"[handle_voice_message] INFO: User {user_id} conversation {current_conversation_id} is in human takeover mode. Voice will be stored but NOT processed by AI."
                     )
 
-                    # Get operator info for notification message
-                    # Try to get operator_name first, then fallback to operator_id
-                    operator_name = conv_data.get("operator_name")
-                    if not operator_name:
-                        operator_id = conv_data.get("operator_id")
-                        # If operator_id looks like an email, extract the name part
-                        if operator_id and "@" in str(operator_id):
-                            operator_name = str(operator_id).split("@")[0].replace(".", " ").replace("_", " ").title()
-                        elif operator_id:
-                            operator_name = operator_id
+                    from services.takeover_customer_notice import customer_human_handover_notice
 
-                    # Prepare handover notification message based on language
                     user_lang = user_data.get("user_preferred_lang", "ar")
-
-                    # Different messages depending on whether we have the operator name
-                    if operator_name:
-                        handover_messages = {
-                            "ar": f"📞 تم تحويل المحادثة إلى {operator_name}. سيقوم بالرد عليك قريباً.",
-                            "en": f"📞 The conversation has been transferred to {operator_name}. They will respond to you shortly.",
-                            "fr": f"📞 La conversation a été transférée à {operator_name}. Il vous répondra sous peu.",
-                        }
-                    else:
-                        handover_messages = {
-                            "ar": "📞 تم تحويل المحادثة إلى أحد موظفينا. سيقوم فريقنا بالرد عليك قريباً.",
-                            "en": "📞 The conversation has been transferred to a human agent. Our team will respond to you shortly.",
-                            "fr": "📞 La conversation a été transférée à un agent humain. Notre équipe vous répondra sous peu.",
-                        }
-                    handover_msg = handover_messages.get(user_lang, handover_messages["ar"])
+                    handover_msg = customer_human_handover_notice(user_lang)
 
                     # Send handover notification ONCE (only if not already notified)
                     if not user_data.get("handover_notified_voice"):

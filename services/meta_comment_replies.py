@@ -334,7 +334,7 @@ async def process_meta_comment_event(
                     skip_public=already_replied,
                 )
             reply_text = plan.public_text
-        if not reply_text:
+        if not str(reply_text or "").strip():
             _settle_generated_comment(
                 binding=binding,
                 comment_id=comment_id,

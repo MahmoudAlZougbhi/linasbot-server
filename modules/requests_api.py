@@ -26,6 +26,7 @@ from services.requests.schemas import (
     RequestStatusBody,
 )
 from services.requests.service import CustomerRequestsError, CustomerRequestsService
+from services.takeover_customer_notice import public_staff_label
 
 
 def _tenant(session: Any) -> str:
@@ -321,7 +322,7 @@ async def send_request_manual_chat(request_id: str, body: RequestManualSendBody,
         message_type="text",
         idempotency_key=body.idempotency_key,
         tenant_id=tenant_id,
-        operator_name=getattr(session, "email", None),
+        operator_name=public_staff_label(getattr(session, "email", None)) or None,
         request_id=request_id,
         source_channel=row.get("source_channel"),
     )
