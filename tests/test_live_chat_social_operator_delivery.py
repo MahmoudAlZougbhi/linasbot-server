@@ -6,14 +6,14 @@ from services.live_chat_operator_social_delivery import (
     is_social_live_chat_user,
     live_chat_needs_whatsapp_session,
 )
+from services.live_chat_tiktok_operator import (
+    parse_tiktok_live_chat_user_id,
+    tiktok_operator_media_not_supported,
+)
 from services.requests.constants import (
     SOURCE_CHANNEL_FACEBOOK_MESSENGER,
     SOURCE_CHANNEL_INSTAGRAM_DM,
     SOURCE_CHANNEL_WHATSAPP_CLOUD,
-)
-from services.live_chat_tiktok_operator import (
-    parse_tiktok_live_chat_user_id,
-    tiktok_operator_media_not_supported,
 )
 
 

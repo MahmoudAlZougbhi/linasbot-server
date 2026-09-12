@@ -28,18 +28,15 @@ def test_live_chat_events_route_is_registered() -> None:
     import modules.live_chat_api  # noqa: F401
     from modules.core import app
 
-    routes = [
-        route
-        for route in app.routes
-        if isinstance(route, APIRoute) and route.path == "/api/live-chat/events"
-    ]
+    routes = [route for route in app.routes if isinstance(route, APIRoute) and route.path == "/api/live-chat/events"]
     assert routes
     assert "GET" in (routes[0].methods or set())
 
 
 def test_live_chat_events_requires_auth() -> None:
-    import modules.live_chat_api  # noqa: F401
     from fastapi.testclient import TestClient
+
+    import modules.live_chat_api  # noqa: F401
     from modules.core import app
 
     client = TestClient(app)
