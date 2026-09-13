@@ -58,19 +58,19 @@ def publish_sections(tenant_id: str, sections: dict[str, Any], *, revision: str)
     if not tid:
         raise ValueError("tenant_id required")
     ensure_cm_dirs(tid)
+    previous = read_published_pointer(tid)
     checksums = {key: compute_checksum(payload) for key, payload in sections.items()}
     write_version_content(tid, revision, sections)
     pointer = PublishedPointer(
         content_version_id=revision,
-        index_version_id=f"idx_{revision}",
+        index_version_id=str(getattr(previous, "index_version_id", "") or "") or f"idx_{revision}",
         checksums=checksums,
-        embedding_provider="voyage",
-        embedding_model=KNOWLEDGE_MODEL,
-        embedding_version="live-matrix",
-        embedding_dimensions=1024,
+        embedding_provider=str(getattr(previous, "embedding_provider", "") or "voyage"),
+        embedding_model=str(getattr(previous, "embedding_model", "") or KNOWLEDGE_MODEL),
+        embedding_version=str(getattr(previous, "embedding_version", "") or "live-matrix"),
+        embedding_dimensions=int(getattr(previous, "embedding_dimensions", 0) or 1024),
         updated_at=utc_now(),
     )
-    previous = read_published_pointer(tid)
     write_published_pointer(tid, pointer)
     try:
         from services.customer_reply_v2.manifest import clear_manifest_cache
@@ -82,6 +82,7 @@ def publish_sections(tenant_id: str, sections: dict[str, Any], *, revision: str)
         "tenant_id": tid,
         "revision": revision,
         "previous_revision": str(getattr(previous, "content_version_id", "") or ""),
+        "index_version_id": pointer.index_version_id,
         "sections": sorted(sections.keys()),
         "peer": "skipped",
     }
@@ -129,13 +130,13 @@ async def seed_and_publish_all() -> dict[str, Any]:
         TENANT_TEST_2, _full_sections(test2_sections()), revision=f"live_test2_{stamp}"
     )
     pointer = read_published_pointer(TENANT_LINAS)
+    linas = publish_sections(TENANT_LINAS, linas_merged_sections(), revision=f"live_linas_{stamp}")
     rows[TENANT_LINAS] = {
-        "tenant_id": TENANT_LINAS,
-        "revision": str(getattr(pointer, "content_version_id", "") or ""),
-        "skipped_publish": True,
-        "reason": "voyage_429_on_56_docs",
-        "index_ready": False,
+        **linas,
+        "skipped_index": True,
+        "reason": "keep_existing_index_avoid_voyage_429",
+        "index_ready": bool(getattr(pointer, "index_version_id", None)),
+        "kept_index_version_id": linas.get("index_version_id") or str(getattr(pointer, "index_version_id", "") or ""),
         "rolled_back": False,
-        "peer": "skipped",
     }
     return rows

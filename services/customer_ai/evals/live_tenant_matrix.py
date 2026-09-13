@@ -195,7 +195,9 @@ def judge(case: Case, outcome: Any) -> tuple[bool, str]:
             return False, f"leaked:{needle}"
     expect = case["expect"]
     if expect == "hello":
-        ok = bool(reply.strip()) and "couldn" not in reply.lower()
+        if "Use this rule only if the user message is only" in reply:
+            return False, "internal_rule_copy"
+        ok = bool(reply.strip()) and "couldn" not in reply.lower() and len(reply) <= 280
         return ok, "hello" if ok else "empty_or_fail_copy"
     if expect == "hours_antelias":
         ok = "11:00" in reply and "19:00" in reply

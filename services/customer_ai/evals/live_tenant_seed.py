@@ -15,7 +15,9 @@ _INTERNAL_GREETING_RULE = "Use this rule only if the user message is only"
 
 
 def keep_knowledge_item(row: dict[str, Any]) -> bool:
-    blob = " ".join(str(row.get(key) or "") for key in ("body", "title", "content", "text", "description"))
+    blob = " ".join(
+        str(row.get(key) or "") for key in ("body", "title", "content", "text", "description", "ar", "en", "fr")
+    )
     return _INTERNAL_GREETING_RULE not in blob
 
 
@@ -296,8 +298,8 @@ def merge_linas_extras(sections: dict[str, Any]) -> dict[str, Any]:
     """Add greeting, marker, laser/product media, and request types without wiping other drafts."""
     out = dict(sections)
     greet = dict(out.get("dynamic_messages") or {})
-    items = list(greet.get("items") or [])
-    if not any(str(row.get("id") or "") == "greet_linas" for row in items if isinstance(row, dict)):
+    items = [row for row in (greet.get("items") or []) if isinstance(row, dict) and keep_knowledge_item(row)]
+    if not any(str(row.get("id") or "") == "greet_linas" for row in items):
         items.extend(_greeting("linas", "مرحباً من ليناز ليزر", "Hello from Lina's Laser")["items"])
     greet["items"] = items
     out["dynamic_messages"] = greet
