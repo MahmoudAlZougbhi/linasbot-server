@@ -16,6 +16,7 @@ jobs:
     name: Capture-only Linas Laser Brain turn
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: matrix
     steps:
       - name: Run on-server capture-only Brain turn
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
@@ -218,3 +219,46 @@ jobs:
                 )
             )
             PY
+
+  matrix:
+    name: Capture-only tenant matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Publish isolated tenants and run live GPT matrix
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+        env:
+          MATRIX_REF: ${{ github.sha }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: false
+          command_timeout: 35m
+          envs: MATRIX_REF
+          script: |
+            set -e
+            APP_DIR="/opt/linasbot"
+            PYTHON_BIN="$APP_DIR/venv/bin/python3"
+            if [ ! -x "$PYTHON_BIN" ]; then
+              PYTHON_BIN="$(command -v python3)"
+            fi
+            echo "[tenant-matrix] git_head=$(git -C "$APP_DIR" rev-parse HEAD)"
+            echo "[tenant-matrix] matrix_ref=$MATRIX_REF"
+            PACK="/tmp/live_matrix_pack"
+            rm -rf "$PACK"
+            mkdir -p "$PACK"
+            git -C "$APP_DIR" fetch --depth=1 origin "$MATRIX_REF"
+            git -C "$APP_DIR" show "$MATRIX_REF:services/customer_ai/evals/live_tenant_seed.py" > "$PACK/live_tenant_seed.py"
+            git -C "$APP_DIR" show "$MATRIX_REF:services/customer_ai/evals/live_tenant_publish.py" > "$PACK/live_tenant_publish.py"
+            git -C "$APP_DIR" show "$MATRIX_REF:services/customer_ai/evals/live_tenant_matrix.py" > "$PACK/live_tenant_matrix.py"
+            git -C "$APP_DIR" show "$MATRIX_REF:scripts/prod_brain_tenant_matrix.py" > "$PACK/prod_brain_tenant_matrix.py"
+            if [ -f "$APP_DIR/venv/bin/activate" ]; then
+              # shellcheck disable=SC1091
+              source "$APP_DIR/venv/bin/activate"
+            fi
+            export APP_DIR
+            export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
+            cd "$APP_DIR"
+            "$PYTHON_BIN" "$PACK/prod_brain_tenant_matrix.py"
