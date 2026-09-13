@@ -249,6 +249,25 @@ async def run_agentic_turn(
                     }
                 }
             )
+        from services.customer_ai.agent.no_evidence_handoff import unanswered_question_result
+
+        handed = await unanswered_question_result(
+            turn,
+            message=message,
+            plan=plan,
+            dest=dest,
+            lang=lang,
+            extra=extra,
+            agent_trace=agent_trace,
+            outcome=str(bundle.outcome),
+            evidence=evidence,
+            structured_facts=structured_facts,
+            resource_receipts=resource_receipts,
+            visual_reason=visual_reason,
+            tool_rows=tool_rows,
+        )
+        if handed is not None:
+            return handed
         agent_trace.append({"step": "FINAL", "decision": "no_reply", "reason": bundle.outcome})
         return TurnResult(
             stop_reason=_stop_from_outcome(bundle.outcome),
