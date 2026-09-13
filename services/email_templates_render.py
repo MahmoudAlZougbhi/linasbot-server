@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from services.email_templates_catalog import get_template_copy, normalize_locale
+from services.platform_portal_hosts import EMAIL_LINK_HOSTS
 
 BRAND_NAME = "Linas AI"
 BRAND_PRIMARY = "#0F766E"
@@ -34,7 +35,7 @@ def _safe_https_url(url: str) -> str | None:
     if parsed.scheme != "https":
         return None
     host = (parsed.hostname or "").lower()
-    if host not in {"linasaibot.com", "www.linasaibot.com"}:
+    if host not in EMAIL_LINK_HOSTS:
         return None
     return raw
 

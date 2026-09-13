@@ -89,6 +89,7 @@ def provision_first_admin(
     name: str | None = None,
     created_by: str = "cli-provision",
     role: str = "admin",
+    tenant_id: str | None = None,
 ) -> ProvisionResult:
     """
     Create the first admin when the users collection is empty.
@@ -104,6 +105,7 @@ def provision_first_admin(
             email=email,
             password=password,
             name=name,
+            tenant_id=tenant_id,
         )
 
     email_n = _normalize_email(email)
@@ -143,8 +145,10 @@ def provision_platform_owner(
     email: str,
     password: str,
     name: str | None = None,
+    tenant_id: str | None = None,
 ) -> ProvisionResult:
     """Offline-only: create or elevate a platform_owner user."""
+    from services.platform_portal_hosts import PLATFORM_OWNER_TENANT_ID
     from services.role_assignment import PLATFORM_OWNER_CREATED_BY, PLATFORM_OWNER_ROLE
 
     email_n = _normalize_email(email)
@@ -152,6 +156,7 @@ def provision_platform_owner(
         raise ValueError("A valid email is required")
     validate_provision_password(password)
     created_by = next(iter(PLATFORM_OWNER_CREATED_BY))
+    tenant = (tenant_id or PLATFORM_OWNER_TENANT_ID).strip().lower()
 
     existing = user_service.get_user_by_email(email_n)
     if existing:
@@ -179,6 +184,8 @@ def provision_platform_owner(
             "permissions": None,
             "status": "active",
             "emailVerified": True,
+            "tenantId": tenant,
+            "businessName": "Linas AI platform",
         },
         created_by=created_by,
     )

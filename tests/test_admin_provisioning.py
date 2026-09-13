@@ -81,3 +81,33 @@ def test_logout_not_public_requires_session_and_csrf() -> None:
     from modules.api_security import is_public_api
 
     assert not is_public_api("POST", "/api/auth/logout")
+
+
+def test_provision_platform_owner_sets_platform_tenant() -> None:
+    created = {
+        "id": "u-po",
+        "email": "owner@linasaibot.com",
+        "role": "platform_owner",
+        "tenantId": "platform",
+    }
+    with (
+        patch(
+            "services.admin_provisioning_service.user_service.get_user_by_email",
+            return_value=None,
+        ),
+        patch(
+            "services.admin_provisioning_service.user_service.create_user",
+            return_value=created,
+        ) as create,
+    ):
+        result = provision_first_admin(
+            email="owner@linasaibot.com",
+            password="SecurePassPhrase99!",
+            role="platform_owner",
+        )
+    assert result.status == "created"
+    payload = create.call_args.args[0]
+    assert payload["role"] == "platform_owner"
+    assert payload["tenantId"] == "platform"
+    assert payload["email"] == "owner@linasaibot.com"
+    assert create.call_args.kwargs["created_by"] == "cli-provision-platform-owner"

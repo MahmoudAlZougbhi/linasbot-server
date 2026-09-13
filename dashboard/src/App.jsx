@@ -13,6 +13,7 @@ import Features from './pages/public/Features';
 import { AuthProvider } from './contexts/AuthContext';
 import { PublicLandingLocaleProvider } from './contexts/PublicLandingLocaleContext';
 import AppEntry from './pages/AppEntry';
+import { isPlatformPortalHost } from './pages/portalHost';
 import OwnerPortalShell from './pages/owner/OwnerPortalShell';
 import OwnerOverview from './pages/owner/OwnerOverview';
 import OwnerUsers from './pages/owner/OwnerUsers';
@@ -28,6 +29,7 @@ import OwnerMessages from './pages/owner/OwnerMessages';
  */
 
 function PublicMarketingShell() {
+  if (isPlatformPortalHost()) return <Navigate to="/login" replace />;
   return (
     <PublicLandingLocaleProvider>
       <Outlet />

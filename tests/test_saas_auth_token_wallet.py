@@ -214,8 +214,11 @@ def test_cors_production_drops_http_linasaibot_keeps_localhost() -> None:
     assert "http://127.0.0.1:8003" in prod
     assert "https://linasaibot.com" in prod
     assert "https://www.linasaibot.com" in prod
+    assert "https://portal.linasaibot.com" in prod
+    assert "https://www.portal.linasaibot.com" in prod
     assert "http://linasaibot.com" not in prod
     assert "http://www.linasaibot.com" not in prod
+    assert "http://portal.linasaibot.com" not in prod
 
     dev = cors_allow_origins(environment="development")
     assert "http://linasaibot.com" in dev

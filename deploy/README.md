@@ -22,7 +22,7 @@ Or include the snippet:
 
 ```nginx
 server {
-    server_name linasaibot.com www.linasaibot.com;
+    server_name linasaibot.com www.linasaibot.com portal.linasaibot.com www.portal.linasaibot.com;
     # ... your existing config ...
     
     include /etc/nginx/snippets/linasbot-api.conf;
@@ -40,3 +40,7 @@ sudo mkdir -p /etc/nginx/snippets
 sudo cp deploy/nginx-api-include.conf /etc/nginx/snippets/linasbot-api.conf
 # Then add the include line to your server block
 ```
+
+## Platform owner portal (`portal.linasaibot.com`)
+
+Same nginx `server_name` as marketing. DNS A/CNAME `portal` and `www.portal` must point at the same load balancer as `www.linasaibot.com`. The TLS certificate must include both portal names. Workspace logins on that host are rejected; only `platform_owner` reaches `/owner`.

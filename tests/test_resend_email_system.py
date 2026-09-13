@@ -79,6 +79,13 @@ def test_render_blocks_open_redirect() -> None:
     assert "www.linasaibot.com/verify-email" in good.html_body
     assert "Linas AI" in good.html_body
 
+    portal = render_transactional_email(
+        template_id="verify_email",
+        action_url="https://www.portal.linasaibot.com/login",
+        locale="en",
+    )
+    assert "www.portal.linasaibot.com/login" in portal.html_body
+
 
 def test_render_ar_rtl() -> None:
     rendered = render_transactional_email(
