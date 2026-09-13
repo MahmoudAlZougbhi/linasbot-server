@@ -279,9 +279,6 @@ export const ar = {
   subscribeGateViewPlans: 'عرض الخطط',
   subscribeGateRefresh: 'اشتركت بالفعل — تحديث',
   subscribeGateSignOut: 'تسجيل الخروج',
-  serviceUnavailableTitle: 'عم نحدّث الخدمة',
-  serviceUnavailableBody: 'جرّب مرة تانية بعد حوالي ٥ دقائق. حسابك واشتراكك ما تغيّروا.',
-  serviceUnavailableRetry: 'حاول مرة ثانية',
 
   welcomeQuickStart: 'بداية سريعة',
   welcomeChipLearnApp: 'حابب تعرف أكثر عن التطبيق؟',

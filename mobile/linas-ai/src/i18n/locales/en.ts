@@ -277,10 +277,6 @@ export const en = {
   subscribeGateViewPlans: 'View plans',
   subscribeGateRefresh: 'I already subscribed — refresh',
   subscribeGateSignOut: 'Sign out',
-  serviceUnavailableTitle: 'We’re updating the service',
-  serviceUnavailableBody:
-    'Please try again in about 5 minutes. Your account and plan are unchanged.',
-  serviceUnavailableRetry: 'Try again',
 
   welcomeQuickStart: 'Quick start',
   welcomeChipLearnApp: 'Want to learn more about the app?',

@@ -283,10 +283,6 @@ export const fr = {
   subscribeGateViewPlans: 'Voir les offres',
   subscribeGateRefresh: 'Je suis déjà abonné — actualiser',
   subscribeGateSignOut: 'Se déconnecter',
-  serviceUnavailableTitle: 'Nous mettons le service à jour',
-  serviceUnavailableBody:
-    'Réessayez dans environ 5 minutes. Votre compte et votre abonnement restent inchangés.',
-  serviceUnavailableRetry: 'Réessayer',
   welcomeQuickStart: 'Démarrage rapide',
   welcomeChipLearnApp: 'En savoir plus sur l’app ?',
   welcomeChipSetupGuided: 'Configurer mon IA de réponses pas à pas',

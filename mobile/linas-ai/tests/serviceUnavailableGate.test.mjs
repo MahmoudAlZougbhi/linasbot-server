@@ -48,7 +48,7 @@ test('app shell prefers maintenance screen over subscribe wall', () => {
 });
 
 test('maintenance copy asks to retry in about 5 minutes', () => {
-  const en = readFileSync(join(root, 'src/i18n/locales/en.ts'), 'utf8');
+  const en = readFileSync(join(root, 'src/i18n/locales/subscriptionEn.ts'), 'utf8');
   const screen = read('features/billing/ServiceUnavailableScreen.tsx');
   assert.match(en, /serviceUnavailableTitle:\s*'We’re updating the service'/);
   assert.match(en, /Please try again in about 5 minutes/);

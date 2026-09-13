@@ -127,7 +127,7 @@ test('subscription gate uses customer-facing title and description', () => {
 });
 
 test('service unavailable gate uses maintenance copy, not subscribe copy', () => {
-  const en = readFileSync(join(srcRoot, 'i18n/locales/en.ts'), 'utf8');
+  const en = readFileSync(join(srcRoot, 'i18n/locales/subscriptionEn.ts'), 'utf8');
   const screen = readFileSync(join(srcRoot, 'features/billing/ServiceUnavailableScreen.tsx'), 'utf8');
   assert.match(en, /serviceUnavailableTitle:\s*'We’re updating the service'/);
   assert.match(en, /Please try again in about 5 minutes\. Your account and plan are unchanged\./);
