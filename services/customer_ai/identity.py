@@ -19,6 +19,8 @@ class IdentityBundle(BaseModel):
     business_purpose: str = ""
     identity_summary: str = ""
     advanced_instructions: str = ""
+    short_introduction: str = ""
+    greeting_behavior: str = ""
     tone: str = ""
     formality: str = ""
     response_length: str = ""
@@ -55,6 +57,8 @@ def load_identity_bundle(tenant_id: str) -> IdentityBundle | None:
         business_purpose=basics.business_purpose,
         identity_summary=basics.identity_summary,
         advanced_instructions=basics.advanced_instructions,
+        short_introduction=basics.short_introduction,
+        greeting_behavior=basics.greeting_behavior,
         tone=style.tone,
         formality=style.formality,
         response_length=style.response_length,

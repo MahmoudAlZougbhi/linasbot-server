@@ -73,7 +73,12 @@ async def test_enrich_loads_instagram_media_and_caption() -> None:
                 json={
                     "id": "igc2",
                     "text": "price?",
-                    "media": {"id": "media-laser", "caption": "Full body laser 9 sessions"},
+                    "media": {
+                        "id": "media-laser",
+                        "caption": "Full body laser 9 sessions",
+                        "media_type": "IMAGE",
+                        "media_url": "https://cdn.example/laser.jpg",
+                    },
                     "parent_id": "igc1",
                 },
             )
@@ -97,6 +102,8 @@ async def test_enrich_loads_instagram_media_and_caption() -> None:
         )
     assert out["post_id"] == "media-laser"
     assert out["caption"] == "Full body laser 9 sessions"
+    assert out["media_type"] == "IMAGE"
+    assert out["image_urls"] == ["https://cdn.example/laser.jpg"]
 
 
 @pytest.mark.asyncio

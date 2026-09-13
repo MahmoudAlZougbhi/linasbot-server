@@ -6,6 +6,7 @@ silently inventing a new threshold.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -14,6 +15,20 @@ from services.cm.schemas import DynamicMessageRecord, DynamicMessagesSection
 from services.cm.version_store import PublishedVersionError, load_published_content
 from services.customer_ai.contracts.turn import HistorySnapshot
 from services.customer_ai.normalize import normalize_search_text
+
+_GREETING_ONLY_RE = re.compile(
+    r"^\s*(?:"
+    r"hi+|hello|hey+|hola|"
+    r"bonjour|salut|bonsoir|"
+    r"مرحباً?|اهلاً?|أهلاً?|هلا|أهلين|"
+    r"السلام عليكم|"
+    r"صباح الخير|مساء الخير|"
+    r"marhaba|mar7aba|hiya"
+    r")"
+    r"(?:\s+(?:kifak|keefak|كيفك|كيف حالك|how are you|ça va|ca va))?"
+    r"\s*(?:[!?.؟]+)?\s*(?:👋|😊|🌷)?\s*$",
+    re.IGNORECASE | re.UNICODE,
+)
 
 
 @dataclass(frozen=True)
@@ -171,3 +186,8 @@ def evaluate_greeting(
             continue
         return GreetingDecision(True, text=text, rule_id=rule.id, reason="matched")
     return GreetingDecision(False, reason="no_match")
+
+
+def is_greeting_only(message: str) -> bool:
+    """True for hello / marhaba kifak with no hours, price, or booking ask."""
+    return bool(_GREETING_ONLY_RE.match((message or "").strip()))

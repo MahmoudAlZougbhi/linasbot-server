@@ -119,6 +119,64 @@ def test_generated_dm_prepends_greeting(monkeypatch: pytest.MonkeyPatch) -> None
     assert comment_turn.state.greeted is False
 
 
+def test_greeting_only_does_not_prepend_canned_line(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
+    from services.customer_ai.contracts.turn import CustomerTurn
+    from services.customer_ai.greeting import is_greeting_only
+    from services.customer_ai.turn_pipeline import _apply_greeting
+
+    assert is_greeting_only("Hi") is True
+    assert is_greeting_only("marhaba kifak") is True
+    assert is_greeting_only("مرحبا كيفك") is True
+    assert is_greeting_only("Hi, what time do you open?") is False
+    monkeypatch.setattr(
+        "services.customer_ai.turn_pipeline.evaluate_greeting",
+        lambda **_k: type("G", (), {"eligible": True, "text": "Hello from Lina's Laser"})(),
+    )
+    turn = CustomerTurn(tenant_id="t1", invocation_kind="dm")
+    envelope = FinalReplyEnvelope(
+        decision="reply",
+        messages=[OutboundMessage(destination="dm", text="How can I help you today?")],
+    )
+    out = _apply_greeting(turn, "Hi", "instagram_dm", envelope)
+    assert [item.text for item in out.messages] == ["How can I help you today?"]
+
+
+@pytest.mark.asyncio
+async def test_greeting_only_uses_identity_not_agent_retrieve(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+    from services.customer_ai.contracts.turn import CustomerTurn
+    from services.customer_ai.turn_pipeline import run_dm_after_gates
+
+    async def no_confirm(*_a, **_k):
+        return None
+
+    async def boom(*_a, **_k):
+        raise AssertionError("agent must not retrieve for greeting-only")
+
+    async def identity_hi(*_a, **_k):
+        return TurnResult(
+            stop_reason="ok",
+            envelope=FinalReplyEnvelope(
+                decision="reply",
+                messages=[OutboundMessage(destination="dm", text="Hi, I'm the clinic assistant. How can I help?")],
+            ),
+            ai_called=True,
+            extra={"path": "identity_greeting"},
+        )
+
+    monkeypatch.setattr("services.customer_ai.turn_pipeline.try_confirm_pending", no_confirm)
+    monkeypatch.setattr("services.customer_ai.agent.greeting_turn.identity_greeting_result", identity_hi)
+    monkeypatch.setattr("services.customer_ai.agent.loop.run_agentic_dm_path", boom)
+    turn = CustomerTurn(
+        tenant_id="linas", conversation_id="c-hi", event_ids=["m-hi"], extra={"response_language": "en"}
+    )
+    out = await run_dm_after_gates(turn, message="Hi", channel="instagram_dm")
+    assert out.ai_called is True
+    assert "Lina's Laser" not in out.envelope.messages[0].text
+    assert "11:00" not in out.envelope.messages[0].text
+
+
 def test_greeting_follows_inbound_language(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "services.customer_ai.greeting.load_dynamic_messages",
@@ -209,3 +267,23 @@ async def test_flag_on_exact_faq_is_deterministic(monkeypatch: pytest.MonkeyPatc
     assert out.reply == "We reply within one business day."
     assert out.metadata.get("ai_called") is False
     assert out.metadata.get("path") == "faq_exact"
+
+
+def test_comment_inbound_includes_post_photo_or_video() -> None:
+    from services.customer_ai.contracts.turn import CustomerTurn
+    from services.customer_ai.turn_pipeline import inbound_task_text
+
+    turn = CustomerTurn(
+        tenant_id="t1",
+        surface="comment",
+        invocation_kind="comment",
+        extra={
+            "post_caption": "Spring laser reel",
+            "post_media_type": "VIDEO",
+            "post_image_urls": ["https://cdn.example/reel.jpg"],
+        },
+    )
+    blob = inbound_task_text(turn, "price?")
+    assert "Spring laser reel" in blob
+    assert "post_media_type=VIDEO" in blob
+    assert "https://cdn.example/reel.jpg" in blob

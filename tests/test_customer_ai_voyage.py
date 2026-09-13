@@ -20,6 +20,7 @@ async def test_voyage_embed_without_key(monkeypatch: pytest.MonkeyPatch) -> None
         await embed_texts(ENTITY_DOCUMENT, ["hair removal"])
 
 
-def test_voyage_query_budget_is_bounded() -> None:
+def test_voyage_query_budget_retries_rate_limits() -> None:
     assert QUERY_TIMEOUT_SECONDS <= 12.0
-    assert QUERY_ATTEMPTS <= 2
+    assert QUERY_ATTEMPTS >= 4
+    assert QUERY_ATTEMPTS <= 6

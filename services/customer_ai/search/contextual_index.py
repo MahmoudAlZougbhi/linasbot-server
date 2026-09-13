@@ -18,6 +18,7 @@ log = logging.getLogger("customer_ai.contextual_index")
 CONTEXT_FAMILY = "knowledge_ctx"
 CHUNKER_VERSION = "customer_ai.chunk.v2"
 COMPILER_VERSION = "customer_ai.compiler.v1"
+CONTEXT_GROUP_BATCH = 4
 
 
 def _hash(text: str) -> str:
@@ -94,10 +95,12 @@ async def embed_contextual_rows(rows: list[dict[str, Any]], groups: list[list[st
         raise VoyageContractError("provider_not_configured")
     if not groups:
         return []
-    embedded = await embed_contextual_groups(KNOWLEDGE_DOCUMENT, groups)
     vectors: list[list[float]] = []
-    for group in embedded:
-        vectors.extend(group.vectors)
+    for start in range(0, len(groups), CONTEXT_GROUP_BATCH):
+        batch = groups[start : start + CONTEXT_GROUP_BATCH]
+        embedded = await embed_contextual_groups(KNOWLEDGE_DOCUMENT, batch)
+        for group in embedded:
+            vectors.extend(group.vectors)
     if len(vectors) != len(rows):
         raise VoyageContractError(f"contextual_row_mismatch:{len(vectors)}!={len(rows)}")
     return vectors

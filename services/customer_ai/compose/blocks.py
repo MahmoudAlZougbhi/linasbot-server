@@ -40,13 +40,22 @@ def compose_evidence_context(
 ) -> str:
     parts: list[str] = []
     if identity:
-        parts.append(
-            "IDENTITY\n"
-            f"name={identity.assistant_name} business={identity.business_name}\n"
-            f"tone={identity.tone} formality={identity.formality} length={identity.response_length}\n"
-            f"do={'; '.join(identity.do_list)}\n"
-            f"dont={'; '.join(identity.dont_list)}"
-        )
+        ident_lines = [
+            f"name={identity.assistant_name} business={identity.business_name}",
+            f"role={identity.ai_role} purpose={identity.business_purpose}",
+            f"tone={identity.tone} formality={identity.formality} length={identity.response_length}",
+            f"do={'; '.join(identity.do_list)}",
+            f"dont={'; '.join(identity.dont_list)}",
+        ]
+        if identity.identity_summary:
+            ident_lines.append(f"summary={identity.identity_summary}")
+        if identity.short_introduction:
+            ident_lines.append(f"introduction={identity.short_introduction}")
+        if identity.greeting_behavior:
+            ident_lines.append(f"greeting_behavior={identity.greeting_behavior}")
+        if identity.advanced_instructions:
+            ident_lines.append(f"advanced={identity.advanced_instructions}")
+        parts.append("IDENTITY\n" + "\n".join(ident_lines))
         if identity.style_body:
             parts.append(f"STYLE\n{identity.style_body}")
     if followup_goal:
