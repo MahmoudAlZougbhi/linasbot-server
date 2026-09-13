@@ -8,7 +8,7 @@ from services.search_metadata.fingerprint import content_fingerprint, item_id_of
 from services.search_metadata.generate import SearchMetadata, generate_search_metadata
 from services.search_metadata.item_content import save_time_item_content
 from services.search_metadata.limits import ITEM_LIST_KEYS, METADATA_SECTIONS
-from services.search_metadata.luna_titles import original_title_of
+from services.search_metadata.title_fields import original_title_of
 
 _LAST_APPLY: dict[str, Any] = {
     "section": "",

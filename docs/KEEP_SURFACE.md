@@ -78,3 +78,11 @@ Still not deleted (import-graph blocked or KEEP):
 - Booking / `api_integrations_*` — BOC is not in the SaaS app; gate stays OFF (`LINASLASER_BOC_BOOKING_ENABLED`); stack still imported
 - `owner_copilot_v2/creative_policy.py` KEEP as refusal
 - Disabled API prefixes in `product_features.py` stay fail-closed even after HTTP modules are gone
+
+## WAVE 2 — Customer Brain slim
+
+- Voyage entity + knowledge indexes skip Voyage calls when `content_hash` is unchanged (`services/customer_ai/search/reuse_vectors.py`).
+- Expense records count only newly embedded rows.
+- Title helpers used by CM save go through `search_metadata.title_fields` (not Luna-named imports).
+- CM OpenAI `semantic_index` remains for `runtime_pipeline` FAQ semantic search (live handler). Brain retrieve stays Voyage-only. Do not treat CM OpenAI as a Brain fallback.
+
