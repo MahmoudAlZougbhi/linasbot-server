@@ -36,3 +36,18 @@ async def test_tiktok_context_uses_caption_without_inventing_video(monkeypatch: 
     assert out["tiktok_raw_video"] is False
     assert out["video_raw_unavailable"] == "tiktok_official_mp4_missing"
     assert out["video_transcript"] == ""
+
+
+@pytest.mark.asyncio
+async def test_tiktok_official_mp4_sets_video_url() -> None:
+    out = await build_tiktok_comment_context(
+        tenant_id="linas",
+        comment_text="what is this",
+        comment_id="c1",
+        video_id="v1",
+        caption="offer",
+        video_url="https://example.com/v.mp4",
+    )
+    assert out["tiktok_raw_video"] is True
+    assert out["video_url"] == "https://example.com/v.mp4"
+    assert "video_raw_unavailable" not in out

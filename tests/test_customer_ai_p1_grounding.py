@@ -170,6 +170,43 @@ async def test_visual_disabled_image_returns_localized_clarify(monkeypatch: pyte
     assert result.envelope.messages[0].text == brain_template("visual_disabled", "ar")
 
 
+@pytest.mark.asyncio
+async def test_visual_disabled_skipped_when_image_already_described(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.customer_ai import turn_pipeline as pipeline
+    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+
+    async def _no_confirm(*_args, **_kwargs):
+        return None
+
+    async def _no_greet(*_args, **_kwargs):
+        return None
+
+    async def _agent(*_args, **_kwargs):
+        return TurnResult(
+            stop_reason="ok",
+            envelope=FinalReplyEnvelope(
+                decision="reply",
+                messages=[OutboundMessage(destination="web_chat:c1", text="this is a cream jar")],
+            ),
+        )
+
+    monkeypatch.setattr(pipeline, "try_confirm_pending", _no_confirm)
+    monkeypatch.setattr("services.customer_ai.agent.greeting_turn.identity_greeting_result", _no_greet)
+    monkeypatch.setattr("services.customer_ai.agent.loop.run_agentic_dm_path", _agent)
+    monkeypatch.setattr(pipeline, "_exact_faq_result", lambda *_a, **_k: None)
+    monkeypatch.setattr(pipeline, "_semantic_faq_result", _no_greet)
+    turn = CustomerTurn(
+        tenant_id="lab",
+        conversation_id="c1",
+        event_ids=["m1"],
+        media=MediaView(image_media_id="img-1", extract_preview="a white cream jar on a table"),
+        extra={"response_language": "ar"},
+    )
+    result = await pipeline.run_dm_after_gates(turn, message="what is this?", channel="web_chat")
+    assert result.envelope.decision == "reply"
+    assert "cream jar" in result.envelope.messages[0].text
+
+
 def test_identity_prompt_includes_ai_setup_greeting_behavior() -> None:
     from services.customer_ai.compose.blocks import compose_evidence_context
     from services.customer_ai.identity import IdentityBundle

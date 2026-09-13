@@ -11,9 +11,10 @@ from typing import Any
 
 MAX_VIDEO_BYTES = 80 * 1024 * 1024
 MAX_FRAMES = 60
+MAX_ANALYZE_SECONDS = 600.0
 FFMPEG_TIMEOUT_S = 180
 FRAME_TIMEOUT_S = 45
-AUDIO_TIMEOUT_S = 600
+AUDIO_TIMEOUT_S = 120
 _DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)")
 
 
@@ -21,8 +22,16 @@ def ffmpeg_available() -> bool:
     return shutil.which("ffmpeg") is not None
 
 
+def cap_analyze_duration_s(duration_s: float) -> tuple[float, bool]:
+    """Analyze at most the first 10 minutes. Longer clips are truncated, not rejected."""
+    duration = max(0.0, float(duration_s or 0.0))
+    if duration <= MAX_ANALYZE_SECONDS:
+        return duration, False
+    return MAX_ANALYZE_SECONDS, True
+
+
 def frame_interval_s(duration_s: float) -> float:
-    """Small clips: 5s. Medium: 10s. Long: 15s."""
+    """Small clips: 5s. Medium: 10s. Long: 15s. Duration should already be capped."""
     duration = max(0.0, float(duration_s or 0.0))
     if duration <= 60:
         return 5.0
@@ -69,8 +78,9 @@ def extract_bounded_video(data: bytes) -> dict[str, Any]:
         src = root / "in.bin"
         src.write_bytes(raw)
         duration = _probe_duration_s(src)
-        frames = _extract_frames(src, root, duration)
-        audio = _extract_audio(src, root)
+        capped, truncated = cap_analyze_duration_s(duration)
+        frames = _extract_frames(src, root, capped)
+        audio = _extract_audio(src, root, duration_s=capped)
         if not frames and audio is None:
             return _result(status="video_extract_failed")
         status = "extracted"
@@ -84,7 +94,9 @@ def extract_bounded_video(data: bytes) -> dict[str, Any]:
             "frame_count": len(frames),
             "audio": audio,
             "duration_s": duration,
-            "interval_s": frame_interval_s(duration),
+            "analyze_duration_s": capped,
+            "interval_s": frame_interval_s(capped),
+            "truncated": truncated,
             "error": "",
         }
 
@@ -96,7 +108,9 @@ def _result(*, status: str, error: str = "") -> dict[str, Any]:
         "frame_count": 0,
         "audio": None,
         "duration_s": 0.0,
+        "analyze_duration_s": 0.0,
         "interval_s": 5.0,
+        "truncated": False,
         "error": error or status,
     }
 
@@ -152,23 +166,23 @@ def _extract_frames(src: Path, root: Path, duration_s: float) -> list[bytes]:
     return frames
 
 
-def _extract_audio(src: Path, root: Path) -> bytes | None:
+def _extract_audio(src: Path, root: Path, *, duration_s: float) -> bytes | None:
     out = root / "audio.wav"
-    completed = _run_ffmpeg(
-        [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(src),
-            "-vn",
-            "-ac",
-            "1",
-            "-ar",
-            "16000",
-            str(out),
-        ],
-        timeout_s=AUDIO_TIMEOUT_S,
-    )
+    args = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(src),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+    ]
+    if duration_s > 0:
+        args.extend(["-t", f"{duration_s:.2f}"])
+    args.append(str(out))
+    completed = _run_ffmpeg(args, timeout_s=AUDIO_TIMEOUT_S)
     if completed is not None and completed.returncode == 0 and out.is_file() and out.stat().st_size > 0:
         return out.read_bytes()
     return None

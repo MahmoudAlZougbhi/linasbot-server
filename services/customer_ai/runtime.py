@@ -306,6 +306,23 @@ async def run_customer_ai_comment(
     )
     parent = str(_kwargs.get("parent_comment") or "").strip()
     caption = str(_kwargs.get("caption") or "").strip()
+    raw_ctx = _kwargs.get("comment_context")
+    ctx: dict[str, Any] = raw_ctx if isinstance(raw_ctx, dict) else {}
+    media_type = str(_kwargs.get("media_type") or ctx.get("media_type") or "").strip()
+    image_urls = [
+        str(item).strip() for item in (_kwargs.get("image_urls") or ctx.get("image_urls") or []) if str(item).strip()
+    ]
+    video_url = str(_kwargs.get("video_url") or ctx.get("video_url") or "").strip()
+    from services.customer_ai.media_analysis.comment_attach import analysis_fields_for_comment
+
+    media_fields = await analysis_fields_for_comment(
+        tenant_id=tenant_id,
+        post_id=post_id_value,
+        media_type=media_type,
+        urls=image_urls,
+        video_url=video_url,
+        caption=caption,
+    )
     history = await load_history_snapshot(
         user_id=sender or f"comment:{comment_id or conv_id}",
         conversation_id=conv_id,
@@ -336,10 +353,9 @@ async def run_customer_ai_comment(
                 "winning_rule": getattr(decision, "rule_id", ""),
                 "post_caption": caption,
                 "post_id": post_id_value,
-                "post_media_type": str(_kwargs.get("media_type") or "").strip(),
-                "post_image_urls": [
-                    str(item).strip() for item in (_kwargs.get("image_urls") or []) if str(item).strip()
-                ],
+                "post_media_type": media_type,
+                "post_image_urls": image_urls,
+                **media_fields,
                 **_language_extra(
                     detected_language=str(_kwargs.get("detected_language") or ""),
                     response_language=str(_kwargs.get("response_language") or ""),

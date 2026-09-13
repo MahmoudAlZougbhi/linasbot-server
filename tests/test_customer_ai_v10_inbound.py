@@ -23,6 +23,12 @@ PDF = b"%PDF-1.4\n(After Care Cream) Tj\n"
 def inbound_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path / "data"))
     monkeypatch.setenv("ENVIRONMENT", "test")
+
+    async def _no_desc(*_args: object, **_kwargs: object) -> str:
+        return ""
+
+    monkeypatch.setattr("services.customer_ai.media_analysis.describe.describe_stills", _no_desc)
+    monkeypatch.setattr("services.customer_reply_v2.inbound_media_enrich.describe_stills", _no_desc)
     return tmp_path
 
 
@@ -77,7 +83,7 @@ async def test_audio_uses_real_stt_path(inbound_env: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_video_frames_and_audio_not_unimplemented(inbound_env: Path) -> None:
+async def test_video_frames_and_audio_not_unimplemented(inbound_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     async def fetch(url: str, max_bytes: int) -> dict:
         _ = url, max_bytes
         return {"ok": True, "bytes": b"ftypmp42", "mime": "video/mp4", "url": url, "error": ""}
@@ -96,6 +102,11 @@ async def test_video_frames_and_audio_not_unimplemented(inbound_env: Path) -> No
         assert data.startswith(b"RIFF")
         return {"ok": True, "text": "laser hair removal", "model": "whisper-1", "error": ""}
 
+    async def stt_full(data: bytes) -> dict:
+        assert data.startswith(b"RIFF")
+        return {"ok": True, "text": "laser hair removal", "model": "whisper-1", "error": ""}
+
+    monkeypatch.setattr("services.customer_reply_v2.inbound_media_enrich.transcribe_full_wav", stt_full)
     result = await ingest_inbound_attachments(
         tenant_id="t-in",
         attachments=[{"type": "video", "payload": {"url": "https://cdninstagram.com/v.mp4"}}],

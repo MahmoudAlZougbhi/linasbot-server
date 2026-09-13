@@ -42,8 +42,14 @@ def inbound_task_text(turn: CustomerTurn, message: str) -> str:
     media_type = str(turn.extra.get("post_media_type") or "").strip()
     if media_type and turn.surface == "comment":
         parts.append(f"post_media_type={media_type}")
+    visual = str(turn.extra.get("post_visual_description") or "").strip()
+    if visual:
+        parts.append(f"post_visual={visual}")
+    post_transcript = str(turn.extra.get("post_transcript") or "").strip()
+    if post_transcript and post_transcript not in parts:
+        parts.append(f"post_audio_transcript={post_transcript}")
     urls = [str(item).strip() for item in (turn.extra.get("post_image_urls") or []) if str(item).strip()]
-    if urls and turn.surface == "comment":
+    if urls and turn.surface == "comment" and not visual:
         parts.append(f"post_media_url={urls[0]}")
     return "\n".join(parts) or (turn.followup_goal or "")
 
@@ -111,7 +117,13 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
         has_authorized_asset_id=bool(turn.media.inbound_link),
         requires_visual_reading=bool(turn.media.image_media_id),
     )
-    if visual.reason == "disabled" and turn.media.image_media_id:
+    analyzed = bool(
+        (turn.media.extract_preview or "").strip()
+        or (turn.media.transcript or "").strip()
+        or str((turn.extra or {}).get("post_visual_description") or "").strip()
+        or str((turn.extra or {}).get("post_transcript") or "").strip()
+    )
+    if visual.reason == "disabled" and turn.media.image_media_id and not analyzed:
         lang = _response_language(turn)
         return TurnResult(
             stop_reason="ok",

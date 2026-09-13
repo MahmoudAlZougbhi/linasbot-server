@@ -59,6 +59,8 @@ async def build_tiktok_comment_context(
         "image_urls": [thumbnail_url] if thumbnail_url else [],
         "image_input_count": len(image_inputs),
     }
+    if official_url:
+        out["video_url"] = official_url
     if not tiktok_raw_video:
         out["video_raw_unavailable"] = "tiktok_official_mp4_missing"
     return out
