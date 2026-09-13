@@ -70,13 +70,6 @@ def publish_sections(tenant_id: str, sections: dict[str, Any], *, revision: str)
         updated_at=utc_now(),
     )
     write_published_pointer(tid, pointer)
-    peer = "ok"
-    try:
-        from services.ha_cm_peer_replicate import warm_published_cm_peer_cache
-
-        warm_published_cm_peer_cache(tenant_id=tid, pointer=pointer)
-    except Exception as exc:  # noqa: BLE001 — matrix records peer replication faults
-        peer = type(exc).__name__
     try:
         from services.customer_reply_v2.manifest import clear_manifest_cache
 
@@ -87,20 +80,28 @@ def publish_sections(tenant_id: str, sections: dict[str, Any], *, revision: str)
         "tenant_id": tid,
         "revision": revision,
         "sections": sorted(sections.keys()),
-        "peer": peer,
+        "peer": "skipped",
     }
 
 
 async def publish_and_index(tenant_id: str, sections: dict[str, Any], *, revision: str) -> dict[str, Any]:
+    import asyncio
+
     from services.customer_ai.search.index_schedule import run_tenant_index_job
 
     published = publish_sections(tenant_id, sections, revision=revision)
-    index = await run_tenant_index_job(tenant_id, revision=revision, reason="live-tenant-matrix")
+    index: dict[str, Any] = {}
+    for attempt in range(5):
+        index = await run_tenant_index_job(tenant_id, revision=revision, reason="live-tenant-matrix")
+        if index.get("ready"):
+            break
+        await asyncio.sleep(8 * (attempt + 1))
     return {
         **published,
         "index_ready": bool(index.get("ready")),
         "index_reason": str(index.get("reason") or ""),
         "index_count": index.get("count"),
+        "index_attempts": attempt + 1,
     }
 
 

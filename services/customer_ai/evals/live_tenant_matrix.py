@@ -231,17 +231,31 @@ def judge(case: Case, outcome: Any) -> tuple[bool, str]:
 
 
 async def run_case(case: Case) -> dict[str, Any]:
-    token = uuid.uuid4().hex[:10]
+    token = uuid.uuid4().hex[:8]
     started = time.perf_counter()
-    outcome = await run_customer_ai_dm(
-        tenant_id=case["tenant_id"],
-        message=case["message"],
-        channel="web_chat",
-        conversation_id=f"matrix:{case['tenant_id']}:{case['id']}:{token}",
-        user_id=f"matrix:{case['tenant_id']}",
-        message_id=f"matrix:{token}",
-        apply_customer_usage_limits=False,
-    )
+    try:
+        outcome = await run_customer_ai_dm(
+            tenant_id=case["tenant_id"],
+            message=case["message"],
+            channel="web_chat",
+            conversation_id=f"mt{token}",
+            user_id=f"mu{token}",
+            message_id=f"mm{token}",
+            apply_customer_usage_limits=False,
+        )
+    except Exception as exc:  # noqa: BLE001 — matrix records provider/runtime faults
+        return {
+            "tenant_id": case["tenant_id"],
+            "id": case["id"],
+            "ok": False,
+            "detail": f"exc:{type(exc).__name__}",
+            "elapsed_ms": int((time.perf_counter() - started) * 1000),
+            "stop": True,
+            "reason": type(exc).__name__,
+            "phase": "",
+            "reply_len": 0,
+            "reply_preview": "",
+        }
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     ok, detail = judge(case, outcome)
     meta = outcome.metadata if isinstance(getattr(outcome, "metadata", None), dict) else {}
@@ -261,7 +275,10 @@ async def run_case(case: Case) -> dict[str, Any]:
 
 
 async def run_matrix() -> dict[str, Any]:
-    rows = [await run_case(case) for case in matrix_cases()]
+    rows = []
+    for case in matrix_cases():
+        rows.append(await run_case(case))
+        time.sleep(0.4)
     passed = sum(1 for row in rows if row.get("ok"))
     return {
         "ok": passed == len(rows),
