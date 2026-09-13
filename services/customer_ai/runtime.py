@@ -309,9 +309,7 @@ async def run_customer_ai_comment(
     ctx = _kwargs.get("comment_context") if isinstance(_kwargs.get("comment_context"), dict) else {}
     media_type = str(_kwargs.get("media_type") or ctx.get("media_type") or "").strip()
     image_urls = [
-        str(item).strip()
-        for item in (_kwargs.get("image_urls") or ctx.get("image_urls") or [])
-        if str(item).strip()
+        str(item).strip() for item in (_kwargs.get("image_urls") or ctx.get("image_urls") or []) if str(item).strip()
     ]
     video_url = str(_kwargs.get("video_url") or ctx.get("video_url") or "").strip()
     from services.customer_ai.media_analysis.comment_attach import analysis_fields_for_comment

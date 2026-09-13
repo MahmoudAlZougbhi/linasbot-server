@@ -57,9 +57,13 @@ def put_analysis(*, tenant_id: str, post_id: str, payload: dict[str, Any]) -> bo
     if client is None or not tenant_id or not post_id:
         return False
     status = str(payload.get("status") or "")
-    ttl = _SUCCESS_TTL_SEC if status in {"ok", "empty"} else _FAIL_TTL_SEC
+    ttl = _SUCCESS_TTL_SEC if status == "ok" else _FAIL_TTL_SEC
     try:
-        client.set(analysis_key(tenant_id=tenant_id, post_id=post_id), json.dumps(payload, separators=(",", ":")), ex=ttl)
+        client.set(
+            analysis_key(tenant_id=tenant_id, post_id=post_id),
+            json.dumps(payload, separators=(",", ":")),
+            ex=ttl,
+        )
         return True
     except Exception:
         return False

@@ -8,6 +8,7 @@ import pytest
 from services.customer_ai.contracts.turn import CustomerTurn, MediaView
 from services.customer_ai.media_analysis.analyze import analyze_post_media, is_video_media_type
 from services.customer_ai.media_analysis.cache import (
+    analysis_key,
     get_analysis,
     put_analysis,
     set_post_media_redis_for_tests,
@@ -31,12 +32,19 @@ def test_video_media_type_detects_reels() -> None:
 
 
 def test_cache_round_trip() -> None:
+    client = fakeredis.FakeRedis(decode_responses=True)
+    set_post_media_redis_for_tests(client)
     payload = {"status": "ok", "transcript": "hello", "visual_description": "a clinic lobby"}
     assert put_analysis(tenant_id="linas", post_id="ig_1", payload=payload) is True
     got = get_analysis(tenant_id="linas", post_id="ig_1")
     assert got is not None
     assert got["transcript"] == "hello"
     assert get_analysis(tenant_id="linas", post_id="other") is None
+    ok_ttl = int(client.ttl(analysis_key(tenant_id="linas", post_id="ig_1")))
+    put_analysis(tenant_id="linas", post_id="ig_empty", payload={"status": "empty"})
+    empty_ttl = int(client.ttl(analysis_key(tenant_id="linas", post_id="ig_empty")))
+    assert ok_ttl > empty_ttl
+    assert empty_ttl <= 900
 
 
 @pytest.mark.asyncio
@@ -74,6 +82,25 @@ async def test_second_comment_reuses_cached_analysis(monkeypatch: pytest.MonkeyP
     assert first.get("cache_hit") is not True
     assert second["cache_hit"] is True
     assert second["transcript"] == "welcome to the clinic"
+
+
+@pytest.mark.asyncio
+async def test_lock_wait_does_not_steal_or_reanalyze(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = {"n": 0}
+
+    async def _run(**_kwargs: object) -> dict[str, object]:
+        calls["n"] += 1
+        return {"status": "ok", "transcript": "nope"}
+
+    async def _sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr("services.customer_ai.media_analysis.analyze._run", _run)
+    monkeypatch.setattr("services.customer_ai.media_analysis.analyze.acquire_lock", lambda **_k: False)
+    monkeypatch.setattr("services.customer_ai.media_analysis.analyze.asyncio.sleep", _sleep)
+    row = await analyze_post_media(tenant_id="linas", post_id="busy-1", media_type="VIDEO")
+    assert row["status"] == "lock_wait"
+    assert calls["n"] == 0
 
 
 @pytest.mark.asyncio

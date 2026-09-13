@@ -14,7 +14,7 @@ MAX_FRAMES = 60
 MAX_ANALYZE_SECONDS = 600.0
 FFMPEG_TIMEOUT_S = 180
 FRAME_TIMEOUT_S = 45
-AUDIO_TIMEOUT_S = 600
+AUDIO_TIMEOUT_S = 120
 _DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)")
 
 

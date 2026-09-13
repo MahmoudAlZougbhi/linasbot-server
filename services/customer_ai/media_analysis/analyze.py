@@ -11,6 +11,9 @@ from services.customer_reply_v2.inbound_fetch import VIDEO_FETCH_TIMEOUT_S, fetc
 from services.customer_reply_v2.inbound_stt_chunks import transcribe_full_wav
 from services.customer_reply_v2.inbound_video import extract_bounded_video
 
+_LOCK_WAIT_ATTEMPTS = 150
+_LOCK_WAIT_SLEEP_S = 0.4
+
 
 def is_video_media_type(media_type: str) -> bool:
     label = (media_type or "").strip().upper()
@@ -52,11 +55,12 @@ async def analyze_post_media(
     if cached:
         return {**cached, "cache_hit": True}
     if not acquire_lock(tenant_id=tid, post_id=pid):
-        for _attempt in range(25):
-            await asyncio.sleep(0.4)
+        for _attempt in range(_LOCK_WAIT_ATTEMPTS):
+            await asyncio.sleep(_LOCK_WAIT_SLEEP_S)
             cached = get_analysis(tenant_id=tid, post_id=pid)
             if cached:
                 return {**cached, "cache_hit": True}
+        return _empty(status="lock_wait")
     try:
         cached = get_analysis(tenant_id=tid, post_id=pid)
         if cached:
@@ -87,18 +91,13 @@ async def _run(*, tenant_id: str, media_type: str, urls: list[str], video_url: s
         return _empty(status="no_media")
     videoish = is_video_media_type(media_type) or bool(video_url)
     if videoish:
-        fetched = await _fetch_first(candidates, kind="video")
-        if fetched:
-            mime = str(fetched.get("mime") or "")
-            blob = fetched.get("bytes") or b""
-            if mime.startswith("image/"):
-                visual = await describe_stills([blob], tenant_id=tenant_id, kind="video_cover")
-                return _empty(status="ok" if visual else "empty", kind="video_cover", visual_description=visual)
-            extracted = extract_bounded_video(blob)
+        video_row, cover_row = await _fetch_video_or_cover(candidates)
+        if video_row:
+            extracted = extract_bounded_video(video_row.get("bytes") or b"")
             return await _from_extracted(tenant_id=tenant_id, extracted=extracted, kind="video")
-        cover = await _fetch_first(candidates, kind="image")
-        if cover and cover.get("bytes"):
-            visual = await describe_stills([cover["bytes"]], tenant_id=tenant_id, kind="video_cover")
+        blob = (cover_row or {}).get("bytes") or b""
+        if blob:
+            visual = await describe_stills([blob], tenant_id=tenant_id, kind="video_cover")
             return _empty(status="ok" if visual else "empty", kind="video_cover", visual_description=visual)
         return _empty(status="fetch_failed", kind="video")
     fetched = await _fetch_first(candidates, kind="image")
@@ -139,3 +138,20 @@ async def _fetch_first(urls: list[str], *, kind: str) -> dict[str, Any] | None:
         if fetched.get("ok") and fetched.get("bytes"):
             return fetched
     return None
+
+
+async def _fetch_video_or_cover(urls: list[str]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Prefer a real video blob. Do not stop at a JPEG thumbnail if an MP4 is later in the list."""
+    cover: dict[str, Any] | None = None
+    for url in urls:
+        fetched = await fetch_inbound_url(url, max_bytes=max_bytes_for_kind("video"), timeout_s=VIDEO_FETCH_TIMEOUT_S)
+        if not (fetched.get("ok") and fetched.get("bytes")):
+            continue
+        mime = str(fetched.get("mime") or "")
+        if mime.startswith("image/"):
+            cover = cover or fetched
+            continue
+        return fetched, cover
+    if cover is None:
+        cover = await _fetch_first(urls, kind="image")
+    return None, cover
