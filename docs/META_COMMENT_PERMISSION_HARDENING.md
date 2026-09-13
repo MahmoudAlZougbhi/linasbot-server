@@ -60,12 +60,12 @@ See **`docs/META_PERMISSION_HARDENING_ROLLOUT.md`** for the full owner gate chec
 Summary:
 
 1. **Merge PR #542** → wait for **CI green on `main`** → deploy **`main` merge SHA** (not PR tip).
-2. Protected HA deploy runs **`scripts/ha/release_alembic_migrate.py`** (already wired in
-   `deploy_meta_release_ha.sh`).
-3. **Before LB admission**, protected HA runs **`scripts/ha/run_meta_comment_permission_backfill.py`**
-   → `scripts/backfill_meta_comment_permission_verification.py`.
-4. **Hard stop:** backfill exit **2** if any active binding remains `unknown` — do not attach nodes to LB.
-5. Verify identical `alembic current` + git SHA on node01/node02; smoke FB Comments capability + DMs.
+2. Protected HA deploy runs **`scripts/ha/release_alembic_migrate.py`**, then
+   **`scripts/ha/run_meta_comment_permission_backfill.py`** inside `deploy_meta_release_ha.sh`
+   (after Alembic, before readiness/LB — infra PR #544).
+3. **Hard stop:** backfill exit **2** if any active binding remains `unknown` — deploy aborts with
+   automatic rollback; maintenance clears only after successful rollback parity.
+4. Verify identical `alembic current` + git SHA on node01/node02; smoke FB Comments capability + DMs.
 
 **Do not deploy to production without explicit approval.**
 
