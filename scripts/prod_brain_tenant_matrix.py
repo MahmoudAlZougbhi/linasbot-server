@@ -51,19 +51,20 @@ def _module_path(filename: str) -> Path:
 
 
 def _overlay_greeting_path() -> list[str]:
+    import services.customer_ai as cai
     import services.customer_ai.runtime as runtime
+    from services.customer_ai.billing import apply_message_billing, release_turn_reservation
 
     loaded: list[str] = []
-    for name, filename in (
-        ("services.customer_ai.greeting", "greeting.py"),
-        ("services.customer_ai.templates", "templates.py"),
-        ("services.customer_ai.turn_pipeline", "turn_pipeline.py"),
-    ):
-        path = _module_path(filename)
-        _load_module(name, path)
-        loaded.append(f"{name}={path}")
-    import services.customer_ai.turn_pipeline as pipeline
-    from services.customer_ai.billing import apply_message_billing, release_turn_reservation
+    greeting = _load_module("services.customer_ai.greeting", _module_path("greeting.py"))
+    cai.greeting = greeting
+    loaded.append(f"services.customer_ai.greeting={greeting.__file__}")
+    templates = _load_module("services.customer_ai.templates", _module_path("templates.py"))
+    cai.templates = templates
+    loaded.append(f"services.customer_ai.templates={templates.__file__}")
+    pipeline = _load_module("services.customer_ai.turn_pipeline", _module_path("turn_pipeline.py"))
+    cai.turn_pipeline = pipeline
+    loaded.append(f"pipeline={pipeline.run_dm_after_gates.__code__.co_filename}")
 
     async def _run_billed(turn, *, message, channel):
         try:
@@ -76,7 +77,6 @@ def _overlay_greeting_path() -> list[str]:
 
     runtime._run_billed = _run_billed
     runtime.run_dm_after_gates = pipeline.run_dm_after_gates
-    loaded.append(f"pipeline={pipeline.run_dm_after_gates.__code__.co_filename}")
     return loaded
 
 

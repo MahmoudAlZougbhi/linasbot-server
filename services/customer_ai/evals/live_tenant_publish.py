@@ -128,6 +128,14 @@ async def seed_and_publish_all() -> dict[str, Any]:
     rows[TENANT_TEST_2] = await publish_and_index(
         TENANT_TEST_2, _full_sections(test2_sections()), revision=f"live_test2_{stamp}"
     )
-    await asyncio.sleep(12)
-    rows[TENANT_LINAS] = await publish_and_index(TENANT_LINAS, linas_merged_sections(), revision=f"live_linas_{stamp}")
+    pointer = read_published_pointer(TENANT_LINAS)
+    rows[TENANT_LINAS] = {
+        "tenant_id": TENANT_LINAS,
+        "revision": str(getattr(pointer, "content_version_id", "") or ""),
+        "skipped_publish": True,
+        "reason": "voyage_429_on_56_docs",
+        "index_ready": False,
+        "rolled_back": False,
+        "peer": "skipped",
+    }
     return rows
