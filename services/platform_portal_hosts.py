@@ -6,7 +6,7 @@ Marketing stays on linasaibot.com. Owner control is portal.linasaibot.com
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 MARKETING_HOSTS: frozenset[str] = frozenset({"linasaibot.com", "www.linasaibot.com"})
 PLATFORM_PORTAL_HOSTS: frozenset[str] = frozenset(
