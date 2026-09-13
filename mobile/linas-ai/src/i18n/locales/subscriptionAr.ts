@@ -180,5 +180,8 @@ export const subscriptionAr = {
   subBadgeStarter: 'عمل صغير',
   subBadgeGrowth: 'عمل نامٍ',
   subBadgePro: 'حجم عالي',
-  subBadgeMax: 'أقصى سعة'
+  subBadgeMax: 'أقصى سعة',
+  serviceUnavailableTitle: 'عم نحدّث الخدمة',
+  serviceUnavailableBody: 'جرّب مرة تانية بعد حوالي ٥ دقائق. حسابك واشتراكك ما تغيّروا.',
+  serviceUnavailableRetry: 'حاول مرة ثانية',
 } as const;

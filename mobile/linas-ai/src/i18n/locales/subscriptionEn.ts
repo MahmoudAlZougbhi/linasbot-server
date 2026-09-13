@@ -181,5 +181,9 @@ export const subscriptionEn = {
   subBadgeStarter: 'SMALL BUSINESS',
   subBadgeGrowth: 'GROWING BUSINESS',
   subBadgePro: 'HIGH VOLUME',
-  subBadgeMax: 'MAXIMUM CAPACITY'
+  subBadgeMax: 'MAXIMUM CAPACITY',
+  serviceUnavailableTitle: 'We’re updating the service',
+  serviceUnavailableBody:
+    'Please try again in about 5 minutes. Your account and plan are unchanged.',
+  serviceUnavailableRetry: 'Try again',
 } as const;

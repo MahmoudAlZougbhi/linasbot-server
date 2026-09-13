@@ -182,5 +182,9 @@ export const subscriptionFr = {
   subBadgeStarter: 'PETITE ENTREPRISE',
   subBadgeGrowth: 'EN CROISSANCE',
   subBadgePro: 'HAUT VOLUME',
-  subBadgeMax: 'CAPACITÉ MAXIMALE'
+  subBadgeMax: 'CAPACITÉ MAXIMALE',
+  serviceUnavailableTitle: 'Nous mettons le service à jour',
+  serviceUnavailableBody:
+    'Réessayez dans environ 5 minutes. Votre compte et votre abonnement restent inchangés.',
+  serviceUnavailableRetry: 'Réessayer',
 } as const;

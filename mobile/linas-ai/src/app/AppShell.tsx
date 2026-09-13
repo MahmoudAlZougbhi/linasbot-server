@@ -42,8 +42,14 @@ export function AppShell() {
   const [areaFocusNonce, bumpAreaFocus] = useAreaFocusNonce();
   const subGate = useSubscriptionGate(hasAccess);
   const versionCheck = useAppVersionCheck(bootDone && authReady);
+  const showServiceUnavailable =
+    hasAccess &&
+    subGate.unavailable &&
+    screen.name !== 'login' &&
+    screen.name !== 'register';
   const showSubGate =
     hasAccess &&
+    !subGate.unavailable &&
     subGate.blocked &&
     screen.name !== 'billing' &&
     screen.name !== 'login' &&
@@ -120,6 +126,10 @@ export function AppShell() {
   }, [authReady, bootDone]);
 
   function openAreaAuthed(area: ControlArea) {
+    if (subGate.unavailable) {
+      setScreen({ name: 'chat' });
+      return;
+    }
     if (subGate.blocked && area !== 'subscription') {
       setScreen({ name: 'chat' });
       return;
@@ -323,6 +333,7 @@ export function AppShell() {
               authEpoch={authEpoch}
               hasAccess={hasAccess}
               showSubGate={showSubGate}
+              showServiceUnavailable={showServiceUnavailable}
               subGateLoading={subGate.loading}
               onOpenArea={openArea}
               onOpenCmReview={openCmReview}

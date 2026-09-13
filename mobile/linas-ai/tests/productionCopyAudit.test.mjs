@@ -126,6 +126,16 @@ test('subscription gate uses customer-facing title and description', () => {
   assert.doesNotMatch(en, /set-plan|not wired|test tenant/i);
 });
 
+test('service unavailable gate uses maintenance copy, not subscribe copy', () => {
+  const en = readFileSync(join(srcRoot, 'i18n/locales/subscriptionEn.ts'), 'utf8');
+  const screen = readFileSync(join(srcRoot, 'features/billing/ServiceUnavailableScreen.tsx'), 'utf8');
+  assert.match(en, /serviceUnavailableTitle:\s*'We’re updating the service'/);
+  assert.match(en, /Please try again in about 5 minutes\. Your account and plan are unchanged\./);
+  assert.match(screen, /tr\('serviceUnavailableTitle'\)/);
+  assert.match(screen, /tr\('serviceUnavailableBody'\)/);
+  assert.doesNotMatch(screen, /subscribeGateViewPlans/);
+});
+
 test('AR and FR subscription gate strings exist', () => {
   const ar = readFileSync(join(srcRoot, 'i18n/locales/ar.ts'), 'utf8');
   const fr = readFileSync(join(srcRoot, 'i18n/locales/fr.ts'), 'utf8');
