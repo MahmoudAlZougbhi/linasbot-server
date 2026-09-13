@@ -151,6 +151,34 @@ async def test_verify_pass_stays_deterministic() -> None:
 
 
 @pytest.mark.asyncio
+async def test_verify_hours_uses_tool_receipt_clocks() -> None:
+    plan = _plan(_task("t_hours", "hours", families=["hours", "branches"], span="antelias hours"))
+    bundle = EvidenceBundle(
+        items=[_item("hours:antelias", family="hours", text="Antelias")],
+        outcome="found",
+    )
+    missing = await verify_answer(
+        reply_text="Antelias is open 11:00–19:00.",
+        plan=plan,
+        bundle=bundle,
+        structured_facts={},
+        message="شو ساعات أنطلياس؟",
+    )
+    assert missing.verdict == "FAIL"
+    assert "t_hours" in missing.missing_tasks
+    passed = await verify_answer(
+        reply_text="Antelias is open 11:00–19:00.",
+        plan=plan,
+        bundle=bundle,
+        structured_facts={},
+        receipts=["fact:hours:antelias:monday: 11:00–19:00"],
+        message="شو ساعات أنطلياس؟",
+    )
+    assert passed.verdict == "PASS"
+    assert passed.missing_tasks == []
+
+
+@pytest.mark.asyncio
 async def test_multi_round_covers_two_tasks_in_one_round() -> None:
     plan = _plan(
         _task("t1", "information", families=["knowledge"], span="laser"),

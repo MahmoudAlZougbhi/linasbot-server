@@ -41,6 +41,52 @@ def _row_id(raw: dict[str, Any]) -> str:
     return str(raw.get("id") or raw.get("qa_group_id") or "").strip()
 
 
+def _hours_name_blob(raw: dict[str, Any]) -> str:
+    labels = raw.get("labels")
+    label_bits: list[str] = []
+    if isinstance(labels, dict):
+        label_bits.extend(str(value or "") for value in labels.values())
+    aliases = raw.get("aliases")
+    alias_bits = [str(item or "") for item in aliases] if isinstance(aliases, list) else []
+    return " ".join(
+        [
+            _row_id(raw),
+            str(raw.get("branch_id") or ""),
+            str(raw.get("title") or raw.get("name") or ""),
+            *label_bits,
+            *alias_bits,
+        ]
+    ).casefold()
+
+
+def _hours_row_matches(row: dict[str, Any], source_id: str) -> bool:
+    sid = source_id.casefold()
+    rid = _row_id(row).casefold()
+    branch_id = str(row.get("branch_id") or "").strip().casefold()
+    if rid == sid or branch_id == sid or rid.endswith(f":{sid}"):
+        return True
+    return sid in _hours_name_blob(row)
+
+
+def _select_hours_row(sections: dict[str, Any], source_id: str) -> dict[str, Any] | None:
+    """Prefer the published hours/branch row that actually contains clocks."""
+    from services.customer_ai.retrieve.schedule_text import schedule_lines
+
+    sid = (source_id or "").strip()
+    if not sid:
+        return None
+    candidates = [row for row in _rows(sections, "hours") if _hours_row_matches(row, sid)]
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda row: (
+            len(schedule_lines(row)),
+            int(_row_id(row).casefold() == sid.casefold()),
+        ),
+    )
+
+
 def _label(labels: Any) -> str:
     if isinstance(labels, dict):
         for key in ("en", "ar", "fr", "franco"):
@@ -147,7 +193,11 @@ def expand_hits(
                 )
             )
             continue
-        match = next((row for row in _rows(sections, family) if _row_id(row) == source_id), None)
+        match = (
+            _select_hours_row(sections, source_id)
+            if family == "hours"
+            else next((row for row in _rows(sections, family) if _row_id(row) == source_id), None)
+        )
         if match is None:
             continue
         if family == "knowledge" and (card.body or "").strip():
@@ -157,6 +207,11 @@ def expand_hits(
             text = chunk if (not full or len(chunk) <= len(full)) else full
         else:
             text = _text_card(family, match, sections=sections, tenant_id=tenant_id)
+        if family in {"hours", "branches"} and not _schedule_lines(match):
+            sibling = _select_hours_row(sections, source_id)
+            extra_clocks = _schedule_lines(sibling) if sibling is not None else []
+            if extra_clocks:
+                text = "\n".join(part for part in [text, *extra_clocks] if str(part).strip())
         if not text:
             continue
         items.append(

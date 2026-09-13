@@ -56,10 +56,14 @@ def evaluate_task_coverage(
     plan: PlannerPlan,
     bundle: EvidenceBundle,
     structured_facts: Any = None,
+    receipts: list[str] | None = None,
 ) -> dict[str, TaskCoverageStatus]:
     """Map each plan task_id to covered|missing|partial."""
     facts = _facts_list(structured_facts)
-    text = "\n".join(f"{item.title}\n{item.text}" for item in bundle.items).lower()
+    text = "\n".join(f"{item.title}\n{item.text}" for item in bundle.items)
+    fact_blob = "\n".join(f"{fact.get('text') or ''} {fact.get('value') or ''}" for fact in facts)
+    receipt_blob = "\n".join(str(item) for item in (receipts or []) if str(item).strip())
+    clock_source = f"{text}\n{fact_blob}\n{receipt_blob}".lower()
     families = {item.source_family for item in bundle.items}
     out: dict[str, TaskCoverageStatus] = {}
     for task in plan.tasks:
@@ -68,19 +72,26 @@ def evaluate_task_coverage(
             continue
         wanted = _task_families(task)
         fact_hit = any(
-            str(fact.get("task_id") or "") == task.id or str(fact.get("family") or "") in wanted for fact in facts
+            str(fact.get("task_id") or "") == task.id or str(fact.get("family") or fact.get("kind") or "") in wanted
+            for fact in facts
         )
         family_hit = bool(wanted & families) or (not wanted and bool(bundle.items))
         tagged = any(task.id in (item.task_ids or []) for item in bundle.items)
         span = (task.span.text or "").strip().lower()
-        token_hit = bool(span) and any(token and token in text for token in span.split()[:4])
+        hay = text.lower()
+        token_hit = bool(span) and any(token and token in hay for token in span.split()[:4])
         if task.type == "hours":
-            clock_hit = bool(_CLOCK.search(text))
+            clock_hit = bool(_CLOCK.search(clock_source))
             hours_family = bool(families & {"hours", "branches"})
-            fact_hours = any(str(fact.get("family") or "") in {"hours", "branches"} for fact in facts)
-            if (hours_family or fact_hours) and clock_hit:
+            fact_hours = any(
+                str(fact.get("family") or fact.get("kind") or "") in {"hours", "branches"} for fact in facts
+            )
+            receipt_hours = any(
+                str(item).startswith("fact:hours:") or "clock_lines" in str(item) for item in (receipts or [])
+            )
+            if (hours_family or fact_hours or receipt_hours) and clock_hit:
                 out[task.id] = "covered"
-            elif hours_family or clock_hit or fact_hours:
+            elif hours_family or clock_hit or fact_hours or receipt_hours:
                 out[task.id] = "partial"
             else:
                 out[task.id] = "missing"

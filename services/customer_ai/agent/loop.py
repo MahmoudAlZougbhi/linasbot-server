@@ -204,7 +204,7 @@ async def run_agentic_turn(
         trace=agent_trace,
         coverage=evaluate_task_coverage(plan, bundle, structured_facts),
     )
-    coverage = evaluate_task_coverage(plan, bundle, structured_facts)
+    coverage = evaluate_task_coverage(plan, bundle, structured_facts, receipts=tool_receipts)
     agent_trace.append({"step": "DECIDE", "n": steps, "tools_used": tools_used, "coverage": coverage})
 
     resource_receipts: list[dict] = []
