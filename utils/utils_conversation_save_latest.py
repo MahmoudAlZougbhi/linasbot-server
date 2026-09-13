@@ -114,6 +114,17 @@ async def save_message_without_conversation_id(
             "last_message_at": message_data.get("timestamp") or utc_now(),
             "unread_count": new_unread,
         }
+        from services.live_chat_tenant import conversation_tenant_fields
+
+        update_payload.update(
+            conversation_tenant_fields(
+                user_id=canonical_user_id,
+                conversation_id=resolved_conversation_id,
+                existing=doc_data,
+                customer_info=customer_info,
+                metadata=metadata,
+            )
+        )
         # Smart campaign messages should not reopen/take over live conversations.
         if not is_smart_source:
             # human_takeover_active is source of truth; only infer from status when field is missing (legacy)
@@ -221,22 +232,33 @@ async def save_message_without_conversation_id(
         )
     else:
         # No existing conversation found — create a new one
+        from services.live_chat_tenant import conversation_tenant_fields
+
+        new_payload = {
+            "user_id": canonical_user_id,
+            "customer_info": customer_info,
+            "messages": [message_data],
+            "timestamp": utc_now(),
+            "status": "active",
+            "sentiment": "neutral",
+            "human_takeover_active": False,
+            "last_updated": utc_now(),
+            "conversation_state": "bot_active",
+            "last_message_text": message_data.get("text", ""),
+            "last_message_at": message_data.get("timestamp") or utc_now(),
+            "unread_count": 0 if role != "user" else 1,
+        }
+        new_payload.update(
+            conversation_tenant_fields(
+                user_id=canonical_user_id,
+                conversation_id=None,
+                customer_info=customer_info,
+                metadata=metadata,
+            )
+        )
         _, new_doc_ref = await asyncio.to_thread(
             conversations_collection_for_user.add,
-            {
-                "user_id": canonical_user_id,
-                "customer_info": customer_info,
-                "messages": [message_data],
-                "timestamp": utc_now(),
-                "status": "active",
-                "sentiment": "neutral",
-                "human_takeover_active": False,
-                "last_updated": utc_now(),
-                "conversation_state": "bot_active",
-                "last_message_text": message_data.get("text", ""),
-                "last_message_at": message_data.get("timestamp") or utc_now(),
-                "unread_count": 0 if role != "user" else 1,
-            },
+            new_payload,
         )
         saved_conv_id = new_doc_ref.id
         if canonical_user_id not in config.user_data_whatsapp:
@@ -258,6 +280,7 @@ async def save_message_without_conversation_id(
                         "phone": customer_info.get("phone_full"),
                         "name": customer_name,
                         "user_name": customer_name,
+                        "tenant_id": new_payload.get("tenant_id"),
                     },
                 )
             )

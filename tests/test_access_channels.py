@@ -51,7 +51,12 @@ def test_channel_filter_hides_other_inboxes() -> None:
     assert effective_inbox_channel(session, "instagram") is None
     payload = filter_chats_for_session(
         session,
-        {"chats": [{"channel": "whatsapp"}, {"channel": "instagram"}]},
+        {
+            "chats": [
+                {"channel": "whatsapp", "tenant_id": "t1", "user_id": "+96170111111"},
+                {"channel": "instagram", "tenant_id": "t1", "user_id": "instagram:1"},
+            ]
+        },
     )
     assert [row["channel"] for row in payload["chats"]] == ["whatsapp"]
 

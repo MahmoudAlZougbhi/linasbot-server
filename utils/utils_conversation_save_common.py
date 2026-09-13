@@ -88,6 +88,15 @@ def _sse_new_message_payload(
         "user_name": name or None,
         "message": dash_msg,
     }
+    from services.live_chat_tenant import resolve_live_chat_tenant_id
+
+    tenant = resolve_live_chat_tenant_id(
+        user_id=canonical_user_id,
+        conversation_id=conversation_id,
+        payload={"customer_info": info, "metadata": (message_data or {}).get("metadata")},
+    )
+    if tenant:
+        payload["tenant_id"] = tenant
     if unread_count is not None:
         payload["unread_count"] = int(unread_count)
     return payload

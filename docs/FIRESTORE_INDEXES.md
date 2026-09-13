@@ -11,7 +11,11 @@ The error message includes a direct link. **Click it** – it opens Firebase Con
 
 ## Indexes needed
 
-1. **live_chat_index** (unified chats):
+1. **live_chat_index** (unified chats, tenant-scoped):
+   - `tenant_id` ASC
+   - `last_message_at` DESC
+
+2. **live_chat_index** (unified chats):
    - `last_message_at` DESC
    - `conversation_id` ASC
 

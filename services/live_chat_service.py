@@ -17,7 +17,9 @@ from services.live_chat_service_common import _env_bool, _env_float, _env_int
 from services.live_chat_service_details import LiveChatDetailsMixin
 from services.live_chat_service_history import LiveChatHistoryMixin
 from services.live_chat_service_history_api import LiveChatHistoryApiMixin
+from services.live_chat_service_inbox_cache import LiveChatInboxCacheMixin
 from services.live_chat_service_index import LiveChatIndexMixin
+from services.live_chat_service_legacy_scan import LiveChatLegacyScanMixin
 from services.live_chat_service_lifecycle import LiveChatLifecycleMixin
 from services.live_chat_service_operator import LiveChatOperatorMixin
 from services.live_chat_service_phone import LiveChatPhoneMixin
@@ -28,8 +30,10 @@ from services.live_chat_service_unified import LiveChatUnifiedMixin
 
 class LiveChatService(
     LiveChatIndexMixin,
+    LiveChatInboxCacheMixin,
     LiveChatRebuildMixin,
     LiveChatHistoryMixin,
+    LiveChatLegacyScanMixin,
     LiveChatUnifiedMixin,
     LiveChatTemplatesMixin,
     LiveChatHistoryApiMixin,
@@ -90,11 +94,13 @@ class LiveChatService(
         # Cache for waiting queue
         self._queue_cache: list[dict[str, Any]] | None = None
         self._queue_cache_time: datetime.datetime | None = None
+        self._waiting_queue_by_tenant: dict[str, dict[str, Any]] = {}
         # Cache for static phone<->room mapping file
         self._phone_to_room_cache: dict[str, str] = {}
         self._room_to_phone_cache: dict[str, str] = {}
         self._phone_mapping_cache_time: datetime.datetime | None = None
-        # Cache for unified chats (WhatsApp-style list)
+        # Per-tenant unified inbox cache (never share across workspaces)
+        self._unified_inbox_by_tenant: dict[str, dict[str, Any]] = {}
         self._unified_chats_cache: list[dict[str, Any]] = []
         self._unified_chats_cache_time: datetime.datetime | None = None
         self._unified_chats_cache_has_more = False
@@ -103,6 +109,7 @@ class LiveChatService(
         self._unified_chats_cache_page_size: int | None = None
         self._index_counters_cache = self._empty_counters()
         self._index_counters_cache_time: datetime.datetime | None = None
+        self._index_counters_by_tenant: dict[str, dict[str, Any]] = {}
         self._index_write_paused_until: datetime.datetime | None = None
         # Prevent duplicate index writes for identical payloads.
         self._index_signature_cache: dict[str, Any] = {}

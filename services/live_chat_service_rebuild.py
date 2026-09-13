@@ -14,6 +14,10 @@ from services.live_chat_contracts import (
 from services.live_chat_service_common import (
     _live_chat_display_name,
 )
+from services.live_chat_tenant import (
+    conversation_tenant_fields,
+    resolve_live_chat_tenant_id,
+)
 from utils.utils import (
     get_firestore_db,
 )
@@ -79,6 +83,16 @@ class LiveChatRebuildMixin:
 
         raw_payload = conv_snap.to_dict() or {}
         conv_data = self._canonical_conversation(conversation_id, resolved_user_id, raw_payload)
+        tenant_fields = conversation_tenant_fields(
+            user_id=resolved_user_id,
+            conversation_id=conversation_id,
+            existing=raw_payload,
+            customer_info=conv_data.get("customer_info") or {},
+        )
+        if not tenant_fields.get("tenant_id"):
+            return {"written": False, "reason": "missing_tenant_id"}
+        conv_data["tenant_id"] = tenant_fields["tenant_id"]
+        conv_data["customer_info"] = tenant_fields.get("customer_info") or conv_data.get("customer_info")
         entry = self._build_index_entry(resolved_user_id, conv_data, conv_data.get("visible_messages", []))
 
         state_backfill = False
@@ -88,6 +102,11 @@ class LiveChatRebuildMixin:
                 state_backfill = True
             except Exception as e:
                 print(f"⚠️ Failed to backfill conversation_state for {conversation_id}: {e}")
+        if not str(raw_payload.get("tenant_id") or "").strip():
+            try:
+                await asyncio.to_thread(conv_ref.update, {"tenant_id": tenant_fields["tenant_id"]})
+            except Exception as e:
+                print(f"⚠️ Failed to backfill tenant_id for {conversation_id}: {e}")
 
         await self._upsert_index_entry(entry)
 
@@ -265,6 +284,11 @@ class LiveChatRebuildMixin:
             "customer_info": customer_info,
             "is_new_customer": is_new_customer,
             "channel": resolve_live_chat_channel(user_id, conv_data),
+            "tenant_id": resolve_live_chat_tenant_id(
+                user_id=user_id,
+                conversation_id=conv_data.get("conversation_id"),
+                payload=conv_data,
+            ),
         }
         if recent_messages:
             out["recent_messages"] = recent_messages
@@ -282,6 +306,9 @@ class LiveChatRebuildMixin:
                 return
 
             payload = dict(entry)
+            if not str(payload.get("tenant_id") or "").strip():
+                print(f"[live_chat:index] skip unscoped write conv={conv_id}")
+                return
             if isinstance(payload.get("last_message_at"), str):
                 try:
                     payload["last_message_at"] = self._parse_timestamp(payload["last_message_at"])
@@ -297,6 +324,7 @@ class LiveChatRebuildMixin:
                 int(payload.get("unread_count") or 0),
                 str(payload.get("human_takeover_active")),
                 str(payload.get("post_release_escalation_suppressed_until")),
+                str(payload.get("tenant_id") or ""),
             )
             if self._index_signature_cache.get(conv_id) == signature:
                 print(f"[live_chat:index] skip unchanged write conv={conv_id}")
@@ -346,5 +374,8 @@ class LiveChatRebuildMixin:
         self._unified_chats_cache_total = 0
         self._unified_chats_cache_next_cursor = None
         self._unified_chats_cache_page_size = None
+        self._unified_inbox_by_tenant = {}
+        self._waiting_queue_by_tenant = {}
+        self._index_counters_by_tenant = {}
         self._index_counters_cache = self._empty_counters()
         self._index_counters_cache_time = None
