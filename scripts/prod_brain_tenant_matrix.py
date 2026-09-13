@@ -63,8 +63,20 @@ def _overlay_greeting_path() -> list[str]:
         _load_module(name, path)
         loaded.append(f"{name}={path}")
     import services.customer_ai.turn_pipeline as pipeline
+    from services.customer_ai.billing import apply_message_billing, release_turn_reservation
 
+    async def _run_billed(turn, *, message, channel):
+        try:
+            return apply_message_billing(
+                turn, await pipeline.run_dm_after_gates(turn, message=message, channel=channel)
+            )
+        except Exception:
+            release_turn_reservation(turn)
+            raise
+
+    runtime._run_billed = _run_billed
     runtime.run_dm_after_gates = pipeline.run_dm_after_gates
+    loaded.append(f"pipeline={pipeline.run_dm_after_gates.__code__.co_filename}")
     return loaded
 
 

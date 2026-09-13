@@ -9,7 +9,7 @@ from services.cm.atomic_io import compute_checksum
 from services.cm.constants import CM_SECTIONS
 from services.cm.paths import ensure_cm_dirs
 from services.cm.schemas import PublishedPointer, default_section_payload, utc_now
-from services.cm.version_store import write_published_pointer, write_version_content
+from services.cm.version_store import read_published_pointer, write_published_pointer, write_version_content
 from services.customer_ai.evals.live_tenant_seed import (
     TENANT_LINAS,
     TENANT_TEST,
@@ -17,6 +17,7 @@ from services.customer_ai.evals.live_tenant_seed import (
     merge_linas_extras,
     merge_linas_hours,
     merge_linas_opening_hours,
+    scrub_internal_rules,
     test1_sections,
     test2_sections,
 )
@@ -49,7 +50,7 @@ def linas_merged_sections() -> dict[str, Any]:
         }
     )
     sections.update(extras)
-    return sections
+    return scrub_internal_rules(sections)
 
 
 def publish_sections(tenant_id: str, sections: dict[str, Any], *, revision: str) -> dict[str, Any]:
@@ -69,6 +70,7 @@ def publish_sections(tenant_id: str, sections: dict[str, Any], *, revision: str)
         embedding_dimensions=1024,
         updated_at=utc_now(),
     )
+    previous = read_published_pointer(tid)
     write_published_pointer(tid, pointer)
     try:
         from services.customer_reply_v2.manifest import clear_manifest_cache
@@ -79,6 +81,7 @@ def publish_sections(tenant_id: str, sections: dict[str, Any], *, revision: str)
     return {
         "tenant_id": tid,
         "revision": revision,
+        "previous_revision": str(getattr(previous, "content_version_id", "") or ""),
         "sections": sorted(sections.keys()),
         "peer": "skipped",
     }
@@ -89,19 +92,27 @@ async def publish_and_index(tenant_id: str, sections: dict[str, Any], *, revisio
 
     from services.customer_ai.search.index_schedule import run_tenant_index_job
 
+    previous = read_published_pointer(tenant_id)
     published = publish_sections(tenant_id, sections, revision=revision)
     index: dict[str, Any] = {}
-    for attempt in range(5):
+    attempts = 8 if tenant_id == TENANT_LINAS else 5
+    for attempt in range(attempts):
         index = await run_tenant_index_job(tenant_id, revision=revision, reason="live-tenant-matrix")
         if index.get("ready"):
             break
-        await asyncio.sleep(12 * (attempt + 1))
+        await asyncio.sleep(20 * (attempt + 1))
+    ready = bool(index.get("ready"))
+    rolled_back = False
+    if not ready and previous is not None and tenant_id == TENANT_LINAS:
+        write_published_pointer(tenant_id, previous)
+        rolled_back = True
     return {
         **published,
-        "index_ready": bool(index.get("ready")),
+        "index_ready": ready,
         "index_reason": str(index.get("reason") or ""),
         "index_count": index.get("count"),
         "index_attempts": attempt + 1,
+        "rolled_back": rolled_back,
     }
 
 
@@ -109,15 +120,14 @@ async def seed_and_publish_all() -> dict[str, Any]:
     import asyncio
 
     stamp = str(int(time.time()))
-    rows = {
-        TENANT_LINAS: await publish_and_index(TENANT_LINAS, linas_merged_sections(), revision=f"live_linas_{stamp}"),
-    }
-    await asyncio.sleep(8)
+    rows: dict[str, Any] = {}
     rows[TENANT_TEST] = await publish_and_index(
         TENANT_TEST, _full_sections(test1_sections()), revision=f"live_test1_{stamp}"
     )
-    await asyncio.sleep(8)
+    await asyncio.sleep(12)
     rows[TENANT_TEST_2] = await publish_and_index(
         TENANT_TEST_2, _full_sections(test2_sections()), revision=f"live_test2_{stamp}"
     )
+    await asyncio.sleep(12)
+    rows[TENANT_LINAS] = await publish_and_index(TENANT_LINAS, linas_merged_sections(), revision=f"live_linas_{stamp}")
     return rows

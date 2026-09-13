@@ -15,8 +15,23 @@ _INTERNAL_GREETING_RULE = "Use this rule only if the user message is only"
 
 
 def keep_knowledge_item(row: dict[str, Any]) -> bool:
-    body = str(row.get("body") or "")
-    return _INTERNAL_GREETING_RULE not in body
+    blob = " ".join(str(row.get(key) or "") for key in ("body", "title", "content", "text", "description"))
+    return _INTERNAL_GREETING_RULE not in blob
+
+
+def scrub_internal_rules(sections: dict[str, Any]) -> dict[str, Any]:
+    out = dict(sections)
+    for name, payload in list(out.items()):
+        if not isinstance(payload, dict):
+            continue
+        copied = dict(payload)
+        for key in ("items", "topics", "rules", "catalog"):
+            rows = copied.get(key)
+            if not isinstance(rows, list):
+                continue
+            copied[key] = [row for row in rows if not isinstance(row, dict) or keep_knowledge_item(row)]
+        out[name] = copied
+    return out
 
 
 def week(open_t: str, close_t: str, *, sunday_off: bool = False) -> dict[str, Any]:

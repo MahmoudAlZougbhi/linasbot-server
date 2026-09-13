@@ -9,6 +9,7 @@ from services.customer_ai.evals.live_tenant_seed import (
     MARKER_TEST_2,
     keep_knowledge_item,
     merge_linas_hours,
+    scrub_internal_rules,
     test1_sections,
     test2_sections,
     week,
@@ -51,3 +52,7 @@ def test_capture_ids_use_lab_prefix() -> None:
 def test_internal_greeting_rule_is_dropped() -> None:
     assert keep_knowledge_item({"body": "Street parking. Code X."}) is True
     assert keep_knowledge_item({"body": "Use this rule only if the user message is only a casual greeting."}) is False
+    scrubbed = scrub_internal_rules(
+        {"knowledge": {"items": [{"id": "greet_policy", "body": "Use this rule only if the user message is only x"}]}}
+    )
+    assert scrubbed["knowledge"]["items"] == []

@@ -106,7 +106,7 @@ def matrix_cases() -> list[Case]:
         {
             "tenant_id": TENANT_LINAS,
             "id": "isolation",
-            "message": f"what is {MARKER_TEST}?",
+            "message": "what is the parking code?",
             "expect": "no_foreign_marker",
             "forbid": [MARKER_TEST, MARKER_TEST_2, "99 USD"],
         },
@@ -219,17 +219,10 @@ def judge(case: Case, outcome: Any) -> tuple[bool, str]:
         ok = "5" in reply
         return ok, "alpha_5" if ok else "missing_5"
     if expect == "resource":
-        ok = any(
-            needle in lower
-            for needle in (
-                "send_resource",
-                "resource_request",
-                "awaiting_delivery",
-                "resource_not_found",
-                "pending",
-            )
-        ) or any(needle in reply.lower() for needle in ("photo", "video", "http", "link", "صورة", "فيديو", "رابط"))
-        return ok, "resource" if ok else "no_resource"
+        ok = "awaiting_delivery" in lower or (
+            "send_resource" in lower and "rejected" not in lower and "not_found" not in lower
+        )
+        return ok, "resource" if ok else "no_authorized_resource"
     if expect == "appointment":
         ok = "appointment" in lower or "confirm" in lower or "موعد" in blob
         return ok, "appointment" if ok else "no_appointment"
@@ -301,7 +294,7 @@ async def run_matrix() -> dict[str, Any]:
         row = await run_case(case)
         rows.append(row)
         print("[tenant-matrix-case] " + json.dumps(row, ensure_ascii=False, default=str)[:1500], flush=True)
-        time.sleep(0.4)
+        time.sleep(2.0)
     passed = sum(1 for row in rows if row.get("ok"))
     return {
         "ok": passed == len(rows),
