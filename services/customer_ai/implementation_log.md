@@ -132,7 +132,7 @@ Owner Portal → Brain lab → **Run fixture evals** / **Run verification exerci
 
 ## Rollout / rollback
 
-- Keep `CUSTOMER_BRAIN_ENABLED=false`. Flag-off path remains `engine_removed`.
+- Customer Brain is permanent on this branch (`CUSTOMER_BRAIN_ENABLED` was removed).
 - Rollback is redeploy tag `rollback/pre-brain-2026-09-11` (`0f23bcf1`) — do not revive deleted Luna/Terra on this branch.
 - Search pointer supports `rollback_version` when a ready index exists.
 - Missing Voyage or pgvector or tenant pointer is a typed readiness miss, not fake semantic success.

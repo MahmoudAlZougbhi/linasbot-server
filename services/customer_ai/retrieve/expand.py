@@ -12,13 +12,16 @@ from services.customer_ai.retrieve.lexical import LexicalHit
 def _rows(sections: dict[str, Any], family: str) -> list[dict[str, Any]]:
     if family == "hours":
         payload = sections.get("opening_hours")
-        rows = payload.get("items") if isinstance(payload, dict) else None
-        hours = [r for r in rows or [] if isinstance(r, dict)]
-        if hours:
-            return hours
+        opening = payload.get("items") if isinstance(payload, dict) else None
+        hours = [row for row in opening or [] if isinstance(row, dict)]
         branches = sections.get("branches")
-        items = branches.get("items") if isinstance(branches, dict) else None
-        return [r for r in items or [] if isinstance(r, dict)]
+        branch_items = branches.get("items") if isinstance(branches, dict) else None
+        branch_rows = [row for row in branch_items or [] if isinstance(row, dict)]
+        off_payload = sections.get("off_days")
+        off_rows: list[dict[str, Any]] = [{"id": "off_days", **off_payload}] if isinstance(off_payload, dict) else []
+        # Branch weekly_schedule is the hours SoT. Opening-hours rows must not
+        # hide branch ids like hours:antelias at hydrate time.
+        return [*hours, *branch_rows, *off_rows]
     if family in {"prices", "services"}:
         payload = sections.get("prices")
         catalog = payload.get("catalog") if isinstance(payload, dict) else None
@@ -48,41 +51,18 @@ def _label(labels: Any) -> str:
 
 
 def _price_lines(sections: dict[str, Any], catalog_item_id: str) -> list[str]:
-    from services.cm.pricing.section import normalize_prices_section, section_price_entries
+    from services.customer_ai.retrieve.price_text import price_evidence_lines
 
-    raw = sections.get("prices")
-    if not isinstance(raw, dict):
-        return []
-    section = normalize_prices_section(raw)
-    lines: list[str] = []
-    for entry in section_price_entries(section):
-        if entry.catalog_item_id != catalog_item_id or not entry.active:
-            continue
-        unit = f" / {entry.unit}" if entry.unit else ""
-        lines.append(f"{entry.amount} {entry.currency}{unit}".strip())
-    return lines
+    return price_evidence_lines(sections, catalog_item_id)
 
 
 def _schedule_lines(raw: dict[str, Any]) -> list[str]:
-    nested = raw.get("weekly_hours") or raw.get("hours") or raw.get("schedule")
-    schedule = nested if isinstance(nested, dict) else raw
-    lines: list[str] = []
-    for day in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"):
-        row = schedule.get(day)
-        if not isinstance(row, dict):
-            continue
-        if row.get("closed"):
-            lines.append(f"{day}: closed")
-        elif row.get("open") or row.get("close"):
-            lines.append(f"{day}: {row.get('open') or ''}–{row.get('close') or ''}".strip())
-    exceptions = raw.get("exceptions") or raw.get("off_days") or []
-    if isinstance(exceptions, list):
-        for item in exceptions:
-            lines.append(str(item))
-    return lines
+    from services.customer_ai.retrieve.schedule_text import schedule_lines
+
+    return schedule_lines(raw)
 
 
-def _text_card(family: str, raw: dict[str, Any], *, sections: dict[str, Any]) -> str:
+def _text_card(family: str, raw: dict[str, Any], *, sections: dict[str, Any], tenant_id: str = "") -> str:
     parts = [
         str(raw.get("title") or raw.get("name") or _label(raw.get("labels")) or ""),
         str(raw.get("description") or raw.get("body") or raw.get("notes") or ""),
@@ -98,15 +78,24 @@ def _text_card(family: str, raw: dict[str, Any], *, sections: dict[str, Any]) ->
                 parts.append(str(variant.get("answer") or ""))
     if family == "branches":
         parts.append(str(raw.get("address") or raw.get("maps_url") or ""))
+    if family in {"branches", "hours"}:
         tz = str(raw.get("timezone") or raw.get("tz") or "").strip()
         if tz:
             parts.append(f"timezone {tz}")
-        parts.extend(_schedule_lines(raw))
-    if family == "hours":
-        tz = str(raw.get("timezone") or raw.get("tz") or "").strip()
-        if tz:
-            parts.append(f"timezone {tz}")
-        parts.extend(_schedule_lines(raw))
+        if family == "hours" and _row_id(raw) == "off_days":
+            from services.customer_ai.retrieve.schedule_text import off_days_search_blob
+
+            parts.append(off_days_search_blob(raw))
+        else:
+            parts.extend(_schedule_lines(raw))
+    if family in {"branches", "hours", "services"}:
+        attachments = raw.get("attachments") or []
+        if attachments:
+            from services.cm.article_media import format_attachments_block
+
+            block = format_attachments_block(list(attachments), tenant_id=tenant_id)
+            if block:
+                parts.append(block)
     return "\n".join(p.strip() for p in parts if str(p).strip())
 
 
@@ -163,11 +152,11 @@ def expand_hits(
             continue
         if family == "knowledge" and (card.body or "").strip():
             chunk = card.body.strip()
-            full = _text_card(family, match, sections=sections)
+            full = _text_card(family, match, sections=sections, tenant_id=tenant_id)
             # Prefer indexed winning chunk when shorter than (or equal to) the full article.
             text = chunk if (not full or len(chunk) <= len(full)) else full
         else:
-            text = _text_card(family, match, sections=sections)
+            text = _text_card(family, match, sections=sections, tenant_id=tenant_id)
         if not text:
             continue
         items.append(

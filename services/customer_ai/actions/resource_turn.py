@@ -49,7 +49,10 @@ def match_resource_refs(
             score += 4
         score += sum(1 for token in tokens if token in blob)
         kind = str(record.get("resource_type") or "")
-        if any(token in {"photo", "picture", "image", "video", "link"} for token in tokens) and kind in {
+        if any(
+            token in {"photo", "picture", "image", "video", "link", "صورة", "صور", "فيديو", "رابط", "لينك"}
+            for token in tokens
+        ) and kind in {
             "image",
             "video",
             "link",

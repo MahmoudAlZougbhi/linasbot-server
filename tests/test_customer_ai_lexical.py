@@ -182,6 +182,14 @@ async def test_hybrid_still_fuses_bm25_ranks_with_rrf() -> None:
     assert hits[0].semantic_score == 0.0
 
 
+def test_arabic_clitics_still_match_published_tokens() -> None:
+    from services.customer_ai.retrieve.normalize_ar import expand_arabic_tokens
+
+    assert "بيروت" in expand_arabic_tokens(["ببيروت"])
+    assert "ليزر" in expand_arabic_tokens(["الليزر"])
+    assert expand_arabic_tokens(["after"]) == ["after"]
+
+
 def test_rerank_skip_uses_surface_equality_not_score_scale() -> None:
     from services.customer_ai.retrieve.hybrid import HybridHit
     from services.customer_ai.retrieve.rerank import should_rerank

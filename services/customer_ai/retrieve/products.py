@@ -28,12 +28,17 @@ def cards_from_products(rows: list[Any]) -> list[TitleCard]:
         if not is_customer_searchable(str(_attr(row, "availability") or "")):
             continue
         item_id = str(_attr(row, "id") or "").strip()
-        title = str(_attr(row, "name") or _attr(row, "ai_search_title") or "").strip()
+        title = str(_attr(row, "name") or _attr(row, "title") or _attr(row, "ai_search_title") or "").strip()
         keywords = _attr(row, "ai_search_keywords") or []
         extra = [
             str(_attr(row, "ai_search_title") or ""),
             str(_attr(row, "ai_search_description") or ""),
             str(_attr(row, "description") or ""),
+            str(_attr(row, "price") or ""),
+            str(_attr(row, "currency") or ""),
+            str(_attr(row, "image_url") or _attr(row, "image") or ""),
+            str(_attr(row, "product_url") or _attr(row, "url") or ""),
+            str(_attr(row, "video_url") or ""),
             " ".join(str(k) for k in keywords) if isinstance(keywords, list) else str(keywords),
         ]
         card = _card(
@@ -52,11 +57,14 @@ def evidence_from_product(row: Any) -> EvidenceItem | None:
     item_id = str(_attr(row, "id") or "").strip()
     if not item_id or not is_customer_searchable(str(_attr(row, "availability") or "")):
         return None
-    title = str(_attr(row, "name") or "").strip()
+    title = str(_attr(row, "name") or _attr(row, "title") or "").strip()
     parts = [
         title,
         str(_attr(row, "description") or ""),
         str(_attr(row, "note") or ""),
+        str(_attr(row, "image_url") or _attr(row, "image") or ""),
+        str(_attr(row, "product_url") or _attr(row, "url") or ""),
+        str(_attr(row, "video_url") or ""),
     ]
     price = _attr(row, "price")
     if price:

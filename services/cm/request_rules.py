@@ -193,10 +193,9 @@ def format_request_rules_for_ai(
     *,
     selected_ids: list[str] | None = None,
 ) -> str:
-    """Compact guidance block for Answer Tera when capture is active.
+    """Compact tenant-scoped request-rule block for Customer Brain.
 
-    When Luna selected specific request definitions, only those rules are included.
-    Never dump the tenant's full rule list into Tera.
+    When selected_ids is set, only those published rules are included.
     """
     rules_raw = payload.get("rules")
     if not isinstance(rules_raw, list) or not rules_raw:

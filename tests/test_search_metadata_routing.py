@@ -1,4 +1,4 @@
-"""Luna still selects files; Terra receives original bodies including full hours."""
+"""Title fields vs original bodies. Customer Brain does not use a Luna retrieval engine."""
 
 from __future__ import annotations
 

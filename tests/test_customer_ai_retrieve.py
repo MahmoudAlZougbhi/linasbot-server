@@ -85,7 +85,8 @@ def test_heuristic_negation_reference_and_correction() -> None:
     fix = plan_message("I meant the facial not the laser")
     assert any(task.type == "draft_correction" for task in fix.tasks)
     multi = plan_message("What is the price? What are the hours?")
-    assert len([task for task in multi.tasks if task.type == "information"]) >= 2
+    assert any(task.type == "hours" for task in multi.tasks)
+    assert any(task.type == "information" for task in multi.tasks)
 
 
 def test_branch_weekly_hours_hydrate() -> None:

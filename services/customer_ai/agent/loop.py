@@ -5,23 +5,21 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from services.customer_ai.actions.pending import attach_confirmation
+from services.customer_ai.agent.action_gate import append_handoff_message, apply_action_gate
 from services.customer_ai.agent.generate_path import generate_verified
 from services.customer_ai.agent.multi_retrieve import multi_round_retrieve
 from services.customer_ai.agent.rewrite import rewrite_queries
 from services.customer_ai.agent.task_coverage import evaluate_task_coverage, missing_tasks
 from services.customer_ai.billing import operation_id_for_turn, reserve_generative
 from services.customer_ai.budgets import DEFAULT_BUDGETS
-from services.customer_ai.contracts.actions import ActionProposal, ActionProposalSet
 from services.customer_ai.contracts.enums import StopReason
 from services.customer_ai.contracts.plan import PlannerPlan
-from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.customer_ai.contracts.reply import FinalReplyEnvelope, TurnResult
 from services.customer_ai.contracts.turn import CustomerTurn
 from services.customer_ai.memory.store import recall_facts
 from services.customer_ai.memory.summary import rolling_summary
 from services.customer_ai.planner.openai_plan import plan_turn
 from services.customer_ai.stage_timeline import StageTimer, evidence_preview, stamp
-from services.customer_ai.templates import brain_template
 from services.customer_ai.tools.registry import execute_tool
 
 
@@ -67,35 +65,6 @@ def _stop_from_outcome(outcome: str) -> StopReason:
     if outcome == "source_unpublished":
         return "unpublished"
     return "failed_closed"
-
-
-def _human_proposals(plan: PlannerPlan) -> ActionProposalSet:
-    return ActionProposalSet(
-        actions=[
-            ActionProposal(task_id=task.id, action_type="escalate_to_human")
-            for task in plan.tasks
-            if task.type == "human_request"
-        ]
-    )
-
-
-def _request_proposals(plan: PlannerPlan, *, tenant_id: str = "") -> ActionProposalSet:
-    from services.customer_ai.actions.request_fields import published_request_fields
-
-    actions = []
-    for task in plan.tasks:
-        if task.type == "service_request":
-            kind = "APPOINTMENT"
-        elif task.type == "product_request":
-            kind = "ORDER"
-        elif task.type == "cancel_or_status":
-            actions.append(ActionProposal(task_id=task.id, action_type="cancel_request"))
-            continue
-        else:
-            continue
-        fields = {"request_type": kind, "title": task.span.text[:80], **published_request_fields(tenant_id, kind)}
-        actions.append(ActionProposal(task_id=task.id, action_type="start_request", fields=fields))
-    return ActionProposalSet(actions=actions)
 
 
 def _fast_path_eligible(plan: PlannerPlan) -> bool:
@@ -197,52 +166,18 @@ async def run_agentic_turn(
         ("plan", "Understood the customer request", {"plan_tasks": [{"id": t.id, "type": t.type} for t in plan.tasks]}),
     )
 
-    if any(task.type == "human_request" for task in plan.tasks):
-        from services.customer_ai.actions.execute import execute_actions
-
-        receipts = await execute_actions(turn=turn, proposals=_human_proposals(plan), customer_text=message)
-        ok = any(item.action_type == "escalate_to_human" and item.state == "success" for item in receipts.receipts)
-        agent_trace.append({"step": "FINAL", "decision": "handoff_ack" if ok else "no_reply"})
-        return TurnResult(
-            stop_reason="ok" if ok else "failed_closed",
-            envelope=FinalReplyEnvelope(
-                decision="handoff_ack" if ok else "no_reply",
-                messages=[OutboundMessage(destination=dest, text=brain_template("handoff", lang))] if ok else [],
-                dispositions={"handoff": "action_succeeded" if ok else "failed"},
-            ),
-            extra=_flow_extra(
-                {
-                    "phase": "handoff",
-                    "receipts": [r.model_dump() for r in receipts.receipts],
-                    "agent_trace": agent_trace,
-                    **extra,
-                },
-                ("handoff", "Handed off to a human teammate", {"decision": "handoff_ack" if ok else "no_reply"}),
-            ),
-        )
-
-    request_proposals = _request_proposals(plan, tenant_id=turn.tenant_id)
-    if request_proposals.actions:
-        proposals = attach_confirmation(turn, request_proposals)
-        agent_trace.append({"step": "FINAL", "decision": "clarify", "reason": "awaiting_confirmation"})
-        return TurnResult(
-            stop_reason="ok",
-            envelope=FinalReplyEnvelope(
-                decision="clarify",
-                messages=[OutboundMessage(destination=dest, text=brain_template("confirm_request", lang))],
-            ),
-            extra=_flow_extra(
-                {
-                    "phase": "actions_pending",
-                    "plan": plan.model_dump(),
-                    "awaiting_confirmation": True,
-                    "pending_actions": [item.model_dump() for item in proposals.actions],
-                    "agent_trace": agent_trace,
-                    **extra,
-                },
-                ("request", "Waiting for customer confirmation before submitting request", None),
-            ),
-        )
+    gated = await apply_action_gate(
+        turn,
+        plan,
+        message=message,
+        dest=dest,
+        lang=lang,
+        extra=extra,
+        agent_trace=agent_trace,
+    )
+    extra = gated.extra
+    if gated.early is not None:
+        return gated.early
 
     steps += 1
     retrieve_timer = StageTimer()
@@ -284,8 +219,10 @@ async def run_agentic_turn(
         info_tasks = [task for task in plan.tasks if task.type in {"information", "hours", "comparison"}]
         if resource_result is not None and not info_tasks:
             agent_trace.append({"step": "FINAL", "decision": "resource"})
+            envelope = append_handoff_message(resource_result.envelope, extra, dest=dest, lang=lang)
             return resource_result.model_copy(
                 update={
+                    "envelope": envelope,
                     "extra": _flow_extra(
                         {
                             **(resource_result.extra or {}),
@@ -294,7 +231,7 @@ async def run_agentic_turn(
                             "agent_trace": agent_trace,
                         },
                         ("resource", "Prepared authorized resource to send", None),
-                    )
+                    ),
                 }
             )
         if resource_result is not None:

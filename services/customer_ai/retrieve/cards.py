@@ -75,7 +75,7 @@ def _from_items(
         item_id = str(raw.get("id") or raw.get("qa_group_id") or "").strip()
         title = str(raw.get("title") or raw.get("name") or _label(raw.get("labels")) or "").strip()
         body = str(raw.get("body") or raw.get("content") or raw.get("text") or raw.get("description") or "")
-        if family in {"knowledge", "care"} and tenant_id:
+        if family in {"knowledge", "care", "branches", "hours", "services"} and tenant_id:
             attachments = raw.get("attachments") or []
             if attachments:
                 from services.cm.article_media import format_attachments_block
@@ -98,11 +98,15 @@ def _from_items(
             " ".join(str(t) for t in (raw.get("tags") or [])),
             " ".join(label_langs),
         ]
+        if family in {"hours", "branches"}:
+            from services.customer_ai.retrieve.schedule_text import schedule_search_blob
+
+            extra.append(schedule_search_blob(raw))
         if family == "faq":
             for variant in raw.get("variants") or []:
                 if isinstance(variant, dict):
                     extra.append(str(variant.get("question") or ""))
-        if family in {"knowledge", "care"} and body:
+        if family in {"knowledge", "care", "branches", "hours", "services"} and body:
             extra.append(body)
         card = _card(family=family, item_id=item_id, title=title, extra=extra, revision=revision, body=body)
         if card:
@@ -131,21 +135,70 @@ def cards_from_sections(
         rows = payload.get("items")
         if isinstance(rows, list):
             cards.extend(_from_items(family, rows, revision, tenant_id=tenant_id))
-    if not any(card.source_family == "hours" for card in cards):
-        branches = sections.get("branches")
-        items = branches.get("items") if isinstance(branches, dict) else None
-        if isinstance(items, list):
-            cards.extend(_from_items("hours", items, revision, tenant_id=tenant_id))
+    # Always index branch weekly_schedule as hours cards. Opening-hours rows
+    # must not hide published branch clocks when both sections exist.
+    branches = sections.get("branches")
+    items = branches.get("items") if isinstance(branches, dict) else None
+    if isinstance(items, list):
+        existing = {card.item_id: index for index, card in enumerate(cards) if card.source_family == "hours"}
+        for card in _from_items("hours", items, revision, tenant_id=tenant_id):
+            prior = existing.get(card.item_id)
+            if prior is None:
+                existing[card.item_id] = len(cards)
+                cards.append(card)
+                continue
+            old = cards[prior]
+            if card.search_text and card.search_text not in old.search_text:
+                cards[prior] = TitleCard(
+                    item_id=old.item_id,
+                    source_family=old.source_family,
+                    title=old.title,
+                    search_text=normalize_search_text(f"{old.search_text} {card.search_text}"),
+                    revision=old.revision or card.revision,
+                    aliases=tuple(dict.fromkeys([*old.aliases, *card.aliases])),
+                    body=old.body or card.body,
+                )
     # Mobile Services screen writes published CM prices.catalog — that is the service SoT.
     prices = sections.get("prices")
     catalog = prices.get("catalog") if isinstance(prices, dict) else None
     if isinstance(catalog, list) and catalog:
-        cards.extend(_from_items("services", catalog, revision, tenant_id=tenant_id))
+        from services.customer_ai.retrieve.price_text import price_search_blob
+
+        for service_card in _from_items("services", catalog, revision, tenant_id=tenant_id):
+            source_id = service_card.item_id.partition(":")[2]
+            blob = price_search_blob(sections, source_id)
+            if blob:
+                service_card = TitleCard(
+                    item_id=service_card.item_id,
+                    source_family=service_card.source_family,
+                    title=service_card.title,
+                    search_text=normalize_search_text(f"{service_card.search_text} {blob}"),
+                    revision=service_card.revision,
+                    aliases=service_card.aliases,
+                    body=service_card.body,
+                )
+            cards.append(service_card)
     else:
         legacy = sections.get("services")
         rows = legacy.get("items") if isinstance(legacy, dict) else None
         if isinstance(rows, list):
             cards.extend(_from_items("services", rows, revision, tenant_id=tenant_id))
+    off_payload = sections.get("off_days")
+    if isinstance(off_payload, dict):
+        from services.customer_ai.retrieve.schedule_text import off_days_search_blob
+
+        blob = off_days_search_blob(off_payload)
+        if blob:
+            off_card = _card(
+                family="hours",
+                item_id="off_days",
+                title="Off days",
+                extra=[blob],
+                revision=revision,
+                body=blob,
+            )
+            if off_card is not None:
+                cards.append(off_card)
     return cards
 
 

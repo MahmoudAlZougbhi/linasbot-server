@@ -10,6 +10,7 @@ from services.customer_ai.normalize import normalize_search_text
 from services.customer_ai.retrieve.cards import TitleCard, load_published_cards
 from services.customer_ai.retrieve.lexical import search_cards
 from services.customer_ai.retrieve.products import load_product_cards
+from services.customer_ai.retrieve.schedule_text import schedule_search_blob
 
 
 def _sections(tenant_id: str) -> dict[str, Any]:
@@ -62,6 +63,7 @@ def _search_rows(rows: list[dict[str, Any]], query: str, *, limit: int = 5) -> l
                     str(row.get("description") or ""),
                     str(row.get("body") or ""),
                     " ".join(str(a) for a in (row.get("aliases") or [])),
+                    schedule_search_blob(row),
                 ]
             )
         )
@@ -93,11 +95,19 @@ def _card_search(tenant_id: str, query: str, families: set[str] | None, *, limit
 
 
 def _hours_from_branch(row: dict[str, Any]) -> dict[str, Any]:
+    from services.customer_ai.retrieve.schedule_text import schedule_lines
+
     hours = row.get("hours") or row.get("opening_hours") or row.get("schedule") or {}
+    clock = schedule_lines(row)
+    payload: dict[str, Any] = hours if isinstance(hours, dict) else {"raw": hours}
+    if clock:
+        payload = {**payload, "clock_lines": clock}
+    if isinstance(row.get("weekly_schedule"), dict):
+        payload = {**payload, "weekly_schedule": row["weekly_schedule"]}
     return {
         "id": str(row.get("id") or ""),
         "name": _label(row),
-        "hours": hours if isinstance(hours, dict) else {"raw": hours},
+        "hours": payload,
         "phone": str(row.get("phone") or row.get("whatsapp") or ""),
         "address": str(row.get("address") or ""),
     }
@@ -232,14 +242,27 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
         return {"ok": True, "data": _hours_from_branch(row)}
 
     if name == "get_branch_hours":
-        branches = _items(sections, "branches") or _items(sections, "opening_hours")
+        branches = _items(sections, "branches")
+        hours_rows = _items(sections, "opening_hours")
+        pool = branches or hours_rows
         if item_id or query:
-            row = _match_id(branches, item_id) or _first_search_row(branches, query or item_id)
+            row = (
+                _match_id(branches, item_id)
+                or _first_search_row(branches, query or item_id)
+                or _match_id(hours_rows, item_id)
+                or _first_search_row(hours_rows, query or item_id)
+            )
             if not row:
                 hits = _card_search(tenant_id, query or item_id, {"hours", "branches"})
                 return {"ok": bool(hits), "data": hits, "error": None if hits else "not_found"}
-            return {"ok": True, "data": _hours_from_branch(row)}
-        return {"ok": True, "data": [_hours_from_branch(row) for row in branches[:10]]}
+            data = _hours_from_branch(row)
+            clocks = data.get("hours") if isinstance(data.get("hours"), dict) else {}
+            if not (isinstance(clocks, dict) and clocks.get("clock_lines")):
+                alt = _first_search_row(hours_rows, query or item_id or _label(row))
+                if alt is not None:
+                    data = {**data, **{k: v for k, v in _hours_from_branch(alt).items() if k in {"hours"}}}
+            return {"ok": True, "data": data}
+        return {"ok": True, "data": [_hours_from_branch(row) for row in pool[:10]]}
 
     if name == "get_faq":
         faqs = _items(sections, "faq")

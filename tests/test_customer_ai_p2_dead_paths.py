@@ -22,6 +22,18 @@ def test_smart_retrieval_callables_raise_dead() -> None:
             getattr(srs, name)("tenant")
 
 
+def test_brain_path_does_not_import_luna_retrieval_engine() -> None:
+    root = Path(__file__).resolve().parents[1] / "services" / "customer_ai"
+    offenders: list[str] = []
+    needles = ("gpt-5.6-luna", "resolve_customer_retrieval_policy", "luna_retrieval")
+    for path in root.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        for needle in needles:
+            if needle in text:
+                offenders.append(f"{path}:{needle}")
+    assert not offenders, f"Customer Brain must not call the old Luna retrieval engine: {offenders}"
+
+
 def test_brain_retrieve_path_does_not_import_smart_retrieval() -> None:
     root = Path(__file__).resolve().parents[1] / "services" / "customer_ai"
     offenders: list[str] = []

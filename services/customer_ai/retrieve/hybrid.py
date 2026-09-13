@@ -166,7 +166,12 @@ async def _semantic_from_store(
                 continue
             seen.add(card.item_id)
             merged.append((score, card))
-        if merged and doc_space_i is KNOWLEDGE_DOCUMENT:
+        # Hours/branches/prices live in the entity space. A knowledge hit must
+        # not skip them when the planner asked for those families.
+        need_entity = families is None or bool(
+            {"hours", "branches", "services", "products", "prices"} & set(families or set())
+        )
+        if merged and doc_space_i is KNOWLEDGE_DOCUMENT and not need_entity:
             break
     return merged or None
 

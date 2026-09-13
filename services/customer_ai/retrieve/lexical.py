@@ -15,7 +15,7 @@ from services.customer_ai.budgets import DEFAULT_BUDGETS
 from services.customer_ai.contracts.enums import SourceFamily
 from services.customer_ai.normalize import normalize_search_text
 from services.customer_ai.retrieve.cards import TitleCard
-from services.customer_ai.retrieve.normalize_ar import normalize_arabic
+from services.customer_ai.retrieve.normalize_ar import expand_arabic_tokens, normalize_arabic
 
 BM25_K1 = 1.5
 BM25_B = 0.75
@@ -45,7 +45,7 @@ def prepare_query_text(query: str) -> str:
 
 
 def tokenize(text: str) -> list[str]:
-    return [token for token in (text or "").split() if token]
+    return expand_arabic_tokens([token for token in (text or "").split() if token])
 
 
 def _idf(total_docs: int, doc_freq: int) -> float:

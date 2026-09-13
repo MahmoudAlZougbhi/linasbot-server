@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 from services.customer_ai.contracts.evidence import EvidenceBundle
@@ -43,6 +44,14 @@ def _facts_list(structured_facts: Any) -> list[dict[str, Any]]:
     return []
 
 
+_CLOCK = re.compile(
+    r"\d{1,2}\s*[:hH]\s*\d{2}"
+    r"|\d{1,2}\s*(?:to|until|–|-)\s*\d{1,2}"
+    r"|closed|مغلق|مفتوح|\bopen\b|\bclose\b|off.?day",
+    re.I,
+)
+
+
 def evaluate_task_coverage(
     plan: PlannerPlan,
     bundle: EvidenceBundle,
@@ -65,6 +74,17 @@ def evaluate_task_coverage(
         tagged = any(task.id in (item.task_ids or []) for item in bundle.items)
         span = (task.span.text or "").strip().lower()
         token_hit = bool(span) and any(token and token in text for token in span.split()[:4])
+        if task.type == "hours":
+            clock_hit = bool(_CLOCK.search(text))
+            hours_family = bool(families & {"hours", "branches"})
+            fact_hours = any(str(fact.get("family") or "") in {"hours", "branches"} for fact in facts)
+            if (hours_family or fact_hours) and clock_hit:
+                out[task.id] = "covered"
+            elif hours_family or clock_hit or fact_hours:
+                out[task.id] = "partial"
+            else:
+                out[task.id] = "missing"
+            continue
         if tagged or fact_hit or (family_hit and (token_hit or not span)):
             out[task.id] = "covered"
         elif family_hit or token_hit:
