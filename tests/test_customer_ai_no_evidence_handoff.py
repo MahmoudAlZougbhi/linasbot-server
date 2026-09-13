@@ -58,8 +58,15 @@ def test_should_handoff_only_unanswered_questions() -> None:
     assert should_handoff_unanswered(plan=hours, outcome="index_not_ready", message="شو ساعات أنطلياس؟") is False
     assert should_handoff_unanswered(plan=hours, outcome="ambiguous", message="شو ساعات أنطلياس؟") is False
     assert should_handoff_unanswered(plan=ack, outcome="not_found", message="thanks") is False
-    assert should_handoff_unanswered(plan=info, outcome="not_found", message="Do you have guest wifi?", invocation_kind="comment") is False
-    catchall = _plan(_task("t1", "information", families=["knowledge", "care", "services", "faq", "branches"], span="ok"))
+    assert (
+        should_handoff_unanswered(
+            plan=info, outcome="not_found", message="Do you have guest wifi?", invocation_kind="comment"
+        )
+        is False
+    )
+    catchall = _plan(
+        _task("t1", "information", families=["knowledge", "care", "services", "faq", "branches"], span="ok")
+    )
     assert should_handoff_unanswered(plan=catchall, outcome="not_found", message="ok") is False
     assert should_handoff_unanswered(plan=catchall, outcome="not_found", message="cool") is False
 
