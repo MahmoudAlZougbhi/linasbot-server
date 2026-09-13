@@ -115,12 +115,21 @@ async def store_inbound_image_from_url(user_data: dict[str, Any], url: str) -> s
         mark_inbound_attachment(user_data, "image")
         return ""
     mime = str(fetched.get("mime") or "image/jpeg")
-    return store_inbound_image(
+    media_id = store_inbound_image(
         user_data,
         content=fetched.get("bytes") or b"",
         filename="inbound.jpg",
         content_type=mime or "image/jpeg",
     )
+    blob = fetched.get("bytes") or b""
+    tenant_id = str(user_data.get("tenant_id") or user_data.get("tenantId") or "").strip()
+    if blob and tenant_id:
+        from services.customer_ai.media_analysis.describe import describe_stills
+
+        visual = await describe_stills([blob], tenant_id=tenant_id, kind="image")
+        if visual:
+            mark_inbound_attachment(user_data, "image", extract=visual, file_extract_preview=visual)
+    return media_id
 
 
 def store_inbound_image_base64(
@@ -365,7 +374,11 @@ async def _ingest_image(
         return
     if not result.image_media_id:
         result.image_media_id = str(stored.get("media_id") or "") or None
-    text_parts.append(_PIPELINE_LABELS["image"])
+    from services.customer_reply_v2.inbound_media_enrich import enrich_inbound_image
+
+    await enrich_inbound_image(tenant_id=tenant_id, blob=blob, result=result, text_parts=text_parts)
+    if not result.extract:
+        text_parts.append(_PIPELINE_LABELS["image"])
 
 
 def _journal_stt(tenant_id: str, spoken: dict[str, Any], filename: str) -> None:
@@ -419,38 +432,21 @@ async def _ingest_video(
     text_parts: list[str],
 ) -> None:
     _ = mime
+    _ = stt
     if not blob:
         result.video_status = "video_bytes_unavailable"
         text_parts.append(_PIPELINE_LABELS["video"])
         return
-    extracted = video_fn(blob)
-    result.video_status = str(extracted.get("status") or "")
-    result.video_frame_count = int(extracted.get("frame_count") or 0)
-    frames = list(extracted.get("frames") or [])
-    if frames and not result.image_media_id:
-        from services.products.media import store_product_media
+    from services.customer_reply_v2.inbound_media_enrich import enrich_inbound_video
 
-        stored = store_product_media(
-            tenant_id=tenant_id,
-            user_id="inbound_customer",
-            filename="video_frame.jpg",
-            content=frames[0],
-            content_type="image/jpeg",
-        )
-        if stored.get("ok"):
-            result.image_media_id = str(stored.get("media_id") or "") or None
-    audio = extracted.get("audio")
-    if audio:
-        spoken = await stt(data=audio, filename="video_audio.wav")
-        _journal_stt(tenant_id, spoken, "video_audio.wav")
-        if spoken.get("ok") and spoken.get("text"):
-            result.transcript = str(spoken["text"]).strip()
-            text_parts.append(result.transcript)
-            return
-        result.fetch_errors.append(str(spoken.get("error") or "video_stt_failed"))
-    text_parts.append(_PIPELINE_LABELS["video"])
-    if result.video_status in {"ffmpeg_unavailable", "video_extract_failed", "empty_video", "video_too_large"}:
-        result.fetch_errors.append(result.video_status)
+    await enrich_inbound_video(
+        tenant_id=tenant_id,
+        blob=blob,
+        mime=mime,
+        video_fn=video_fn,
+        result=result,
+        text_parts=text_parts,
+    )
 
 
 def _ingest_file(

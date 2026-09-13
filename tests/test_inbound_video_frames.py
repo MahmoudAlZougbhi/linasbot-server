@@ -43,11 +43,16 @@ def test_long_video_uses_fifteen_second_interval() -> None:
     assert offsets[-1] >= 220.0
 
 
-def test_very_long_video_covers_full_length_within_frame_cap() -> None:
-    offsets = frame_offsets_s(20 * 60)
-    assert len(offsets) == MAX_FRAMES
+def test_ten_minute_cap_uses_first_ten_minutes_only() -> None:
+    from services.customer_reply_v2.inbound_video import cap_analyze_duration_s
+
+    capped, truncated = cap_analyze_duration_s(20 * 60)
+    assert truncated is True
+    assert capped == 600.0
+    offsets = frame_offsets_s(capped)
     assert offsets[0] == 0.0
-    assert offsets[-1] >= 1100.0
+    assert offsets[-1] <= 600.0
+    assert len(offsets) <= MAX_FRAMES
 
 
 def test_empty_duration_still_has_first_frame() -> None:
