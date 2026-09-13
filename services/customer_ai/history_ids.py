@@ -28,17 +28,19 @@ def comment_conversation_id(
     conversation_id: str = "",
     channel: str = "",
     post_id: str = "",
+    author_id: str = "",
 ) -> str:
-    """Keep static and AI comments on one thread. Do not mint a new scheme."""
+    """Per-author comment Brain history. Do not share a post-wide thread."""
     explicit = (conversation_id or "").strip()
     if explicit:
         return explicit
     tid = (tenant_id or "").strip()
-    if not tid:
+    author = (author_id or "").strip()
+    if not tid or not author:
         return ""
     ch = (channel or "comment").strip() or "comment"
     post = (post_id or "").strip() or "thread"
-    return f"comment:{tid}:{ch}:{post}"
+    return f"comment:{tid}:{ch}:{post}:{author}"
 
 
 def conversation_id_from_user_data(user_data: dict[str, Any] | None = None, *, fallback: str = "") -> str:

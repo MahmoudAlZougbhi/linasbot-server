@@ -359,6 +359,7 @@ def test_offline_eval_contract_cases() -> None:
     assert "tiktok_media_reaches_brain" in ids
     assert "meta_ai_dm_reaches_brain" in ids
     assert "history_routes_by_channel" in ids
+    assert "comment_threads_per_author" in ids
     assert "web_chat_indexes_leftover" in ids
     assert "legacy_photo_fetches_ssrf_safe" in ids
     assert "index_seeds_from_pending" in ids

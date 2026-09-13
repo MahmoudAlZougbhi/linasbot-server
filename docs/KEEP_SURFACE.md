@@ -86,3 +86,10 @@ Still not deleted (import-graph blocked or KEEP):
 - Title helpers used by CM save go through `search_metadata.title_fields` (not Luna-named imports).
 - CM OpenAI `semantic_index` remains for `runtime_pipeline` FAQ semantic search (live handler). Brain retrieve stays Voyage-only. Do not treat CM OpenAI as a Brain fallback.
 
+## WAVE 3 — Comments / hub
+
+- Brain comment history is per-author: `comment:{tenant}:{channel}:{post}:{author}`. Missing author does not fall back to a shared post thread.
+- Operator comments inbox stays post-scoped (Live Chat Comments UI).
+- AI Setup hub tiles stay the KEEP allowlist (Knowledge, AI Basics, Locations, Services, Comments, Requests + Products).
+
+

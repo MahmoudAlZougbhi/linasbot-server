@@ -260,22 +260,34 @@ def test_manual_comment_mode_is_zero_units() -> None:
     assert message_units_for("no_reply") == 0
 
 
-def test_static_and_ai_comments_share_fallback_thread() -> None:
+def test_static_and_ai_comments_use_per_author_thread() -> None:
     from inspect import getsource
 
     from services.customer_ai.history_ids import comment_conversation_id
     from services.customer_ai.runtime import run_customer_ai_comment
 
-    fallback = comment_conversation_id(
+    first = comment_conversation_id(
         tenant_id="shop",
         conversation_id="",
         channel="instagram_comment",
         post_id="p1",
+        author_id="ig:alice",
     )
-    assert fallback == "comment:shop:instagram_comment:p1"
+    second = comment_conversation_id(
+        tenant_id="shop",
+        conversation_id="",
+        channel="instagram_comment",
+        post_id="p1",
+        author_id="ig:bob",
+    )
+    assert first == "comment:shop:instagram_comment:p1:ig:alice"
+    assert second == "comment:shop:instagram_comment:p1:ig:bob"
+    assert first != second
+    assert comment_conversation_id(tenant_id="shop", channel="instagram_comment", post_id="p1") == ""
     assert comment_conversation_id(tenant_id="shop", conversation_id="thread-1", post_id="p1") == "thread-1"
     src = getsource(run_customer_ai_comment)
-    assert src.count("comment_conversation_id") >= 2
+    assert src.count("comment_conversation_id") >= 1
+    assert "author_id" in src
 
 
 def test_comment_runtime_binds_existing_comment_or_post_id() -> None:
