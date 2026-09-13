@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 
-def _week(open_t: str, close_t: str, *, sunday_off: bool = True) -> dict[str, Any]:
+def _week(open_t: str, close_t: str, *, sunday_off: bool = False) -> dict[str, Any]:
     day = {"enabled": True, "open": open_t, "close": close_t, "off_day": False}
     off = {"enabled": True, "open": "", "close": "", "off_day": True}
     week = {name: dict(day) for name in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday")}
@@ -59,7 +59,7 @@ def linas_like_qa_sections() -> dict[str, Any]:
                     "title": "Beirut Opening Hours",
                     "aliases": ["beirut hours"],
                     "monday": {"open": "10:00", "close": "20:00"},
-                    "sunday": {"closed": True},
+                    "sunday": {"open": "10:00", "close": "20:00"},
                     "status": "active",
                 },
                 {
@@ -67,7 +67,7 @@ def linas_like_qa_sections() -> dict[str, Any]:
                     "title": "Antelias Opening Hours",
                     "aliases": ["antelias hours", "أنطلياس"],
                     "monday": {"open": "11:00", "close": "19:00"},
-                    "sunday": {"closed": True},
+                    "sunday": {"open": "11:00", "close": "19:00"},
                     "status": "active",
                 },
             ]
@@ -79,6 +79,16 @@ def linas_like_qa_sections() -> dict[str, Any]:
                     "labels": {"en": "Laser hair removal", "ar": "ليزر"},
                     "aliases": ["laser", "ليزر"],
                     "active": True,
+                    "attachments": [
+                        {
+                            "id": "att_laser_women",
+                            "kind": "image",
+                            "title": "Laser women photo",
+                            "caption": "Send this photo when the customer asks for laser pictures.",
+                            "url": "https://qa.linas.example/laser-women.png",
+                            "status": "active",
+                        }
+                    ],
                 }
             ],
             "price_entries": [
@@ -89,7 +99,15 @@ def linas_like_qa_sections() -> dict[str, Any]:
                     "amount": 80,
                     "currency": "USD",
                     "active": True,
-                }
+                },
+                {
+                    "id": "laser_antelias",
+                    "catalog_item_id": "laser",
+                    "branch_id": "antelias",
+                    "amount": 70,
+                    "currency": "USD",
+                    "active": True,
+                },
             ],
         },
         "faq": {
@@ -149,7 +167,7 @@ def shop_b_qa_sections() -> dict[str, Any]:
                     "labels": {"en": "Hamra", "ar": "حمرا"},
                     "aliases": ["hamra", "حمرا"],
                     "phone": "+9619999999",
-                    "weekly_schedule": _week("09:00", "15:00"),
+                    "weekly_schedule": _week("09:00", "15:00", sunday_off=True),
                     "status": "active",
                 }
             ]

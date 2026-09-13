@@ -69,7 +69,7 @@ def _schedule_lines(raw: dict[str, Any]) -> list[str]:
     return schedule_lines(raw)
 
 
-def _text_card(family: str, raw: dict[str, Any], *, sections: dict[str, Any]) -> str:
+def _text_card(family: str, raw: dict[str, Any], *, sections: dict[str, Any], tenant_id: str = "") -> str:
     parts = [
         str(raw.get("title") or raw.get("name") or _label(raw.get("labels")) or ""),
         str(raw.get("description") or raw.get("body") or raw.get("notes") or ""),
@@ -85,15 +85,19 @@ def _text_card(family: str, raw: dict[str, Any], *, sections: dict[str, Any]) ->
                 parts.append(str(variant.get("answer") or ""))
     if family == "branches":
         parts.append(str(raw.get("address") or raw.get("maps_url") or ""))
+    if family in {"branches", "hours"}:
         tz = str(raw.get("timezone") or raw.get("tz") or "").strip()
         if tz:
             parts.append(f"timezone {tz}")
         parts.extend(_schedule_lines(raw))
-    if family == "hours":
-        tz = str(raw.get("timezone") or raw.get("tz") or "").strip()
-        if tz:
-            parts.append(f"timezone {tz}")
-        parts.extend(_schedule_lines(raw))
+    if family in {"branches", "hours", "services"}:
+        attachments = raw.get("attachments") or []
+        if attachments:
+            from services.cm.article_media import format_attachments_block
+
+            block = format_attachments_block(list(attachments), tenant_id=tenant_id)
+            if block:
+                parts.append(block)
     return "\n".join(p.strip() for p in parts if str(p).strip())
 
 
@@ -150,11 +154,11 @@ def expand_hits(
             continue
         if family == "knowledge" and (card.body or "").strip():
             chunk = card.body.strip()
-            full = _text_card(family, match, sections=sections)
+            full = _text_card(family, match, sections=sections, tenant_id=tenant_id)
             # Prefer indexed winning chunk when shorter than (or equal to) the full article.
             text = chunk if (not full or len(chunk) <= len(full)) else full
         else:
-            text = _text_card(family, match, sections=sections)
+            text = _text_card(family, match, sections=sections, tenant_id=tenant_id)
         if not text:
             continue
         items.append(

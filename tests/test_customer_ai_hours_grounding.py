@@ -134,9 +134,7 @@ def test_hours_coverage_ignores_greeting_knowledge() -> None:
 
 def test_opening_hours_do_not_hide_branch_clocks() -> None:
     sections = {
-        "opening_hours": {
-            "items": [{"id": "oh_antelias", "title": "Antelias Opening Hours", "status": "active"}]
-        },
+        "opening_hours": {"items": [{"id": "oh_antelias", "title": "Antelias Opening Hours", "status": "active"}]},
         "branches": {
             "items": [
                 {
@@ -182,3 +180,38 @@ def test_two_tenants_do_not_share_hours_cards() -> None:
     assert "hours:hamra" in other_ids
     assert "hours:hamra" not in linas_ids
     assert "hours:antelias" not in other_ids
+
+
+def test_no_day_off_is_not_invented() -> None:
+    sections = {
+        "branches": {
+            "items": [
+                {
+                    "id": "antelias",
+                    "title": "Antelias",
+                    "weekly_schedule": _week("11:00", "19:00", sunday_off=False),
+                }
+            ]
+        },
+        "off_days": {"rules": [], "notes": ""},
+    }
+    cards = cards_from_sections(sections)
+    hours = next(card for card in cards if card.item_id == "hours:antelias")
+    assert "closed" not in hours.search_text
+    assert "no weekly off day" in hours.search_text
+    assert not any(card.item_id == "hours:off_days" for card in cards)
+    plan = plan_message("عندكن يوم عطلة؟")
+    assert any(task.type == "hours" for task in plan.tasks)
+
+
+def test_published_off_day_is_indexed() -> None:
+    sections = {
+        "branches": {
+            "items": [{"id": "hamra", "title": "Hamra", "weekly_schedule": _week("09:00", "15:00", sunday_off=True)}]
+        },
+        "off_days": {"rules": [{"kind": "weekly", "weekday": 6, "reason": "Sunday closed"}]},
+    }
+    cards = cards_from_sections(sections)
+    hours = next(card for card in cards if card.item_id == "hours:hamra")
+    assert "sunday: closed" in " ".join(hours.search_text.split()) or "closed" in hours.search_text
+    assert any(card.item_id == "hours:off_days" for card in cards)

@@ -75,7 +75,7 @@ def _from_items(
         item_id = str(raw.get("id") or raw.get("qa_group_id") or "").strip()
         title = str(raw.get("title") or raw.get("name") or _label(raw.get("labels")) or "").strip()
         body = str(raw.get("body") or raw.get("content") or raw.get("text") or raw.get("description") or "")
-        if family in {"knowledge", "care"} and tenant_id:
+        if family in {"knowledge", "care", "branches", "hours", "services"} and tenant_id:
             attachments = raw.get("attachments") or []
             if attachments:
                 from services.cm.article_media import format_attachments_block
@@ -106,7 +106,7 @@ def _from_items(
             for variant in raw.get("variants") or []:
                 if isinstance(variant, dict):
                     extra.append(str(variant.get("question") or ""))
-        if family in {"knowledge", "care"} and body:
+        if family in {"knowledge", "care", "branches", "hours", "services"} and body:
             extra.append(body)
         card = _card(family=family, item_id=item_id, title=title, extra=extra, revision=revision, body=body)
         if card:
@@ -168,6 +168,22 @@ def cards_from_sections(
         rows = legacy.get("items") if isinstance(legacy, dict) else None
         if isinstance(rows, list):
             cards.extend(_from_items("services", rows, revision, tenant_id=tenant_id))
+    off_payload = sections.get("off_days")
+    if isinstance(off_payload, dict):
+        from services.customer_ai.retrieve.schedule_text import off_days_search_blob
+
+        blob = off_days_search_blob(off_payload)
+        if blob:
+            card = _card(
+                family="hours",
+                item_id="off_days",
+                title="Off days",
+                extra=[blob],
+                revision=revision,
+                body=blob,
+            )
+            if card:
+                cards.append(card)
     return cards
 
 

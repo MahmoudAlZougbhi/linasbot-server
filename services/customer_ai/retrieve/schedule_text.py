@@ -24,6 +24,23 @@ def _day_line(day: str, row: dict[str, Any]) -> str:
     return f"{day}: {raw}" if raw else ""
 
 
+def _no_weekly_off_day(schedule: dict[str, Any]) -> str:
+    """Only when every weekday is published open. Empty/disabled days are not a day off."""
+    rows: list[dict[str, Any]] = []
+    for day in _WEEKDAYS:
+        row = schedule.get(day)
+        if not isinstance(row, dict):
+            return ""
+        rows.append(row)
+    if any(row.get("off_day") or row.get("closed") for row in rows):
+        return ""
+    if not all(row.get("enabled") is not False for row in rows):
+        return ""
+    if not all(str(row.get("open") or "").strip() and str(row.get("close") or "").strip() for row in rows):
+        return ""
+    return "no weekly off day"
+
+
 def _from_unified(schedule: dict[str, Any]) -> list[str]:
     lines: list[str] = []
     for day in _WEEKDAYS:
@@ -35,6 +52,9 @@ def _from_unified(schedule: dict[str, Any]) -> list[str]:
         line = _day_line(day, row)
         if line:
             lines.append(line)
+    note = _no_weekly_off_day(schedule)
+    if note:
+        lines.append(note)
     return lines
 
 
@@ -76,6 +96,30 @@ def schedule_lines(raw: dict[str, Any]) -> list[str]:
     exceptions = raw.get("exceptions") or raw.get("off_days") or []
     extra = [str(item) for item in exceptions] if isinstance(exceptions, list) else []
     return [*direct, *extra]
+
+
+def off_days_search_blob(section: dict[str, Any] | None) -> str:
+    """Index published off-day rules only. Empty rules mean no off-day card."""
+    if not isinstance(section, dict):
+        return ""
+    rules = section.get("rules")
+    lines: list[str] = []
+    if isinstance(rules, list):
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+            kind = str(rule.get("kind") or "").strip()
+            reason = str(rule.get("reason") or "closed").strip()
+            if kind == "weekly" and rule.get("weekday") is not None:
+                lines.append(f"weekly off weekday={rule.get('weekday')} {reason}")
+            elif kind == "date" and rule.get("date"):
+                lines.append(f"off date {rule.get('date')} {reason}")
+            elif kind == "range":
+                lines.append(f"off range {rule.get('start_date')} {rule.get('end_date')} {reason}")
+    notes = str(section.get("notes") or "").strip()
+    if notes:
+        lines.append(notes)
+    return " ".join(lines)
 
 
 def schedule_search_blob(raw: dict[str, Any]) -> str:

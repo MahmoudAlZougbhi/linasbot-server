@@ -29,7 +29,7 @@ _HOURS = re.compile(
     r"("
     r"\b(hour|hours|open|opens|close|closes|opening|opened|closed)\b"
     r"|ساعات|مفتوح|مغلق|الدوام|دوام|يفتح|تسكر|يسكر|فاتح|سكر"
-    r"|امتى|متى|aw2at|dawem|se3a|opening hours"
+    r"|امتى|متى|aw2at|dawem|se3a|opening hours|عطلة|off.?day|day off"
     r")",
     re.I,
 )
@@ -52,7 +52,7 @@ _CORRECT = re.compile(
     r"\b(i meant|i mean|not the|actually the|قصدت|مش ال|مو ال|غلط.? قصدي)\b",
     re.I,
 )
-_COMPARE = re.compile(r"(الفرق|فرق بين|\bvs\b|versus|compare|difference)", re.I)
+_COMPARE = re.compile(r"(الفرق|فرق بين|قارن|\bvs\b|versus|compare|difference)", re.I)
 
 
 def _has(pattern: re.Pattern[str], text: str, *substrings: str) -> bool:

@@ -79,7 +79,9 @@ def test_product_media_urls_stay_on_own_tenant() -> None:
 
     linas = cards_from_products(linas_like_products())
     other = cards_from_products(shop_b_products())
-    linas_ev = " ".join(str(evidence_from_product(row).text) for row in linas_like_products() if evidence_from_product(row))
+    linas_ev = " ".join(
+        str(evidence_from_product(row).text) for row in linas_like_products() if evidence_from_product(row)
+    )
     other_ev = " ".join(str(evidence_from_product(row).text) for row in shop_b_products() if evidence_from_product(row))
     assert linas
     assert other
