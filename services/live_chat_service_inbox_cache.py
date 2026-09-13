@@ -100,9 +100,13 @@ class LiveChatInboxCacheMixin:
     def _counters_for_tenant(self, tenant_id: str) -> dict[str, int]:
         tid = normalize_live_chat_tenant_id(tenant_id)
         slot = self._index_counters_by_tenant.get(tid) if tid else None
-        if isinstance(slot, dict) and isinstance(slot.get("counters"), dict):
-            return dict(slot["counters"])
-        return self._empty_counters()
+        counters = slot.get("counters") if isinstance(slot, dict) else None
+        if isinstance(counters, dict):
+            typed: dict[str, int] = {str(key): int(value) for key, value in counters.items()}
+            return typed
+        empty = dict(self._empty_counters())
+        typed_empty: dict[str, int] = {str(key): int(value) for key, value in empty.items()}
+        return typed_empty
 
     def _unified_cache_file(self) -> Any:
         path = str(self.UNIFIED_CACHE_PATH or "").strip()

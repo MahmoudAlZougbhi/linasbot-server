@@ -36,6 +36,9 @@ class LiveChatRebuildMixin:
     _unified_chats_cache_total: Any
     _unified_chats_cache_next_cursor: Any
     _unified_chats_cache_page_size: Any
+    _unified_inbox_by_tenant: dict[str, dict[str, Any]]
+    _waiting_queue_by_tenant: dict[str, dict[str, Any]]
+    _index_counters_by_tenant: dict[str, dict[str, Any]]
     _index_counters_cache: Any
     _index_counters_cache_time: Any
     _index_write_paused_until: Any
