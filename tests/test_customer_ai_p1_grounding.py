@@ -170,7 +170,25 @@ async def test_visual_disabled_image_returns_localized_clarify(monkeypatch: pyte
     assert result.envelope.messages[0].text == brain_template("visual_disabled", "ar")
 
 
-def test_localization_handoff_and_confirm() -> None:
+def test_identity_prompt_includes_ai_setup_greeting_behavior() -> None:
+    from services.customer_ai.compose.blocks import compose_evidence_context
+    from services.customer_ai.identity import IdentityBundle
+
+    identity = IdentityBundle(
+        assistant_name="Nour",
+        business_name="Clinic X",
+        greeting_behavior="Open warmly, never use a canned Hi Linas Laser line.",
+        short_introduction="I help with published clinic questions.",
+    )
+    blob = compose_evidence_context(
+        identity=identity,
+        plan=PlannerPlan(tasks=[PlannerTask(id="t1", type="acknowledgement")]),
+        bundle=EvidenceBundle(outcome="not_found"),
+    )
+    assert "Nour" in blob
+    assert "Clinic X" in blob
+    assert "never use a canned Hi Linas Laser line" in blob
+    assert "I help with published clinic questions" in blob
     assert brain_template("handoff", "en") != brain_template("handoff", "ar")
     assert "confirm" in brain_template("confirm_request", "en").lower()
     assert brain_template("faq_ambiguous", "fr")

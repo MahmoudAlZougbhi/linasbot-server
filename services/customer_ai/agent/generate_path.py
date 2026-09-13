@@ -31,9 +31,11 @@ def _flow_extra(extra: dict | None, *rows: tuple[str, str, dict | None]) -> dict
 
 def apply_greeting(turn: CustomerTurn, message: str, channel: str, envelope: FinalReplyEnvelope) -> FinalReplyEnvelope:
     from services.customer_ai.conversation_store import remember_turn
-    from services.customer_ai.greeting import evaluate_greeting
+    from services.customer_ai.greeting import evaluate_greeting, is_greeting_only
 
     if turn.invocation_kind in {"followup", "comment"} or not envelope.messages:
+        return envelope
+    if is_greeting_only(message):
         return envelope
     greet = evaluate_greeting(
         tenant_id=turn.tenant_id,

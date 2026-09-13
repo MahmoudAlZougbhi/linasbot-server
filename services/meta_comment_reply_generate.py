@@ -67,6 +67,8 @@ async def generate_comment_reply_text(
                 post_id=str(enriched.get("post_id") or ""),
                 caption=str(enriched.get("caption") or ""),
                 parent_comment=str(enriched.get("parent_comment") or ""),
+                media_type=str(enriched.get("media_type") or ""),
+                image_urls=list(enriched.get("image_urls") or []) or None,
                 comment_context=enriched or None,
             )
         except Exception as v2_exc:

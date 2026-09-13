@@ -7,7 +7,7 @@ from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMes
 from services.customer_ai.contracts.turn import CustomerTurn
 from services.customer_ai.conversation_store import remember_turn
 from services.customer_ai.faq_turn import exact_faq_result, semantic_faq_result
-from services.customer_ai.greeting import evaluate_greeting
+from services.customer_ai.greeting import evaluate_greeting, is_greeting_only
 from services.customer_ai.stage_timeline import stamp
 from services.customer_ai.templates import brain_template
 
@@ -38,6 +38,12 @@ def inbound_task_text(turn: CustomerTurn, message: str) -> str:
     caption = str(turn.extra.get("post_caption") or "").strip()
     if caption and turn.surface == "comment":
         parts.insert(0, caption)
+    media_type = str(turn.extra.get("post_media_type") or "").strip()
+    if media_type and turn.surface == "comment":
+        parts.append(f"post_media_type={media_type}")
+    urls = [str(item).strip() for item in (turn.extra.get("post_image_urls") or []) if str(item).strip()]
+    if urls and turn.surface == "comment":
+        parts.append(f"post_media_url={urls[0]}")
     return "\n".join(parts) or (turn.followup_goal or "")
 
 
@@ -48,6 +54,8 @@ def _apply_greeting(
     envelope: FinalReplyEnvelope,
 ) -> FinalReplyEnvelope:
     if turn.invocation_kind in {"followup", "comment"} or not envelope.messages:
+        return envelope
+    if is_greeting_only(message):
         return envelope
     greet = evaluate_greeting(
         tenant_id=turn.tenant_id,
@@ -120,7 +128,14 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
                 ("visual", "Image present but visual reading is disabled", {"reason": visual.reason}),
             ),
         )
-    faq = _exact_faq_result(turn, message, channel) or await _semantic_faq_result(turn, message, channel)
+    from services.customer_ai.agent.greeting_turn import identity_greeting_result
+
+    greeted = await identity_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
+    if greeted is not None:
+        return greeted
+    faq = None
+    if not is_greeting_only(message):
+        faq = _exact_faq_result(turn, message, channel) or await _semantic_faq_result(turn, message, channel)
     if faq:
         return faq.model_copy(
             update={

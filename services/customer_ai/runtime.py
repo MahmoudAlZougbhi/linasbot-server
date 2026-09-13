@@ -336,6 +336,10 @@ async def run_customer_ai_comment(
                 "winning_rule": getattr(decision, "rule_id", ""),
                 "post_caption": caption,
                 "post_id": post_id_value,
+                "post_media_type": str(_kwargs.get("media_type") or "").strip(),
+                "post_image_urls": [
+                    str(item).strip() for item in (_kwargs.get("image_urls") or []) if str(item).strip()
+                ],
                 **_language_extra(
                     detected_language=str(_kwargs.get("detected_language") or ""),
                     response_language=str(_kwargs.get("response_language") or ""),

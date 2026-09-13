@@ -15,6 +15,7 @@ from services.customer_ai.search.store import activate_pointer, write_documents
 
 log = logging.getLogger("customer_ai.index")
 COMPILER_VERSION = "customer_ai.compiler.v1"
+EMBED_BATCH_SIZE = 8
 
 
 def _hash(text: str) -> str:
@@ -70,8 +71,13 @@ async def embed_document_rows(rows: list[dict[str, Any]]) -> list[list[float]]:
         return []
     if not voyage_configured():
         raise VoyageContractError("provider_not_configured")
-    vectors = await embed_texts(ENTITY_DOCUMENT, [str(row.get("search_text") or "") for row in rows])
-    return vectors.vectors
+    texts = [str(row.get("search_text") or "") for row in rows]
+    vectors: list[list[float]] = []
+    for start in range(0, len(texts), EMBED_BATCH_SIZE):
+        batch = texts[start : start + EMBED_BATCH_SIZE]
+        part = await embed_texts(ENTITY_DOCUMENT, batch)
+        vectors.extend(part.vectors)
+    return vectors
 
 
 def write_entity_candidate(

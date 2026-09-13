@@ -15,9 +15,9 @@ from services.customer_ai.providers.spaces import EmbeddingSpace
 VOYAGE_BASE = "https://api.voyageai.com/v1"
 _RETRY_STATUSES = {429, 502, 503, 504}
 QUERY_TIMEOUT_SECONDS = 12.0
-QUERY_ATTEMPTS = 2
+QUERY_ATTEMPTS = 4
 INDEX_TIMEOUT_SECONDS = 45.0
-INDEX_ATTEMPTS = 3
+INDEX_ATTEMPTS = 6
 
 
 class VoyageNotConfiguredError(RuntimeError):
@@ -53,8 +53,8 @@ def _validate(space: EmbeddingSpace, vectors: list[list[float]]) -> None:
 
 def _request_budget(space: EmbeddingSpace) -> tuple[float, int, float]:
     if space.input_mode == "query":
-        return QUERY_TIMEOUT_SECONDS, QUERY_ATTEMPTS, 2.0
-    return INDEX_TIMEOUT_SECONDS, INDEX_ATTEMPTS, 8.0
+        return QUERY_TIMEOUT_SECONDS, QUERY_ATTEMPTS, 12.0
+    return INDEX_TIMEOUT_SECONDS, INDEX_ATTEMPTS, 45.0
 
 
 def _retry_delay(response: httpx.Response, attempt: int, *, cap: float) -> float:

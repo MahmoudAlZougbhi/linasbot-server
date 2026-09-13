@@ -11,28 +11,28 @@ from services.meta_app_registry import MetaAssetBinding
 from services.meta_graph_routing import graph_api_url
 
 _CAPTION_TTL_SECONDS = 600.0
-_CAPTION_CACHE: dict[str, tuple[float, str]] = {}
+_POST_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
-def _cache_get(key: str) -> str | None:
-    row = _CAPTION_CACHE.get(key)
+def _cache_get(key: str) -> dict[str, Any] | None:
+    row = _POST_CACHE.get(key)
     if not row:
         return None
-    stored_at, caption = row
+    stored_at, payload = row
     if time.time() - stored_at > _CAPTION_TTL_SECONDS:
-        _CAPTION_CACHE.pop(key, None)
+        _POST_CACHE.pop(key, None)
         return None
-    return caption
+    return dict(payload)
 
 
-def _cache_put(key: str, caption: str) -> None:
-    _CAPTION_CACHE[key] = (time.time(), caption)
-    if len(_CAPTION_CACHE) < 400:
+def _cache_put(key: str, payload: dict[str, Any]) -> None:
+    _POST_CACHE[key] = (time.time(), dict(payload))
+    if len(_POST_CACHE) < 400:
         return
     cutoff = time.time() - _CAPTION_TTL_SECONDS
-    stale = [item for item, (ts, _) in _CAPTION_CACHE.items() if ts < cutoff]
+    stale = [item for item, (ts, _) in _POST_CACHE.items() if ts < cutoff]
     for item in stale:
-        _CAPTION_CACHE.pop(item, None)
+        _POST_CACHE.pop(item, None)
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -41,6 +41,19 @@ def _as_dict(value: Any) -> dict[str, Any]:
 
 def _caption_from_payload(payload: dict[str, Any]) -> str:
     return str(payload.get("caption") or payload.get("message") or payload.get("story") or "").strip()
+
+
+def _media_type_from_payload(payload: dict[str, Any]) -> str:
+    return str(payload.get("media_type") or payload.get("type") or "").strip()
+
+
+def _image_urls_from_payload(payload: dict[str, Any]) -> list[str]:
+    urls: list[str] = []
+    for key in ("media_url", "thumbnail_url", "full_picture", "permalink"):
+        value = str(payload.get(key) or "").strip()
+        if value and value not in urls:
+            urls.append(value)
+    return urls
 
 
 def _post_id_from_comment_payload(payload: dict[str, Any], *, channel: str) -> str:
@@ -89,9 +102,9 @@ async def _fetch_comment_graph(
     graph_api_version: str,
 ) -> dict[str, Any] | None:
     if binding.channel == "instagram":
-        fields = "media{id,caption},parent_id,text,id"
+        fields = "media{id,caption,media_type,media_url,thumbnail_url},parent_id,text,id"
     else:
-        fields = "post{id,message,story},parent{id,message},message,id"
+        fields = "post{id,message,story,full_picture},parent{id,message},message,id"
     return await _graph_get(
         client,
         graph_api_url(binding, graph_api_version=graph_api_version, path=comment_id),
@@ -100,28 +113,35 @@ async def _fetch_comment_graph(
     )
 
 
-async def _fetch_post_caption(
+async def _fetch_post_context(
     client: httpx.AsyncClient,
     *,
     binding: MetaAssetBinding,
     post_id: str,
     token: str,
     graph_api_version: str,
-) -> str:
+) -> dict[str, Any]:
     cache_key = f"{binding.binding_id}:{post_id}"
     cached = _cache_get(cache_key)
     if cached is not None:
         return cached
-    fields = "caption" if binding.channel == "instagram" else "message,story"
+    fields = (
+        "caption,media_type,media_url,thumbnail_url" if binding.channel == "instagram" else "message,story,full_picture"
+    )
     payload = await _graph_get(
         client,
         graph_api_url(binding, graph_api_version=graph_api_version, path=post_id),
         token=token,
         params={"fields": fields},
     )
-    caption = _caption_from_payload(payload or {})
-    _cache_put(cache_key, caption)
-    return caption
+    body = payload or {}
+    out = {
+        "caption": _caption_from_payload(body),
+        "media_type": _media_type_from_payload(body),
+        "image_urls": _image_urls_from_payload(body),
+    }
+    _cache_put(cache_key, out)
+    return out
 
 
 async def enrich_comment_event_post(
@@ -133,7 +153,7 @@ async def enrich_comment_event_post(
     client: httpx.AsyncClient | None = None,
     allow_graph: bool = True,
 ) -> dict[str, Any]:
-    """Fill post_id / caption / parent_comment from Graph when the webhook omitted them."""
+    """Fill post_id / caption / parent_comment / media from Graph when the webhook omitted them."""
 
     out = dict(event)
     comment_id = str(out.get("comment_id") or "").strip()
@@ -141,16 +161,22 @@ async def enrich_comment_event_post(
     caption = str(out.get("caption") or out.get("post_caption") or "").strip()
     parent_comment = str(out.get("parent_comment") or out.get("parent_text") or "").strip()
     parent_id = str(out.get("parent_id") or "").strip()
+    media_type = str(out.get("media_type") or "").strip()
+    image_urls = [str(item).strip() for item in (out.get("image_urls") or []) if str(item).strip()]
     if post_id:
         out["post_id"] = post_id
         out["media_id"] = str(out.get("media_id") or post_id)
-    if not allow_graph or not comment_id or not str(token or "").strip():
+    if not allow_graph or not str(token or "").strip():
+        return out
+    if not comment_id and not post_id:
         return out
 
     owns_client = client is None
     graph = client or httpx.AsyncClient(timeout=15.0)
     try:
-        need_comment = (not post_id) or (parent_id and parent_id != post_id and not parent_comment)
+        need_comment = bool(comment_id) and (
+            (not post_id) or (parent_id and parent_id != post_id and not parent_comment)
+        )
         comment_payload = None
         if need_comment:
             comment_payload = await _fetch_comment_graph(
@@ -164,20 +190,31 @@ async def enrich_comment_event_post(
             graph_post = _post_id_from_comment_payload(comment_payload, channel=binding.channel)
             if graph_post:
                 post_id = graph_post
+            media = _as_dict(comment_payload.get("media"))
+            post_obj = _as_dict(comment_payload.get("post"))
             if not caption:
-                media = _as_dict(comment_payload.get("media"))
-                post_obj = _as_dict(comment_payload.get("post"))
                 caption = _caption_from_payload(media) or _caption_from_payload(post_obj)
+            if not media_type:
+                media_type = _media_type_from_payload(media) or _media_type_from_payload(post_obj)
+            for url in _image_urls_from_payload(media) + _image_urls_from_payload(post_obj):
+                if url not in image_urls:
+                    image_urls.append(url)
             if not parent_comment:
                 parent_comment = _parent_text_from_payload(comment_payload)
-        if post_id and not caption:
-            caption = await _fetch_post_caption(
+        if post_id and (not caption or not media_type or not image_urls):
+            post_ctx = await _fetch_post_context(
                 graph,
                 binding=binding,
                 post_id=post_id,
                 token=token,
                 graph_api_version=graph_api_version,
             )
+            caption = caption or str(post_ctx.get("caption") or "")
+            media_type = media_type or str(post_ctx.get("media_type") or "")
+            for url in list(post_ctx.get("image_urls") or []):
+                value = str(url or "").strip()
+                if value and value not in image_urls:
+                    image_urls.append(value)
     finally:
         if owns_client:
             await graph.aclose()
@@ -188,6 +225,10 @@ async def enrich_comment_event_post(
     if caption:
         out["caption"] = caption
         out["post_caption"] = caption
+    if media_type:
+        out["media_type"] = media_type
+    if image_urls:
+        out["image_urls"] = image_urls
     if parent_comment:
         out["parent_comment"] = parent_comment
     return out
