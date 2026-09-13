@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from services.customer_ai.actions.pending import try_confirm_pending
+from services.customer_ai.contracts.enums import StopReason
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.customer_ai.contracts.turn import CustomerTurn
 from services.customer_ai.conversation_store import remember_turn
@@ -133,9 +134,19 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
     greeted = await identity_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
     if greeted is not None:
         return greeted
-    faq = None
-    if not is_greeting_only(message):
-        faq = _exact_faq_result(turn, message, channel) or await _semantic_faq_result(turn, message, channel)
+    if is_greeting_only(message):
+        from services.customer_ai.generate.reply import openai_configured
+
+        stop_reason: StopReason = "provider_not_configured" if not openai_configured() else "failed_closed"
+        return TurnResult(
+            stop_reason=stop_reason,
+            envelope=FinalReplyEnvelope(decision="no_reply"),
+            extra=_flow_extra(
+                {"phase": "identity_greeting", **flow_base},
+                ("greeting", "Greeting-only identity reply unavailable", {"reason": stop_reason}),
+            ),
+        )
+    faq = _exact_faq_result(turn, message, channel) or await _semantic_faq_result(turn, message, channel)
     if faq:
         return faq.model_copy(
             update={
