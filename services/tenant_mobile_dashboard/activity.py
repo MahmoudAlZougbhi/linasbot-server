@@ -224,7 +224,6 @@ def build_activity_summary(
         ),
         "requests_source": req_source,
         "credits_by_channel_note": (
-            "Per-channel billed_messages counts generative replies (one each). "
-            "Smart FAQ answers are not billed."
+            "Per-channel billed_messages counts generative replies (one each). Smart FAQ answers are not billed."
         ),
     }
