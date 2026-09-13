@@ -199,6 +199,13 @@ async def generate_verified(
         if task.type == "resource_request" and task.id not in dispositions:
             dispositions[task.id] = "pending_delivery" if resource_receipts else "not_found"
     agent_trace.append({"step": "FINAL", "decision": envelope.decision})
+    greeted = apply_greeting(turn, message, channel, envelope.model_copy(update={"dispositions": dispositions}))
+    if extra.get("awaiting_confirmation"):
+        from services.customer_ai.templates import brain_template
+
+        lang = str((turn.extra or {}).get("response_language") or "")
+        confirm = OutboundMessage(destination=dest, text=brain_template("confirm_request", lang))
+        greeted = greeted.model_copy(update={"messages": [*list(greeted.messages), confirm]})
     out_extra = _flow_extra(
         {
             "phase": "generate",
@@ -221,7 +228,7 @@ async def generate_verified(
     )
     return TurnResult(
         stop_reason="ok",
-        envelope=apply_greeting(turn, message, channel, envelope.model_copy(update={"dispositions": dispositions})),
+        envelope=greeted,
         ai_called=True,
         extra=out_extra,
     )

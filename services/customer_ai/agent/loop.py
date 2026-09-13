@@ -222,27 +222,34 @@ async def run_agentic_turn(
         )
 
     request_proposals = _request_proposals(plan, tenant_id=turn.tenant_id)
+    info_tasks = [task for task in plan.tasks if task.type in {"information", "hours", "comparison"}]
     if request_proposals.actions:
         proposals = attach_confirmation(turn, request_proposals)
-        agent_trace.append({"step": "FINAL", "decision": "clarify", "reason": "awaiting_confirmation"})
-        return TurnResult(
-            stop_reason="ok",
-            envelope=FinalReplyEnvelope(
-                decision="clarify",
-                messages=[OutboundMessage(destination=dest, text=brain_template("confirm_request", lang))],
-            ),
-            extra=_flow_extra(
-                {
-                    "phase": "actions_pending",
-                    "plan": plan.model_dump(),
-                    "awaiting_confirmation": True,
-                    "pending_actions": [item.model_dump() for item in proposals.actions],
-                    "agent_trace": agent_trace,
-                    **extra,
-                },
-                ("request", "Waiting for customer confirmation before submitting request", None),
-            ),
-        )
+        extra = {
+            **extra,
+            "awaiting_confirmation": True,
+            "pending_actions": [item.model_dump() for item in proposals.actions],
+        }
+        if not info_tasks:
+            agent_trace.append({"step": "FINAL", "decision": "clarify", "reason": "awaiting_confirmation"})
+            return TurnResult(
+                stop_reason="ok",
+                envelope=FinalReplyEnvelope(
+                    decision="clarify",
+                    messages=[OutboundMessage(destination=dest, text=brain_template("confirm_request", lang))],
+                ),
+                extra=_flow_extra(
+                    {
+                        "phase": "actions_pending",
+                        "plan": plan.model_dump(),
+                        "awaiting_confirmation": True,
+                        "pending_actions": [item.model_dump() for item in proposals.actions],
+                        "agent_trace": agent_trace,
+                        **extra,
+                    },
+                    ("request", "Waiting for customer confirmation before submitting request", None),
+                ),
+            )
 
     steps += 1
     retrieve_timer = StageTimer()

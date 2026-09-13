@@ -106,10 +106,16 @@ async def generate_grounded_reply(
             used_evidence_ids=_used_evidence_ids(bundle),
             dispositions={task.id: "blocked" for task in plan.tasks if task.type in _ANSWERED_TASK_TYPES},
         )
+    policy_notes: list[str] = []
+    if turn.tenant_id.strip():
+        from services.customer_ai.planner.published_rules import request_rule_notes
+
+        policy_notes = request_rule_notes(turn.tenant_id)
     context = compose_evidence_context(
         identity=identity,
         plan=plan,
         bundle=bundle,
+        policy_notes=policy_notes or None,
         receipts=receipts,
         followup_goal=turn.followup_goal,
     )

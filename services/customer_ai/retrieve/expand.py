@@ -64,22 +64,9 @@ def _price_lines(sections: dict[str, Any], catalog_item_id: str) -> list[str]:
 
 
 def _schedule_lines(raw: dict[str, Any]) -> list[str]:
-    nested = raw.get("weekly_hours") or raw.get("hours") or raw.get("schedule")
-    schedule = nested if isinstance(nested, dict) else raw
-    lines: list[str] = []
-    for day in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"):
-        row = schedule.get(day)
-        if not isinstance(row, dict):
-            continue
-        if row.get("closed"):
-            lines.append(f"{day}: closed")
-        elif row.get("open") or row.get("close"):
-            lines.append(f"{day}: {row.get('open') or ''}–{row.get('close') or ''}".strip())
-    exceptions = raw.get("exceptions") or raw.get("off_days") or []
-    if isinstance(exceptions, list):
-        for item in exceptions:
-            lines.append(str(item))
-    return lines
+    from services.customer_ai.retrieve.schedule_text import schedule_lines
+
+    return schedule_lines(raw)
 
 
 def _text_card(family: str, raw: dict[str, Any], *, sections: dict[str, Any]) -> str:

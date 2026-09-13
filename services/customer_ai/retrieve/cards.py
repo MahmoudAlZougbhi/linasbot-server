@@ -98,6 +98,10 @@ def _from_items(
             " ".join(str(t) for t in (raw.get("tags") or [])),
             " ".join(label_langs),
         ]
+        if family in {"hours", "branches"}:
+            from services.customer_ai.retrieve.schedule_text import schedule_search_blob
+
+            extra.append(schedule_search_blob(raw))
         if family == "faq":
             for variant in raw.get("variants") or []:
                 if isinstance(variant, dict):
@@ -131,11 +135,29 @@ def cards_from_sections(
         rows = payload.get("items")
         if isinstance(rows, list):
             cards.extend(_from_items(family, rows, revision, tenant_id=tenant_id))
-    if not any(card.source_family == "hours" for card in cards):
-        branches = sections.get("branches")
-        items = branches.get("items") if isinstance(branches, dict) else None
-        if isinstance(items, list):
-            cards.extend(_from_items("hours", items, revision, tenant_id=tenant_id))
+    # Always index branch weekly_schedule as hours cards. Opening-hours rows
+    # must not hide published branch clocks when both sections exist.
+    branches = sections.get("branches")
+    items = branches.get("items") if isinstance(branches, dict) else None
+    if isinstance(items, list):
+        existing = {card.item_id: index for index, card in enumerate(cards) if card.source_family == "hours"}
+        for card in _from_items("hours", items, revision, tenant_id=tenant_id):
+            prior = existing.get(card.item_id)
+            if prior is None:
+                existing[card.item_id] = len(cards)
+                cards.append(card)
+                continue
+            old = cards[prior]
+            if card.search_text and card.search_text not in old.search_text:
+                cards[prior] = TitleCard(
+                    item_id=old.item_id,
+                    source_family=old.source_family,
+                    title=old.title,
+                    search_text=normalize_search_text(f"{old.search_text} {card.search_text}"),
+                    revision=old.revision or card.revision,
+                    aliases=tuple(dict.fromkeys([*old.aliases, *card.aliases])),
+                    body=old.body or card.body,
+                )
     # Mobile Services screen writes published CM prices.catalog — that is the service SoT.
     prices = sections.get("prices")
     catalog = prices.get("catalog") if isinstance(prices, dict) else None

@@ -59,6 +59,13 @@ def _task_query(
     variants: list[str],
     round_idx: int,
 ) -> tuple[str, set[SourceFamily] | None]:
+    families = _families(task)
+    if task.type == "hours":
+        seed = (task.span.text or message).strip() or message
+        lowered = seed.casefold()
+        if "hour" not in lowered and "دوام" not in seed and "ساعات" not in seed:
+            seed = f"{seed} hours دوام"
+        return seed, families or {"hours", "branches"}
     parts = [
         normalized.get("primary") or message,
         rewritten.get("rewritten") or message,
@@ -91,27 +98,52 @@ def _fold_round_bundle(
     return merged, outcome
 
 
-async def _retrieve_task(
+async def _retrieve_round(
     turn: CustomerTurn,
-    task: PlannerTask,
+    targets: list[PlannerTask],
     *,
     message: str,
     normalized: dict[str, Any],
     rewritten: dict[str, Any],
     variants: list[str],
     round_idx: int,
-) -> tuple[PlannerTask, str, set[SourceFamily] | None, EvidenceBundle]:
-    query, families = _task_query(
-        task=task,
-        message=message,
-        normalized=normalized,
-        rewritten=rewritten,
-        variants=variants,
-        round_idx=round_idx,
+) -> list[tuple[PlannerTask, str, set[SourceFamily] | None, EvidenceBundle]]:
+    planned = [
+        (
+            task,
+            *_task_query(
+                task=task,
+                message=message,
+                normalized=normalized,
+                rewritten=rewritten,
+                variants=variants,
+                round_idx=round_idx,
+            ),
+        )
+        for task in targets
+    ]
+    unique_jobs: list[tuple[tuple[str, tuple[str, ...]], str, set[SourceFamily] | None]] = []
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+    for _task, query, families in planned:
+        key = (query, tuple(sorted(families or ())))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_jobs.append((key, query, families))
+    bundles = await asyncio.gather(
+        *[
+            retrieve_published(RetrieveContext(tenant_id=turn.tenant_id, query=query, families=families))
+            for _key, query, families in unique_jobs
+        ]
     )
-    bundle = await retrieve_published(RetrieveContext(tenant_id=turn.tenant_id, query=query, families=families))
-    tagged = _tag_task(bundle, task.id) if bundle.items else bundle
-    return task, query, families, tagged
+    by_key = {key: bundle for (key, _query, _families), bundle in zip(unique_jobs, bundles, strict=True)}
+    out: list[tuple[PlannerTask, str, set[SourceFamily] | None, EvidenceBundle]] = []
+    for task, query, families in planned:
+        key = (query, tuple(sorted(families or ())))
+        bundle = by_key[key]
+        tagged = _tag_task(bundle, task.id) if bundle.items else bundle
+        out.append((task, query, families, tagged))
+    return out
 
 
 def _structured_facts(bundle: EvidenceBundle) -> dict[str, Any]:
@@ -170,19 +202,14 @@ async def multi_round_retrieve(
             targets = [task for task in info_tasks if task.id in missing_ids]
             if not targets:
                 break
-        retrieved = await asyncio.gather(
-            *[
-                _retrieve_task(
-                    turn,
-                    task,
-                    message=message,
-                    normalized=normalized,
-                    rewritten=rewritten,
-                    variants=variants,
-                    round_idx=round_idx,
-                )
-                for task in targets
-            ]
+        retrieved = await _retrieve_round(
+            turn,
+            targets,
+            message=message,
+            normalized=normalized,
+            rewritten=rewritten,
+            variants=variants,
+            round_idx=round_idx,
         )
         for task, query, families, tagged in retrieved:
             merged, outcome = _fold_round_bundle(merged=merged, outcome=outcome, tagged=tagged)
