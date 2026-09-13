@@ -306,7 +306,8 @@ async def run_customer_ai_comment(
     )
     parent = str(_kwargs.get("parent_comment") or "").strip()
     caption = str(_kwargs.get("caption") or "").strip()
-    ctx = _kwargs.get("comment_context") if isinstance(_kwargs.get("comment_context"), dict) else {}
+    raw_ctx = _kwargs.get("comment_context")
+    ctx: dict[str, Any] = raw_ctx if isinstance(raw_ctx, dict) else {}
     media_type = str(_kwargs.get("media_type") or ctx.get("media_type") or "").strip()
     image_urls = [
         str(item).strip() for item in (_kwargs.get("image_urls") or ctx.get("image_urls") or []) if str(item).strip()
