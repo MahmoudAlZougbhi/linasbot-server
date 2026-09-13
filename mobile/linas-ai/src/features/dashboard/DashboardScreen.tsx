@@ -5,8 +5,6 @@ import { EmptyState } from '../../components/EmptyState';
 import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../theme';
-import { BuyCreditsSheet } from '../billing/BuyCreditsSheet';
-import { useBuyCreditsFlow } from '../billing/useBuyCreditsFlow';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { DASH_CANVAS } from './dashboardChrome';
 import { dashboardQueryRange } from './dashboardFormat';
@@ -30,7 +28,6 @@ export function DashboardScreen({ onNavigate, active = true }: Props) {
   const { period, setPeriod, refreshIfStale, state, refreshing, refresh } = useTenantDashboard();
   const queryRange = dashboardQueryRange(period);
   const [copilotExpanded, setCopilotExpanded] = useState(false);
-  const credits = useBuyCreditsFlow(refresh);
 
   useEffect(() => {
     if (active) void refreshIfStale();
@@ -96,7 +93,6 @@ export function DashboardScreen({ onNavigate, active = true }: Props) {
               <GrowthPlanCard
                 plan={state.data.plan_and_credits}
                 locale={language === 'ar' ? 'ar' : language === 'fr' ? 'fr' : 'en'}
-                onBuyCredits={() => credits.setOpen(true)}
                 onUpgrade={() => onNavigate('choose_plan')}
               />
 
@@ -120,17 +116,6 @@ export function DashboardScreen({ onNavigate, active = true }: Props) {
           ) : null}
         </ScrollView>
       ) : null}
-
-      <BuyCreditsSheet
-        visible={credits.open && !credits.messageBillingActive}
-        prices={credits.prices}
-        purchasing={credits.purchasing}
-        locale={credits.locale}
-        tr={credits.tr}
-        messageBillingActive={credits.messageBillingActive}
-        onClose={() => credits.setOpen(false)}
-        onBuy={(pack) => void credits.buy(pack)}
-      />
     </ScreenChrome>
   );
 }

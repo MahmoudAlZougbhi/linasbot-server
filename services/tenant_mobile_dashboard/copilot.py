@@ -1,4 +1,4 @@
-"""Owner Copilot Dashboard stats: chats, credits, and per-user rows that add up."""
+"""Owner Copilot Dashboard stats: chats, billed messages, and per-user rows that add up."""
 
 from __future__ import annotations
 
@@ -10,12 +10,6 @@ from services.owner_chat_store import OwnerChatStore
 
 # Ignore corrupt / placeholder timestamps (epoch 0, bad strings coerced to 0).
 _MIN_ACTIVITY_TS = 1_704_067_200.0  # 2024-01-01 UTC
-
-
-def credits_from_tokens(tokens: int) -> int:
-    if tokens <= 0:
-        return 0
-    return max(1, round(int(tokens) / 100))
 
 
 def _safe_ts(raw: Any) -> float:
@@ -60,7 +54,7 @@ def _chats_active_in_window(
     end_ts: float,
     store: OwnerChatStore,
     tracker_rows: list[dict[str, Any]],
-    log_credits_by_conversation: dict[str, int],
+    log_messages_by_conversation: dict[str, int],
 ) -> dict[str, str]:
     """Distinct conversation_id -> user_id with Copilot activity in [start_ts, end_ts)."""
     conv_to_user: dict[str, str] = {}
@@ -85,7 +79,7 @@ def _chats_active_in_window(
         if uid:
             active[cid] = uid
 
-    for cid in log_credits_by_conversation:
+    for cid in log_messages_by_conversation:
         if not cid or cid in active:
             continue
         uid = conv_to_user.get(cid, "")
@@ -109,12 +103,12 @@ def build_owner_copilot_summary(
     *,
     start_ts: float,
     end_ts: float,
-    log_credits_by_conversation: dict[str, int],
-    log_credits_unmapped: int,
+    log_messages_by_conversation: dict[str, int],
+    log_messages_unmapped: int,
     log_interactions: int,
     store: OwnerChatStore | None = None,
 ) -> dict[str, Any]:
-    """Real Copilot spend for the selected range. Totals equal the sum of by_user rows."""
+    """Copilot message counts for the selected range. Totals equal the sum of by_user rows."""
     tid = (tenant_id or "").strip().lower()
     chat_store = store or OwnerChatStore()
 
@@ -125,7 +119,7 @@ def build_owner_copilot_summary(
         end_ts=end_ts,
         store=chat_store,
         tracker_rows=tracker_rows,
-        log_credits_by_conversation=log_credits_by_conversation,
+        log_messages_by_conversation=log_messages_by_conversation,
     )
     chats_by_user: dict[str, int] = defaultdict(int)
     for uid in active_convs.values():
@@ -138,8 +132,8 @@ def build_owner_copilot_summary(
         if cid and uid:
             conv_to_user[cid] = uid
 
-    credits_by_user: dict[str, int] = defaultdict(int)
-    unattributed = max(0, int(log_credits_unmapped))
+    messages_by_user: dict[str, int] = defaultdict(int)
+    unattributed = max(0, int(log_messages_unmapped))
     tracker_convs: set[str] = set()
     sources: list[str] = []
 
@@ -150,35 +144,36 @@ def build_owner_copilot_summary(
         cid = str(row.get("conversation_id") or "").strip()
         if cid:
             tracker_convs.add(cid)
-        credits = credits_from_tokens(int(row.get("total_tokens") or 0))
         if uid:
-            credits_by_user[uid] += credits
+            messages_by_user[uid] += 1
         else:
-            unattributed += credits
+            unattributed += 1
 
     leftover_logs = 0
-    for cid, credits in log_credits_by_conversation.items():
+    for cid, units in log_messages_by_conversation.items():
         if cid in tracker_convs:
             continue
-        leftover_logs += int(credits)
+        leftover_logs += int(units)
         uid = conv_to_user.get(cid, "")
         if uid:
-            credits_by_user[uid] += int(credits)
+            messages_by_user[uid] += int(units)
         else:
-            unattributed += int(credits)
-    if leftover_logs or log_credits_unmapped:
-        sources.append("interaction_logs_estimate")
+            unattributed += int(units)
+    if leftover_logs or log_messages_unmapped:
+        sources.append("interaction_logs")
 
-    user_ids: set[str] = set(chats_by_user) | set(credits_by_user)
+    user_ids: set[str] = set(chats_by_user) | set(messages_by_user)
     names = _lookup_names(user_ids)
     by_user: list[dict[str, Any]] = []
     for uid in sorted(user_ids, key=lambda key: cast(str, names.get(key, key)).lower()):
+        billed = int(messages_by_user.get(uid, 0))
         by_user.append(
             {
                 "user_id": uid,
                 "name": names.get(uid, uid),
                 "chats": int(chats_by_user.get(uid, 0)),
-                "credits": int(credits_by_user.get(uid, 0)),
+                "messages": billed,
+                "credits": billed,
             }
         )
     if unattributed:
@@ -187,15 +182,17 @@ def build_owner_copilot_summary(
                 "user_id": None,
                 "name": None,
                 "chats": 0,
+                "messages": int(unattributed),
                 "credits": int(unattributed),
                 "unattributed": True,
             }
         )
 
     total_chats = sum(int(row["chats"]) for row in by_user)
-    total_credits = sum(int(row["credits"]) for row in by_user)
+    total_messages = sum(int(row["messages"]) for row in by_user)
     return {
-        "credits": total_credits,
+        "messages": total_messages,
+        "credits": total_messages,
         "chats": total_chats,
         "users": len(user_ids),
         "by_user": by_user,

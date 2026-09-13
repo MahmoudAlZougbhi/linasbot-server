@@ -22,11 +22,11 @@ type Props = {
 export function OwnerCopilotCard({ copilot, expanded, onToggle, onOpenChat }: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
-  const credits = copilot?.credits ?? 0;
+  const messages = copilot?.messages ?? copilot?.credits ?? 0;
   const chats = copilot?.chats ?? 0;
   const users = copilot?.users ?? 0;
   const meta = tr('dashOwnerCopilotMeta')
-    .replace('{credits}', formatCount(credits))
+    .replace('{messages}', formatCount(messages))
     .replace('{chats}', formatCount(chats))
     .replace('{users}', formatCount(users));
   const rows = copilot?.by_user ?? [];
@@ -71,7 +71,7 @@ function UserRow({
   const name = row.unattributed || !row.name ? tr('dashUnattributed') : row.name;
   const line = tr('dashCopilotUserMeta')
     .replace('{chats}', formatCount(row.chats))
-    .replace('{credits}', formatCount(row.credits));
+    .replace('{messages}', formatCount(row.messages ?? row.credits));
   return (
     <View style={[styles.userRow, { borderTopColor: colors.borderSoft }]}>
       <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>

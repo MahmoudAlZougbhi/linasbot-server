@@ -21,11 +21,10 @@ type Plan = TenantDashboard['plan_and_credits'];
 type Props = {
   plan: Plan;
   locale: string;
-  onBuyCredits: () => void;
   onUpgrade: () => void;
 };
 
-export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props) {
+export function GrowthPlanCard({ plan, locale, onUpgrade }: Props) {
   const { tr } = useI18n();
   const { resolved } = useTheme();
   const planName = (plan.plan_name || plan.plan_id || '').trim();
@@ -58,7 +57,6 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
   const active = plan.has_subscription || plan.subscription_exempt;
   const displayRatio = ratio;
   const showUpgrade = !isHighestPlan(plan.plan_id);
-  const showLeftoverBuy = !billingActive && plan.actions?.buy_credits !== false;
 
   return (
     <View style={styles.card}>
@@ -113,11 +111,6 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
 
       <View style={styles.bottomRow}>
         <Text style={styles.renews}>{renews ? `${tr('dashRenews')} ${renews}` : ''}</Text>
-        {showLeftoverBuy ? (
-          <Pressable onPress={onBuyCredits} style={styles.buyBtn} accessibilityRole="button">
-            <Text style={styles.buyText}>{tr('chatAddLeftoverCredits')}</Text>
-          </Pressable>
-        ) : null}
       </View>
     </View>
   );
@@ -193,11 +186,4 @@ const styles = StyleSheet.create({
   fill: { height: '100%', borderRadius: 999, backgroundColor: DASH_MINT },
   bottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.sm },
   renews: { color: DASH_MINT_SOFT, fontFamily: fonts.body, fontSize: 13, flex: 1 },
-  buyBtn: {
-    backgroundColor: DASH_MINT,
-    borderRadius: DASH_BTN_RADIUS,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-  },
-  buyText: { color: DASH_FOREST, fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '700' },
 });

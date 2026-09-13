@@ -70,6 +70,8 @@ def test_dashboard_counts_from_logs_only() -> None:
     assert tiktok["coming_soon"] is False
     assert tiktok["comments"] == 1
     assert tiktok["messages"] == 1
+    assert tiktok["billed_messages"] == 2
+    assert tiktok["credits"] == 2
     ig = next(row for row in payload["channels"] if row["platform"] == "instagram")
     assert ig["messages"] == 0
     assert ig["comments"] == 0

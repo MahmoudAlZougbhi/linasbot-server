@@ -343,9 +343,9 @@ test('Dashboard sections match design handoff', () => {
   assert.match(chrome, /DASH_MINT = '#4ADE80'/);
   assert.match(chrome, /DASH_CARD_RADIUS = 16/);
   assert.match(chrome, /DASH_BAR_HEIGHT = 6/);
-  assert.match(screen, /BuyCreditsSheet/);
-  assert.match(screen, /useBuyCreditsFlow/);
-  assert.match(screen, /onBuyCredits=\{\(\) => credits\.setOpen\(true\)\}/);
+  assert.doesNotMatch(screen, /BuyCreditsSheet/);
+  assert.doesNotMatch(screen, /useBuyCreditsFlow/);
+  assert.doesNotMatch(screen, /onBuyCredits/);
   assert.match(screen, /onUpgrade=\{\(\) => onNavigate\('choose_plan'\)\}/);
   assert.doesNotMatch(screen, /centerTitle/);
   assert.doesNotMatch(screen, /stackedHeader/);
@@ -359,13 +359,13 @@ test('Dashboard sections match design handoff', () => {
   assert.match(plan, /dashMessagesPending/);
   assert.match(plan, /message_billing_active/);
   assert.match(plan, /splitRow/);
-  assert.match(plan, /chatAddLeftoverCredits/);
-  assert.match(plan, /buy_credits/);
+  assert.doesNotMatch(plan, /chatAddLeftoverCredits/);
+  assert.doesNotMatch(plan, /buy_credits/);
   assert.match(en, /dashCreditsMembership: 'Membership'/);
   assert.match(en, /dashCreditsBought: 'Bought'/);
   assert.match(en, /dashMessagesPending: 'Not active yet'/);
   assert.match(plan, /DASH_MINT/);
-  assert.match(plan, /buyBtn/);
+  assert.doesNotMatch(plan, /buyBtn/);
   assert.match(grid, /dashTotalActivity/);
   assert.match(grid, /briefcase-outline/);
   assert.match(grid, /chatbox-ellipses-outline/);
@@ -381,6 +381,8 @@ test('Dashboard sections match design handoff', () => {
   assert.match(copilot, /dashOwnerCopilot/);
   assert.match(copilot, /by_user/);
   assert.match(copilot, /dashCopilotUserMeta/);
+  assert.match(copilot, /\{messages\}/);
+  assert.doesNotMatch(copilot, /\{credits\}/);
   assert.doesNotMatch(copilot, /fontWeight:\s*'700'/);
   assert.match(chrome, /DASH_NAVY = '#1A2B4C'/);
   assert.match(chrome, /DASH_ICON_BG = '#E0F2F1'/);
