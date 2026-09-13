@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { isTransientServiceError } from '../../api/transientError';
 import { fetchSubscriptionAccess, type SubscriptionAccess } from './subscriptionAccess';
+
+const UNAVAILABLE_RETRY_MS = 30_000;
 
 /** Authenticated subscription gate state (guest path never gated). */
 export function useSubscriptionGate(isAuthenticated: boolean) {
   const [loading, setLoading] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
   const [access, setAccess] = useState<SubscriptionAccess | null>(null);
   const requestGen = useRef(0);
 
@@ -12,6 +16,7 @@ export function useSubscriptionGate(isAuthenticated: boolean) {
     if (!isAuthenticated) {
       requestGen.current += 1;
       setAccess(null);
+      setUnavailable(false);
       setLoading(false);
       return;
     }
@@ -24,11 +29,17 @@ export function useSubscriptionGate(isAuthenticated: boolean) {
       if (gen !== requestGen.current) {
         return;
       }
+      setUnavailable(false);
       setAccess(next);
-    } catch {
+    } catch (err) {
       if (gen !== requestGen.current) {
         return;
       }
+      if (isTransientServiceError(err)) {
+        setUnavailable(true);
+        return;
+      }
+      setUnavailable(false);
       // Fail closed for authenticated owners — no silent unlock.
       setAccess({
         allowed: false,
@@ -48,6 +59,15 @@ export function useSubscriptionGate(isAuthenticated: boolean) {
     void refresh();
   }, [refresh]);
 
-  const blocked = isAuthenticated && !loading && access !== null && !access.allowed;
-  return { loading, access, blocked, refresh };
+  useEffect(() => {
+    if (!isAuthenticated || !unavailable) return;
+    const timer = setInterval(() => {
+      void refresh();
+    }, UNAVAILABLE_RETRY_MS);
+    return () => clearInterval(timer);
+  }, [isAuthenticated, unavailable, refresh]);
+
+  const blocked =
+    isAuthenticated && !loading && !unavailable && access !== null && !access.allowed;
+  return { loading, access, blocked, unavailable, refresh };
 }

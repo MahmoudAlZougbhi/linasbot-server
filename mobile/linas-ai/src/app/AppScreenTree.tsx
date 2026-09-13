@@ -4,6 +4,7 @@ import { LoginScreen } from '../features/auth/LoginScreen';
 import { RegisterScreen } from '../features/auth/RegisterScreen';
 import { ForgotPasswordScreen } from '../features/auth/ForgotPasswordScreen';
 import { BillingScreen } from '../features/billing/BillingScreen';
+import { ServiceUnavailableScreen } from '../features/billing/ServiceUnavailableScreen';
 import { SubscriptionGateScreen } from '../features/billing/SubscriptionGateScreen';
 import { ChatScreen } from '../features/chat/ChatScreen';
 import { queueSetupHandoff } from '../features/chat/pendingSetupHandoff';
@@ -38,6 +39,7 @@ type Props = {
   authEpoch: number;
   hasAccess: boolean;
   showSubGate: boolean;
+  showServiceUnavailable: boolean;
   subGateLoading: boolean;
   onOpenArea: (area: ControlArea) => void;
   onOpenCmReview: (review: CmProposalReview) => void;
@@ -54,6 +56,7 @@ export function AppScreenTree({
   authEpoch,
   hasAccess,
   showSubGate,
+  showServiceUnavailable,
   subGateLoading,
   onOpenArea,
   onOpenCmReview,
@@ -64,7 +67,7 @@ export function AppScreenTree({
   refreshSubGate,
 }: Props) {
   const name = screen.name;
-  const chatActive = !showSubGate && name === 'chat';
+  const chatActive = !showSubGate && !showServiceUnavailable && name === 'chat';
 
   return (
     <View style={styles.root}>
@@ -86,6 +89,13 @@ export function AppScreenTree({
         <ForgotPasswordScreen
           onBack={() => setScreen({ name: 'login' })}
           onDone={() => setScreen({ name: 'login' })}
+        />
+      ) : null}
+      {showServiceUnavailable ? (
+        <ServiceUnavailableScreen
+          loading={subGateLoading}
+          onRetry={() => void refreshSubGate()}
+          onLogout={() => void logout()}
         />
       ) : null}
       {showSubGate ? (
