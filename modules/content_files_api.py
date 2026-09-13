@@ -54,11 +54,6 @@ async def delete_content_file(section: str, file_id: str) -> Any:
     return _gone()
 
 
-@app.get("/api/retrieval-debug/logs")
-async def get_retrieval_debug_logs(limit: int = 50) -> Any:
-    return _gone()
-
-
 @app.post("/api/content-files/migrate-legacy")
 async def migrate_legacy() -> Any:
     return _gone()

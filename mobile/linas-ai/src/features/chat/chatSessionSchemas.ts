@@ -62,22 +62,3 @@ export type ProposedPatch = {
   confirmation_token?: string;
   preview?: Record<string, unknown>;
 };
-
-/** @deprecated Creative Studio cancelled — type retained only so dead UI files typecheck. */
-export type CreativeDraft = {
-  status?: string;
-  kind?: string;
-  text?: string;
-  prompt?: string;
-  reason?: string;
-  job_id?: string;
-  model?: string;
-  task_options?: { id: string; label: string }[];
-  actions?: {
-    edit?: boolean;
-    regenerate?: boolean;
-    schedule?: boolean;
-    publish?: boolean;
-    publish_reason?: string;
-  };
-};

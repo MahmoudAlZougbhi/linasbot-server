@@ -1,8 +1,8 @@
 """Product surface flags: which legacy modules are disabled for ALL tenants.
 
-Wave 1 SaaS conversion — disable/hide, do not delete legacy code.
-These modules stay in the repo but must not appear in navigation or accept
-normal authenticated API traffic.
+Wave 1 SaaS conversion — HTTP modules for Testing Lab / smart-messaging / create-post
+were removed. Prefixes stay fail-closed so leftover clients get a disabled response
+instead of a SPA 404 that looks like an outage.
 """
 
 from __future__ import annotations

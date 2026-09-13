@@ -23,10 +23,6 @@ from services.owner_ai_tools_cm_upsert import (
     tool_propose_cm_article_upsert,
     tool_propose_cm_faq_upsert,
 )
-from services.owner_ai_tools_creative import (
-    tool_create_creative_draft,
-    tool_schedule_creative_draft,
-)
 from services.owner_ai_tools_diagnosis import (
     tool_approve_diagnosis_fix,
     tool_get_interaction_trace,
@@ -91,8 +87,6 @@ TOOL_HANDLERS: dict[str, Callable[..., Awaitable[ToolResult]]] = {
     "read_faq_quota": tool_read_faq_quota,
     "propose_smart_answer": tool_propose_smart_answer,
     "approve_smart_answer": tool_approve_smart_answer,
-    "create_creative_draft": tool_create_creative_draft,
-    "schedule_creative_draft": tool_schedule_creative_draft,
 }
 
 HIGH_IMPACT_TOOLS: frozenset[str] = frozenset(
@@ -300,25 +294,6 @@ async def dispatch_tool(
             user_id=user_id,
             proposal_id=str(a.get("proposal_id") or ""),
             confirmed=confirmed,
-        )
-    if name == "create_creative_draft":
-        return await handler(
-            tenant_id=tenant_id,
-            role=role,
-            user_id=user_id,
-            prompt=str(a.get("prompt") or a.get("query") or ""),
-            kind=str(a.get("kind") or a.get("creative_kind") or "") or None,
-            compress=bool(a.get("compress")),
-        )
-    if name == "schedule_creative_draft":
-        return await handler(
-            tenant_id=tenant_id,
-            role=role,
-            user_id=user_id,
-            text=str(a.get("text") or a.get("prompt") or ""),
-            kind=str(a.get("kind") or "post"),
-            platform=str(a.get("platform") or "") or None,
-            scheduled_at=float(a["scheduled_at"]) if a.get("scheduled_at") is not None else None,
         )
     # Generic read tools
     return await handler(tenant_id=tenant_id, role=role)

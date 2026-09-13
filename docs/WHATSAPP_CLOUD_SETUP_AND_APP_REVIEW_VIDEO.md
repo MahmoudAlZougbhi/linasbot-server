@@ -218,4 +218,4 @@ No mobile rebuild required for the switch itself.
 2. Optional: owner **Disconnect** — Business App stays usable
 3. Do not delete PG history unless retention policy requires
 
-Full architecture: `archive/docs/whatsapp_cloud/WHATSAPP_CLOUD_COEXISTENCE.md`
+WhatsApp Cloud is the only supported transport. Monty coexistence docs were removed with `archive/**` in WAVE 1.

@@ -3,7 +3,7 @@
 Frozen from the WAVE 0 KEEP list (AUDIT-06 mobile drawer + required backends).
 Audit files `AUDIT-00` … `AUDIT-10` were not in this workspace at freeze time; the lists below match the WAVE 0 prompt and were checked against `mobile/linas-ai/src/features/nav/drawerModules.ts` and `mobile/linas-ai/src/features/cm/cmSections.ts`.
 
-This file is inventory only. WAVE 0 does not delete product code. Later waves execute DELETE candidates.
+This file is inventory only. WAVE 0 did not delete product code. WAVE 1 executed the proven-dead DELETE list below.
 
 Do not revive Luna customer engine, Monty, or Creative.
 
@@ -58,18 +58,23 @@ Drawer:
 - Unified inbox memory/disk cache is per-tenant. Legacy unscoped disk cache is refused.
 - Firestore composite: `tenant_id` ASC + `last_message_at` DESC (owner-activated deploy; see `docs/FIRESTORE_INDEXES.md`). If the composite is missing, recency is scanned then foreign rows are dropped.
 
-## DELETE candidates (list only — execute in WAVE 1+)
+## DELETE candidates (WAVE 1 executed proven-dead items)
 
-- `archive/**`
-- Creative stack: `modules/creative_api.py`, `services/creative_studio_service.py`, `services/owner_ai_tools_creative.py`, mobile Creative dead types/UI, DISABLED `create_post` / social-posts implementations
-- `services/smart_retrieval_service.py`
-- `retrieval_debug.py` + `GET /api/retrieval-debug/logs`; `SMART_RETRIEVAL_DEBUG`
-- `smart_messaging_*` (~8 files) + testing_lab + `/api/test*` + `/api/debug` + `/api/switch-provider` + `/api/analytics` product implementations
-- `modules/customer_ai_lab_api.py` unmount from prod; dashboard `OwnerLab.jsx` / `/owner/lab`
-- Monty transport leftovers / adapters not needed for WA Cloud-only
-- Clinic corpus `data/*` (qa_database, marwa rules, empty kb/style) after confirming CM published is SoT
-- Owner AI v1 (`services/owner_ai_*`, `modules/owner_ai_api.py`) if routing proves mobile/portal → owner_copilot_v2 only
-- Dead web operator SPA remnants behind get-app redirects
-- Orphan booking FSM / `api_integrations_*` if the SaaS app does not use BOC booking (leave a note: BOC not in SaaS app)
-- Unused CM fields; dual `semantic_index` if Voyage-only
-- Luna customer-retrieval engine leftovers
+WAVE 1 deleted:
+
+- `archive/**` (Meta webhook contract inlined to `scripts/meta_webhook_contract.py`)
+- Creative HTTP/tools: `modules/creative_api.py`, `services/creative_studio_service.py`, `services/owner_ai_tools_creative.py`, `services/providers/openai_media.py`; leftover `creative_image`/`creative_video` jobs fail-closed (`creative_studio_cancelled`)
+- `services/smart_retrieval_service.py`, `services/retrieval_debug.py`, `GET /api/retrieval-debug/logs`
+- Owner Lab: `modules/customer_ai_lab_api.py`, `dashboard/src/pages/owner/OwnerLab.jsx`, `/owner/lab`, `/owner/copilot-setup`
+- Mobile CreativeDraft type + unused Create Post i18n
+- Marketing copy: Creative Studio / Scheduling on `/features`
+
+Still not deleted (import-graph blocked or KEEP):
+
+- Smart Follow-Up live backend (`services/smart_followup`, `services/whatsapp_cloud/smart_followup`, `/api/whatsapp/smart-followup/*`)
+- `smart_messaging_*` files still used by scheduler/catalog/WA templates (HTTP already disabled)
+- Clinic corpus `data/*` — prompt path still injects when `published_mode` is false
+- Owner AI v1 HTTP CRUD (`modules/owner_ai_api.py`) — mobile conversations/profile still depend on it
+- Booking / `api_integrations_*` — BOC is not in the SaaS app; gate stays OFF (`LINASLASER_BOC_BOOKING_ENABLED`); stack still imported
+- `owner_copilot_v2/creative_policy.py` KEEP as refusal
+- Disabled API prefixes in `product_features.py` stay fail-closed even after HTTP modules are gone

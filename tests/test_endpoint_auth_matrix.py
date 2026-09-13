@@ -34,10 +34,8 @@ _ROUTE_MODULES = (
     "modules.guest_ai_api",
     "modules.web_chat_api",
     "modules.entitlements_api",
-    "modules.creative_api",
     "modules.platform_api",
     "modules.platform_message_api",
-    "modules.customer_ai_lab_api",
     "modules.mobile_integrations_api",
     "modules.mobile_app_version_api",
     "modules.mobile_dashboard_api",
@@ -381,6 +379,13 @@ class TestSocialLiveChatMutations:
         self, client: TestClient, path: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("ENVIRONMENT", "test")
+        async def _visible(*_a: object, **_k: object) -> bool:
+            return True
+
+        monkeypatch.setattr(
+            "services.live_chat_service.live_chat_service.thread_visible_to_tenant",
+            _visible,
+        )
         _clear_client_auth(client)
         csrf = _set_admin_session(client, with_csrf_header=True)
         response = client.post(

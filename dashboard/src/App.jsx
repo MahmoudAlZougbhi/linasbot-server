@@ -17,10 +17,8 @@ import { isMarketingPublicHost, isPlatformPortalHost } from './pages/portalHost'
 import OwnerPortalShell from './pages/owner/OwnerPortalShell';
 import OwnerOverview from './pages/owner/OwnerOverview';
 import OwnerUsers from './pages/owner/OwnerUsers';
-import OwnerCopilotSetup from './pages/owner/OwnerCopilotSetup';
 import OwnerCatalog from './pages/owner/OwnerCatalog';
 import OwnerCosts from './pages/owner/OwnerCosts';
-import OwnerLab from './pages/owner/OwnerLab';
 import OwnerMessages from './pages/owner/OwnerMessages';
 
 /**
@@ -75,10 +73,8 @@ function App() {
             <Route index element={<OwnerOverview />} />
             <Route path="users" element={<OwnerUsers />} />
             <Route path="messages" element={<OwnerMessages />} />
-            <Route path="copilot-setup" element={<OwnerCopilotSetup />} />
             <Route path="catalog" element={<OwnerCatalog />} />
             <Route path="costs" element={<OwnerCosts />} />
-            <Route path="lab" element={<OwnerLab />} />
           </Route>
           <Route path="/training" element={<Navigate to="/#get-app" replace />} />
           <Route path="/content-managers/*" element={<Navigate to="/#get-app" replace />} />

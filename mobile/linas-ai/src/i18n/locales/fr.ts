@@ -69,16 +69,12 @@ export const fr = {
   authGateTitle: 'Connectez-vous pour continuer',
   authGateBody:
     'Centre de contrôle, Configuration IA, intégrations et facturation nécessitent un compte.',
-  authGateCreatePost:
-    'Create Post se fait dans le chat avec l’IA de votre marque. Connectez-vous pour rédiger et planifier.',
   continueAsGuest: 'Continuer en invité',
   confirmAction: 'Confirmer',
   rejectAction: 'Refuser',
   proposedCmPatch: 'Modification Configuration IA proposée',
   reviewSetup: 'Revoir la config',
   checkUsage: 'Vérifier l’usage',
-  createPost: 'Créer une publication',
-  createPostStart: 'Je veux créer une publication',
   addEditCm: 'Ajouter / modifier Configuration IA',
   attachDocument: 'Joindre un document',
   attachImage: 'Joindre une image',

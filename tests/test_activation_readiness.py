@@ -15,7 +15,7 @@ def test_readiness_stays_blocked_and_does_not_enable() -> None:
     assert report["conversion"]["blocked"] is True
     assert report["conversion"]["assumed_rate"] is None
     assert report["lab_isolated"] is True
-    assert "staging lab tests" in report["note"]
+    assert "Owner Lab HTTP and /owner/lab" in report["note"]
     for field in UNCONFIGURED_FREE_FIELDS:
         assert field in report["catalog_unconfigured"]
         assert field in report["blockers"]

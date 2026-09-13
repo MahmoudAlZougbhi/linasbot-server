@@ -275,7 +275,14 @@ class TestAPIAuthEnforcement:
         body = r.json()
         assert body.get("code") == "PRODUCT_MODULE_DISABLED"
 
-    def test_social_takeover_allowed_not_403(self, client):
+    def test_social_takeover_allowed_not_403(self, client, monkeypatch):
+        async def _visible(*_a, **_k):
+            return True
+
+        monkeypatch.setattr(
+            "services.live_chat_service.live_chat_service.thread_visible_to_tenant",
+            _visible,
+        )
         rec = session_service.create_session(
             user_id="op2", email="op2@example.com", role="admin", permissions=None, tenant_id="linas"
         )
