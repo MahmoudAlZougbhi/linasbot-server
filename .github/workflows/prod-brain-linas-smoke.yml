@@ -70,8 +70,25 @@ jobs:
             from services.customer_ai.retrieve.schedule_text import schedule_lines
             from services.customer_ai.runtime import run_customer_ai_dm
 
+            def _row_clocks(raw: dict) -> dict:
+                clocks = schedule_lines(raw)
+                hours = raw.get("hours")
+                hour_days = []
+                if isinstance(hours, dict):
+                    hour_days = [d for d in ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday") if str(hours.get(d) or "").strip()]
+                ws = raw.get("weekly_schedule")
+                return {
+                    "id": str(raw.get("id") or ""),
+                    "clock_n": len(clocks),
+                    "clocks": clocks[:3],
+                    "ws": isinstance(ws, dict),
+                    "hours_type": type(hours).__name__,
+                    "hours_days": hour_days,
+                    "keys": sorted(str(k) for k in raw.keys())[:20],
+                }
+
             def _hours_inventory() -> dict:
-                _pointer, sections = load_published_content("linas")
+                pointer, sections = load_published_content("linas")
                 if not isinstance(sections, dict):
                     return {"error": "no_sections"}
                 rows = []
@@ -79,35 +96,36 @@ jobs:
                     payload = sections.get(key)
                     items = payload.get("items") if isinstance(payload, dict) else None
                     for raw in items or []:
-                        if not isinstance(raw, dict):
-                            continue
-                        clocks = schedule_lines(raw)
-                        ws = raw.get("weekly_schedule")
-                        ws_days = sorted(ws.keys()) if isinstance(ws, dict) else []
-                        rows.append(
-                            {
-                                "section": key,
-                                "id": str(raw.get("id") or ""),
-                                "title": str(raw.get("title") or raw.get("name") or ""),
-                                "aliases": [str(a) for a in (raw.get("aliases") or [])][:6],
-                                "ws_days": ws_days,
-                                "clock_n": len(clocks),
-                                "clocks": clocks[:3],
-                                "keys": sorted(str(k) for k in raw.keys())[:20],
-                            }
-                        )
+                        if isinstance(raw, dict):
+                            rows.append({"section": key, **_row_clocks(raw)})
+                draft_rows = []
+                try:
+                    from services.cm.storage import get_draft
+
+                    for key in ("branches", "opening_hours"):
+                        env = get_draft(key, tenant_id="linas", create_default=False)
+                        payload = env.payload if env is not None else {}
+                        items = payload.get("items") if isinstance(payload, dict) else None
+                        for raw in items or []:
+                            if isinstance(raw, dict):
+                                draft_rows.append({"section": key, **_row_clocks(raw)})
+                except Exception as exc:
+                    draft_rows = [{"error": type(exc).__name__ + ":" + str(exc)[:160]}]
                 cards = cards_from_sections(sections, tenant_id="linas")
-                hours_cards = [
-                    {"id": c.item_id, "title": c.title, "search": (c.search_text or "")[:160]}
-                    for c in cards
-                    if c.source_family in {"hours", "branches"}
-                ]
                 antelias = next((c for c in cards if c.item_id == "hours:antelias"), None)
                 hydrated = ""
                 if antelias is not None:
                     bundle = expand_hits([LexicalHit(card=antelias, score=1.0)], sections, tenant_id="linas")
-                    hydrated = (bundle.items[0].text if bundle.items else "")[:400]
-                return {"rows": rows, "hours_cards": hours_cards[:12], "hydrated_antelias": hydrated}
+                    hydrated = (bundle.items[0].text if bundle.items else "")[:240]
+                return {
+                    "pointer": str(getattr(pointer, "version_id", "") or getattr(pointer, "revision", "") or ""),
+                    "oh_keys": sorted((sections.get("opening_hours") or {}).keys())
+                    if isinstance(sections.get("opening_hours"), dict)
+                    else [],
+                    "rows": rows,
+                    "draft_rows": draft_rows,
+                    "hydrated_antelias": hydrated,
+                }
 
             try:
                 print("[brain-smoke] hours " + json.dumps(_hours_inventory(), ensure_ascii=False)[:8000])
