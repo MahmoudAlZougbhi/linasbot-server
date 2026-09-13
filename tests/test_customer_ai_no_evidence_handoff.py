@@ -1,0 +1,274 @@
+"""Unanswered published-info questions go to Live Chat. Small talk does not."""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock
+
+import pytest
+
+from services.customer_ai.agent.action_gate import ActionGateResult
+from services.customer_ai.agent.loop import run_agentic_turn
+from services.customer_ai.agent.no_evidence_handoff import should_handoff_unanswered, unanswered_question_result
+from services.customer_ai.contracts.actions import ActionReceipt, ActionReceiptSet
+from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
+from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+from services.customer_ai.contracts.turn import CustomerTurn, HistorySnapshot
+from services.customer_ai.templates import brain_template
+
+
+def _plan(*tasks: PlannerTask) -> PlannerPlan:
+    return PlannerPlan(tasks=list(tasks), read_only=True)
+
+
+def _task(
+    task_id: str,
+    task_type: str = "information",
+    *,
+    families: list[str] | None = None,
+    span: str = "",
+) -> PlannerTask:
+    return PlannerTask(
+        id=task_id,
+        type=task_type,  # type: ignore[arg-type]
+        span=TaskSpan(text=span or task_id),
+        source_families=list(families or ["knowledge"]),  # type: ignore[arg-type]
+    )
+
+
+def _turn(*, kind: str = "dm", lang: str = "en") -> CustomerTurn:
+    return CustomerTurn(
+        tenant_id="t-unanswered",
+        customer_id="u-1",
+        conversation_id="c-1",
+        channel="instagram_dm",
+        invocation_kind=kind,  # type: ignore[arg-type]
+        extra={"response_language": lang},
+        history=HistorySnapshot(),
+    )
+
+
+def test_should_handoff_only_unanswered_questions() -> None:
+    info = _plan(_task("t1", "information", span="guest wifi?"))
+    hours = _plan(_task("h1", "hours", families=["hours", "branches"], span="antelias hours"))
+    ack = _plan(_task("t1", "information", span="thanks"))
+    found_hours = hours
+    assert should_handoff_unanswered(plan=info, outcome="not_found", message="Do you have guest wifi?") is True
+    assert should_handoff_unanswered(plan=hours, outcome="not_found", message="شو ساعات أنطلياس؟") is True
+    assert should_handoff_unanswered(plan=found_hours, outcome="found", message="شو ساعات أنطلياس؟") is False
+    assert should_handoff_unanswered(plan=hours, outcome="index_not_ready", message="شو ساعات أنطلياس؟") is False
+    assert should_handoff_unanswered(plan=hours, outcome="ambiguous", message="شو ساعات أنطلياس؟") is False
+    assert should_handoff_unanswered(plan=ack, outcome="not_found", message="thanks") is False
+    assert should_handoff_unanswered(plan=info, outcome="not_found", message="Do you have guest wifi?", invocation_kind="comment") is False
+    catchall = _plan(_task("t1", "information", families=["knowledge", "care", "services", "faq", "branches"], span="ok"))
+    assert should_handoff_unanswered(plan=catchall, outcome="not_found", message="ok") is False
+    assert should_handoff_unanswered(plan=catchall, outcome="not_found", message="cool") is False
+
+
+def test_polite_copy_does_not_send_customer_away() -> None:
+    sorry = brain_template("no_evidence_handoff", "en").lower()
+    assert "sorry" in sorry
+    assert "team" in sorry
+    assert "reach out" not in sorry
+    assert "ask a teammate" not in sorry
+    ar = brain_template("no_evidence_handoff", "ar")
+    assert "آسف" in ar
+    assert "فريق" in ar
+    assert brain_template("handoff", "en") != brain_template("handoff", "ar")
+
+
+@pytest.mark.asyncio
+async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "services.customer_ai.agent.no_evidence_handoff.human_handoff_enabled",
+        lambda _tid: True,
+    )
+    execute = AsyncMock(
+        return_value=ActionReceiptSet(
+            receipts=[
+                ActionReceipt(
+                    action_id="handoff:unanswered",
+                    action_type="escalate_to_human",
+                    state="success",
+                    backend_id="c-1",
+                )
+            ]
+        )
+    )
+    monkeypatch.setattr("services.customer_ai.agent.no_evidence_handoff.execute_actions", execute)
+    plan = _plan(_task("t1", "information", span="unpublished policy?"))
+    result = await unanswered_question_result(
+        _turn(),
+        message="What is your unpublished refund policy?",
+        plan=plan,
+        dest="dm",
+        lang="en",
+        extra={},
+        agent_trace=[],
+        outcome="not_found",
+        evidence=[],
+        structured_facts={},
+        resource_receipts=[],
+        visual_reason="",
+        tool_rows=[],
+    )
+    assert result is not None
+    assert result.stop_reason == "ok"
+    assert result.envelope.decision == "handoff_ack"
+    text = result.envelope.messages[0].text.lower()
+    assert "sorry" in text
+    assert "team" in text
+    assert "reach out" not in text
+    execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_unanswered_does_not_claim_transfer_when_persist_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "services.customer_ai.agent.no_evidence_handoff.human_handoff_enabled",
+        lambda _tid: True,
+    )
+    monkeypatch.setattr(
+        "services.customer_ai.agent.no_evidence_handoff.execute_actions",
+        AsyncMock(
+            return_value=ActionReceiptSet(
+                receipts=[
+                    ActionReceipt(
+                        action_id="handoff:unanswered",
+                        action_type="escalate_to_human",
+                        state="failure",
+                        reason="handoff_persist_failed",
+                    )
+                ]
+            )
+        ),
+    )
+    result = await unanswered_question_result(
+        _turn(),
+        message="What is your unpublished refund policy?",
+        plan=_plan(_task("t1", "information", span="policy?")),
+        dest="dm",
+        lang="en",
+        extra={},
+        agent_trace=[],
+        outcome="not_found",
+        evidence=[],
+        structured_facts={},
+        resource_receipts=[],
+        visual_reason="",
+        tool_rows=[],
+    )
+    assert result is not None
+    assert result.envelope.decision == "clarify"
+    text = result.envelope.messages[0].text.lower()
+    assert "sorry" in text
+    assert "connect you" not in text
+    assert "transferred" not in text
+    assert "reach out" not in text
+
+
+@pytest.mark.asyncio
+async def test_agentic_not_found_question_hands_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _gate(turn, plan, *, message, dest, lang, extra, agent_trace):
+        return ActionGateResult(early=None, extra=dict(extra))
+
+    async def _retrieve(*_a, **_k):
+        return EvidenceBundle(items=[], outcome="not_found"), [], {}
+
+    execute = AsyncMock(
+        return_value=ActionReceiptSet(
+            receipts=[
+                ActionReceipt(
+                    action_id="handoff:unanswered",
+                    action_type="escalate_to_human",
+                    state="success",
+                    backend_id="c-1",
+                )
+            ]
+        )
+    )
+    monkeypatch.setattr("services.customer_ai.agent.loop.apply_action_gate", _gate)
+    monkeypatch.setattr("services.customer_ai.agent.loop.multi_round_retrieve", _retrieve)
+    monkeypatch.setattr("services.customer_ai.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
+    monkeypatch.setattr(
+        "services.customer_ai.agent.no_evidence_handoff.human_handoff_enabled",
+        lambda _tid: True,
+    )
+    monkeypatch.setattr("services.customer_ai.agent.no_evidence_handoff.execute_actions", execute)
+    result = await run_agentic_turn(
+        _turn(),
+        "What is your unpublished refund policy?",
+        "instagram_dm",
+        plan=_plan(_task("t1", "information", span="unpublished refund?")),
+    )
+    assert result.envelope.decision == "handoff_ack"
+    assert result.stop_reason == "ok"
+    execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_agentic_found_hours_does_not_auto_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _gate(turn, plan, *, message, dest, lang, extra, agent_trace):
+        return ActionGateResult(early=None, extra=dict(extra))
+
+    async def _retrieve(*_a, **_k):
+        item = EvidenceItem(
+            evidence_id="hours:antelias",
+            source_family="hours",
+            source_id="antelias",
+            title="Antelias",
+            text="monday: 11:00–19:00",
+        )
+        return EvidenceBundle(items=[item], outcome="found"), [], {}
+
+    execute = AsyncMock()
+
+    async def _generate(*_a, **_k):
+        from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+
+        return TurnResult(
+            stop_reason="ok",
+            envelope=FinalReplyEnvelope(
+                decision="reply",
+                messages=[OutboundMessage(destination="dm", text="Antelias is open 11:00–19:00.")],
+            ),
+        )
+
+    monkeypatch.setattr("services.customer_ai.agent.loop.apply_action_gate", _gate)
+    monkeypatch.setattr("services.customer_ai.agent.loop.multi_round_retrieve", _retrieve)
+    monkeypatch.setattr("services.customer_ai.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
+    monkeypatch.setattr("services.customer_ai.agent.loop.generate_verified", _generate)
+    monkeypatch.setattr("services.customer_ai.agent.loop.reserve_generative", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.customer_ai.agent.no_evidence_handoff.execute_actions", execute)
+    result = await run_agentic_turn(
+        _turn(),
+        "شو ساعات أنطلياس؟",
+        "instagram_dm",
+        plan=_plan(_task("h1", "hours", families=["hours", "branches"], span="antelias")),
+    )
+    assert result.envelope.decision == "reply"
+    assert "11:00" in result.envelope.messages[0].text
+    execute.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_index_not_ready_does_not_auto_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _gate(turn, plan, *, message, dest, lang, extra, agent_trace):
+        return ActionGateResult(early=None, extra=dict(extra))
+
+    async def _retrieve(*_a, **_k):
+        return EvidenceBundle(items=[], outcome="index_not_ready"), [], {}
+
+    execute = AsyncMock()
+    monkeypatch.setattr("services.customer_ai.agent.loop.apply_action_gate", _gate)
+    monkeypatch.setattr("services.customer_ai.agent.loop.multi_round_retrieve", _retrieve)
+    monkeypatch.setattr("services.customer_ai.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
+    monkeypatch.setattr("services.customer_ai.agent.no_evidence_handoff.execute_actions", execute)
+    result = await run_agentic_turn(
+        _turn(),
+        "What is your unpublished refund policy?",
+        "instagram_dm",
+        plan=_plan(_task("t1", "information", span="policy?")),
+    )
+    assert result.envelope.decision == "no_reply"
+    assert result.stop_reason == "index_not_ready"
+    execute.assert_not_called()

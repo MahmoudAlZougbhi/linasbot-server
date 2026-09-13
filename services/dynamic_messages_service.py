@@ -69,6 +69,48 @@ DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
             "franco": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
         },
     },
+    "brain_handoff_ack": {
+        "label": "Brain Human Handoff Ack",
+        "when_used": "Sent when the customer asked for a person and Live Chat takeover succeeded.",
+        "messages": {
+            "ar": "رح حوّلك لحدا من الفريق شوي، وبيكون معك.",
+            "en": "I'll connect you with someone from the team shortly, and they'll be with you.",
+            "fr": "Je vous mets en relation avec quelqu’un de l’équipe sous peu, et il sera avec vous.",
+            "franco": "رح حوّلك لحدا من الفريق شوي، وبيكون معك.",
+        },
+    },
+    "brain_no_evidence": {
+        "label": "Brain No Published Answer",
+        "when_used": (
+            "Sent when Brain has no published answer and cannot place the chat in Live Chat "
+            "(handoff disabled or persist failed). Does not tell the customer to go find the team."
+        ),
+        "messages": {
+            "ar": "آسف، ما عندي معلومات عن هالسؤال هلق.",
+            "en": "Sorry, I don’t have information about that question yet.",
+            "fr": "Désolé, je n’ai pas encore d’information sur cette question.",
+            "franco": "آسف، ما عندي معلومات عن هالسؤال هلق.",
+        },
+    },
+    "brain_no_evidence_handoff": {
+        "label": "Brain Unanswered Question Handoff",
+        "when_used": (
+            "Sent when Brain found no published answer for a real customer question and "
+            "automatically transferred the chat to Live Chat."
+        ),
+        "messages": {
+            "ar": "آسف، ما عندي معلومات عن هالسؤال هلق. رح حوّلك لحدا من الفريق شوي، وبيكون معك.",
+            "en": (
+                "Sorry, I don’t have information about that question yet. "
+                "I’ll connect you with someone from the team shortly, and they’ll be with you."
+            ),
+            "fr": (
+                "Désolé, je n’ai pas encore d’information sur cette question. "
+                "Je vous mets en relation avec quelqu’un de l’équipe sous peu, et il sera avec vous."
+            ),
+            "franco": "آسف، ما عندي معلومات عن هالسؤال هلق. رح حوّلك لحدا من الفريق شوي، وبيكون معك.",
+        },
+    },
     "waiting_queue_message": {
         "label": "Waiting Queue Message",
         "when_used": "Sent while human takeover is active and no operator assigned yet.",
@@ -87,10 +129,10 @@ DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
             "handoff with no invented facts. See services/cm/runtime_pipeline.py."
         ),
         "messages": {
-            "ar": "ما قدرت أتأكد ١٠٠٪ من هالمعلومة هلق. فيك تعيد صياغة سؤالك أو تتواصل معنا مباشرة وفريقنا بيساعدك؟",
-            "en": "I couldn't fully confirm that detail right now. Could you rephrase your question, or reach out to our team directly so they can help?",
-            "fr": "Je n'ai pas pu confirmer entièrement ce détail pour le moment. Pouvez-vous reformuler votre question ou contacter directement notre équipe ?",
-            "franco": "ما قدرت أتأكد ١٠٠٪ من هالمعلومة هلق. فيك تعيد صياغة سؤالك أو تتواصل معنا مباشرة وفريقنا بيساعدك؟",
+            "ar": "آسف، ما قدرت أتأكد من هالمعلومة هلق.",
+            "en": "Sorry, I couldn't fully confirm that detail right now.",
+            "fr": "Désolé, je n'ai pas pu confirmer entièrement ce détail pour le moment.",
+            "franco": "آسف، ما قدرت أتأكد من هالمعلومة هلق.",
         },
     },
 }
