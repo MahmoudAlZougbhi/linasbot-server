@@ -77,7 +77,7 @@ export function ChannelActivityTable({ channels, unavailable }: Props) {
             <DataCell value={row.comments} colors={colors} />
             <DataCell value={row.smart} colors={colors} />
             <DataCell value={row.requests} colors={colors} />
-            <DataCell value={row.credits} colors={colors} wide />
+            <DataCell value={row.billed_messages ?? row.credits} colors={colors} wide />
           </View>
         ))
       )}

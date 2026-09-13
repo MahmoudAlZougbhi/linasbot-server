@@ -247,12 +247,14 @@ export const TenantDashboardSchema = z.object({
             comments: z.number(),
             smart: z.number(),
             requests: z.number(),
+            billed_messages: z.number().optional(),
             credits: z.number(),
           }),
         )
         .optional(),
       owner_copilot: z
         .object({
+          messages: z.number().optional(),
           credits: z.number(),
           chats: z.number(),
           users: z.number(),
@@ -262,6 +264,7 @@ export const TenantDashboardSchema = z.object({
                 user_id: z.string().nullable().optional(),
                 name: z.string().nullable().optional(),
                 chats: z.number(),
+                messages: z.number().optional(),
                 credits: z.number(),
                 unattributed: z.boolean().optional(),
               }),

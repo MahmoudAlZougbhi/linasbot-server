@@ -21,7 +21,7 @@ _REQUEST_CHANNEL_MAP = {
 
 
 def _empty_platform_row() -> dict[str, int]:
-    return {"messages": 0, "comments": 0, "smart": 0, "requests": 0, "credits": 0}
+    return {"messages": 0, "comments": 0, "smart": 0, "requests": 0, "billed_messages": 0}
 
 
 _BUCKET_PLATFORM_MAP = {
@@ -59,27 +59,11 @@ def _normalize_platform(channel: Any) -> str | None:
     return None
 
 
-def _entry_tokens(entry: dict[str, Any]) -> int:
-    if isinstance(entry.get("tokens"), int):
-        return max(0, int(entry["tokens"]))
-    prompt = entry.get("prompt_tokens")
-    completion = entry.get("completion_tokens")
-    total = 0
-    if isinstance(prompt, int):
-        total += max(0, prompt)
-    if isinstance(completion, int):
-        total += max(0, completion)
-    return total
-
-
-def _entry_credits_estimate(entry: dict[str, Any]) -> int:
-    cost = entry.get("cost_usd")
-    if isinstance(cost, (int, float)) and float(cost) > 0:
-        return max(1, round(float(cost) * 1000))
-    tokens = _entry_tokens(entry)
-    if tokens > 0:
-        return max(1, round(tokens / 100))
-    return 0
+def _billed_message_units(source: str) -> int:
+    """One generative reply = one message. Smart FAQ answers are not billed."""
+    if source in _SMART_SOURCES:
+        return 0
+    return 1
 
 
 def _is_reply(entry: dict[str, Any]) -> bool:
@@ -144,8 +128,8 @@ def build_activity_summary(
 
     platform_rows = {key: _empty_platform_row() for key in _ACTIVITY_PLATFORMS}
     owner_copilot_interactions = 0
-    log_credits_by_conversation: dict[str, int] = {}
-    log_credits_unmapped = 0
+    log_messages_by_conversation: dict[str, int] = {}
+    log_messages_unmapped = 0
 
     for entry in scoped:
         ts = _parse_ts(entry.get("timestamp"))
@@ -157,15 +141,15 @@ def build_activity_summary(
         bucket = _normalize_usage_bucket(entry)
         platform = _normalize_platform(entry.get("channel")) or _BUCKET_PLATFORM_MAP.get(bucket)
         source = str(entry.get("source") or "").strip().lower()
-        credits = _entry_credits_estimate(entry)
+        billed = _billed_message_units(source)
 
         if bucket == "owner_copilot":
             owner_copilot_interactions += 1
             cid = str(entry.get("conversation_id") or "").strip()
             if cid:
-                log_credits_by_conversation[cid] = log_credits_by_conversation.get(cid, 0) + credits
+                log_messages_by_conversation[cid] = log_messages_by_conversation.get(cid, 0) + billed
             else:
-                log_credits_unmapped += credits
+                log_messages_unmapped += billed
             continue
 
         if platform not in platform_rows:
@@ -179,7 +163,7 @@ def build_activity_summary(
         if source in _SMART_SOURCES:
             platform_rows[platform]["smart"] += 1
 
-        platform_rows[platform]["credits"] += credits
+        platform_rows[platform]["billed_messages"] += billed
 
     req_by_platform, req_total, req_source = _request_counts_by_platform(tid, start=start, end=end)
     for platform, count in req_by_platform.items():
@@ -205,6 +189,7 @@ def build_activity_summary(
                 coming_soon = bool(item.get("coming_soon"))
                 break
         row = platform_rows[platform]
+        billed = int(row["billed_messages"])
         channels.append(
             {
                 "platform": platform,
@@ -212,6 +197,7 @@ def build_activity_summary(
                 "operational": is_connected,
                 "coming_soon": coming_soon,
                 **row,
+                "credits": billed,
             }
         )
 
@@ -232,12 +218,12 @@ def build_activity_summary(
             tid,
             start_ts=start_ts,
             end_ts=end_ts,
-            log_credits_by_conversation=log_credits_by_conversation,
-            log_credits_unmapped=log_credits_unmapped,
+            log_messages_by_conversation=log_messages_by_conversation,
+            log_messages_unmapped=log_messages_unmapped,
             log_interactions=owner_copilot_interactions,
         ),
         "requests_source": req_source,
         "credits_by_channel_note": (
-            "Per-channel messages are estimated from interaction token/cost fields in activity logs."
+            "Per-channel billed_messages counts generative replies (one each). Smart FAQ answers are not billed."
         ),
     }

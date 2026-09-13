@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from services.owner_ai_model_router import OwnerChatUsageTracker, RouteDecision
 from services.owner_chat_store import OwnerChatStore
 from services.tenant_mobile_dashboard.activity import build_activity_summary
-from services.tenant_mobile_dashboard.copilot import _safe_ts, build_owner_copilot_summary, credits_from_tokens
+from services.tenant_mobile_dashboard.copilot import _safe_ts, build_owner_copilot_summary
 
 
 def _route() -> RouteDecision:
@@ -33,10 +34,24 @@ def _seed_chat(store: OwnerChatStore, *, tenant_id: str, user_id: str, ts: float
     return conv.id
 
 
-def test_credits_from_tokens_matches_log_estimate() -> None:
-    assert credits_from_tokens(0) == 0
-    assert credits_from_tokens(100) == 1
-    assert credits_from_tokens(250) == 2
+def test_copilot_counts_one_message_per_turn(tmp_path: Path, monkeypatch) -> None:
+    store = OwnerChatStore(root=tmp_path / "owner_chat")
+    monkeypatch.setattr(
+        "services.tenant_mobile_dashboard.copilot.owner_chat_usage_tracker",
+        OwnerChatUsageTracker(root=tmp_path / "usage"),
+    )
+    now = time.time()
+    summary = build_owner_copilot_summary(
+        "acme",
+        start_ts=now - 86400,
+        end_ts=now + 60,
+        log_messages_by_conversation={},
+        log_messages_unmapped=0,
+        log_interactions=0,
+        store=store,
+    )
+    assert summary["messages"] == 0
+    assert summary["credits"] == 0
 
 
 def test_safe_ts_ignores_corrupt_conversation_timestamps() -> None:
@@ -70,8 +85,8 @@ def test_copilot_survives_corrupt_conversation_meta(tmp_path: Path, monkeypatch)
         "acme",
         start_ts=now - 86400,
         end_ts=now + 60,
-        log_credits_by_conversation={},
-        log_credits_unmapped=0,
+        log_messages_by_conversation={},
+        log_messages_unmapped=0,
         log_interactions=0,
         store=store,
     )
@@ -107,8 +122,8 @@ def test_copilot_ignores_epoch_timestamps_in_all_time_window(tmp_path: Path, mon
         "acme",
         start_ts=0,
         end_ts=now + 60,
-        log_credits_by_conversation={},
-        log_credits_unmapped=0,
+        log_messages_by_conversation={},
+        log_messages_unmapped=0,
         log_interactions=0,
         store=store,
     )
@@ -131,8 +146,8 @@ def test_copilot_chat_counts_match_across_recent_ranges(tmp_path: Path, monkeypa
     )
 
     kwargs = dict(
-        log_credits_by_conversation={cid: 2},
-        log_credits_unmapped=0,
+        log_messages_by_conversation={cid: 2},
+        log_messages_unmapped=0,
         log_interactions=1,
         store=store,
     )
@@ -181,22 +196,23 @@ def test_copilot_per_user_rows_sum_to_footer(tmp_path: Path, monkeypatch) -> Non
         "acme",
         start_ts=start,
         end_ts=end,
-        log_credits_by_conversation={cid_b: 7},
-        log_credits_unmapped=2,
+        log_messages_by_conversation={cid_b: 1},
+        log_messages_unmapped=2,
         log_interactions=3,
         store=store,
     )
     assert summary["chats"] == 3
     assert summary["users"] == 2
+    assert summary["messages"] == summary["credits"]
     assert sum(row["chats"] for row in summary["by_user"]) == summary["chats"]
-    assert sum(row["credits"] for row in summary["by_user"]) == summary["credits"]
+    assert sum(row["messages"] for row in summary["by_user"]) == summary["messages"]
     by_id = {row["user_id"]: row for row in summary["by_user"] if row.get("user_id")}
     assert by_id["u-owner"]["chats"] == 2
     assert by_id["u-staff"]["chats"] == 1
-    assert by_id["u-owner"]["credits"] == credits_from_tokens(1000) + 7
-    assert by_id["u-staff"]["credits"] == credits_from_tokens(500)
+    assert by_id["u-owner"]["messages"] == 2
+    assert by_id["u-staff"]["messages"] == 1
     unattr = next(row for row in summary["by_user"] if row.get("unattributed"))
-    assert unattr["credits"] == 2
+    assert unattr["messages"] == 2
     assert "owner_ai_usage" in summary["credits_source"]
 
 
@@ -213,4 +229,41 @@ def test_activity_includes_tiktok_zero_row() -> None:
     assert platforms == ["instagram", "facebook", "tiktok", "whatsapp", "web"]
     tiktok = next(row for row in payload["channels"] if row["platform"] == "tiktok")
     assert tiktok["messages"] == 0
+    assert tiktok["billed_messages"] == 0
     assert tiktok["connected"] is False
+
+
+def test_activity_bills_one_message_and_skips_faq() -> None:
+    now = time.time()
+    iso = datetime.fromtimestamp(now, tz=UTC).isoformat()
+    payload = build_activity_summary(
+        "t-dash-bill",
+        start_ts=now - 50,
+        end_ts=now + 50,
+        integrations=[{"platform": "instagram", "connected": True, "coming_soon": False}],
+        entries=[
+            {
+                "tenant_id": "t-dash-bill",
+                "channel": "instagram",
+                "source": "gpt",
+                "outcome": "ok",
+                "bot_to_user": "hello",
+                "timestamp": iso,
+                "tokens": 800,
+            },
+            {
+                "tenant_id": "t-dash-bill",
+                "channel": "instagram",
+                "source": "qa_database",
+                "outcome": "ok",
+                "bot_to_user": True,
+                "timestamp": iso,
+                "tokens": 40,
+            },
+        ],
+    )
+    ig = next(row for row in payload["channels"] if row["platform"] == "instagram")
+    assert ig["messages"] == 2
+    assert ig["smart"] == 1
+    assert ig["billed_messages"] == 1
+    assert ig["credits"] == 1

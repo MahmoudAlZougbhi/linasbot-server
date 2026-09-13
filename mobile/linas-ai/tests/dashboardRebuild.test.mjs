@@ -37,9 +37,8 @@ test('Dashboard rebuild uses typed mobile dashboard API', () => {
   assert.match(screen, /TotalActivityGrid/);
   assert.match(screen, /ChannelActivityTable/);
   assert.match(screen, /OwnerCopilotCard/);
-  assert.match(screen, /BuyCreditsSheet/);
-  assert.match(screen, /credits\.open && !credits\.messageBillingActive/);
-  assert.match(screen, /credits\.setOpen\(true\)/);
+  assert.doesNotMatch(screen, /BuyCreditsSheet/);
+  assert.doesNotMatch(screen, /useBuyCreditsFlow/);
   assert.match(screen, /headerRight/);
   assert.match(screen, /refreshIfStale/);
   assert.match(read('app/AppScreenTree.tsx'), /active=\{name === 'dashboard'\}/);
@@ -111,6 +110,9 @@ test('dashboard i18n covers en ar fr', () => {
   assert.match(read('i18n/locales/ar.ts'), /dashboardAr/);
   assert.match(read('i18n/locales/fr.ts'), /dashboardFr/);
   assert.match(read('i18n/locales/dashboardEn.ts'), /dashGrowthPlan/);
+  assert.match(read('i18n/locales/dashboardEn.ts'), /\{messages\} messages/);
+  assert.doesNotMatch(read('i18n/locales/dashboardEn.ts'), /\{credits\} credits/);
+  assert.match(read('features/dashboard/sections/ChannelActivityTable.tsx'), /billed_messages/);
 });
 
 test('dashboard date card uses new presets and Linas copilot mark', () => {
