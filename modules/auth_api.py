@@ -46,6 +46,7 @@ from services.dashboard_session_service import (
     SESSION_COOKIE_NAME,
     session_service,
 )
+from services.platform_portal_hosts import cookie_login_error
 from services.user_service import AuthBackendUnavailableError, user_service
 
 
@@ -88,9 +89,9 @@ async def ensure_model_policy_configured() -> None:
 
 
 @app.post("/api/auth/login")
-async def login(request: LoginRequest, response: Response) -> Any:
-    email = (request.email or "").strip().lower()
-    password = request.password or ""
+async def login(body: LoginRequest, request: Request, response: Response) -> Any:
+    email = (body.email or "").strip().lower()
+    password = body.password or ""
 
     max_retries = 3
     last_error_type = None
@@ -107,6 +108,9 @@ async def login(request: LoginRequest, response: Response) -> Any:
             tenant_id = str(user.get("tenantId") or "").strip()
             if not tenant_id:
                 return {"success": False, "error": "Tenant required"}
+            blocked = cookie_login_error(request.headers.get("host"), str(user.get("role") or ""))
+            if blocked:
+                return {"success": False, "error": blocked}
 
             record = session_service.create_session(
                 user_id=str(user["id"]),

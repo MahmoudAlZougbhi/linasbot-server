@@ -98,12 +98,11 @@ const Login = () => {
             <SparklesIcon className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-4xl font-bold gradient-text font-display mb-2">
-            Welcome Back
+            Owner Portal
           </h1>
-          <p className="text-slate-600">Operator dashboard login</p>
+          <p className="text-slate-600">Platform owner sign in</p>
           <p className="mt-2 text-sm text-slate-500">
-            Public accounts are created in the Linas AI mobile app.{" "}
-            <a href="/" className="font-medium text-primary-700 underline">Back to home</a>
+            Workspace accounts belong in the Linas AI mobile app.
           </p>
         </motion.div>
 

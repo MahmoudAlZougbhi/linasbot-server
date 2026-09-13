@@ -59,6 +59,11 @@ def main() -> int:
         choices=["admin", "platform_owner"],
         help="admin (default first-admin) or platform_owner (offline-only elevation)",
     )
+    parser.add_argument(
+        "--tenant-id",
+        default="platform",
+        help="Tenant for a new platform_owner (default: platform). Ignored when elevating an existing user.",
+    )
     args = parser.parse_args()
 
     try:
@@ -76,6 +81,7 @@ def main() -> int:
             name=args.name,
             created_by="cli-provision",
             role=str(args.role),
+            tenant_id=str(args.tenant_id),
         )
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)

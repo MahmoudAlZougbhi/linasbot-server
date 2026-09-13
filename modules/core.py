@@ -61,28 +61,15 @@ app = FastAPI(
 
 
 def cors_allow_origins(*, environment: str | None = None) -> list[str]:
-    """CORS origins: localhost always; linasaibot.com is HTTPS-only in production."""
+    """CORS origins: localhost always; public hosts are HTTPS-only in production."""
+    from services.platform_portal_hosts import cors_public_origins
+
     env = (
         (environment if environment is not None else (os.getenv("ENVIRONMENT") or os.getenv("ENV") or ""))
         .strip()
         .lower()
     )
-    origins = [
-        "http://localhost:3000",  # React development server
-        "http://127.0.0.1:3000",
-        "http://localhost:8003",  # Backend (for dashboard serving)
-        "http://127.0.0.1:8003",
-        "https://linasaibot.com",
-        "https://www.linasaibot.com",
-    ]
-    if env not in {"prod", "production"}:
-        origins.extend(
-            [
-                "http://linasaibot.com",
-                "http://www.linasaibot.com",
-            ]
-        )
-    return origins
+    return cors_public_origins(production=env in {"prod", "production"})
 
 
 # Configure CORS middleware to allow frontend access

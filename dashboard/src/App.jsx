@@ -13,6 +13,7 @@ import Features from './pages/public/Features';
 import { AuthProvider } from './contexts/AuthContext';
 import { PublicLandingLocaleProvider } from './contexts/PublicLandingLocaleContext';
 import AppEntry from './pages/AppEntry';
+import { isMarketingPublicHost, isPlatformPortalHost } from './pages/portalHost';
 import OwnerPortalShell from './pages/owner/OwnerPortalShell';
 import OwnerOverview from './pages/owner/OwnerOverview';
 import OwnerUsers from './pages/owner/OwnerUsers';
@@ -28,11 +29,22 @@ import OwnerMessages from './pages/owner/OwnerMessages';
  */
 
 function PublicMarketingShell() {
+  if (isPlatformPortalHost()) return <Navigate to="/login" replace />;
   return (
     <PublicLandingLocaleProvider>
       <Outlet />
     </PublicLandingLocaleProvider>
   );
+}
+
+function LoginRoute() {
+  if (isMarketingPublicHost()) return <Navigate to="/#get-app" replace />;
+  return <Login />;
+}
+
+function OwnerGate() {
+  if (isMarketingPublicHost()) return <Navigate to="/#get-app" replace />;
+  return <OwnerPortalShell />;
 }
 
 function App() {
@@ -43,15 +55,15 @@ function App() {
         <Routes>
           <Route element={<PublicMarketingShell />}>
             <Route path="/" element={<Landing />} />
-            {/* Public web is marketing-only — no Create Account. Ops login stays at /login. */}
+            {/* Public web is marketing-only — no Create Account. */}
             <Route path="/register" element={<Navigate to="/#get-app" replace />} />
             <Route path="/about" element={<About />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/features" element={<Features />} />
           </Route>
-          {/* Thin auth — not linked from marketing CTAs; mobile forgot-password opens these. */}
-          <Route path="/login" element={<Login />} />
+          {/* Mobile forgot/reset/verify stay on marketing. Web login is portal-only. */}
+          <Route path="/login" element={<LoginRoute />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
@@ -59,7 +71,7 @@ function App() {
           {/* Former operator SPA routes → mobile app CTA (parity matrix committed first). */}
           <Route path="/mobile/live-chat" element={<Navigate to="/#get-app" replace />} />
           <Route path="/app" element={<AppEntry />} />
-          <Route path="/owner" element={<OwnerPortalShell />}>
+          <Route path="/owner" element={<OwnerGate />}>
             <Route index element={<OwnerOverview />} />
             <Route path="users" element={<OwnerUsers />} />
             <Route path="messages" element={<OwnerMessages />} />

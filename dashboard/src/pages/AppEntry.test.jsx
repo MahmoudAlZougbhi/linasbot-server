@@ -1,15 +1,25 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeAuthUser } from "../testHelpers/renderWithProviders";
 import AppEntry, { UseMobileAppPage } from "./AppEntry";
 
 const mockUseAuth = vi.fn();
+const portalHostState = { portal: false, marketing: false };
 vi.mock("../contexts/AuthContext", () => ({
   useAuth: () => mockUseAuth(),
 }));
+vi.mock("./portalHost", () => ({
+  isPlatformPortalHost: () => portalHostState.portal,
+  isMarketingPublicHost: () => portalHostState.marketing,
+}));
 
 describe("AppEntry", () => {
+  beforeEach(() => {
+    portalHostState.portal = false;
+    portalHostState.marketing = false;
+  });
+
   it("sends platform_owner to /owner", () => {
     mockUseAuth.mockReturnValue({
       user: makeAuthUser({ role: "platform_owner", email: "owner@linas.ai" }),
@@ -26,6 +36,21 @@ describe("AppEntry", () => {
     expect(screen.getByText("owner-portal")).toBeInTheDocument();
   });
 
+  it("on the marketing host, platform_owner stays off /owner", () => {
+    portalHostState.marketing = true;
+    mockUseAuth.mockReturnValue({
+      user: makeAuthUser({ role: "platform_owner", email: "owner@linas.ai" }),
+      loading: false,
+      logout: vi.fn(),
+    });
+    render(
+      <MemoryRouter>
+        <AppEntry />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole("heading", { name: "Use the Linas AI mobile app" })).toBeInTheDocument();
+  });
+
   it("shows the mobile-app stub for tenant admin after login", () => {
     mockUseAuth.mockReturnValue({
       user: makeAuthUser({ role: "admin", email: "admin@linas.ai" }),
@@ -40,6 +65,22 @@ describe("AppEntry", () => {
     expect(screen.getByRole("heading", { name: "Use the Linas AI mobile app" })).toBeInTheDocument();
     expect(screen.getByText("Signed in as admin@linas.ai")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+  });
+
+  it("shows owner-only copy on the portal host for workspace accounts", () => {
+    portalHostState.portal = true;
+    mockUseAuth.mockReturnValue({
+      user: makeAuthUser({ role: "admin", email: "admin@linas.ai" }),
+      loading: false,
+      logout: vi.fn(),
+    });
+    render(
+      <MemoryRouter>
+        <AppEntry />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole("heading", { name: "Platform owner portal" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Owner sign in" })).toBeInTheDocument();
   });
 
   it("does not show signed-in controls for anonymous /app", () => {
