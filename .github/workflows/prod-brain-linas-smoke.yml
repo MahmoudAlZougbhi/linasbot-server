@@ -62,8 +62,57 @@ jobs:
                     key, value = line.split("=", 1)
                     os.environ.setdefault(key.strip(), value.strip().strip("'").strip('"'))
 
+            from services.cm.version_store import load_published_content
             from services.customer_ai.readiness import brain_readiness_report
+            from services.customer_ai.retrieve.cards import cards_from_sections
+            from services.customer_ai.retrieve.expand import expand_hits
+            from services.customer_ai.retrieve.lexical import LexicalHit
+            from services.customer_ai.retrieve.schedule_text import schedule_lines
             from services.customer_ai.runtime import run_customer_ai_dm
+
+            def _hours_inventory() -> dict:
+                _pointer, sections = load_published_content("linas")
+                if not isinstance(sections, dict):
+                    return {"error": "no_sections"}
+                rows = []
+                for key in ("branches", "opening_hours"):
+                    payload = sections.get(key)
+                    items = payload.get("items") if isinstance(payload, dict) else None
+                    for raw in items or []:
+                        if not isinstance(raw, dict):
+                            continue
+                        clocks = schedule_lines(raw)
+                        ws = raw.get("weekly_schedule")
+                        ws_days = sorted(ws.keys()) if isinstance(ws, dict) else []
+                        rows.append(
+                            {
+                                "section": key,
+                                "id": str(raw.get("id") or ""),
+                                "title": str(raw.get("title") or raw.get("name") or ""),
+                                "aliases": [str(a) for a in (raw.get("aliases") or [])][:6],
+                                "ws_days": ws_days,
+                                "clock_n": len(clocks),
+                                "clocks": clocks[:3],
+                                "keys": sorted(str(k) for k in raw.keys())[:20],
+                            }
+                        )
+                cards = cards_from_sections(sections, tenant_id="linas")
+                hours_cards = [
+                    {"id": c.item_id, "title": c.title, "search": (c.search_text or "")[:160]}
+                    for c in cards
+                    if c.source_family in {"hours", "branches"}
+                ]
+                antelias = next((c for c in cards if c.item_id == "hours:antelias"), None)
+                hydrated = ""
+                if antelias is not None:
+                    bundle = expand_hits([LexicalHit(card=antelias, score=1.0)], sections, tenant_id="linas")
+                    hydrated = (bundle.items[0].text if bundle.items else "")[:400]
+                return {"rows": rows, "hours_cards": hours_cards[:12], "hydrated_antelias": hydrated}
+
+            try:
+                print("[brain-smoke] hours " + json.dumps(_hours_inventory(), ensure_ascii=False)[:8000])
+            except Exception as exc:
+                print("[brain-smoke] hours_error " + type(exc).__name__ + ":" + str(exc)[:300])
 
             report = brain_readiness_report(tenant_id="linas")
             search = report.get("search") or {}
