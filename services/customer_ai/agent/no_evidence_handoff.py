@@ -8,6 +8,7 @@ from typing import Any
 from services.cm.capability_gates import human_handoff_enabled
 from services.customer_ai.actions.execute import execute_actions
 from services.customer_ai.contracts.actions import ActionProposal, ActionProposalSet
+from services.customer_ai.contracts.enums import ReplyDecision, StopReason, TaskDisposition
 from services.customer_ai.contracts.plan import PlannerPlan
 from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.customer_ai.contracts.turn import CustomerTurn
@@ -132,26 +133,27 @@ async def unanswered_question_result(
     extra["receipts"] = list(extra.get("receipts") or []) + dumped
     extra["no_evidence_handoff"] = True
 
+    decision: ReplyDecision
+    stop_reason: StopReason = "ok"
+    dispositions: dict[str, TaskDisposition]
     if ok:
         text = brain_template("no_evidence_handoff", lang)
         decision = "handoff_ack"
-        stop_reason = "ok"
         dispositions = {task.id: "not_found" for task in plan.tasks if task.type in _INFO_TYPES}
         dispositions["handoff"] = "action_succeeded"
     else:
         text = brain_template("no_evidence", lang)
         decision = "clarify"
-        stop_reason = "ok"
         dispositions = {task.id: "not_found" for task in plan.tasks if task.type in _INFO_TYPES}
 
     agent_trace.append({"step": "FINAL", "decision": decision, "reason": "unanswered_not_found"})
     envelope = FinalReplyEnvelope(
         decision=decision,
         messages=[OutboundMessage(destination=dest, text=text, protected=True)],
-        dispositions=dispositions,  # type: ignore[arg-type]
+        dispositions=dispositions,
     )
     return TurnResult(
-        stop_reason=stop_reason,  # type: ignore[arg-type]
+        stop_reason=stop_reason,
         envelope=envelope,
         extra=_flow_extra(
             {
