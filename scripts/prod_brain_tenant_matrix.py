@@ -1,0 +1,76 @@
+"""Capture-only production Brain matrix. Does not send WhatsApp or Instagram.
+
+Loads seed/publish/matrix modules from this git ref (via /tmp) or from the app tree.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import importlib.util
+import json
+import os
+import sys
+from pathlib import Path
+from types import ModuleType
+
+
+def _load_env(app_dir: Path) -> None:
+    os.chdir(app_dir)
+    for env_path in (Path("/opt/linasbot/.env"), app_dir / ".env"):
+        if not env_path.exists():
+            continue
+        for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if not line or line.lstrip().startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip("'").strip('"'))
+
+
+def _load_module(name: str, path: Path) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot_load:{path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _module_path(filename: str) -> Path:
+    here = Path(__file__).resolve().parent
+    dumped = Path("/tmp/live_matrix_pack") / filename
+    app = Path("/opt/linasbot/services/customer_ai/evals") / filename
+    repo = here.parent / "services" / "customer_ai" / "evals" / filename
+    for candidate in (dumped, repo, app, here / filename):
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(filename)
+
+
+async def _run() -> dict:
+    seed_path = _module_path("live_tenant_seed.py")
+    publish_path = _module_path("live_tenant_publish.py")
+    matrix_path = _module_path("live_tenant_matrix.py")
+    seed = _load_module("live_tenant_seed", seed_path)
+    sys.modules["services.customer_ai.evals.live_tenant_seed"] = seed
+    publish = _load_module("live_tenant_publish", publish_path)
+    matrix = _load_module("live_tenant_matrix", matrix_path)
+    published = await publish.seed_and_publish_all()
+    results = await matrix.run_matrix()
+    return {"publish": published, "matrix": results}
+
+
+def main() -> int:
+    app_dir = Path(os.environ.get("APP_DIR") or "/opt/linasbot")
+    _load_env(app_dir)
+    sys.path.insert(0, str(app_dir))
+    report = asyncio.run(_run())
+    print("[tenant-matrix] " + json.dumps(report, ensure_ascii=False, default=str)[:12000])
+    matrix = report.get("matrix") or {}
+    ok = bool(matrix.get("ok"))
+    print(f"[tenant-matrix] passed={matrix.get('passed')}/{matrix.get('total')} ok={ok}")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

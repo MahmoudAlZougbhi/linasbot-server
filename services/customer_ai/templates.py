@@ -27,6 +27,11 @@ _FAQ_AMBIGUOUS = {
     "ar": "وجدت أكثر من سؤال شائع مطابق. أعد الصياغة بمزيد من التفاصيل لأجيب عن السؤال الصحيح.",
     "fr": "Plusieurs FAQ correspondent. Reformulez avec plus de détails pour que je réponde à la bonne.",
 }
+_HELLO = {
+    "en": "Hello! How can I help you today?",
+    "ar": "مرحباً! كيف فيني ساعدك اليوم؟",
+    "fr": "Bonjour ! Comment puis-je vous aider aujourd’hui ?",
+}
 
 
 def _lang(code: str) -> str:
@@ -45,6 +50,7 @@ def brain_template(key: str, response_language: str = "") -> str:
         "visual_disabled": _VISUAL_DISABLED,
         "no_evidence": _NO_EVIDENCE,
         "faq_ambiguous": _FAQ_AMBIGUOUS,
+        "hello": _HELLO,
     }.get(key) or _NO_EVIDENCE
     lang = _lang(response_language)
     try:
@@ -56,6 +62,7 @@ def brain_template(key: str, response_language: str = "") -> str:
             "visual_disabled": "brain_visual_disabled",
             "no_evidence": "brain_no_evidence",
             "faq_ambiguous": "brain_faq_ambiguous",
+            "hello": "session_greeting_after_inactivity",
         }.get(key)
         if mapped:
             text = (get_dynamic_message(mapped, lang) or "").strip()

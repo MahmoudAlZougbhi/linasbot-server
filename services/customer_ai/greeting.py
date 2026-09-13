@@ -6,6 +6,7 @@ silently inventing a new threshold.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -14,6 +15,18 @@ from services.cm.schemas import DynamicMessageRecord, DynamicMessagesSection
 from services.cm.version_store import PublishedVersionError, load_published_content
 from services.customer_ai.contracts.turn import HistorySnapshot
 from services.customer_ai.normalize import normalize_search_text
+
+_GREETING_ONLY_RE = re.compile(
+    r"^\s*(?:"
+    r"hi+|hello|hey+|hola|"
+    r"bonjour|salut|bonsoir|"
+    r"مرحباً?|اهلاً?|أهلاً?|هلا|"
+    r"السلام عليكم|"
+    r"صباح الخير|مساء الخير|"
+    r"marhaba|hiya"
+    r")\s*(?:[!?.؟]+)?\s*(?:👋|😊|🌷)?\s*$",
+    re.IGNORECASE | re.UNICODE,
+)
 
 
 @dataclass(frozen=True)
@@ -171,3 +184,39 @@ def evaluate_greeting(
             continue
         return GreetingDecision(True, text=text, rule_id=rule.id, reason="matched")
     return GreetingDecision(False, reason="no_match")
+
+
+def is_greeting_only(message: str) -> bool:
+    """True only when the inbound is a casual hello with no question or request."""
+    text = (message or "").strip()
+    if not text or len(text) > 48:
+        return False
+    return bool(_GREETING_ONLY_RE.fullmatch(text))
+
+
+def greeting_only_text(
+    *,
+    tenant_id: str,
+    message: str,
+    history: HistorySnapshot,
+    language: str = "",
+    already_greeted: bool = False,
+    invocation_kind: str = "dm",
+) -> str:
+    """Standalone greeting copy. Never invent hours, prices, or other business facts."""
+    if not is_greeting_only(message):
+        return ""
+    greet = evaluate_greeting(
+        tenant_id=tenant_id,
+        message=message,
+        history=history,
+        language=language,
+        already_greeted=already_greeted,
+        invocation_kind=invocation_kind,
+    )
+    if greet.text:
+        return greet.text
+    from services.customer_ai.templates import brain_template
+
+    lang = (language or inbound_greeting_language(message)).strip()
+    return brain_template("hello", lang)

@@ -79,3 +79,25 @@ def test_link_and_video_paraphrases_are_resource_requests() -> None:
     ):
         types = {task.type for task in plan_message(message).tasks}
         assert "resource_request" in types, message
+
+
+def test_request_proposals_keep_human_out_of_requests() -> None:
+    from services.customer_ai.agent.action_gate import human_proposals, request_proposals
+
+    plan = plan_message("بدي موعد ليزر وبدي اطلب After Care وبدي احكي مع حدا")
+    requests = request_proposals(plan)
+    humans = human_proposals(plan)
+    kinds = {str((item.fields or {}).get("request_type") or "") for item in requests.actions}
+    assert "APPOINTMENT" in kinds
+    assert "ORDER" in kinds
+    assert "HUMAN" not in kinds
+    assert humans.actions
+    assert all(item.action_type == "escalate_to_human" for item in humans.actions)
+
+
+def test_clinic_c_human_only_blocks_booking_and_order() -> None:
+    message = "بدي موعد وبدي اطلب المنتج"
+    blocked = overlay_plan(None, message, enabled_action_types={"human_request"})
+    types = {task.type for task in blocked.tasks}
+    assert "service_request" not in types
+    assert "product_request" not in types

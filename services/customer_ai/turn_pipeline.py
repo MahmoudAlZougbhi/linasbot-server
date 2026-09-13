@@ -7,7 +7,7 @@ from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMes
 from services.customer_ai.contracts.turn import CustomerTurn
 from services.customer_ai.conversation_store import remember_turn
 from services.customer_ai.faq_turn import exact_faq_result, semantic_faq_result
-from services.customer_ai.greeting import evaluate_greeting
+from services.customer_ai.greeting import evaluate_greeting, greeting_only_text, is_greeting_only
 from services.customer_ai.stage_timeline import stamp
 from services.customer_ai.templates import brain_template
 
@@ -65,6 +65,41 @@ def _apply_greeting(
     return envelope.model_copy(update={"messages": [greeting, *list(envelope.messages)]})
 
 
+def _greeting_only_result(
+    turn: CustomerTurn,
+    message: str,
+    channel: str,
+    flow_base: dict,
+) -> TurnResult | None:
+    if turn.invocation_kind in {"followup", "comment"} or not is_greeting_only(message):
+        return None
+    lang = _response_language(turn)
+    text = greeting_only_text(
+        tenant_id=turn.tenant_id,
+        message=message,
+        history=turn.history,
+        language=lang,
+        already_greeted=turn.state.greeted,
+        invocation_kind=turn.invocation_kind,
+    ).strip()
+    if not text:
+        return None
+    if not turn.state.greeted:
+        turn.state = turn.state.model_copy(update={"greeted": True})
+        remember_turn(turn)
+    return TurnResult(
+        stop_reason="ok",
+        envelope=FinalReplyEnvelope(
+            decision="deterministic",
+            messages=[OutboundMessage(destination=_destination(channel, turn), text=text, protected=True)],
+        ),
+        extra=_flow_extra(
+            {"phase": "greeting", **flow_base},
+            ("greeting", "Greeting-only inbound", {"inbound_preview": message[:48]}),
+        ),
+    )
+
+
 def _exact_faq_result(turn: CustomerTurn, message: str, channel: str) -> TurnResult | None:
     return exact_faq_result(turn, message, channel, apply_greeting=_apply_greeting)
 
@@ -120,6 +155,9 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
                 ("visual", "Image present but visual reading is disabled", {"reason": visual.reason}),
             ),
         )
+    greeted = _greeting_only_result(turn, message, channel, flow_base)
+    if greeted is not None:
+        return greeted
     faq = _exact_faq_result(turn, message, channel) or await _semantic_faq_result(turn, message, channel)
     if faq:
         return faq.model_copy(

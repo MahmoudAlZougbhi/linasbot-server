@@ -93,6 +93,61 @@ def test_persist_request_keeps_web_chat(req_db, monkeypatch: pytest.MonkeyPatch)
     assert row.source_channel == "web_chat"
 
 
+def test_persist_request_rejects_human_type(req_db, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("services.requests.service.requests_capture_active", lambda _tid: True)
+    monkeypatch.setattr("services.requests.service.published_configuration_version", lambda _tid: "v-web")
+    receipt = persist_request(
+        session=req_db,
+        tenant_id="shop-web",
+        proposal=ActionProposal(
+            task_id="human",
+            action_type="start_request",
+            expected_revision="1",
+            confirmation_message_id="m1",
+            fields={"request_type": "HUMAN", "title": "Talk to staff", "confirmation_text": "yes"},
+        ),
+        channel="web_chat",
+        customer_id="visitor-1",
+        conversation_id="web:shop-web:sess-h",
+        message_id="m2",
+        customer_text="yes",
+        current_revision="1",
+    )
+    assert receipt.state == "rejected"
+    assert receipt.reason == "invalid_request_type"
+
+
+def test_persist_product_order_is_not_appointment(req_db, monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.requests.service import CustomerRequestsService
+
+    monkeypatch.setattr("services.requests.service.requests_capture_active", lambda _tid: True)
+    monkeypatch.setattr("services.requests.service.published_configuration_version", lambda _tid: "v-web")
+    receipt = persist_request(
+        session=req_db,
+        tenant_id="shop-web",
+        proposal=ActionProposal(
+            task_id="cream",
+            action_type="start_request",
+            expected_revision="1",
+            confirmation_message_id="m1",
+            fields={"request_type": "ORDER", "title": "After Care", "confirmation_text": "yes"},
+        ),
+        channel="web_chat",
+        customer_id="visitor-1",
+        conversation_id="web:shop-web:sess-o",
+        message_id="m2",
+        customer_text="yes",
+        current_revision="1",
+    )
+    assert receipt.state == "success"
+    row = CustomerRequestsService(req_db).repo.get_for_tenant(
+        tenant_id="shop-web",
+        request_id=receipt.backend_id,
+    )
+    assert row is not None
+    assert str(row.request_type).upper() == "ORDER"
+
+
 def test_persist_request_remerges_published_graph_keys(req_db, monkeypatch: pytest.MonkeyPatch) -> None:
     from services.requests.service import CustomerRequestsService
 

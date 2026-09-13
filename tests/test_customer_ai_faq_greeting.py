@@ -8,8 +8,14 @@ import pytest
 
 from services.cm.schemas import DynamicMessageRecord, DynamicMessagesSection, FaqRecord, FaqSection, FaqVariant
 from services.customer_ai.faq_exact import faq_fast_path_safe, find_exact_faq
-from services.customer_ai.greeting import evaluate_greeting, inactivity_threshold
+from services.customer_ai.greeting import (
+    evaluate_greeting,
+    greeting_only_text,
+    inactivity_threshold,
+    is_greeting_only,
+)
 from services.customer_ai.history import build_history_snapshot
+from services.customer_ai.templates import brain_template
 
 
 def test_faq_exact_sends_approved_answer_only() -> None:
@@ -209,3 +215,51 @@ async def test_flag_on_exact_faq_is_deterministic(monkeypatch: pytest.MonkeyPatc
     assert out.reply == "We reply within one business day."
     assert out.metadata.get("ai_called") is False
     assert out.metadata.get("path") == "faq_exact"
+
+
+@pytest.mark.asyncio
+async def test_greeting_only_skips_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.customer_ai.contracts.turn import CustomerTurn
+    from services.customer_ai.turn_pipeline import run_dm_after_gates
+
+    async def no_confirm(*_a, **_k):
+        return None
+
+    async def boom(*_a, **_k):
+        raise AssertionError("agent must not run for greeting-only")
+
+    monkeypatch.setattr("services.customer_ai.turn_pipeline.try_confirm_pending", no_confirm)
+    monkeypatch.setattr("services.customer_ai.greeting.load_dynamic_messages", lambda _tid: None)
+    monkeypatch.setattr("services.customer_ai.agent.loop.run_agentic_dm_path", boom)
+    turn = CustomerTurn(
+        tenant_id="linas",
+        conversation_id="c-hi",
+        event_ids=["m-hi"],
+        extra={"response_language": "en"},
+    )
+    out = await run_dm_after_gates(turn, message="Hi", channel="instagram_dm")
+    assert out.stop_reason == "ok"
+    assert out.envelope.messages
+    text = out.envelope.messages[0].text
+    assert text
+    assert "11:00" not in text
+    assert "couldn" not in text.lower()
+
+
+def test_is_greeting_only_rejects_hours_and_requests() -> None:
+    assert is_greeting_only("Hi") is True
+    assert is_greeting_only("hello!") is True
+    assert is_greeting_only("مرحبا") is True
+    assert is_greeting_only("شو ساعات عمل فرع أنطلياس؟") is False
+    assert is_greeting_only("Hi, what time do you open?") is False
+    assert is_greeting_only("بدي موعد") is False
+
+
+def test_greeting_only_text_does_not_invent_hours(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("services.customer_ai.greeting.load_dynamic_messages", lambda _tid: None)
+    history = build_history_snapshot([{"id": "m1", "role": "user", "text": "Hi"}], current_inbound_id="m1")
+    text = greeting_only_text(tenant_id="linas", message="Hi", history=history, language="en")
+    assert text
+    assert "11:00" not in text
+    assert "hour" not in text.lower()
+    assert text == brain_template("hello", "en")
