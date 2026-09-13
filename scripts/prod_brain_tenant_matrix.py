@@ -51,6 +51,8 @@ def _module_path(filename: str) -> Path:
 
 
 def _overlay_greeting_path() -> list[str]:
+    import services.customer_ai.runtime as runtime
+
     loaded: list[str] = []
     for name, filename in (
         ("services.customer_ai.greeting", "greeting.py"),
@@ -60,6 +62,9 @@ def _overlay_greeting_path() -> list[str]:
         path = _module_path(filename)
         _load_module(name, path)
         loaded.append(f"{name}={path}")
+    import services.customer_ai.turn_pipeline as pipeline
+
+    runtime.run_dm_after_gates = pipeline.run_dm_after_gates
     return loaded
 
 
