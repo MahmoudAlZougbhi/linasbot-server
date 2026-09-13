@@ -10,7 +10,7 @@ const NAV = [
 ];
 
 /**
- * @param {{ compact?: boolean, onOpenGuest?: () => void }} props
+ * @param {{ compact?: boolean }} props
  */
 const PublicSiteHeader = ({ compact = false }) => {
   return (

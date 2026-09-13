@@ -119,13 +119,12 @@ async def test_embed_failure_keeps_old_active_and_retries(
     assert tenant_pointer_ready(None, "retry-shop") is True
     old = str(get_lifecycle("retry-shop").get("active_version") or "")
 
-    async def _boom(*_a: object, **_k: object) -> list[list[float]]:
+    async def _boom(*_a: object, **_k: object) -> tuple[list[list[float]], int]:
         raise RuntimeError("voyage_down")
 
-    async def _ok_embed(rows: list[object]) -> list[list[float]]:
-        return [[0.2, 0.1, 0.0, 0.0] for _ in rows]
+    from services.customer_ai.search.index_job import embed_document_rows_incremental as real_incremental
 
-    monkeypatch.setattr("services.customer_ai.search.index_job.embed_document_rows", _boom)
+    monkeypatch.setattr("services.customer_ai.search.index_job.embed_document_rows_incremental", _boom)
     failed = await index_published_tenant("retry-shop", revision="will-fail")
     assert failed["ready"] is False
     assert get_lifecycle("retry-shop")["status"] == "FAILED"
@@ -133,8 +132,8 @@ async def test_embed_failure_keeps_old_active_and_retries(
     assert get_lifecycle("retry-shop")["active_version"] == old or old == first.content_version_id
 
     monkeypatch.setattr(
-        "services.customer_ai.search.index_job.embed_document_rows",
-        _ok_embed,
+        "services.customer_ai.search.index_job.embed_document_rows_incremental",
+        real_incremental,
     )
     again = await index_published_tenant("retry-shop", revision=first.content_version_id)
     assert again["ready"] is True

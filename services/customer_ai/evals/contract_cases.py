@@ -96,17 +96,18 @@ def _omni_generate_releases_unsent() -> bool:
     )
 
 
-def _comment_threads_share_fallback() -> bool:
+def _comment_threads_per_author() -> bool:
     from services.customer_ai.history_ids import comment_conversation_id
     from services.customer_ai.runtime import run_customer_ai_comment
 
-    fallback = comment_conversation_id(
-        tenant_id="t",
-        channel="instagram_comment",
-        post_id="p1",
-    )
-    return fallback == "comment:t:instagram_comment:p1" and "comment_conversation_id" in getsource(
-        run_customer_ai_comment
+    first = comment_conversation_id(tenant_id="t", channel="instagram_comment", post_id="p1", author_id="u1")
+    second = comment_conversation_id(tenant_id="t", channel="instagram_comment", post_id="p1", author_id="u2")
+    return (
+        first == "comment:t:instagram_comment:p1:u1"
+        and second == "comment:t:instagram_comment:p1:u2"
+        and first != second
+        and comment_conversation_id(tenant_id="t", channel="instagram_comment", post_id="p1") == ""
+        and "author_id" in getsource(run_customer_ai_comment)
     )
 
 
@@ -451,8 +452,8 @@ def run_contract_cases() -> dict[str, Any]:
             "ok": _history_routes_by_channel(),
         },
         {
-            "id": "comment_threads_share_fallback",
-            "ok": _comment_threads_share_fallback(),
+            "id": "comment_threads_per_author",
+            "ok": _comment_threads_per_author(),
         },
         {
             "id": "omni_generate_releases_unsent",

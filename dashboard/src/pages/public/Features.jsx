@@ -6,8 +6,6 @@ const FEATURES = [
   'ChatGPT-style Linas AI owner assistant',
   'AI Setup with publish and rollback',
   'Social media DM and comment automation',
-  'Creative Studio (Pro+)',
-  'Scheduling (Pro+)',
   'Monthly AI messages and subscription entitlements',
   'Role-aware team users',
 ];

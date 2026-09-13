@@ -276,10 +276,10 @@ class LiveChatPhoneMixin:
         """Parse various timestamp formats - always returns UTC-aware datetime"""
         return parse_timestamp_utc(timestamp)
 
-    async def get_active_conversations(self, search: str = "") -> list[dict[str, Any]]:
+    async def get_active_conversations(self, search: str = "", tenant_id: str = "") -> list[dict[str, Any]]:
         """Backward-compatible wrapper: return master inbox page 1 (no 6h filter)."""
         try:
-            unified = await self.get_unified_chats(search=search, page=1, page_size=200)
+            unified = await self.get_unified_chats(search=search, page=1, page_size=200, tenant_id=tenant_id)
             return [
                 {
                     "conversation_id": c.get("conversation_id"),
@@ -303,11 +303,11 @@ class LiveChatPhoneMixin:
             traceback.print_exc()
             return []
 
-    async def get_metrics(self) -> dict[str, Any]:
+    async def get_metrics(self, tenant_id: str = "") -> dict[str, Any]:
         """Get real-time metrics"""
         try:
-            active_conversations = await self.get_active_conversations()
-            waiting_queue = await self.get_waiting_queue()
+            active_conversations = await self.get_active_conversations(tenant_id=tenant_id)
+            waiting_queue = await self.get_waiting_queue(tenant_id=tenant_id)
 
             total_active = len(active_conversations)
             bot_handling = len([c for c in active_conversations if c["status"] == "bot"])

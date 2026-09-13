@@ -8,7 +8,7 @@ from typing import Any
 from services.cm.resource_attachment import resource_summary
 from services.customer_reply_v2.models import ItemIndexEntry
 from services.search_metadata.limits import LUNA_FULL_TITLE_SECTIONS
-from services.search_metadata.luna_titles import luna_title_fields
+from services.search_metadata.title_fields import retrieval_title_fields
 
 MAX_ITEMS_PER_SECTION = 80
 MAX_ITEMS_PER_READ = 20
@@ -39,7 +39,7 @@ def _items_like_entries(section_id: str, rows: list[Any]) -> list[ItemIndexEntry
         item_id = str(raw.get("id") or raw.get("qa_group_id") or "").strip()
         if not item_id:
             continue
-        fields = luna_title_fields(raw)
+        fields = retrieval_title_fields(raw)
         desc = (
             fields["ai_search_description"]
             or str(raw.get("notes") or raw.get("body") or raw.get("short_introduction") or "")[:240]
@@ -104,18 +104,18 @@ def iter_section_items(section_id: str, payload: dict[str, Any]) -> list[ItemInd
         return entries
     rules = payload.get("rules")
     if isinstance(rules, list):
-        from services.customer_reply_v2.comment_rule_select import is_luna_selectable_comment_rule
+        from services.customer_reply_v2.comment_rule_select import is_selectable_comment_rule
 
         for raw in _rows_for_index(section_id, rules):
             if not isinstance(raw, dict):
                 continue
-            if section_id == "comments" and not is_luna_selectable_comment_rule(raw):
+            if section_id == "comments" and not is_selectable_comment_rule(raw):
                 continue
             item_id = str(raw.get("id") or "").strip()
             if not item_id:
                 continue
             title = str(raw.get("name") or raw.get("title") or item_id)
-            fields = luna_title_fields(raw)
+            fields = retrieval_title_fields(raw)
             status = "active" if raw.get("enabled", True) else "inactive"
             entries.append(
                 ItemIndexEntry(
@@ -136,7 +136,7 @@ def iter_section_items(section_id: str, payload: dict[str, Any]) -> list[ItemInd
 
 
 def record_content(section_id: str, raw: dict[str, Any]) -> str:
-    """File body for Luna/Tera. Never include resource bytes, URLs, or storage keys."""
+    """File body for title/search metadata. Never include resource bytes, URLs, or storage keys."""
     if section_id == "faq":
         variants = raw.get("variants") or []
         bits = []

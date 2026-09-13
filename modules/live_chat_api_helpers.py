@@ -32,7 +32,7 @@ async def broadcast_sse_event(event_type: str, data: dict) -> None:
     if not str(payload.get("tenant_id") or "").strip() and payload.get("user_id"):
         from services.live_chat_channel import live_chat_event_tenant_id
 
-        payload["tenant_id"] = live_chat_event_tenant_id(payload.get("user_id"))
+        payload["tenant_id"] = live_chat_event_tenant_id(payload.get("user_id"), payload)
     if not payload.get("channel") and payload.get("user_id"):
         from services.live_chat_channel import resolve_live_chat_channel
 
@@ -75,12 +75,35 @@ def session_allows_live_chat_sse_event(session: Any, event: dict[str, Any] | Non
     return session_can_use_channel(session, resolve_live_chat_channel(user_id, data))
 
 
-def require_chat_channel(http_request: Any, user_id: str) -> Any:
+def require_chat_channel(http_request: Any, user_id: str, conversation_id: str | None = None) -> Any:
+    from fastapi import HTTPException
+
     from modules.api_security import require_session
     from services.access_channels import require_session_channel
+    from services.live_chat_tenant import require_workspace_tenant, resolve_live_chat_tenant_id
 
     session = require_session(http_request)
     require_session_channel(session, user_id)
+    workspace = require_workspace_tenant(session)
+    proven = resolve_live_chat_tenant_id(user_id=user_id, conversation_id=conversation_id)
+    if proven and proven != workspace:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return session
+
+
+async def require_live_chat_thread(http_request: Any, user_id: str, conversation_id: str) -> Any:
+    from fastapi import HTTPException
+
+    from services.live_chat_service import live_chat_service
+
+    session = require_chat_channel(http_request, user_id, conversation_id)
+    visible = await live_chat_service.thread_visible_to_tenant(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        tenant_id=str(getattr(session, "tenant_id", "") or ""),
+    )
+    if not visible:
+        raise HTTPException(status_code=403, detail="Forbidden")
     return session
 
 

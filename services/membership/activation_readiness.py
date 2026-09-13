@@ -58,7 +58,6 @@ def _brain_imports() -> dict[str, bool]:
         "turn_pipeline": "services.customer_ai.turn_pipeline",
         "pending_actions": "services.customer_ai.actions.pending",
         "followup_revalidate": "services.customer_ai.followup.revalidate",
-        "lab": "modules.customer_ai_lab_api",
         "omni_hold": "services.omnichannel.message_hold",
         "social_turn_outcome": "services.social_turn_outcome",
         "social_customer_name": "services.social_customer_name",
@@ -183,8 +182,8 @@ def activation_readiness() -> dict[str, Any]:
         },
         "blockers": blockers,
         "note": (
-            "testing_ready means Brain/admin code paths import and are ready for staging lab tests "
-            "with LINAS_CUSTOMER_AI_LAB (Owner Lab page) on a non-customer tenant. "
+            "testing_ready means Brain/admin code paths import. Owner Lab HTTP and /owner/lab "
+            "are unmounted (WAVE 1). Capture-only pytest helpers remain under services.customer_ai.test_lab. "
             "ready_to_enable stays false until commercial/live verification blockers clear. "
             "This report never enables message billing."
         ),

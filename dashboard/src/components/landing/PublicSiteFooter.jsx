@@ -11,10 +11,7 @@ import './footerClose.css';
 
 const linkClass = 'transition-colors hover:text-white';
 
-/**
- * @param {{ onOpenGuest?: () => void }} props
- */
-const PublicSiteFooter = ({ onOpenGuest: _onOpenGuest }) => {
+const PublicSiteFooter = () => {
   const year = new Date().getFullYear();
   return (
     <footer className="lp-close relative z-10 overflow-hidden">

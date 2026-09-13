@@ -53,6 +53,8 @@ def _wallet_honesty() -> dict[str, Any]:
 
 
 def overlay_message_fields(tenant_id: str, plan_id: str) -> dict[str, Any]:
+    """Message fields for entitlements/me and /api/mobile/usage (mobile Subscription SoT)."""
+
     try:
         intended = effective_offer_fields(plan_id).get("included_messages")
     except Exception:

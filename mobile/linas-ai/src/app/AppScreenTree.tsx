@@ -27,7 +27,6 @@ import { RequestsScreen } from '../features/requests/RequestsScreen';
 import { OwnerPortalScreen } from '../features/control/OwnerPortalScreen';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
 import { SmartFollowUpScreen } from '../features/smartFollowUp/SmartFollowUpScreen';
-import { SimpleResourceScreen } from '../features/shared/SimpleResourceScreen';
 import { UsersScreen } from '../features/users/UsersScreen';
 import { EphemeralRoute } from './EphemeralRoute';
 import { isKeepMountedScreen } from './keepMountedPolicy';
@@ -314,11 +313,6 @@ export function AppScreenTree({
                     : undefined
             }
           />
-        </EphemeralRoute>
-      ) : null}
-      {name === 'resource' ? (
-        <EphemeralRoute>
-          <SimpleResourceScreen title={screen.title} path={screen.path} />
         </EphemeralRoute>
       ) : null}
     </View>

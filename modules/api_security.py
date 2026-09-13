@@ -252,7 +252,7 @@ def required_permission_for(method: str, path: str) -> str | None:
         return "settings"
     if p.startswith("/api/training-files") or p.startswith("/api/instructions"):
         return "training"
-    if p.startswith("/api/content-files") or p.startswith("/api/retrieval-debug"):
+    if p.startswith("/api/content-files"):
         return "contentManagers"
     if p.startswith("/api/cm"):
         # Publish / unpublish require contentPublish; draft/meta/FAQ use contentManagers.
@@ -363,7 +363,6 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
             or path.startswith("/api/tiktok")
             or path.startswith("/api/comments/inbox")
             or path.startswith("/api/entitlements/")
-            or path.startswith("/api/creative/")
             or path.startswith("/api/schedule/")
             or path.startswith("/api/platform/")
             or path.startswith("/api/safety/")

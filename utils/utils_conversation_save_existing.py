@@ -84,6 +84,17 @@ async def save_message_when_conversation_id(
             "last_message_at": message_data.get("timestamp") or utc_now(),
             "unread_count": new_unread,
         }
+        from services.live_chat_tenant import conversation_tenant_fields
+
+        update_payload.update(
+            conversation_tenant_fields(
+                user_id=canonical_user_id,
+                conversation_id=conversation_id,
+                existing=doc_data,
+                customer_info=customer_info,
+                metadata=metadata,
+            )
+        )
         if role == "ai":
             update_payload["last_ai_response_at"] = message_data.get("timestamp") or utc_now()
         if not is_smart_source:

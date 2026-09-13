@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import json
-import os
 from typing import Any
 
 from google.cloud import firestore
@@ -14,8 +12,14 @@ from services.live_chat_contracts import (
     parse_timestamp_utc,
     utc_now,
 )
+from services.live_chat_tenant import (
+    normalize_live_chat_tenant_id,
+    resolve_live_chat_tenant_id,
+    row_belongs_to_tenant,
+)
 from utils.utils import (
     get_canonical_user_id_and_phone,
+    get_firestore_db,
 )
 
 
@@ -122,9 +126,63 @@ class LiveChatIndexMixin:
     def _is_live_window(self, ts: datetime.datetime) -> Any:
         return bool(ts) and (utc_now() - ts).total_seconds() <= self.ACTIVE_TIME_WINDOW
 
-    def _index_recency_query(self, index_coll: Any) -> Any:
-        """Order inbox rows by recency using Firestore's automatic single-field index."""
-        return index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING)
+    def _index_recency_query(self, index_coll: Any, tenant_id: str | None = None) -> Any:
+        """Order inbox rows by recency. Tenant equality is required when tenant_id is set."""
+        query = index_coll
+        tid = normalize_live_chat_tenant_id(tenant_id)
+        if tid:
+            query = query.where("tenant_id", "==", tid)
+        return query.order_by("last_message_at", direction=firestore.Query.DESCENDING)
+
+    def _stream_tenant_index_docs(self, index_coll: Any, tenant_id: str, *, limit: int) -> list[Any]:
+        """Fail-closed tenant scan. Missing tenant_id never returns rows."""
+        tid = normalize_live_chat_tenant_id(tenant_id)
+        if not tid:
+            return []
+        timeout = self.FIRESTORE_QUERY_TIMEOUT_SECONDS
+
+        def _stream(q: Any) -> list[Any]:
+            return list(q.limit(limit).stream(timeout=timeout, retry=None))
+
+        try:
+            docs = _stream(self._index_recency_query(index_coll, tenant_id=tid))
+        except Exception as exc:
+            lowered = str(exc).lower()
+            if "index" not in lowered and "failed_precondition" not in lowered:
+                raise
+            print("[live_chat:index] tenant composite missing; scanning recency then dropping foreign rows")
+            docs = _stream(self._index_recency_query(index_coll, tenant_id=None))
+        return [doc for doc in docs if row_belongs_to_tenant(doc.to_dict() or {}, tid)]
+
+    async def thread_visible_to_tenant(self, *, user_id: str, conversation_id: str, tenant_id: str) -> bool:
+        tid = normalize_live_chat_tenant_id(tenant_id)
+        if not tid or not str(conversation_id or "").strip():
+            return False
+        db = get_firestore_db()
+        if not db:
+            return False
+        try:
+            index_ref = self._index_collection(db).document(str(conversation_id))
+            index_doc = await self._get_doc_with_timeout(index_ref, timeout_seconds=self.FIRESTORE_DOC_TIMEOUT_SECONDS)
+            if index_doc and index_doc.exists:
+                data = index_doc.to_dict() or {}
+                data.setdefault("conversation_id", conversation_id)
+                data.setdefault("user_id", user_id)
+                return row_belongs_to_tenant(data, tid)
+            conv_ref, conv_snap, resolved_user_id = await self._resolve_conversation_doc_ref(
+                db, user_id, conversation_id
+            )
+            if not conv_snap or not conv_snap.exists:
+                return False
+            payload = conv_snap.to_dict() or {}
+            proven = resolve_live_chat_tenant_id(
+                user_id=resolved_user_id or user_id,
+                conversation_id=conversation_id,
+                payload=payload,
+            )
+            return proven == tid
+        except Exception:
+            return False
 
     def _state_filter_values(self, filter_key: str) -> Any:
         key = (filter_key or "").lower()
@@ -254,128 +312,6 @@ class LiveChatIndexMixin:
                 return False
         self._read_path_refresh_tracker[conversation_id] = now
         return True
-
-    def _cached_unified_response(self, page: int, page_size: int, filter_state: str, search: str) -> dict[str, Any]:
-        chats = list(self._unified_chats_cache or [])
-        counters = dict(self._index_counters_cache or self._empty_counters())
-        total = int(self._unified_chats_cache_total or len(chats))
-        return {
-            "success": True,
-            "chats": chats,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "has_more": bool(self._unified_chats_cache_has_more),
-            "next_cursor": self._unified_chats_cache_next_cursor,
-            "filter": filter_state,
-            "counters": counters,
-            "search": search,
-            "source": "cache",
-        }
-
-    def _unified_cache_file(self) -> Any:
-        path = str(self.UNIFIED_CACHE_PATH or "").strip()
-        if not path:
-            return ""
-        return path if os.path.isabs(path) else os.path.join(os.getcwd(), path)
-
-    def _persist_unified_cache_to_disk(self) -> None:
-        if not self.PERSIST_UNIFIED_CACHE:
-            return
-        cache_file = self._unified_cache_file()
-        if not cache_file:
-            return
-        try:
-            cache_dir = os.path.dirname(cache_file)
-            if cache_dir:
-                os.makedirs(cache_dir, exist_ok=True)
-            payload: dict[str, Any] = {
-                "updated_at": utc_now().isoformat(),
-                "chats": list(self._unified_chats_cache or []),
-                "has_more": bool(self._unified_chats_cache_has_more),
-                "total": int(self._unified_chats_cache_total or len(self._unified_chats_cache or [])),
-                "next_cursor": self._unified_chats_cache_next_cursor,
-                "page_size": self._unified_chats_cache_page_size,
-                "counters": dict(self._index_counters_cache or self._empty_counters()),
-            }
-            with open(cache_file, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False)
-        except Exception as e:
-            print(f"⚠️ Could not persist unified cache to disk: {e}")
-
-    def _load_unified_cache_from_disk(self) -> None:
-        if not self.PERSIST_UNIFIED_CACHE:
-            return
-        cache_file = self._unified_cache_file()
-        if not cache_file or not os.path.exists(cache_file):
-            return
-        try:
-            with open(cache_file, encoding="utf-8") as f:
-                payload = json.load(f) or {}
-            chats = payload.get("chats")
-            if not isinstance(chats, list) or not chats:
-                return
-
-            updated_at_raw = payload.get("updated_at")
-            if updated_at_raw:
-                try:
-                    updated_at = self._parse_timestamp(updated_at_raw)
-                    age = (utc_now() - updated_at).total_seconds()
-                    if age > max(60, int(self.UNIFIED_DISK_CACHE_MAX_AGE_SECONDS)):
-                        return
-                except Exception:
-                    pass
-
-            self._unified_chats_cache = chats
-            self._unified_chats_cache_has_more = bool(payload.get("has_more"))
-            self._unified_chats_cache_total = int(payload.get("total") or len(chats))
-            self._unified_chats_cache_next_cursor = payload.get("next_cursor")
-            self._unified_chats_cache_page_size = payload.get("page_size")
-            counters = payload.get("counters")
-            if isinstance(counters, dict):
-                merged = self._empty_counters()
-                merged.update({k: int(v) for k, v in counters.items() if k in merged})
-                self._index_counters_cache = merged
-            self._unified_chats_cache_time = utc_now()
-            print(f"[live_chat:unified] loaded disk cache chats={len(chats)} file={cache_file}")
-        except Exception as e:
-            print(f"⚠️ Could not load unified cache from disk: {e}")
-
-    def _stale_unified_fallback(
-        self, page: int, page_size: int, filter_state: str, search: str
-    ) -> dict[str, Any] | None:
-        """Serve memory or disk cache when live index reads fail — never invent rows."""
-        if self._unified_chats_cache:
-            resp = self._cached_unified_response(page, page_size, filter_state, search)
-            resp["source"] = "memory_cache"
-            return resp
-        self._load_unified_cache_from_disk()
-        if self._unified_chats_cache:
-            resp = self._cached_unified_response(page, page_size, filter_state, search)
-            resp["source"] = "disk_cache"
-            return resp
-        return None
-
-    def _empty_unified_response(
-        self, page: int, page_size: int, filter_state: str, search: str, source: str
-    ) -> dict[str, Any]:
-        is_legitimate_empty = source in {"index_empty"}
-        payload: dict[str, Any] = {
-            "success": is_legitimate_empty,
-            "chats": [],
-            "total": 0,
-            "page": page,
-            "page_size": page_size,
-            "has_more": False,
-            "next_cursor": None,
-            "filter": filter_state,
-            "counters": dict(self._index_counters_cache or self._empty_counters()),
-            "search": search,
-            "source": source,
-        }
-        if not is_legitimate_empty:
-            payload["error"] = "Could not load conversations."
-        return payload
 
     async def _run_blocking_with_timeout(self, fn: Any, timeout_seconds: float) -> Any:
         timeout = max(0.1, float(timeout_seconds or 0))

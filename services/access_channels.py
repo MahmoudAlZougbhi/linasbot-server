@@ -57,12 +57,19 @@ def effective_inbox_channel(session: SessionRecord, requested: str) -> str | Non
 
 
 def filter_chats_for_session(session: SessionRecord, payload: dict[str, Any]) -> dict[str, Any]:
+    from services.live_chat_tenant import normalize_live_chat_tenant_id, row_belongs_to_tenant
+
+    tenant = normalize_live_chat_tenant_id(getattr(session, "tenant_id", None))
     allowed = allowed_channels_for_session(session)
-    if allowed is None:
-        return payload
-    chats = [
-        row for row in (payload.get("chats") or []) if resolve_live_chat_channel(row.get("user_id"), row) in allowed
-    ]
+    chats = []
+    for row in payload.get("chats") or []:
+        if not isinstance(row, dict):
+            continue
+        if not tenant or not row_belongs_to_tenant(row, tenant):
+            continue
+        if allowed is not None and resolve_live_chat_channel(row.get("user_id"), row) not in allowed:
+            continue
+        chats.append(row)
     next_payload = dict(payload)
     next_payload["chats"] = chats
     return next_payload

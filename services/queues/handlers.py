@@ -51,84 +51,8 @@ async def handle_publish_scheduled(job: QueueJob) -> dict[str, Any]:
 
 
 async def handle_creative_expensive(job: QueueJob) -> dict[str, Any]:
-    """Process reserved creative image/video jobs with capture on success only.
-
-    Do not release credits here on retryable errors — worker releases only on DLQ.
-    Image/video call real OpenAI providers — never stub success.
-    """
-    from services.credit_ledger_service import credit_ledger_service
-    from services.providers.openai_media import generate_openai_image, start_openai_video
-    from services.providers.router import provider_router
-
-    reservation_id = job.reservation_id or str(job.payload.get("reservation_id") or "")
-    kind = str(job.payload.get("kind") or "")
-    prompt = str(job.payload.get("prompt") or "")
-    if not reservation_id:
-        raise PermanentJobError("missing reservation_id")
-
-    def _throttle(provider: str, limit: int) -> None:
-        from services.queues.redis_backend import RedisQueueBackend
-
-        if not RedisQueueBackend().throttle_provider(provider=provider, limit_per_minute=limit):
-            raise RuntimeError(f"{provider}_provider_throttled")
-
-    if kind == "image":
-        route = provider_router.resolve_image()
-        if route["provider"] != "openai":
-            raise PermanentJobError(f"Image provider not configured: {route['provider']}")
-        _throttle(route["provider"], 30)
-        try:
-            image_result = await generate_openai_image(
-                prompt=prompt,
-                model=route["model"],
-                tenant_id=job.tenant_id,
-            )
-        except Exception as exc:  # noqa: BLE001
-            # Provider/auth/model errors are permanent; throttle remains retryable above.
-            raise PermanentJobError(f"image_generation_failed:{type(exc).__name__}:{exc}") from exc
-        credit_ledger_service.capture(
-            tenant_id=job.tenant_id,
-            reservation_id=reservation_id,
-            provider_cost_usd=image_result.provider_cost_usd,
-            model_provider=f"{image_result.provider}:{image_result.model}",
-        )
-        return {
-            "kind": kind,
-            "status": "completed",
-            "model": image_result.model,
-            "asset_url": image_result.asset_url,
-            "provider_cost_usd": image_result.provider_cost_usd,
-        }
-
-    if kind == "video":
-        route = provider_router.resolve_video()
-        if route["provider"] != "openai":
-            raise PermanentJobError(f"Video provider not configured: {route['provider']}")
-        model = route["model"]
-        if model in {"", "configurable", "pluggable"}:
-            raise PermanentJobError(
-                "Video model not configured — set LINAS_VIDEO_MODEL=sora-2-pro (strongest OpenAI Sora)"
-            )
-        _throttle(route["provider"], 5)
-        try:
-            video_result = await start_openai_video(prompt=prompt, model=model)
-        except Exception as exc:  # noqa: BLE001
-            raise PermanentJobError(f"video_generation_failed:{type(exc).__name__}:{exc}") from exc
-        credit_ledger_service.capture(
-            tenant_id=job.tenant_id,
-            reservation_id=reservation_id,
-            provider_cost_usd=video_result.provider_cost_usd,
-            model_provider=f"{video_result.provider}:{video_result.model}",
-        )
-        return {
-            "kind": kind,
-            "status": video_result.status,
-            "model": video_result.model,
-            "provider_job_id": video_result.job_id,
-            "provider_cost_usd": video_result.provider_cost_usd,
-        }
-
-    raise PermanentJobError(f"unsupported creative kind: {kind}")
+    """Creative Studio is cancelled. Drain leftover jobs to DLQ so the worker refunds."""
+    raise PermanentJobError(f"creative_studio_cancelled:{job.job_type}")
 
 
 async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:

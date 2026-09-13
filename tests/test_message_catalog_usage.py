@@ -359,6 +359,7 @@ def test_offline_eval_contract_cases() -> None:
     assert "tiktok_media_reaches_brain" in ids
     assert "meta_ai_dm_reaches_brain" in ids
     assert "history_routes_by_channel" in ids
+    assert "comment_threads_per_author" in ids
     assert "web_chat_indexes_leftover" in ids
     assert "legacy_photo_fetches_ssrf_safe" in ids
     assert "index_seeds_from_pending" in ids
@@ -433,22 +434,20 @@ def test_free_draft_records_owner_values_without_inventing_the_rest() -> None:
     assert "credit_to_message_conversion" in free["unconfigured_fields"]
 
 
-def test_owner_portal_wires_catalog_costs_and_lab() -> None:
+def test_owner_portal_wires_catalog_and_costs() -> None:
     from pathlib import Path
 
     root = Path("dashboard/src/pages/owner")
     catalog = (root / "OwnerCatalog.jsx").read_text(encoding="utf-8")
     costs = (root / "OwnerCosts.jsx").read_text(encoding="utf-8")
-    lab = (root / "OwnerLab.jsx").read_text(encoding="utf-8")
     api = (root / "ownerApi.js").read_text(encoding="utf-8")
+    assert not (root / "OwnerLab.jsx").exists()
     assert "freeDraftFromCatalog" in catalog
     assert "leave empty until decided" in catalog
     assert "patchDailyEdits" in catalog
     assert "usage_classes?.by_class" in costs
     assert "daily_edits?.tenants" in costs
-    assert "labClassify" in lab
-    assert "Classify units" in lab
-    assert "customer-ai-lab/classify" in api
+    assert "customer-ai-lab" not in api
     assert "/api/platform/daily-edits" in api
     banner = (root / "OwnerActivationBanner.jsx").read_text(encoding="utf-8")
     assert "durable_tables" in banner

@@ -1,6 +1,5 @@
 import type { CmProposalReview } from '../features/cm/cmProposalReview';
 import type { CmSectionId } from '../features/cm/cmSections';
-import type { ControlArea } from '../features/control/controlAreas';
 
 export type LiveChatOpen = { userId: string; conversationId: string };
 
@@ -33,10 +32,7 @@ export type Screen =
     }
   | { name: 'faq'; proposalReview?: CmProposalReview | null }
   | { name: 'smartFollowUp' }
-  | { name: 'owner' }
-  | { name: 'resource'; title: string; path: string };
-
-export const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {};
+  | { name: 'owner' };
 
 export function parseLiveChatDeepLink(url: string | null): LiveChatOpen | null {
   if (!url) return null;

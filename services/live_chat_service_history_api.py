@@ -12,6 +12,7 @@ from services.live_chat_contracts import (
 from services.live_chat_service_common import (
     _live_chat_display_name,
 )
+from services.live_chat_tenant import normalize_live_chat_tenant_id, row_belongs_to_tenant
 from utils.utils import (
     get_firestore_db,
 )
@@ -44,6 +45,8 @@ class LiveChatHistoryApiMixin:
     _history_filter_match: Any
     _index_collection: Any
     _index_recency_query: Any
+    _stream_tenant_index_docs: Any
+    _waiting_queue_by_tenant: Any
     _is_cache_fresh: Any
     _normalize_conversation_state: Any
     _paginate: Any
@@ -338,32 +341,23 @@ class LiveChatHistoryApiMixin:
             print(f"❌ Error getting client conversations: {e}")
             return []
 
-    async def get_waiting_queue(self) -> Any:
-        """
-        Get conversations waiting for human intervention
-        Queries live_chat_index for conversations_state == waiting_for_operator
-        """
+    async def get_waiting_queue(self, tenant_id: str = "") -> Any:
+        """Waiting-for-operator rows from live_chat_index, scoped to tenant_id."""
         try:
             current_time = utc_now()
-            # Use short cache to keep UI responsive while staying near real-time.
-            if self._queue_cache is not None and self._is_cache_fresh(self._queue_cache_time):
-                return self._queue_cache
+            tid = normalize_live_chat_tenant_id(tenant_id)
+            if not tid:
+                return []
+            slot = (self._waiting_queue_by_tenant or {}).get(tid)
+            if isinstance(slot, dict) and self._is_cache_fresh(slot.get("cached_at")):
+                return list(slot.get("items") or [])
 
             db = get_firestore_db()
             if not db:
                 return []
 
             index_coll = self._index_collection(db)
-            docs = await asyncio.to_thread(
-                lambda: list(
-                    self._index_recency_query(index_coll)
-                    .limit(300)
-                    .stream(
-                        timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
-                        retry=None,
-                    )
-                )
-            )
+            docs = await asyncio.to_thread(lambda: self._stream_tenant_index_docs(index_coll, tid, limit=300))
 
             if not docs:
                 print(
@@ -372,6 +366,7 @@ class LiveChatHistoryApiMixin:
                 )
                 self._queue_cache = []
                 self._queue_cache_time = current_time
+                self._waiting_queue_by_tenant[tid] = {"items": [], "cached_at": current_time}
                 return []
 
             waiting_queue = []
@@ -379,6 +374,8 @@ class LiveChatHistoryApiMixin:
             for doc in docs:
                 data = doc.to_dict() or {}
                 data["conversation_id"] = doc.id
+                if not row_belongs_to_tenant(data, tid):
+                    continue
                 # Explicit True only: fallback query uses conversation_state and can return rows missing
                 # human_takeover_active (stale index) — those must not appear as waiting after release.
                 if data.get("human_takeover_active") is not True:
@@ -447,6 +444,7 @@ class LiveChatHistoryApiMixin:
             # Update cache
             self._queue_cache = waiting_queue
             self._queue_cache_time = current_time
+            self._waiting_queue_by_tenant[tid] = {"items": waiting_queue, "cached_at": current_time}
 
             print(f"📊 Waiting queue: {len(waiting_queue)} conversations")
 

@@ -1,11 +1,11 @@
-"""Which Comment Rules Luna may retrieve (AI-guidance only)."""
+"""Which Comment Rules Brain may retrieve (AI-guidance only)."""
 
 from __future__ import annotations
 
 from typing import Any
 
 
-def is_luna_selectable_comment_rule(raw: dict[str, Any]) -> bool:
+def is_selectable_comment_rule(raw: dict[str, Any]) -> bool:
     """Deterministic templates stay server-enforced. AI-guidance is selectable evidence."""
     if not isinstance(raw, dict):
         return False

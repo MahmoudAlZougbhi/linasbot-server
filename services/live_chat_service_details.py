@@ -29,6 +29,7 @@ class LiveChatDetailsMixin:
     _should_schedule_read_path_refresh: Any
     _visible_chat_messages: Any
     invalidate_cache: Any
+    thread_visible_to_tenant: Any
 
     async def get_conversation_details(
         self,
@@ -38,6 +39,7 @@ class LiveChatDetailsMixin:
         days: int = 0,
         before: str | None = None,
         day_window: int = 0,
+        tenant_id: str = "",
     ) -> dict[str, Any]:
         """Get detailed conversation history.
 
@@ -50,9 +52,18 @@ class LiveChatDetailsMixin:
             day_window: If before is set and > 0, return only messages in (before - day_window days, before]
         """
         try:
+            from services.live_chat_tenant import normalize_live_chat_tenant_id, row_belongs_to_tenant
+
             db = get_firestore_db()
             if not db:
                 return {"success": False, "error": "Firestore not initialized"}
+            workspace = normalize_live_chat_tenant_id(tenant_id)
+            if workspace:
+                visible = await self.thread_visible_to_tenant(
+                    user_id=user_id, conversation_id=conversation_id, tenant_id=workspace
+                )
+                if not visible:
+                    return {"success": False, "error": "Conversation not found"}
 
             app_id = "linas-ai-bot-backend"
             index_coll = self._index_collection(db)
@@ -66,6 +77,10 @@ class LiveChatDetailsMixin:
                     )
                     if index_doc.exists:
                         data = index_doc.to_dict() or {}
+                        data.setdefault("conversation_id", conversation_id)
+                        data.setdefault("user_id", user_id)
+                        if workspace and not row_belongs_to_tenant(data, workspace):
+                            return {"success": False, "error": "Conversation not found"}
                         recent = data.get("recent_messages")
                         if isinstance(recent, list) and len(recent) > 0:
                             formatted_recent = [

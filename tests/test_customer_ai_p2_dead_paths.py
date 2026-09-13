@@ -8,18 +8,10 @@ from pathlib import Path
 import pytest
 
 
-def test_smart_retrieval_callables_raise_dead() -> None:
-    from services import smart_retrieval_service as srs
-
-    assert srs.DEAD_FOR_CUSTOMER_BRAIN is True
-    for name in (
-        "invalidate_titles_cache",
-        "select_relevant_files",
-        "get_smart_context",
-        "build_retrieval_prompt",
-    ):
-        with pytest.raises(RuntimeError, match="DEAD"):
-            getattr(srs, name)("tenant")
+def test_smart_retrieval_module_removed() -> None:
+    root = Path(__file__).resolve().parents[1]
+    assert not (root / "services" / "smart_retrieval_service.py").exists()
+    assert not (root / "services" / "retrieval_debug.py").exists()
 
 
 def test_brain_path_does_not_import_luna_retrieval_engine() -> None:

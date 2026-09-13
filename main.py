@@ -49,8 +49,6 @@ import modules.cm_request_graphs_api  # noqa: E402, F401
 import modules.cm_setup_api  # noqa: E402, F401
 import modules.comments_inbox_api  # noqa: E402, F401
 import modules.content_files_api  # noqa: E402, F401
-import modules.creative_api  # noqa: E402, F401
-import modules.customer_ai_lab_api  # noqa: E402, F401
 import modules.dashboard_api  # noqa: E402, F401
 import modules.entitlements_api  # noqa: E402, F401
 import modules.event_handlers  # noqa: E402, F401

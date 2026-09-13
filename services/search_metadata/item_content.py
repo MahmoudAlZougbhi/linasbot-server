@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from services.customer_reply_v2.retrieval_item_index import record_content
-from services.search_metadata.luna_titles import original_title_of
+from services.search_metadata.title_fields import original_title_of
 
 
 def save_time_item_content(section_id: str, raw: dict[str, Any]) -> str:

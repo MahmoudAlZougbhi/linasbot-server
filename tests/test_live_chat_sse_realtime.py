@@ -20,6 +20,7 @@ def test_live_chat_api_and_sse_modules_under_500_lines() -> None:
         "modules/live_chat_api_helpers.py",
         "services/live_chat_sse_broadcaster.py",
         "services/live_chat_channel.py",
+        "services/live_chat_tenant.py",
     ):
         assert len(Path(rel).read_text(encoding="utf-8").splitlines()) < 500, rel
 
@@ -48,7 +49,7 @@ def test_live_chat_event_tenant_id_from_prefixed_social_ids() -> None:
     assert live_chat_event_tenant_id("acme:instagram:ig:psid") == "acme"
     assert live_chat_event_tenant_id("linas:facebook:page:user") == "linas"
     assert live_chat_event_tenant_id("shop:tiktok:open:id") == "shop"
-    assert live_chat_event_tenant_id("+96170123456") == "linas"
+    assert live_chat_event_tenant_id("+96170123456") == ""
     assert live_chat_event_tenant_id("tiktok:open_id") == "linas"
     assert live_chat_event_tenant_id("instagram:178414") == "linas"
 
@@ -151,7 +152,7 @@ async def test_broadcast_publishes_when_no_local_clients(monkeypatch: pytest.Mon
     body = published[0][1]
     assert body["user_id"] == "+96170123456"
     assert body["conversation_id"] == "c1"
-    assert body["tenant_id"] == "linas"
+    assert body["tenant_id"] == ""
     assert body["channel"] == "whatsapp"
     assert body["event_id"]
     assert body["event_ts"]

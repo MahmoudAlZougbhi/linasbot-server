@@ -263,10 +263,19 @@ async def run_customer_ai_comment(
         if reason:
             return CustomerReplyOutcome(stop=True, reason=reason, reply=None)
         raise
+    sender = str(_kwargs.get("provider_sender_id") or "").strip()
+    post_id_value = post_id or str(_kwargs.get("post_id") or "")
+    conv_id = comment_conversation_id(
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+        channel=channel,
+        post_id=post_id_value,
+        author_id=sender,
+    )
     mode, decision = winning_comment_mode(
         tenant_id=tenant_id,
         comment_text=comment_text,
-        post_id=post_id or str(_kwargs.get("post_id") or ""),
+        post_id=post_id_value,
         channel=channel,
     )
     if mode and decision is not None:
@@ -274,12 +283,7 @@ async def run_customer_ai_comment(
         if static is not None:
             static_turn = CustomerTurn(
                 tenant_id=tenant_id,
-                conversation_id=comment_conversation_id(
-                    tenant_id=tenant_id,
-                    conversation_id=conversation_id,
-                    channel=channel,
-                    post_id=post_id or str(_kwargs.get("post_id") or ""),
-                ),
+                conversation_id=conv_id,
                 channel=channel,
                 surface="comment",
                 invocation_kind="comment",
@@ -296,14 +300,6 @@ async def run_customer_ai_comment(
             return _outcome(billed, comment_surface=True)
     from services.customer_ai.history import build_history_snapshot
 
-    sender = str(_kwargs.get("provider_sender_id") or "").strip()
-    post_id_value = post_id or str(_kwargs.get("post_id") or "")
-    conv_id = comment_conversation_id(
-        tenant_id=tenant_id,
-        conversation_id=conversation_id,
-        channel=channel,
-        post_id=post_id_value,
-    )
     parent = str(_kwargs.get("parent_comment") or "").strip()
     caption = str(_kwargs.get("caption") or "").strip()
     raw_ctx = _kwargs.get("comment_context")

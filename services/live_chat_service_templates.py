@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from google.cloud import firestore
-
 import config
 from services.live_chat_contracts import (
     utc_now,
@@ -13,6 +11,7 @@ from services.live_chat_service_common import (
     _env_int,
     _live_chat_display_name,
 )
+from services.live_chat_tenant import normalize_live_chat_tenant_id, row_belongs_to_tenant
 from utils.phone_utils import phone_match_key
 from utils.utils import (
     get_firestore_db,
@@ -50,6 +49,8 @@ class LiveChatTemplatesMixin:
     _empty_counters: Any
     _index_collection: Any
     _index_recency_query: Any
+    _stream_tenant_index_docs: Any
+    _index_counters_by_tenant: Any
     _is_cache_fresh: Any
     _normalize_conversation_state: Any
     _parse_timestamp: Any
@@ -59,6 +60,7 @@ class LiveChatTemplatesMixin:
     async def get_chats_by_template_send_log(
         self,
         template_id: str,
+        tenant_id: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
         scan_limit: int | None = None,
@@ -94,6 +96,18 @@ class LiveChatTemplatesMixin:
             tid, date_from=df, date_to=dt
         )
 
+        workspace = normalize_live_chat_tenant_id(tenant_id)
+        if not workspace:
+            return {
+                "success": True,
+                "chats": [],
+                "template_id": tid,
+                "log_entries_matched": 0,
+                "distinct_recipients": 0,
+                "matched_chats": 0,
+                "index_scanned": 0,
+            }
+
         if not recipient_keys:
             return {
                 "success": True,
@@ -124,11 +138,7 @@ class LiveChatTemplatesMixin:
         index_coll = self._index_collection(db)
 
         def _stream() -> Any:
-            return list(
-                self._index_recency_query(index_coll)
-                .limit(max_scan)
-                .stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS, retry=None)
-            )
+            return self._stream_tenant_index_docs(index_coll, workspace, limit=max_scan)
 
         try:
             docs = await self._run_blocking_with_timeout(
@@ -151,6 +161,9 @@ class LiveChatTemplatesMixin:
         matched: list[dict[str, Any]] = []
         for doc in docs or []:
             data = doc.to_dict() or {}
+            data.setdefault("conversation_id", doc.id)
+            if not row_belongs_to_tenant(data, workspace):
+                continue
             state = self._normalize_conversation_state(data)
             customer_info = data.get("customer_info") or {}
             user_id = data.get("user_id")
@@ -219,14 +232,17 @@ class LiveChatTemplatesMixin:
             "date_to": dt or "",
         }
 
-    async def _compute_index_counters(self) -> Any:
-        """Compute dashboard counters directly from live_chat_index (best-effort, capped for performance)."""
-        if self._is_cache_fresh(
-            self._index_counters_cache_time,
-            ttl_seconds=self.INDEX_COUNTERS_CACHE_TTL,
+    async def _compute_index_counters(self, tenant_id: str = "") -> Any:
+        """Compute dashboard counters from live_chat_index for one tenant."""
+        tid = normalize_live_chat_tenant_id(tenant_id)
+        if not tid:
+            return self._empty_counters()
+        slot = (self._index_counters_by_tenant or {}).get(tid)
+        if isinstance(slot, dict) and self._is_cache_fresh(
+            slot.get("cached_at"), ttl_seconds=self.INDEX_COUNTERS_CACHE_TTL
         ):
             print("[live_chat:counters] source=cache")
-            return dict(self._index_counters_cache)
+            return dict(slot.get("counters") or self._empty_counters())
 
         counters = self._empty_counters()
         try:
@@ -234,17 +250,14 @@ class LiveChatTemplatesMixin:
             if not db:
                 return counters
             index_coll = self._index_collection(db)
-            # Cap to avoid massive scans on every dashboard refresh.
             docs = await asyncio.to_thread(
-                lambda: list(
-                    index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING)
-                    .limit(self.INDEX_COUNTER_SCAN_LIMIT)
-                    .stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS)
-                ),
+                lambda: self._stream_tenant_index_docs(index_coll, tid, limit=self.INDEX_COUNTER_SCAN_LIMIT)
             )
-            print(f"[live_chat:counters] source=index docs_scanned={len(docs)} limit={self.INDEX_COUNTER_SCAN_LIMIT}")
+            print(f"[live_chat:counters] source=index tenant={tid} docs_scanned={len(docs)}")
             for doc in docs:
                 data = doc.to_dict() or {}
+                if not row_belongs_to_tenant(data, tid):
+                    continue
                 state = self._normalize_conversation_state(data)
                 counters["all"] += 1
                 if state == self.STATE_WAITING_OPERATOR:
@@ -255,13 +268,14 @@ class LiveChatTemplatesMixin:
                     counters["bot_active"] += 1
                 if state in {self.STATE_RESOLVED, self.STATE_ARCHIVED}:
                     counters["closed"] += 1
+            self._index_counters_by_tenant[tid] = {"counters": dict(counters), "cached_at": utc_now()}
             self._index_counters_cache = dict(counters)
             self._index_counters_cache_time = utc_now()
             return counters
         except Exception as e:
             print(f"⚠️ counter computation failed: {e}")
-            if self._index_counters_cache:
-                return dict(self._index_counters_cache)
+            if isinstance(slot, dict) and slot.get("counters"):
+                return dict(slot["counters"])
             return counters
 
     def _identity_keys_for_index_chat(self, user_id: Any, phone_full: str, phone_clean: str) -> set:

@@ -222,6 +222,17 @@ async def save_conversation_message_to_firestore(
     channel = str(user_data.get("channel") or "").strip().lower()
     if channel:
         customer_info["channel"] = channel
+    from services.live_chat_tenant import conversation_tenant_fields
+
+    tenant_fields = conversation_tenant_fields(
+        user_id=canonical_user_id,
+        conversation_id=conversation_id,
+        customer_info=customer_info,
+        metadata=metadata,
+        existing={"tenant_id": user_data.get("tenant_id") or user_data.get("tenantId")},
+    )
+    if tenant_fields:
+        customer_info = tenant_fields["customer_info"]
 
     saved_conv_id = None
     try:

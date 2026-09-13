@@ -88,22 +88,43 @@ def build_contextual_rows(
     return rows, groups, parents
 
 
-async def embed_contextual_rows(rows: list[dict[str, Any]], groups: list[list[str]]) -> list[list[float]]:
+async def embed_contextual_rows(
+    rows: list[dict[str, Any]],
+    groups: list[list[str]],
+    *,
+    session: Any | None = None,
+) -> tuple[list[list[float]], int]:
     if not rows:
-        return []
+        return [], 0
     if not voyage_configured():
         raise VoyageContractError("provider_not_configured")
     if not groups:
-        return []
-    vectors: list[list[float]] = []
-    for start in range(0, len(groups), CONTEXT_GROUP_BATCH):
-        batch = groups[start : start + CONTEXT_GROUP_BATCH]
+        return [], 0
+    from services.customer_ai.search.reuse_vectors import group_row_slices, lookup_prior_vectors, merge_prior_and_fresh
+
+    prior = lookup_prior_vectors(session, rows)
+    slices = group_row_slices(groups)
+    if slices and slices[-1][1] != len(rows):
+        raise VoyageContractError(f"contextual_group_row_mismatch:{slices[-1][1]}!={len(rows)}")
+    fresh_groups: list[list[str]] = []
+    missing: list[int] = []
+    for group, (start, end) in zip(groups, slices, strict=True):
+        if any(prior[index] is None for index in range(start, end)):
+            for index in range(start, end):
+                prior[index] = None
+            fresh_groups.append(group)
+            missing.extend(range(start, end))
+    if not missing:
+        return [vector for vector in prior if vector is not None], 0
+    fresh: list[list[float]] = []
+    for start in range(0, len(fresh_groups), CONTEXT_GROUP_BATCH):
+        batch = fresh_groups[start : start + CONTEXT_GROUP_BATCH]
         embedded = await embed_contextual_groups(KNOWLEDGE_DOCUMENT, batch)
-        for group in embedded:
-            vectors.extend(group.vectors)
-    if len(vectors) != len(rows):
-        raise VoyageContractError(f"contextual_row_mismatch:{len(vectors)}!={len(rows)}")
-    return vectors
+        for group_vectors in embedded:
+            fresh.extend(group_vectors.vectors)
+    if len(fresh) != len(missing):
+        raise VoyageContractError(f"contextual_row_mismatch:{len(fresh)}!={len(missing)}")
+    return merge_prior_and_fresh(prior, fresh), len(missing)
 
 
 async def build_and_activate_contextual_index(
@@ -129,7 +150,7 @@ async def build_and_activate_contextual_index(
             "role": "candidate",
         }
     try:
-        vectors = await embed_contextual_rows(rows, groups)
+        vectors, _embedded = await embed_contextual_rows(rows, groups, session=session)
     except Exception as exc:
         log.warning("contextual embed failed tenant=%s err=%s detail=%s", tid, type(exc).__name__, str(exc)[:200])
         return {

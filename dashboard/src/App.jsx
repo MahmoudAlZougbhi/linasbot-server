@@ -13,14 +13,13 @@ import Features from './pages/public/Features';
 import { AuthProvider } from './contexts/AuthContext';
 import { PublicLandingLocaleProvider } from './contexts/PublicLandingLocaleContext';
 import AppEntry from './pages/AppEntry';
+import { OBSOLETE_OPERATOR_PATHS } from './constants/publicSite';
 import { isMarketingPublicHost, isPlatformPortalHost } from './pages/portalHost';
 import OwnerPortalShell from './pages/owner/OwnerPortalShell';
 import OwnerOverview from './pages/owner/OwnerOverview';
 import OwnerUsers from './pages/owner/OwnerUsers';
-import OwnerCopilotSetup from './pages/owner/OwnerCopilotSetup';
 import OwnerCatalog from './pages/owner/OwnerCatalog';
 import OwnerCosts from './pages/owner/OwnerCosts';
-import OwnerLab from './pages/owner/OwnerLab';
 import OwnerMessages from './pages/owner/OwnerMessages';
 
 /**
@@ -68,29 +67,17 @@ function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
 
-          {/* Former operator SPA routes → mobile app CTA (parity matrix committed first). */}
-          <Route path="/mobile/live-chat" element={<Navigate to="/#get-app" replace />} />
           <Route path="/app" element={<AppEntry />} />
           <Route path="/owner" element={<OwnerGate />}>
             <Route index element={<OwnerOverview />} />
             <Route path="users" element={<OwnerUsers />} />
             <Route path="messages" element={<OwnerMessages />} />
-            <Route path="copilot-setup" element={<OwnerCopilotSetup />} />
             <Route path="catalog" element={<OwnerCatalog />} />
             <Route path="costs" element={<OwnerCosts />} />
-            <Route path="lab" element={<OwnerLab />} />
           </Route>
-          <Route path="/training" element={<Navigate to="/#get-app" replace />} />
-          <Route path="/content-managers/*" element={<Navigate to="/#get-app" replace />} />
-          <Route path="/activity-flow" element={<Navigate to="/#get-app" replace />} />
-          <Route path="/live-chat" element={<Navigate to="/#get-app" replace />} />
-          <Route path="/analytics" element={<Navigate to="/#get-app" replace />} />
-          <Route path="/smart-messaging" element={<Navigate to="/#get-app" replace />} />
-          <Route path="/social-posts" element={<Navigate to="/#get-app" replace />} />
-          <Route path="/wallet" element={<Navigate to="/#get-app" replace />} />
-          <Route path="/settings" element={<Navigate to="/#get-app" replace />} />
-          <Route path="/testing" element={<Navigate to="/#get-app" replace />} />
-          <Route path="/api-debug" element={<Navigate to="/#get-app" replace />} />
+          {OBSOLETE_OPERATOR_PATHS.map((path) => (
+            <Route key={path} path={path} element={<Navigate to="/#get-app" replace />} />
+          ))}
           <Route path="/*" element={<AppEntry />} />
         </Routes>
       </AuthProvider>

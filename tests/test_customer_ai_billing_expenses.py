@@ -148,20 +148,29 @@ def test_faq_only_does_not_open_a_lot_when_billing_off() -> None:
 def test_index_embed_records_pending_voyage(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
 
+    from services.customer_ai.retrieve.cards import TitleCard
     from services.customer_ai.search.index_job import index_published_tenant
+    from services.customer_ai.search.store import reset_memory_store
     from services.membership.processing_budgets import reset_processing_budgets_for_tests
 
     reset_processing_budgets_for_tests()
+    reset_memory_store()
     monkeypatch.setattr("services.customer_ai.search.index_job.voyage_configured", lambda: True)
-    monkeypatch.setattr(
-        "services.customer_ai.search.index_job.load_published_cards",
-        lambda _tid: [],
+    card = TitleCard(
+        item_id="services:svc1",
+        source_family="services",
+        title="Laser",
+        search_text="underarm laser",
+        body="underarm laser",
+        revision="r1",
     )
+    monkeypatch.setattr("services.customer_ai.search.index_job.load_published_cards", lambda _tid: [card])
     monkeypatch.setattr("services.customer_ai.search.index_job.load_product_cards", lambda _tid: [])
-    monkeypatch.setattr(
-        "services.customer_ai.search.index_job.embed_document_rows",
-        lambda _rows: asyncio.sleep(0, result=[]),
-    )
+
+    async def _embed(rows: list[object]) -> list[list[float]]:
+        return [[0.2, 0.1, 0.0, 0.0] for _ in rows]
+
+    monkeypatch.setattr("services.customer_ai.search.index_job.embed_document_rows", _embed)
 
     async def _run() -> None:
         await index_published_tenant("idx-shop", revision="v-test")

@@ -116,9 +116,10 @@ def test_unified_chats_api_declares_channel_query() -> None:
     unified = Path("services/live_chat_service_unified.py").read_text(encoding="utf-8")
     assert "wanted_channel" in unified
     assert '"channel": row_channel' in unified
-    assert "if not search_val and not cursor and not state_values and not wanted_channel:" in unified
-    api = Path("modules/live_chat_api.py").read_text(encoding="utf-8")
-    assert '"error": "request_failed"' in api
+    assert "tenant_id" in unified
+    assert "_store_unified_inbox" in Path("services/live_chat_service_inbox_cache.py").read_text(encoding="utf-8")
+    assert "tenant_id=workspace" in src
+    assert '"error": "request_failed"' in src
     assert "tiktok" in Path("services/live_chat_channel.py").read_text(encoding="utf-8")
 
 
@@ -183,18 +184,26 @@ def test_coerce_user_id_never_blank_for_real_threads() -> None:
 @pytest.mark.asyncio
 async def test_unified_chats_uses_disk_cache_when_firestore_missing() -> None:
     svc = live_chat_service
-    svc._unified_chats_cache = [
-        {
-            "conversation_id": "cached-1",
-            "user_id": "+96170111111",
-            "last_message_at": utc_now().isoformat(),
-            "conversation_state": svc.STATE_BOT_ACTIVE,
-        }
-    ]
-    svc._unified_chats_cache_has_more = False
-    svc._unified_chats_cache_total = 1
+    svc.invalidate_cache()
+    svc._store_unified_inbox(
+        "t-cache",
+        chats=[
+            {
+                "conversation_id": "cached-1",
+                "tenant_id": "t-cache",
+                "user_id": "+96170111111",
+                "last_message_at": utc_now().isoformat(),
+                "conversation_state": svc.STATE_BOT_ACTIVE,
+            }
+        ],
+        has_more=False,
+        total=1,
+        next_cursor=None,
+        page_size=20,
+        counters=svc._empty_counters(),
+    )
     with patch("services.live_chat_service_unified.get_firestore_db", return_value=None):
-        result = await svc.get_unified_chats(search="", page=1, page_size=20, filter_state="all")
+        result = await svc.get_unified_chats(search="", page=1, page_size=20, filter_state="all", tenant_id="t-cache")
     assert result.get("success") is True
     assert len(result.get("chats") or []) == 1
-    assert result.get("source") == "memory_cache"
+    assert result.get("source") in {"cache", "memory_cache"}

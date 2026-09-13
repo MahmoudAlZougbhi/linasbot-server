@@ -237,4 +237,5 @@ def normalize_conversation_document(
         "post_release_escalation_suppressed_until": data.get("post_release_escalation_suppressed_until"),
         "release_time": data.get("release_time"),
         "ai_context_reset_at": data.get("ai_context_reset_at"),
+        "tenant_id": str(data.get("tenant_id") or data.get("tenantId") or "").strip(),
     }

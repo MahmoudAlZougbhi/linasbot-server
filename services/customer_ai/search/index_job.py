@@ -80,6 +80,22 @@ async def embed_document_rows(rows: list[dict[str, Any]]) -> list[list[float]]:
     return vectors
 
 
+async def embed_document_rows_incremental(
+    rows: list[dict[str, Any]],
+    *,
+    session: Any | None = None,
+) -> tuple[list[list[float]], int]:
+    """Embed only rows whose content_hash is new. Copies Voyage vectors for unchanged hashes."""
+    from services.customer_ai.search.reuse_vectors import lookup_prior_vectors, merge_prior_and_fresh
+
+    prior = lookup_prior_vectors(session, rows)
+    missing = [index for index, vector in enumerate(prior) if vector is None]
+    if not missing:
+        return [vector for vector in prior if vector is not None], 0
+    fresh = await embed_document_rows([rows[index] for index in missing])
+    return merge_prior_and_fresh(prior, fresh), len(missing)
+
+
 def write_entity_candidate(
     session: Any | None, rows: list[dict[str, Any]], vectors: list[list[float]], *, tenant_id: str, revision: str
 ) -> dict[str, Any]:
@@ -168,20 +184,35 @@ async def _index_published_body(tid: str, *, revision: str, session: Any | None,
 
         mark_failed(tid, revision=revision, reason="provider_not_configured")
         return {"ready": False, "reason": "provider_not_configured", "count": len(rows), "health": "FAILED"}
+    if session is not None:
+        return await _embed_and_persist(session, tid=tid, revision=revision, rows=rows, cards=cards, activate=activate)
+    return await _index_with_resolved_session(tid, revision=revision, rows=rows, cards=cards, activate=activate)
+
+
+async def _embed_and_persist(
+    session: Any | None,
+    *,
+    tid: str,
+    revision: str,
+    rows: list[dict[str, Any]],
+    cards: list[TitleCard],
+    activate: bool,
+) -> dict[str, Any]:
     try:
-        vectors = await embed_document_rows(rows)
+        vectors, embedded = await embed_document_rows_incremental(rows, session=session)
         from services.membership.provider_expense import record_pending_provider
 
-        record_pending_provider(
-            event_id=f"embed:{tid}:{revision}",
-            tenant_id=tid,
-            category="embedding",
-            feature="knowledge",
-            provider="voyage",
-            model=ENTITY_MODEL,
-            quantity=len(rows),
-            operation_id=revision,
-        )
+        if embedded:
+            record_pending_provider(
+                event_id=f"embed:{tid}:{revision}",
+                tenant_id=tid,
+                category="embedding",
+                feature="knowledge",
+                provider="voyage",
+                model=ENTITY_MODEL,
+                quantity=embedded,
+                operation_id=revision,
+            )
     except Exception as exc:
         log.warning("customer_ai index embed failed tenant=%s err=%s", tid, type(exc).__name__)
         from services.customer_ai.search.index_lifecycle import mark_failed
@@ -193,14 +224,12 @@ async def _index_published_body(tid: str, *, revision: str, session: Any | None,
 
         mark_failed(tid, revision=revision, reason="provider_error")
         return {"ready": False, "reason": "provider_error", "count": len(rows), "health": "FAILED"}
-
-    if session is not None:
-        return await _persist_candidate_and_maybe_activate(
-            session, tid=tid, revision=revision, rows=rows, vectors=vectors, cards=cards, activate=activate
-        )
-    return await _index_with_resolved_session(
-        tid, revision=revision, rows=rows, vectors=vectors, cards=cards, activate=activate
+    result = await _persist_candidate_and_maybe_activate(
+        session, tid=tid, revision=revision, rows=rows, vectors=vectors, cards=cards, activate=activate
     )
+    result["embedded"] = embedded
+    result["reused"] = max(0, len(rows) - embedded)
+    return result
 
 
 async def _index_with_resolved_session(
@@ -208,7 +237,6 @@ async def _index_with_resolved_session(
     *,
     revision: str,
     rows: list[dict[str, Any]],
-    vectors: list[list[float]],
     cards: list[TitleCard],
     activate: bool,
 ) -> dict[str, Any]:
@@ -217,9 +245,7 @@ async def _index_with_resolved_session(
 
     try:
         with whatsapp_session(require=True) as db:
-            return await _persist_candidate_and_maybe_activate(
-                db, tid=tid, revision=revision, rows=rows, vectors=vectors, cards=cards, activate=activate
-            )
+            return await _embed_and_persist(db, tid=tid, revision=revision, rows=rows, cards=cards, activate=activate)
     except WhatsAppDatabaseUnavailable:
         if is_production_env():
             from services.customer_ai.search.index_lifecycle import mark_failed
@@ -232,9 +258,7 @@ async def _index_with_resolved_session(
                 "store": "unavailable",
                 "health": "FAILED",
             }
-        return await _persist_candidate_and_maybe_activate(
-            None, tid=tid, revision=revision, rows=rows, vectors=vectors, cards=cards, activate=activate
-        )
+        return await _embed_and_persist(None, tid=tid, revision=revision, rows=rows, cards=cards, activate=activate)
     except Exception:
         from services.customer_ai.search.index_lifecycle import mark_failed
 
