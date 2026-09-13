@@ -2727,7 +2727,12 @@ def _validate_lb_ready_projection(projection: Any, expected_ready_sha256: str) -
     return projection
 
 
-def _validate_lb_ready_attestation(payload: Any, expected_ready_sha256: str) -> str:
+def _validate_lb_ready_attestation(
+    payload: Any,
+    expected_ready_sha256: str,
+    *,
+    require_fresh: bool = True,
+) -> str:
     expected_keys = {
         "schema",
         "load_balancer_id",
@@ -2753,9 +2758,10 @@ def _validate_lb_ready_attestation(payload: Any, expected_ready_sha256: str) -> 
         if before == "0" * 64:
             raise RuntimeError("DigitalOcean ready attestation prior projection is invalid")
     observed = _parse_utc(payload.get("observed_at"), "DigitalOcean ready attestation observation")
-    now = datetime.now(UTC)
-    if observed > now + timedelta(seconds=30) or (now - observed).total_seconds() > 300:
-        raise RuntimeError("DigitalOcean ready attestation is not fresh enough for bootstrap")
+    if require_fresh:
+        now = datetime.now(UTC)
+        if observed > now + timedelta(seconds=30) or (now - observed).total_seconds() > 300:
+            raise RuntimeError("DigitalOcean ready attestation is not fresh enough for bootstrap")
     return str(payload["observed_at"])
 
 
@@ -2898,7 +2904,7 @@ def _install_lb_ready_attestation(
         raise RuntimeError("DigitalOcean ready attestation input is invalid JSON") from exc
     if raw != _canonical(payload) + b"\n":
         raise RuntimeError("DigitalOcean ready attestation bytes are not canonical")
-    _validate_lb_ready_attestation(payload, expected_ready_sha256)
+    _validate_lb_ready_attestation(payload, expected_ready_sha256, require_fresh=True)
     _secure_dir(STATE_ROOT, create=True)
     if LB_BOOTSTRAP_ATTESTATION_PATH.exists() or LB_BOOTSTRAP_ATTESTATION_PATH.is_symlink():
         _secure_regular(LB_BOOTSTRAP_ATTESTATION_PATH)
@@ -2917,6 +2923,8 @@ def _lb_owner_attestation(
     expected_attestation_sha256: str,
     expected_ready_sha256: str,
     target_sha: str,
+    *,
+    require_fresh: bool = True,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Consume one exact protected provider observation without a prod token."""
 
@@ -2935,7 +2943,11 @@ def _lb_owner_attestation(
         raise RuntimeError("DigitalOcean ready attestation is invalid JSON") from exc
     if raw != _canonical(payload) + b"\n":
         raise RuntimeError("DigitalOcean ready attestation bytes are not canonical")
-    observed_at = _validate_lb_ready_attestation(payload, expected_ready_sha256)
+    observed_at = _validate_lb_ready_attestation(
+        payload,
+        expected_ready_sha256,
+        require_fresh=require_fresh,
+    )
     check_interval = LB_HEALTH_CONTRACT["check_interval_seconds"]
     unhealthy_threshold = LB_HEALTH_CONTRACT["unhealthy_threshold"]
     if (
@@ -3027,7 +3039,11 @@ def _assert_exact_helper(target_sha: str, source_sha: str) -> None:
         raise RuntimeError("running bootstrap helper is not the authenticated QG control blob")
 
 
-def _combined_plan(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str, dict[str, Any]]:
+def _combined_plan(
+    args: argparse.Namespace,
+    *,
+    require_fresh_lb: bool = False,
+) -> tuple[dict[str, Any], bytes, str, dict[str, Any]]:
     source, source_sha = _helper_source()
     node01 = _node_probe("node01", args.expected_node01_sha)
     node02_raw = _remote(
@@ -3056,6 +3072,7 @@ def _combined_plan(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str
         args.expected_lb_attestation_sha256,
         args.expected_lb_ready_sha256,
         args.target_sha,
+        require_fresh=require_fresh_lb,
     )
     plan = {
         "schema": BOOTSTRAP_PLAN_SCHEMA,
@@ -3115,7 +3132,7 @@ def _validated_apply_context(
 ) -> tuple[dict[str, Any], bytes, str, dict[str, Any], str]:
     """Rebuild stable authority and validate fresh evidence before mutation."""
 
-    plan, source, source_sha, lb_evidence = _combined_plan(args)
+    plan, source, source_sha, lb_evidence = _combined_plan(args, require_fresh_lb=True)
     plan_sha = _digest(plan)
     if plan_sha != args.expected_plan_sha256:
         raise RuntimeError("bootstrap plan changed after owner dry-run")
