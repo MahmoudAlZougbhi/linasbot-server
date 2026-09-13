@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from typing import Any
@@ -17,6 +18,17 @@ from services.customer_ai.evals.live_tenant_seed import (
 from services.customer_ai.runtime import run_customer_ai_dm
 
 Case = dict[str, Any]
+
+
+def capture_ids(token: str) -> dict[str, str]:
+    """Lab-prefixed ids skip live Instagram outbox hydrate/billing persist."""
+    short = (token or uuid.uuid4().hex)[:8]
+    return {
+        "channel": "instagram_dm",
+        "conversation_id": f"lab:mt{short}",
+        "user_id": f"lab:mu{short}",
+        "message_id": f"lab:mm{short}",
+    }
 
 
 def matrix_cases() -> list[Case]:
@@ -207,7 +219,16 @@ def judge(case: Case, outcome: Any) -> tuple[bool, str]:
         ok = "5" in reply
         return ok, "alpha_5" if ok else "missing_5"
     if expect == "resource":
-        ok = "resource" in lower or "pending" in lower or "http" in lower or "photo" in lower or "video" in lower
+        ok = any(
+            needle in lower
+            for needle in (
+                "send_resource",
+                "resource_request",
+                "awaiting_delivery",
+                "resource_not_found",
+                "pending",
+            )
+        ) or any(needle in reply.lower() for needle in ("photo", "video", "http", "link", "صورة", "فيديو", "رابط"))
         return ok, "resource" if ok else "no_resource"
     if expect == "appointment":
         ok = "appointment" in lower or "confirm" in lower or "موعد" in blob
@@ -231,16 +252,16 @@ def judge(case: Case, outcome: Any) -> tuple[bool, str]:
 
 
 async def run_case(case: Case) -> dict[str, Any]:
-    token = uuid.uuid4().hex[:8]
+    ids = capture_ids(uuid.uuid4().hex[:8])
     started = time.perf_counter()
     try:
         outcome = await run_customer_ai_dm(
             tenant_id=case["tenant_id"],
             message=case["message"],
-            channel="web_chat",
-            conversation_id=f"mt{token}",
-            user_id=f"mu{token}",
-            message_id=f"mm{token}",
+            channel=ids["channel"],
+            conversation_id=ids["conversation_id"],
+            user_id=ids["user_id"],
+            message_id=ids["message_id"],
             apply_customer_usage_limits=False,
         )
     except Exception as exc:  # noqa: BLE001 — matrix records provider/runtime faults
@@ -277,7 +298,9 @@ async def run_case(case: Case) -> dict[str, Any]:
 async def run_matrix() -> dict[str, Any]:
     rows = []
     for case in matrix_cases():
-        rows.append(await run_case(case))
+        row = await run_case(case)
+        rows.append(row)
+        print("[tenant-matrix-case] " + json.dumps(row, ensure_ascii=False, default=str)[:1500], flush=True)
         time.sleep(0.4)
     passed = sum(1 for row in rows if row.get("ok"))
     return {

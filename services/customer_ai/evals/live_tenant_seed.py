@@ -11,6 +11,12 @@ TENANT_TEST_2 = "lab_linas_test_2"
 MARKER_LINAS = "LinasLaserMarkerAlpha"
 MARKER_TEST = "LinasTestOneMarker"
 MARKER_TEST_2 = "LinasTestTwoMarker"
+_INTERNAL_GREETING_RULE = "Use this rule only if the user message is only"
+
+
+def keep_knowledge_item(row: dict[str, Any]) -> bool:
+    body = str(row.get("body") or "")
+    return _INTERNAL_GREETING_RULE not in body
 
 
 def week(open_t: str, close_t: str, *, sunday_off: bool = False) -> dict[str, Any]:
@@ -282,7 +288,9 @@ def merge_linas_extras(sections: dict[str, Any]) -> dict[str, Any]:
     out["dynamic_messages"] = greet
 
     knowledge = dict(out.get("knowledge") or {})
-    kn_items = [dict(row) for row in (knowledge.get("items") or []) if isinstance(row, dict)]
+    kn_items = [
+        dict(row) for row in (knowledge.get("items") or []) if isinstance(row, dict) and keep_knowledge_item(row)
+    ]
     if not any(str(row.get("id") or "") == "marker" for row in kn_items):
         kn_items.append(
             {

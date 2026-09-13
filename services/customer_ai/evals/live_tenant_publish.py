@@ -95,7 +95,7 @@ async def publish_and_index(tenant_id: str, sections: dict[str, Any], *, revisio
         index = await run_tenant_index_job(tenant_id, revision=revision, reason="live-tenant-matrix")
         if index.get("ready"):
             break
-        await asyncio.sleep(8 * (attempt + 1))
+        await asyncio.sleep(12 * (attempt + 1))
     return {
         **published,
         "index_ready": bool(index.get("ready")),
@@ -106,14 +106,18 @@ async def publish_and_index(tenant_id: str, sections: dict[str, Any], *, revisio
 
 
 async def seed_and_publish_all() -> dict[str, Any]:
+    import asyncio
+
     stamp = str(int(time.time()))
     rows = {
         TENANT_LINAS: await publish_and_index(TENANT_LINAS, linas_merged_sections(), revision=f"live_linas_{stamp}"),
-        TENANT_TEST: await publish_and_index(
-            TENANT_TEST, _full_sections(test1_sections()), revision=f"live_test1_{stamp}"
-        ),
-        TENANT_TEST_2: await publish_and_index(
-            TENANT_TEST_2, _full_sections(test2_sections()), revision=f"live_test2_{stamp}"
-        ),
     }
+    await asyncio.sleep(8)
+    rows[TENANT_TEST] = await publish_and_index(
+        TENANT_TEST, _full_sections(test1_sections()), revision=f"live_test1_{stamp}"
+    )
+    await asyncio.sleep(8)
+    rows[TENANT_TEST_2] = await publish_and_index(
+        TENANT_TEST_2, _full_sections(test2_sections()), revision=f"live_test2_{stamp}"
+    )
     return rows

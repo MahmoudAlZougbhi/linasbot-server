@@ -234,12 +234,18 @@ jobs:
           python3 - <<'PY'
           import base64
           import io
+          import os
           import tarfile
           from pathlib import Path
 
+          Path("PACK_SHA").write_text(os.environ.get("GITHUB_SHA", ""), encoding="utf-8")
           buf = io.BytesIO()
           with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+              tar.add("PACK_SHA", arcname="PACK_SHA")
               for rel in (
+                  "services/customer_ai/greeting.py",
+                  "services/customer_ai/templates.py",
+                  "services/customer_ai/turn_pipeline.py",
                   "services/customer_ai/evals/live_tenant_seed.py",
                   "services/customer_ai/evals/live_tenant_publish.py",
                   "services/customer_ai/evals/live_tenant_matrix.py",
@@ -260,6 +266,7 @@ jobs:
                       "base64 -d <<'B64' | tar -xz -C \"$PACK\"",
                       b64,
                       "B64",
+                      'echo "[tenant-matrix] pack_sha=$(cat "$PACK/PACK_SHA" 2>/dev/null || true)"',
                       'PYTHON_BIN="$APP_DIR/venv/bin/python3"',
                       'if [ ! -x "$PYTHON_BIN" ]; then PYTHON_BIN="$(command -v python3)"; fi',
                       'if [ -f "$APP_DIR/venv/bin/activate" ]; then source "$APP_DIR/venv/bin/activate"; fi',

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from services.customer_ai.evals.live_tenant_matrix import capture_ids
 from services.customer_ai.evals.live_tenant_seed import (
     MARKER_LINAS,
     MARKER_TEST,
     MARKER_TEST_2,
+    keep_knowledge_item,
     merge_linas_hours,
     test1_sections,
     test2_sections,
@@ -36,3 +38,16 @@ def test_test_tenants_have_distinct_prices_and_markers() -> None:
     assert two["requests_appointments"]["enabled_types"] == ["HUMAN"]
     hamra = week("09:00", "15:00", sunday_off=True)
     assert hamra["sunday"]["off_day"] is True
+
+
+def test_capture_ids_use_lab_prefix() -> None:
+    ids = capture_ids("abcd1234")
+    assert ids["conversation_id"].startswith("lab:")
+    assert ids["user_id"].startswith("lab:")
+    assert ids["message_id"].startswith("lab:")
+    assert ids["channel"] == "instagram_dm"
+
+
+def test_internal_greeting_rule_is_dropped() -> None:
+    assert keep_knowledge_item({"body": "Street parking. Code X."}) is True
+    assert keep_knowledge_item({"body": "Use this rule only if the user message is only a casual greeting."}) is False

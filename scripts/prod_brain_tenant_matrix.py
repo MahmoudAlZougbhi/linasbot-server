@@ -1,6 +1,7 @@
 """Capture-only production Brain matrix. Does not send WhatsApp or Instagram.
 
 Loads seed/publish/matrix modules from this git ref (via /tmp) or from the app tree.
+Overlays greeting-only Brain files in this process only; gunicorn stays on the live SHA.
 """
 
 from __future__ import annotations
@@ -39,25 +40,43 @@ def _load_module(name: str, path: Path) -> ModuleType:
 def _module_path(filename: str) -> Path:
     here = Path(__file__).resolve().parent
     dumped = Path("/tmp/live_matrix_pack") / filename
-    app = Path("/opt/linasbot/services/customer_ai/evals") / filename
-    repo = here.parent / "services" / "customer_ai" / "evals" / filename
-    for candidate in (dumped, repo, app, here / filename):
+    app_evals = Path("/opt/linasbot/services/customer_ai/evals") / filename
+    app_cai = Path("/opt/linasbot/services/customer_ai") / filename
+    repo_evals = here.parent / "services" / "customer_ai" / "evals" / filename
+    repo_cai = here.parent / "services" / "customer_ai" / filename
+    for candidate in (dumped, repo_evals, repo_cai, app_evals, app_cai, here / filename):
         if candidate.exists():
             return candidate
     raise FileNotFoundError(filename)
 
 
+def _overlay_greeting_path() -> list[str]:
+    loaded: list[str] = []
+    for name, filename in (
+        ("services.customer_ai.greeting", "greeting.py"),
+        ("services.customer_ai.templates", "templates.py"),
+        ("services.customer_ai.turn_pipeline", "turn_pipeline.py"),
+    ):
+        path = _module_path(filename)
+        _load_module(name, path)
+        loaded.append(f"{name}={path}")
+    return loaded
+
+
 async def _run() -> dict:
+    overlay = _overlay_greeting_path()
     seed_path = _module_path("live_tenant_seed.py")
     publish_path = _module_path("live_tenant_publish.py")
     matrix_path = _module_path("live_tenant_matrix.py")
+    print("[tenant-matrix] overlay " + json.dumps(overlay), flush=True)
+    print(f"[tenant-matrix] seed={seed_path} publish={publish_path} matrix={matrix_path}", flush=True)
     seed = _load_module("live_tenant_seed", seed_path)
     sys.modules["services.customer_ai.evals.live_tenant_seed"] = seed
     publish = _load_module("live_tenant_publish", publish_path)
     matrix = _load_module("live_tenant_matrix", matrix_path)
     published = await publish.seed_and_publish_all()
     results = await matrix.run_matrix()
-    return {"publish": published, "matrix": results}
+    return {"publish": published, "matrix": results, "overlay": overlay}
 
 
 def main() -> int:
