@@ -177,6 +177,31 @@ async def test_greeting_only_uses_identity_not_agent_retrieve(monkeypatch: pytes
     assert "11:00" not in out.envelope.messages[0].text
 
 
+@pytest.mark.asyncio
+async def test_greeting_only_does_not_retrieve_knowledge_when_identity_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from services.customer_ai.contracts.turn import CustomerTurn
+    from services.customer_ai.turn_pipeline import run_dm_after_gates
+
+    async def no_confirm(*_a, **_k):
+        return None
+
+    async def no_greet(*_a, **_k):
+        return None
+
+    async def boom(*_a, **_k):
+        raise AssertionError("greeting-only must not retrieve Knowledge SOPs")
+
+    monkeypatch.setattr("services.customer_ai.turn_pipeline.try_confirm_pending", no_confirm)
+    monkeypatch.setattr("services.customer_ai.agent.greeting_turn.identity_greeting_result", no_greet)
+    monkeypatch.setattr("services.customer_ai.agent.loop.run_agentic_dm_path", boom)
+    turn = CustomerTurn(tenant_id="linas", conversation_id="c-hi2", event_ids=["m-hi2"])
+    out = await run_dm_after_gates(turn, message="Hi", channel="instagram_dm")
+    assert out.envelope.decision == "no_reply"
+    assert out.stop_reason in {"failed_closed", "provider_not_configured"}
+
+
 def test_greeting_follows_inbound_language(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "services.customer_ai.greeting.load_dynamic_messages",
