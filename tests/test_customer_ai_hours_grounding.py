@@ -215,3 +215,90 @@ def test_published_off_day_is_indexed() -> None:
     hours = next(card for card in cards if card.item_id == "hours:hamra")
     assert "sunday: closed" in " ".join(hours.search_text.split()) or "closed" in hours.search_text
     assert any(card.item_id == "hours:off_days" for card in cards)
+
+
+def test_hydrate_clocks_when_branch_schedule_empty() -> None:
+    """Production-shaped: clocks live on opening_hours, branch weekly_schedule is empty."""
+    sections = {
+        "opening_hours": {
+            "items": [
+                {
+                    "id": "oh_antelias",
+                    "title": "Antelias Opening Hours",
+                    "aliases": ["antelias", "أنطلياس"],
+                    "branch_id": "antelias",
+                    "weekly_schedule": _week("11:00", "19:00", sunday_off=False),
+                    "status": "active",
+                }
+            ]
+        },
+        "branches": {
+            "items": [
+                {
+                    "id": "antelias",
+                    "title": "Antelias",
+                    "aliases": ["أنطلياس"],
+                    "weekly_schedule": {},
+                    "status": "active",
+                }
+            ]
+        },
+    }
+    cards = cards_from_sections(sections)
+    hours = next(card for card in cards if card.item_id == "hours:antelias")
+    hydrated = expand_hits([LexicalHit(card=hours, score=1.0)], sections)
+    assert hydrated.items
+    text = hydrated.items[0].text.lower()
+    assert "11:00" in hydrated.items[0].text
+    assert "19:00" in hydrated.items[0].text
+    assert "sunday: closed" not in text
+    branch = next(card for card in cards if card.item_id == "branches:antelias")
+    branch_text = expand_hits([LexicalHit(card=branch, score=1.0)], sections).items[0].text
+    assert "11:00" in branch_text
+    assert "19:00" in branch_text
+
+
+def _hours_plan() -> PlannerPlan:
+    return PlannerPlan(
+        tasks=[
+            PlannerTask(
+                id="t_hours",
+                type="hours",
+                span=TaskSpan(text="antelias hours"),
+                source_families=["hours", "branches"],
+            )
+        ]
+    )
+
+
+def _hours_card_without_clocks() -> EvidenceBundle:
+    return EvidenceBundle(
+        items=[
+            EvidenceItem(
+                evidence_id="hours:antelias",
+                source_family="hours",
+                source_id="antelias",
+                title="Antelias",
+                text="Antelias",
+            )
+        ],
+        outcome="found",
+    )
+
+
+def test_hours_coverage_uses_receipt_and_kind_clocks() -> None:
+    plan = _hours_plan()
+    hours = _hours_card_without_clocks()
+    assert evaluate_task_coverage(plan, hours, {})["t_hours"] == "partial"
+    assert evaluate_task_coverage(plan, hours, {}, receipts=["tool:get_product:ok"])["t_hours"] == "partial"
+    receipts = evaluate_task_coverage(
+        plan,
+        hours,
+        {},
+        receipts=["fact:hours:antelias:monday: 11:00–19:00"],
+    )
+    assert receipts["t_hours"] == "covered"
+    kind_facts = [{"kind": "hours", "value": "monday: 11:00–19:00", "entity_id": "antelias"}]
+    assert evaluate_task_coverage(plan, hours, kind_facts)["t_hours"] == "covered"
+    no_clock_facts = [{"kind": "hours", "value": "Antelias", "entity_id": "antelias"}]
+    assert evaluate_task_coverage(plan, hours, no_clock_facts)["t_hours"] == "partial"

@@ -55,7 +55,7 @@ def _deterministic(
         )
     reasons = ungrounded_claims(text, bundle, receipts)
     verdicts = verify_claims(text, bundle, receipts=receipts)
-    coverage = evaluate_task_coverage(plan, bundle, structured_facts)
+    coverage = evaluate_task_coverage(plan, bundle, structured_facts, receipts=receipts)
     missing = missing_tasks(plan, coverage)
     if missing:
         return VerifierResult(

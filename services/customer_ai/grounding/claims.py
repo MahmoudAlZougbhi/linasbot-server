@@ -63,7 +63,8 @@ def verify_claims(
     receipts: list[str] | None = None,
 ) -> list[ClaimVerdict]:
     """Deterministic claim verifier. Fail closed on unsupported factual claims."""
-    corpus = "\n".join(item.text for item in bundle.items)
+    receipt_lines = [line for line in (receipts or []) if str(line).strip()]
+    corpus = "\n".join([*(item.text for item in bundle.items), *receipt_lines])
     corpus_ids = tuple(item.evidence_id for item in bundle.items)
     verdicts: list[ClaimVerdict] = []
     for sentence in _split_claims(reply_text):
