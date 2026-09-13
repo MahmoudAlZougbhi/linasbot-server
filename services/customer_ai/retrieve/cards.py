@@ -19,6 +19,7 @@ class TitleCard:
     revision: str = ""
     aliases: tuple[str, ...] = field(default_factory=tuple)
     body: str = ""
+    chunks: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _label(labels: Any) -> str:
@@ -53,6 +54,7 @@ def _card(
         revision=revision,
         aliases=tuple(p for p in extra if p),
         body=body.strip(),
+        chunks=(),
     )
 
 
@@ -62,6 +64,7 @@ def _from_items(
     revision: str,
     *,
     tenant_id: str = "",
+    section: str = "",
 ) -> list[TitleCard]:
     cards: list[TitleCard] = []
     for raw in rows:
@@ -74,7 +77,9 @@ def _from_items(
             continue
         item_id = str(raw.get("id") or raw.get("qa_group_id") or "").strip()
         title = str(raw.get("title") or raw.get("name") or _label(raw.get("labels")) or "").strip()
-        body = str(raw.get("body") or raw.get("content") or raw.get("text") or raw.get("description") or "")
+        body = str(
+            raw.get("body") or raw.get("content") or raw.get("text") or raw.get("description") or raw.get("notes") or ""
+        )
         if family in {"knowledge", "care", "branches", "hours", "services"} and tenant_id:
             attachments = raw.get("attachments") or []
             if attachments:
@@ -110,7 +115,9 @@ def _from_items(
             extra.append(body)
         card = _card(family=family, item_id=item_id, title=title, extra=extra, revision=revision, body=body)
         if card:
-            cards.append(card)
+            from services.customer_ai.retrieve.card_luna import attach_luna_chunks
+
+            cards.append(attach_luna_chunks(card, tenant_id=tenant_id, section=section or family, item_id=item_id))
     return cards
 
 
@@ -134,29 +141,34 @@ def cards_from_sections(
             continue
         rows = payload.get("items")
         if isinstance(rows, list):
-            cards.extend(_from_items(family, rows, revision, tenant_id=tenant_id))
+            cards.extend(_from_items(family, rows, revision, tenant_id=tenant_id, section=key))
     # Always index branch weekly_schedule as hours cards. Opening-hours rows
     # must not hide published branch clocks when both sections exist.
     branches = sections.get("branches")
     items = branches.get("items") if isinstance(branches, dict) else None
     if isinstance(items, list):
         existing = {card.item_id: index for index, card in enumerate(cards) if card.source_family == "hours"}
-        for card in _from_items("hours", items, revision, tenant_id=tenant_id):
+        for card in _from_items("hours", items, revision, tenant_id=tenant_id, section="branches"):
             prior = existing.get(card.item_id)
             if prior is None:
                 existing[card.item_id] = len(cards)
                 cards.append(card)
                 continue
             old = cards[prior]
-            if card.search_text and card.search_text not in old.search_text:
-                cards[prior] = TitleCard(
-                    item_id=old.item_id,
-                    source_family=old.source_family,
-                    title=old.title,
-                    search_text=normalize_search_text(f"{old.search_text} {card.search_text}"),
+            need_text = bool(card.search_text and card.search_text not in old.search_text)
+            need_chunks = bool(card.chunks and card.chunks != old.chunks)
+            if need_text or need_chunks:
+                from services.customer_ai.retrieve.card_luna import clone_title_card
+
+                cards[prior] = clone_title_card(
+                    old,
+                    search_text=(
+                        normalize_search_text(f"{old.search_text} {card.search_text}") if need_text else old.search_text
+                    ),
                     revision=old.revision or card.revision,
                     aliases=tuple(dict.fromkeys([*old.aliases, *card.aliases])),
                     body=old.body or card.body,
+                    chunks=tuple(dict.fromkeys([*old.chunks, *card.chunks])),
                 )
     # Mobile Services screen writes published CM prices.catalog — that is the service SoT.
     prices = sections.get("prices")
@@ -164,25 +176,22 @@ def cards_from_sections(
     if isinstance(catalog, list) and catalog:
         from services.customer_ai.retrieve.price_text import price_search_blob
 
-        for service_card in _from_items("services", catalog, revision, tenant_id=tenant_id):
+        for service_card in _from_items("services", catalog, revision, tenant_id=tenant_id, section="prices"):
             source_id = service_card.item_id.partition(":")[2]
             blob = price_search_blob(sections, source_id)
             if blob:
-                service_card = TitleCard(
-                    item_id=service_card.item_id,
-                    source_family=service_card.source_family,
-                    title=service_card.title,
+                from services.customer_ai.retrieve.card_luna import clone_title_card
+
+                service_card = clone_title_card(
+                    service_card,
                     search_text=normalize_search_text(f"{service_card.search_text} {blob}"),
-                    revision=service_card.revision,
-                    aliases=service_card.aliases,
-                    body=service_card.body,
                 )
             cards.append(service_card)
     else:
         legacy = sections.get("services")
         rows = legacy.get("items") if isinstance(legacy, dict) else None
         if isinstance(rows, list):
-            cards.extend(_from_items("services", rows, revision, tenant_id=tenant_id))
+            cards.extend(_from_items("services", rows, revision, tenant_id=tenant_id, section="services"))
     off_payload = sections.get("off_days")
     if isinstance(off_payload, dict):
         from services.customer_ai.retrieve.schedule_text import off_days_search_blob
@@ -199,6 +208,9 @@ def cards_from_sections(
             )
             if off_card is not None:
                 cards.append(off_card)
+    from services.customer_ai.retrieve.card_luna import extra_luna_cards
+
+    cards.extend(extra_luna_cards(sections, revision=revision, tenant_id=tenant_id))
     return cards
 
 

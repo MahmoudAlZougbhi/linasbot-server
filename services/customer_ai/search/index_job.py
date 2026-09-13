@@ -49,6 +49,19 @@ def document_rows(cards: list[TitleCard], *, tenant_id: str, version: str) -> li
 
     rows: list[dict[str, Any]] = []
     for card in cards:
+        stored = tuple(text for text in card.chunks if str(text).strip())
+        if stored:
+            for index, text in enumerate(stored, 1):
+                rows.append(
+                    _row(
+                        tenant_id=tenant_id,
+                        card=card,
+                        version=version,
+                        chunk_id=f"{card.item_id}:c{index}",
+                        text=text,
+                    )
+                )
+            continue
         if card.source_family == "knowledge":
             chunks = chunk_document(document_id=card.item_id, body=card.body or card.search_text)
             if chunks:

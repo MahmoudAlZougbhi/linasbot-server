@@ -6,7 +6,12 @@ import hashlib
 import logging
 from typing import Any
 
-from services.customer_ai.compiler.chunks import CONTEXTUALIZATION_VERSION, chunk_document, contextual_groups
+from services.customer_ai.compiler.chunks import (
+    CONTEXTUALIZATION_VERSION,
+    chunk_document,
+    chunks_from_texts,
+    contextual_groups,
+)
 from services.customer_ai.flags import voyage_configured
 from services.customer_ai.providers.spaces import KNOWLEDGE_DOCUMENT, KNOWLEDGE_MODEL
 from services.customer_ai.providers.voyage_client import VoyageContractError, embed_contextual_groups
@@ -16,7 +21,7 @@ from services.customer_ai.search.store import activate_pointer, write_documents
 log = logging.getLogger("customer_ai.contextual_index")
 
 CONTEXT_FAMILY = "knowledge_ctx"
-CHUNKER_VERSION = "customer_ai.chunk.v2"
+CHUNKER_VERSION = "customer_ai.chunk.v3"
 COMPILER_VERSION = "customer_ai.compiler.v1"
 CONTEXT_GROUP_BATCH = 4
 
@@ -40,15 +45,26 @@ def build_contextual_rows(
     groups: list[list[str]] = []
     parents: list[str] = []
     for card in knowledge_cards(cards):
-        chunks = chunk_document(
-            document_id=card.item_id,
-            body=card.body or card.search_text,
-            document_title=card.title,
-            entity=card.title,
-            source_family=card.source_family,
-            tenant_id=tenant_id,
-            source_version=card.revision or version,
-        )
+        if card.chunks:
+            chunks = chunks_from_texts(
+                document_id=card.item_id,
+                texts=card.chunks,
+                document_title=card.title,
+                entity=card.title,
+                source_family=card.source_family,
+                tenant_id=tenant_id,
+                source_version=card.revision or version,
+            )
+        else:
+            chunks = chunk_document(
+                document_id=card.item_id,
+                body=card.body or card.search_text,
+                document_title=card.title,
+                entity=card.title,
+                source_family=card.source_family,
+                tenant_id=tenant_id,
+                source_version=card.revision or version,
+            )
         if not chunks:
             continue
         grouped = contextual_groups(chunks)

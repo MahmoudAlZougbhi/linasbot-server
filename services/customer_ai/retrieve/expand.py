@@ -32,6 +32,10 @@ def _rows(sections: dict[str, Any], family: str) -> list[dict[str, Any]]:
             rows = legacy.get("items") if isinstance(legacy, dict) else None
             return [r for r in rows or [] if isinstance(r, dict)]
         return []
+    if family == "requests":
+        payload = sections.get("requests_appointments")
+        rows = payload.get("rules") if isinstance(payload, dict) else None
+        return [r for r in rows or [] if isinstance(r, dict)]
     payload = sections.get(family)
     rows = payload.get("items") if isinstance(payload, dict) else None
     return [r for r in rows or [] if isinstance(r, dict)]
@@ -199,6 +203,20 @@ def expand_hits(
             else next((row for row in _rows(sections, family) if _row_id(row) == source_id), None)
         )
         if match is None:
+            stored = "\n\n".join(card.chunks) if card.chunks else (card.body or "").strip()
+            if not stored:
+                continue
+            items.append(
+                EvidenceItem(
+                    evidence_id=card.item_id,
+                    source_family=family,
+                    source_id=source_id,
+                    revision=revision or card.revision,
+                    title=card.title,
+                    text=stored,
+                    extra={"lexical_score": hit.score},
+                )
+            )
             continue
         if family == "knowledge" and (card.body or "").strip():
             chunk = card.body.strip()

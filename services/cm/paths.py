@@ -43,6 +43,11 @@ def media_dir(tenant_id: str | None = None) -> Path:
     return tenant_cm_root(tenant_id) / "media"
 
 
+def luna_chunks_dir(tenant_id: str | None = None) -> Path:
+    """Luna chunk sidecars (not CM payload fields — schemas forbid extras)."""
+    return tenant_cm_root(tenant_id) / "luna_chunks"
+
+
 def ensure_cm_dirs(tenant_id: str | None = None) -> None:
     for p in (
         draft_dir(tenant_id),
@@ -52,5 +57,6 @@ def ensure_cm_dirs(tenant_id: str | None = None) -> None:
         snapshots_dir(tenant_id),
         archive_dir(tenant_id),
         media_dir(tenant_id),
+        luna_chunks_dir(tenant_id),
     ):
         p.mkdir(parents=True, exist_ok=True)

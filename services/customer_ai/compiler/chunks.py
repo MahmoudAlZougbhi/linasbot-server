@@ -111,6 +111,62 @@ def chunk_document(
     return chunks
 
 
+def chunks_from_texts(
+    *,
+    document_id: str,
+    texts: list[str] | tuple[str, ...],
+    document_title: str = "",
+    entity: str = "",
+    source_family: str = "knowledge",
+    tenant_id: str = "",
+    source_version: str = "",
+) -> list[KnowledgeChunk]:
+    """Turn Luna save-time chunk texts into KnowledgeChunk rows for Voyage."""
+    title = (document_title or "").strip() or document_id
+    chunks: list[KnowledgeChunk] = []
+    for index, raw in enumerate(texts, 1):
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        heading = ""
+        first, _, rest = text.partition("\n")
+        if rest.strip() and len(first) <= 120:
+            heading = first.strip()
+        prefix = _context_prefix(
+            document_title=title,
+            heading=heading,
+            entity=entity or title,
+            branch="",
+            source_family=source_family,
+            tenant_id=tenant_id,
+        )
+        contextual = f"{prefix}\n{text}".strip() if prefix else text
+        chunks.append(
+            KnowledgeChunk(
+                chunk_id=f"{document_id}:c{index}",
+                parent_id=document_id,
+                heading=heading,
+                raw_text=text,
+                contextualized_text=contextual,
+                text=contextual,
+                section=heading,
+                metadata={
+                    "document_id": document_id,
+                    "document_title": title,
+                    "entity": entity or title,
+                    "branch": "",
+                    "source_family": source_family,
+                    "tenant_id": tenant_id,
+                    "source_version": source_version,
+                    "page": "",
+                    "chunk_source": "luna",
+                    "contextualization_version": CONTEXTUALIZATION_VERSION,
+                },
+            )
+        )
+    return chunks
+
+
 def contextual_groups(chunks: list[KnowledgeChunk]) -> dict[str, list[str]]:
     """Group contextualized chunk texts by parent document for voyage-context-4."""
     groups: dict[str, list[str]] = {}
