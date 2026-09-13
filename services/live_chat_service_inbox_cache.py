@@ -192,7 +192,9 @@ class LiveChatInboxCacheMixin:
                     "cached_at": now,
                 }
                 self._index_counters_by_tenant[key] = {"counters": merged, "cached_at": now}
-            print(f"[live_chat:unified] loaded disk cache tenants={len(self._unified_inbox_by_tenant)} file={cache_file}")
+            print(
+                f"[live_chat:unified] loaded disk cache tenants={len(self._unified_inbox_by_tenant)} file={cache_file}"
+            )
         except Exception as e:
             print(f"⚠️ Could not load unified cache from disk: {e}")
 

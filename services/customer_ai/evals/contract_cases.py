@@ -100,12 +100,8 @@ def _comment_threads_per_author() -> bool:
     from services.customer_ai.history_ids import comment_conversation_id
     from services.customer_ai.runtime import run_customer_ai_comment
 
-    first = comment_conversation_id(
-        tenant_id="t", channel="instagram_comment", post_id="p1", author_id="u1"
-    )
-    second = comment_conversation_id(
-        tenant_id="t", channel="instagram_comment", post_id="p1", author_id="u2"
-    )
+    first = comment_conversation_id(tenant_id="t", channel="instagram_comment", post_id="p1", author_id="u1")
+    second = comment_conversation_id(tenant_id="t", channel="instagram_comment", post_id="p1", author_id="u2")
     return (
         first == "comment:t:instagram_comment:p1:u1"
         and second == "comment:t:instagram_comment:p1:u2"

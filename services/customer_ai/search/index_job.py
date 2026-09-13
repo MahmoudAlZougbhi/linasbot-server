@@ -245,9 +245,7 @@ async def _index_with_resolved_session(
 
     try:
         with whatsapp_session(require=True) as db:
-            return await _embed_and_persist(
-                db, tid=tid, revision=revision, rows=rows, cards=cards, activate=activate
-            )
+            return await _embed_and_persist(db, tid=tid, revision=revision, rows=rows, cards=cards, activate=activate)
     except WhatsAppDatabaseUnavailable:
         if is_production_env():
             from services.customer_ai.search.index_lifecycle import mark_failed
@@ -260,9 +258,7 @@ async def _index_with_resolved_session(
                 "store": "unavailable",
                 "health": "FAILED",
             }
-        return await _embed_and_persist(
-            None, tid=tid, revision=revision, rows=rows, cards=cards, activate=activate
-        )
+        return await _embed_and_persist(None, tid=tid, revision=revision, rows=rows, cards=cards, activate=activate)
     except Exception:
         from services.customer_ai.search.index_lifecycle import mark_failed
 

@@ -203,9 +203,7 @@ async def test_unified_chats_uses_disk_cache_when_firestore_missing() -> None:
         counters=svc._empty_counters(),
     )
     with patch("services.live_chat_service_unified.get_firestore_db", return_value=None):
-        result = await svc.get_unified_chats(
-            search="", page=1, page_size=20, filter_state="all", tenant_id="t-cache"
-        )
+        result = await svc.get_unified_chats(search="", page=1, page_size=20, filter_state="all", tenant_id="t-cache")
     assert result.get("success") is True
     assert len(result.get("chats") or []) == 1
     assert result.get("source") in {"cache", "memory_cache"}

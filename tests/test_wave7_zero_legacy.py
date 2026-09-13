@@ -106,7 +106,7 @@ def test_wave2_voyage_reuse_and_wave3_per_author_comments() -> None:
     reuse = (ROOT / "services/customer_ai/search/reuse_vectors.py").read_text(encoding="utf-8")
     history = (ROOT / "services/customer_ai/history_ids.py").read_text(encoding="utf-8")
     assert "content_hash" in reuse
-    assert 'comment:{tid}:{ch}:{post}:{author}' in history
+    assert "comment:{tid}:{ch}:{post}:{author}" in history
 
 
 def test_wave4_billing_sot_and_wave5_web_keep() -> None:

@@ -169,7 +169,9 @@ class LiveChatUnifiedMixin:
                 stale = self._stale_unified_fallback(page_num, safe_size, filter_state, search, tenant_id=tid)
                 if stale:
                     return stale
-                print("[live_chat:unified] index empty — refusing legacy full scan; run live chat index backfill/rebuild")
+                print(
+                    "[live_chat:unified] index empty — refusing legacy full scan; run live chat index backfill/rebuild"
+                )
                 empty = self._empty_unified_response(
                     page_num, safe_size, filter_state, search, source="index_empty", tenant_id=tid
                 )

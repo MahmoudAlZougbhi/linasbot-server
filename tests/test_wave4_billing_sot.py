@@ -54,9 +54,7 @@ def test_entitlements_and_usage_compose_overlay_message_fields() -> None:
     assert "get_tenant_entitlement_public" in entitlements
 
 
-def test_entitlements_public_exposes_subscription_keys(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_entitlements_public_exposes_subscription_keys(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     from services import entitlements_service as es
     from services.entitlements_service import EntitlementsStore, get_tenant_entitlement_public
 

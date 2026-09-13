@@ -379,6 +379,7 @@ class TestSocialLiveChatMutations:
         self, client: TestClient, path: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("ENVIRONMENT", "test")
+
         async def _visible(*_a: object, **_k: object) -> bool:
             return True
 

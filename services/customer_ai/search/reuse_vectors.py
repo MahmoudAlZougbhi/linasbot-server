@@ -29,7 +29,9 @@ def _as_vector(value: Any) -> list[float] | None:
     return None
 
 
-def _memory_lookup(tenant_id: str, wanted: set[tuple[str, str, str, str, str]]) -> dict[tuple[str, str, str, str, str], list[float]]:
+def _memory_lookup(
+    tenant_id: str, wanted: set[tuple[str, str, str, str, str]]
+) -> dict[tuple[str, str, str, str, str], list[float]]:
     found: dict[tuple[str, str, str, str, str], list[float]] = {}
     for item in _MEMORY.get(tenant_id, []):
         if not isinstance(item, dict):

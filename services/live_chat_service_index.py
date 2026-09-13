@@ -154,9 +154,7 @@ class LiveChatIndexMixin:
             docs = _stream(self._index_recency_query(index_coll, tenant_id=None))
         return [doc for doc in docs if row_belongs_to_tenant(doc.to_dict() or {}, tid)]
 
-    async def thread_visible_to_tenant(
-        self, *, user_id: str, conversation_id: str, tenant_id: str
-    ) -> bool:
+    async def thread_visible_to_tenant(self, *, user_id: str, conversation_id: str, tenant_id: str) -> bool:
         tid = normalize_live_chat_tenant_id(tenant_id)
         if not tid or not str(conversation_id or "").strip():
             return False
