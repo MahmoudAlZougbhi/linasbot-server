@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import '../../styles/landing.css';
 import PublicSiteHeader from '../../components/landing/PublicSiteHeader';
 import PublicSiteFooter from '../../components/landing/PublicSiteFooter';
@@ -19,6 +19,15 @@ const Landing = () => {
   const closeGuest = useCallback(() => setGuestOpen(false), []);
   const stats = usePublicLandingStats();
 
+  useEffect(() => {
+    const syncHash = () => {
+      if (window.location.hash === '#talk-to-linas') openGuest();
+    };
+    syncHash();
+    window.addEventListener('hashchange', syncHash);
+    return () => window.removeEventListener('hashchange', syncHash);
+  }, [openGuest]);
+
   return (
     <div className="landing-page min-h-screen antialiased">
       <PublicSiteHeader />
@@ -32,8 +41,8 @@ const Landing = () => {
         <LandingLiveImpact stats={stats} />
         <LandingPricing />
       </main>
-      <PublicSiteFooter onOpenGuest={openGuest} />
-      <GuestChatPanel open={guestOpen} onOpen={openGuest} onClose={closeGuest} showFab={false} />
+      <PublicSiteFooter />
+      <GuestChatPanel open={guestOpen} onOpen={openGuest} onClose={closeGuest} />
     </div>
   );
 };

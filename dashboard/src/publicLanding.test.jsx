@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, Navigate } from "react-router-dom";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { HOW_IT_WORKS_STEPS } from "./constants/landingHowItWorks";
-import { PUBLIC_PATHS, PUBLIC_SITE } from "./constants/publicSite";
+import { OBSOLETE_OPERATOR_PATHS, PUBLIC_PATHS, PUBLIC_SITE } from "./constants/publicSite";
 import { PublicLandingLocaleProvider } from "./contexts/PublicLandingLocaleContext";
 import Landing from "./pages/public/Landing";
 
@@ -231,5 +231,30 @@ describe("public marketing landing", () => {
       </MemoryRouter>
     );
     expect(screen.getByText("landing-home")).toBeInTheDocument();
+  });
+
+  it("does not publish a public wallet path", () => {
+    expect(PUBLIC_PATHS).not.toHaveProperty("wallet");
+    expect(OBSOLETE_OPERATOR_PATHS).toContain("/wallet");
+    expect(OBSOLETE_OPERATOR_PATHS).toContain("/content-managers/*");
+  });
+
+  it("shows the guest chat FAB and opens the panel", async () => {
+    renderLanding("/");
+    const fab = screen.getByRole("button", { name: /Chat with Linas/i });
+    expect(fab).toBeInTheDocument();
+    fireEvent.click(fab);
+    await waitFor(() => {
+      expect(screen.getByRole("dialog", { name: /Talk to Linas/i })).toBeInTheDocument();
+    });
+  });
+
+  it("opens guest chat when the hash is talk-to-linas", async () => {
+    window.location.hash = "#talk-to-linas";
+    renderLanding("/");
+    await waitFor(() => {
+      expect(screen.getByRole("dialog", { name: /Talk to Linas/i })).toBeInTheDocument();
+    });
+    window.location.hash = "";
   });
 });

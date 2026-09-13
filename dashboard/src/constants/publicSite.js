@@ -51,10 +51,25 @@ export const PUBLIC_PATHS = {
   terms: '/terms',
   dataDeletion: '/data-deletion',
   appHome: '/app',
-  wallet: '/wallet',
   getApp: '/#get-app',
   guestChat: '/#talk-to-linas',
 };
+
+/** Former operator SPA bookmarks → landing `#get-app`. Unknown paths still hit AppEntry. */
+export const OBSOLETE_OPERATOR_PATHS = [
+  '/mobile/live-chat',
+  '/training',
+  '/content-managers/*',
+  '/activity-flow',
+  '/live-chat',
+  '/analytics',
+  '/smart-messaging',
+  '/social-posts',
+  '/wallet',
+  '/settings',
+  '/testing',
+  '/api-debug',
+];
 
 /**
  * Linas AI public social channels (footer). No Web Chat.

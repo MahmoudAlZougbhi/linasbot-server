@@ -110,4 +110,11 @@ Fields the Subscription UI reads:
 
 This wave does **not** flip `MESSAGE_BILLING_ENABLED`. Credit ledger, leftover_reserve, and token_wallet stay until Mahmoud approves cutover.
 
+## WAVE 5 — Web = marketing + portal
+
+- KEEP marketing routes, thin auth recovery, portal `/owner/*` (overview, users, messages, catalog, costs — not Lab).
+- Former operator SPA bookmarks (`OBSOLETE_OPERATOR_PATHS`) redirect to `/#get-app`. Catch-all unknown paths still render the `/app` CTA (`AppEntry`).
+- `/wallet` is not a public-site path. Store listing URLs stay `null` until ASC / Play listings are live.
+- Guest chat FAB is on the marketing landing. `#talk-to-linas` opens the panel.
+
 
