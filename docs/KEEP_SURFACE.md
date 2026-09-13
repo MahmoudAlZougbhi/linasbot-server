@@ -124,4 +124,21 @@ This wave does **not** flip `MESSAGE_BILLING_ENABLED`. Credit ledger, leftover_r
 - `owner` screen / `OwnerPortalScreen` / `area === 'owner'` stay for the platform_owner WA pilot (nav-unreachable from the tenant drawer).
 - `usage` still aliases to Dashboard in AppShell. Notifications stay reachable from Settings.
 
+## WAVE 7 — Zero-legacy freeze
+
+Live product paths must not import deleted Creative / Owner Lab / smart_retrieval / archive modules. Monty names stay only on the refuse list. `luna_titles.py` is a title-helper shim (`DEAD_LUNA_ENGINE`), not a customer retrieval engine. CM OpenAI `semantic_index` stays for the live CM FAQ handler; Brain retrieve stays Voyage-only.
+
+| Wave | What KEEP / done |
+| --- | --- |
+| 0 | Live Chat `live_chat_index` is tenant-scoped and fail-closed |
+| 1 | Proven-dead Creative / Lab / archive / retrieval-debug deleted |
+| 2 | Voyage incremental publish (`reuse_vectors`) |
+| 3 | Brain comment history is per-author; hub tiles KEEP allowlist |
+| 4 | Mobile Subscription compose is billing SoT (`overlay_message_fields`) — flag not flipped |
+| 5 | Web = marketing + portal; guest FAB on; store URLs unset |
+| 6 | Mobile Screen union reachable-only; owner screen kept |
+| 7 | This freeze + matrix |
+
+Still not deleted (KEEP or import-graph blocked): Smart Follow-Up live backend, `smart_messaging_*` used by scheduler/templates, clinic `data/*` prompt inject when unpublished, Owner AI v1 HTTP CRUD, BOC booking stack with gate OFF, `creative_policy.py` refusal, disabled API prefixes in `product_features.py`.
+
 
