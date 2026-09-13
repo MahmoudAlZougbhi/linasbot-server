@@ -31,7 +31,8 @@ def _payload(tenant_id: str) -> dict[str, Any]:
 
 def enabled_request_types(tenant_id: str) -> set[str]:
     payload = _payload(tenant_id)
-    types = payload.get("enabled_types") if isinstance(payload.get("enabled_types"), list) else []
+    raw_types = payload.get("enabled_types")
+    types = raw_types if isinstance(raw_types, list) else []
     return {str(item).strip().upper() for item in types if str(item).strip()}
 
 
@@ -49,3 +50,17 @@ def request_rule_notes(tenant_id: str) -> list[str]:
 
 def task_types_for_enabled_rules(tenant_id: str) -> set[str]:
     return {_TYPE_TO_TASK[code] for code in enabled_request_types(tenant_id) if code in _TYPE_TO_TASK}
+
+
+def allowed_action_task_types(tenant_id: str) -> set[str] | None:
+    """None = no published Requests module, so do not invent a filter.
+
+    A published module is authoritative: only enabled APPOINTMENT/ORDER/HUMAN
+    tasks may start. Empty enabled_types means no request actions.
+    """
+    payload = _payload(tenant_id)
+    if not payload:
+        return None
+    if payload.get("module_enabled") is False:
+        return set()
+    return task_types_for_enabled_rules(tenant_id)

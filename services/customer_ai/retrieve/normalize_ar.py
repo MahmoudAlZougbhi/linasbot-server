@@ -40,3 +40,38 @@ def normalize_arabic(text: str) -> str:
         body = body.replace(src, dst)
     body = _NON_ALNUM.sub(" ", body)
     return " ".join(body.split())
+
+
+_ARTICLE_PREFIXES = ("وال", "فال", "بال", "كال", "ال")
+_LETTER_PREFIXES = ("و", "ف", "ب", "ك", "ل")
+
+
+def _arabic_token(token: str) -> bool:
+    return any("\u0600" <= char <= "\u06ff" for char in token)
+
+
+def expand_arabic_tokens(tokens: list[str]) -> list[str]:
+    """Keep the original token and add clitic-stripped forms (ال/ببيروت → بيروت)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for token in tokens:
+        pieces = [token]
+        if _arabic_token(token):
+            rest = token
+            stripped = False
+            for prefix in _ARTICLE_PREFIXES:
+                if rest.startswith(prefix) and len(rest) - len(prefix) >= 2:
+                    rest = rest[len(prefix) :]
+                    pieces.append(rest)
+                    stripped = True
+                    break
+            if not stripped:
+                for prefix in _LETTER_PREFIXES:
+                    if rest.startswith(prefix) and len(rest) - len(prefix) >= 3:
+                        pieces.append(rest[len(prefix) :])
+                        break
+        for piece in pieces:
+            if piece and piece not in seen:
+                seen.add(piece)
+                out.append(piece)
+    return out

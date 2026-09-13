@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from services.customer_ai.evals.qa_tenants import (
+    clinic_c_products,
+    clinic_c_qa_sections,
     linas_like_products,
     linas_like_qa_sections,
     shop_b_products,
@@ -79,18 +81,30 @@ def test_product_media_urls_stay_on_own_tenant() -> None:
 
     linas = cards_from_products(linas_like_products())
     other = cards_from_products(shop_b_products())
+    third = cards_from_products(clinic_c_products())
     linas_ev = " ".join(
         str(evidence_from_product(row).text) for row in linas_like_products() if evidence_from_product(row)
     )
     other_ev = " ".join(str(evidence_from_product(row).text) for row in shop_b_products() if evidence_from_product(row))
+    third_ev = " ".join(
+        str(evidence_from_product(row).text) for row in clinic_c_products() if evidence_from_product(row)
+    )
     assert linas
     assert other
+    assert third
     assert "qa.linas.example/aftercare.png" in linas_ev
     assert "qa.linas.example" not in other_ev
+    assert "qa.linas.example" not in third_ev
     assert "qa.shopb.example/alpha.png" in other_ev
     assert "qa.shopb.example" not in linas_ev
+    assert "qa.clinicc.example/alpha.png" in third_ev
+    assert "5 USD" in third_ev or "5" in third[0].search_text
     linas_ids = {card.item_id for card in cards_from_sections(linas_like_qa_sections(), tenant_id="qa-linas")}
     other_ids = {card.item_id for card in cards_from_sections(shop_b_qa_sections(), tenant_id="qa-shop-b")}
+    clinic_ids = {card.item_id for card in cards_from_sections(clinic_c_qa_sections(), tenant_id="qa-clinic-c")}
     assert any("antelias" in item_id for item_id in linas_ids)
     assert not any("antelias" in item_id for item_id in other_ids)
+    assert not any("antelias" in item_id for item_id in clinic_ids)
     assert any("hamra" in item_id for item_id in other_ids)
+    assert any("jounieh" in item_id for item_id in clinic_ids)
+    assert not any("jounieh" in item_id for item_id in linas_ids)

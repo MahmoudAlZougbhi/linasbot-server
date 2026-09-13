@@ -24,7 +24,13 @@ _BOOK = re.compile(
     re.I,
 )
 _ORDER = re.compile(r"\b(order|buy|purchase|اطلب|اشتري|بدي اطلب)\b", re.I)
-_PHOTO = re.compile(r"\b(photo|picture|video|image|صورة|صور|فيديو)\b", re.I)
+_PHOTO = re.compile(
+    r"("
+    r"\b(photo|picture|video|videos|image|images|link|links)\b"
+    r"|صورة|صور|فيديو|رابط|روابط|لينك"
+    r")",
+    re.I,
+)
 _HOURS = re.compile(
     r"("
     r"\b(hour|hours|open|opens|close|closes|opening|opened|closed)\b"
@@ -82,7 +88,7 @@ def plan_message(message: str) -> PlannerPlan:
         tasks.append(_task("t_book", "service_request", text, ["services", "branches", "hours"]))
     if _has(_ORDER, text, "اطلب", "اشتري"):
         tasks.append(_task("t_order", "product_request", text, ["products"]))
-    if _has(_PHOTO, text, "صورة", "صور", "فيديو"):
+    if _has(_PHOTO, text, "صورة", "صور", "فيديو", "رابط", "لينك"):
         tasks.append(_task("t_media", "resource_request", text, ["services", "products", "knowledge"]))
     if _has(_HOURS, text, "ساعات", "مفتوح", "مغلق", "الدوام", "دوام", "يفتح", "يسكر", "فاتح"):
         tasks.append(_task("t_hours", "hours", text, ["hours", "branches"]))
@@ -133,18 +139,39 @@ def plan_message(message: str) -> PlannerPlan:
 
 
 _ACTION_TYPES = {"human_request", "service_request", "product_request", "cancel_or_status", "resource_request"}
+_RULE_BOUND = {"human_request", "service_request", "product_request"}
 _READ_ONLY = {"information", "comparison", "hours", "acknowledgement", "draft_correction"}
 
 
-def overlay_plan(llm: PlannerPlan | None, message: str) -> PlannerPlan:
+def _bind_request_rules(
+    plan: PlannerPlan,
+    message: str,
+    enabled_action_types: set[str] | None,
+) -> PlannerPlan:
+    if enabled_action_types is None:
+        return plan
+    tasks = [task for task in plan.tasks if task.type not in _RULE_BOUND or task.type in enabled_action_types]
+    if not tasks:
+        tasks = [_task("t_info", "information", message, ["knowledge", "care", "services", "faq", "branches"])]
+    read_only = all(task.type in _READ_ONLY for task in tasks)
+    return plan.model_copy(update={"tasks": tasks, "read_only": read_only})
+
+
+def overlay_plan(
+    llm: PlannerPlan | None,
+    message: str,
+    *,
+    enabled_action_types: set[str] | None = None,
+) -> PlannerPlan:
     """Keep the LLM plan, but force published hours/handoff/request tasks the heuristic saw.
 
     The live OpenAI planner sometimes labels a hours question as knowledge-only
     information. That must not drop hours/branches retrieval.
+    Published request rules win over heuristic/LLM action guesses.
     """
     heur = plan_message(message)
     if llm is None or not llm.tasks:
-        return heur
+        return _bind_request_rules(heur, message, enabled_action_types)
     tasks = [task.model_copy(deep=True) for task in llm.tasks]
     llm_types = {task.type for task in tasks}
     heur_types = {task.type for task in heur.tasks}
@@ -175,7 +202,10 @@ def overlay_plan(llm: PlannerPlan | None, message: str) -> PlannerPlan:
 
     for task in heur.tasks:
         if task.type in _ACTION_TYPES and task.type not in llm_types:
+            if enabled_action_types is not None and task.type in _RULE_BOUND and task.type not in enabled_action_types:
+                continue
             tasks.append(task.model_copy(deep=True))
 
     read_only = all(task.type in _READ_ONLY for task in tasks)
-    return llm.model_copy(update={"tasks": tasks, "read_only": read_only})
+    merged = llm.model_copy(update={"tasks": tasks, "read_only": read_only})
+    return _bind_request_rules(merged, message, enabled_action_types)

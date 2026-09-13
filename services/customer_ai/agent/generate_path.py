@@ -206,6 +206,10 @@ async def generate_verified(
         lang = str((turn.extra or {}).get("response_language") or "")
         confirm = OutboundMessage(destination=dest, text=brain_template("confirm_request", lang))
         greeted = greeted.model_copy(update={"messages": [*list(greeted.messages), confirm]})
+    from services.customer_ai.agent.action_gate import append_handoff_message
+
+    lang = str((turn.extra or {}).get("response_language") or "")
+    greeted = append_handoff_message(greeted, extra, dest=dest, lang=lang)
     out_extra = _flow_extra(
         {
             "phase": "generate",
@@ -214,11 +218,11 @@ async def generate_verified(
             "faq_used": bool(faq_items),
             "faq_id": faq_items[0].source_id if faq_items else "",
             "used_evidence_ids": list(envelope.used_evidence_ids),
-            "receipts": list(resource_receipts),
+            "receipts": list(extra.get("receipts") or []) + list(resource_receipts),
             "agent_trace": agent_trace,
             "structured_facts": structured_facts,
             "evidence_preview": evidence,
-            **extra,
+            **{key: value for key, value in extra.items() if key != "receipts"},
         },
         (
             "generate",

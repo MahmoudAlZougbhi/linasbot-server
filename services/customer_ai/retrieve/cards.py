@@ -162,7 +162,22 @@ def cards_from_sections(
     prices = sections.get("prices")
     catalog = prices.get("catalog") if isinstance(prices, dict) else None
     if isinstance(catalog, list) and catalog:
-        cards.extend(_from_items("services", catalog, revision, tenant_id=tenant_id))
+        from services.customer_ai.retrieve.price_text import price_search_blob
+
+        for service_card in _from_items("services", catalog, revision, tenant_id=tenant_id):
+            source_id = service_card.item_id.partition(":")[2]
+            blob = price_search_blob(sections, source_id)
+            if blob:
+                service_card = TitleCard(
+                    item_id=service_card.item_id,
+                    source_family=service_card.source_family,
+                    title=service_card.title,
+                    search_text=normalize_search_text(f"{service_card.search_text} {blob}"),
+                    revision=service_card.revision,
+                    aliases=service_card.aliases,
+                    body=service_card.body,
+                )
+            cards.append(service_card)
     else:
         legacy = sections.get("services")
         rows = legacy.get("items") if isinstance(legacy, dict) else None
@@ -174,7 +189,7 @@ def cards_from_sections(
 
         blob = off_days_search_blob(off_payload)
         if blob:
-            card = _card(
+            off_card = _card(
                 family="hours",
                 item_id="off_days",
                 title="Off days",
@@ -182,8 +197,8 @@ def cards_from_sections(
                 revision=revision,
                 body=blob,
             )
-            if card:
-                cards.append(card)
+            if off_card is not None:
+                cards.append(off_card)
     return cards
 
 

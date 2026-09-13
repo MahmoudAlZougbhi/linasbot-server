@@ -87,9 +87,41 @@ def linas_like_qa_sections() -> dict[str, Any]:
                             "caption": "Send this photo when the customer asks for laser pictures.",
                             "url": "https://qa.linas.example/laser-women.png",
                             "status": "active",
+                        },
+                        {
+                            "id": "att_laser_video",
+                            "kind": "video",
+                            "title": "Laser session video",
+                            "caption": "Send this video when the customer asks how a laser session looks.",
+                            "url": "https://qa.linas.example/videos/laser-session.mp4",
+                            "status": "active",
+                        },
+                        {
+                            "id": "att_laser_booking_link",
+                            "kind": "link",
+                            "title": "Laser booking link",
+                            "caption": "Send this link when the customer asks for the booking page.",
+                            "url": "https://qa.linas.example/book/laser",
+                            "status": "active",
+                        },
+                    ],
+                },
+                {
+                    "id": "face_laser",
+                    "labels": {"en": "Face laser", "ar": "ليزر الوجه"},
+                    "aliases": ["face laser", "ليزر الوجه"],
+                    "active": True,
+                    "attachments": [
+                        {
+                            "id": "att_face_photo",
+                            "kind": "image",
+                            "title": "Face laser photo",
+                            "caption": "Send this photo for face laser examples.",
+                            "url": "https://qa.linas.example/face-laser.png",
+                            "status": "active",
                         }
                     ],
-                }
+                },
             ],
             "price_entries": [
                 {
@@ -105,6 +137,22 @@ def linas_like_qa_sections() -> dict[str, Any]:
                     "catalog_item_id": "laser",
                     "branch_id": "antelias",
                     "amount": 70,
+                    "currency": "USD",
+                    "active": True,
+                },
+                {
+                    "id": "face_beirut",
+                    "catalog_item_id": "face_laser",
+                    "branch_id": "beirut",
+                    "amount": 50,
+                    "currency": "USD",
+                    "active": True,
+                },
+                {
+                    "id": "face_antelias",
+                    "catalog_item_id": "face_laser",
+                    "branch_id": "antelias",
+                    "amount": 45,
                     "currency": "USD",
                     "active": True,
                 },
@@ -243,6 +291,88 @@ def shop_b_products() -> list[dict[str, Any]]:
             "currency": "USD",
             "image_url": "https://qa.shopb.example/alpha.png",
             "product_url": "https://qa.shopb.example/products/alpha",
+            "status": "active",
+        }
+    ]
+
+
+def clinic_c_qa_sections() -> dict[str, Any]:
+    """Third tenant: different city, off-day, HUMAN-only rules, unique knowledge."""
+    return {
+        "ai_basics": {
+            "assistant_name": "Cora QA",
+            "clinic_name": "Clinic C QA",
+            "identity_summary": "QA tenant C. Never use Linas or Shop B facts.",
+        },
+        "style": {"tone": "direct", "style_body": "Direct. Quote this tenant only."},
+        "knowledge": {
+            "items": [
+                {
+                    "id": "c_policy",
+                    "title": "Clinic C parking",
+                    "body": "Clinic C has private garage parking in Jounieh only.",
+                    "status": "active",
+                }
+            ]
+        },
+        "branches": {
+            "items": [
+                {
+                    "id": "jounieh",
+                    "labels": {"en": "Jounieh", "ar": "جونيه"},
+                    "aliases": ["jounieh", "جونيه"],
+                    "phone": "+9611333333",
+                    "weekly_schedule": _week("08:00", "16:00", sunday_off=True),
+                    "status": "active",
+                }
+            ]
+        },
+        "prices": {
+            "catalog": [
+                {
+                    "id": "alpha",
+                    "labels": {"en": "Product Alpha", "ar": "منتج ألفا"},
+                    "aliases": ["alpha", "product alpha"],
+                    "active": True,
+                }
+            ],
+            "price_entries": [
+                {
+                    "id": "alpha_jounieh",
+                    "catalog_item_id": "alpha",
+                    "amount": 5,
+                    "currency": "USD",
+                    "active": True,
+                }
+            ],
+        },
+        "requests_appointments": {
+            "module_enabled": True,
+            "enabled_types": ["HUMAN"],
+            "rules": [
+                {
+                    "id": "req_c_human",
+                    "type": "HUMAN",
+                    "name": "Clinic C human",
+                    "notes": "Escalate only. Do not take orders or appointments.",
+                    "enabled": True,
+                    "scope": "handoff",
+                }
+            ],
+        },
+    }
+
+
+def clinic_c_products() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "alpha",
+            "title": "Product Alpha",
+            "description": "Clinic C Product Alpha. Price 5 USD.",
+            "price": "5",
+            "currency": "USD",
+            "image_url": "https://qa.clinicc.example/alpha.png",
+            "product_url": "https://qa.clinicc.example/products/alpha",
             "status": "active",
         }
     ]

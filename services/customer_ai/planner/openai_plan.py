@@ -93,4 +93,9 @@ async def plan_turn(
             model=planner_model(),
             operation_id=op,
         )
-    return overlay_plan(planned, message)
+    enabled = None
+    if tenant_id.strip():
+        from services.customer_ai.planner.published_rules import allowed_action_task_types
+
+        enabled = allowed_action_task_types(tenant_id)
+    return overlay_plan(planned, message, enabled_action_types=enabled)
