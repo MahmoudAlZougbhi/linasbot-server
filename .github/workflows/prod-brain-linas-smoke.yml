@@ -125,6 +125,7 @@ jobs:
                         }
                     )
             reply = str(getattr(outcome, "reply", None) or "")
+            plan = extra.get("plan") if isinstance(extra.get("plan"), dict) else {}
             print(
                 "[brain-smoke] turn "
                 + json.dumps(
@@ -132,10 +133,16 @@ jobs:
                         "elapsed_ms": elapsed_ms,
                         "stop": bool(getattr(outcome, "stop", False)),
                         "reason": str(getattr(outcome, "reason", "") or extra.get("phase") or ""),
+                        "phase": extra.get("phase"),
                         "ai_called": extra.get("ai_called"),
                         "retrieval_outcome": extra.get("retrieval_outcome"),
+                        "missing_tasks": extra.get("missing_tasks"),
+                        "verify": extra.get("verify"),
+                        "evidence_preview": extra.get("evidence_preview"),
+                        "plan_tasks": (plan.get("tasks") or [])[:8],
+                        "agent_trace": (extra.get("agent_trace") or [])[-8:],
                         "reply_len": len(reply),
-                        "reply_preview": reply[:220],
+                        "reply_preview": reply[:400],
                         "operation_id": extra.get("operation_id") or "",
                         "stages": stages,
                     },
