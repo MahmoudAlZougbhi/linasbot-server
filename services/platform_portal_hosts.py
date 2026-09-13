@@ -9,9 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 MARKETING_HOSTS: frozenset[str] = frozenset({"linasaibot.com", "www.linasaibot.com"})
-PLATFORM_PORTAL_HOSTS: frozenset[str] = frozenset(
-    {"portal.linasaibot.com", "www.portal.linasaibot.com"}
-)
+PLATFORM_PORTAL_HOSTS: frozenset[str] = frozenset({"portal.linasaibot.com", "www.portal.linasaibot.com"})
 EMAIL_LINK_HOSTS: frozenset[str] = MARKETING_HOSTS | PLATFORM_PORTAL_HOSTS
 PLATFORM_OWNER_TENANT_ID = "platform"
 PORTAL_LOGIN_FORBIDDEN = "This portal is for the platform owner only."
