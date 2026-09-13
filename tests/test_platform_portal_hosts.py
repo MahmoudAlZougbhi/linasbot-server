@@ -28,6 +28,16 @@ def test_portal_login_rejects_workspace_roles() -> None:
     assert portal_login_error(host, "platform_owner") is None
 
 
+def test_cookie_login_rejects_marketing_host() -> None:
+    from services.platform_portal_hosts import cookie_login_error
+
+    assert cookie_login_error("www.linasaibot.com", "admin")
+    assert cookie_login_error("www.linasaibot.com", "platform_owner")
+    assert cookie_login_error("localhost", "admin") is None
+    assert cookie_login_error("www.portal.linasaibot.com", "platform_owner") is None
+    assert cookie_login_error("www.portal.linasaibot.com", "admin")
+
+
 def test_cors_includes_portal_https() -> None:
     prod = cors_public_origins(production=True)
     assert "https://www.portal.linasaibot.com" in prod
@@ -71,4 +81,33 @@ def test_portal_login_http_rejects_workspace_admin() -> None:
     assert response.status_code == 200
     assert payload["success"] is False
     assert "platform owner" in str(payload.get("error") or "").lower()
+    assert "linas_session" not in response.cookies
+
+
+def test_marketing_login_http_rejects_all_roles() -> None:
+    from unittest.mock import patch
+
+    from fastapi.testclient import TestClient
+
+    import main  # noqa: F401
+    from modules.core import app
+
+    user = {
+        "id": "u1",
+        "email": "owner@linasaibot.com",
+        "role": "platform_owner",
+        "tenantId": "platform",
+        "status": "active",
+        "passwordEpoch": 0,
+    }
+    with patch("modules.auth_api.user_service.authenticate", return_value=user):
+        response = TestClient(app).post(
+            "/api/auth/login",
+            json={"email": "owner@linasaibot.com", "password": "SecurePassPhrase99!"},
+            headers={"host": "www.linasaibot.com"},
+        )
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["success"] is False
+    assert "mobile app" in str(payload.get("error") or "").lower()
     assert "linas_session" not in response.cookies

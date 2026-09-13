@@ -15,6 +15,7 @@ PLATFORM_PORTAL_HOSTS: frozenset[str] = frozenset(
 EMAIL_LINK_HOSTS: frozenset[str] = MARKETING_HOSTS | PLATFORM_PORTAL_HOSTS
 PLATFORM_OWNER_TENANT_ID = "platform"
 PORTAL_LOGIN_FORBIDDEN = "This portal is for the platform owner only."
+MARKETING_LOGIN_FORBIDDEN = "Sign in with the Linas AI mobile app."
 
 
 def hostname_from_header(host_header: str | None) -> str:
@@ -36,6 +37,13 @@ def portal_login_error(host_header: str | None, role: str | None) -> str | None:
     if (role or "").strip().lower() == "platform_owner":
         return None
     return PORTAL_LOGIN_FORBIDDEN
+
+
+def cookie_login_error(host_header: str | None, role: str | None) -> str | None:
+    """Cookie login is portal-only. Marketing never issues a dashboard session."""
+    if hostname_from_header(host_header) in MARKETING_HOSTS:
+        return MARKETING_LOGIN_FORBIDDEN
+    return portal_login_error(host_header, role)
 
 
 def https_origins(hosts: Iterable[str]) -> list[str]:

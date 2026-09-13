@@ -28,12 +28,13 @@ test.describe("public marketing landing smoke", () => {
     await expect(page.getByRole("main").getByRole("link", { name: /support@linasai.com/i })).toBeVisible();
   });
 
-  test("register redirects to marketing; ops login remains", async ({ page }) => {
+  test("register redirects to get the app; local /login is owner portal only", async ({ page }) => {
     await page.goto("/register");
     await expect(page).toHaveURL(/\/#get-app|\/$/);
     await expect(page.getByRole("heading", { name: "Create Account" })).toHaveCount(0);
     await page.goto("/login");
-    await expect(page.getByRole("heading", { name: /Welcome Back/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Owner Portal/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Welcome Back/i })).toHaveCount(0);
   });
 
   test("dashboard app points operators to the mobile app", async ({ page }) => {

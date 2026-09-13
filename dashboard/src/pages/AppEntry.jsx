@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { isPlatformPortalHost } from './portalHost';
+import { isMarketingPublicHost, isPlatformPortalHost } from './portalHost';
 
 /**
  * Stub for former operator web paths. Live Chat / AI Setup live in the mobile app.
@@ -76,7 +76,9 @@ export function PortalOwnerOnlyPage() {
 export default function AppEntry() {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen grid place-items-center">Loading…</div>;
-  if (user?.role === 'platform_owner') return <Navigate to="/owner" replace />;
+  if (user?.role === 'platform_owner' && !isMarketingPublicHost()) {
+    return <Navigate to="/owner" replace />;
+  }
   if (isPlatformPortalHost()) return <PortalOwnerOnlyPage />;
   return <UseMobileAppPage />;
 }

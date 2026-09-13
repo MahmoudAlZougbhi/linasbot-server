@@ -46,7 +46,7 @@ from services.dashboard_session_service import (
     SESSION_COOKIE_NAME,
     session_service,
 )
-from services.platform_portal_hosts import portal_login_error
+from services.platform_portal_hosts import cookie_login_error
 from services.user_service import AuthBackendUnavailableError, user_service
 
 
@@ -108,7 +108,7 @@ async def login(body: LoginRequest, request: Request, response: Response) -> Any
             tenant_id = str(user.get("tenantId") or "").strip()
             if not tenant_id:
                 return {"success": False, "error": "Tenant required"}
-            blocked = portal_login_error(request.headers.get("host"), str(user.get("role") or ""))
+            blocked = cookie_login_error(request.headers.get("host"), str(user.get("role") or ""))
             if blocked:
                 return {"success": False, "error": blocked}
 

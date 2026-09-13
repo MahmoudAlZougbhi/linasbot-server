@@ -43,4 +43,4 @@ sudo cp deploy/nginx-api-include.conf /etc/nginx/snippets/linasbot-api.conf
 
 ## Platform owner portal (`portal.linasaibot.com`)
 
-Same nginx `server_name` as marketing. DNS A/CNAME `portal` and `www.portal` must point at the same load balancer as `www.linasaibot.com`. The TLS certificate must include both portal names. Workspace logins on that host are rejected; only `platform_owner` reaches `/owner`.
+Same nginx `server_name` as marketing. DNS A/CNAME `portal` and `www.portal` must point at the same load balancer as `www.linasaibot.com`. The TLS certificate must include both portal names. Marketing `/login` redirects to the app download CTA. Cookie login on `linasaibot.com` is rejected. Only `platform_owner` on the portal host reaches `/owner`. Forgot/reset/verify stay on the marketing host for mobile recovery.

@@ -16,7 +16,7 @@ function LandingOnlyRoutes() {
   return (
     <Routes>
       <Route path="/" element={<div>public-landing</div>} />
-      <Route path="/login" element={<div>login-page</div>} />
+      <Route path="/login" element={<Navigate to="/#get-app" replace />} />
       <Route path="/forgot-password" element={<div>forgot-page</div>} />
       <Route path="/reset-password" element={<div>reset-page</div>} />
       <Route path="/verify-email" element={<div>verify-page</div>} />
@@ -57,6 +57,7 @@ describe("landing-only auth and obsolete routes", () => {
       "/activity-flow",
       "/settings",
       "/register",
+      "/login",
       "/content-managers/faq",
     ]) {
       const { unmount } = render(

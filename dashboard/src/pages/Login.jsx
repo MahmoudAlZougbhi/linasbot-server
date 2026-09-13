@@ -10,7 +10,6 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
 import { errorMessage } from '../utils/apiValidate';
-import { isPlatformPortalHost } from './portalHost';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -20,7 +19,6 @@ const Login = () => {
   const [error, setError] = useState('');
   const { login } = /** @type {AuthContextValue} */ (useAuth());
   const location = useLocation();
-  const portal = isPlatformPortalHost();
   const redirectTo = location.state?.from
     ? `${location.state.from.pathname || ''}${location.state.from.search || ''}`
     : '/app';
@@ -100,21 +98,12 @@ const Login = () => {
             <SparklesIcon className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-4xl font-bold gradient-text font-display mb-2">
-            {portal ? 'Owner Portal' : 'Welcome Back'}
+            Owner Portal
           </h1>
-          <p className="text-slate-600">
-            {portal ? 'Platform owner sign in' : 'Operator dashboard login'}
+          <p className="text-slate-600">Platform owner sign in</p>
+          <p className="mt-2 text-sm text-slate-500">
+            Workspace accounts belong in the Linas AI mobile app.
           </p>
-          {portal ? (
-            <p className="mt-2 text-sm text-slate-500">
-              Workspace accounts belong in the Linas AI mobile app.
-            </p>
-          ) : (
-            <p className="mt-2 text-sm text-slate-500">
-              Public accounts are created in the Linas AI mobile app.{' '}
-              <a href="/" className="font-medium text-primary-700 underline">Back to home</a>
-            </p>
-          )}
         </motion.div>
 
         {/* Login Card */}

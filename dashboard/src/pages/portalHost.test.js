@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPlatformPortalHost } from './portalHost';
+import { isMarketingPublicHost, isPlatformPortalHost } from './portalHost';
 
 describe('isPlatformPortalHost', () => {
   it('accepts portal hosts', () => {
@@ -12,5 +12,14 @@ describe('isPlatformPortalHost', () => {
     expect(isPlatformPortalHost('linasaibot.com')).toBe(false);
     expect(isPlatformPortalHost('www.linasaibot.com')).toBe(false);
     expect(isPlatformPortalHost('localhost')).toBe(false);
+  });
+});
+
+describe('isMarketingPublicHost', () => {
+  it('is only the public marketing site', () => {
+    expect(isMarketingPublicHost('linasaibot.com')).toBe(true);
+    expect(isMarketingPublicHost('www.linasaibot.com')).toBe(true);
+    expect(isMarketingPublicHost('www.portal.linasaibot.com')).toBe(false);
+    expect(isMarketingPublicHost('localhost')).toBe(false);
   });
 });
