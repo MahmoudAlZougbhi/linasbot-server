@@ -275,8 +275,10 @@ def test_web_channel_counts_handler_only_logs() -> None:
     assert aug_fb["messages"] == 1
     assert july_payload["owner_copilot"]["interactions"] == 1
     assert august_payload["owner_copilot"]["interactions"] == 1
-    assert july_payload["owner_copilot"]["credits"] == 2
-    assert august_payload["owner_copilot"]["credits"] == 2
+    assert july_payload["owner_copilot"]["messages"] == 1
+    assert august_payload["owner_copilot"]["messages"] == 1
+    assert july_payload["owner_copilot"]["credits"] == 1
+    assert august_payload["owner_copilot"]["credits"] == 1
     all_time = resolve_period_window(
         period="custom",
         tz=tz,
@@ -294,3 +296,5 @@ def test_web_channel_counts_handler_only_logs() -> None:
     )
     assert all_payload["total_activity"]["messages_replied"] == 2
     assert all_payload["owner_copilot"]["interactions"] == 2
+    assert all_payload["owner_copilot"]["messages"] == 2
+    assert all_payload["owner_copilot"]["credits"] == 2
