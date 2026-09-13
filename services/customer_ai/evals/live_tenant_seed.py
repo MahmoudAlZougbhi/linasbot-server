@@ -297,12 +297,7 @@ def merge_linas_opening_hours(hours_payload: dict[str, Any]) -> dict[str, Any]:
 def merge_linas_extras(sections: dict[str, Any]) -> dict[str, Any]:
     """Add greeting, marker, laser/product media, and request types without wiping other drafts."""
     out = dict(sections)
-    greet = dict(out.get("dynamic_messages") or {})
-    items = [row for row in (greet.get("items") or []) if isinstance(row, dict) and keep_knowledge_item(row)]
-    if not any(str(row.get("id") or "") == "greet_linas" for row in items):
-        items.extend(_greeting("linas", "مرحباً من ليناز ليزر", "Hello from Lina's Laser")["items"])
-    greet["items"] = items
-    out["dynamic_messages"] = greet
+    out["dynamic_messages"] = _greeting("linas", "مرحباً من ليناز ليزر", "Hello from Lina's Laser")
 
     knowledge = dict(out.get("knowledge") or {})
     kn_items = [
