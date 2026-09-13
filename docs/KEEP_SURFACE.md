@@ -92,4 +92,22 @@ Still not deleted (import-graph blocked or KEEP):
 - Operator comments inbox stays post-scoped (Live Chat Comments UI).
 - AI Setup hub tiles stay the KEEP allowlist (Knowledge, AI Basics, Locations, Services, Comments, Requests + Products).
 
+## WAVE 4 — Billing SoT (mobile Subscription)
+
+Tenant-visible billing is the mobile Subscription screen (`mobile/linas-ai/src/features/billing/useBillingData.ts`).
+
+Compose (both overlay the same helper):
+
+- `GET /api/entitlements/me` → `get_tenant_entitlement_public` + `overlay_message_fields`
+- `GET /api/mobile/usage` → credit buckets + the same `overlay_message_fields`
+
+Fields the Subscription UI reads:
+
+- `message_billing_active`
+- `included_messages` (catalog allowance even when billing is off)
+- `available_messages` / `included_remaining` / `purchased_messages` only when `message_billing_active` is true
+- leftover credit quantities stay labeled credits (`wallet_unit=credits`). Credits are not Messages remaining.
+
+This wave does **not** flip `MESSAGE_BILLING_ENABLED`. Credit ledger, leftover_reserve, and token_wallet stay until Mahmoud approves cutover.
+
 
