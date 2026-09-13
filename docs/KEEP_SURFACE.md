@@ -117,4 +117,11 @@ This wave does **not** flip `MESSAGE_BILLING_ENABLED`. Credit ledger, leftover_r
 - `/wallet` is not a public-site path. Store listing URLs stay `null` until ASC / Play listings are live.
 - Guest chat FAB is on the marketing landing. `#talk-to-linas` opens the panel.
 
+## WAVE 6 — Mobile reachable screens
+
+- Screen union is reachable-only. Dead `resource` screen, `RESOURCE_MAP`, and `SimpleResourceScreen` are gone.
+- Unused `CONTROL_ITEMS` / `GROUP_LABELS` catalog is gone. `ControlArea` stays (drawer + AppShell).
+- `owner` screen / `OwnerPortalScreen` / `area === 'owner'` stay for the platform_owner WA pilot (nav-unreachable from the tenant drawer).
+- `usage` still aliases to Dashboard in AppShell. Notifications stay reachable from Settings.
+
 

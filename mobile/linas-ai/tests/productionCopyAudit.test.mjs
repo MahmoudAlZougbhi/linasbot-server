@@ -5,7 +5,7 @@
  * Run: node --test mobile/linas-ai/tests/*.test.mjs
  */
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -148,16 +148,27 @@ test('AR and FR subscription gate strings exist', () => {
 test('raw entitlement/usage JSON dumps are __DEV__ gated', () => {
   const billing = readFileSync(join(srcRoot, 'features/billing/BillingScreen.tsx'), 'utf8');
   const dashboard = readFileSync(join(srcRoot, 'features/dashboard/DashboardScreen.tsx'), 'utf8');
-  const simple = readFileSync(join(srcRoot, 'features/shared/SimpleResourceScreen.tsx'), 'utf8');
   for (const [name, text] of [
     ['BillingScreen', billing],
     ['DashboardScreen', dashboard],
-    ['SimpleResourceScreen', simple],
   ]) {
     if (text.includes('JSON.stringify')) {
       assert.match(text, /__DEV__/, `${name} must gate JSON.stringify behind __DEV__`);
     }
   }
+});
+
+test('dead resource screen and unused control catalog are gone', () => {
+  assert.equal(existsSync(join(srcRoot, 'features/shared/SimpleResourceScreen.tsx')), false);
+  const nav = readFileSync(join(srcRoot, 'app/navigation.ts'), 'utf8');
+  const tree = readFileSync(join(srcRoot, 'app/AppScreenTree.tsx'), 'utf8');
+  const areas = readFileSync(join(srcRoot, 'features/control/controlAreas.ts'), 'utf8');
+  assert.doesNotMatch(nav, /name: 'resource'/);
+  assert.doesNotMatch(nav, /RESOURCE_MAP/);
+  assert.doesNotMatch(tree, /SimpleResourceScreen/);
+  assert.doesNotMatch(areas, /CONTROL_ITEMS/);
+  assert.doesNotMatch(areas, /GROUP_LABELS/);
+  assert.match(areas, /'owner'/);
 });
 
 test('tenant Dashboard has no Platform Owner metrics stub', () => {

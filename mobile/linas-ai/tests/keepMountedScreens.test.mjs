@@ -34,6 +34,8 @@ describe('keep-mounted module screens', () => {
     assert.equal(tree.includes('KeepMountedPane key={`cm_section'), false);
     assert.equal(tree.includes('KeepMountedPane key={`resource'), false);
     assert.equal(tree.includes('KeepMountedPane key={`login'), false);
+    assert.doesNotMatch(tree, /SimpleResourceScreen/);
+    assert.doesNotMatch(tree, /name === 'resource'/);
     assert.match(tree, /name === 'cm_section'[\s\S]*<EphemeralRoute>/);
     assert.match(tree, /name === 'products'[\s\S]*<EphemeralRoute>/);
   });
