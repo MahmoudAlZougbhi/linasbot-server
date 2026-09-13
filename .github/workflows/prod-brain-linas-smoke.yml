@@ -225,10 +225,56 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
+      - name: Checkout matrix scripts
+        uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.sha }}
+      - name: Pack remote runner
+        run: |
+          python3 - <<'PY'
+          import base64
+          import io
+          import tarfile
+          from pathlib import Path
+
+          buf = io.BytesIO()
+          with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+              for rel in (
+                  "services/customer_ai/evals/live_tenant_seed.py",
+                  "services/customer_ai/evals/live_tenant_publish.py",
+                  "services/customer_ai/evals/live_tenant_matrix.py",
+                  "scripts/prod_brain_tenant_matrix.py",
+              ):
+                  tar.add(rel, arcname=Path(rel).name)
+          b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+          Path("remote-matrix.sh").write_text(
+              "\n".join(
+                  [
+                      "#!/usr/bin/env bash",
+                      "set -euo pipefail",
+                      'APP_DIR="/opt/linasbot"',
+                      'PACK="/tmp/live_matrix_pack"',
+                      'echo "[tenant-matrix] git_head=$(git -C "$APP_DIR" rev-parse HEAD)"',
+                      'rm -rf "$PACK"',
+                      'mkdir -p "$PACK"',
+                      "base64 -d <<'B64' | tar -xz -C \"$PACK\"",
+                      b64,
+                      "B64",
+                      'PYTHON_BIN="$APP_DIR/venv/bin/python3"',
+                      'if [ ! -x "$PYTHON_BIN" ]; then PYTHON_BIN="$(command -v python3)"; fi',
+                      'if [ -f "$APP_DIR/venv/bin/activate" ]; then source "$APP_DIR/venv/bin/activate"; fi',
+                      "export APP_DIR",
+                      'export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"',
+                      'cd "$APP_DIR"',
+                      '"$PYTHON_BIN" "$PACK/prod_brain_tenant_matrix.py"',
+                      "",
+                  ]
+              ),
+              encoding="utf-8",
+          )
+          PY
       - name: Publish isolated tenants and run live GPT matrix
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
-        env:
-          MATRIX_REF: ${{ github.sha }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -236,29 +282,5 @@ jobs:
           port: 22
           script_stop: false
           command_timeout: 35m
-          envs: MATRIX_REF
-          script: |
-            set -e
-            APP_DIR="/opt/linasbot"
-            PYTHON_BIN="$APP_DIR/venv/bin/python3"
-            if [ ! -x "$PYTHON_BIN" ]; then
-              PYTHON_BIN="$(command -v python3)"
-            fi
-            echo "[tenant-matrix] git_head=$(git -C "$APP_DIR" rev-parse HEAD)"
-            echo "[tenant-matrix] matrix_ref=$MATRIX_REF"
-            PACK="/tmp/live_matrix_pack"
-            rm -rf "$PACK"
-            mkdir -p "$PACK"
-            git -C "$APP_DIR" fetch --depth=1 origin "$MATRIX_REF"
-            git -C "$APP_DIR" show "$MATRIX_REF:services/customer_ai/evals/live_tenant_seed.py" > "$PACK/live_tenant_seed.py"
-            git -C "$APP_DIR" show "$MATRIX_REF:services/customer_ai/evals/live_tenant_publish.py" > "$PACK/live_tenant_publish.py"
-            git -C "$APP_DIR" show "$MATRIX_REF:services/customer_ai/evals/live_tenant_matrix.py" > "$PACK/live_tenant_matrix.py"
-            git -C "$APP_DIR" show "$MATRIX_REF:scripts/prod_brain_tenant_matrix.py" > "$PACK/prod_brain_tenant_matrix.py"
-            if [ -f "$APP_DIR/venv/bin/activate" ]; then
-              # shellcheck disable=SC1091
-              source "$APP_DIR/venv/bin/activate"
-            fi
-            export APP_DIR
-            export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
-            cd "$APP_DIR"
-            "$PYTHON_BIN" "$PACK/prod_brain_tenant_matrix.py"
+          script_path: remote-matrix.sh
+
