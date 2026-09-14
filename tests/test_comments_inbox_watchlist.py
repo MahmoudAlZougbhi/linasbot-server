@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from services.comments_inbox.kinds import media_kind
-from services.comments_inbox.watchlist import (
+from services.live_chat.comments_inbox.kinds import media_kind
+from services.live_chat.comments_inbox.watchlist import (
     apply_watch_patch,
     comment_post_allowed,
     comment_post_watched,
@@ -20,14 +20,14 @@ def test_media_kind_reel_and_post() -> None:
 
 
 def test_default_allows_every_post(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("services.comments_inbox.watchlist.get_data_root", lambda: str(tmp_path))
+    monkeypatch.setattr("services.live_chat.comments_inbox.watchlist.get_data_root", lambda: str(tmp_path))
     assert comment_post_allowed("linas", "instagram", "1789") is True
     assert comment_post_watched("linas", "instagram", "1789") is True
     assert load_watchlist("linas")["instagram"]["mode"] == "all"
 
 
 def test_selected_mode_pins_inbox_but_ai_stays_on(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("services.comments_inbox.watchlist.get_data_root", lambda: str(tmp_path))
+    monkeypatch.setattr("services.live_chat.comments_inbox.watchlist.get_data_root", lambda: str(tmp_path))
     apply_watch_patch(
         "linas",
         platform="instagram",
@@ -42,7 +42,7 @@ def test_selected_mode_pins_inbox_but_ai_stays_on(tmp_path, monkeypatch) -> None
 
 
 def test_all_mode_clears_inbox_pins(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr("services.comments_inbox.watchlist.get_data_root", lambda: str(tmp_path))
+    monkeypatch.setattr("services.live_chat.comments_inbox.watchlist.get_data_root", lambda: str(tmp_path))
     apply_watch_patch("linas", platform="tiktok", mode="selected", post_ids=["v1"])
     assert comment_post_watched("linas", "tiktok", "v2") is False
     assert comment_post_allowed("linas", "tiktok", "v2") is True

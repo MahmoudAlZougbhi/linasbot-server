@@ -12,9 +12,9 @@ from modules.meta_social_comment_sync_job import (
     run_meta_social_comment_sync_job,
 )
 from modules.tiktok_sync_job import run_tiktok_comment_sync_job
+from services.integrations.tiktok.jobs import handle_tiktok_comment_sync
 from services.meta_social_comment_sync_jobs import handle_meta_social_comment_sync
 from services.queues.models import QueueJob
-from services.tiktok_business.jobs import handle_tiktok_comment_sync
 
 
 def test_meta_comment_poll_stays_off_even_when_env_true(monkeypatch: pytest.MonkeyPatch) -> None:

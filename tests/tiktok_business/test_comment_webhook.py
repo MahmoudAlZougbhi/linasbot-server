@@ -35,10 +35,10 @@ async def test_comment_update_queues_visitor_on_any_video(tt_db, monkeypatch) ->
             "create_time": _now_epoch(),
         }
 
-    monkeypatch.setattr("services.tiktok_business.comment_webhook.enqueue_tiktok_comment_ai", _enqueue)
-    monkeypatch.setattr("services.tiktok_business.comment_webhook.ensure_fresh_token", _token)
-    monkeypatch.setattr("services.tiktok_business.comment_webhook._fetch_public_comment", _fetch)
-    from services.tiktok_business.webhook_process import process_tiktok_webhook_payload
+    monkeypatch.setattr("services.integrations.tiktok.comment_webhook.enqueue_tiktok_comment_ai", _enqueue)
+    monkeypatch.setattr("services.integrations.tiktok.comment_webhook.ensure_fresh_token", _token)
+    monkeypatch.setattr("services.integrations.tiktok.comment_webhook._fetch_public_comment", _fetch)
+    from services.integrations.tiktok.webhook_process import process_tiktok_webhook_payload
 
     payload = {
         "event": "comment.update",
@@ -71,7 +71,7 @@ async def test_comment_update_skips_owner_and_replies(tt_db, monkeypatch) -> Non
     seed_connection(tt_db, open_id="biz-open")
     queued: list[dict] = []
     monkeypatch.setattr(
-        "services.tiktok_business.comment_webhook.enqueue_tiktok_comment_ai", lambda **k: queued.append(k)
+        "services.integrations.tiktok.comment_webhook.enqueue_tiktok_comment_ai", lambda **k: queued.append(k)
     )
 
     async def _token(*_a, **_k):
@@ -85,9 +85,9 @@ async def test_comment_update_skips_owner_and_replies(tt_db, monkeypatch) -> Non
             "create_time": _now_epoch(),
         }
 
-    monkeypatch.setattr("services.tiktok_business.comment_webhook.ensure_fresh_token", _token)
-    monkeypatch.setattr("services.tiktok_business.comment_webhook._fetch_public_comment", _fetch_owner)
-    from services.tiktok_business.webhook_process import process_tiktok_webhook_payload
+    monkeypatch.setattr("services.integrations.tiktok.comment_webhook.ensure_fresh_token", _token)
+    monkeypatch.setattr("services.integrations.tiktok.comment_webhook._fetch_public_comment", _fetch_owner)
+    from services.integrations.tiktok.webhook_process import process_tiktok_webhook_payload
 
     owner_payload = {
         "event": "comment.update",
@@ -130,10 +130,10 @@ async def test_duplicate_tiktok_webhook_event_does_not_reenqueue(tt_db, monkeypa
         enqueued.append(str(kwargs.get("idempotency_key") or ""))
         return "job-1"
 
-    monkeypatch.setattr("services.omnichannel.enqueue.enqueue_job", _enqueue)
-    monkeypatch.setattr("services.omnichannel.enqueue.should_defer_to_worker", lambda: True)
-    monkeypatch.setattr("services.omnichannel.enqueue.queue_is_durable", lambda: True)
-    from services.tiktok_business.webhook_process import process_tiktok_webhook_payload
+    monkeypatch.setattr("services.integrations.omnichannel.enqueue.enqueue_job", _enqueue)
+    monkeypatch.setattr("services.integrations.omnichannel.enqueue.should_defer_to_worker", lambda: True)
+    monkeypatch.setattr("services.integrations.omnichannel.enqueue.queue_is_durable", lambda: True)
+    from services.integrations.tiktok.webhook_process import process_tiktok_webhook_payload
 
     payload = {"event": "comment.update", "event_id": "evt-dup-wh", "user_openid": "biz-open", "content": {}}
     first = await process_tiktok_webhook_payload(raw_body=b"{}", payload=payload)
@@ -153,8 +153,8 @@ async def test_ensure_comment_webhook_skips_when_url_matches(monkeypatch) -> Non
 
     monkeypatch.setenv("TIKTOK_CLIENT_KEY", "tt-client-key")
     monkeypatch.setenv("TIKTOK_CLIENT_SECRET", "tt-client-secret-value")
-    monkeypatch.setattr("services.tiktok_business.webhook_subscription.tiktok_request", _req)
-    from services.tiktok_business.webhook_subscription import ensure_comment_webhook_registered
+    monkeypatch.setattr("services.integrations.tiktok.webhook_subscription.tiktok_request", _req)
+    from services.integrations.tiktok.webhook_subscription import ensure_comment_webhook_registered
 
     result = await ensure_comment_webhook_registered()
     assert result["already"] is True
@@ -162,7 +162,7 @@ async def test_ensure_comment_webhook_skips_when_url_matches(monkeypatch) -> Non
 
 
 def test_upsert_media_does_not_blank_existing_caption(tt_db) -> None:
-    from services.tiktok_business.repository_content import TikTokContentRepository
+    from services.integrations.tiktok.repository_content import TikTokContentRepository
 
     connection = seed_connection(tt_db)
     content = TikTokContentRepository(tt_db)

@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy import select
 
-from services.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
-from services.web_chat.operation import (
+from services.integrations.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
+from services.integrations.web_chat.operation import (
     abandon_operation_lease,
     advance_operation,
     begin_operation,
@@ -18,12 +18,12 @@ from services.web_chat.operation import (
     operation_session,
     refresh_operation_lease,
 )
-from services.web_chat.operation_fence import fenced_failure_release
-from services.web_chat.operation_fsm import OperationFsmError, OperationState, stable_operation_key
-from services.web_chat.pg_models import WebChatOperationRow
-from services.web_chat.processor import WebChatError, _generate_reply_text, process_web_chat_message
-from services.web_chat.session_authority import verified_session_snapshot
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.operation_fence import fenced_failure_release
+from services.integrations.web_chat.operation_fsm import OperationFsmError, OperationState, stable_operation_key
+from services.integrations.web_chat.pg_models import WebChatOperationRow
+from services.integrations.web_chat.processor import WebChatError, _generate_reply_text, process_web_chat_message
+from services.integrations.web_chat.session_authority import verified_session_snapshot
+from services.integrations.web_chat.store_pg import WebChatPgStore
 from tests.test_web_chat_acceptance_fsm import _widget_and_visitor
 from tests.web_chat_acceptance_billing import assert_acceptance_ledger_equation, fetch_pg_ledger_snapshot
 from tests.web_chat_acceptance_support import patch_acceptance_eligibility, patch_web_chat_store
@@ -401,7 +401,7 @@ async def test_processor_ai_failure_path_fenced_after_reserved_reclaim(
     assert runtime_b.lease_generation == runtime_a.lease_generation + 1
 
     monkeypatch.setattr(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         AsyncMock(side_effect=RuntimeError("ai down")),
     )
 
@@ -473,11 +473,11 @@ async def test_end_to_end_stale_ai_failure_after_reclaim_via_process_message(
         raise RuntimeError("ai down")
 
     monkeypatch.setattr(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         AsyncMock(side_effect=reserve_then_fail),
     )
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
 

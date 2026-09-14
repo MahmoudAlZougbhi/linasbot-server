@@ -8,8 +8,8 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from modules.core import app
-from services.tiktok_business.ads_oauth import complete_tiktok_ads_oauth
-from services.tiktok_business.errors import TikTokBusinessError
+from services.integrations.tiktok.ads_oauth import complete_tiktok_ads_oauth
+from services.integrations.tiktok.errors import TikTokBusinessError
 
 
 @app.get("/oauth/tiktok/ads/callback")

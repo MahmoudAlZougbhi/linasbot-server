@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.tiktok_business.comment_ai import process_tiktok_comment_ai
-from services.tiktok_business.repository_content import TikTokContentRepository
+from services.integrations.tiktok.comment_ai import process_tiktok_comment_ai
+from services.integrations.tiktok.repository_content import TikTokContentRepository
 from tests.tiktok_business.conftest import seed_connection
 
 
@@ -60,13 +60,13 @@ async def test_a_comments_work_without_identity_http(tt_db, monkeypatch) -> None
     async def _publish(**_k):
         return {"request_id": "req-basic", "comment_id": "reply-basic"}
 
-    monkeypatch.setattr("services.tiktok_business.comment_ai.comments_action_enabled", lambda *_a, **_k: True)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.resolve_tiktok_post_context", _resolve)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.run_customer_reply_v2_comment", _reply)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.create_comment_reply", _publish)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.ensure_fresh_token", _tok)
-    monkeypatch.setattr("services.tiktok_business.post_context.identity_video_info", _identity)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.comments_action_enabled", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.resolve_tiktok_post_context", _resolve)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.run_customer_reply_v2_comment", _reply)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.create_comment_reply", _publish)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.ensure_fresh_token", _tok)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.identity_video_info", _identity)
     ok = await process_tiktok_comment_ai(
         tenant_id="linas", connection_id=connection.id, comment_id="c-basic", item_id="v1"
     )
@@ -98,12 +98,12 @@ async def test_h_no_confident_reply_does_not_publish(tt_db, monkeypatch) -> None
         published["called"] = True
         return {}
 
-    monkeypatch.setattr("services.tiktok_business.comment_ai.comments_action_enabled", lambda *_a, **_k: True)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.resolve_tiktok_post_context", _resolve)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.run_customer_reply_v2_comment", _reply)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.create_comment_reply", _publish)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.ensure_fresh_token", _tok)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.comments_action_enabled", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.resolve_tiktok_post_context", _resolve)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.run_customer_reply_v2_comment", _reply)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.create_comment_reply", _publish)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.ensure_fresh_token", _tok)
     result = await process_tiktok_comment_ai(
         tenant_id="linas", connection_id=connection.id, comment_id="c-empty", item_id="v1"
     )

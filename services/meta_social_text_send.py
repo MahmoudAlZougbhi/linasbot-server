@@ -28,7 +28,7 @@ async def send_meta_social_outbound(
     if capture_send is not None:
         await capture_send(namespaced_id, message_text, image_url, audio_url)
         if message_text:
-            from services.customer_reply_v2.product_media_outbound import send_pending_product_media
+            from services.brain.reply.product_media_outbound import send_pending_product_media
 
             await send_pending_product_media(
                 user_data=user_data,
@@ -40,7 +40,7 @@ async def send_meta_social_outbound(
                 capture_send=capture_send,
                 capture_to=namespaced_id,
             )
-            from services.customer_reply_v2.setup_resource_outbound import send_pending_setup_resources
+            from services.brain.reply.setup_resource_outbound import send_pending_setup_resources
 
             await send_pending_setup_resources(
                 user_data=user_data,
@@ -76,7 +76,7 @@ async def send_meta_social_outbound(
     else:
         text_result = await adapter.send_text_message(sender_id, outbound_text)
 
-    from services.customer_reply_v2.product_media_outbound import send_pending_product_media
+    from services.brain.reply.product_media_outbound import send_pending_product_media
 
     media_result = await send_pending_product_media(
         user_data=user_data,
@@ -87,7 +87,7 @@ async def send_meta_social_outbound(
         binding_id=binding_id,
         capture_send=None,
     )
-    from services.customer_reply_v2.setup_resource_outbound import send_pending_setup_resources
+    from services.brain.reply.setup_resource_outbound import send_pending_setup_resources
 
     resource_result = await send_pending_setup_resources(
         user_data=user_data,

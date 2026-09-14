@@ -107,7 +107,7 @@ def test_never_submitted_releases_ready_message_hold() -> None:
 
 
 def test_whatsapp_bridge_does_not_capture_before_send() -> None:
-    from services.whatsapp_cloud import ai_bridge, outbound_finalization
+    from services.integrations.whatsapp import ai_bridge, outbound_finalization
 
     src = getsource(ai_bridge.maybe_generate_and_send_ai_reply)
     assert "reserve_leftover_reply" in src
@@ -123,7 +123,7 @@ def test_whatsapp_bridge_does_not_capture_before_send() -> None:
     assert "release_unsent_ai_outbound" in release
     queued = getsource(outbound_finalization.release_unsent_ai_outbound)
     assert "accepted=False" in queued
-    from services.whatsapp_cloud.delivery_retry import send_canonical_intent
+    from services.integrations.whatsapp.delivery_retry import send_canonical_intent
 
     retry = getsource(send_canonical_intent)
     assert "release_unsent_ai_outbound" in retry
@@ -131,9 +131,9 @@ def test_whatsapp_bridge_does_not_capture_before_send() -> None:
 
 
 def test_comment_and_omni_settle_after_delivery() -> None:
+    from services.integrations.omnichannel.deliver import _finish_success
+    from services.integrations.tiktok.comment_ai import process_tiktok_comment_ai
     from services.meta_comment_brain_send import send_comment_destinations
-    from services.omnichannel.deliver import _finish_success
-    from services.tiktok_business.comment_ai import process_tiktok_comment_ai
 
     comment = getsource(send_comment_destinations)
     assert "_settle_comment_send" in comment
@@ -146,7 +146,7 @@ def test_comment_and_omni_settle_after_delivery() -> None:
     deliver = getsource(_finish_success)
     assert "settle_after_send" in deliver
     assert "_message_settle_ops" in deliver
-    from services.web_chat.processor_turn_finalize import complete_captured_turn
+    from services.integrations.web_chat.processor_turn_finalize import complete_captured_turn
 
     web = getsource(complete_captured_turn)
     assert "web_inbound_message_id" in web
@@ -155,7 +155,7 @@ def test_comment_and_omni_settle_after_delivery() -> None:
     assert "_settle_comment_send" in tiktok
     assert "accepted=True" in tiktok
     assert "accepted=False" in tiktok
-    from services.omnichannel.deliver import _release_credits_if_never_submitted
+    from services.integrations.omnichannel.deliver import _release_credits_if_never_submitted
 
     release = getsource(_release_credits_if_never_submitted)
     assert "release_leftover_reply" in release
@@ -172,7 +172,7 @@ def test_comment_and_omni_settle_after_delivery() -> None:
 def test_omni_settle_matches_provider_mid_not_row_id() -> None:
     from types import SimpleNamespace
 
-    from services.omnichannel.deliver import _message_settle_ops
+    from services.integrations.omnichannel.deliver import _message_settle_ops
 
     inbound = SimpleNamespace(
         provider_event_id="wamid.omni-1",
@@ -213,7 +213,7 @@ def test_web_chat_settle_matches_inbound_hash() -> None:
 
 def test_web_chat_fence_releases_inbound_hold() -> None:
     from services.brain.history_ids import web_inbound_message_id
-    from services.web_chat.operation_fence import fenced_failure_release, release_web_chat_message_hold
+    from services.integrations.web_chat.operation_fence import fenced_failure_release, release_web_chat_message_hold
 
     mid = web_inbound_message_id("web:sess", "hours?")
     turn, result = _generated(mid)
@@ -233,7 +233,7 @@ def test_web_chat_fence_releases_inbound_hold() -> None:
 
 def test_web_chat_fence_does_not_invent_inbound_text() -> None:
     from services.brain.history_ids import web_inbound_message_id
-    from services.web_chat.operation_fence import release_web_chat_message_hold
+    from services.integrations.web_chat.operation_fence import release_web_chat_message_hold
 
     mid = web_inbound_message_id("web:sess", "hours?")
     turn, result = _generated(mid)
@@ -244,7 +244,7 @@ def test_web_chat_fence_does_not_invent_inbound_text() -> None:
 
 def test_tiktok_dm_settle_matches_minted_inbound() -> None:
     from services.brain.history_ids import bind_dm_ids
-    from services.tiktok_business.messaging import _maybe_ai_dm, _settle_tiktok_dm_send
+    from services.integrations.tiktok.messaging import _maybe_ai_dm, _settle_tiktok_dm_send
 
     _conv, mid = bind_dm_ids(conversation_id="tt-conv", message_id="", message="hours?")
     assert mid
@@ -264,7 +264,7 @@ def test_tiktok_dm_settle_matches_minted_inbound() -> None:
 
 
 def test_whatsapp_cloud_fail_releases_message_hold() -> None:
-    from services.whatsapp_cloud.outbound_finalization import release_unsent_ai_outbound
+    from services.integrations.whatsapp.outbound_finalization import release_unsent_ai_outbound
 
     turn, result = _generated("wamid.fail")
     apply_message_billing(turn, result)
@@ -278,7 +278,7 @@ def test_whatsapp_cloud_fail_releases_message_hold() -> None:
 
 
 def test_whatsapp_settle_uses_intent_mid_when_inbound_empty() -> None:
-    from services.whatsapp_cloud.outbound_finalization import _settle_confirmed_send
+    from services.integrations.whatsapp.outbound_finalization import _settle_confirmed_send
 
     turn, result = _generated("wamid.from-intent")
     apply_message_billing(turn, result)
@@ -328,8 +328,8 @@ def test_sfu_settle_matches_minted_followup_id() -> None:
 
 
 def test_omni_generate_fail_releases_brain_hold() -> None:
-    from services.omnichannel.generate import handle_omnichannel_generate
-    from services.omnichannel.message_hold import release_unsent_omni_hold
+    from services.integrations.omnichannel.generate import handle_omnichannel_generate
+    from services.integrations.omnichannel.message_hold import release_unsent_omni_hold
 
     src = getsource(handle_omnichannel_generate)
     assert "release_unsent_omni_hold" in src
@@ -438,8 +438,8 @@ def test_hold_policy_does_not_tag_message_holds_as_leftover(monkeypatch: pytest.
 
 def test_ambiguous_holds_use_hold_policy_not_leftover_only() -> None:
     from services.billing.membership.pending_settlement import list_pending
-    from services.tiktok_business import messaging as tiktok_messaging
-    from services.whatsapp_cloud.ai_bridge import _hold_after_ambiguous_send
+    from services.integrations.tiktok import messaging as tiktok_messaging
+    from services.integrations.whatsapp.ai_bridge import _hold_after_ambiguous_send
 
     hold = getsource(_hold_after_ambiguous_send)
     assert "hold_billing_policy" in hold

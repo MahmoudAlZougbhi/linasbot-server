@@ -38,7 +38,7 @@ def load_web_history_rows(conversation_id: str) -> list[dict[str, Any]]:
     if len(sid) < 8:
         return []
     try:
-        from services.web_chat.store import web_chat_store
+        from services.integrations.web_chat.store import web_chat_store
 
         visitor = web_chat_store.get_visitor(sid)
     except Exception:

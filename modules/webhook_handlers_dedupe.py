@@ -10,7 +10,7 @@ from typing import Any
 
 from google.cloud import firestore
 
-from services.whatsapp_adapters.outbound_text_dedupe import normalize_text_body_for_dedupe
+from services.integrations.whatsapp.adapters.outbound_text_dedupe import normalize_text_body_for_dedupe
 from utils.phone_utils import phone_match_key
 from utils.utils import get_firestore_db
 

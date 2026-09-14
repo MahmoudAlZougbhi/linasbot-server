@@ -106,7 +106,7 @@ async def mobile_integration_toggles(
     kind = f"safety:toggle:{platform_key}:{toggle}" if not enabled else f"integration:toggle:{platform_key}:{toggle}"
 
     if platform_key == "tiktok":
-        from services.tiktok_business.toggles import TikTokToggleError, set_tiktok_toggle
+        from services.integrations.tiktok.toggles import TikTokToggleError, set_tiktok_toggle
 
         try:
             with guarded_edit(
@@ -189,9 +189,9 @@ async def mobile_disconnect_platform(platform: str, request: Request) -> Any:
     platform_key = (platform or "").strip().lower()
     if platform_key == "tiktok":
         from db.session import WhatsAppDatabaseUnavailable
-        from services.tiktok_business.errors import TikTokBusinessError
-        from services.tiktok_business.oauth import disconnect_tiktok
-        from services.tiktok_business.status import tiktok_integration_row
+        from services.integrations.tiktok.errors import TikTokBusinessError
+        from services.integrations.tiktok.oauth import disconnect_tiktok
+        from services.integrations.tiktok.status import tiktok_integration_row
 
         actor = session.user_id or session.email or "mobile_disconnect"
         try:

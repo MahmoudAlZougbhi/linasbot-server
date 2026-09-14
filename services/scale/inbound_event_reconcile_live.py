@@ -35,7 +35,7 @@ def ingress_idempotency_key(event_id: str) -> str:
 
 
 def _physical_queue_for_record(rec: InboundEventRecord) -> str:
-    from services.omnichannel.queues import logical_for_channel, physical_queue_for
+    from services.integrations.omnichannel.queues import logical_for_channel, physical_queue_for
 
     surface = "comment" if rec.kind == "meta_comment" else "dm"
     logical = logical_for_channel(channel="meta", surface=surface)

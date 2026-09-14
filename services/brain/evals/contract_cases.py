@@ -44,8 +44,8 @@ def _generate_holds_until_send() -> bool:
     from handlers.text_handlers_respond_phase2 import text_handlers_respond_phase2
     from services.ai_reply_turn_runtime import _capture_ready_turn, on_ai_generated, settle_after_outbound
     from services.brain.billing import settle_after_send
+    from services.integrations.whatsapp.ai_bridge import _release_reservation
     from services.smart_followup.worker_job import process_one_followup_job
-    from services.whatsapp_cloud.ai_bridge import _release_reservation
 
     generated = getsource(on_ai_generated)
     phase2 = getsource(text_handlers_respond_phase2)
@@ -65,15 +65,15 @@ def _generate_holds_until_send() -> bool:
 
 
 def _cloud_inbound_hydrates() -> bool:
-    from services.whatsapp_cloud.webhook_processor import _process_one_event
+    from services.integrations.whatsapp.webhook_processor import _process_one_event
 
     src = getsource(_process_one_event)
     return src.index("hydrate_cloud_inbound_snapshot") < src.index("maybe_generate_and_send_ai_reply")
 
 
 def _tiktok_media_reaches_brain() -> bool:
-    from services.omnichannel import generate as omni_generate
-    from services.tiktok_business.messaging import handle_messaging_webhook
+    from services.integrations.omnichannel import generate as omni_generate
+    from services.integrations.tiktok.messaging import handle_messaging_webhook
 
     hook = getsource(handle_messaging_webhook)
     omni = getsource(omni_generate)
@@ -86,8 +86,8 @@ def _tiktok_media_reaches_brain() -> bool:
 
 def _omni_generate_releases_unsent() -> bool:
     from services.brain.test_lab import run_lab_turn
-    from services.omnichannel.channel_whatsapp import generate_whatsapp_reply
-    from services.omnichannel.generate import handle_omnichannel_generate
+    from services.integrations.omnichannel.channel_whatsapp import generate_whatsapp_reply
+    from services.integrations.omnichannel.generate import handle_omnichannel_generate
 
     return (
         "release_unsent_omni_hold" in getsource(handle_omnichannel_generate)
@@ -156,8 +156,8 @@ def _index_seeds_from_pending() -> bool:
 
 
 def _tiktok_comment_settles_after_send() -> bool:
-    from services.tiktok_business.comment_ai import process_tiktok_comment_ai
-    from services.tiktok_business.messaging import _maybe_ai_dm
+    from services.integrations.tiktok.comment_ai import process_tiktok_comment_ai
+    from services.integrations.tiktok.messaging import _maybe_ai_dm
 
     src = getsource(process_tiktok_comment_ai)
     dm = getsource(_maybe_ai_dm)
@@ -200,10 +200,10 @@ def _meta_public_comment_settles() -> bool:
 
 
 def _web_chat_indexes_leftover() -> bool:
-    from services.omnichannel.deliver import _finish_success
-    from services.web_chat.credit_fsm import WebChatCreditHandle
-    from services.web_chat.operation_fence import fenced_failure_release
-    from services.web_chat.processor_turn_finalize import complete_captured_turn
+    from services.integrations.omnichannel.deliver import _finish_success
+    from services.integrations.web_chat.credit_fsm import WebChatCreditHandle
+    from services.integrations.web_chat.operation_fence import fenced_failure_release
+    from services.integrations.web_chat.processor_turn_finalize import complete_captured_turn
 
     src = getsource(WebChatCreditHandle)
     complete = getsource(complete_captured_turn)

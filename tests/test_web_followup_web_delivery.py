@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob
+from services.integrations.web_chat.config_models import WebChatWidgetConfig
+from services.integrations.web_chat.followup_delivery import deliver_web_followup_message
+from services.integrations.web_chat.processor import compose_web_user_id
 from services.smart_followup.adapters.web import WebFollowUpAdapter
 from services.smart_followup.types import FollowUpConversationView, FollowUpSendResult
-from services.web_chat.config_models import WebChatWidgetConfig
-from services.web_chat.followup_delivery import deliver_web_followup_message
-from services.web_chat.processor import compose_web_user_id
 from tests.web_chat_acceptance_billing import seed_acceptance_credit_ledger
 from tests.web_chat_acceptance_support import patch_acceptance_eligibility, seed_acceptance_widget, seed_widget_config
 
@@ -42,11 +42,11 @@ def _web_followup_fixtures(store, *, visitor_id: str = "visitor-2", idem: str = 
         created_at=time.time(),
         updated_at=time.time(),
     )
-    from services.web_chat.store_pg import WebChatPgStore
+    from services.integrations.web_chat.store_pg import WebChatPgStore
 
     if isinstance(store, WebChatPgStore):
         widget = seed_widget_config(store, widget)
-        from services.web_chat.session_authority import issue_session_authority
+        from services.integrations.web_chat.session_authority import issue_session_authority
 
         bundle = issue_session_authority(widget=widget)
         store.get_or_create_visitor(
@@ -89,14 +89,14 @@ def _web_followup_fixtures(store, *, visitor_id: str = "visitor-2", idem: str = 
 async def test_web_followup_same_idempotency_key_delivers_once(web_chat_pg_store, monkeypatch) -> None:
     monkeypatch.setenv("WEB_CHAT_PUBLIC_AVAILABILITY", "true")
     store = web_chat_pg_store
-    monkeypatch.setattr("services.web_chat.followup_delivery.web_chat_store", store)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.web_chat_store", store)
     monkeypatch.setattr("services.smart_followup.adapters.web.web_chat_store", store)
     _, job, conv = _web_followup_fixtures(store, visitor_id="visitor-idem", idem="sfu:seq:1")
 
-    from services.web_chat.persistence import PersistOutcome, PersistResult
+    from services.integrations.web_chat.persistence import PersistOutcome, PersistResult
 
     save_mock = AsyncMock(return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id="conv"))
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", save_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", save_mock)
     adapter = WebFollowUpAdapter()
     job.reservation_id = _reserve_followup_credit(tenant_id="tenant-b", idem="sfu:seq:1")
 
@@ -130,14 +130,14 @@ async def test_web_followup_same_idempotency_key_delivers_once(web_chat_pg_store
 async def test_web_followup_crash_after_persist_before_queue_recovers(web_chat_pg_store, monkeypatch) -> None:
     monkeypatch.setenv("WEB_CHAT_PUBLIC_AVAILABILITY", "true")
     store = web_chat_pg_store
-    monkeypatch.setattr("services.web_chat.followup_delivery.web_chat_store", store)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.web_chat_store", store)
     monkeypatch.setattr("services.smart_followup.adapters.web.web_chat_store", store)
     _, job, conv = _web_followup_fixtures(store, visitor_id="visitor-crash", idem="sfu:crash:1")
 
-    from services.web_chat.persistence import PersistOutcome, PersistResult
+    from services.integrations.web_chat.persistence import PersistOutcome, PersistResult
 
     save_mock = AsyncMock(return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id="conv"))
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", save_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", save_mock)
     job.reservation_id = _reserve_followup_credit(tenant_id="tenant-b", idem="sfu:crash:1")
     adapter = WebFollowUpAdapter()
     original_queue = store.queue_assistant_message
@@ -170,7 +170,7 @@ async def test_web_followup_crash_after_persist_before_queue_recovers(web_chat_p
 @pytest.mark.asyncio
 async def test_deliver_web_followup_message_is_idempotent(web_chat_pg_store, monkeypatch) -> None:
     store = web_chat_pg_store
-    monkeypatch.setattr("services.web_chat.followup_delivery.web_chat_store", store)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.web_chat_store", store)
     widget = seed_widget_config(
         store,
         WebChatWidgetConfig(
@@ -182,7 +182,7 @@ async def test_deliver_web_followup_message_is_idempotent(web_chat_pg_store, mon
             updated_at=time.time(),
         ),
     )
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     store.get_or_create_visitor(
@@ -192,10 +192,10 @@ async def test_deliver_web_followup_message_is_idempotent(web_chat_pg_store, mon
         authority_hash=bundle.authority_hash,
     )
 
-    from services.web_chat.persistence import PersistOutcome, PersistResult
+    from services.integrations.web_chat.persistence import PersistOutcome, PersistResult
 
     save_mock = AsyncMock(return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id="conv"))
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", save_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", save_mock)
     reservation_id = _reserve_followup_credit(tenant_id="tenant-b", idem="sfu:deliver:1")
 
     first = await deliver_web_followup_message(
@@ -346,11 +346,11 @@ async def test_acceptance_followup_exactly_one_pending_after_concurrent_retries(
     """Acceptance: replayed delivery keeps a single outbox row for one idempotency key."""
     monkeypatch.setenv("WEB_CHAT_PUBLIC_AVAILABILITY", "true")
     patch_acceptance_eligibility(monkeypatch, tmp_path)
-    from services.web_chat.session_authority import issue_session_authority
-    from services.web_chat.store_pg import WebChatPgStore
+    from services.integrations.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.store_pg import WebChatPgStore
 
     store = WebChatPgStore()
-    monkeypatch.setattr("services.web_chat.followup_delivery.web_chat_store", store)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.web_chat_store", store)
     widget_key, tenant_id = seed_acceptance_widget(store)
     widget = store.get_widget_by_key(widget_key)
     assert widget is not None
@@ -362,10 +362,10 @@ async def test_acceptance_followup_exactly_one_pending_after_concurrent_retries(
         authority_hash=bundle.authority_hash,
     )
 
-    from services.web_chat.persistence import PersistOutcome, PersistResult
+    from services.integrations.web_chat.persistence import PersistOutcome, PersistResult
 
     save_mock = AsyncMock(return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id="conv"))
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", save_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", save_mock)
     adapter = WebFollowUpAdapter()
     reservation_id = _reserve_followup_credit(tenant_id=tenant_id, idem="sfu:replay:1")
 

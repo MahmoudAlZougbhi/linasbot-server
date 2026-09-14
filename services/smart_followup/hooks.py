@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from services.integrations.whatsapp.observability import emit_wa_event
 from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT, SOURCE_CHANNEL_WHATSAPP_CLOUD
 from services.smart_followup.channels import normalize_followup_channel
 from services.smart_followup.constants import DEFAULT_CHANNEL
@@ -14,7 +15,6 @@ from services.smart_followup.repository import SmartFollowUpRepository
 from services.smart_followup.settings_service import channel_enabled_for_settings
 from services.smart_followup.types import FollowUpConversationView, FollowUpScheduleRequest
 from services.smart_followup.window_rules import safe_send_deadline
-from services.whatsapp_cloud.observability import emit_wa_event
 
 
 def _utcnow() -> datetime:
@@ -92,7 +92,7 @@ def schedule_followup_sequence(
 
     channel = normalize_followup_channel(request.channel or DEFAULT_CHANNEL)
     if channel == SOURCE_CHANNEL_WEB_CHAT:
-        from services.web_chat.flags import web_chat_containment_active
+        from services.integrations.web_chat.flags import web_chat_containment_active
 
         if web_chat_containment_active():
             return {"scheduled": False, "reason": "web_chat_contained"}

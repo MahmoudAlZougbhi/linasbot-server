@@ -14,8 +14,8 @@ from modules.core import app
 async def omnichannel_backlog(request: Request) -> Any:
     require_platform_owner(request)
     from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
-    from services.omnichannel.metrics import snapshot
-    from services.omnichannel.store import backlog_snapshot
+    from services.integrations.omnichannel.metrics import snapshot
+    from services.integrations.omnichannel.store import backlog_snapshot
 
     counts: dict[str, Any] = {"unavailable": True}
     try:
@@ -34,8 +34,8 @@ async def omnichannel_replay(request: Request) -> Any:
         return {"success": False, "error": "invalid_payload"}
     from db.models.omnichannel import OmnichannelOutboundOutbox
     from db.session import whatsapp_session
-    from services.omnichannel.accept import enqueue_deliver_job
-    from services.omnichannel.dlq import replay_delivery_only
+    from services.integrations.omnichannel.accept import enqueue_deliver_job
+    from services.integrations.omnichannel.dlq import replay_delivery_only
 
     try:
         replay_delivery_only({**body, "mode": str(body.get("mode") or "delivery_only")})

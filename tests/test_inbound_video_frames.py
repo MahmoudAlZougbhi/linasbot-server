@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from services.customer_reply_v2.inbound_video import (
+from services.brain.reply.inbound_video import (
     MAX_FRAMES,
     extract_bounded_video,
     ffmpeg_available,
@@ -44,7 +44,7 @@ def test_long_video_uses_fifteen_second_interval() -> None:
 
 
 def test_ten_minute_cap_uses_first_ten_minutes_only() -> None:
-    from services.customer_reply_v2.inbound_video import cap_analyze_duration_s
+    from services.brain.reply.inbound_video import cap_analyze_duration_s
 
     capped, truncated = cap_analyze_duration_s(20 * 60)
     assert truncated is True

@@ -49,7 +49,7 @@ def test_anonymous_status_requires_auth(client):
 def test_status_full_number_is_scoped_to_authenticated_tenant(client):
     from db.session import whatsapp_session
     from services.dashboard_session_service import session_service
-    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+    from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
     with whatsapp_session() as db:
         repo = WhatsAppCloudRepository(db)
@@ -104,7 +104,7 @@ def test_cross_tenant_conversation_idor(tmp_path, monkeypatch):
     monkeypatch.setenv("LINAS_WHATSAPP_ALLOW_SQLITE", "true")
     from db.models import Base
     from db.session import reset_engine_for_tests
-    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+    from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
     reset_engine_for_tests()
     engine = create_engine(url, future=True)

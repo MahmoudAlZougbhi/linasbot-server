@@ -6,11 +6,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from services.tiktok_business.capabilities import ENHANCED_LABEL, user_message_for
-from services.tiktok_business.capability_probe import probe_enhanced_capabilities
-from services.tiktok_business.errors import TikTokApiError
-from services.tiktok_business.repository_enhanced import TikTokEnhancedRepository
-from services.tiktok_business.status import tiktok_integration_row
+from services.integrations.tiktok.capabilities import ENHANCED_LABEL, user_message_for
+from services.integrations.tiktok.capability_probe import probe_enhanced_capabilities
+from services.integrations.tiktok.errors import TikTokApiError
+from services.integrations.tiktok.repository_enhanced import TikTokEnhancedRepository
+from services.integrations.tiktok.status import tiktok_integration_row
 from tests.tiktok_business.conftest import seed_connection, seed_enhanced_binding
 
 
@@ -23,9 +23,9 @@ async def test_a_no_advertiser_token_skips_identity_and_bc_http(tt_db, monkeypat
         hits.append("called")
         raise AssertionError("Marketing API must not be called without an advertiser token")
 
-    monkeypatch.setattr("services.tiktok_business.capability_probe.advertiser_get", _forbidden)
-    monkeypatch.setattr("services.tiktok_business.capability_probe.bc_get", _forbidden)
-    monkeypatch.setattr("services.tiktok_business.capability_probe.identity_get", _forbidden)
+    monkeypatch.setattr("services.integrations.tiktok.capability_probe.advertiser_get", _forbidden)
+    monkeypatch.setattr("services.integrations.tiktok.capability_probe.bc_get", _forbidden)
+    monkeypatch.setattr("services.integrations.tiktok.capability_probe.identity_get", _forbidden)
     repo = TikTokEnhancedRepository(tt_db)
     out = await probe_enhanced_capabilities(
         repo=repo,
@@ -60,7 +60,7 @@ async def test_l_waiting_for_permission_then_active(tt_db, monkeypatch) -> None:
     async def _forbidden(**_k):
         raise AssertionError("cooldown must skip Marketing API")
 
-    monkeypatch.setattr("services.tiktok_business.capability_probe.advertiser_get", _forbidden)
+    monkeypatch.setattr("services.integrations.tiktok.capability_probe.advertiser_get", _forbidden)
     cached = await probe_enhanced_capabilities(
         repo=TikTokEnhancedRepository(tt_db),
         tenant_id="linas",
@@ -92,9 +92,9 @@ async def test_l_waiting_for_permission_then_active(tt_db, monkeypatch) -> None:
             ]
         }
 
-    monkeypatch.setattr("services.tiktok_business.capability_probe.advertiser_get", _advertisers)
-    monkeypatch.setattr("services.tiktok_business.capability_probe.bc_get", _bc)
-    monkeypatch.setattr("services.tiktok_business.capability_probe.identity_get", _identities)
+    monkeypatch.setattr("services.integrations.tiktok.capability_probe.advertiser_get", _advertisers)
+    monkeypatch.setattr("services.integrations.tiktok.capability_probe.bc_get", _bc)
+    monkeypatch.setattr("services.integrations.tiktok.capability_probe.identity_get", _identities)
     live = await probe_enhanced_capabilities(
         repo=TikTokEnhancedRepository(tt_db),
         tenant_id="linas",
@@ -118,7 +118,7 @@ async def test_permission_denied_classified_and_cached(tt_db, monkeypatch) -> No
     async def _denied(**_k):
         raise TikTokApiError("No permission", tiktok_code=40001, request_id="r1")
 
-    monkeypatch.setattr("services.tiktok_business.capability_probe.advertiser_get", _denied)
+    monkeypatch.setattr("services.integrations.tiktok.capability_probe.advertiser_get", _denied)
     out = await probe_enhanced_capabilities(
         repo=TikTokEnhancedRepository(tt_db),
         tenant_id="linas",

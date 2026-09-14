@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import func, select
 
-from services.web_chat.pg_models import WebChatMessageRow, WebChatOperationRow
+from services.integrations.web_chat.pg_models import WebChatMessageRow, WebChatOperationRow
 from tests.web_chat_acceptance_support import (
     bootstrap_http,
     node_available,

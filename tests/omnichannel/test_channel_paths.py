@@ -6,14 +6,14 @@ import pytest
 
 from db.models.omnichannel import OmnichannelInboundEvent, OmnichannelOutboundOutbox
 from db.session import whatsapp_session
-from services.omnichannel.accept import InboundAcceptError, accept_and_enqueue
-from services.omnichannel.channel_tiktok import deliver_tiktok
-from services.omnichannel.classify import classify_http_delivery
-from services.omnichannel.deliver import handle_omnichannel_deliver
-from services.omnichannel.gates import TIKTOK_DM_GATE_REASON, tiktok_dm_live_allowed
-from services.omnichannel.generate import handle_omnichannel_generate
-from services.omnichannel.operator_enqueue import enqueue_operator_reply
-from services.omnichannel.store import persist_outbound
+from services.integrations.omnichannel.accept import InboundAcceptError, accept_and_enqueue
+from services.integrations.omnichannel.channel_tiktok import deliver_tiktok
+from services.integrations.omnichannel.classify import classify_http_delivery
+from services.integrations.omnichannel.deliver import handle_omnichannel_deliver
+from services.integrations.omnichannel.gates import TIKTOK_DM_GATE_REASON, tiktok_dm_live_allowed
+from services.integrations.omnichannel.generate import handle_omnichannel_generate
+from services.integrations.omnichannel.operator_enqueue import enqueue_operator_reply
+from services.integrations.omnichannel.store import persist_outbound
 from tests.omnichannel.conftest import make_inbound, make_job
 
 CHANNELS = (
@@ -49,7 +49,7 @@ async def test_channel_accept_generate_deliver_is_idempotent(
             return "", None, TIKTOK_DM_GATE_REASON
         return "canonical", None, None
 
-    monkeypatch.setattr("services.omnichannel.generate._generate_canonical", gen)
+    monkeypatch.setattr("services.integrations.omnichannel.generate._generate_canonical", gen)
     gen_result = await handle_omnichannel_generate(
         make_job(
             job_type="omni_generate",
@@ -72,7 +72,7 @@ async def test_channel_accept_generate_deliver_is_idempotent(
         sends["bodies"].append(snapshot["canonical_body"])
         return {"http_status": 200, "submitted": True, "message_id": f"mid-{sends['n']}"}
 
-    monkeypatch.setattr("services.omnichannel.deliver._send", send)
+    monkeypatch.setattr("services.integrations.omnichannel.deliver._send", send)
     outbox_id = gen_result["outbox_id"]
     first = await handle_omnichannel_deliver(
         make_job(job_type="omni_deliver", tenant_id="tenant-a", payload={"outbox_id": outbox_id})
@@ -121,7 +121,7 @@ async def test_out_of_order_conversation_waits(omni_db, durable_jobs, monkeypatc
     async def ok(**_k):
         return "canonical", None, None
 
-    monkeypatch.setattr("services.omnichannel.generate._generate_canonical", ok)
+    monkeypatch.setattr("services.integrations.omnichannel.generate._generate_canonical", ok)
     from services.queues.handlers import JobNotReady
 
     with pytest.raises(JobNotReady, match="conversation_order_wait"):
@@ -162,12 +162,12 @@ async def test_operator_takeover_suppresses_racing_ai(omni_db, durable_jobs, fak
             sends["ai"] += 1
         return {"http_status": 200, "submitted": True, "message_id": "mid"}
 
-    monkeypatch.setattr("services.omnichannel.deliver._send", send)
+    monkeypatch.setattr("services.integrations.omnichannel.deliver._send", send)
 
     async def gen(**_k):
         return "ai reply", None, None
 
-    monkeypatch.setattr("services.omnichannel.generate._generate_canonical", gen)
+    monkeypatch.setattr("services.integrations.omnichannel.generate._generate_canonical", gen)
     gen_result = await handle_omnichannel_generate(
         make_job(
             job_type="omni_generate",
@@ -232,7 +232,7 @@ async def test_permanent_400_does_not_retry_forever(omni_db, fake_limiter, monke
     async def bad(_snapshot):
         return {"http_status": 400, "submitted": False, "error": "bad_request"}
 
-    monkeypatch.setattr("services.omnichannel.deliver._send", bad)
+    monkeypatch.setattr("services.integrations.omnichannel.deliver._send", bad)
     with pytest.raises(Exception, match="definitive|PermanentJobError|client"):
         await handle_omnichannel_deliver(
             make_job(job_type="omni_deliver", tenant_id="tenant-a", payload={"outbox_id": outbox_id})
@@ -268,7 +268,7 @@ async def test_meta_429_613_retries_and_honors_retry_after(omni_db, fake_limiter
             "headers": {"Retry-After": "4", "X-App-Usage": '{"call_count":90}'},
         }
 
-    monkeypatch.setattr("services.omnichannel.deliver._send", throttled)
+    monkeypatch.setattr("services.integrations.omnichannel.deliver._send", throttled)
     with pytest.raises(RuntimeError, match="transient"):
         await handle_omnichannel_deliver(
             make_job(job_type="omni_deliver", tenant_id="tenant-a", payload={"outbox_id": outbox_id})
@@ -282,7 +282,7 @@ async def test_meta_429_613_retries_and_honors_retry_after(omni_db, fake_limiter
 
 def test_enqueue_failure_is_not_swallowed(omni_db, monkeypatch):
     monkeypatch.setattr(
-        "services.omnichannel.accept.enqueue_generate_job",
+        "services.integrations.omnichannel.accept.enqueue_generate_job",
         lambda **_k: (_ for _ in ()).throw(RuntimeError("redis_down")),
     )
     with pytest.raises(InboundAcceptError):
@@ -315,19 +315,21 @@ async def test_tiktok_exception_before_submit_is_not_marked_submitted(monkeypatc
 
         yield Dummy()
 
-    monkeypatch.setattr("services.omnichannel.channel_tiktok.whatsapp_session", fake_session)
-    monkeypatch.setattr("services.omnichannel.channel_tiktok.TikTokRepository", lambda _s: Repo())
-    monkeypatch.setattr("services.omnichannel.channel_tiktok.tiktok_dm_live_allowed", lambda _c: (True, ""))
+    monkeypatch.setattr("services.integrations.omnichannel.channel_tiktok.whatsapp_session", fake_session)
+    monkeypatch.setattr("services.integrations.omnichannel.channel_tiktok.TikTokRepository", lambda _s: Repo())
+    monkeypatch.setattr(
+        "services.integrations.omnichannel.channel_tiktok.tiktok_dm_live_allowed", lambda _c: (True, "")
+    )
 
     async def token(*_a, **_k):
         return "tok"
 
-    monkeypatch.setattr("services.omnichannel.channel_tiktok.ensure_fresh_token", token)
+    monkeypatch.setattr("services.integrations.omnichannel.channel_tiktok.ensure_fresh_token", token)
 
     async def boom(**_k):
         raise ConnectionResetError("reset")
 
-    monkeypatch.setattr("services.tiktok_business.messaging.send_business_message", boom)
+    monkeypatch.setattr("services.integrations.tiktok.messaging.send_business_message", boom)
     result = await deliver_tiktok(
         {
             "tenant_id": "tenant-a",

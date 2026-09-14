@@ -7,15 +7,15 @@ from datetime import UTC, datetime
 
 import pytest
 
-from services.customer_reply_v2.channel_metadata import parse_channel
+from services.brain.reply.channel_metadata import parse_channel
 from services.dashboard.activity import build_activity_summary
 from services.integration_capabilities import list_tenant_integration_status
 from services.integrations.channel_capability_state import action_id_for, supported_platforms
 from services.integrations.channel_capability_toggles import attach_channel_toggles
+from services.integrations.tiktok.config import REQUESTED_SCOPES, tiktok_redirect_uri, tiktok_webhook_callback_url
+from services.integrations.tiktok.scopes import messaging_send_ready
 from services.live_chat.channel import live_chat_channel_matches, resolve_live_chat_channel
 from services.social_user_id import compose_social_user_id
-from services.tiktok_business.config import REQUESTED_SCOPES, tiktok_redirect_uri, tiktok_webhook_callback_url
-from services.tiktok_business.scopes import messaging_send_ready
 from tests.tiktok_business.conftest import seed_connection
 
 
@@ -132,8 +132,8 @@ def test_attach_toggles_skips_coming_soon_tiktok_stub() -> None:
 def test_fail_closed_without_credentials(monkeypatch) -> None:
     monkeypatch.delenv("TIKTOK_CLIENT_KEY", raising=False)
     monkeypatch.delenv("TIKTOK_CLIENT_SECRET", raising=False)
-    from services.tiktok_business.config import get_tiktok_settings, require_tiktok_settings
-    from services.tiktok_business.errors import TikTokNotConfiguredError
+    from services.integrations.tiktok.config import get_tiktok_settings, require_tiktok_settings
+    from services.integrations.tiktok.errors import TikTokNotConfiguredError
 
     assert get_tiktok_settings().configured is False
     with pytest.raises(TikTokNotConfiguredError):
@@ -141,7 +141,7 @@ def test_fail_closed_without_credentials(monkeypatch) -> None:
 
 
 def test_health_does_not_require_tiktok() -> None:
-    from services.tiktok_business.health import tiktok_business_readiness
+    from services.integrations.tiktok.health import tiktok_business_readiness
 
     payload = tiktok_business_readiness()
     assert payload["ok"] is True
@@ -150,7 +150,7 @@ def test_health_does_not_require_tiktok() -> None:
 
 def test_connected_identity_in_status(tt_db) -> None:
     seed_connection(tt_db)
-    from services.tiktok_business.status import tiktok_integration_row
+    from services.integrations.tiktok.status import tiktok_integration_row
 
     row = tiktok_integration_row("linas")
     assert row["connected"] is True

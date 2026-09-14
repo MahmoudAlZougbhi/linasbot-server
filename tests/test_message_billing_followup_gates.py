@@ -7,7 +7,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from services.billing.membership.reservation_gc import _created_at
-from services.web_chat.followup_message_ledger import credit_reservation_required, followup_uses_message_ledger
+from services.integrations.web_chat.followup_message_ledger import (
+    credit_reservation_required,
+    followup_uses_message_ledger,
+)
 
 
 def test_flags_stay_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -26,9 +29,9 @@ def test_message_billing_skips_web_credit_reservation(monkeypatch: pytest.Monkey
 def test_web_adapter_and_delivery_honor_message_ledger() -> None:
     from inspect import getsource
 
+    from services.integrations.web_chat import followup_delivery
+    from services.integrations.whatsapp import ai_bridge
     from services.smart_followup.adapters import web as web_adapter
-    from services.web_chat import followup_delivery
-    from services.whatsapp_cloud import ai_bridge
 
     assert "credit_reservation_required" in getsource(web_adapter.WebFollowUpAdapter.send_followup)
     assert "followup_uses_message_ledger" in getsource(followup_delivery._preflight_reservation_or_resume)
@@ -71,7 +74,7 @@ def test_meta_comment_forwards_caption_when_present() -> None:
 
 
 def test_web_live_handle_skips_credit_ledger(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.web_chat.credit_fsm import WebChatCreditHandle
+    from services.integrations.web_chat.credit_fsm import WebChatCreditHandle
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     handle = WebChatCreditHandle(tenant_id="biz", reservation_id=None, request_id="web:live:1")
@@ -151,9 +154,9 @@ def test_omni_and_request_persist_stay_honest() -> None:
     from inspect import getsource
 
     from services.brain.actions.requests import persist_request
-    from services.omnichannel import deliver
-    from services.omnichannel.channel_web_chat import generate_web_chat_reply
-    from services.omnichannel.channel_whatsapp import generate_whatsapp_reply
+    from services.integrations.omnichannel import deliver
+    from services.integrations.omnichannel.channel_web_chat import generate_web_chat_reply
+    from services.integrations.omnichannel.channel_whatsapp import generate_whatsapp_reply
 
     persist_src = getsource(persist_request)
     assert "published_configuration_version" in persist_src
@@ -173,8 +176,8 @@ def test_live_and_preview_gates_are_wired() -> None:
 
     from modules import whatsapp_smart_followup_api
     from services.ai_reply_credit_gate import reserve_before_ai
-    from services.web_chat.credit_fsm import WebChatCreditHandle
-    from services.web_chat.processor_v2_reply import generate_web_chat_reply_text
+    from services.integrations.web_chat.credit_fsm import WebChatCreditHandle
+    from services.integrations.web_chat.processor_v2_reply import generate_web_chat_reply_text
 
     reserve_src = getsource(reserve_before_ai)
     assert "credit_ledger_service.reserve" in reserve_src

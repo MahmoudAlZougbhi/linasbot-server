@@ -45,7 +45,7 @@ async def generate_followup_text(
     elif normalized == "facebook_messenger":
         cr_channel = "facebook_dm"
 
-    from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
+    from services.brain.reply.orchestrator import run_customer_reply_v2_dm
     from services.smart_followup.billing_ids import followup_operation_ids
 
     mid, _extras = followup_operation_ids(

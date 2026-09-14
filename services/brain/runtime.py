@@ -15,8 +15,8 @@ from services.brain.conversation_store import hydrate_turn_state, remember_turn
 from services.brain.gates import GateDecision, evaluate_gates
 from services.brain.history_ids import bind_dm_ids, comment_conversation_id
 from services.brain.history_store import load_history_snapshot
+from services.brain.reply.models import CustomerReplyOutcome
 from services.brain.turn_pipeline import run_dm_after_gates
-from services.customer_reply_v2.models import CustomerReplyOutcome
 
 
 def _outcome(result: TurnResult, *, comment_surface: bool = False) -> CustomerReplyOutcome:

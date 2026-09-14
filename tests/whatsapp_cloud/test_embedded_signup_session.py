@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from services.whatsapp_cloud.config import WHATSAPP_COEXISTENCE_FEATURE
-from services.whatsapp_cloud.embedded_signup_bridge import render_embedded_signup_bridge_html
-from services.whatsapp_cloud.embedded_signup_session import (
+from services.integrations.whatsapp.config import WHATSAPP_COEXISTENCE_FEATURE
+from services.integrations.whatsapp.embedded_signup_bridge import render_embedded_signup_bridge_html
+from services.integrations.whatsapp.embedded_signup_session import (
     SignupAssetError,
     assert_coexistence_session,
     coexistence_launch_extras,

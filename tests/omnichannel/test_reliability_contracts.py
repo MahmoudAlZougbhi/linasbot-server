@@ -5,18 +5,18 @@ from __future__ import annotations
 import fakeredis
 import pytest
 
-from services.omnichannel.backoff import delay_for_provider
-from services.omnichannel.classify import classify_http_delivery, returned_rejection_is_definitive
-from services.omnichannel.comment_limit import comment_send_allowed, configure_comment_limiter
-from services.omnichannel.dlq import replay_delivery_only
-from services.omnichannel.gates import TIKTOK_DM_GATE_REASON, tiktok_dm_live_allowed
-from services.omnichannel.headers import parse_meta_usage, parse_retry_after_seconds
-from services.omnichannel.limiter import DistributedProviderLimiter
-from services.omnichannel.meta_errors import MetaProviderError
-from services.omnichannel.queues import logical_for_channel, outbound_logical, physical_queue_for
+from services.integrations.omnichannel.backoff import delay_for_provider
+from services.integrations.omnichannel.classify import classify_http_delivery, returned_rejection_is_definitive
+from services.integrations.omnichannel.comment_limit import comment_send_allowed, configure_comment_limiter
+from services.integrations.omnichannel.dlq import replay_delivery_only
+from services.integrations.omnichannel.gates import TIKTOK_DM_GATE_REASON, tiktok_dm_live_allowed
+from services.integrations.omnichannel.headers import parse_meta_usage, parse_retry_after_seconds
+from services.integrations.omnichannel.limiter import DistributedProviderLimiter
+from services.integrations.omnichannel.meta_errors import MetaProviderError
+from services.integrations.omnichannel.queues import logical_for_channel, outbound_logical, physical_queue_for
+from services.integrations.tiktok.comment_sync import enqueue_tiktok_comment_ai
 from services.rate_limit_service import RateLimitService
 from services.scale.provider_limiter import ProviderLimiter
-from services.tiktok_business.comment_sync import enqueue_tiktok_comment_ai
 
 
 def test_dms_and_comments_use_different_physical_queues():
@@ -126,7 +126,7 @@ def test_worker_concurrency_uses_configured_defaults(monkeypatch):
     monkeypatch.setenv("LINAS_QUEUE_CONCURRENCY_HIGH", "8")
     from importlib import reload
 
-    import services.omnichannel.worker_pool as pool
+    import services.integrations.omnichannel.worker_pool as pool
     import services.queues.config as config
 
     reload(config)
@@ -161,7 +161,7 @@ def test_operator_outbound_logical_queue():
 def test_tiktok_claim_does_not_mark_processed():
     import inspect
 
-    from services.tiktok_business.repository_content import TikTokContentRepository
+    from services.integrations.tiktok.repository_content import TikTokContentRepository
 
     src = inspect.getsource(TikTokContentRepository.claim_comment_for_ai)
     assert "ai_processed=True" not in src
@@ -171,7 +171,7 @@ def test_tiktok_claim_does_not_mark_processed():
 def test_operator_idempotency_uses_sha256_not_hash():
     import inspect
 
-    from services.omnichannel import operator_enqueue
+    from services.integrations.omnichannel import operator_enqueue
 
     src = inspect.getsource(operator_enqueue.enqueue_operator_reply)
     assert "hash(text)" not in src
@@ -179,7 +179,7 @@ def test_operator_idempotency_uses_sha256_not_hash():
 
 
 def test_meta_429_exception_is_definitive_failure_not_owner_action():
-    from services.omnichannel.meta_errors import finish_status_for_send_exception
+    from services.integrations.omnichannel.meta_errors import finish_status_for_send_exception
 
     err = MetaProviderError("throttled", http_status=429, error_code=613, headers={"Retry-After": "2"})
     status, reason = finish_status_for_send_exception(err)
@@ -200,7 +200,7 @@ def test_omnichannel_job_types_are_registered():
 def test_whatsapp_retry_skips_reconciliation_required():
     import inspect
 
-    from services.whatsapp_cloud import delivery_retry
+    from services.integrations.whatsapp import delivery_retry
 
     src = inspect.getsource(delivery_retry.retry_pending_outbound_intents)
     assert '"reconciliation_required"' not in src
@@ -210,7 +210,7 @@ def test_whatsapp_retry_skips_reconciliation_required():
 def test_whatsapp_webhook_marks_processed_after_enqueue():
     import inspect
 
-    from services.whatsapp_cloud import webhook_processor
+    from services.integrations.whatsapp import webhook_processor
 
     src = inspect.getsource(webhook_processor._process_one_event)
     assert src.rindex("enqueue_job") < src.rindex("_complete_claimed_webhook(claim_id)")

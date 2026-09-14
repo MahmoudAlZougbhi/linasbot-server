@@ -51,7 +51,7 @@ async def send_comment_rule_resources(
             ],
         },
     }
-    from services.customer_reply_v2.setup_resource_outbound import send_pending_setup_resources
+    from services.brain.reply.setup_resource_outbound import send_pending_setup_resources
 
     return await send_pending_setup_resources(
         user_data=user_data,

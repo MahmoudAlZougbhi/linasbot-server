@@ -7,7 +7,7 @@ from typing import Any, cast
 import config
 from services.ai_reply_turn_runtime import settle_after_outbound, settle_reserved_credits
 from services.brain.history_ids import conversation_id_from_user_data, message_id_for_brain
-from services.customer_reply_v2.inbound_media import inbound_payload_from_user_data as _inbound_from_user_data
+from services.brain.reply.inbound_media import inbound_payload_from_user_data as _inbound_from_user_data
 
 _PHASE_HALT = "_PHASE_HALT"
 

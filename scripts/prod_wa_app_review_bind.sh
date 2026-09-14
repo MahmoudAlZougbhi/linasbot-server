@@ -26,14 +26,14 @@ from typing import Any
 sys.path.insert(0, "/opt/linasbot")
 
 from db.session import whatsapp_session
-from services.whatsapp_cloud.app_review_bind import (
+from services.integrations.whatsapp.app_review_bind import (
     WEBHOOK_FIELDS,
     AppReviewBindError,
     bind_app_review_test_number,
     status_app_review_bind,
 )
-from services.whatsapp_cloud.config import WHATSAPP_REQUIRED_SCOPES, get_whatsapp_cloud_flags
-from services.whatsapp_cloud.repository import ACTIVE_LIFECYCLES, WhatsAppCloudRepository
+from services.integrations.whatsapp.config import WHATSAPP_REQUIRED_SCOPES, get_whatsapp_cloud_flags
+from services.integrations.whatsapp.repository import ACTIVE_LIFECYCLES, WhatsAppCloudRepository
 
 TENANT_ID = "linas"
 WABA_ID = "1409769574350248"

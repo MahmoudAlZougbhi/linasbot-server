@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from services.whatsapp_cloud.embedded_signup_session import SignupAssetError
-from services.whatsapp_cloud.embedded_signup_token import validate_embedded_signup_token
+from services.integrations.whatsapp.embedded_signup_session import SignupAssetError
+from services.integrations.whatsapp.embedded_signup_token import validate_embedded_signup_token
 
 
 def _ok(**overrides):

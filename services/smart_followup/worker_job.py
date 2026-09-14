@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from db.session import whatsapp_session
+from services.integrations.whatsapp.observability import emit_wa_event
 from services.smart_followup.channels import get_channel_adapter, normalize_followup_channel
 from services.smart_followup.constants import OPERATION_TYPE
 from services.smart_followup.eligibility import evaluate_job_eligibility_async
@@ -13,7 +14,6 @@ from services.smart_followup.generation import generate_followup_text
 from services.smart_followup.idempotency import canonical_sfu_credit_request_id, canonical_sfu_key
 from services.smart_followup.job_fence import JobClaimFenceError, assert_job_claim_fence, claim_generation_of
 from services.smart_followup.repository import SmartFollowUpRepository
-from services.whatsapp_cloud.observability import emit_wa_event
 
 
 def _utcnow() -> datetime:

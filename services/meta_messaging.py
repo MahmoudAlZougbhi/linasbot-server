@@ -402,7 +402,7 @@ class MetaMessagingAdapter:
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            from services.omnichannel.meta_errors import raise_from_meta_response
+            from services.integrations.omnichannel.meta_errors import raise_from_meta_response
 
             raise_from_meta_response(response)
             raise RuntimeError("meta_send_failed") from exc

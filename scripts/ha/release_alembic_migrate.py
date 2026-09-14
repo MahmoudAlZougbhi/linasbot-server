@@ -396,7 +396,7 @@ def main() -> None:
 
     skip_ha_tenant_runtime_config_file_migrate()
 
-    from services.web_chat.flags import get_web_chat_ha_readiness
+    from services.integrations.web_chat.flags import get_web_chat_ha_readiness
 
     ok, checks = get_web_chat_ha_readiness()
     if not ok:

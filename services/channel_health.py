@@ -86,7 +86,7 @@ def _whatsapp_channel() -> dict[str, Any]:
 
         from db.models.whatsapp_cloud import WhatsAppConnection
         from db.session import whatsapp_db_configured, whatsapp_session
-        from services.whatsapp_cloud.repository_helpers import ACTIVE_LIFECYCLES
+        from services.integrations.whatsapp.repository_helpers import ACTIVE_LIFECYCLES
 
         if not whatsapp_db_configured():
             return _result(status="WARNING", connected=False, reason="no_active_binding")
@@ -136,8 +136,8 @@ def _web_chat_channel() -> dict[str, Any]:
         from sqlalchemy import select
 
         from db.session import whatsapp_db_configured, whatsapp_session
-        from services.web_chat.config_models import config_from_raw
-        from services.web_chat.pg_models import WebChatWidgetRow
+        from services.integrations.web_chat.config_models import config_from_raw
+        from services.integrations.web_chat.pg_models import WebChatWidgetRow
 
         if not whatsapp_db_configured():
             return _result(status="WARNING", connected=False, reason="no_active_binding")

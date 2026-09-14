@@ -12,9 +12,9 @@ async def run_tiktok_comment_webhook_register_job() -> None:
     try:
         if not whatsapp_db_configured():
             return
-        from services.tiktok_business.config import get_tiktok_settings
-        from services.tiktok_business.errors import TikTokApiError
-        from services.tiktok_business.webhook_subscription import ensure_comment_webhook_registered
+        from services.integrations.tiktok.config import get_tiktok_settings
+        from services.integrations.tiktok.errors import TikTokApiError
+        from services.integrations.tiktok.webhook_subscription import ensure_comment_webhook_registered
 
         if not get_tiktok_settings().configured:
             return

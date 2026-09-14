@@ -15,6 +15,7 @@ os.environ["META_CREDENTIAL_ENCRYPTION_KEY"] = "x" * 32
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
 from services.requests.constants import (  # noqa: E402
     SOURCE_CHANNEL_FACEBOOK_MESSENGER,
     SOURCE_CHANNEL_INSTAGRAM_DM,
@@ -23,7 +24,6 @@ from services.requests.constants import (  # noqa: E402
 from services.smart_followup.channels import get_channel_adapter, normalize_followup_channel  # noqa: E402
 from services.smart_followup.hooks import schedule_after_ai_reply  # noqa: E402
 from services.smart_followup.settings_service import update_settings  # noqa: E402
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository  # noqa: E402
 
 
 @pytest.fixture()

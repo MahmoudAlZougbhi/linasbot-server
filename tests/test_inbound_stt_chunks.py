@@ -7,7 +7,7 @@ import wave
 
 import pytest
 
-from services.customer_reply_v2.inbound_stt_chunks import split_wav_chunks, transcribe_full_wav
+from services.brain.reply.inbound_stt_chunks import split_wav_chunks, transcribe_full_wav
 
 
 def _silent_wav(*, seconds: int, rate: int = 16000) -> bytes:
@@ -41,7 +41,7 @@ async def test_full_wav_joins_chunk_text(monkeypatch: pytest.MonkeyPatch) -> Non
         seen.append(filename)
         return {"ok": True, "text": f"part-{filename}", "model": "whisper-1", "error": ""}
 
-    monkeypatch.setattr("services.customer_reply_v2.inbound_stt_chunks.transcribe_inbound_audio", _fake)
+    monkeypatch.setattr("services.brain.reply.inbound_stt_chunks.transcribe_inbound_audio", _fake)
     data = _silent_wav(seconds=3)
     spoken = await transcribe_full_wav(data)
     assert spoken["ok"] is True
@@ -55,7 +55,7 @@ async def test_full_wav_fails_closed_when_no_speech(monkeypatch: pytest.MonkeyPa
         _ = data, filename
         return {"ok": False, "text": "", "model": "whisper-1", "error": "no_speech_detected"}
 
-    monkeypatch.setattr("services.customer_reply_v2.inbound_stt_chunks.transcribe_inbound_audio", _empty)
+    monkeypatch.setattr("services.brain.reply.inbound_stt_chunks.transcribe_inbound_audio", _empty)
     spoken = await transcribe_full_wav(_silent_wav(seconds=1))
     assert spoken["ok"] is False
     assert spoken["text"] == ""

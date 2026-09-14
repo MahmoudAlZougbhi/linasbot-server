@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from services.customer_reply_v2.inbound_extract import extract_inbound_file
-from services.customer_reply_v2.inbound_media import (
+from services.brain.reply.inbound_extract import extract_inbound_file
+from services.brain.reply.inbound_media import (
     inbound_media_view,
     ingest_inbound_attachments,
 )
-from services.customer_reply_v2.inbound_video import extract_bounded_video
+from services.brain.reply.inbound_video import extract_bounded_video
 from services.ssrf_guard import SSRFValidationError, validate_fetch_url
 
 JPEG = b"\xff\xd8\xff\xd9 inbound"
@@ -28,7 +28,7 @@ def inbound_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         return ""
 
     monkeypatch.setattr("services.brain.media.describe.describe_stills", _no_desc)
-    monkeypatch.setattr("services.customer_reply_v2.inbound_media_enrich.describe_stills", _no_desc)
+    monkeypatch.setattr("services.brain.reply.inbound_media_enrich.describe_stills", _no_desc)
     return tmp_path
 
 
@@ -106,7 +106,7 @@ async def test_video_frames_and_audio_not_unimplemented(inbound_env: Path, monke
         assert data.startswith(b"RIFF")
         return {"ok": True, "text": "laser hair removal", "model": "whisper-1", "error": ""}
 
-    monkeypatch.setattr("services.customer_reply_v2.inbound_media_enrich.transcribe_full_wav", stt_full)
+    monkeypatch.setattr("services.brain.reply.inbound_media_enrich.transcribe_full_wav", stt_full)
     result = await ingest_inbound_attachments(
         tenant_id="t-in",
         attachments=[{"type": "video", "payload": {"url": "https://cdninstagram.com/v.mp4"}}],
@@ -122,7 +122,7 @@ async def test_video_frames_and_audio_not_unimplemented(inbound_env: Path, monke
 
 
 def test_video_honest_when_ffmpeg_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.customer_reply_v2.inbound_video.ffmpeg_available", lambda: False)
+    monkeypatch.setattr("services.brain.reply.inbound_video.ffmpeg_available", lambda: False)
     out = extract_bounded_video(b"not-a-real-mp4-but-nonempty")
     assert out["status"] == "ffmpeg_unavailable"
     assert out["frame_count"] == 0
@@ -183,7 +183,7 @@ def test_social_processor_no_generic_image_placeholder() -> None:
 
 
 def test_whatsapp_public_availability_stays_off(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
+    from services.integrations.whatsapp.config import get_whatsapp_cloud_flags
 
     monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "false")
     flags = get_whatsapp_cloud_flags()

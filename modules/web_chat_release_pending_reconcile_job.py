@@ -13,7 +13,7 @@ async def run_web_chat_release_pending_reconcile_job() -> None:
 
         if not whatsapp_db_configured():
             return
-        from services.web_chat.operation_release_pending_sweeper import sweep_release_pending_operations
+        from services.integrations.web_chat.operation_release_pending_sweeper import sweep_release_pending_operations
 
         result = sweep_release_pending_operations(limit=50)
         if result.released or result.pending or result.failed:

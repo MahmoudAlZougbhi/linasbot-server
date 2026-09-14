@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.comments_inbox.thread_pairs import pair_comment_threads, pair_tiktok_threads
+from services.live_chat.comments_inbox.thread_pairs import pair_comment_threads, pair_tiktok_threads
 from services.meta_graph_routing import graph_api_version_for_binding
 from services.meta_instagram_login_config import INSTAGRAM_LOGIN_GRAPH_API_VERSION
 

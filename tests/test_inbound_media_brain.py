@@ -6,7 +6,7 @@ from inspect import getsource
 
 import pytest
 
-from services.customer_reply_v2.inbound_media import (
+from services.brain.reply.inbound_media import (
     inbound_payload_from_user_data,
     mark_inbound_attachment,
     store_inbound_image,
@@ -14,7 +14,7 @@ from services.customer_reply_v2.inbound_media import (
 
 
 def test_inbound_from_attachment_type() -> None:
-    from services.customer_reply_v2.inbound_media import inbound_from_attachment_type
+    from services.brain.reply.inbound_media import inbound_from_attachment_type
 
     assert inbound_from_attachment_type("image") == {"attachment_types": ["image"]}
     assert inbound_from_attachment_type("audio", transcript="hi") == {
@@ -27,7 +27,7 @@ def test_inbound_from_attachment_type() -> None:
         "attachment_types": ["file"],
         "extract": "hours.pdf",
     }
-    from services.customer_reply_v2.inbound_media import planner_text_from_inbound
+    from services.brain.reply.inbound_media import planner_text_from_inbound
 
     assert planner_text_from_inbound({"transcript": "hello"}, text="") == "hello"
     assert planner_text_from_inbound({"extract": "hours.pdf"}, text="caption") == "caption"
@@ -56,15 +56,15 @@ def test_phase2_image_flag_without_storing_bytes() -> None:
 @pytest.mark.asyncio
 async def test_cloud_image_hydrate_stores_resource_id(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path / "data"))
-    from services.whatsapp_cloud.inbound_media_cloud import hydrate_cloud_inbound_snapshot
+    from services.integrations.whatsapp.inbound_media_cloud import hydrate_cloud_inbound_snapshot
 
     async def fake_download(*, access_token: str, media_id: str, max_bytes: int = 8_000_000):
         _ = access_token, media_id, max_bytes
         return b"\xff\xd8\xff\xd9 inbound", "image/jpeg"
 
-    monkeypatch.setattr("services.whatsapp_cloud.inbound_media_cloud._load_token", lambda _s: "tok")
+    monkeypatch.setattr("services.integrations.whatsapp.inbound_media_cloud._load_token", lambda _s: "tok")
     monkeypatch.setattr(
-        "services.whatsapp_cloud.graph_client.download_media_bytes",
+        "services.integrations.whatsapp.graph_client.download_media_bytes",
         fake_download,
     )
     snapshot = await hydrate_cloud_inbound_snapshot(
@@ -75,7 +75,7 @@ async def test_cloud_image_hydrate_stores_resource_id(tmp_path, monkeypatch) -> 
 
 @pytest.mark.asyncio
 async def test_cloud_audio_hydrate_keeps_transcript(monkeypatch) -> None:
-    from services.whatsapp_cloud.inbound_media_cloud import hydrate_cloud_inbound_snapshot
+    from services.integrations.whatsapp.inbound_media_cloud import hydrate_cloud_inbound_snapshot
 
     async def fake_download(*, access_token: str, media_id: str, max_bytes: int = 8_000_000):
         _ = access_token, media_id, max_bytes
@@ -85,13 +85,13 @@ async def test_cloud_audio_hydrate_keeps_transcript(monkeypatch) -> None:
         _ = data, filename
         return {"ok": True, "text": "I want a facial", "model": "whisper-1"}
 
-    monkeypatch.setattr("services.whatsapp_cloud.inbound_media_cloud._load_token", lambda _s: "tok")
+    monkeypatch.setattr("services.integrations.whatsapp.inbound_media_cloud._load_token", lambda _s: "tok")
     monkeypatch.setattr(
-        "services.whatsapp_cloud.graph_client.download_media_bytes",
+        "services.integrations.whatsapp.graph_client.download_media_bytes",
         fake_download,
     )
     monkeypatch.setattr(
-        "services.customer_reply_v2.inbound_stt.transcribe_inbound_audio",
+        "services.brain.reply.inbound_stt.transcribe_inbound_audio",
         fake_stt,
     )
     snapshot = await hydrate_cloud_inbound_snapshot(
@@ -112,15 +112,15 @@ async def test_cloud_audio_hydrate_keeps_transcript(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_cloud_document_hydrate_extracts_text(monkeypatch) -> None:
-    from services.whatsapp_cloud.inbound_media_cloud import hydrate_cloud_inbound_snapshot
+    from services.integrations.whatsapp.inbound_media_cloud import hydrate_cloud_inbound_snapshot
 
     async def fake_download(*, access_token: str, media_id: str, max_bytes: int = 8_000_000):
         _ = access_token, media_id, max_bytes
         return b"Open 9am-5pm\nAfter care cream", "text/plain"
 
-    monkeypatch.setattr("services.whatsapp_cloud.inbound_media_cloud._load_token", lambda _s: "tok")
+    monkeypatch.setattr("services.integrations.whatsapp.inbound_media_cloud._load_token", lambda _s: "tok")
     monkeypatch.setattr(
-        "services.whatsapp_cloud.graph_client.download_media_bytes",
+        "services.integrations.whatsapp.graph_client.download_media_bytes",
         fake_download,
     )
     snapshot = await hydrate_cloud_inbound_snapshot(
@@ -137,7 +137,7 @@ async def test_cloud_document_hydrate_extracts_text(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_cloud_video_hydrate_stores_frame(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path / "data"))
-    from services.whatsapp_cloud.inbound_media_cloud import hydrate_cloud_inbound_snapshot
+    from services.integrations.whatsapp.inbound_media_cloud import hydrate_cloud_inbound_snapshot
 
     async def fake_download(*, access_token: str, media_id: str, max_bytes: int = 8_000_000):
         _ = access_token, media_id, max_bytes
@@ -151,13 +151,13 @@ async def test_cloud_video_hydrate_stores_frame(tmp_path, monkeypatch) -> None:
             "audio": b"",
         }
 
-    monkeypatch.setattr("services.whatsapp_cloud.inbound_media_cloud._load_token", lambda _s: "tok")
+    monkeypatch.setattr("services.integrations.whatsapp.inbound_media_cloud._load_token", lambda _s: "tok")
     monkeypatch.setattr(
-        "services.whatsapp_cloud.graph_client.download_media_bytes",
+        "services.integrations.whatsapp.graph_client.download_media_bytes",
         fake_download,
     )
     monkeypatch.setattr(
-        "services.customer_reply_v2.inbound_video.extract_bounded_video",
+        "services.brain.reply.inbound_video.extract_bounded_video",
         fake_video,
     )
     snapshot = await hydrate_cloud_inbound_snapshot(
@@ -206,7 +206,7 @@ def test_whatsapp_photo_and_voice_stamp_inbound_media() -> None:
     assert "store_inbound_image_from_url" in photo
     assert "store_inbound_image_base64" in photo
     assert "get_bot_photo_analysis_from_gpt" not in getsource(photo_handlers)
-    from services.whatsapp_cloud import ai_bridge
+    from services.integrations.whatsapp import ai_bridge
 
     wa = getsource(ai_bridge.maybe_generate_and_send_ai_reply)
     assert "inbound_from_attachment_type" in wa
@@ -216,11 +216,11 @@ def test_whatsapp_photo_and_voice_stamp_inbound_media() -> None:
     assert "extract=extract" in wa
     assert "reserve_leftover_reply" in wa
     assert "credit_ledger_service.capture" not in wa
-    from services.whatsapp_cloud import webhook_processor
+    from services.integrations.whatsapp import webhook_processor
 
     assert "hydrate_cloud_inbound_snapshot" in getsource(webhook_processor._process_one_event)
-    from services.omnichannel import generate as omni_generate
-    from services.tiktok_business import messaging as tiktok_messaging
+    from services.integrations.omnichannel import generate as omni_generate
+    from services.integrations.tiktok import messaging as tiktok_messaging
 
     omni = getsource(omni_generate)
     assert "planner_text_from_inbound" in omni
@@ -233,7 +233,7 @@ def test_whatsapp_photo_and_voice_stamp_inbound_media() -> None:
 
 @pytest.mark.asyncio
 async def test_tiktok_hydrate_type_and_url(monkeypatch) -> None:
-    from services.tiktok_business.inbound_dm import (
+    from services.integrations.tiktok.inbound_dm import (
         attachments_from_content,
         hydrate_tiktok_inbound_media,
         message_text_from_content,
@@ -247,13 +247,13 @@ async def test_tiktok_hydrate_type_and_url(monkeypatch) -> None:
     )
     assert type_only == {"attachment_types": ["image"]}
 
-    from services.customer_reply_v2.inbound_media import InboundMediaResult
+    from services.brain.reply.inbound_media import InboundMediaResult
 
     async def fake_ingest(**kwargs):
         return InboundMediaResult(attachment_types=["image"], image_media_id="prdim_tt")
 
     monkeypatch.setattr(
-        "services.customer_reply_v2.inbound_media.ingest_inbound_attachments",
+        "services.brain.reply.inbound_media.ingest_inbound_attachments",
         fake_ingest,
     )
     hydrated = await hydrate_tiktok_inbound_media(
@@ -266,13 +266,13 @@ async def test_tiktok_hydrate_type_and_url(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_store_inbound_image_from_url_uses_ssrf_fetch(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path / "data"))
-    from services.customer_reply_v2.inbound_media import store_inbound_image_from_url
+    from services.brain.reply.inbound_media import store_inbound_image_from_url
 
     async def fake_fetch(url: str, *, max_bytes: int, timeout_s: float | None = None):
         _ = url, max_bytes, timeout_s
         return {"ok": True, "bytes": b"\xff\xd8\xff\xd9 remote", "mime": "image/jpeg"}
 
-    monkeypatch.setattr("services.customer_reply_v2.inbound_media.fetch_inbound_url", fake_fetch)
+    monkeypatch.setattr("services.brain.reply.inbound_media.fetch_inbound_url", fake_fetch)
     user_data = {"tenant_id": "remote-shop"}
     media_id = await store_inbound_image_from_url(user_data, "https://cdn.example/photo.jpg")
     assert media_id.startswith("prdim_")

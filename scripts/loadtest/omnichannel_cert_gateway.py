@@ -16,8 +16,8 @@ from scripts.loadtest.omnichannel_cert_guards import (  # noqa: E402
     TEST_TENANT_PREFIX,
     assert_staging_cert_allowed,
 )
-from services.omnichannel.accept import InboundAcceptError, accept_and_enqueue  # noqa: E402
-from services.omnichannel.contract import NormalizedInbound  # noqa: E402
+from services.integrations.omnichannel.accept import InboundAcceptError, accept_and_enqueue  # noqa: E402
+from services.integrations.omnichannel.contract import NormalizedInbound  # noqa: E402
 
 
 class _Handler(BaseHTTPRequestHandler):

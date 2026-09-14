@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from services.web_chat.operation_fsm import OperationState
-from services.web_chat.persistence import PersistFailure, PersistOutcome, PersistResult
-from services.web_chat.processor import WebChatError, process_web_chat_message
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.operation_fsm import OperationState
+from services.integrations.web_chat.persistence import PersistFailure, PersistOutcome, PersistResult
+from services.integrations.web_chat.processor import WebChatError, process_web_chat_message
+from services.integrations.web_chat.store_pg import WebChatPgStore
 from tests.test_web_chat_acceptance_fsm import _widget_and_visitor
 from tests.web_chat_acceptance_billing import (
     assert_acceptance_ledger_equation,
@@ -49,15 +49,15 @@ async def test_unresolved_release_failure_blocks_second_reserve_until_confirmed(
 
     monkeypatch.setattr(credit_ledger_service, "release", fail_once_release)
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
     monkeypatch.setattr(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         AsyncMock(side_effect=RuntimeError("ai down")),
     )
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
             return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id="conv"),
         ),
@@ -144,7 +144,7 @@ async def test_release_ack_loss_after_commit_converges_before_ai(tmp_path, monke
     widget, visitor, _bundle = _widget_and_visitor(store)
     tenant_id = widget.tenant_id
     from services.credit_ledger_service import credit_ledger_service
-    from services.web_chat.operation_credit_reconcile import list_release_pending_operations
+    from services.integrations.web_chat.operation_credit_reconcile import list_release_pending_operations
     from tests.test_web_chat_operation_lease_fence import _expire_operation_lease, _operation_snapshot
 
     original_release = credit_ledger_service.release
@@ -179,14 +179,14 @@ async def test_release_ack_loss_after_commit_converges_before_ai(tmp_path, monke
 
     monkeypatch.setattr(credit_ledger_service, "release", commit_then_throw_release)
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
     monkeypatch.setattr(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         ai_fail_first_then_success_after_reconcile,
     )
-    monkeypatch.setattr("services.web_chat.processor.persist_web_chat_message", track_persist)
+    monkeypatch.setattr("services.integrations.web_chat.processor.persist_web_chat_message", track_persist)
 
     idem = "release-ack-loss-key"
     operation_key = f"{visitor.id}:{idem}"
@@ -246,11 +246,11 @@ async def test_release_ack_loss_after_commit_converges_before_ai(tmp_path, monke
 
 @pytest.mark.asyncio
 async def test_firestore_skip_is_not_duplicate(tmp_path, monkeypatch) -> None:
-    from services.web_chat.persistence import persist_web_chat_message
+    from services.integrations.web_chat.persistence import persist_web_chat_message
     from utils.conversation_save_result import FirestoreSaveOutcome, FirestoreSaveStatus
 
     monkeypatch.setattr(
-        "services.web_chat.persistence.save_conversation_message_to_firestore",
+        "services.integrations.web_chat.persistence.save_conversation_message_to_firestore",
         AsyncMock(return_value=FirestoreSaveOutcome(status=FirestoreSaveStatus.SKIPPED, conversation_id="c1")),
     )
     with pytest.raises(PersistFailure, match="unavailable"):

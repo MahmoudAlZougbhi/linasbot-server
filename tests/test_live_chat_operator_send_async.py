@@ -45,7 +45,7 @@ def test_durable_mode_sync_when_redis_not_required(monkeypatch: pytest.MonkeyPat
 
 def test_durable_mode_unavailable_when_required_but_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("services.queues.config.redis_required", lambda: True)
-    monkeypatch.setattr("services.omnichannel.enqueue.queue_is_durable", lambda: False)
+    monkeypatch.setattr("services.integrations.omnichannel.enqueue.queue_is_durable", lambda: False)
     assert live_chat_durable_mode() == "unavailable"
     result = queue_unavailable_result(channel="instagram")
     assert result["success"] is False
@@ -330,7 +330,7 @@ async def test_notify_skips_reconciliation_and_publishes_sent(monkeypatch: pytes
         "services.live_chat.operator_delivery_status.notify_live_chat_operator_job",
         fake_notify,
     )
-    from services.omnichannel.deliver import _notify_live_chat
+    from services.integrations.omnichannel.deliver import _notify_live_chat
 
     payload = {"live_chat_user_id": "instagram:1"}
     await _notify_live_chat(payload, "reconciliation_required")

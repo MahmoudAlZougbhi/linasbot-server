@@ -46,7 +46,7 @@ def test_operator_media_blocked_for_tiktok_and_web() -> None:
 def test_deliver_web_operator_text_enqueues_outbox() -> None:
     store = MagicMock()
     store.queue_assistant_message.return_value = True
-    with patch("services.web_chat.store.web_chat_store", store):
+    with patch("services.integrations.web_chat.store.web_chat_store", store):
         result = deliver_web_operator_text(
             user_id="web:visitor-1",
             conversation_id="web:linas:visitor-1",
@@ -65,7 +65,7 @@ def test_deliver_web_operator_text_enqueues_outbox() -> None:
 def test_deliver_web_duplicate_idempotency_is_success() -> None:
     store = MagicMock()
     store.queue_assistant_message.return_value = False
-    with patch("services.web_chat.store.web_chat_store", store):
+    with patch("services.integrations.web_chat.store.web_chat_store", store):
         result = deliver_web_operator_text(
             user_id="web:visitor-1",
             conversation_id="web:linas:visitor-1",
@@ -79,7 +79,7 @@ def test_deliver_web_duplicate_idempotency_is_success() -> None:
 def test_deliver_web_missing_session_is_honest_failure() -> None:
     store = MagicMock()
     store.queue_assistant_message.side_effect = KeyError("session not found")
-    with patch("services.web_chat.store.web_chat_store", store):
+    with patch("services.integrations.web_chat.store.web_chat_store", store):
         result = deliver_web_operator_text(
             user_id="web:missing",
             conversation_id="web:linas:missing",
@@ -124,7 +124,7 @@ async def test_web_operator_send_enqueues_and_never_calls_whatsapp() -> None:
 
     with ExitStack() as stack:
         for cm in _send_patches(
-            patch("services.web_chat.store.web_chat_store", store),
+            patch("services.integrations.web_chat.store.web_chat_store", store),
             patch("db.session.whatsapp_session", side_effect=boom),
         ):
             stack.enter_context(cm)
@@ -154,7 +154,7 @@ async def test_web_enqueue_failure_undoes_fresh_pause() -> None:
 
     with ExitStack() as stack:
         for cm in _send_patches(
-            patch("services.web_chat.store.web_chat_store", store),
+            patch("services.integrations.web_chat.store.web_chat_store", store),
             patch("services.requests.manual_mode.resume_manual_mode", resume),
         ):
             stack.enter_context(cm)

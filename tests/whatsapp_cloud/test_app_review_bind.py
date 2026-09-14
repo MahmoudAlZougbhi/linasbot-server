@@ -25,14 +25,14 @@ os.environ["PUBLIC_URL"] = "https://example.test"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.whatsapp_cloud.app_review_bind import (  # noqa: E402
+from services.integrations.whatsapp.app_review_bind import (  # noqa: E402
     APP_REVIEW_SOURCE,
     AppReviewBindError,
     bind_app_review_test_number,
 )
-from services.whatsapp_cloud.config import get_whatsapp_cloud_flags  # noqa: E402
-from services.whatsapp_cloud.graph_client import WhatsAppGraphError  # noqa: E402
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository  # noqa: E402
+from services.integrations.whatsapp.config import get_whatsapp_cloud_flags  # noqa: E402
+from services.integrations.whatsapp.graph_client import WhatsAppGraphError  # noqa: E402
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
 
 TEST_WABA = "900100200300"
 TEST_PHONE = "900100200301"
@@ -62,7 +62,7 @@ def wa_db(tmp_path, monkeypatch):
             session.rollback()
             raise
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.whatsapp_session", _sess)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind.whatsapp_session", _sess)
     yield session
     session.close()
     reset_engine_for_tests()
@@ -92,9 +92,9 @@ def _mock_meta_ok(monkeypatch, *, phone_id: str = TEST_PHONE, waba_id: str = TES
     async def _sub(**kwargs: Any) -> dict[str, Any]:
         return {"success": True}
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _debug)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.fetch_waba_phone_numbers", _phones)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.subscribe_waba_webhooks", _sub)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.debug_token", _debug)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.fetch_waba_phone_numbers", _phones)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind.subscribe_waba_webhooks", _sub)
 
 
 @pytest.mark.asyncio
@@ -224,7 +224,7 @@ async def test_rotation_invalid_token_leaves_connected_credential_untouched(wa_d
     async def _invalid(**kwargs: Any) -> dict[str, Any]:
         return {"is_valid": False}
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _invalid)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.debug_token", _invalid)
     with pytest.raises(AppReviewBindError) as exc:
         await bind_app_review_test_number(
             tenant_id="linas",
@@ -261,7 +261,7 @@ async def test_rotation_same_token_is_idempotent_without_subscribe_or_generation
     async def _unexpected_subscribe(**kwargs: Any) -> dict[str, Any]:
         raise AssertionError("same-token replay must not resubscribe")
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.subscribe_waba_webhooks", _unexpected_subscribe)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind.subscribe_waba_webhooks", _unexpected_subscribe)
     replay = await bind_app_review_test_number(
         tenant_id="linas",
         waba_id=TEST_WABA,
@@ -324,7 +324,7 @@ async def test_subscribe_failure_rolls_back_active_bind(wa_db, monkeypatch):
         raise WhatsAppGraphError("subscribe_failed", "Meta rejected subscription", http_status=400)
 
     monkeypatch.setattr(
-        "services.whatsapp_cloud.app_review_bind.subscribe_waba_webhooks",
+        "services.integrations.whatsapp.app_review_bind.subscribe_waba_webhooks",
         _fail_subscribe,
     )
     with pytest.raises(AppReviewBindError) as exc:
@@ -398,7 +398,7 @@ async def test_reject_expired_token_fail_closed(wa_db, monkeypatch):
     async def _bad(**kwargs: Any) -> dict[str, Any]:
         return {"is_valid": False}
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _bad)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.debug_token", _bad)
     with pytest.raises(AppReviewBindError) as exc:
         await bind_app_review_test_number(
             tenant_id="linas",
@@ -419,7 +419,7 @@ async def test_reject_token_issued_for_different_meta_app(wa_db, monkeypatch):
             "scopes": ["whatsapp_business_management", "whatsapp_business_messaging"],
         }
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _wrong_app)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.debug_token", _wrong_app)
     with pytest.raises(AppReviewBindError) as exc:
         await bind_app_review_test_number(
             tenant_id="linas",

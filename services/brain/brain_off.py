@@ -7,7 +7,7 @@ tag restores a real answering engine.
 from __future__ import annotations
 
 from services.brain.flags import emergency_legacy_reply_enabled
-from services.customer_reply_v2.models import ENGINE_REMOVED, CustomerReplyOutcome
+from services.brain.reply.models import ENGINE_REMOVED, CustomerReplyOutcome
 
 
 def engine_removed_outcome() -> CustomerReplyOutcome:

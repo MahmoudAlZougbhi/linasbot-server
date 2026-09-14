@@ -8,13 +8,13 @@ from typing import Any
 from fastapi import HTTPException, Request
 
 from modules.api_security import _client_ip
+from services.integrations.web_chat.appearance import contrast_warnings
+from services.integrations.web_chat.config_models import WebChatWidgetConfig
+from services.integrations.web_chat.embed import build_embed_snippet, public_api_base
+from services.integrations.web_chat.flags import web_chat_containment_active
+from services.integrations.web_chat.processor import evaluate_web_ai_eligibility
+from services.integrations.web_chat.store import web_chat_store
 from services.rate_limit_service import rate_limit_service
-from services.web_chat.appearance import contrast_warnings
-from services.web_chat.config_models import WebChatWidgetConfig
-from services.web_chat.embed import build_embed_snippet, public_api_base
-from services.web_chat.flags import web_chat_containment_active
-from services.web_chat.processor import evaluate_web_ai_eligibility
-from services.web_chat.store import web_chat_store
 
 
 def reject_if_web_chat_contained() -> None:

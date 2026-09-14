@@ -224,9 +224,12 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
     }
     try:
         from db.session import whatsapp_db_configured, whatsapp_session
-        from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
-        from services.whatsapp_cloud.entitlement import assert_whatsapp_connection_allowed, connection_status_payload
-        from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+        from services.integrations.whatsapp.config import get_whatsapp_cloud_flags
+        from services.integrations.whatsapp.entitlement import (
+            assert_whatsapp_connection_allowed,
+            connection_status_payload,
+        )
+        from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
         flags = get_whatsapp_cloud_flags()
         ui_open = bool(flags.connection_ui_enabled or flags.public_availability)
@@ -266,7 +269,7 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
     rows.insert(2, wa_row)
 
     try:
-        from services.web_chat.store import web_chat_store
+        from services.integrations.web_chat.store import web_chat_store
 
         web_widget = web_chat_store.get_or_create_widget(tenant_id)
         web_connected = web_widget.connected
@@ -316,6 +319,6 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
 
 
 def tiktok_row_for_tenant(tenant_id: str) -> dict[str, Any]:
-    from services.tiktok_business.status import tiktok_integration_row
+    from services.integrations.tiktok.status import tiktok_integration_row
 
     return tiktok_integration_row(tenant_id)

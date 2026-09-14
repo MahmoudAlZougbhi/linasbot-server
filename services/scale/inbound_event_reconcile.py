@@ -43,7 +43,7 @@ def _enqueue_or_mark(rec: InboundEventRecord, claim_handle: Any) -> dict[str, An
             and redis_required()
         )
         if queue_available:
-            from services.omnichannel.queues import logical_for_channel, physical_queue_for
+            from services.integrations.omnichannel.queues import logical_for_channel, physical_queue_for
 
             surface = "comment" if rec.kind == "meta_comment" else "dm"
             logical = logical_for_channel(channel="meta", surface=surface)

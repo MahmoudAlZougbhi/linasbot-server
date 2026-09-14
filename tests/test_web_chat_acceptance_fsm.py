@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from services.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
-from services.web_chat.followup_delivery import deliver_web_followup_message
-from services.web_chat.processor import WebChatError, compose_web_user_id, process_web_chat_message
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
+from services.integrations.web_chat.followup_delivery import deliver_web_followup_message
+from services.integrations.web_chat.processor import WebChatError, compose_web_user_id, process_web_chat_message
+from services.integrations.web_chat.store_pg import WebChatPgStore
 from tests.test_web_followup_web_delivery import _reserve_followup_credit
 from tests.web_chat_acceptance_billing import (
     assert_acceptance_ledger_equation,
@@ -24,7 +24,7 @@ from tests.web_chat_acceptance_support import (
 
 
 def _widget_and_visitor(store: WebChatPgStore):
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     widget_key, _tid = seed_acceptance_widget(store)
     widget = store.get_widget_by_key(widget_key)
@@ -48,11 +48,11 @@ async def test_fsm_reserve_ai_failure_releases_credit(tmp_path, monkeypatch, acc
     widget, visitor, _bundle = _widget_and_visitor(store)
 
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
     monkeypatch.setattr(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         AsyncMock(side_effect=RuntimeError("ai down")),
     )
 
@@ -97,19 +97,23 @@ async def test_released_operation_same_client_key_retry_converges_without_integr
         return SimpleNamespace(reply="Recovered reply")
 
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
-            return_value=__import__("services.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
-                outcome=__import__("services.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+            return_value=__import__(
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult"]
+            ).PersistResult(
+                outcome=__import__(
+                    "services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]
+                ).PersistOutcome.CREATED,
                 conversation_id="conv",
             )
         ),
     )
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm", ai_fail_then_succeed)
+    monkeypatch.setattr("services.brain.reply.orchestrator.run_customer_reply_v2_dm", ai_fail_then_succeed)
 
     with pytest.raises(WebChatError) as exc:
         await process_web_chat_message(
@@ -160,10 +164,14 @@ async def test_fsm_capture_failure_enters_billing_pending(tmp_path, monkeypatch,
     from services.credit_ledger_service import credit_ledger_service
 
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
-            return_value=__import__("services.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
-                outcome=__import__("services.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+            return_value=__import__(
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult"]
+            ).PersistResult(
+                outcome=__import__(
+                    "services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]
+                ).PersistOutcome.CREATED,
                 conversation_id="conv",
             )
         ),
@@ -194,14 +202,14 @@ async def test_fsm_persist_failure_releases_credit(tmp_path, monkeypatch, accept
     widget, visitor, _bundle = _widget_and_visitor(store)
 
     patch_ai_reply(monkeypatch, reply="AI")
-    from services.web_chat.persistence import PersistFailure
+    from services.integrations.web_chat.persistence import PersistFailure
 
     monkeypatch.setattr(
-        "services.web_chat.persistence.persist_web_chat_message",
+        "services.integrations.web_chat.persistence.persist_web_chat_message",
         AsyncMock(side_effect=PersistFailure("firestore_error", "down")),
     )
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(side_effect=PersistFailure("firestore_error", "down")),
     )
 
@@ -233,7 +241,7 @@ async def test_fsm_followup_queue_failure_then_recovery(tmp_path, monkeypatch, a
     widget_key, tenant_id = seed_acceptance_widget(store)
     widget = store.get_widget_by_key(widget_key)
     assert widget is not None
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     visitor_id = "visitor-fsm-queue"
@@ -245,18 +253,20 @@ async def test_fsm_followup_queue_failure_then_recovery(tmp_path, monkeypatch, a
     )
 
     monkeypatch.setattr(
-        "services.web_chat.persistence.persist_web_chat_message",
+        "services.integrations.web_chat.persistence.persist_web_chat_message",
         AsyncMock(
-            return_value=__import__("services.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
+            return_value=__import__(
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult"]
+            ).PersistResult(
                 outcome="created",
                 conversation_id=f"web:{tenant_id}:{visitor_id}",
             )
         ),
     )
-    from services.web_chat.persistence import PersistOutcome, PersistResult
+    from services.integrations.web_chat.persistence import PersistOutcome, PersistResult
 
     monkeypatch.setattr(
-        "services.web_chat.followup_delivery.persist_web_chat_message",
+        "services.integrations.web_chat.followup_delivery.persist_web_chat_message",
         AsyncMock(
             return_value=PersistResult(
                 outcome=PersistOutcome.CREATED,

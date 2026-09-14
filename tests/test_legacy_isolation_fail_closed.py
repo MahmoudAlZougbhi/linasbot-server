@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.whatsapp_cloud import legacy_isolation as li
+from services.integrations.whatsapp import legacy_isolation as li
 
 
 def test_cloud_bound_display_digits_raises_on_db_error(monkeypatch: pytest.MonkeyPatch) -> None:

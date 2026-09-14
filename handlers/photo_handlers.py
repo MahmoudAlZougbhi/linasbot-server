@@ -23,14 +23,14 @@ async def handle_photo_message(
     from handlers.text_handlers_respond import _process_and_respond
     from services.ai_reply_delivery import wrap_tracked_send
     from services.ai_reply_turn_runtime import run_reserved_customer_turn
-    from services.customer_reply_v2.inbound_media import mark_inbound_attachment, store_inbound_image_base64
+    from services.brain.reply.inbound_media import mark_inbound_attachment, store_inbound_image_base64
 
     if not user_data.get("_source_message_id") and image_url:
         user_data["_source_message_id"] = str(image_url)
     if str(image_url or "").startswith("data:"):
         store_inbound_image_base64(user_data, b64=image_url)
     elif image_url:
-        from services.customer_reply_v2.inbound_media import store_inbound_image_from_url
+        from services.brain.reply.inbound_media import store_inbound_image_from_url
 
         await store_inbound_image_from_url(user_data, image_url)
     else:

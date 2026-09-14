@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import fakeredis
 
-from services.omnichannel.dlq import replay_delivery_only
+from services.integrations.omnichannel.dlq import replay_delivery_only
 from services.scale.dlq_record import classify_error, record_dead, set_dlq_redis_for_tests
 
 

@@ -10,7 +10,7 @@ import time
 import uuid
 from typing import Any
 
-from services.omnichannel.worker_pool import run_bounded_pool
+from services.integrations.omnichannel.worker_pool import run_bounded_pool
 from services.queues.config import DEFAULT_TENANT_INFLIGHT, lease_heartbeat_seconds, redis_url
 from services.queues.handlers import JobNotReady, PermanentJobError, get_handler
 from services.queues.redis_backend import RedisQueueBackend
@@ -94,7 +94,7 @@ class WorkerRuntime:
 
     def _provider_gate(self, job: Any) -> float | None:
         try:
-            from services.omnichannel.limiter import DistributedProviderLimiter
+            from services.integrations.omnichannel.limiter import DistributedProviderLimiter
 
             limiter = DistributedProviderLimiter()
             priority = str((job.payload or {}).get("_priority") or "customer_conversation")
@@ -111,7 +111,7 @@ class WorkerRuntime:
 
     def _release_provider(self, job: Any) -> None:
         try:
-            from services.omnichannel.limiter import DistributedProviderLimiter
+            from services.integrations.omnichannel.limiter import DistributedProviderLimiter
 
             DistributedProviderLimiter().exit(provider=self._provider_name(job), tenant_id=job.tenant_id)
         except Exception:

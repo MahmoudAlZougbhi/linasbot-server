@@ -26,14 +26,14 @@ os.environ["PUBLIC_URL"] = "https://example.test"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.whatsapp_cloud.app_review_bind import (  # noqa: E402
+from services.integrations.whatsapp.app_review_bind import (  # noqa: E402
     AppReviewBindError,
     bind_app_review_test_number,
     status_app_review_bind,
     unbind_app_review_test_number,
 )
-from services.whatsapp_cloud.config import get_whatsapp_cloud_flags  # noqa: E402
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository  # noqa: E402
+from services.integrations.whatsapp.config import get_whatsapp_cloud_flags  # noqa: E402
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
 
 TEST_WABA = "900100200300"
 TEST_PHONE = "900100200301"
@@ -63,7 +63,7 @@ def wa_db(tmp_path, monkeypatch):
             session.rollback()
             raise
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.whatsapp_session", _sess)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind.whatsapp_session", _sess)
     yield session
     session.close()
     reset_engine_for_tests()
@@ -93,9 +93,9 @@ def _mock_meta_ok(monkeypatch, *, phone_id: str = TEST_PHONE, waba_id: str = TES
     async def _sub(**kwargs: Any) -> dict[str, Any]:
         return {"success": True}
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _debug)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.fetch_waba_phone_numbers", _phones)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.subscribe_waba_webhooks", _sub)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.debug_token", _debug)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.fetch_waba_phone_numbers", _phones)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind.subscribe_waba_webhooks", _sub)
 
 
 @pytest.mark.asyncio
@@ -140,8 +140,8 @@ async def test_reject_phone_not_in_waba(wa_db, monkeypatch):
     async def _phones(**kwargs: Any) -> list[dict[str, Any]]:
         return [{"id": "999", "display_phone_number": "+1 555 000 0000"}]
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _debug)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.fetch_waba_phone_numbers", _phones)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.debug_token", _debug)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.fetch_waba_phone_numbers", _phones)
     with pytest.raises(AppReviewBindError) as exc:
         await bind_app_review_test_number(
             tenant_id="linas",
@@ -202,7 +202,7 @@ async def test_inbound_resolves_linas_uses_ai_bridge_not_canned(wa_db, monkeypat
 
     import json
 
-    from services.whatsapp_cloud import webhook_processor as wp
+    from services.integrations.whatsapp import webhook_processor as wp
 
     ai_calls: list[dict[str, Any]] = []
 
@@ -218,7 +218,7 @@ async def test_inbound_resolves_linas_uses_ai_bridge_not_canned(wa_db, monkeypat
         wa_db.commit()
 
     monkeypatch.setattr(wp, "whatsapp_session", _sess)
-    monkeypatch.setattr("services.whatsapp_cloud.ai_bridge.whatsapp_session", _sess)
+    monkeypatch.setattr("services.integrations.whatsapp.ai_bridge.whatsapp_session", _sess)
 
     inbound = {
         "object": "whatsapp_business_account",
@@ -256,7 +256,7 @@ async def test_inbound_resolves_linas_uses_ai_bridge_not_canned(wa_db, monkeypat
     # No canned branch in ai_bridge — production path uses Customer Reply V2 + send_text_message.
     import inspect
 
-    import services.whatsapp_cloud.ai_bridge as ai_bridge
+    import services.integrations.whatsapp.ai_bridge as ai_bridge
 
     src = inspect.getsource(ai_bridge.maybe_generate_and_send_ai_reply)
     assert "run_customer_reply_v2_dm" in src
@@ -348,9 +348,9 @@ async def test_unbind_idempotent_when_already_revoked(wa_db, monkeypatch):
 @pytest.mark.asyncio
 async def test_ai_bridge_uses_send_text_message(monkeypatch):
     """Outbound path remains the production Graph sender (no test-only branch)."""
-    import services.whatsapp_cloud.ai_bridge as ai_bridge
+    import services.integrations.whatsapp.ai_bridge as ai_bridge
 
     assert hasattr(ai_bridge, "send_text_message")
     # Ensure import is the graph client function, not a stub.
-    assert ai_bridge.send_text_message.__module__ == "services.whatsapp_cloud.graph_client"
+    assert ai_bridge.send_text_message.__module__ == "services.integrations.whatsapp.graph_client"
     assert AsyncMock  # keep import used for typing clarity in suite

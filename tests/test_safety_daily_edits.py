@@ -58,8 +58,8 @@ def test_safety_edits_work_when_daily_limit_is_zero() -> None:
 def test_web_chat_keeps_single_reservation_lifecycle() -> None:
     from inspect import getsource
 
-    from services.omnichannel import generate as omni_generate
-    from services.web_chat import processor_completion
+    from services.integrations.omnichannel import generate as omni_generate
+    from services.integrations.web_chat import processor_completion
 
     assert "reserve_leftover_reply" not in getsource(processor_completion)
     assert "reserve_leftover_reply" in getsource(omni_generate)

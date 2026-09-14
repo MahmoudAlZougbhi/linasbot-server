@@ -48,7 +48,7 @@ KEEP_PATHS = (
     "services/search_metadata/title_fields.py",
     "services/brain/history_ids.py",
     "services/owner_copilot/creative_policy.py",
-    "services/whatsapp_adapters/whatsapp_factory.py",
+    "services/integrations/whatsapp/adapters/whatsapp_factory.py",
     "dashboard/src/pages/owner/OwnerOverview.jsx",
     "dashboard/src/pages/public/Landing.jsx",
     "mobile/linas-ai/src/features/control/OwnerPortalScreen.tsx",
@@ -184,7 +184,7 @@ def test_wave4_billing_sot_and_wave5_web_keep() -> None:
 def test_wave6_owner_stays_monty_stays_refused() -> None:
     nav = (ROOT / "mobile/linas-ai/src/app/navigation.ts").read_text(encoding="utf-8")
     areas = (ROOT / "mobile/linas-ai/src/features/control/controlAreas.ts").read_text(encoding="utf-8")
-    factory = (ROOT / "services/whatsapp_adapters/whatsapp_factory.py").read_text(encoding="utf-8")
+    factory = (ROOT / "services/integrations/whatsapp/adapters/whatsapp_factory.py").read_text(encoding="utf-8")
     titles = (ROOT / "services/search_metadata/title_fields.py").read_text(encoding="utf-8")
     hub = (ROOT / "mobile/linas-ai/src/features/cm/cmSections.ts").read_text(encoding="utf-8")
     assert "name: 'resource'" not in nav
@@ -271,7 +271,7 @@ def test_wave_c_customer_runtime_has_no_luna_engine_names() -> None:
         ROOT / "services/ai_setup",
         ROOT / "services/products",
         ROOT / "services/search_metadata",
-        ROOT / "services/customer_reply_v2",
+        ROOT / "services/brain/reply",
         ROOT / "services/model_policy.py",
     )
     offenders: list[str] = []

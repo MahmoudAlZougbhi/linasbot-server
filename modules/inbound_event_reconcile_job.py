@@ -22,7 +22,7 @@ def _run_inbound_event_reconcile_job_sync() -> None:
                 f"actions={len(result.get('actions') or [])} "
                 f"unexplained_missing={missing}"
             )
-        from services.omnichannel.reconcile import reconcile_omnichannel
+        from services.integrations.omnichannel.reconcile import reconcile_omnichannel
 
         omni = reconcile_omnichannel(older_than_seconds=45.0)
         if int(omni.get("examined") or 0):

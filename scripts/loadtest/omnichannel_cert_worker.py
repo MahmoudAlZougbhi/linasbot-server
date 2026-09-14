@@ -23,7 +23,7 @@ async def _stub_generate(
     conversation_key: str = "",
 ) -> tuple[str, str | None, str | None]:
     if channel == "tiktok" and surface == "dm":
-        from services.omnichannel.gates import TIKTOK_DM_GATE_REASON, tiktok_dm_live_allowed
+        from services.integrations.omnichannel.gates import TIKTOK_DM_GATE_REASON, tiktok_dm_live_allowed
 
         allowed, reason = tiktok_dm_live_allowed(None)
         if not allowed:
@@ -55,7 +55,7 @@ def main() -> int:
         events_per_minute=1,
         duration_seconds=1,
     )
-    from services.omnichannel import deliver, generate
+    from services.integrations.omnichannel import deliver, generate
 
     generate._generate_canonical = _stub_generate  # type: ignore[method-assign]
     deliver._send = _stub_send  # type: ignore[method-assign]

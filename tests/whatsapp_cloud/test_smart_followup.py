@@ -26,18 +26,18 @@ os.environ["PUBLIC_URL"] = "https://example.test"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository  # noqa: E402
-from services.whatsapp_cloud.smart_followup.eligibility import (  # noqa: E402
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
+from services.integrations.whatsapp.smart_followup.eligibility import (  # noqa: E402
     evaluate_job_eligibility,
     window_allows_send,
 )
-from services.whatsapp_cloud.smart_followup.hooks import (  # noqa: E402
+from services.integrations.whatsapp.smart_followup.hooks import (  # noqa: E402
     cancel_conversation_followups,
     schedule_after_ai_reply,
 )
-from services.whatsapp_cloud.smart_followup.opt_out import looks_like_opt_out  # noqa: E402
-from services.whatsapp_cloud.smart_followup.repository import SmartFollowUpRepository  # noqa: E402
-from services.whatsapp_cloud.smart_followup.settings_service import (  # noqa: E402
+from services.integrations.whatsapp.smart_followup.opt_out import looks_like_opt_out  # noqa: E402
+from services.integrations.whatsapp.smart_followup.repository import SmartFollowUpRepository  # noqa: E402
+from services.integrations.whatsapp.smart_followup.settings_service import (  # noqa: E402
     SmartFollowUpSettingsError,
     get_or_create_settings,
     update_settings,
@@ -366,7 +366,15 @@ def test_tenant_isolation_settings(wa_db):
 
 
 def test_no_monty_fallback_in_smart_followup_package():
-    root = os.path.join(os.path.dirname(__file__), "..", "..", "services", "whatsapp_cloud", "smart_followup")
+    root = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "services",
+        "integrations",
+        "whatsapp",
+        "smart_followup",
+    )
     for name in os.listdir(root):
         if not name.endswith(".py"):
             continue
@@ -408,11 +416,11 @@ def test_eligibility_epoch_and_pause(wa_db):
 
     with (
         patch(
-            "services.whatsapp_cloud.smart_followup.eligibility.evaluate_ai_eligibility",
+            "services.integrations.whatsapp.smart_followup.eligibility.evaluate_ai_eligibility",
             return_value=(True, None),
         ),
         patch(
-            "services.whatsapp_cloud.smart_followup.eligibility._tenant_suspend_reason",
+            "services.integrations.whatsapp.smart_followup.eligibility._tenant_suspend_reason",
             return_value=None,
         ),
     ):

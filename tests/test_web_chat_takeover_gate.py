@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.web_chat.takeover_gate import (
+from services.integrations.web_chat.takeover_gate import (
     WebChatTakeoverState,
     maybe_silence_web_chat_for_takeover,
     read_web_chat_takeover_state,
@@ -37,8 +37,8 @@ async def test_assigned_takeover_skips_ai_without_waiting_notice() -> None:
         return True
 
     with (
-        patch("services.web_chat.takeover_gate.read_web_chat_takeover_state", fake_read),
-        patch("services.web_chat.store.web_chat_store.queue_assistant_message", fake_queue),
+        patch("services.integrations.web_chat.takeover_gate.read_web_chat_takeover_state", fake_read),
+        patch("services.integrations.web_chat.store.web_chat_store.queue_assistant_message", fake_queue),
     ):
         silenced = await maybe_silence_web_chat_for_takeover(
             tenant_id="linas",
@@ -64,10 +64,10 @@ async def test_waiting_takeover_queues_notice_and_skips_ai() -> None:
         return True
 
     with (
-        patch("services.web_chat.takeover_gate.read_web_chat_takeover_state", fake_read),
-        patch("services.web_chat.store.web_chat_store.queue_assistant_message", fake_queue),
-        patch("services.web_chat.takeover_gate._persist_web_projection", new_callable=AsyncMock),
-        patch("services.web_chat.takeover_gate._waiting_notice", return_value="please wait"),
+        patch("services.integrations.web_chat.takeover_gate.read_web_chat_takeover_state", fake_read),
+        patch("services.integrations.web_chat.store.web_chat_store.queue_assistant_message", fake_queue),
+        patch("services.integrations.web_chat.takeover_gate._persist_web_projection", new_callable=AsyncMock),
+        patch("services.integrations.web_chat.takeover_gate._waiting_notice", return_value="please wait"),
     ):
         silenced = await maybe_silence_web_chat_for_takeover(
             tenant_id="linas",
@@ -88,7 +88,7 @@ async def test_inactive_takeover_allows_ai() -> None:
     async def fake_read(**_k: object) -> WebChatTakeoverState:
         return WebChatTakeoverState(active=False, operator_id=None)
 
-    with patch("services.web_chat.takeover_gate.read_web_chat_takeover_state", fake_read):
+    with patch("services.integrations.web_chat.takeover_gate.read_web_chat_takeover_state", fake_read):
         silenced = await maybe_silence_web_chat_for_takeover(
             tenant_id="linas",
             user_id="web:v1",
@@ -102,12 +102,15 @@ async def test_inactive_takeover_allows_ai() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_web_reply_skips_customer_ai_when_silenced() -> None:
-    from services.web_chat.processor_v2_reply import generate_web_chat_reply_text
+    from services.integrations.web_chat.processor_v2_reply import generate_web_chat_reply_text
 
     run_ai = AsyncMock()
     with (
-        patch("services.web_chat.takeover_gate.maybe_silence_web_chat_for_takeover", AsyncMock(return_value=True)),
-        patch("services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm", run_ai),
+        patch(
+            "services.integrations.web_chat.takeover_gate.maybe_silence_web_chat_for_takeover",
+            AsyncMock(return_value=True),
+        ),
+        patch("services.brain.reply.orchestrator.run_customer_reply_v2_dm", run_ai),
     ):
         reply = await generate_web_chat_reply_text(
             tid="linas",

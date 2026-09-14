@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from handlers.text_handlers_respond import _handle_published_cm_runtime
-from services.customer_reply_v2.models import CustomerReplyOutcome
+from services.brain.reply.models import CustomerReplyOutcome
 from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
 
@@ -107,7 +107,7 @@ async def test_v2_generated_reply_never_calls_classic_generate() -> None:
 
     with (
         patch(
-            "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+            "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
             new=AsyncMock(return_value=outcome),
         ),
         patch("services.ai_setup.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen,
@@ -137,7 +137,7 @@ async def test_published_runtime_passes_inbound_message_id() -> None:
         captured.update(kwargs)
         return CustomerReplyOutcome(stop=False, reply="ok", reason="v2_generated")
 
-    with patch("services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm", new=capture_dm):
+    with patch("services.brain.reply.orchestrator.run_customer_reply_v2_dm", new=capture_dm):
         await _handle_published_cm_runtime(
             tenant_id=tenant_id,
             message="book me",
@@ -194,7 +194,7 @@ async def test_v2_exception_fails_closed_without_classic() -> None:
 
     with (
         patch(
-            "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+            "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ),
         patch("services.ai_setup.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen,

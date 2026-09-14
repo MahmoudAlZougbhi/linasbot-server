@@ -66,7 +66,7 @@ async def extract_image_text(data: bytes, *, filename: str = "") -> dict[str, An
         return {"ok": False, "status": "FAILED", "reason": "empty_image", "text": ""}
     # Prefer existing inbound extract helpers when available; otherwise mark FAILED visibly.
     try:
-        from services.customer_reply_v2.inbound_extract import extract_inbound_image  # type: ignore
+        from services.brain.reply.inbound_extract import extract_inbound_image  # type: ignore
 
         out = await extract_inbound_image(data, filename=filename)
         text = str((out or {}).get("text") or (out or {}).get("description") or "").strip()
@@ -87,7 +87,7 @@ async def extract_audio_transcript(data: bytes, *, filename: str = "") -> dict[s
     if not data:
         return {"ok": False, "status": "FAILED", "reason": "empty_audio", "text": ""}
     try:
-        from services.customer_reply_v2.inbound_extract import extract_inbound_audio  # type: ignore
+        from services.brain.reply.inbound_extract import extract_inbound_audio  # type: ignore
 
         out = await extract_inbound_audio(data, filename=filename)
         text = str((out or {}).get("transcript") or (out or {}).get("text") or "").strip()

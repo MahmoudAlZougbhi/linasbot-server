@@ -66,7 +66,7 @@ def _failed(exc: BaseException) -> Any:
 
 
 async def dm(message: str, **kwargs: Any) -> Any:
-    from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
+    from services.brain.reply.orchestrator import run_customer_reply_v2_dm
 
     try:
         return await run_customer_reply_v2_dm(
@@ -86,7 +86,7 @@ async def dm(message: str, **kwargs: Any) -> Any:
 
 
 async def comment(text: str, **kwargs: Any) -> Any:
-    from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
+    from services.brain.reply.comment_runtime import run_customer_reply_v2_comment
 
     try:
         return await run_customer_reply_v2_comment(

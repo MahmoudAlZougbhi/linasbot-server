@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.tiktok_business.post_context import context_level_for, resolve_tiktok_post_context
+from services.integrations.tiktok.post_context import context_level_for, resolve_tiktok_post_context
 from tests.tiktok_business.conftest import seed_connection, seed_enhanced_binding
 
 
@@ -51,10 +51,10 @@ async def test_b_identity_without_media_url_is_caption_thumbnail(tt_db, monkeypa
             "tiktok_raw_video": False,
         }
 
-    monkeypatch.setattr("services.tiktok_business.post_context.fetch_tiktok_video_item", _live)
-    monkeypatch.setattr("services.tiktok_business.post_context.identity_video_info", _info)
-    monkeypatch.setattr("services.tiktok_business.post_context.build_tiktok_comment_context", _build)
-    monkeypatch.setattr("services.tiktok_business.post_context.ensure_fresh_advertiser_token", _async_val("ads"))
+    monkeypatch.setattr("services.integrations.tiktok.post_context.fetch_tiktok_video_item", _live)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.identity_video_info", _info)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.build_tiktok_comment_context", _build)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.ensure_fresh_advertiser_token", _async_val("ads"))
     out = await resolve_tiktok_post_context(
         tenant_id="linas",
         connection_id=connection.id,
@@ -103,10 +103,10 @@ async def test_c_official_media_url_is_full_video(tt_db, monkeypatch) -> None:
             "tiktok_raw_video": True,
         }
 
-    monkeypatch.setattr("services.tiktok_business.post_context.fetch_tiktok_video_item", _live)
-    monkeypatch.setattr("services.tiktok_business.post_context.identity_video_info", _info)
-    monkeypatch.setattr("services.tiktok_business.post_context.build_tiktok_comment_context", _build)
-    monkeypatch.setattr("services.tiktok_business.post_context.ensure_fresh_advertiser_token", _async_val("ads"))
+    monkeypatch.setattr("services.integrations.tiktok.post_context.fetch_tiktok_video_item", _live)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.identity_video_info", _info)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.build_tiktok_comment_context", _build)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.ensure_fresh_advertiser_token", _async_val("ads"))
     out = await resolve_tiktok_post_context(
         tenant_id="linas",
         connection_id=connection.id,
@@ -163,10 +163,10 @@ async def test_d_expired_media_url_refreshes_once(tt_db, monkeypatch) -> None:
             "video_raw_unavailable": "tiktok_official_mp4_missing",
         }
 
-    monkeypatch.setattr("services.tiktok_business.post_context.fetch_tiktok_video_item", _live)
-    monkeypatch.setattr("services.tiktok_business.post_context.identity_video_info", _info)
-    monkeypatch.setattr("services.tiktok_business.post_context.build_tiktok_comment_context", _build)
-    monkeypatch.setattr("services.tiktok_business.post_context.ensure_fresh_advertiser_token", _async_val("ads"))
+    monkeypatch.setattr("services.integrations.tiktok.post_context.fetch_tiktok_video_item", _live)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.identity_video_info", _info)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.build_tiktok_comment_context", _build)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.ensure_fresh_advertiser_token", _async_val("ads"))
     out = await resolve_tiktok_post_context(
         tenant_id="linas",
         connection_id=connection.id,
@@ -198,8 +198,8 @@ async def test_e_audio_transcript_in_full_video_context(tt_db, monkeypatch) -> N
             "tiktok_raw_video": True,
         }
 
-    monkeypatch.setattr("services.tiktok_business.post_context.fetch_tiktok_video_item", _live)
-    monkeypatch.setattr("services.tiktok_business.post_context.build_tiktok_comment_context", _build)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.fetch_tiktok_video_item", _live)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.build_tiktok_comment_context", _build)
     out = await resolve_tiktok_post_context(
         tenant_id="linas",
         connection_id=connection.id,
@@ -234,8 +234,8 @@ async def test_g_what_is_this_receives_real_caption(tt_db, monkeypatch) -> None:
             "tiktok_raw_video": False,
         }
 
-    monkeypatch.setattr("services.tiktok_business.post_context.fetch_tiktok_video_item", _live)
-    monkeypatch.setattr("services.tiktok_business.post_context.build_tiktok_comment_context", _build)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.fetch_tiktok_video_item", _live)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.build_tiktok_comment_context", _build)
     out = await resolve_tiktok_post_context(
         tenant_id="linas",
         connection_id=connection.id,
@@ -251,7 +251,7 @@ async def test_g_what_is_this_receives_real_caption(tt_db, monkeypatch) -> None:
 
 
 def test_f_long_video_offsets_still_cover_full_duration() -> None:
-    from services.customer_reply_v2.inbound_video import MAX_FRAMES, frame_offsets_s
+    from services.brain.reply.inbound_video import MAX_FRAMES, frame_offsets_s
 
     offsets = frame_offsets_s(20 * 60)
     assert len(offsets) == MAX_FRAMES
@@ -280,9 +280,9 @@ async def test_a_resolver_skips_identity_without_advertiser_binding(tt_db, monke
             "tiktok_raw_video": False,
         }
 
-    monkeypatch.setattr("services.tiktok_business.post_context.fetch_tiktok_video_item", _live)
-    monkeypatch.setattr("services.tiktok_business.post_context.identity_video_info", _info)
-    monkeypatch.setattr("services.tiktok_business.post_context.build_tiktok_comment_context", _build)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.fetch_tiktok_video_item", _live)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.identity_video_info", _info)
+    monkeypatch.setattr("services.integrations.tiktok.post_context.build_tiktok_comment_context", _build)
     out = await resolve_tiktok_post_context(
         tenant_id="linas",
         connection_id=connection.id,

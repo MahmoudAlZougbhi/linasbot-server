@@ -12,7 +12,7 @@ from typing import Any
 
 import config
 from services.analytics_events import analytics
-from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
 
 SESSION_RATING_ENABLED = os.getenv("SESSION_RATING_AFTER_BOOKING", "true").strip().lower() == "true"
 SESSION_RATING_DELAY_SECONDS = float(os.getenv("SESSION_RATING_DELAY_SECONDS", "5"))

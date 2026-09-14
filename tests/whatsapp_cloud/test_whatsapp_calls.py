@@ -23,7 +23,7 @@ def calls_api(tmp_path, monkeypatch):
     from db.models import Base
     from db.session import reset_engine_for_tests, whatsapp_session
     from services.dashboard_session_service import session_service
-    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+    from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
     reset_engine_for_tests()
     engine = create_engine(database_url, future=True)

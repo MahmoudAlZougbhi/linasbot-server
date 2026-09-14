@@ -30,6 +30,6 @@ def assert_channel_plan_allowed(tenant_id: str, channel: str) -> None:
         assert_web_plan_allowed(tenant_id)
         return
     if "tiktok" in name:
-        from services.tiktok_business.entitlement import assert_tiktok_plan_allowed
+        from services.integrations.tiktok.entitlement import assert_tiktok_plan_allowed
 
         assert_tiktok_plan_allowed(tenant_id)

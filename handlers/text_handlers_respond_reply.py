@@ -240,8 +240,8 @@ async def _handle_published_cm_runtime(
     failure, returns a safe closed failure reply with an explicit blocker.
     """
     from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
-    from services.customer_reply_v2.models import ENGINE_REMOVED
-    from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
+    from services.brain.reply.models import ENGINE_REMOVED
+    from services.brain.reply.orchestrator import run_customer_reply_v2_dm
     from services.dynamic_messages_service import get_dynamic_message
 
     social_channel = "instagram_dm"

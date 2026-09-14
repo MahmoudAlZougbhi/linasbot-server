@@ -10,19 +10,19 @@ from unittest.mock import AsyncMock, MagicMock
 
 from sqlalchemy import select
 
-from services.web_chat.followup_delivery import deliver_web_followup_message
-from services.web_chat.operation import (
+from services.integrations.web_chat.followup_delivery import deliver_web_followup_message
+from services.integrations.web_chat.operation import (
     advance_operation,
     begin_operation,
     build_followup_payload,
     operation_session,
 )
-from services.web_chat.operation_fsm import OperationFsmError, OperationState, stable_operation_key
-from services.web_chat.persistence import PersistOutcome, PersistResult
-from services.web_chat.pg_models import WebChatOperationRow
-from services.web_chat.processor import WebChatError, compose_web_user_id, process_web_chat_message
-from services.web_chat.session_authority import issue_session_authority, verified_session_snapshot
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.operation_fsm import OperationFsmError, OperationState, stable_operation_key
+from services.integrations.web_chat.persistence import PersistOutcome, PersistResult
+from services.integrations.web_chat.pg_models import WebChatOperationRow
+from services.integrations.web_chat.processor import WebChatError, compose_web_user_id, process_web_chat_message
+from services.integrations.web_chat.session_authority import issue_session_authority, verified_session_snapshot
+from services.integrations.web_chat.store_pg import WebChatPgStore
 from tests.web_chat_acceptance_billing import (
     assert_acceptance_ledger_equation,
     fetch_pg_ledger_snapshot,
@@ -95,7 +95,7 @@ def _assert_fifty_concurrent_followup_one_delivery(
     widget = store.get_widget_by_key(widget_key)
     assert widget is not None
     visitor_id = f"visitor-concurrent-50-{run_suffix}"
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     store.get_or_create_visitor(
@@ -126,7 +126,7 @@ def _assert_fifty_concurrent_followup_one_delivery(
                 outcome = PersistOutcome.DUPLICATE
         return PersistResult(outcome=outcome, conversation_id=conversation_id)
 
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", counting_persist)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", counting_persist)
 
     async def one_delivery() -> str:
         return await _deliver_followup_with_retry(
@@ -173,7 +173,7 @@ def _assert_fifty_concurrent_followup_one_delivery(
 
 def test_fifty_concurrent_ha_idempotency_claims(web_chat_ha_db) -> None:
     """Supplementary: PostgreSQL claim primitive under thread contention."""
-    from services.web_chat.ha_repository import WebChatHaRepository
+    from services.integrations.web_chat.ha_repository import WebChatHaRepository
 
     repo = WebChatHaRepository()
     with web_chat_ha_db() as db:
@@ -277,7 +277,7 @@ def test_reply_ready_expired_lease_reclaim_one_delivery(tmp_path, monkeypatch, a
         db.commit()
 
     monkeypatch.setattr(
-        "services.web_chat.followup_delivery.persist_web_chat_message",
+        "services.integrations.web_chat.followup_delivery.persist_web_chat_message",
         AsyncMock(
             return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id=conversation_id),
         ),
@@ -329,7 +329,7 @@ def test_same_key_followup_barrier_then_sequential_retry(tmp_path, monkeypatch, 
     widget = store.get_widget_by_key(widget_key)
     assert widget is not None
     visitor_id = "visitor-followup-retry"
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     store.get_or_create_visitor(
@@ -346,7 +346,7 @@ def test_same_key_followup_barrier_then_sequential_retry(tmp_path, monkeypatch, 
     reservation_id = _reserve_followup_credit(tenant_id=tenant_id, idem=idem)
 
     monkeypatch.setattr(
-        "services.web_chat.followup_delivery.persist_web_chat_message",
+        "services.integrations.web_chat.followup_delivery.persist_web_chat_message",
         AsyncMock(
             return_value=PersistResult(
                 outcome=PersistOutcome.CREATED,
@@ -415,7 +415,7 @@ def test_concurrent_same_client_key_one_operation(tmp_path, monkeypatch, accepta
     widget_key, tenant_id = seed_acceptance_widget(store)
     widget = store.get_widget_by_key(widget_key)
     assert widget is not None
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     visitor = store.get_or_create_visitor(
@@ -435,16 +435,18 @@ def test_concurrent_same_client_key_one_operation(tmp_path, monkeypatch, accepta
         return MagicMock(reply="One reply")
 
     monkeypatch.setattr(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         AsyncMock(side_effect=gated_ai),
     )
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
             side_effect=lambda **_kwargs: __import__(
-                "services.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
             ).PersistResult(
-                outcome=__import__("services.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+                outcome=__import__(
+                    "services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]
+                ).PersistOutcome.CREATED,
                 conversation_id=f"web:{tenant_id}:{bundle.session_id}",
             )
         ),

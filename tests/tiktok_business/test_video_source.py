@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.tiktok_business.video_source import (
+from services.integrations.tiktok.video_source import (
     fetch_tiktok_video_item,
     parse_tiktok_video_item,
     pick_tiktok_video_url,
@@ -47,7 +47,7 @@ async def test_fetch_uses_video_ids_filter_then_falls_back(monkeypatch: pytest.M
             ]
         }
 
-    monkeypatch.setattr("services.tiktok_business.video_source.tiktok_request", _req)
+    monkeypatch.setattr("services.integrations.tiktok.video_source.tiktok_request", _req)
     out = await fetch_tiktok_video_item(access_token="tok", open_id="biz", video_id="wanted")
     assert out["caption"] == "live caption"
     assert out["video_url"] == "https://example.com/file.mp4"

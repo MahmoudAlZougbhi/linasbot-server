@@ -10,9 +10,9 @@ from fastapi.responses import JSONResponse
 from db.session import WhatsAppDatabaseUnavailable
 from modules.api_security import is_platform_owner, require_permission, user_has_permission
 from modules.core import app
-from services.tiktok_business.errors import TikTokBusinessError
-from services.tiktok_business.oauth import disconnect_tiktok, start_tiktok_oauth
-from services.tiktok_business.status import tiktok_integration_row
+from services.integrations.tiktok.errors import TikTokBusinessError
+from services.integrations.tiktok.oauth import disconnect_tiktok, start_tiktok_oauth
+from services.integrations.tiktok.status import tiktok_integration_row
 
 
 def _actor(session: Any) -> str:

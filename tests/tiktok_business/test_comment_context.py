@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.tiktok_business.comment_context import build_tiktok_comment_context, tiktok_video_source
+from services.integrations.tiktok.comment_context import build_tiktok_comment_context, tiktok_video_source
 
 
 def test_tiktok_video_source_only_https() -> None:
@@ -21,7 +21,7 @@ async def test_tiktok_context_uses_caption_without_inventing_video(monkeypatch: 
         _ = url, max_bytes, timeout_s
         return {"ok": True, "bytes": b"jpeg-bytes", "mime": "image/jpeg", "url": url, "error": ""}
 
-    monkeypatch.setattr("services.tiktok_business.comment_context.fetch_inbound_url", _fetch)
+    monkeypatch.setattr("services.integrations.tiktok.comment_context.fetch_inbound_url", _fetch)
     out = await build_tiktok_comment_context(
         tenant_id="linas",
         comment_text="what is this",

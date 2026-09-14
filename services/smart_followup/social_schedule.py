@@ -90,7 +90,7 @@ def maybe_schedule_social_followup_after_ai_reply(
                 channel_context=channel_context,
             )
     except Exception as exc:
-        from services.whatsapp_cloud.observability import emit_wa_event
+        from services.integrations.whatsapp.observability import emit_wa_event
 
         emit_wa_event("smart_followup_schedule_failed", error=type(exc).__name__, channel=channel)
         return {"scheduled": False, "reason": "schedule_failed"}

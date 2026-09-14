@@ -8,17 +8,17 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob, WhatsAppSmartFollowUpSettings
-from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
-from services.smart_followup.types import FollowUpConversationView, FollowUpSendResult
-from services.web_chat.flags import web_chat_containment_active
-from services.web_chat.followup_delivery import (
+from services.integrations.web_chat.flags import web_chat_containment_active
+from services.integrations.web_chat.followup_delivery import (
     FollowUpSessionBoundaryError,
     deliver_web_followup_message,
 )
-from services.web_chat.operation_fsm import OperationFsmError
-from services.web_chat.processor import compose_web_user_id
-from services.web_chat.session_binding import resolve_durable_visitor_binding
-from services.web_chat.store import web_chat_store
+from services.integrations.web_chat.operation_fsm import OperationFsmError
+from services.integrations.web_chat.processor import compose_web_user_id
+from services.integrations.web_chat.session_binding import resolve_durable_visitor_binding
+from services.integrations.web_chat.store import web_chat_store
+from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
+from services.smart_followup.types import FollowUpConversationView, FollowUpSendResult
 
 
 class WebFollowUpAdapter:
@@ -66,8 +66,8 @@ class WebFollowUpAdapter:
         conv: FollowUpConversationView,
         now: Any | None = None,
     ) -> tuple[bool, str]:
-        from services.web_chat.flags import assert_widget_operational
-        from services.web_chat.processor import evaluate_web_ai_eligibility
+        from services.integrations.web_chat.flags import assert_widget_operational
+        from services.integrations.web_chat.processor import evaluate_web_ai_eligibility
 
         if web_chat_containment_active():
             return False, "web_chat_contained"
@@ -111,7 +111,7 @@ class WebFollowUpAdapter:
         visitor = web_chat_store.get_visitor(visitor_id)
         authority_hash = str(getattr(visitor, "authority_hash", "") or "") if visitor is not None else ""
         bound_reservation = str(job.reservation_id or "").strip()
-        from services.web_chat.followup_message_ledger import credit_reservation_required
+        from services.integrations.web_chat.followup_message_ledger import credit_reservation_required
 
         if credit_reservation_required(bound_reservation):
             return FollowUpSendResult(

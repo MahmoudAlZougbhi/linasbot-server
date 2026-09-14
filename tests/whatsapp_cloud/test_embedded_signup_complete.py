@@ -23,12 +23,12 @@ os.environ["PUBLIC_URL"] = "https://example.test"
 from db.models import Base  # noqa: E402
 from db.models.whatsapp_cloud import WhatsAppCredential  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.whatsapp_cloud.embedded_signup import (  # noqa: E402
+from services.integrations.whatsapp.embedded_signup import (  # noqa: E402
     WhatsAppSignupError,
     complete_embedded_signup,
     start_embedded_signup,
 )
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository  # noqa: E402
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
 
 WABA = "900100200300"
 PHONE = "900100200301"
@@ -54,7 +54,7 @@ def wa_db(tmp_path, monkeypatch):
         yield session
         session.commit()
 
-    monkeypatch.setattr("services.whatsapp_cloud.embedded_signup.whatsapp_session", _sess)
+    monkeypatch.setattr("services.integrations.whatsapp.embedded_signup.whatsapp_session", _sess)
     yield session
     session.close()
     reset_engine_for_tests()
@@ -126,12 +126,12 @@ def _mock_graph(monkeypatch, *, phones: list[dict[str, Any]], debug: dict[str, A
         calls["smb"] += 1
         return {"messaging_product": "whatsapp", "request_id": "req-1"}
 
-    monkeypatch.setattr("services.whatsapp_cloud.embedded_signup.exchange_embedded_signup_code", _exchange)
-    monkeypatch.setattr("services.whatsapp_cloud.embedded_signup.debug_token", _dbg)
-    monkeypatch.setattr("services.whatsapp_cloud.embedded_signup_proof.fetch_waba_phone_numbers", _phones)
-    monkeypatch.setattr("services.whatsapp_cloud.embedded_signup_proof.fetch_business_phone_number", _fields)
-    monkeypatch.setattr("services.whatsapp_cloud.embedded_signup.subscribe_waba_webhooks", _sub)
-    monkeypatch.setattr("services.whatsapp_cloud.embedded_signup.initiate_smb_app_data_sync", _smb)
+    monkeypatch.setattr("services.integrations.whatsapp.embedded_signup.exchange_embedded_signup_code", _exchange)
+    monkeypatch.setattr("services.integrations.whatsapp.embedded_signup.debug_token", _dbg)
+    monkeypatch.setattr("services.integrations.whatsapp.embedded_signup_proof.fetch_waba_phone_numbers", _phones)
+    monkeypatch.setattr("services.integrations.whatsapp.embedded_signup_proof.fetch_business_phone_number", _fields)
+    monkeypatch.setattr("services.integrations.whatsapp.embedded_signup.subscribe_waba_webhooks", _sub)
+    monkeypatch.setattr("services.integrations.whatsapp.embedded_signup.initiate_smb_app_data_sync", _smb)
     return calls
 
 

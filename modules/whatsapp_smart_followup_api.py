@@ -10,15 +10,15 @@ from fastapi.responses import JSONResponse
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 from modules.api_security import is_platform_owner, require_permission, require_session, user_has_permission
 from modules.core import app
-from services.whatsapp_cloud.entitlement import evaluate_ai_eligibility, tenant_has_whatsapp_pilot
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository
-from services.whatsapp_cloud.smart_followup.analytics import (
+from services.integrations.whatsapp.entitlement import evaluate_ai_eligibility, tenant_has_whatsapp_pilot
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository
+from services.integrations.whatsapp.smart_followup.analytics import (
     build_smart_followup_analytics,
     resolve_analytics_window,
 )
-from services.whatsapp_cloud.smart_followup.generation import generate_followup_text, preview_prompt_for_goal
-from services.whatsapp_cloud.smart_followup.repository import SmartFollowUpRepository
-from services.whatsapp_cloud.smart_followup.settings_service import (
+from services.integrations.whatsapp.smart_followup.generation import generate_followup_text, preview_prompt_for_goal
+from services.integrations.whatsapp.smart_followup.repository import SmartFollowUpRepository
+from services.integrations.whatsapp.smart_followup.settings_service import (
     SmartFollowUpSettingsError,
     get_or_create_settings,
     update_settings,

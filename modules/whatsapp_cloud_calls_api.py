@@ -9,8 +9,8 @@ from fastapi import HTTPException, Request
 from db.session import whatsapp_session
 from modules.core import app
 from modules.whatsapp_cloud_ops_api import _actor_id, _require_wa_manager
-from services.whatsapp_cloud.entitlement import connection_status_payload
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+from services.integrations.whatsapp.entitlement import connection_status_payload
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
 
 def _set_calls_enabled(connection_id: str, request: Request, *, enabled: bool) -> dict[str, Any]:

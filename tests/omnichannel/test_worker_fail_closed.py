@@ -58,7 +58,7 @@ class _RecordingBackend:
 def _runtime(monkeypatch, backend):
     monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:9/0")
     monkeypatch.setattr("services.queues.worker_runtime.RedisQueueBackend", lambda: backend)
-    monkeypatch.setattr("services.omnichannel.limiter.DistributedProviderLimiter", _AllowLimiter)
+    monkeypatch.setattr("services.integrations.omnichannel.limiter.DistributedProviderLimiter", _AllowLimiter)
     from services.queues.worker_runtime import WorkerRuntime
 
     return WorkerRuntime("high_priority")
@@ -125,7 +125,7 @@ async def test_worker_pool_survives_raising_cycle(monkeypatch):
     monkeypatch.setenv("LINAS_QUEUE_CONCURRENCY_HIGH", "2")
     from importlib import reload
 
-    import services.omnichannel.worker_pool as pool
+    import services.integrations.omnichannel.worker_pool as pool
     import services.queues.config as config
 
     reload(config)
@@ -150,7 +150,7 @@ async def test_worker_pool_overlapping_blocking_cycles(monkeypatch):
     from importlib import reload
 
     monkeypatch.setenv("LINAS_QUEUE_CONCURRENCY_HIGH", "2")
-    import services.omnichannel.worker_pool as pool
+    import services.integrations.omnichannel.worker_pool as pool
     import services.queues.config as config
 
     reload(config)
@@ -173,7 +173,7 @@ async def test_worker_pool_overlapping_blocking_cycles(monkeypatch):
 
 
 def test_executor_max_workers_is_not_a_hard_24_cap(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.omnichannel.worker_pool import executor_max_workers
+    from services.integrations.omnichannel.worker_pool import executor_max_workers
 
     monkeypatch.delenv("LINAS_WORKER_EXECUTOR_MAX", raising=False)
     assert executor_max_workers() == 64

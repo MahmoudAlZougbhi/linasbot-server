@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.whatsapp_cloud.repository import (
+from services.integrations.whatsapp.repository import (
     ACTIVE_LIFECYCLES,
     WhatsAppCloudRepository,
     connection_public_view,
     conversation_public_view,
 )
-from services.whatsapp_cloud.repository_helpers import ACTIVE_LIFECYCLES as HELPER_LIFECYCLES
-from services.whatsapp_cloud.repository_helpers import connection_public_view as helper_conn_view
-from services.whatsapp_cloud.repository_runtime import WhatsAppCloudRepositoryRuntimeMixin
+from services.integrations.whatsapp.repository_helpers import ACTIVE_LIFECYCLES as HELPER_LIFECYCLES
+from services.integrations.whatsapp.repository_helpers import connection_public_view as helper_conn_view
+from services.integrations.whatsapp.repository_runtime import WhatsAppCloudRepositoryRuntimeMixin
 
 
 def _line_count(rel: str) -> int:
@@ -20,9 +20,9 @@ def _line_count(rel: str) -> int:
 
 
 def test_whatsapp_repository_modules_under_500_lines() -> None:
-    assert _line_count("services/whatsapp_cloud/repository.py") < 500
-    assert _line_count("services/whatsapp_cloud/repository_helpers.py") < 500
-    assert _line_count("services/whatsapp_cloud/repository_runtime.py") < 500
+    assert _line_count("services/integrations/whatsapp/repository.py") < 500
+    assert _line_count("services/integrations/whatsapp/repository_helpers.py") < 500
+    assert _line_count("services/integrations/whatsapp/repository_runtime.py") < 500
 
 
 def test_whatsapp_repository_preserves_public_api() -> None:

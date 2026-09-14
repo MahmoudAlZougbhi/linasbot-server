@@ -7,7 +7,10 @@ Date: 2026-09-14.
 
 **Wave X1:** founder `linas` env/analytics/Meta/API exemptions removed; Laser `INITIAL_RESTRICTED` and clinic WhatsApp matrix emptied; prod lab scripts write `false`; KEEP Live Chat/Requests/WhatsApp on the shared tenant API allowlist.
 
-**Wave X2 (this branch, stacked on X1):** museum `smart_messaging_*`, appointment scheduler, daily dispatcher, training handlers, clinic holidays, `qa_database_service`, and 410 content-files/instructions HTTP are **deleted**. `normalize_template_id` moved to `services/live_chat/template_ids.py`. SFU worker stays on the runtime scheduler. `customer_reply_v2` remains a live facade (MOVE in X3). Laser `prod_migration` seed still writes `laser_hair_removal` (not deleted — redistribution tests depend on it).
+**Wave X2:** museum `smart_messaging_*`, appointment scheduler, daily dispatcher, training handlers, clinic holidays, `qa_database_service`, and 410 content-files/instructions HTTP are **deleted**. `normalize_template_id` moved to `services/live_chat/template_ids.py`. SFU worker stays on the runtime scheduler. Laser `prod_migration` seed still writes `laser_hair_removal`.
+
+**Wave X3 (this branch):** `customer_reply_v2` → `services/brain/reply/`; `comments_inbox` → `services/live_chat/comments_inbox/`; WA Cloud / adapters / TikTok / web_chat / omnichannel → `services/integrations/{whatsapp,tiktok,web_chat,omnichannel}`. Meta `services/meta_*.py` still flat (follow-up). Web already marketing+portal.
+
 
 ## Method
 
@@ -228,11 +231,11 @@ Training trio + `photo_analysis_service`; appointment_scheduler*; campaign servi
 
 ## A–D scoreboard
 
-| Area | Result at `036d3857` | After X1 | After X2 |
-| --- | --- | --- | --- |
-| A Founder/Laser | **FAIL** | live special-cases **PASS**; Laser classifier/prod_migration seed remain | same (seed leftover) |
-| B Museum | **FAIL** | still present | **PASS** for proven-dead list; `customer_reply_v2` MOVE leftover |
-| C Sprawl | **FAIL** (263 flat; channels not under `integrations/`) | unchanged | flat count down by museum files; channels still X3 |
-| D Freeze GONE | **PASS** (source) | PASS | PASS |
+| Area | Result at `036d3857` | After X1 | After X2 | After X3 |
+| --- | --- | --- | --- | --- |
+| A Founder/Laser | **FAIL** | live special-cases **PASS**; Laser classifier/prod_migration seed remain | same | same |
+| B Museum | **FAIL** | still present | **PASS** for proven-dead list | `customer_reply_v2` folded into `brain/reply` |
+| C Sprawl | **FAIL** (263 flat; channels not under `integrations/`) | unchanged | museum files gone | WA/TikTok/web_chat/omnichannel under `integrations/`; Meta `meta_*.py` still flat |
+| D Freeze GONE | **PASS** (source) | PASS | PASS | PASS |
 
-Phase 2 order: **X1 → X2 → X3 → X4**. X3: fold channels under `integrations/`, `customer_reply_v2` → `brain/`, comments_inbox fold. If SFU or WA template tests break, MOVE catalog helpers; do not delete `smart_messaging_catalog` first (already moved in X2).
+Phase 2 order: **X1 → X2 → X3 → X4**. X4: extend freeze tests; KEEP backends enabled; merge stacked PRs.

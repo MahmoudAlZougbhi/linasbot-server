@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from services.tiktok_business.comment_sync import persist_comment_page_cursor, should_enqueue_comment_ai
-from services.tiktok_business.repository_content import TikTokContentRepository
+from services.integrations.tiktok.comment_sync import persist_comment_page_cursor, should_enqueue_comment_ai
+from services.integrations.tiktok.repository_content import TikTokContentRepository
 from tests.tiktok_business.conftest import seed_connection
 
 

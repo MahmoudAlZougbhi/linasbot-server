@@ -17,7 +17,7 @@ os.environ.setdefault("TIKTOK_REDIRECT_URI", "https://www.linasaibot.com/oauth/t
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.tiktok_business.repository import TikTokRepository  # noqa: E402
+from services.integrations.tiktok.repository import TikTokRepository  # noqa: E402
 
 
 @pytest.fixture()
@@ -88,8 +88,8 @@ def seed_enhanced_binding(
 ):
     from datetime import UTC, datetime, timedelta
 
-    from services.tiktok_business.capabilities import empty_capabilities
-    from services.tiktok_business.repository_enhanced import TikTokEnhancedRepository
+    from services.integrations.tiktok.capabilities import empty_capabilities
+    from services.integrations.tiktok.repository_enhanced import TikTokEnhancedRepository
 
     account_cred = connection.credential_id
     repo = TikTokEnhancedRepository(session)

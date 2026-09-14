@@ -8,14 +8,14 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob, WhatsAppSmartFollowUpSettings
+from services.integrations.whatsapp.config import get_whatsapp_cloud_flags
+from services.integrations.whatsapp.entitlement import evaluate_ai_eligibility, tenant_has_whatsapp_pilot
+from services.integrations.whatsapp.graph_client import WhatsAppGraphError, send_text_message
+from services.integrations.whatsapp.observability import emit_wa_event, record_analytics_channel_usage
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 from services.requests.constants import SOURCE_CHANNEL_WHATSAPP_CLOUD
 from services.smart_followup.types import FollowUpConversationView, FollowUpSendResult
 from services.smart_followup.window_rules import window_allows_send
-from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
-from services.whatsapp_cloud.entitlement import evaluate_ai_eligibility, tenant_has_whatsapp_pilot
-from services.whatsapp_cloud.graph_client import WhatsAppGraphError, send_text_message
-from services.whatsapp_cloud.observability import emit_wa_event, record_analytics_channel_usage
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository
 
 
 class WhatsAppFollowUpAdapter:

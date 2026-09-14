@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.customer_reply_v2.retrieval_item_index import record_content
+from services.brain.reply.retrieval_item_index import record_content
 from services.search_metadata.title_fields import original_title_of
 
 

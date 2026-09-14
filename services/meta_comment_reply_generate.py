@@ -49,7 +49,7 @@ async def generate_comment_reply_text(
     response_language = _lang["response_language"]
 
     if tenant_uses_cm_runtime(tenant_id):
-        from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
+        from services.brain.reply.comment_runtime import run_customer_reply_v2_comment
 
         social_channel = "facebook_comment" if channel == "facebook" else "instagram_comment"
         enriched = ctx

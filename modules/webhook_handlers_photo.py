@@ -12,8 +12,8 @@ import config
 from config import WHATSAPP_API_TOKEN
 from handlers.text_handlers import _process_and_respond
 from modules.core import whatsapp_api_client
+from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
 from services.saas_no_boc import log_report_event
-from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 from utils.utils import save_conversation_message_to_firestore
 
 
@@ -147,7 +147,7 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
             user_data["_source_message_id"] = str(mids[-1])
         elif image_id:
             user_data["_source_message_id"] = str(image_id)
-        from services.customer_reply_v2.inbound_media import store_inbound_image_base64
+        from services.brain.reply.inbound_media import store_inbound_image_base64
 
         store_inbound_image_base64(user_data, b64=str(base64_image or ""))
         from services.ai_reply_delivery import wrap_tracked_send

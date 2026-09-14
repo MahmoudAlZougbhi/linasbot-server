@@ -71,7 +71,7 @@ WAVE 1 deleted:
 
 Still not deleted (import-graph blocked or KEEP):
 
-- Smart Follow-Up live backend (`services/smart_followup`, `services/whatsapp_cloud/smart_followup`, `/api/whatsapp/smart-followup/*`)
+- Smart Follow-Up live backend (`services/smart_followup`, `services/integrations/whatsapp/smart_followup`, `/api/whatsapp/smart-followup/*`)
 - WA Cloud + Live Chat template id aliases live in `services/live_chat/template_ids.py` (WAVE X2)
 - `owner_ai_tools*` (WAVE B git-mv into `services/owner_copilot/`)
 - `owner_copilot/creative_policy.py` KEEP as refusal
@@ -227,6 +227,15 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - `normalize_template_id` lives in `services/live_chat/template_ids.py` (Live Chat logs + WA Cloud templates).
 - Remaining `smart_messaging_*`, appointment scheduler, daily template dispatcher, training handlers, BOC campaign jobs, `qa_database_service`, clinic holidays, and 410 content-files/instructions HTTP are deleted.
 - Smart Follow-Up worker stays on the runtime scheduler.
+
+## WAVE X3 — domain packages
+
+- Customer reply facade: `services/brain/reply/` (was `customer_reply_v2`; no shim).
+- Operator comments inbox: `services/live_chat/comments_inbox/`.
+- Channel packages under `services/integrations/`: `whatsapp/` (includes `adapters/` + Cloud `smart_followup/`), `tiktok/`, `web_chat/`, `omnichannel/`.
+- HTTP mounts stay in `modules/*`. Meta `services/meta_*.py` and Apple IAP/Sign-In stay as sibling modules this wave (Apple stays billing/auth; Meta fold is a follow-up).
+- Web stays marketing `pages/public/*` + owner portal `pages/owner/*` (no leftover operator SPA pages).
+
 
 
 

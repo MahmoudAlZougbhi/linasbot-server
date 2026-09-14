@@ -173,7 +173,7 @@ def build_activity_summary(
         str(row.get("platform") or ""): bool(row.get("connected")) for row in integrations if isinstance(row, dict)
     }
     try:
-        from services.web_chat.store import web_chat_store
+        from services.integrations.web_chat.store import web_chat_store
 
         web_widget = web_chat_store.get_or_create_widget(tid)
         connected["web"] = web_widget.connected
