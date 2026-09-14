@@ -1022,8 +1022,9 @@ def test_target_verification_keeps_boot_guard_and_workers_offline_until_parity()
     )
     assert 'systemctl enable "linasbot-worker@${queue}.service"' not in final_start
     assert 'systemctl enable "linasbot-worker@${queue}.service"' in enable_last
-    assert "seq 1 90" in final_start
+    assert "seq 1 240" in final_start
     assert "seq 1 45" not in final_start
+    assert "canonical target API start diagnostics" in final_start
     assert "canonical target API did not publish /api/health on :8003 after start" in final_start
     assert final_start.index("health_ok=1") < final_start.index("assert_health_while_drained")
     assert "queue_ok=1" in final_start
