@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from services.durable_event_claim import (
     complete_event_claim,
@@ -15,7 +12,6 @@ from services.durable_event_claim import (
     try_acquire_job_lock,
     try_claim_event,
 )
-from services.smart_messaging import SmartMessagingService, deliver_scheduled_smart_whatsapp
 
 
 class TestDurableClaims:
@@ -42,120 +38,6 @@ class TestDurableClaims:
         release_job_lock("job_a")
         assert try_acquire_job_lock("job_a", ttl_seconds=30) is True
         release_job_lock("job_a")
-
-
-class TestSmartMessagingPersistence:
-    def test_pending_queue_survives_reload(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
-        # Re-import paths under new root
-        from storage import persistent_storage as ps
-
-        monkeypatch.setattr(ps, "_DATA_ROOT", tmp_path)
-        monkeypatch.setattr(ps, "SMART_MESSAGING_DIR", tmp_path / "smart_messaging")
-        monkeypatch.setattr(
-            ps, "PENDING_SMART_MESSAGES_FILE", tmp_path / "smart_messaging" / "pending_smart_messages.json"
-        )
-        monkeypatch.setattr(ps, "SENT_SMART_MESSAGES_FILE", tmp_path / "smart_messaging" / "sent_smart_messages.json")
-        monkeypatch.setattr(ps, "MESSAGE_TEMPLATES_FILE", tmp_path / "smart_messaging" / "message_templates.json")
-        monkeypatch.setattr(ps, "APP_SETTINGS_FILE", tmp_path / "settings" / "app_settings.json")
-        monkeypatch.setattr(
-            ps, "SERVICE_TEMPLATE_MAPPING_FILE", tmp_path / "smart_messaging" / "service_template_mapping.json"
-        )
-        (tmp_path / "smart_messaging").mkdir(parents=True, exist_ok=True)
-        (tmp_path / "settings").mkdir(parents=True, exist_ok=True)
-        (tmp_path / "settings" / "app_settings.json").write_text(
-            json.dumps({"smartMessaging": {"enabled": True, "previewBeforeSend": False}}),
-            encoding="utf-8",
-        )
-
-        svc = SmartMessagingService()
-        svc.SENT_MESSAGES_FILE = str(tmp_path / "smart_messaging" / "sent_smart_messages.json")
-        svc.QUEUE_FILE = str(tmp_path / "smart_messaging" / "pending_smart_messages.json")
-        svc.templates_file = str(tmp_path / "smart_messaging" / "message_templates.json")
-        svc.settings_file = str(tmp_path / "settings" / "app_settings.json")
-        svc.mapping_file = str(tmp_path / "smart_messaging" / "service_template_mapping.json")
-        svc.scheduled_messages = {}
-        svc.message_templates = {"reminder_24h": {"ar": "hi {name}", "en": "hi {name}"}}
-
-        mid = svc.schedule_message(
-            customer_phone="96170000000",
-            message_type="reminder_24h",
-            send_at=datetime.now() + timedelta(hours=1),
-            placeholders={"name": "Test"},
-            language="ar",
-        )
-        assert mid
-        assert Path(svc.QUEUE_FILE).exists()
-        data = json.loads(Path(svc.QUEUE_FILE).read_text(encoding="utf-8"))
-        assert mid in data
-        assert data[mid]["status"] == "scheduled"
-
-        svc2 = SmartMessagingService()
-        svc2.SENT_MESSAGES_FILE = svc.SENT_MESSAGES_FILE
-        svc2.QUEUE_FILE = svc.QUEUE_FILE
-        svc2.templates_file = svc.templates_file
-        svc2.settings_file = svc.settings_file
-        svc2.mapping_file = svc.mapping_file
-        svc2.scheduled_messages = {}
-        svc2._load_sent_messages()
-        svc2._load_pending_queue()
-        assert mid in svc2.scheduled_messages
-        assert svc2.scheduled_messages[mid]["status"] == "scheduled"
-
-    def test_preview_mode_forces_pending_approval(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
-        (tmp_path / "smart_messaging").mkdir(parents=True, exist_ok=True)
-        (tmp_path / "settings").mkdir(parents=True, exist_ok=True)
-        (tmp_path / "settings" / "app_settings.json").write_text(
-            json.dumps({"smartMessaging": {"enabled": True, "previewBeforeSend": True}}),
-            encoding="utf-8",
-        )
-        svc = SmartMessagingService()
-        svc.SENT_MESSAGES_FILE = str(tmp_path / "smart_messaging" / "sent_smart_messages.json")
-        svc.QUEUE_FILE = str(tmp_path / "smart_messaging" / "pending_smart_messages.json")
-        svc.settings_file = str(tmp_path / "settings" / "app_settings.json")
-        svc.message_templates = {"reminder_24h": {"ar": "hi", "en": "hi"}}
-        svc.scheduled_messages = {}
-
-        with patch.object(svc, "_add_to_preview_queue") as add_preview:
-            mid = svc.schedule_message(
-                customer_phone="96170000001",
-                message_type="reminder_24h",
-                send_at=datetime.now() + timedelta(hours=1),
-                placeholders={},
-                language="ar",
-                metadata={"source": "missed_paused_campaign"},
-            )
-            assert mid
-            add_preview.assert_called_once_with(mid)
-
-
-class TestTemplateRequired:
-    def test_deliver_rejects_freeform_without_template(self):
-        async def _run():
-            adapter = MagicMock()
-            adapter.send_text_message = MagicMock()
-            with patch(
-                "services.whatsapp_cloud_template_service.whatsapp_cloud_template_service.get_template_info",
-                return_value=None,
-            ):
-                with patch(
-                    "services.whatsapp_adapters.safe_send_adapter._should_dry_run",
-                    return_value=False,
-                ):
-                    result = await deliver_scheduled_smart_whatsapp(
-                        adapter,
-                        phone="96170000002",
-                        template_id="reminder_24h",
-                        language="ar",
-                        placeholders={},
-                        rendered_text="hello",
-                    )
-            assert result.get("success") is False
-            assert result.get("template_required") is True
-            adapter.send_text_message.assert_not_called()
-
-        asyncio.run(_run())
 
 
 class TestReadyEndpoint:

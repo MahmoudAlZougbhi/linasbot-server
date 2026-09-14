@@ -72,7 +72,7 @@ WAVE 1 deleted:
 Still not deleted (import-graph blocked or KEEP):
 
 - Smart Follow-Up live backend (`services/smart_followup`, `services/whatsapp_cloud/smart_followup`, `/api/whatsapp/smart-followup/*`)
-- `smart_messaging_*` files still used by scheduler/catalog/WA templates (HTTP already disabled)
+- WA Cloud + Live Chat template id aliases live in `services/live_chat/template_ids.py` (WAVE X2)
 - `owner_ai_tools*` (WAVE B git-mv into `services/owner_copilot/`)
 - `owner_copilot/creative_policy.py` KEEP as refusal
 - Disabled API prefixes in `product_features.py` stay fail-closed even after HTTP modules are gone
@@ -139,7 +139,7 @@ Live product paths must not import deleted Creative / Owner Lab / smart_retrieva
 | 6 | Mobile Screen union reachable-only; owner screen kept |
 | 7 | This freeze + matrix |
 
-Still not deleted (KEEP or import-graph blocked): Smart Follow-Up live backend, `smart_messaging_*` used by scheduler/templates, `creative_policy.py` refusal, disabled API prefixes in `product_features.py`.
+Still not deleted (KEEP or import-graph blocked): Smart Follow-Up live backend, `creative_policy.py` refusal, disabled API prefixes in `product_features.py`. Museum `smart_messaging_*` is gone (WAVE X2).
 
 ## WAVE C — Voyage-only index; Luna names purged from retrieval
 
@@ -180,7 +180,7 @@ Keep #677 media analysis.
 | Owner Copilot | `services/owner_copilot/` |
 | Customer Brain | `services/brain/` (`brain/comments`, `brain/media`) |
 
-`main.py` imports are grouped by those domains. `modules/owner_copilot_api.py` is the Copilot HTTP mount; `modules/owner_ai_api.py` stays gone. `smart_messaging_*` remains for scheduler/templates (not a museum HTTP API). Channel capability status copy lives in `services/integrations/channel_capability_status.py` so the matrix file stays under 500 lines.
+`main.py` imports are grouped by those domains. `modules/owner_copilot_api.py` is the Copilot HTTP mount; `modules/owner_ai_api.py` stays gone. Channel capability status copy lives in `services/integrations/channel_capability_status.py` so the matrix file stays under 500 lines.
 
 ## WAVE D — one billing meter = mobile Subscription credits
 
@@ -221,5 +221,12 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - Prod apply/stage scripts write `LINAS_CUSTOMER_AI_LAB=false` (never `true`).
 - Authenticated KEEP APIs (Live Chat, Requests, WhatsApp, Copilot, CM, billing, …) use one allowlist for every tenant. Founder slug `linas` is not exempt. Missing session tenant is 403. Meta connection activate requires published CM for every tenant.
 - Evidence: `docs/FINAL_CLEANUP_VERIFY.md`. Tests: `tests/test_wave_x1_founder_cleanup.py`.
+
+## WAVE X2 — museum delete
+
+- `normalize_template_id` lives in `services/live_chat/template_ids.py` (Live Chat logs + WA Cloud templates).
+- Remaining `smart_messaging_*`, appointment scheduler, daily template dispatcher, training handlers, BOC campaign jobs, `qa_database_service`, clinic holidays, and 410 content-files/instructions HTTP are deleted.
+- Smart Follow-Up worker stays on the runtime scheduler.
+
 
 

@@ -45,8 +45,6 @@ import modules.cm_faq_api  # noqa: E402, F401
 import modules.cm_media_api  # noqa: E402, F401
 import modules.cm_request_graphs_api  # noqa: E402, F401
 import modules.cm_setup_api  # noqa: E402, F401
-import modules.content_files_api  # noqa: E402, F401
-import modules.instructions_api  # noqa: E402, F401
 import modules.local_qa_api  # noqa: E402, F401
 
 # Dashboard
