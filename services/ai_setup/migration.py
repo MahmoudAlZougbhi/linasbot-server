@@ -324,10 +324,10 @@ def _detect_conflicts(*, tenant_id: str) -> list[dict[str, Any]]:
         failures = validate_restricted_conflicts(
             restricted=drafts.get("restricted") or {},
             prices=drafts.get("prices"),
-        faq=drafts.get("faq"),
-        knowledge=drafts.get("knowledge"),
-        handoff=drafts.get("handoff"),
-    )
+            faq=drafts.get("faq"),
+            knowledge=drafts.get("knowledge"),
+            handoff=drafts.get("handoff"),
+        )
     return [failure.model_dump(mode="json") for failure in failures]
 
 

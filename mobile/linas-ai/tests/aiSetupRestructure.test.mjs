@@ -20,8 +20,8 @@ describe('AI Setup hub restructure', () => {
     assert.match(src, /id: 'languages'[\s\S]*showInCmHub: false/);
     assert.match(src, /id: 'style'[\s\S]*showInCmHub: false/);
     assert.match(src, /id: 'dynamic_messages'[\s\S]*showInCmHub: false/);
-    assert.match(src, /id: 'services'[\s\S]*showInCmHub: false/);
-    assert.match(src, /CM_HUB_PROGRESS_EXCLUDED[\s\S]*dynamic_messages[\s\S]*services/s);
+    assert.doesNotMatch(src, /id: 'services'/);
+    assert.match(src, /CM_HUB_PROGRESS_EXCLUDED[\s\S]*dynamic_messages/s);
     assert.doesNotMatch(src, /CM_HUB_CARDS[\s\S]*id: 'languages'/);
   });
 
@@ -54,7 +54,7 @@ describe('AI Setup hub restructure', () => {
     const sections = read('features/cm/cmSections.ts');
     assert.match(sections, /CM_HUB_PROGRESS_SECTION_IDS[\s\S]*ai_basics[\s\S]*knowledge[\s\S]*branches/s);
     assert.match(sections, /CM_HUB_PROGRESS_TOTAL/);
-    assert.match(sections, /CM_HUB_PROGRESS_EXCLUDED.*dynamic_messages.*services/s);
+    assert.match(sections, /CM_HUB_PROGRESS_EXCLUDED.*dynamic_messages/s);
     const hub = read('features/cm/cmHubProgress.ts');
     assert.match(hub, /CM_HUB_PROGRESS_SECTION_IDS/);
     assert.match(hub, /CM_HUB_PRODUCTS_PROGRESS_ID/);

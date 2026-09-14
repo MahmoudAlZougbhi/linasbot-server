@@ -365,7 +365,7 @@ def test_wave_f_portal_drawer_no_snapchat() -> None:
         assert label in shell
     assert "/owner/lab" not in app
     assert "OwnerLab" not in app
-    assert "path=\"lab\"" not in app
+    assert 'path="lab"' not in app
     assert "| { name: 'resource' }" not in nav
     assert "name: 'chat'" in nav
     assert "name: 'notifications'" in nav
