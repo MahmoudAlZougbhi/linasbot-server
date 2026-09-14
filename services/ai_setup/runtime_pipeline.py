@@ -283,8 +283,8 @@ async def prepare_response(
             section_price_entries,
         )
 
-        prices_section = normalize_prices_section(sections.get("prices") or {})
-        catalog_items = section_catalog_items(prices_section)
+        normalized_prices = normalize_prices_section(sections.get("prices") or {})
+        catalog_items = section_catalog_items(normalized_prices)
         if catalog_items:
             matches = resolve_catalog_item_ids(message, catalog_items)
             single_id, ambiguous = disambiguate_matches(matches)
@@ -305,8 +305,8 @@ async def prepare_response(
             if quote_item_id and any(i.id == quote_item_id for i in catalog_items):
                 quote = compute_quote(
                     catalog_items=catalog_items,
-                    price_entries=section_price_entries(prices_section),
-                    discount_rules=section_discount_rules(prices_section),
+                    price_entries=section_price_entries(normalized_prices),
+                    discount_rules=section_discount_rules(normalized_prices),
                     request_lines=[QuoteRequestLine(catalog_item_id=quote_item_id, quantity=1)],
                     context=PricingContext(
                         tenant_id=tenant_id,

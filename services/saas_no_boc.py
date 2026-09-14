@@ -47,45 +47,45 @@ def log_report_event(event_type: str, user_id: str, user_gender: str, details: d
         _log.warning("ops report log failed: %s", type(exc).__name__)
 
 
-async def get_customer_by_phone(**_kwargs: Any) -> dict[str, Any]:
+async def get_customer_by_phone(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     return _disabled("get_customer_by_phone")
 
 
-async def check_customer_gender(**_kwargs: Any) -> dict[str, Any]:
+async def check_customer_gender(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     return _disabled("check_customer_gender")
 
 
-async def create_customer(**_kwargs: Any) -> dict[str, Any]:
+async def create_customer(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     return _disabled("create_customer")
 
 
-async def send_appointment_reminders(**_kwargs: Any) -> dict[str, Any]:
+async def send_appointment_reminders(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     out = _disabled("send_appointment_reminders")
     out["data"] = {}
     return out
 
 
-async def get_customer_appointments(**_kwargs: Any) -> dict[str, Any]:
+async def get_customer_appointments(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     out = _disabled("get_customer_appointments")
     out["data"] = []
     return out
 
 
-async def get_paused_appointments_between_dates(**_kwargs: Any) -> dict[str, Any]:
+async def get_paused_appointments_between_dates(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     out = _disabled("get_paused_appointments_between_dates")
     out["data"] = []
     return out
 
 
-async def get_missed_appointments(**_kwargs: Any) -> dict[str, Any]:
+async def get_missed_appointments(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     out = _disabled("get_missed_appointments")
     out["data"] = []
     return out
 
 
-async def check_next_appointment(**_kwargs: Any) -> dict[str, Any]:
+async def check_next_appointment(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     return _disabled("check_next_appointment")
 
 
-async def generate_daily_report_command(**_kwargs: Any) -> None:
+async def generate_daily_report_command(*_args: Any, **_kwargs: Any) -> None:
     return None

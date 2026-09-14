@@ -29,7 +29,7 @@ from storage.persistent_storage import _DATA_ROOT as _DEFAULT_DATA_ROOT
 # Overridable in tests
 _DATA_ROOT = _DEFAULT_DATA_ROOT
 
-DEFAULT_SUBSCRIPTION_EXEMPT_TENANTS = frozenset()
+DEFAULT_SUBSCRIPTION_EXEMPT_TENANTS: frozenset[str] = frozenset()
 
 
 def _catalog_features(plan_id: str) -> dict[str, Any]:

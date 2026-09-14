@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-DEFAULT_UNLIMITED_TENANTS = frozenset()
+DEFAULT_UNLIMITED_TENANTS: frozenset[str] = frozenset()
 
 # One-time legacy split (documented; do not invent other ratios).
 LEGACY_INPUT_SHARE = 0.80

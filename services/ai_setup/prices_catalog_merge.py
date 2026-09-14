@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.ai_setup.pricing.schemas import CatalogItem
+from services.ai_setup.pricing.schemas import AudienceScope, CatalogItem
 from services.ai_setup.schemas import PricesSection, ServiceRecord
 
 
@@ -57,8 +57,13 @@ def merge_service_records_into_prices(
     )
 
 
-def _audience(value: str | None) -> str:
-    raw = (value or "any").strip().lower()
-    if raw in {"men", "women", "general", "any"}:
-        return raw
-    return "any"
+_AUDIENCE: dict[str, AudienceScope] = {
+    "men": "men",
+    "women": "women",
+    "general": "general",
+    "any": "any",
+}
+
+
+def _audience(value: str | None) -> AudienceScope:
+    return _AUDIENCE.get((value or "any").strip().lower(), "any")
