@@ -7,7 +7,14 @@ import re
 import pytest
 
 from services.ai_setup.runtime_pipeline import finalize_response, prepare_response
-from services.ai_setup.schemas import HandoffContact, HandoffMatrixRow, HandoffPolicy
+from services.ai_setup.schemas import (
+    HandoffContact,
+    HandoffMatrixRow,
+    HandoffPolicy,
+    LocalizedLabels,
+    RestrictedPolicy,
+    RestrictedTopic,
+)
 from services.local_qa_service import local_qa_service
 from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
@@ -23,6 +30,19 @@ def _handoff_with_default_contact() -> dict:
     contact = HandoffContact(id="main", phone_e164="+96170000000", label="Main WhatsApp", gender="any")
     row = HandoffMatrixRow(id="row_main", contact_id="main", enabled=True, gender="any")
     return HandoffPolicy(contacts=[contact], matrix=[row]).model_dump(mode="json")
+
+
+def _owner_tattoo_restricted_policy() -> dict:
+    return RestrictedPolicy(
+        topics=[
+            RestrictedTopic(
+                id="tattoo_removal",
+                labels=LocalizedLabels(en="tattoo removal", ar="إزالة الوشم"),
+                keywords=["tattoo", "tattoo removal", "وشم"],
+                active=True,
+            )
+        ]
+    ).model_dump(mode="json")
 
 
 @pytest.mark.asyncio
@@ -42,14 +62,12 @@ async def test_no_published_version_is_honest_failure() -> None:
 @pytest.mark.asyncio
 async def test_restricted_topic_refused_and_never_offers_handoff_number() -> None:
     """T7/T23: restricted + booking intent together must NEVER return a WhatsApp number."""
-    from services.ai_setup.schemas import initial_restricted_policy
-
     tenant_id = "cm_runtime_test_restricted_booking"
     await publish_test_content(
         tenant_id,
         {
             "handoff": _handoff_with_default_contact(),
-            "restricted": initial_restricted_policy(active=True).model_dump(mode="json"),
+            "restricted": _owner_tattoo_restricted_policy(),
         },
     )
 
