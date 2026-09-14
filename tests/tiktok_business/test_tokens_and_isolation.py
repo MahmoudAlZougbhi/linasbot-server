@@ -6,11 +6,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from services.meta_app_registry import MetaCredentialError
 from services.integrations.tiktok.crypto import open_tiktok_tokens, seal_tiktok_tokens
 from services.integrations.tiktok.repository import TikTokRepository
 from services.integrations.tiktok.scopes import comments_manage_ready, messaging_send_ready
 from services.integrations.tiktok.status import tiktok_integration_row
+from services.meta_app_registry import MetaCredentialError
 from tests.tiktok_business.conftest import seed_connection
 
 

@@ -12,10 +12,10 @@ from services.dashboard.activity import build_activity_summary
 from services.integration_capabilities import list_tenant_integration_status
 from services.integrations.channel_capability_state import action_id_for, supported_platforms
 from services.integrations.channel_capability_toggles import attach_channel_toggles
-from services.live_chat.channel import live_chat_channel_matches, resolve_live_chat_channel
-from services.social_user_id import compose_social_user_id
 from services.integrations.tiktok.config import REQUESTED_SCOPES, tiktok_redirect_uri, tiktok_webhook_callback_url
 from services.integrations.tiktok.scopes import messaging_send_ready
+from services.live_chat.channel import live_chat_channel_matches, resolve_live_chat_channel
+from services.social_user_id import compose_social_user_id
 from tests.tiktok_business.conftest import seed_connection
 
 

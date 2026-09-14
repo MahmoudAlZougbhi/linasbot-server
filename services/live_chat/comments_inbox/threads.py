@@ -7,8 +7,8 @@ from typing import Any
 
 import httpx
 
-from services.live_chat.comments_inbox.thread_pairs import nested_replies, pair_comment_threads, pair_tiktok_threads
 from services.brain.reply.connected_posts import list_tenant_comment_accounts
+from services.live_chat.comments_inbox.thread_pairs import nested_replies, pair_comment_threads, pair_tiktok_threads
 from services.meta_app_registry import MetaCredentialError, get_meta_app_registry
 from services.meta_graph_routing import graph_api_url, graph_api_version_for_binding
 

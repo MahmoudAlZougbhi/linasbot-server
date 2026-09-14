@@ -7,10 +7,10 @@ import pytest
 from services.billing.membership.plan_catalog import PLAN_CATALOG, plan_features
 from services.billing.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
 from services.billing.plan_economics import PLAN_FEATURES
+from services.integrations.web_chat.store import WebChatStore
 from services.live_chat.channel import resolve_live_chat_channel
 from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT, SOURCE_CHANNELS
 from services.smart_followup.channels import normalize_followup_channel
-from services.integrations.web_chat.store import WebChatStore
 
 
 def test_web_plan_matrix_matches_whatsapp_tier() -> None:

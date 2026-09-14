@@ -11,7 +11,11 @@ from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 from modules.api_security import is_platform_owner, require_permission, require_session, user_has_permission
 from modules.core import app
 from services.integrations.whatsapp.config import get_whatsapp_cloud_flags, whatsapp_config_key_presence
-from services.integrations.whatsapp.embedded_signup import WhatsAppSignupError, complete_embedded_signup, start_embedded_signup
+from services.integrations.whatsapp.embedded_signup import (
+    WhatsAppSignupError,
+    complete_embedded_signup,
+    start_embedded_signup,
+)
 from services.integrations.whatsapp.entitlement import (
     WhatsAppEntitlementError,
     assert_whatsapp_connection_allowed,

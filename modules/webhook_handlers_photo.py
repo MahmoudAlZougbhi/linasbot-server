@@ -12,8 +12,8 @@ import config
 from config import WHATSAPP_API_TOKEN
 from handlers.text_handlers import _process_and_respond
 from modules.core import whatsapp_api_client
-from services.saas_no_boc import log_report_event
 from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
+from services.saas_no_boc import log_report_event
 from utils.utils import save_conversation_message_to_firestore
 
 

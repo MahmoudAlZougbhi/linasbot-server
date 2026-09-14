@@ -15,8 +15,8 @@ def schedule_combine_flush(
     payload: dict[str, Any] | None = None,
 ) -> str | None:
     """Return job id. Queued jobs are bumped; a processing job gets a follow-up."""
-    from services.job_queue import job_queue
     from services.integrations.omnichannel.queues import physical_queue_for
+    from services.job_queue import job_queue
     from services.queues.models import QueueJob
 
     backend = getattr(job_queue, "_redis", None)

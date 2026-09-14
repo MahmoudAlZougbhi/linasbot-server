@@ -223,8 +223,8 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
         emit_wa_event("unsupported_no_ai", message_type=event.message_type)
         _finish_claim_without_ai(claim_id)
         return "accepted"
-    from services.job_queue import job_queue
     from services.integrations.omnichannel.enqueue import AMBIGUOUS_ENQUEUE, enqueue_job, should_defer_to_worker
+    from services.job_queue import job_queue
 
     if should_defer_to_worker():
         if not getattr(job_queue, "production_ready", False):

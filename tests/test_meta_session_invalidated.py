@@ -8,6 +8,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from services.integrations.omnichannel.meta_errors import MetaProviderError
 from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
 from services.meta_app_registry_session import PASSWORD_CHANGED_RECONNECT
 from services.meta_session_invalidated import (
@@ -17,7 +18,6 @@ from services.meta_session_invalidated import (
     probe_binding_session,
 )
 from services.mobile_integrations_display import enrich_mobile_integration_row
-from services.integrations.omnichannel.meta_errors import MetaProviderError
 from tests.meta_app_registry_helpers import _credential
 
 INSTAGRAM_ID = "17840000999900011"

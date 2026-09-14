@@ -17,8 +17,8 @@ from modules.webhook_handlers_parse import (
     _count_images_in_single_message,
     _count_non_empty_lines,
 )
-from services.saas_no_boc import log_report_event
 from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
+from services.saas_no_boc import log_report_event
 from utils.utils import set_human_takeover_status
 
 

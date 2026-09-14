@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.brain.reply.connected_posts import list_connected_posts, list_tenant_comment_accounts
 from services.live_chat.comments_inbox.kinds import media_kind
 from services.live_chat.comments_inbox.watchlist import platform_watch
-from services.brain.reply.connected_posts import list_connected_posts, list_tenant_comment_accounts
 
 
 def _account_for(tenant_id: str, platform: str) -> dict[str, str] | None:

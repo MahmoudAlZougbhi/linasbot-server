@@ -10,6 +10,7 @@ from typing import Any
 
 import httpx
 
+from services.integrations.omnichannel.comment_limit import comment_send_allowed
 from services.meta_app_registry import APP_A_KEY, MetaAssetBinding
 from services.meta_comment_events import ResolvedMetaCommentEvent
 from services.meta_comment_reply_generate import generate_comment_reply_text as _generate_comment_reply_text
@@ -19,7 +20,6 @@ from services.meta_comment_reply_inspect import (
 )
 from services.meta_comment_reply_settings import get_comment_reply_setting
 from services.meta_graph_routing import graph_api_url
-from services.integrations.omnichannel.comment_limit import comment_send_allowed
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 

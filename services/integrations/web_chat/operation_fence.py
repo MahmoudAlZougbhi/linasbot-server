@@ -11,7 +11,12 @@ from services.integrations.web_chat.operation import (
     _sync_runtime_lease,
     operation_session,
 )
-from services.integrations.web_chat.operation_fsm import OperationFsmError, OperationState, assert_transition, may_release_credit
+from services.integrations.web_chat.operation_fsm import (
+    OperationFsmError,
+    OperationState,
+    assert_transition,
+    may_release_credit,
+)
 from services.integrations.web_chat.operation_lease import assert_lease_fence, extend_lease
 
 

@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from db.models.whatsapp_cloud import WhatsAppConnection, WhatsAppConversation
 from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob, WhatsAppSmartFollowUpSettings
+from services.integrations.whatsapp.config import get_whatsapp_cloud_flags
+from services.integrations.whatsapp.entitlement import evaluate_ai_eligibility, tenant_has_whatsapp_pilot
 from services.smart_followup.types import FollowUpConversationView
 from services.smart_followup.window_rules import (
     remaining_safe_seconds as _remaining_safe_seconds,
@@ -21,8 +23,6 @@ from services.smart_followup.window_rules import (
 from services.smart_followup.window_rules import (
     window_allows_send as _window_allows_send,
 )
-from services.integrations.whatsapp.config import get_whatsapp_cloud_flags
-from services.integrations.whatsapp.entitlement import evaluate_ai_eligibility, tenant_has_whatsapp_pilot
 
 
 def _to_view(conv: WhatsAppConversation) -> FollowUpConversationView:

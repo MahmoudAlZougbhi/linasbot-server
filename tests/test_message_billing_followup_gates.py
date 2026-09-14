@@ -7,7 +7,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from services.billing.membership.reservation_gc import _created_at
-from services.integrations.web_chat.followup_message_ledger import credit_reservation_required, followup_uses_message_ledger
+from services.integrations.web_chat.followup_message_ledger import (
+    credit_reservation_required,
+    followup_uses_message_ledger,
+)
 
 
 def test_flags_stay_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -26,9 +29,9 @@ def test_message_billing_skips_web_credit_reservation(monkeypatch: pytest.Monkey
 def test_web_adapter_and_delivery_honor_message_ledger() -> None:
     from inspect import getsource
 
-    from services.smart_followup.adapters import web as web_adapter
     from services.integrations.web_chat import followup_delivery
     from services.integrations.whatsapp import ai_bridge
+    from services.smart_followup.adapters import web as web_adapter
 
     assert "credit_reservation_required" in getsource(web_adapter.WebFollowUpAdapter.send_followup)
     assert "followup_uses_message_ledger" in getsource(followup_delivery._preflight_reservation_or_resume)

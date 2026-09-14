@@ -85,8 +85,8 @@ async def send_visitor_message(
         raise SessionAuthorityError("LEGACY_SESSION_REJECTED", "Legacy session must be re-bootstrapped.")
 
     try:
-        from services.job_queue import job_queue
         from services.integrations.omnichannel.enqueue import AMBIGUOUS_ENQUEUE, enqueue_job, should_defer_to_worker
+        from services.job_queue import job_queue
 
         if should_defer_to_worker():
             if idempotency_key and active_store.has_assistant_delivery(session_id, idempotency_key):

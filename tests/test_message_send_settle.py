@@ -131,9 +131,9 @@ def test_whatsapp_bridge_does_not_capture_before_send() -> None:
 
 
 def test_comment_and_omni_settle_after_delivery() -> None:
-    from services.meta_comment_brain_send import send_comment_destinations
     from services.integrations.omnichannel.deliver import _finish_success
     from services.integrations.tiktok.comment_ai import process_tiktok_comment_ai
+    from services.meta_comment_brain_send import send_comment_destinations
 
     comment = getsource(send_comment_destinations)
     assert "_settle_comment_send" in comment

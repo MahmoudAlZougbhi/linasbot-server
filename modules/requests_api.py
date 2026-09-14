@@ -309,8 +309,8 @@ async def send_request_manual_chat(request_id: str, body: RequestManualSendBody,
                 status_code=409, detail={"code": "NO_CONVERSATION", "message": "Request has no conversation"}
             )
 
-    from services.live_chat.service import live_chat_service
     from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
+    from services.live_chat.service import live_chat_service
 
     adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
     return await live_chat_service.send_operator_message(

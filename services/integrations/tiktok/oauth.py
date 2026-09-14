@@ -7,7 +7,6 @@ from typing import Any
 from urllib.parse import urlencode
 
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
-from services.meta_oauth_return import oauth_completion_redirect_url
 from services.integrations.tiktok.config import (
     REQUESTED_SCOPES,
     TIKTOK_AUTHORIZE_URL,
@@ -22,6 +21,7 @@ from services.integrations.tiktok.http_client import tiktok_request
 from services.integrations.tiktok.oauth_state import create_signed_state, parse_signed_state
 from services.integrations.tiktok.repository import TikTokRepository
 from services.integrations.tiktok.scopes import comments_manage_ready, missing_requested, profile_ready
+from services.meta_oauth_return import oauth_completion_redirect_url
 
 
 def _expires(seconds: Any) -> datetime:

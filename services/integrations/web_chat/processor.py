@@ -21,7 +21,12 @@ from services.integrations.web_chat.operation_fence import fenced_failure_releas
 from services.integrations.web_chat.operation_fsm import OperationFsmError, OperationState, stable_operation_key
 from services.integrations.web_chat.persistence import PersistFailure, PersistOutcome, persist_web_chat_message
 from services.integrations.web_chat.session_authority import verified_session_snapshot
-from services.integrations.web_chat.store import WebChatStoreBackend, WebChatVisitorSession, WebChatWidgetConfig, web_chat_store
+from services.integrations.web_chat.store import (
+    WebChatStoreBackend,
+    WebChatVisitorSession,
+    WebChatWidgetConfig,
+    web_chat_store,
+)
 
 
 class WebChatError(Exception):
