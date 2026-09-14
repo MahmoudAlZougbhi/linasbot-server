@@ -75,15 +75,13 @@ def _normalize_channel(raw: Any) -> str:
 
 
 def _entry_matches_tenant(entry: dict[str, Any], tenant_id: str) -> bool:
-    """Match entry tenant; unlabeled historical rows match only explicit linas queries."""
+    """Match entry tenant. Unlabeled historical rows never inherit another workspace."""
     tid = str(tenant_id or "").strip().lower()
     if not tid:
         raise ValueError("tenant_id required")
     raw = entry.get("tenant_id")
     if raw is None or str(raw).strip() == "":
-        # Historical activity rows predating tenant tagging: attribute only when
-        # the caller intentionally queries the founder clinic tenant.
-        return tid == "linas"
+        return False
     return str(raw).strip().lower() == tid
 
 

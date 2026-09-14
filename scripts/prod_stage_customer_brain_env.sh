@@ -108,7 +108,7 @@ if len(voyage) < 20:
     raise SystemExit("[brain-env-stage] voyage length_too_short")
 updates = {
     "VOYAGE_API_KEY": voyage,
-    "LINAS_CUSTOMER_AI_LAB": "true",
+    "LINAS_CUSTOMER_AI_LAB": "false",
     "EMERGENCY_LEGACY_REPLY_ENABLED": "false",
     "MESSAGE_BILLING_CUTOVER": "false",
     "MESSAGE_BILLING_ENABLED": "false",

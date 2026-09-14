@@ -9,7 +9,7 @@ export PYTHONPATH="/opt/linasbot${PYTHONPATH:+:$PYTHONPATH}"
 "$PYTHON_BIN" - <<'PY'
 from scripts.ha.production_env_cas import atomic_update_canonical_env
 updates = {
-    "LINAS_CUSTOMER_AI_LAB": "true",
+    "LINAS_CUSTOMER_AI_LAB": "false",
     "EMERGENCY_LEGACY_REPLY_ENABLED": "false",
     "MESSAGE_BILLING_CUTOVER": "false",
     "MESSAGE_BILLING_ENABLED": "false",

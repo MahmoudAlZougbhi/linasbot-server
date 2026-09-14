@@ -34,7 +34,7 @@ def test_resolve_social_whatsapp_number_rejects_empty_tenant() -> None:
         resolve_social_whatsapp_number("SOCIAL_WHATSAPP_BEIRUT_FEMALE", tenant_id="   ")
 
 
-def test_resolve_social_whatsapp_number_accepts_explicit_linas(
+def test_resolve_social_whatsapp_number_unpublished_tenant_has_no_matrix(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CM_RUNTIME_MODE", "legacy")
@@ -42,7 +42,7 @@ def test_resolve_social_whatsapp_number_accepts_explicit_linas(
         "SOCIAL_WHATSAPP_BEIRUT_FEMALE",
         tenant_id="linas",
     )
-    assert result == "+96178847527"
+    assert result is None
 
 
 def test_route_social_contact_request_fails_closed_without_tenant() -> None:
@@ -54,11 +54,11 @@ def test_route_social_contact_request_works_with_explicit_tenant(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CM_RUNTIME_MODE", "legacy")
-    ud = _scoped_user_data(tenant_id="linas")
+    ud = _scoped_user_data(tenant_id="shop-a")
     r1 = route_social_contact_request("I want to book", ud, "en")
     assert r1 is not None
     r2 = route_social_contact_request("Beirut", ud, "en")
     assert r2 is not None
     r3 = route_social_contact_request("female", ud, "en")
     assert r3 is not None
-    assert "wa.me/96178847527" in r3.reply
+    assert "wa.me/" not in r3.reply.lower()

@@ -38,29 +38,18 @@ def test_cm_sections_include_dynamic_messages_and_restricted() -> None:
 
 
 def test_initial_restricted_topic_ids_match_labels() -> None:
-    assert INITIAL_RESTRICTED_TOPIC_IDS == (
-        "tattoo_removal",
-        "co2_laser",
-        "pigmentation_removal",
-        "facial_skin_cleaning",
-    )
+    assert INITIAL_RESTRICTED_TOPIC_IDS == ()
+    assert INITIAL_RESTRICTED_LABELS == {}
     assert set(INITIAL_RESTRICTED_TOPIC_IDS) == set(INITIAL_RESTRICTED_LABELS)
-    for _topic_id, labels in INITIAL_RESTRICTED_LABELS.items():
-        assert labels["en"]
-        assert labels["ar"]
-        assert labels["fr"]
 
 
 def test_initial_restricted_defaults_helpers() -> None:
     topics = initial_restricted_topics()
-    assert [t.id for t in topics] == list(INITIAL_RESTRICTED_TOPIC_IDS)
-    assert all(t.active is False for t in topics)
+    assert topics == []
     active_topics = initial_restricted_topics(active=True)
-    assert all(t.active for t in active_topics)
+    assert active_topics == []
     policy = initial_restricted_policy(active=True)
-    assert len(policy.topics) == 4
-    tattoo = next(t for t in policy.topics if t.id == "tattoo_removal")
-    assert tattoo.labels.en == "Tattoo removal"
+    assert policy.topics == []
 
 
 def test_publish_enabled_by_default(monkeypatch) -> None:

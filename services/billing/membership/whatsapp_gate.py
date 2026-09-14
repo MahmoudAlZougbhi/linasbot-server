@@ -13,9 +13,8 @@ class WhatsAppPlanDenied(PermissionError):
 def assert_whatsapp_plan_allowed(tenant_id: str) -> None:
     """Fail closed for paid tenants without the WhatsApp plan flag.
 
-    Subscription-exempt tenants (default: ``linas``) are allowed — they are not
-    on the public paid matrix and must keep founder clinic WhatsApp workable.
-    Catalog features are SoT; stored entitlement.features may be stale.
+    Subscription-exempt tenants (``SUBSCRIPTION_EXEMPT_TENANT_IDS`` env) skip the paid-plan check.
+    Default exempt list is empty. Catalog features are SoT; stored entitlement.features may be stale.
     """
 
     if is_subscription_exempt_tenant(tenant_id):

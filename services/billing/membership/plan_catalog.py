@@ -86,7 +86,7 @@ HIGHEST_PUBLIC_PLAN_ID: Final[PlanId] = PUBLIC_PLAN_IDS[-1]
 
 
 def is_highest_catalog_plan(plan_id: str | None) -> bool:
-    """True only for the top public catalog plan (Max). Do not treat founder ``linas`` as Max."""
+    """True only for the top public catalog plan (Max). Tenant slug is not a plan id."""
     return (plan_id or "").strip().lower() == HIGHEST_PUBLIC_PLAN_ID
 
 

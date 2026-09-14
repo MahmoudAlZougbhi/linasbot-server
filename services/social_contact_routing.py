@@ -304,6 +304,7 @@ def route_social_contact_request(
         tenant_id=_tenant_id_from_user_data(user_data),
     )
     if not wa_phone:
+        _clear_flow_state(user_data)
         return SocialContactRouteResult(
             _missing_contact(lang),
             detected_intent,
