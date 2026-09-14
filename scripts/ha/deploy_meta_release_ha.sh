@@ -9743,18 +9743,22 @@ start_admitted_target_runtime() {
     assert_unit_file_contract "linasbot-worker@${queue}.service"
   done
   systemctl start linasbot.service
-  # Cold start after CPython rematerialize can exceed 45s. Do not fall through
+  # Full main.py after CPython rematerialize can exceed 90s. Do not fall through
   # to a single-shot health probe that Connection-refuses and fail-closes.
-  for _ in $(seq 1 90); do
-    if curl -fsS http://127.0.0.1:8003/api/health 2>/dev/null | \
+  for _ in $(seq 1 240); do
+    if curl -fsS --max-time 2 http://127.0.0.1:8003/api/health 2>/dev/null | \
       grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
       health_ok=1
       break
     fi
     sleep 1
   done
-  test "$health_ok" = 1 || \
+  if [ "$health_ok" != 1 ]; then
+    log "canonical target API start diagnostics $(systemctl show linasbot.service -p ActiveState,SubState,Result,ExecMainStatus,NRestarts,MainPID --no-pager 2>/dev/null || true)"
+    journalctl -u linasbot.service -n 80 --no-pager -o cat 2>/dev/null || true
+    tail -n 80 /var/log/linasbot.error.log 2>/dev/null || true
     die "canonical target API did not publish /api/health on :8003 after start"
+  fi
   systemctl is-active --quiet linasbot.service || die "canonical target API failed final start"
   assert_unit_contract linasbot
   assert_health_while_drained
