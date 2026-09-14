@@ -1628,9 +1628,7 @@ def test_deploy_proves_full_cluster_runtime_env_and_never_derives_node_local_val
     assert "prod_upsert_model_routing_env.py" not in activation
     assert "never derives node-local CM/model values" in activation
     assert "apply_model_policy_env_cluster" in recovery
-    assert recovery.index("apply_model_policy_env_cluster") < recovery.index(
-        'remote_node "$peer_host" recover-admit'
-    )
+    assert recovery.index("apply_model_policy_env_cluster") < recovery.index('remote_node "$peer_host" recover-admit')
     assert "reconcile-model-policy-env" in source
     assert "LINAS_CUSTOMER_RETRIEVAL_MODEL" in source[source.index("reconcile_model_policy_env() {") :]
     assert orchestrate.count('assert_cluster_runtime_env_parity "$peer_host"') >= 4
