@@ -47,8 +47,6 @@ def reasoning_effort_for_model(model: str) -> str | None:
         return "low"
     if "terra" in m:
         return "medium"
-    if "luna" in m:
-        return "none"
     if "sol" in m:
         return "low"
     if m.startswith("gpt-5") and not m.startswith("gpt-5.4"):

@@ -205,5 +205,13 @@ Keep #677 media analysis.
 - Snapchat is not a live Integrations row (no coming-soon stub). Connectable channels: Instagram, Facebook, WhatsApp, Website, TikTok.
 - KEEP hub tiles stay `mobileSupported: true`. Creative types stay refused under Owner Copilot only.
 
+## WAVE G — zero-legacy freeze + acceptance matrix
+
+CI fails when live mounts still have: Monty as a runtime WhatsApp path, Luna title resolver / Luna customer retrieval, Creative enabled on plans, `smart_retrieval`, live `/api/test*` routers, Owner AI v1, dual OpenAI `semantic_index` on publish, BOC booking, clinic `data/qa_database.json` corpus, or `DEFAULT_TENANT` / `or "linas"` prod fallback.
+
+Matrix (see `tests/test_wave_g_acceptance_matrix.py`): every drawer tile; Live Chat tenant A≠B; two commenters = two histories + #677 media; AI Setup publish → Voyage; Requests; Integrations without Snapchat; Subscription credits SoT; web marketing + portal + widget; Copilot Sol + Creative refused; domain folders ≤500.
+
+Scale job-progress still uses historical Redis stage labels (`luna_started`). Those are stuck-threshold keys, not the customer Luna engine. Renaming them would change env/histogram names (infra — needs Mahmoud).
+
 
 
