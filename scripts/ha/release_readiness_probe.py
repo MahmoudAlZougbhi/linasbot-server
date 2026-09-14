@@ -112,7 +112,7 @@ def main() -> None:
         raise RuntimeError("HA readiness evaluator returned an unexpected response")
     payload = json.loads(bytes(response.body))
     if response.status_code != 200 or payload.get("ok") is not True:
-        raise RuntimeError("target dependency readiness failed")
+        raise RuntimeError("target dependency readiness failed: " + json.dumps(payload, sort_keys=True))
     forbidden = {"modules.event_handlers", "storage.migrate_bootstrap"}
     if forbidden.intersection(sys.modules):
         raise RuntimeError("HA readiness probe imported side-effectful application startup")
