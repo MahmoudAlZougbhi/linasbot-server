@@ -37,8 +37,7 @@ def test_public_schemas_import_still_exposes_content_and_runtime() -> None:
     payload = default_section_payload("ai_basics")
     assert "clinic_name" in payload
     policy = initial_restricted_policy()
-    assert policy.topics
-    assert all(t.active is False for t in policy.topics)
+    assert policy.topics == []
     ra = RequestsAppointmentsSection.model_validate(default_section_payload("requests_appointments"))
     assert ra.module_enabled is False
     assert ra.enabled_types == []

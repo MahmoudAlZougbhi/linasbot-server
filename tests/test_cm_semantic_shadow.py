@@ -9,7 +9,7 @@ import pytest
 from services.ai_setup.embeddings import HASH_EMBEDDING_DIMENSIONS, cosine_similarity, embed_texts, embedding_pin
 from services.ai_setup.paths import indexes_dir
 from services.ai_setup.query_interpreter import interpret_query, interpret_query_deterministic, interpreter_llm_enabled
-from services.ai_setup.schemas import RestrictedPolicy, initial_restricted_policy
+from services.ai_setup.schemas import LocalizedLabels, RestrictedPolicy, RestrictedTopic
 from services.ai_setup.semantic_index import build_index, load_index, search
 from services.ai_setup.shadow_eval import run_shadow_eval
 from services.local_qa_service import local_qa_service
@@ -108,7 +108,16 @@ def test_interpreter_llm_disabled_by_default(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_deterministic_interpreter_extracts_booking_and_restricted() -> None:
-    restricted = initial_restricted_policy(active=True)
+    restricted = RestrictedPolicy(
+        topics=[
+            RestrictedTopic(
+                id="tattoo_removal",
+                labels=LocalizedLabels(en="tattoo removal"),
+                keywords=["tattoo", "tattoo removal"],
+                active=True,
+            )
+        ]
+    )
     result = interpret_query_deterministic(
         "I want to book an appointment for tattoo removal",
         restricted=restricted,

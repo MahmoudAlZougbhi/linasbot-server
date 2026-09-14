@@ -110,8 +110,8 @@ def test_spend_analytics_cross_tenant_no_share() -> None:
 
     assert acme["periods"]["trailing_12_months"]["interactions"] == 1
     assert other["periods"]["trailing_12_months"]["interactions"] == 1
-    # Unlabeled historical rows only match explicit linas queries.
-    assert linas["periods"]["trailing_12_months"]["interactions"] == 1
+    # Unlabeled historical rows are not attributed to any tenant, including linas.
+    assert linas["periods"]["trailing_12_months"]["interactions"] == 0
 
 
 @pytest.mark.parametrize("tenant_id", [None, "", "   "])
