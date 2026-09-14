@@ -209,7 +209,9 @@ def test_restart_simulation_new_process_reads_ha_pending(monkeypatch, acceptance
     monkeypatch.setattr(
         "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
-            return_value=__import__("services.integrations.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
+            return_value=__import__(
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult"]
+            ).PersistResult(
                 outcome="created",
                 conversation_id=f"web:{tenant_id}:{bundle.session_id}",
             )

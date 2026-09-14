@@ -93,7 +93,9 @@ def test_wave_x2_live_py_has_no_museum_imports() -> None:
     offenders: list[str] = []
     for path in _live_py():
         imported = _imported_modules(path)
-        hits = sorted(mod for mod in MUSEUM_MODULES if any(name == mod or name.startswith(f"{mod}.") for name in imported))
+        hits = sorted(
+            mod for mod in MUSEUM_MODULES if any(name == mod or name.startswith(f"{mod}.") for name in imported)
+        )
         if hits:
             rel = str(path.relative_to(ROOT)).replace("\\", "/")
             offenders.append(f"{rel}: {', '.join(hits)}")

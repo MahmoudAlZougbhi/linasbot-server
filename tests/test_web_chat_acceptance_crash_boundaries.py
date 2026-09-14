@@ -69,7 +69,9 @@ async def test_captured_before_complete_restart_no_second_ai(tmp_path, monkeypat
             side_effect=lambda **_kwargs: __import__(
                 "services.integrations.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
             ).PersistResult(
-                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+                outcome=__import__(
+                    "services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]
+                ).PersistOutcome.CREATED,
                 conversation_id=f"web:{widget.tenant_id}:{bundle.session_id}",
             )
         ),
@@ -86,8 +88,12 @@ async def test_captured_before_complete_restart_no_second_ai(tmp_path, monkeypat
                 raise RuntimeError("kill after captured before complete")
         return original_advance(runtime, from_state, target, **kwargs)
 
-    monkeypatch.setattr("services.integrations.web_chat.processor_turn_finalize.try_advance_operation", kill_before_complete)
-    monkeypatch.setattr("services.integrations.web_chat.processor_completion.try_advance_operation", kill_before_complete)
+    monkeypatch.setattr(
+        "services.integrations.web_chat.processor_turn_finalize.try_advance_operation", kill_before_complete
+    )
+    monkeypatch.setattr(
+        "services.integrations.web_chat.processor_completion.try_advance_operation", kill_before_complete
+    )
 
     with pytest.raises(RuntimeError, match="kill after captured before complete"):
         await process_web_chat_message(
@@ -151,7 +157,9 @@ async def test_complete_replay_repairs_missing_turn(tmp_path, monkeypatch, accep
             side_effect=lambda **_kwargs: __import__(
                 "services.integrations.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
             ).PersistResult(
-                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+                outcome=__import__(
+                    "services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]
+                ).PersistOutcome.CREATED,
                 conversation_id=f"web:{widget.tenant_id}:{bundle.session_id}",
             )
         ),
@@ -206,7 +214,9 @@ async def test_append_before_complete_crash_retries_to_one_turn(tmp_path, monkey
             side_effect=lambda **_kwargs: __import__(
                 "services.integrations.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
             ).PersistResult(
-                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+                outcome=__import__(
+                    "services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]
+                ).PersistOutcome.CREATED,
                 conversation_id=f"web:{widget.tenant_id}:{bundle.session_id}",
             )
         ),
@@ -223,8 +233,12 @@ async def test_append_before_complete_crash_retries_to_one_turn(tmp_path, monkey
                 raise RuntimeError("kill after append before complete commit")
         return original_advance(runtime, from_state, target, **kwargs)
 
-    monkeypatch.setattr("services.integrations.web_chat.processor_turn_finalize.try_advance_operation", kill_on_first_complete)
-    monkeypatch.setattr("services.integrations.web_chat.processor_completion.try_advance_operation", kill_on_first_complete)
+    monkeypatch.setattr(
+        "services.integrations.web_chat.processor_turn_finalize.try_advance_operation", kill_on_first_complete
+    )
+    monkeypatch.setattr(
+        "services.integrations.web_chat.processor_completion.try_advance_operation", kill_on_first_complete
+    )
 
     with pytest.raises(RuntimeError, match="kill after append before complete commit"):
         await process_web_chat_message(
@@ -288,7 +302,9 @@ async def test_captured_active_lease_blocks_retry_until_expiry_then_resumes(
             side_effect=lambda **_kwargs: __import__(
                 "services.integrations.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
             ).PersistResult(
-                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+                outcome=__import__(
+                    "services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]
+                ).PersistOutcome.CREATED,
                 conversation_id=f"web:{widget.tenant_id}:{bundle.session_id}",
             )
         ),
@@ -305,8 +321,12 @@ async def test_captured_active_lease_blocks_retry_until_expiry_then_resumes(
                 raise RuntimeError("hard crash before complete commit")
         return original_advance(runtime, from_state, target, **kwargs)
 
-    monkeypatch.setattr("services.integrations.web_chat.processor_turn_finalize.try_advance_operation", kill_before_complete)
-    monkeypatch.setattr("services.integrations.web_chat.processor_completion.try_advance_operation", kill_before_complete)
+    monkeypatch.setattr(
+        "services.integrations.web_chat.processor_turn_finalize.try_advance_operation", kill_before_complete
+    )
+    monkeypatch.setattr(
+        "services.integrations.web_chat.processor_completion.try_advance_operation", kill_before_complete
+    )
 
     original_abandon = __import__(
         "services.integrations.web_chat.processor_turn_finalize", fromlist=["abandon_operation_lease"]
@@ -320,7 +340,9 @@ async def test_captured_active_lease_blocks_retry_until_expiry_then_resumes(
             return
         original_abandon(runtime)
 
-    monkeypatch.setattr("services.integrations.web_chat.processor_turn_finalize.abandon_operation_lease", skip_first_abandon)
+    monkeypatch.setattr(
+        "services.integrations.web_chat.processor_turn_finalize.abandon_operation_lease", skip_first_abandon
+    )
 
     with pytest.raises(RuntimeError, match="hard crash before complete commit"):
         await process_web_chat_message(
