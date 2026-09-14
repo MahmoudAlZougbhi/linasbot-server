@@ -32,10 +32,10 @@ def _load_env() -> None:
                 os.environ.setdefault(key, value.strip().strip("'").strip('"'))
 
 _load_env()
-from services.cm.publish import publish_faq_only
-from services.cm.publish_gate import ensure_publish_enabled
-from services.cm.storage import get_draft
-from services.cm.schemas import FaqSection
+from services.ai_setup.publish import publish_faq_only
+from services.ai_setup.publish_gate import ensure_publish_enabled
+from services.ai_setup.storage import get_draft
+from services.ai_setup.schemas import FaqSection
 
 ensure_publish_enabled()
 faq = FaqSection.model_validate(get_draft("faq", tenant_id="${TENANT_ID}", create_default=True).payload)

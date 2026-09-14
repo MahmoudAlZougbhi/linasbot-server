@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from services.access_channels import filter_chats_for_session
-from services.live_chat_contracts import utc_now
-from services.live_chat_service import live_chat_service
+from services.live_chat.contracts import utc_now
+from services.live_chat.service import live_chat_service
 
 
 class _Doc:
@@ -100,7 +100,7 @@ async def test_unified_chats_tenant_a_never_sees_tenant_b() -> None:
         ),
     ]
     with (
-        patch("services.live_chat_service_unified.get_firestore_db", return_value=MagicMock()),
+        patch("services.live_chat.service_unified.get_firestore_db", return_value=MagicMock()),
         patch.object(svc, "_index_collection", return_value=MagicMock()),
         patch.object(svc, "_run_blocking_with_timeout", new_callable=AsyncMock, return_value=docs),
         patch.object(svc, "_compute_index_counters", new_callable=AsyncMock, return_value=svc._empty_counters()),
@@ -140,7 +140,7 @@ async def test_unified_cache_does_not_leak_across_tenants() -> None:
         page_size=20,
         counters=svc._empty_counters(),
     )
-    with patch("services.live_chat_service_unified.get_firestore_db", return_value=None):
+    with patch("services.live_chat.service_unified.get_firestore_db", return_value=None):
         leaked = await svc.get_unified_chats(tenant_id="tenant-b", page=1, page_size=20, filter_state="all")
         own = await svc.get_unified_chats(tenant_id="tenant-a", page=1, page_size=20, filter_state="all")
     assert leaked.get("chats") == []
@@ -151,7 +151,7 @@ async def test_unified_cache_does_not_leak_across_tenants() -> None:
 async def test_conversation_details_reject_foreign_tenant() -> None:
     svc = live_chat_service
     with (
-        patch("services.live_chat_service_details.get_firestore_db", return_value=MagicMock()),
+        patch("services.live_chat.service_details.get_firestore_db", return_value=MagicMock()),
         patch.object(svc, "thread_visible_to_tenant", new_callable=AsyncMock, return_value=False),
     ):
         result = await svc.get_conversation_details(
@@ -178,5 +178,5 @@ async def test_build_index_entry_requires_proven_tenant_for_upsert() -> None:
     assert entry["tenant_id"] == ""
     phone = svc._build_index_entry("+96170123456", {"conversation_id": "wa-1", "customer_info": {}}, [])
     assert phone.get("tenant_id") == ""
-    with patch("services.live_chat_service_rebuild.get_firestore_db", return_value=MagicMock()):
+    with patch("services.live_chat.service_rebuild.get_firestore_db", return_value=MagicMock()):
         await svc._upsert_index_entry(phone)

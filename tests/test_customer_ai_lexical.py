@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_ai.retrieve.cards import TitleCard, cards_from_sections
-from services.customer_ai.retrieve.expand import expand_hits
-from services.customer_ai.retrieve.lexical import BM25_K1, bm25_scores, search_cards, tokenize
+from services.brain.retrieve.cards import TitleCard, cards_from_sections
+from services.brain.retrieve.expand import expand_hits
+from services.brain.retrieve.lexical import BM25_K1, bm25_scores, search_cards, tokenize
 
 
 def test_lexical_finds_hair_removal_only() -> None:
@@ -172,7 +172,7 @@ def test_bm25_respects_family_scope_and_limit() -> None:
 
 @pytest.mark.asyncio
 async def test_hybrid_still_fuses_bm25_ranks_with_rrf() -> None:
-    from services.customer_ai.retrieve.hybrid import search_hybrid
+    from services.brain.retrieve.hybrid import search_hybrid
 
     cards = [_card("gift", "gift card terms"), _card("hair", "laser hair removal")]
     hits = await search_hybrid(cards, "laser hair removal", families={"services"})
@@ -183,7 +183,7 @@ async def test_hybrid_still_fuses_bm25_ranks_with_rrf() -> None:
 
 
 def test_arabic_clitics_still_match_published_tokens() -> None:
-    from services.customer_ai.retrieve.normalize_ar import expand_arabic_tokens
+    from services.brain.retrieve.normalize_ar import expand_arabic_tokens
 
     assert "بيروت" in expand_arabic_tokens(["ببيروت"])
     assert "ليزر" in expand_arabic_tokens(["الليزر"])
@@ -191,8 +191,8 @@ def test_arabic_clitics_still_match_published_tokens() -> None:
 
 
 def test_rerank_skip_uses_surface_equality_not_score_scale() -> None:
-    from services.customer_ai.retrieve.hybrid import HybridHit
-    from services.customer_ai.retrieve.rerank import should_rerank
+    from services.brain.retrieve.hybrid import HybridHit
+    from services.brain.retrieve.rerank import should_rerank
 
     exact = _card("hair", "laser")
     other = _card("gift", "laser gift card")

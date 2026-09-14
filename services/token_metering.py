@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from services.model_pricing import compute_cost_from_usage
-from services.token_wallet_service import (
+from services.billing.token_wallet_service import (
     InsufficientTokenBalance,
     is_unlimited_tenant,
     token_wallet_service,
 )
+from services.model_pricing import compute_cost_from_usage
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def assert_tenant_can_use_ai(tenant_id: str | None) -> None:
     ledger — remaining 0 blocks generation for every tenant.
     """
     tid = resolve_tenant_id(explicit=tenant_id)
-    from services.membership.generative_gate import generative_ai_blocked
+    from services.billing.membership.generative_gate import generative_ai_blocked
 
     if generative_ai_blocked(tid):
         raise PermissionError("Insufficient credits")

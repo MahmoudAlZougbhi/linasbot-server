@@ -13,7 +13,7 @@ from sqlalchemy import select
 from db.models.apple_billing import AppleAppAccountTokenRow, AuthExternalIdentityRow
 from db.session import whatsapp_session
 from services.apple_sign_in_service import is_private_relay_email
-from services.user_service import user_service
+from services.team.user_service import user_service
 
 logger = logging.getLogger(__name__)
 

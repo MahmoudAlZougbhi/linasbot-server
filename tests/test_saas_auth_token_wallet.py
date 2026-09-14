@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from modules.api_security import is_public_api
 from services.auth_email_tokens import AuthEmailTokenService
+from services.billing.token_wallet_service import InsufficientTokenBalance, TokenWalletService, is_unlimited_tenant
 from services.token_metering import assert_tenant_can_use_ai
 from services.token_package_catalog import (
     assert_public_payload_has_no_internal_economics,
@@ -17,7 +18,6 @@ from services.token_package_catalog import (
     catalog_public_payload,
     list_token_packages,
 )
-from services.token_wallet_service import InsufficientTokenBalance, TokenWalletService, is_unlimited_tenant
 
 
 @pytest.fixture()
@@ -51,7 +51,7 @@ def test_auth_email_routes_are_public() -> None:
 
 
 def test_forgot_password_does_not_reveal_missing_email(app_client: TestClient) -> None:
-    with mock.patch("services.user_service.user_service.get_user_by_email", return_value=None):
+    with mock.patch("services.team.user_service.user_service.get_user_by_email", return_value=None):
         response = app_client.post("/api/auth/forgot-password", json={"email": "nobody@example.com"})
     assert response.status_code == 200
     payload = response.json()
@@ -156,7 +156,7 @@ def test_wallet_credit_debit_atomic_no_negative(wallet_svc: TokenWalletService) 
 
 def test_zero_balance_blocks_ai_gate(wallet_svc: TokenWalletService, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("services.token_metering.token_wallet_service", wallet_svc)
-    monkeypatch.setattr("services.token_wallet_service.token_wallet_service", wallet_svc)
+    monkeypatch.setattr("services.billing.token_wallet_service.token_wallet_service", wallet_svc)
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
     with pytest.raises(InsufficientTokenBalance):
         assert_tenant_can_use_ai("newbiz")

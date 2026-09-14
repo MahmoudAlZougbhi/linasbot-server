@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_ai.providers.voyage_client import VoyageVectors
-from services.customer_ai.retrieve.cards import TitleCard
-from services.customer_ai.search.index_job import document_rows, embed_document_rows_incremental
-from services.customer_ai.search.store import reset_memory_store, write_documents
+from services.brain.providers.voyage_client import VoyageVectors
+from services.brain.retrieve.cards import TitleCard
+from services.brain.search.index_job import document_rows, embed_document_rows_incremental
+from services.brain.search.store import reset_memory_store, write_documents
 
 
 @pytest.mark.asyncio
@@ -19,8 +19,8 @@ async def test_unchanged_content_hash_skips_voyage(monkeypatch: pytest.MonkeyPat
         calls["n"] += len(texts)
         return VoyageVectors(space_id="entity", vectors=[[0.1, 0.2, 0.3, 0.0] for _ in texts])
 
-    monkeypatch.setattr("services.customer_ai.search.index_job.voyage_configured", lambda: True)
-    monkeypatch.setattr("services.customer_ai.search.index_job.embed_texts", _texts)
+    monkeypatch.setattr("services.brain.search.index_job.voyage_configured", lambda: True)
+    monkeypatch.setattr("services.brain.search.index_job.embed_texts", _texts)
 
     card = TitleCard(
         item_id="knowledge:svc1",
@@ -52,8 +52,8 @@ async def test_changed_content_hash_reembeds(monkeypatch: pytest.MonkeyPatch) ->
         calls.extend(texts)
         return VoyageVectors(space_id="entity", vectors=[[0.4, 0.1, 0.0, 0.0] for _ in texts])
 
-    monkeypatch.setattr("services.customer_ai.search.index_job.voyage_configured", lambda: True)
-    monkeypatch.setattr("services.customer_ai.search.index_job.embed_texts", _texts)
+    monkeypatch.setattr("services.brain.search.index_job.voyage_configured", lambda: True)
+    monkeypatch.setattr("services.brain.search.index_job.embed_texts", _texts)
 
     first = TitleCard(
         item_id="knowledge:svc1",

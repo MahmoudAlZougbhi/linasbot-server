@@ -5,7 +5,7 @@ cd /opt/linasbot
 echo "[sot-audit] deployed_sha=$(git rev-parse HEAD)"
 /opt/linasbot/venv/bin/python - <<'PY'
 import json
-from services.cm.sot_audit import audit_sot_sources
+from services.ai_setup.sot_audit import audit_sot_sources
 
 report = audit_sot_sources()
 ungated = [

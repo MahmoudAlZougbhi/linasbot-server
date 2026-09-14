@@ -230,7 +230,7 @@ class DashboardSessionService:
         # Defense-in-depth: reject sessions whose password epoch no longer matches the user.
         if user_id:
             try:
-                from services.user_service import user_service
+                from services.team.user_service import user_service
 
                 user = user_service.get_user_by_id(user_id)
                 if user is not None:

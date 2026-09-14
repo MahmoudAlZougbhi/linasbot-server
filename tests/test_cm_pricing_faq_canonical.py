@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from services.cm.faq_integration import (
+from services.ai_setup.faq_integration import (
     create_faq_pair_from_livechat,
     find_duplicate_faq_groups,
     list_cm_faq,
 )
-from services.cm.pricing.engine import compute_quote
-from services.cm.pricing.money import as_money, quantize_money
-from services.cm.pricing.schemas import (
+from services.ai_setup.pricing.engine import compute_quote
+from services.ai_setup.pricing.money import as_money, quantize_money
+from services.ai_setup.pricing.schemas import (
     CatalogItem,
     ItemVariant,
     PackageRule,
@@ -27,8 +27,8 @@ from services.cm.pricing.schemas import (
     RuleCondition,
     RuleConditionGroup,
 )
-from services.cm.pricing.section import normalize_prices_section
-from services.cm.schemas import LocalizedLabels, PricesSection
+from services.ai_setup.pricing.section import normalize_prices_section
+from services.ai_setup.schemas import LocalizedLabels, PricesSection
 
 pytestmark = pytest.mark.usefixtures("enable_faq_plan")
 
@@ -58,11 +58,11 @@ async def test_livechat_like_writes_canonical_cm_faq_only(monkeypatch: pytest.Mo
         return "السعر عشرين دولار."
 
     monkeypatch.setattr(
-        "services.cm.faq_integration.language_detection_service.translate_training_pair",
+        "services.ai_setup.faq_integration.language_detection_service.translate_training_pair",
         _fake_translate,
     )
     monkeypatch.setattr(
-        "services.cm.faq_integration._translate_to_arabic_script",
+        "services.ai_setup.faq_integration._translate_to_arabic_script",
         _fake_ar,
     )
 
@@ -234,9 +234,9 @@ def test_normalize_projects_package_and_resources() -> None:
 
 
 def test_no_body_part_engine_symbols_in_pricing_package() -> None:
-    import services.cm.pricing as pricing_pkg
-    import services.cm.pricing.engine as engine
-    import services.cm.pricing.schemas as schemas
+    import services.ai_setup.pricing as pricing_pkg
+    import services.ai_setup.pricing.engine as engine
+    import services.ai_setup.pricing.schemas as schemas
 
     for mod in (pricing_pkg, engine, schemas):
         assert not hasattr(mod, "BodyPartPricingEngine")
@@ -244,8 +244,8 @@ def test_no_body_part_engine_symbols_in_pricing_package() -> None:
 
 
 def test_empty_price_import_does_not_wipe_existing_catalog(tmp_path: Path) -> None:
-    from services.cm.pricing.migration import migrate_staged_price_files_to_catalog
-    from services.cm.storage import get_draft, put_draft
+    from services.ai_setup.pricing.migration import migrate_staged_price_files_to_catalog
+    from services.ai_setup.storage import get_draft, put_draft
 
     tenant = "tenant_empty_guard"
     env = get_draft("prices", tenant_id=tenant, create_default=True)
@@ -270,8 +270,8 @@ def test_empty_price_import_does_not_wipe_existing_catalog(tmp_path: Path) -> No
 
 
 def test_content_price_file_import_populates_catalog(tmp_path: Path) -> None:
-    from services.cm.pricing.migration import migrate_staged_price_files_to_catalog
-    from services.cm.storage import get_draft
+    from services.ai_setup.pricing.migration import migrate_staged_price_files_to_catalog
+    from services.ai_setup.storage import get_draft
 
     tenant = "tenant_price_content_import"
     stage = tmp_path / "stage"

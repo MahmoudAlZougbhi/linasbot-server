@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from services.billing_backend import auth_tokens_use_postgres, require_auth_token_pg_session
+from services.billing.billing_backend import auth_tokens_use_postgres, require_auth_token_pg_session
 from storage.persistent_storage import _DATA_ROOT
 
 MOBILE_REFRESH_TTL_SECONDS = int(os.getenv("MOBILE_REFRESH_TTL_SECONDS", str(60 * 60 * 24 * 30)))

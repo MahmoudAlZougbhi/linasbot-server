@@ -46,10 +46,10 @@ load_env()
 os.environ.setdefault("LINASBOT_DATA_ROOT", "/opt/linasbot_data")
 os.environ.setdefault("ENVIRONMENT", "production")
 
-from services.cm.pricing.migration import migrate_staged_price_files_to_catalog
-from services.cm.prod_migration import stage_live_data_for_migration
-from services.cm.storage import get_draft
-from services.cm.validation import validate_cm
+from services.ai_setup.pricing.migration import migrate_staged_price_files_to_catalog
+from services.ai_setup.prod_migration import stage_live_data_for_migration
+from services.ai_setup.storage import get_draft
+from services.ai_setup.validation import validate_cm
 
 tenant_id = "${TENANT_ID}"
 data_root = Path(os.environ["LINASBOT_DATA_ROOT"])

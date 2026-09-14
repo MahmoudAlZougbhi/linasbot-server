@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from services.cm.request_rules import format_request_rules_for_ai
-from services.customer_ai.evals.qa_tenants import linas_like_qa_sections, shop_b_qa_sections
-from services.customer_ai.planner.heuristic import overlay_plan, plan_message
+from services.ai_setup.request_rules import format_request_rules_for_ai
+from services.brain.evals.qa_tenants import linas_like_qa_sections, shop_b_qa_sections
+from services.brain.planner.heuristic import overlay_plan, plan_message
 
 
 def test_appointment_paraphrases_are_service_request() -> None:
@@ -53,7 +53,7 @@ def test_hours_question_is_not_turned_into_booking() -> None:
 
 
 def test_overlay_keeps_hours_when_llm_only_sees_knowledge() -> None:
-    from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+    from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 
     llm = PlannerPlan(
         tasks=[

@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.live_chat_operator_delivery_status import compose_operator_text_result
-from services.live_chat_operator_queue import live_chat_durable_mode, queue_unavailable_result
-from services.live_chat_service import live_chat_service
+from services.live_chat.operator_delivery_status import compose_operator_text_result
+from services.live_chat.operator_queue import live_chat_durable_mode, queue_unavailable_result
+from services.live_chat.service import live_chat_service
 from services.requests.manual_mode import activate_manual_mode
 
 
@@ -18,11 +18,11 @@ def _send_patches(*extra: object, user_id: str = "instagram:178414:psid"):
     pause_result = MagicMock(activated=True, already_active=False, control_epoch=3)
     return (
         patch(
-            "services.live_chat_service_operator._try_acquire_operator_send_idempotency",
+            "services.live_chat.service_operator._try_acquire_operator_send_idempotency",
             new_callable=AsyncMock,
             return_value=(True, None),
         ),
-        patch("services.live_chat_service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
+        patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=(user_id, None)),
         patch("utils.utils.get_firestore_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
@@ -32,8 +32,8 @@ def _send_patches(*extra: object, user_id: str = "instagram:178414:psid"):
             return_value=pause_result,
         ),
         patch.object(live_chat_service, "_refresh_index_for_conversation", new_callable=AsyncMock),
-        patch("services.live_chat_operator_delivery_status.publish_operator_delivery_status", new_callable=AsyncMock),
-        patch("services.live_chat_operator_delivery_status.persist_operator_delivery_status", new_callable=AsyncMock),
+        patch("services.live_chat.operator_delivery_status.publish_operator_delivery_status", new_callable=AsyncMock),
+        patch("services.live_chat.operator_delivery_status.persist_operator_delivery_status", new_callable=AsyncMock),
         *extra,
     )
 
@@ -81,8 +81,8 @@ async def test_instagram_queued_send_does_not_wait_for_graph() -> None:
 
     with ExitStack() as stack:
         for cm in _send_patches(
-            patch("services.live_chat_operator_queue.live_chat_durable_mode", lambda: "enqueue"),
-            patch("services.live_chat_operator_queue.enqueue_live_chat_operator_text", enqueue),
+            patch("services.live_chat.operator_queue.live_chat_durable_mode", lambda: "enqueue"),
+            patch("services.live_chat.operator_queue.enqueue_live_chat_operator_text", enqueue),
             patch("services.requests.delivery.deliver_meta_dm", slow),
         ):
             stack.enter_context(cm)
@@ -111,7 +111,7 @@ async def test_instagram_queue_unavailable_fails_closed() -> None:
     slow = AsyncMock()
     with ExitStack() as stack:
         for cm in _send_patches(
-            patch("services.live_chat_operator_queue.live_chat_durable_mode", lambda: "unavailable"),
+            patch("services.live_chat.operator_queue.live_chat_durable_mode", lambda: "unavailable"),
             patch("services.requests.delivery.deliver_meta_dm", slow),
             patch(
                 "services.requests.manual_mode.resume_manual_mode",
@@ -175,7 +175,7 @@ async def test_message_status_notify_requires_live_chat_user(monkeypatch: pytest
         "modules.live_chat_api_helpers.broadcast_sse_event",
         fake_broadcast,
     )
-    from services.live_chat_operator_delivery_status import notify_live_chat_operator_job
+    from services.live_chat.operator_delivery_status import notify_live_chat_operator_job
 
     await notify_live_chat_operator_job({"outbox_id": "x"}, delivery_status="sent")
     assert published == []
@@ -199,7 +199,7 @@ async def test_whatsapp_sync_when_durable_off() -> None:
     adapter.send_text_message = AsyncMock(return_value={"success": True})
     with ExitStack() as stack:
         for cm in _send_patches(
-            patch("services.live_chat_operator_queue.live_chat_durable_mode", lambda: "sync"),
+            patch("services.live_chat.operator_queue.live_chat_durable_mode", lambda: "sync"),
             user_id="+96170123456",
         ):
             stack.enter_context(cm)
@@ -218,9 +218,9 @@ async def test_whatsapp_sync_when_durable_off() -> None:
 
 
 def test_whatsapp_enqueue_skipped_in_sync_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.live_chat_operator_queue import try_enqueue_live_chat_whatsapp
+    from services.live_chat.operator_queue import try_enqueue_live_chat_whatsapp
 
-    monkeypatch.setattr("services.live_chat_operator_queue.live_chat_durable_mode", lambda: "sync")
+    monkeypatch.setattr("services.live_chat.operator_queue.live_chat_durable_mode", lambda: "sync")
     assert (
         try_enqueue_live_chat_whatsapp(
             tenant_id="linas",
@@ -234,10 +234,10 @@ def test_whatsapp_enqueue_skipped_in_sync_mode(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_whatsapp_enqueue_fail_closed_without_waba(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.live_chat_operator_queue import try_enqueue_live_chat_whatsapp
+    from services.live_chat.operator_queue import try_enqueue_live_chat_whatsapp
 
-    monkeypatch.setattr("services.live_chat_operator_queue.live_chat_durable_mode", lambda: "enqueue")
-    monkeypatch.setattr("services.live_chat_operator_queue._active_whatsapp_connection_id", lambda _tenant: None)
+    monkeypatch.setattr("services.live_chat.operator_queue.live_chat_durable_mode", lambda: "enqueue")
+    monkeypatch.setattr("services.live_chat.operator_queue._active_whatsapp_connection_id", lambda _tenant: None)
     result = try_enqueue_live_chat_whatsapp(
         tenant_id="linas",
         user_id="+96170123456",
@@ -257,8 +257,8 @@ async def test_whatsapp_redis_required_does_not_sync_adapter() -> None:
     adapter.send_text_message = AsyncMock(side_effect=AssertionError("adapter must not run when Redis required"))
     with ExitStack() as stack:
         for cm in _send_patches(
-            patch("services.live_chat_operator_queue.live_chat_durable_mode", lambda: "enqueue"),
-            patch("services.live_chat_operator_queue._active_whatsapp_connection_id", lambda _tenant: None),
+            patch("services.live_chat.operator_queue.live_chat_durable_mode", lambda: "enqueue"),
+            patch("services.live_chat.operator_queue._active_whatsapp_connection_id", lambda _tenant: None),
             user_id="+96170123456",
         ):
             stack.enter_context(cm)
@@ -290,13 +290,13 @@ async def test_social_queued_send_does_not_wait_for_provider(user_id: str, chann
     )
     slow = AsyncMock(side_effect=AssertionError("provider must not run on HTTP path"))
     extra = [
-        patch("services.live_chat_operator_queue.live_chat_durable_mode", lambda: "enqueue"),
-        patch("services.live_chat_operator_queue.enqueue_live_chat_operator_text", enqueue),
+        patch("services.live_chat.operator_queue.live_chat_durable_mode", lambda: "enqueue"),
+        patch("services.live_chat.operator_queue.enqueue_live_chat_operator_text", enqueue),
     ]
     if channel == "facebook":
         extra.append(patch("services.requests.delivery.deliver_meta_dm", slow))
     else:
-        extra.append(patch("services.live_chat_tiktok_operator.deliver_live_chat_tiktok_operator_text", slow))
+        extra.append(patch("services.live_chat.tiktok_operator.deliver_live_chat_tiktok_operator_text", slow))
     with ExitStack() as stack:
         for cm in _send_patches(*extra, user_id=user_id):
             stack.enter_context(cm)
@@ -327,7 +327,7 @@ async def test_notify_skips_reconciliation_and_publishes_sent(monkeypatch: pytes
         published.append((str(payload.get("live_chat_user_id")), delivery_status))
 
     monkeypatch.setattr(
-        "services.live_chat_operator_delivery_status.notify_live_chat_operator_job",
+        "services.live_chat.operator_delivery_status.notify_live_chat_operator_job",
         fake_notify,
     )
     from services.omnichannel.deliver import _notify_live_chat

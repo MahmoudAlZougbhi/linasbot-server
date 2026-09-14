@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.live_chat_service import LiveChatService, live_chat_service
-from services.live_chat_service_operator import LiveChatOperatorMixin
+from services.live_chat.service import LiveChatService, live_chat_service
+from services.live_chat.service_operator import LiveChatOperatorMixin
 
 
 def _line_count(rel: str) -> int:
@@ -13,16 +13,16 @@ def _line_count(rel: str) -> int:
 
 
 def test_live_chat_service_modules_under_500_lines() -> None:
-    files = [Path("services/live_chat_service.py"), *sorted(Path("services").glob("live_chat_service_*.py"))]
+    files = sorted(Path("services/live_chat").glob("*.py"))
     extra = [
-        Path("services/live_chat_operator_text_delivery.py"),
-        Path("services/live_chat_operator_web_delivery.py"),
+        Path("services/live_chat/operator_text_delivery.py"),
+        Path("services/live_chat/operator_web_delivery.py"),
         Path("services/web_chat/takeover_gate.py"),
-        Path("services/live_chat_channel.py"),
-        Path("services/live_chat_operator_idle.py"),
-        Path("services/live_chat_tenant.py"),
-        Path("services/live_chat_service_inbox_cache.py"),
-        Path("services/live_chat_service_legacy_scan.py"),
+        Path("services/live_chat/channel.py"),
+        Path("services/live_chat/operator_idle.py"),
+        Path("services/live_chat/tenant.py"),
+        Path("services/live_chat/service_inbox_cache.py"),
+        Path("services/live_chat/service_legacy_scan.py"),
     ]
     assert files
     for path in [*files, *extra]:

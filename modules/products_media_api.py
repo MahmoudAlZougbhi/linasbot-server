@@ -28,8 +28,8 @@ async def mobile_upload_product_media(
     session = require_session(request)
     tenant_id = _session_tenant(session)
     raw = await file.read()
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(

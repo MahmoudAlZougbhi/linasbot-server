@@ -73,7 +73,7 @@ class WebChatCreditHandle:
         if not rid or is_message_reservation(rid):
             return
         try:
-            from services.customer_ai.leftover_reserve import remember_leftover_hold
+            from services.brain.leftover_reserve import remember_leftover_hold
 
             remember_leftover_hold(
                 tenant_id=self.tenant_id,
@@ -83,7 +83,7 @@ class WebChatCreditHandle:
                 pin_ids=(self.conversation_id,) if self.conversation_id else (),
             )
         except Exception:
-            from services.membership.credit_reservation_index import record_open
+            from services.billing.membership.credit_reservation_index import record_open
 
             record_open(
                 tenant_id=self.tenant_id,
@@ -98,7 +98,7 @@ class WebChatCreditHandle:
             return
         try:
             if state == "settled":
-                from services.customer_ai.leftover_reserve import complete_leftover_capture
+                from services.brain.leftover_reserve import complete_leftover_capture
 
                 complete_leftover_capture(
                     self.tenant_id,
@@ -108,7 +108,7 @@ class WebChatCreditHandle:
                 )
                 return
             if state == "released":
-                from services.customer_ai.leftover_reserve import complete_leftover_release
+                from services.brain.leftover_reserve import complete_leftover_release
 
                 complete_leftover_release(
                     self.tenant_id,
@@ -118,7 +118,7 @@ class WebChatCreditHandle:
                 return
         except Exception:
             pass
-        from services.membership.credit_reservation_index import mark_closed
+        from services.billing.membership.credit_reservation_index import mark_closed
 
         mark_closed(rid, state=state)
 

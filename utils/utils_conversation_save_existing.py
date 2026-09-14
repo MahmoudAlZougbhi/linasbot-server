@@ -6,7 +6,7 @@ import asyncio
 from typing import Any
 
 import config
-from services.live_chat_contracts import utc_now
+from services.live_chat.contracts import utc_now
 from utils.utils_conversation_save_common import (
     _broadcast_saved_message_sse,
     _build_saved_message_payload,
@@ -84,7 +84,7 @@ async def save_message_when_conversation_id(
             "last_message_at": message_data.get("timestamp") or utc_now(),
             "unread_count": new_unread,
         }
-        from services.live_chat_tenant import conversation_tenant_fields
+        from services.live_chat.tenant import conversation_tenant_fields
 
         update_payload.update(
             conversation_tenant_fields(

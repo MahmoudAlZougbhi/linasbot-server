@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.channel_capability_state import (
+from services.integrations.channel_capability_state import (
     canonical_channel_bindings,
     comment_capability_state,
 )
@@ -26,11 +26,11 @@ def test_ig_login_comments_preferred_over_legacy_facebook_login_sibling(monkeypa
         updated_at=100.0,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.active_channel_bindings",
+        "services.integrations.channel_capability_state.active_channel_bindings",
         lambda *_a, **_k: [legacy, direct],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _MapRegistry(
             {
                 "ig-legacy": _Cred(("instagram_basic", "instagram_manage_messages")),
@@ -44,13 +44,13 @@ def test_ig_login_comments_preferred_over_legacy_facebook_login_sibling(monkeypa
             }
         ),
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: False)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: False)
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: False,
     )
     selected = canonical_channel_bindings("linas", "instagram")
@@ -94,7 +94,7 @@ def test_canonical_bindings_never_combine_foreign_tenant_asset_or_app(monkeypatc
         def list_bindings(self, include_inactive=False, include_superseded=False):
             return [own, other_tenant, other_asset, other_app]
 
-    monkeypatch.setattr("services.channel_capability_state.get_meta_app_registry", lambda: _Reg())
+    monkeypatch.setattr("services.integrations.channel_capability_state.get_meta_app_registry", lambda: _Reg())
     selected = canonical_channel_bindings("linas", "instagram")
     ids = {b.binding_id for b in selected}
     assert ids == {"own", "other-asset"}
@@ -106,22 +106,22 @@ def test_facebook_missing_either_comment_scope_stays_disabled(monkeypatch) -> No
     """Case 3: FB Page missing either required comment scope → comments remain disabled."""
 
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding()],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _MapRegistry(
             {"fb-b1": _Cred(("pages_messaging", "pages_manage_engagement"))}  # missing read_user_content
         ),
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: False)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: False)
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: False,
     )
     state = comment_capability_state("linas", "facebook")
@@ -135,7 +135,7 @@ def test_linas_standard_access_with_real_scopes_allowed(monkeypatch) -> None:
     """Case 4: internal linas Standard Access with actual scopes → allowed (ready)."""
 
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [
             _ig_binding(
                 auth_flow="instagram_login",
@@ -144,7 +144,7 @@ def test_linas_standard_access_with_real_scopes_allowed(monkeypatch) -> None:
         ],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _MapRegistry(
             {
                 "ig-legacy": _Cred(
@@ -157,13 +157,13 @@ def test_linas_standard_access_with_real_scopes_allowed(monkeypatch) -> None:
             }
         ),
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: False)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: False)
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: False,
     )
     state = comment_capability_state("linas", "instagram")
@@ -177,7 +177,7 @@ def test_public_tenant_without_advanced_access_blocked(monkeypatch) -> None:
     """Case 5: public tenant without Advanced Access → blocked."""
 
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [
             _ig_binding(
                 tenant_id="customer_a",
@@ -187,7 +187,7 @@ def test_public_tenant_without_advanced_access_blocked(monkeypatch) -> None:
         ],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _MapRegistry(
             {
                 "ig-legacy": _Cred(
@@ -200,13 +200,13 @@ def test_public_tenant_without_advanced_access_blocked(monkeypatch) -> None:
             }
         ),
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: False)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: False)
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: False,
     )
     state = comment_capability_state("customer_a", "instagram")
@@ -225,11 +225,11 @@ def test_app_a_approval_never_unlocks_dedicated_instagram_app(monkeypatch) -> No
         webhook_subscribed_fields=("messages", "messaging_postbacks", "comments"),
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [binding],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _MapRegistry(
             {
                 binding.binding_id: _Cred(
@@ -242,13 +242,13 @@ def test_app_a_approval_never_unlocks_dedicated_instagram_app(monkeypatch) -> No
             }
         ),
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: True)
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: False,
     )
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_ADVANCED_ACCESS_APPROVED", "false")
@@ -274,7 +274,7 @@ def test_internal_exception_never_enables_without_scopes(monkeypatch) -> None:
     """Case 6: no permission scope → never enabled through internal exception."""
 
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [
             _ig_binding(
                 auth_flow="instagram_login",
@@ -283,16 +283,16 @@ def test_internal_exception_never_enables_without_scopes(monkeypatch) -> None:
         ],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _MapRegistry({"ig-legacy": _Cred(("instagram_business_basic", "instagram_business_manage_messages"))}),
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: False)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: False)
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: True,
     )
     state = comment_capability_state("linas", "instagram")

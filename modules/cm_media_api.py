@@ -9,7 +9,7 @@ from fastapi.responses import Response
 
 from modules.api_security import require_permission
 from modules.core import app
-from services.cm.article_media import load_media_bytes, load_media_meta, store_article_media
+from services.ai_setup.article_media import load_media_bytes, load_media_meta, store_article_media
 from services.dashboard_session_service import SessionRecord
 
 
@@ -28,8 +28,8 @@ async def cm_upload_media(
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
     raw = await file.read()
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(

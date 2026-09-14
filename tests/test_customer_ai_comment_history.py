@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from services.customer_ai.contracts.turn import HistorySnapshot, VisibleMessage
+from services.brain.contracts.turn import HistorySnapshot, VisibleMessage
 from services.customer_reply_v2.models import ENGINE_REMOVED
 
 
@@ -22,20 +22,20 @@ async def test_comment_ai_loads_history_and_parent(monkeypatch: pytest.MonkeyPat
             ]
         )
 
-    monkeypatch.setattr("services.customer_ai.runtime.load_history_snapshot", fake_history)
-    monkeypatch.setattr("services.customer_ai.runtime.winning_comment_mode", lambda **_k: (None, None))
+    monkeypatch.setattr("services.brain.runtime.load_history_snapshot", fake_history)
+    monkeypatch.setattr("services.brain.runtime.winning_comment_mode", lambda **_k: (None, None))
     monkeypatch.setattr(
-        "services.customer_ai.runtime.evaluate_gates",
+        "services.brain.runtime.evaluate_gates",
         lambda *_a, **_k: type("G", (), {"allow": True, "reason": "", "detail": {}})(),
     )
-    monkeypatch.setattr("services.customer_ai.runtime.apply_live_control", lambda turn: turn)
+    monkeypatch.setattr("services.brain.runtime.apply_live_control", lambda turn: turn)
 
     captured = {}
 
     async def fake_run(turn, *, message, channel):
         captured["history"] = [item.text for item in turn.history.messages]
         captured["caption"] = turn.extra.get("post_caption")
-        from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+        from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 
         return TurnResult(
             stop_reason="ok",
@@ -45,15 +45,15 @@ async def test_comment_ai_loads_history_and_parent(monkeypatch: pytest.MonkeyPat
             ),
         )
 
-    monkeypatch.setattr("services.customer_ai.runtime.run_dm_after_gates", fake_run)
+    monkeypatch.setattr("services.brain.runtime.run_dm_after_gates", fake_run)
     monkeypatch.setattr(
-        "services.customer_ai.comments.pipeline.apply_ai_comment_destinations",
+        "services.brain.comments.pipeline.apply_ai_comment_destinations",
         lambda result, _mode: result,
     )
-    monkeypatch.setattr("services.customer_ai.runtime.apply_message_billing", lambda _turn, result: result)
+    monkeypatch.setattr("services.brain.runtime.apply_message_billing", lambda _turn, result: result)
 
-    from services.customer_ai.runtime import run_customer_ai_comment
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
+    from services.brain.runtime import run_customer_ai_comment
 
     entitlements_store.set_plan(tenant_id="c-shop", plan_id="starter", status="active", source="admin")
     outcome = await run_customer_ai_comment(
@@ -81,16 +81,16 @@ async def test_two_authors_same_post_use_separate_histories(monkeypatch: pytest.
         seen.append(str(kwargs.get("conversation_id") or ""))
         return HistorySnapshot()
 
-    monkeypatch.setattr("services.customer_ai.runtime.load_history_snapshot", fake_history)
-    monkeypatch.setattr("services.customer_ai.runtime.winning_comment_mode", lambda **_k: (None, None))
+    monkeypatch.setattr("services.brain.runtime.load_history_snapshot", fake_history)
+    monkeypatch.setattr("services.brain.runtime.winning_comment_mode", lambda **_k: (None, None))
     monkeypatch.setattr(
-        "services.customer_ai.runtime.evaluate_gates",
+        "services.brain.runtime.evaluate_gates",
         lambda *_a, **_k: type("G", (), {"allow": True, "reason": "", "detail": {}})(),
     )
-    monkeypatch.setattr("services.customer_ai.runtime.apply_live_control", lambda turn: turn)
+    monkeypatch.setattr("services.brain.runtime.apply_live_control", lambda turn: turn)
 
     async def fake_run(turn, *, message, channel):
-        from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+        from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 
         return TurnResult(
             stop_reason="ok",
@@ -100,15 +100,15 @@ async def test_two_authors_same_post_use_separate_histories(monkeypatch: pytest.
             ),
         )
 
-    monkeypatch.setattr("services.customer_ai.runtime.run_dm_after_gates", fake_run)
+    monkeypatch.setattr("services.brain.runtime.run_dm_after_gates", fake_run)
     monkeypatch.setattr(
-        "services.customer_ai.comments.pipeline.apply_ai_comment_destinations",
+        "services.brain.comments.pipeline.apply_ai_comment_destinations",
         lambda result, _mode: result,
     )
-    monkeypatch.setattr("services.customer_ai.runtime.apply_message_billing", lambda _turn, result: result)
+    monkeypatch.setattr("services.brain.runtime.apply_message_billing", lambda _turn, result: result)
 
-    from services.customer_ai.runtime import run_customer_ai_comment
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
+    from services.brain.runtime import run_customer_ai_comment
 
     entitlements_store.set_plan(tenant_id="shop", plan_id="starter", status="active", source="admin")
     await run_customer_ai_comment(
@@ -136,20 +136,20 @@ async def test_two_authors_same_post_use_separate_histories(monkeypatch: pytest.
 async def test_comment_gate_blocks_lite_like_meta(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
     monkeypatch.delenv("FREE_PLAN_ENFORCEMENT_ENABLED", raising=False)
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     entitlements_store.set_plan(tenant_id="lite-c", plan_id="lite", status="active", source="admin")
-    monkeypatch.setattr("services.customer_ai.runtime.winning_comment_mode", lambda **_k: (None, None))
+    monkeypatch.setattr("services.brain.runtime.winning_comment_mode", lambda **_k: (None, None))
     monkeypatch.setattr(
-        "services.customer_ai.runtime.evaluate_gates",
+        "services.brain.runtime.evaluate_gates",
         lambda *_a, **_k: type("G", (), {"allow": False, "reason": "unpublished", "detail": {}})(),
     )
-    monkeypatch.setattr("services.customer_ai.runtime.apply_live_control", lambda turn: turn)
+    monkeypatch.setattr("services.brain.runtime.apply_live_control", lambda turn: turn)
     monkeypatch.setattr(
-        "services.customer_ai.runtime.load_history_snapshot",
+        "services.brain.runtime.load_history_snapshot",
         AsyncMock(return_value=HistorySnapshot()),
     )
-    from services.customer_ai.runtime import run_customer_ai_comment
+    from services.brain.runtime import run_customer_ai_comment
 
     blocked = await run_customer_ai_comment(tenant_id="lite-c", comment_text="hi", comments_enabled=True)
     assert blocked.reason == "COMMENT_AUTOMATION_DENIED"
@@ -168,20 +168,20 @@ async def test_comment_gate_blocks_lite_like_meta(monkeypatch: pytest.MonkeyPatc
 
 @pytest.mark.asyncio
 async def test_whatsapp_brain_blocks_lite(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.runtime import run_customer_ai_dm
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
+    from services.brain.runtime import run_customer_ai_dm
 
     entitlements_store.set_plan(tenant_id="lite-wa", plan_id="lite", status="active", source="admin")
     blocked = await run_customer_ai_dm(tenant_id="lite-wa", message="hi", channel="whatsapp")
     assert blocked.reason == "WHATSAPP_PLAN_DENIED"
 
     monkeypatch.setattr(
-        "services.customer_ai.runtime.evaluate_gates",
+        "services.brain.runtime.evaluate_gates",
         lambda *_a, **_k: type("G", (), {"allow": False, "reason": "unpublished", "detail": {}})(),
     )
-    monkeypatch.setattr("services.customer_ai.runtime.apply_live_control", lambda turn: turn)
+    monkeypatch.setattr("services.brain.runtime.apply_live_control", lambda turn: turn)
     monkeypatch.setattr(
-        "services.customer_ai.runtime.load_history_snapshot",
+        "services.brain.runtime.load_history_snapshot",
         AsyncMock(return_value=HistorySnapshot()),
     )
     allowed = await run_customer_ai_dm(tenant_id="lite-wa", message="hi", channel="instagram_dm")
@@ -192,17 +192,17 @@ async def test_whatsapp_brain_blocks_lite(monkeypatch: pytest.MonkeyPatch) -> No
 async def test_followup_gate_waits_for_enforcement_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
     monkeypatch.delenv("FREE_PLAN_ENFORCEMENT_ENABLED", raising=False)
-    from services.customer_ai.runtime import run_customer_ai_dm
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
+    from services.brain.runtime import run_customer_ai_dm
 
     entitlements_store.set_plan(tenant_id="free-fu", plan_id="free", status="active", source="admin")
     monkeypatch.setattr(
-        "services.customer_ai.runtime.evaluate_gates",
+        "services.brain.runtime.evaluate_gates",
         lambda *_a, **_k: type("G", (), {"allow": False, "reason": "unpublished", "detail": {}})(),
     )
-    monkeypatch.setattr("services.customer_ai.runtime.apply_live_control", lambda turn: turn)
+    monkeypatch.setattr("services.brain.runtime.apply_live_control", lambda turn: turn)
     monkeypatch.setattr(
-        "services.customer_ai.runtime.load_history_snapshot",
+        "services.brain.runtime.load_history_snapshot",
         AsyncMock(return_value=HistorySnapshot()),
     )
     allowed = await run_customer_ai_dm(
@@ -272,10 +272,10 @@ async def test_meta_generate_passes_comment_ids(monkeypatch: pytest.MonkeyPatch)
             metadata={"outbound_messages": [{"destination": "comment", "text": "ok"}]},
         )
 
-    monkeypatch.setattr("services.cm.constants.tenant_uses_cm_runtime", lambda _tid: True)
+    monkeypatch.setattr("services.ai_setup.constants.tenant_uses_cm_runtime", lambda _tid: True)
     monkeypatch.setattr("services.customer_reply_v2.comment_runtime.run_customer_reply_v2_comment", fake_comment)
     monkeypatch.setattr(
-        "services.customer_ai.comments.destinations.destinations_from_outcome",
+        "services.brain.comments.destinations.destinations_from_outcome",
         lambda _out: type("P", (), {"has_any": True})(),
     )
     await generate_comment_reply_text(
@@ -296,18 +296,18 @@ async def test_meta_generate_passes_comment_ids(monkeypatch: pytest.MonkeyPatch)
 def test_comment_path_is_permanent_brain(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
 
-    from services.customer_ai.runtime import run_customer_ai_comment
+    from services.brain.runtime import run_customer_ai_comment
 
     outcome = asyncio.run(run_customer_ai_comment(tenant_id="x", comment_text="hi", comment_id="m1"))
     assert outcome.reason != ENGINE_REMOVED
 
 
 def test_manual_comment_mode_is_zero_units() -> None:
-    from services.customer_ai.billing import classify_result
-    from services.customer_ai.comment_normalize import normalize_comment_mode
-    from services.customer_ai.comments.pipeline import deterministic_comment_result
-    from services.customer_ai.contracts.turn import CustomerTurn
-    from services.membership.message_policy import message_units_for
+    from services.billing.membership.message_policy import message_units_for
+    from services.brain.billing import classify_result
+    from services.brain.comment_normalize import normalize_comment_mode
+    from services.brain.comments.pipeline import deterministic_comment_result
+    from services.brain.contracts.turn import CustomerTurn
 
     assert normalize_comment_mode(action="manual") == "manual"
     result = deterministic_comment_result("manual", type("D", (), {"reply_text": "", "dm_text": "", "rule_id": "r1"})())
@@ -321,8 +321,8 @@ def test_manual_comment_mode_is_zero_units() -> None:
 def test_static_and_ai_comments_use_per_author_thread() -> None:
     from inspect import getsource
 
-    from services.customer_ai.history_ids import comment_conversation_id
-    from services.customer_ai.runtime import run_customer_ai_comment
+    from services.brain.history_ids import comment_conversation_id
+    from services.brain.runtime import run_customer_ai_comment
 
     first = comment_conversation_id(
         tenant_id="shop",

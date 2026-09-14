@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from services.cm.faq_integration_helpers import FAQ_SECTION
-from services.cm.schemas import FaqSection
-from services.cm.smart_answer_languages import (
+from services.ai_setup.faq_integration_helpers import FAQ_SECTION
+from services.ai_setup.schemas import FaqSection
+from services.ai_setup.smart_answer_languages import (
     DEFAULT_SMART_ANSWER_LANGUAGES,
     normalize_smart_answer_languages,
     save_smart_answer_languages,
 )
-from services.cm.storage import get_draft
+from services.ai_setup.storage import get_draft
 
 
 def test_default_smart_answer_languages() -> None:
@@ -30,9 +30,9 @@ def test_normalize_explicit_list_does_not_reinject_defaults() -> None:
 
 def test_mirror_preserves_smart_answer_languages(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("storage.persistent_storage.get_data_root", lambda: str(tmp_path))
-    from services.cm.faq_integration_helpers import _mirror_faq_record_into_draft
-    from services.cm.schemas import FaqRecord, FaqVariant
-    from services.cm.storage import ensure_defaults, get_draft
+    from services.ai_setup.faq_integration_helpers import _mirror_faq_record_into_draft
+    from services.ai_setup.schemas import FaqRecord, FaqVariant
+    from services.ai_setup.storage import ensure_defaults, get_draft
 
     tenant_id = "mirror_lang_preserve"
     ensure_defaults(tenant_id=tenant_id)
@@ -50,7 +50,7 @@ def test_mirror_preserves_smart_answer_languages(monkeypatch, tmp_path) -> None:
 
 
 def test_catalog_includes_urdu() -> None:
-    from services.cm.iso639_languages import iso639_catalog
+    from services.ai_setup.iso639_languages import iso639_catalog
 
     ids = {item["id"] for item in iso639_catalog()}
     assert "ur" in ids
@@ -59,9 +59,9 @@ def test_catalog_includes_urdu() -> None:
 
 def test_purge_smart_answer_language_deletes_variants_and_runtime_rows(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("storage.persistent_storage.get_data_root", lambda: str(tmp_path))
-    from services.cm.faq_integration_ops import purge_smart_answer_language_data
-    from services.cm.schemas import FaqRecord, FaqVariant
-    from services.cm.storage import ensure_defaults, get_draft, put_draft
+    from services.ai_setup.faq_integration_ops import purge_smart_answer_language_data
+    from services.ai_setup.schemas import FaqRecord, FaqVariant
+    from services.ai_setup.storage import ensure_defaults, get_draft, put_draft
     from services.local_qa_service import local_qa_service
 
     tenant_id = "purge_lang_test"
@@ -111,7 +111,7 @@ def test_faq_section_schema_has_smart_answer_languages() -> None:
 
 
 def test_faq_record_complete_for_selected_languages() -> None:
-    from services.cm.schemas import FaqRecord, FaqVariant
+    from services.ai_setup.schemas import FaqRecord, FaqVariant
 
     record = FaqRecord(
         qa_group_id="qa_test",
@@ -126,7 +126,7 @@ def test_faq_record_complete_for_selected_languages() -> None:
 
 def test_save_smart_answer_languages_persists_in_draft(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("storage.persistent_storage.get_data_root", lambda: str(tmp_path))
-    from services.cm.storage import ensure_defaults
+    from services.ai_setup.storage import ensure_defaults
 
     ensure_defaults(tenant_id="linas")
     result = save_smart_answer_languages(

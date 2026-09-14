@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from db.session import whatsapp_session
-from services.cm.actions import ACTION_TIKTOK_DM, action_enabled, load_actions_section
+from services.ai_setup.actions import ACTION_TIKTOK_DM, action_enabled, load_actions_section
 from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 from services.social_user_id import compose_social_user_id
 from services.tiktok_business.errors import TikTokCapabilityGatedError
@@ -110,7 +110,7 @@ async def _maybe_ai_dm(snapshot: dict[str, Any]) -> None:
     actions = load_actions_section(tenant_id)
     if not action_enabled(actions, ACTION_TIKTOK_DM):
         return
-    from services.membership.generative_gate import generative_ai_blocked
+    from services.billing.membership.generative_gate import generative_ai_blocked
 
     if generative_ai_blocked(tenant_id):
         return
@@ -145,7 +145,7 @@ async def _maybe_ai_dm(snapshot: dict[str, Any]) -> None:
     sender = str(snapshot.get("customer_open_id") or snapshot.get("conversation_id") or "")
     inbound_mid = str(snapshot.get("provider_message_id") or snapshot.get("conversation_id") or "")
     leftover_rid = None
-    from services.customer_ai.leftover_reserve import (
+    from services.brain.leftover_reserve import (
         capture_leftover_reply,
         release_leftover_reply,
         reserve_leftover_reply,
@@ -164,7 +164,7 @@ async def _maybe_ai_dm(snapshot: dict[str, Any]) -> None:
     provider_mid = ""
     brain_mid = inbound_mid
     try:
-        from services.customer_ai.history_ids import bind_dm_ids
+        from services.brain.history_ids import bind_dm_ids
         from services.customer_reply_v2.inbound_media import planner_text_from_inbound
 
         inbound_media_raw = snapshot.get("inbound_media")
@@ -249,8 +249,8 @@ async def _maybe_ai_dm(snapshot: dict[str, Any]) -> None:
         )
     except Exception:
         if sent:
-            from services.membership.hold_policy import hold_billing_policy
-            from services.membership.reservation_reconcile import hold_failed_capture_after_send
+            from services.billing.membership.hold_policy import hold_billing_policy
+            from services.billing.membership.reservation_reconcile import hold_failed_capture_after_send
 
             hold_failed_capture_after_send(
                 tenant_id=tenant_id,
@@ -282,7 +282,7 @@ def _settle_tiktok_dm_send(
     provider_mid: str = "",
 ) -> None:
     inbound_mid = str(snapshot.get("provider_message_id") or snapshot.get("conversation_id") or "")
-    from services.customer_ai.billing import settle_after_send
+    from services.brain.billing import settle_after_send
 
     settle_after_send(
         tenant_id=tenant_id,

@@ -6,21 +6,21 @@ from datetime import UTC
 
 import pytest
 
-from services.customer_ai.leftover_reserve import (
-    capture_leftover_reply,
-    leftover_policy_for,
-    release_leftover_reply,
-    reserve_leftover_reply,
-    reset_leftover_pins_for_tests,
-)
-from services.membership.pending_settlement import (
+from services.billing.membership.pending_settlement import (
     get_pending,
     list_pending,
     pending_counts,
     record_pending_after_send,
     reset_pending_settlements_for_tests,
 )
-from services.membership.reservation_reconcile import run_reservation_reconcile
+from services.billing.membership.reservation_reconcile import run_reservation_reconcile
+from services.brain.leftover_reserve import (
+    capture_leftover_reply,
+    leftover_policy_for,
+    release_leftover_reply,
+    reserve_leftover_reply,
+    reset_leftover_pins_for_tests,
+)
 
 
 class _Ledger:
@@ -49,7 +49,7 @@ def _clean(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
     reset_pending_settlements_for_tests()
     reset_leftover_pins_for_tests()
-    from services.membership.credit_reservation_index import reset_credit_reservation_index_for_tests
+    from services.billing.membership.credit_reservation_index import reset_credit_reservation_index_for_tests
 
     reset_credit_reservation_index_for_tests()
 
@@ -93,8 +93,8 @@ def test_reconcile_settles_once_and_does_not_double_capture(monkeypatch: pytest.
 def test_unknown_stale_reservation_is_unresolved_not_released(monkeypatch: pytest.MonkeyPatch) -> None:
     from datetime import datetime, timedelta
 
-    from services.membership.lot_window import current_period_id
-    from services.membership.message_ledger import (
+    from services.billing.membership.lot_window import current_period_id
+    from services.billing.membership.message_ledger import (
         grant_lot,
         list_reservations,
         remaining_messages,
@@ -144,10 +144,10 @@ def test_policy_pin_blocks_message_debit_after_flag_flip(monkeypatch: pytest.Mon
         pin_ids=("evt-pin",),
     )
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
-    from services.customer_ai.billing import apply_message_billing
-    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
-    from services.customer_ai.contracts.turn import CustomerTurn
-    from services.membership.message_ledger import remaining_messages, reset_ledger_for_tests
+    from services.billing.membership.message_ledger import remaining_messages, reset_ledger_for_tests
+    from services.brain.billing import apply_message_billing
+    from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+    from services.brain.contracts.turn import CustomerTurn
 
     reset_ledger_for_tests()
     result = apply_message_billing(
@@ -178,7 +178,7 @@ def test_leftover_pin_ids_persist_as_candidate_ids(monkeypatch: pytest.MonkeyPat
     held = get_pending("alias-shop", rid, "evt-alias")
     assert held is not None
     assert "conv-alias" in (held.extra.get("candidate_ids") or [])
-    from services.customer_ai.leftover_reserve import _PINS
+    from services.brain.leftover_reserve import _PINS
 
     _PINS.clear()
     assert leftover_policy_for("alias-shop", "conv-alias") == "legacy_credits"
@@ -188,7 +188,7 @@ def test_leftover_pin_ids_persist_as_candidate_ids(monkeypatch: pytest.MonkeyPat
 
 
 def test_capture_failure_keeps_existing_candidate_ids(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.membership.reservation_reconcile import hold_failed_capture_after_send
+    from services.billing.membership.reservation_reconcile import hold_failed_capture_after_send
 
     ledger = _Ledger()
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
@@ -215,8 +215,8 @@ def test_capture_failure_keeps_existing_candidate_ids(monkeypatch: pytest.Monkey
 
 
 def test_leftover_policy_unpins_when_sql_has_no_active_hold(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai import leftover_reserve as leftover
-    from services.membership import pending_settlement as pending
+    from services.billing.membership import pending_settlement as pending
+    from services.brain import leftover_reserve as leftover
 
     leftover._PINS["stale-shop:mid-stale"] = "legacy_credits"
     leftover._PINS["stale-shop:conv-stale"] = "legacy_credits"
@@ -230,8 +230,8 @@ def test_leftover_policy_unpins_when_sql_has_no_active_hold(monkeypatch: pytest.
 def test_policy_for_operation_uses_sql_over_stale_memory(monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership import pending_settlement as pending
-    from services.membership.pending_settlement import policy_for_operation, upsert
+    from services.billing.membership import pending_settlement as pending
+    from services.billing.membership.pending_settlement import policy_for_operation, upsert
 
     upsert(
         tenant_id="stale-shop",
@@ -247,16 +247,16 @@ def test_policy_for_operation_uses_sql_over_stale_memory(monkeypatch: pytest.Mon
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.pending_settlement_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.membership.pending_settlement_pg.pg_policy_for", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.pending_settlement_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.pending_settlement_pg.pg_policy_for", lambda *_a, **_k: None)
     assert policy_for_operation("stale-shop", "mid-stale", "conv-stale") is None
 
 
 def test_known_settlement_tenants_union_memory_and_sql(monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership.pending_settlement import known_settlement_tenant_ids, upsert
+    from services.billing.membership.pending_settlement import known_settlement_tenant_ids, upsert
 
     upsert(
         tenant_id="mem-settle",
@@ -265,16 +265,16 @@ def test_known_settlement_tenants_union_memory_and_sql(monkeypatch: pytest.Monke
         billing_policy="message_units",
         state="reserved",
     )
-    monkeypatch.setattr("services.membership.pending_settlement._memory_forced", lambda: False)
+    monkeypatch.setattr("services.billing.membership.pending_settlement._memory_forced", lambda: False)
 
     @contextmanager
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.pending_settlement_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.pending_settlement_pg.table_ready", lambda _s: True)
     monkeypatch.setattr(
-        "services.membership.pending_settlement_pg.pg_tenant_ids",
+        "services.billing.membership.pending_settlement_pg.pg_tenant_ids",
         lambda _s: ["sql-settle"],
     )
     assert known_settlement_tenant_ids() == ["mem-settle", "sql-settle"]
@@ -283,7 +283,7 @@ def test_known_settlement_tenants_union_memory_and_sql(monkeypatch: pytest.Monke
 def test_list_pending_unions_memory_and_sql(monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership.pending_settlement import PendingSettlement, list_pending, upsert
+    from services.billing.membership.pending_settlement import PendingSettlement, list_pending, upsert
 
     upsert(
         tenant_id="mem-pend",
@@ -307,10 +307,10 @@ def test_list_pending_unions_memory_and_sql(monkeypatch: pytest.MonkeyPatch) -> 
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.pending_settlement_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.pending_settlement_pg.table_ready", lambda _s: True)
     monkeypatch.setattr(
-        "services.membership.pending_settlement_pg.pg_list",
+        "services.billing.membership.pending_settlement_pg.pg_list",
         lambda *_a, **_k: [sql_item],
     )
     tenants = {item.tenant_id for item in list_pending()}
@@ -321,7 +321,7 @@ def test_list_pending_unions_memory_and_sql(monkeypatch: pytest.MonkeyPatch) -> 
 def test_list_pending_skips_memory_row_already_known_in_sql(monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership.pending_settlement import list_pending, upsert
+    from services.billing.membership.pending_settlement import list_pending, upsert
 
     upsert(
         tenant_id="stale-pend",
@@ -335,11 +335,11 @@ def test_list_pending_skips_memory_row_already_known_in_sql(monkeypatch: pytest.
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.pending_settlement_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.membership.pending_settlement_pg.pg_list", lambda *_a, **_k: [])
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.pending_settlement_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.pending_settlement_pg.pg_list", lambda *_a, **_k: [])
     monkeypatch.setattr(
-        "services.membership.pending_settlement_pg.pg_settlement_ids",
+        "services.billing.membership.pending_settlement_pg.pg_settlement_ids",
         lambda *_a, **_k: {"stale-pend:rid-stale"},
     )
     assert list_pending(tenant_id="stale-pend", states=("reserved",)) == []
@@ -348,7 +348,7 @@ def test_list_pending_skips_memory_row_already_known_in_sql(monkeypatch: pytest.
 def test_pending_counts_union_memory_and_sql(monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership.pending_settlement import pending_counts, upsert
+    from services.billing.membership.pending_settlement import pending_counts, upsert
 
     upsert(
         tenant_id="mem-count",
@@ -362,14 +362,14 @@ def test_pending_counts_union_memory_and_sql(monkeypatch: pytest.MonkeyPatch) ->
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.pending_settlement_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.pending_settlement_pg.table_ready", lambda _s: True)
     monkeypatch.setattr(
-        "services.membership.pending_settlement_pg.pg_counts",
+        "services.billing.membership.pending_settlement_pg.pg_counts",
         lambda *_a, **_k: {"reserved": 0, "pending_settlement": 1, "settled": 0, "released": 0, "unresolved": 0},
     )
     monkeypatch.setattr(
-        "services.membership.pending_settlement_pg.pg_settlement_ids", lambda *_a, **_k: {"sql-count:rid"}
+        "services.billing.membership.pending_settlement_pg.pg_settlement_ids", lambda *_a, **_k: {"sql-count:rid"}
     )
     counts = pending_counts()
     assert counts["reserved"] == 1
@@ -402,7 +402,7 @@ def test_capture_leftover_with_alias_settles_original_hold(monkeypatch: pytest.M
 
 
 def test_get_pending_matches_conversation_alias() -> None:
-    from services.membership.pending_settlement import upsert
+    from services.billing.membership.pending_settlement import upsert
 
     upsert(
         tenant_id="alias-shop",
@@ -422,8 +422,8 @@ def test_hydrate_skips_disk_reserved_when_sql_already_has_id(tmp_path, monkeypat
     import json
     from contextlib import contextmanager
 
-    from services.membership import pending_settlement as pending
-    from services.membership.pending_settlement import list_pending
+    from services.billing.membership import pending_settlement as pending
+    from services.billing.membership.pending_settlement import list_pending
 
     folder = tmp_path / "pending_settlements"
     folder.mkdir()
@@ -448,10 +448,10 @@ def test_hydrate_skips_disk_reserved_when_sql_already_has_id(tmp_path, monkeypat
 
     monkeypatch.setattr(pending, "_root", lambda: folder)
     monkeypatch.setattr(pending, "_memory_forced", lambda: False)
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.pending_settlement_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.membership.pending_settlement_pg.pg_list", lambda *_a, **_k: [])
-    monkeypatch.setattr("services.membership.pending_settlement_pg.pg_settlement_ids", lambda *_a, **_k: {sid})
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.pending_settlement_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.pending_settlement_pg.pg_list", lambda *_a, **_k: [])
+    monkeypatch.setattr("services.billing.membership.pending_settlement_pg.pg_settlement_ids", lambda *_a, **_k: {sid})
     pending._ITEMS.clear()
     pending._HYDRATED = False
     pending._hydrate()

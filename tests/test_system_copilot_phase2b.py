@@ -6,20 +6,20 @@ from typing import Any
 
 import pytest
 
+from services.billing.plan_economics import PLAN_FAQ_MAX_ENTRIES, PLAN_FEATURES
 from services.customer_response_trace import (
     CustomerResponseTraceStore,
     build_safe_trace,
     get_interaction_trace,
     get_recent_customer_interactions,
 )
-from services.faq_cm_invalidation import extract_session_markers
-from services.faq_entitlements import FaqEntitlementError, assert_can_create_faq, get_faq_entitlement
-from services.faq_metrics import FaqMetricsStore
-from services.faq_safe_match import find_safe_faq_match, score_candidate
-from services.owner_ai_cm_approval import CmPatchProposalStore, approve_cm_patch, propose_cm_patch
-from services.owner_ai_diagnosis import diagnose_interaction, propose_diagnosis_fix
-from services.owner_ai_model_router import OwnerChatUsageTracker, route_owner_turn
-from services.plan_economics import PLAN_FAQ_MAX_ENTRIES, PLAN_FEATURES
+from services.faq.faq_cm_invalidation import extract_session_markers
+from services.faq.faq_entitlements import FaqEntitlementError, assert_can_create_faq, get_faq_entitlement
+from services.faq.faq_metrics import FaqMetricsStore
+from services.faq.faq_safe_match import find_safe_faq_match, score_candidate
+from services.owner_copilot.cm_approval import CmPatchProposalStore, approve_cm_patch, propose_cm_patch
+from services.owner_copilot.diagnosis import diagnose_interaction, propose_diagnosis_fix
+from services.owner_copilot.model_router import OwnerChatUsageTracker, route_owner_turn
 from services.system_knowledge_registry import get_capability, registry_route_errors
 
 
@@ -31,9 +31,9 @@ def test_registry_includes_faq_and_diagnosis_routes() -> None:
 
 
 def test_faq_entitlements_central_plan_config(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services import entitlements_service as es
-    from services import faq_entitlements as fe
-    from services.entitlements_service import EntitlementsStore
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
+    from services.faq import faq_entitlements as fe
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)
@@ -86,7 +86,7 @@ def test_faq_tenant_isolation_safe_match(monkeypatch: pytest.MonkeyPatch) -> Non
         },
     ]
     monkeypatch.setattr(
-        "services.faq_entitlements.get_faq_entitlement",
+        "services.faq.faq_entitlements.get_faq_entitlement",
         lambda _tid: {"faq_enabled": True},
     )
     hit_a = find_safe_faq_match(
@@ -126,7 +126,7 @@ def test_safe_match_rejects_stale_and_blind_similarity(monkeypatch: pytest.Monke
     assert scored["accept"] is False
 
     monkeypatch.setattr(
-        "services.faq_entitlements.get_faq_entitlement",
+        "services.faq.faq_entitlements.get_faq_entitlement",
         lambda _tid: {"faq_enabled": True},
     )
     miss = find_safe_faq_match(
@@ -146,9 +146,9 @@ def test_cm_session_invalidation_markers() -> None:
 @pytest.mark.asyncio
 async def test_cm_approve_no_publish_prompt(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     store = CmPatchProposalStore(root=tmp_path / "proposals")
-    monkeypatch.setattr("services.owner_ai_cm_approval.cm_patch_proposal_store", store)
+    monkeypatch.setattr("services.owner_copilot.cm_approval.cm_patch_proposal_store", store)
     monkeypatch.setattr(
-        "services.owner_ai_cm_approval.build_patch_preview",
+        "services.owner_copilot.cm_approval.build_patch_preview",
         lambda **_: {
             "section": "services",
             "changed_keys": ["sessions_note"],
@@ -159,15 +159,15 @@ async def test_cm_approve_no_publish_prompt(tmp_path: Any, monkeypatch: pytest.M
         },
     )
     monkeypatch.setattr(
-        "services.cm.setup_chat.apply_section_patch",
+        "services.ai_setup.setup_chat.apply_section_patch",
         lambda **_: {"section": "services", "revision": 2, "etag": "e2"},
     )
     monkeypatch.setattr(
-        "services.cm.validation.validate_cm",
+        "services.ai_setup.validation.validate_cm",
         lambda **_: {"errors": [], "warnings": []},
     )
     monkeypatch.setattr(
-        "services.faq_cm_invalidation.invalidate_faq_for_cm_patch",
+        "services.faq.faq_cm_invalidation.invalidate_faq_for_cm_patch",
         lambda **_: {"stale_groups": ["qa_x"], "stale_rows": 1, "reason": "session_markers_changed:7-10"},
     )
 
@@ -217,7 +217,7 @@ def test_diagnosis_session_location_service_scenarios(tmp_path: Any, monkeypatch
 
 
 def test_diagnosis_propose_requires_approval(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services import owner_ai_diagnosis as od
+    from services.owner_copilot import diagnosis as od
 
     store = CustomerResponseTraceStore(root=tmp_path / "traces")
     monkeypatch.setattr("services.customer_response_trace.customer_response_trace_store", store)
@@ -266,8 +266,8 @@ def test_faq_metrics_and_token_cost_smoke(tmp_path: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_owner_turn_diagnosis_intent(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.owner_ai_orchestrator import run_owner_turn
-    from services.owner_copilot_v2.models import OwnerV2TurnResult
+    from services.owner_copilot.models import OwnerV2TurnResult
+    from services.owner_copilot.orchestrator import run_owner_turn
 
     captured: dict[str, str] = {}
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
@@ -280,7 +280,7 @@ async def test_owner_turn_diagnosis_intent(monkeypatch: pytest.MonkeyPatch) -> N
             tool_calls=[{"name": "get_recent_customer_interactions", "arguments": "{}"}],
         )
 
-    monkeypatch.setattr("services.owner_copilot_v2.brain_run.run_owner_turn_v2", _fake_v2)
+    monkeypatch.setattr("services.owner_copilot.brain_run.run_owner_turn_v2", _fake_v2)
     turn = await run_owner_turn(
         tenant_id="t1",
         user_id="u1",

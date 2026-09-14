@@ -39,7 +39,7 @@ def followup_operation_ids(snapshot: dict[str, Any]) -> tuple[str, tuple[str, ..
 
 
 def settle_followup_from_snapshot(tenant_id: str, snapshot: dict[str, Any], *, accepted: bool) -> None:
-    from services.customer_ai.billing import settle_followup_send
+    from services.brain.billing import settle_followup_send
 
     operation_id, extras = followup_operation_ids(snapshot)
     settle_followup_send(

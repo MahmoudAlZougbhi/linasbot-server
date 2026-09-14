@@ -7,9 +7,9 @@ from typing import Any
 from fastapi import HTTPException, Request, Response
 
 from modules.core import app
+from services.billing.token_wallet_service import token_wallet_service
 from services.stripe_checkout_service import stripe_checkout_service
 from services.token_package_catalog import get_package
-from services.token_wallet_service import token_wallet_service
 
 
 @app.post("/api/billing/stripe/webhook")
@@ -33,7 +33,7 @@ async def stripe_webhook(request: Request) -> Any:
     data_object = (event.get("data") or {}).get("object") or {}
     if etype == "checkout.session.completed":
         metadata = data_object.get("metadata") or {}
-        from services.membership.iap_message_grant import (
+        from services.billing.membership.iap_message_grant import (
             apply_verified_stripe_message_checkout,
             stripe_checkout_kind,
         )

@@ -16,6 +16,7 @@ from services.ai_usage_limits import (
     recommended_defaults,
     week_period_key,
 )
+from services.billing.token_wallet_service import InsufficientTokenBalance, TokenWalletService
 from services.token_metering import assert_tenant_can_use_ai, debit_ai_usage
 from services.token_package_catalog import (
     assert_public_payload_has_no_internal_economics,
@@ -23,7 +24,6 @@ from services.token_package_catalog import (
     catalog_public_payload,
     list_token_packages,
 )
-from services.token_wallet_service import InsufficientTokenBalance, TokenWalletService
 from services.wallet_spend_analytics import build_wallet_spend_analytics
 
 
@@ -132,7 +132,7 @@ def test_dual_balance_credit_debit(wallet_svc: TokenWalletService) -> None:
 
 def test_preflight_requires_both_buckets(wallet_svc: TokenWalletService, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("services.token_metering.token_wallet_service", wallet_svc)
-    monkeypatch.setattr("services.token_wallet_service.token_wallet_service", wallet_svc)
+    monkeypatch.setattr("services.billing.token_wallet_service.token_wallet_service", wallet_svc)
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
     monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "linas")
     with pytest.raises(InsufficientTokenBalance):

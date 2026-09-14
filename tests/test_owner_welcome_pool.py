@@ -58,10 +58,10 @@ def test_pick_welcome_interpolates_display_name() -> None:
 
 
 def test_build_greeting_uses_pool_not_llm(monkeypatch) -> None:
-    from services.owner_ai_greeting import build_greeting
+    from services.owner_copilot.greeting import build_greeting
 
     monkeypatch.setattr(
-        "services.owner_ai_greeting.read_owner_profile",
+        "services.owner_copilot.greeting.read_owner_profile",
         lambda _uid: {
             "display_name": "mahmoud",
             "gender": "unset",
@@ -70,14 +70,14 @@ def test_build_greeting_uses_pool_not_llm(monkeypatch) -> None:
             "address_prompt_asked": True,
         },
     )
-    monkeypatch.setattr("services.owner_ai_greeting.resolve_setup_stage", lambda _tid: "fully_configured")
+    monkeypatch.setattr("services.owner_copilot.greeting.resolve_setup_stage", lambda _tid: "fully_configured")
     reset_last_picks()
     g = build_greeting(tenant_id="t1", user_id="u-pool", language="en")
     pool_texts = {format_welcome(line, hi="Hello mahmoud") for line in lines_for("en")}
     assert g["text"] in pool_texts
     assert "core looks configured" not in g["text"].lower()
     assert "ai setup" not in g["text"].lower()
-    greeting_src = Path("services/owner_ai_greeting.py").read_text(encoding="utf-8")
+    greeting_src = Path("services/owner_copilot/greeting.py").read_text(encoding="utf-8")
     assert "pick_welcome" in greeting_src
     assert "openai" not in greeting_src.lower()
     assert "generate" not in greeting_src.lower()

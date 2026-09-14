@@ -8,7 +8,7 @@ from fastapi import HTTPException
 
 from modules.api_security import resolve_permissions
 from services.dashboard_session_service import SessionRecord
-from services.live_chat_channel import resolve_live_chat_channel
+from services.live_chat.channel import resolve_live_chat_channel
 
 CHANNEL_PERMISSIONS: dict[str, str] = {
     "channelWhatsapp": "whatsapp",
@@ -57,7 +57,7 @@ def effective_inbox_channel(session: SessionRecord, requested: str) -> str | Non
 
 
 def filter_chats_for_session(session: SessionRecord, payload: dict[str, Any]) -> dict[str, Any]:
-    from services.live_chat_tenant import normalize_live_chat_tenant_id, row_belongs_to_tenant
+    from services.live_chat.tenant import normalize_live_chat_tenant_id, row_belongs_to_tenant
 
     tenant = normalize_live_chat_tenant_id(getattr(session, "tenant_id", None))
     allowed = allowed_channels_for_session(session)

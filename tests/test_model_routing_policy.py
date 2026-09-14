@@ -181,8 +181,8 @@ def test_env_cannot_silently_override_customer_or_owner(monkeypatch: pytest.Monk
 async def test_cm_answer_generation_openai_payload_is_terra_medium(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.cm import answer_generation as ag
-    from services.cm.schemas import AnswerPacket
+    from services.ai_setup import answer_generation as ag
+    from services.ai_setup.schemas import AnswerPacket
 
     captured: dict[str, Any] = {}
 
@@ -218,7 +218,7 @@ async def test_owner_provider_openai_payload_sol_effort(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from services.model_policy import resolve_owner_policy
-    from services.owner_copilot_v2 import provider as prov
+    from services.owner_copilot import provider as prov
 
     captured: dict[str, Any] = {}
 
@@ -341,9 +341,9 @@ def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.Mo
     ):
         monkeypatch.delenv(key, raising=False)
 
-    from services.cm.answer_generation import DEFAULT_CM_ANSWER_MODEL, cm_answer_model
+    from services.ai_setup.answer_generation import DEFAULT_CM_ANSWER_MODEL, cm_answer_model
     from services.customer_reply_v2.flags import customer_answer_model_name, customer_retrieval_model_name
-    from services.owner_ai_model_router import router_config
+    from services.owner_copilot.model_router import router_config
     from services.providers.base import provider_config
 
     cfg = provider_config()
@@ -361,7 +361,7 @@ def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.Mo
 def test_no_active_social_getter_returns_forbidden_models(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LINAS_CUSTOMER_MODEL", "gpt-5.6-luna")
     monkeypatch.setenv("LINAS_CM_ANSWER_MODEL", "gpt-5.6-sol")
-    from services.cm.answer_generation import cm_answer_model
+    from services.ai_setup.answer_generation import cm_answer_model
     from services.customer_reply_v2.flags import customer_answer_model_name, customer_retrieval_model_name
 
     # Deprecated stubs stay on Brain names; CM answer stays Terra (not luna/sol env).

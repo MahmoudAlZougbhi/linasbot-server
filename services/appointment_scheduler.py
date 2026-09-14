@@ -10,9 +10,6 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from services.saas_no_boc import (
-    send_appointment_reminders,
-)
 from services.appointment_scheduler_followups import (
     populate_missed_yesterday_messages,
     populate_one_month_followups,
@@ -22,8 +19,11 @@ from services.appointment_scheduler_missed import (
     populate_no_show_messages_from_missed_appointments,
 )
 from services.appointment_scheduler_parse import parse_appointment_date
+from services.saas_no_boc import (
+    send_appointment_reminders,
+)
 from services.smart_messaging import smart_messaging
-from services.user_persistence_service import user_persistence
+from services.team.user_persistence_service import user_persistence
 
 logger = logging.getLogger(__name__)
 

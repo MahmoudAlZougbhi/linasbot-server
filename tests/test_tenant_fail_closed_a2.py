@@ -11,10 +11,10 @@ import pytest
 from fastapi import HTTPException
 
 from handlers import photo_handlers
+from services.ai_setup.capability_gates import human_handoff_enabled, image_analysis_enabled, voice_processing_enabled
 from services.ai_usage_limits import AiUsageLimitsService
 from services.auth_email_tokens import AuthEmailTokenRecord, AuthEmailTokenService
-from services.cm.capability_gates import human_handoff_enabled, image_analysis_enabled, voice_processing_enabled
-from services.token_wallet_service import TokenWalletService
+from services.billing.token_wallet_service import TokenWalletService
 from services.wallet_spend_analytics import _entry_matches_tenant, build_wallet_spend_analytics
 
 
@@ -23,7 +23,7 @@ from services.wallet_spend_analytics import _entry_matches_tenant, build_wallet_
 async def test_photo_handler_refuses_missing_tenant(user_data: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     gate = MagicMock(return_value=True)
     monkeypatch.setattr(
-        "services.cm.capability_gates.image_analysis_enabled",
+        "services.ai_setup.capability_gates.image_analysis_enabled",
         gate,
     )
     send_message = AsyncMock()
@@ -174,7 +174,7 @@ def test_auth_email_explicit_linas_ok(tmp_path: Path) -> None:
 
 
 def test_compose_skips_users_without_tenant_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.tenant_mobile_dashboard import compose
+    from services.dashboard import compose
 
     users = [
         {"id": "u0", "role": "owner", "status": "active"},  # missing tenantId
@@ -183,7 +183,7 @@ def test_compose_skips_users_without_tenant_id(monkeypatch: pytest.MonkeyPatch) 
         {"id": "u3", "tenantId": "other", "role": "owner", "status": "active"},
     ]
     monkeypatch.setattr(
-        "services.user_service.user_service.get_all_users",
+        "services.team.user_service.user_service.get_all_users",
         lambda: users,
     )
     result = compose._team_capacity("acme", None)

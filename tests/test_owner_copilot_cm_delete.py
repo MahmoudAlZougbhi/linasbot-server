@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from services.cm.storage import ensure_defaults, get_draft, put_draft
-from services.owner_ai_cm_approval import CmPatchProposalStore, approve_cm_patch
-from services.owner_ai_tools_cm_delete import tool_propose_cm_delete
-from services.owner_copilot_v2.brain_support import SYSTEM_V2
-from services.owner_copilot_v2.cards import card_from_tool
-from services.owner_copilot_v2.tool_schemas import tool_names
+from services.ai_setup.storage import ensure_defaults, get_draft, put_draft
+from services.owner_copilot.brain_support import SYSTEM_V2
+from services.owner_copilot.cards import card_from_tool
+from services.owner_copilot.cm_approval import CmPatchProposalStore, approve_cm_patch
+from services.owner_copilot.tool_schemas import tool_names
+from services.owner_copilot.tools_cm_delete import tool_propose_cm_delete
 
 
 @pytest.fixture()
@@ -85,13 +85,13 @@ async def test_propose_cm_delete_faq_archives_on_approve(
     del tenant_root
     _seed_faq()
     store = CmPatchProposalStore(root=tmp_path / "del_proposals")
-    monkeypatch.setattr("services.owner_ai_cm_approval.cm_patch_proposal_store", store)
+    monkeypatch.setattr("services.owner_copilot.cm_approval.cm_patch_proposal_store", store)
     monkeypatch.setattr(
-        "services.cm.validation.validate_cm",
+        "services.ai_setup.validation.validate_cm",
         lambda **_: {"errors": [], "warnings": []},
     )
     monkeypatch.setattr(
-        "services.faq_cm_invalidation.invalidate_faq_for_cm_patch",
+        "services.faq.faq_cm_invalidation.invalidate_faq_for_cm_patch",
         lambda **_: {"stale_groups": [], "stale_rows": 0, "reason": "cm_patch:faq"},
     )
 
@@ -148,13 +148,13 @@ async def test_propose_cm_delete_ai_basics_clears_fields(
         updated_by="tester",
     )
     store = CmPatchProposalStore(root=tmp_path / "del_basics")
-    monkeypatch.setattr("services.owner_ai_cm_approval.cm_patch_proposal_store", store)
+    monkeypatch.setattr("services.owner_copilot.cm_approval.cm_patch_proposal_store", store)
     monkeypatch.setattr(
-        "services.cm.validation.validate_cm",
+        "services.ai_setup.validation.validate_cm",
         lambda **_: {"errors": [], "warnings": []},
     )
     monkeypatch.setattr(
-        "services.faq_cm_invalidation.invalidate_faq_for_cm_patch",
+        "services.faq.faq_cm_invalidation.invalidate_faq_for_cm_patch",
         lambda **_: {"stale_groups": [], "stale_rows": 0, "reason": "cm_patch:ai_basics"},
     )
 

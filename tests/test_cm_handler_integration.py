@@ -48,7 +48,7 @@ async def test_no_published_version_does_not_send_or_raise() -> None:
 
 @pytest.mark.asyncio
 async def test_published_runtime_does_not_call_classic_generate() -> None:
-    from services.cm.schemas import initial_restricted_policy
+    from services.ai_setup.schemas import initial_restricted_policy
 
     tenant_id = "cm_handler_test_restricted"
     await publish_test_content(
@@ -56,7 +56,7 @@ async def test_published_runtime_does_not_call_classic_generate() -> None:
         {"restricted": initial_restricted_policy(active=True).model_dump(mode="json")},
     )
 
-    with patch("services.cm.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen:
+    with patch("services.ai_setup.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen:
         reply, metadata = await _handle_published_cm_runtime(
             tenant_id=tenant_id,
             message="I want tattoo removal please",
@@ -110,7 +110,7 @@ async def test_v2_generated_reply_never_calls_classic_generate() -> None:
             "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
             new=AsyncMock(return_value=outcome),
         ),
-        patch("services.cm.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen,
+        patch("services.ai_setup.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen,
     ):
         reply, metadata = await _handle_published_cm_runtime(
             tenant_id=tenant_id,
@@ -161,7 +161,7 @@ async def test_insufficient_credits_short_circuits_without_classic_generate(
         lambda *_a, **_k: True,
     )
 
-    with patch("services.cm.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen:
+    with patch("services.ai_setup.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen:
         reply, metadata = await _handle_published_cm_runtime(
             tenant_id=tenant_id,
             message="How much does it cost?",
@@ -197,7 +197,7 @@ async def test_v2_exception_fails_closed_without_classic() -> None:
             "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ),
-        patch("services.cm.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen,
+        patch("services.ai_setup.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen,
     ):
         reply, metadata = await _handle_published_cm_runtime(
             tenant_id=tenant_id,

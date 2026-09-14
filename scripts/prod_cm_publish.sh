@@ -46,11 +46,11 @@ if not (os.environ.get("OPENAI_API_KEY") or "").strip():
     raise SystemExit("[cm-publish] OPENAI_API_KEY missing after .env load")
 print("[cm-publish] env_loaded=true")
 
-from services.cm.constants import cm_publish_enabled, cm_runtime_mode
-from services.cm.embeddings import embedding_pin
-from services.cm.publish import publish_draft
-from services.cm.publish_gate import ensure_publish_enabled
-from services.cm.validation import validate_cm
+from services.ai_setup.constants import cm_publish_enabled, cm_runtime_mode
+from services.ai_setup.embeddings import embedding_pin
+from services.ai_setup.publish import publish_draft
+from services.ai_setup.publish_gate import ensure_publish_enabled
+from services.ai_setup.validation import validate_cm
 
 if not cm_publish_enabled():
     raise SystemExit("[cm-publish] CM_PUBLISH_ENABLED is false; aborting")

@@ -53,7 +53,7 @@ async def handle_voice_message(
         print("ERROR: voice handler refused — tenant_id required")
         return
     try:
-        from services.cm.capability_gates import voice_processing_enabled
+        from services.ai_setup.capability_gates import voice_processing_enabled
 
         if not voice_processing_enabled(tenant_id):
             await send_message_func(
@@ -203,7 +203,7 @@ async def handle_voice_message(
 
         # Analytics stays unpriced. Owner Costs journals pending STT without invented USD.
         audio_duration_seconds = len(audio) / 1000.0  # pydub duration is in milliseconds
-        from services.membership.provider_expense import record_pending_provider
+        from services.billing.membership.provider_expense import record_pending_provider
 
         record_pending_provider(
             event_id=f"stt:{tenant_id}:{source_message_id or user_id[-8:]}",

@@ -9,8 +9,8 @@ import pytest
 
 os.environ.setdefault("CM_PUBLISH_ENABLED", "false")
 
-from services.cm.publish_gate import PublishDisabledError, ensure_publish_enabled
-from services.cm.storage import ConflictError, ensure_defaults, get_draft, put_draft
+from services.ai_setup.publish_gate import PublishDisabledError, ensure_publish_enabled
+from services.ai_setup.storage import ConflictError, ensure_defaults, get_draft, put_draft
 
 
 @pytest.fixture()

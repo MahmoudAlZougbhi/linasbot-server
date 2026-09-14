@@ -6,14 +6,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from services.customer_ai.agent.action_gate import ActionGateResult
-from services.customer_ai.agent.loop import run_agentic_turn
-from services.customer_ai.agent.no_evidence_handoff import should_handoff_unanswered, unanswered_question_result
-from services.customer_ai.contracts.actions import ActionReceipt, ActionReceiptSet
-from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
-from services.customer_ai.contracts.turn import CustomerTurn, HistorySnapshot
-from services.customer_ai.templates import brain_template
+from services.brain.agent.action_gate import ActionGateResult
+from services.brain.agent.loop import run_agentic_turn
+from services.brain.agent.no_evidence_handoff import should_handoff_unanswered, unanswered_question_result
+from services.brain.contracts.actions import ActionReceipt, ActionReceiptSet
+from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
+from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+from services.brain.contracts.turn import CustomerTurn, HistorySnapshot
+from services.brain.templates import brain_template
 
 
 def _plan(*tasks: PlannerTask) -> PlannerPlan:
@@ -86,7 +86,7 @@ def test_polite_copy_does_not_send_customer_away() -> None:
 @pytest.mark.asyncio
 async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.customer_ai.agent.no_evidence_handoff.human_handoff_enabled",
+        "services.brain.agent.no_evidence_handoff.human_handoff_enabled",
         lambda _tid: True,
     )
     execute = AsyncMock(
@@ -101,7 +101,7 @@ async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.Monkey
             ]
         )
     )
-    monkeypatch.setattr("services.customer_ai.agent.no_evidence_handoff.execute_actions", execute)
+    monkeypatch.setattr("services.brain.agent.no_evidence_handoff.execute_actions", execute)
     plan = _plan(_task("t1", "information", span="unpublished policy?"))
     result = await unanswered_question_result(
         _turn(),
@@ -131,11 +131,11 @@ async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.Monkey
 @pytest.mark.asyncio
 async def test_unanswered_does_not_claim_transfer_when_persist_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.customer_ai.agent.no_evidence_handoff.human_handoff_enabled",
+        "services.brain.agent.no_evidence_handoff.human_handoff_enabled",
         lambda _tid: True,
     )
     monkeypatch.setattr(
-        "services.customer_ai.agent.no_evidence_handoff.execute_actions",
+        "services.brain.agent.no_evidence_handoff.execute_actions",
         AsyncMock(
             return_value=ActionReceiptSet(
                 receipts=[
@@ -193,14 +193,14 @@ async def test_agentic_not_found_question_hands_off(monkeypatch: pytest.MonkeyPa
             ]
         )
     )
-    monkeypatch.setattr("services.customer_ai.agent.loop.apply_action_gate", _gate)
-    monkeypatch.setattr("services.customer_ai.agent.loop.multi_round_retrieve", _retrieve)
-    monkeypatch.setattr("services.customer_ai.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
+    monkeypatch.setattr("services.brain.agent.loop.apply_action_gate", _gate)
+    monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
+    monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
     monkeypatch.setattr(
-        "services.customer_ai.agent.no_evidence_handoff.human_handoff_enabled",
+        "services.brain.agent.no_evidence_handoff.human_handoff_enabled",
         lambda _tid: True,
     )
-    monkeypatch.setattr("services.customer_ai.agent.no_evidence_handoff.execute_actions", execute)
+    monkeypatch.setattr("services.brain.agent.no_evidence_handoff.execute_actions", execute)
     result = await run_agentic_turn(
         _turn(),
         "What is your unpublished refund policy?",
@@ -230,7 +230,7 @@ async def test_agentic_found_hours_does_not_auto_handoff(monkeypatch: pytest.Mon
     execute = AsyncMock()
 
     async def _generate(*_a, **_k):
-        from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+        from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 
         return TurnResult(
             stop_reason="ok",
@@ -240,12 +240,12 @@ async def test_agentic_found_hours_does_not_auto_handoff(monkeypatch: pytest.Mon
             ),
         )
 
-    monkeypatch.setattr("services.customer_ai.agent.loop.apply_action_gate", _gate)
-    monkeypatch.setattr("services.customer_ai.agent.loop.multi_round_retrieve", _retrieve)
-    monkeypatch.setattr("services.customer_ai.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
-    monkeypatch.setattr("services.customer_ai.agent.loop.generate_verified", _generate)
-    monkeypatch.setattr("services.customer_ai.agent.loop.reserve_generative", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.customer_ai.agent.no_evidence_handoff.execute_actions", execute)
+    monkeypatch.setattr("services.brain.agent.loop.apply_action_gate", _gate)
+    monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
+    monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
+    monkeypatch.setattr("services.brain.agent.loop.generate_verified", _generate)
+    monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.brain.agent.no_evidence_handoff.execute_actions", execute)
     result = await run_agentic_turn(
         _turn(),
         "شو ساعات أنطلياس؟",
@@ -266,10 +266,10 @@ async def test_index_not_ready_does_not_auto_handoff(monkeypatch: pytest.MonkeyP
         return EvidenceBundle(items=[], outcome="index_not_ready"), [], {}
 
     execute = AsyncMock()
-    monkeypatch.setattr("services.customer_ai.agent.loop.apply_action_gate", _gate)
-    monkeypatch.setattr("services.customer_ai.agent.loop.multi_round_retrieve", _retrieve)
-    monkeypatch.setattr("services.customer_ai.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
-    monkeypatch.setattr("services.customer_ai.agent.no_evidence_handoff.execute_actions", execute)
+    monkeypatch.setattr("services.brain.agent.loop.apply_action_gate", _gate)
+    monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
+    monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
+    monkeypatch.setattr("services.brain.agent.no_evidence_handoff.execute_actions", execute)
     result = await run_agentic_turn(
         _turn(),
         "What is your unpublished refund policy?",

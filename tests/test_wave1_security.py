@@ -280,7 +280,7 @@ class TestAPIAuthEnforcement:
             return True
 
         monkeypatch.setattr(
-            "services.live_chat_service.live_chat_service.thread_visible_to_tenant",
+            "services.live_chat.service.live_chat_service.thread_visible_to_tenant",
             _visible,
         )
         rec = session_service.create_session(

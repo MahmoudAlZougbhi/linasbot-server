@@ -12,11 +12,11 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.credit_ledger_service import CreditLedgerService  # noqa: E402
-from services.entitlements_service import (  # noqa: E402
+from services.billing.entitlements_service import (  # noqa: E402
     EntitlementsStore,
     apply_store_notification,
 )
+from services.credit_ledger_service import CreditLedgerService  # noqa: E402
 
 
 @pytest.fixture()
@@ -34,7 +34,7 @@ def pg_billing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     Base.metadata.create_all(engine)
     store = EntitlementsStore(root=tmp_path / "ents_unused")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
     yield tmp_path
@@ -43,7 +43,7 @@ def pg_billing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def test_pg_credit_reserve_capture_idempotent(pg_billing: Path) -> None:
     ledger = CreditLedgerService(root=pg_billing / "file_unused")
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     entitlements_store.set_plan(tenant_id="t1", plan_id="starter", status="active", source="admin")
     ledger.ensure_period_grant("t1")
@@ -64,7 +64,7 @@ def test_pg_credit_reserve_capture_idempotent(pg_billing: Path) -> None:
 
 def test_pg_grant_pack_idempotent_and_entitlement(pg_billing: Path) -> None:
     ledger = CreditLedgerService(root=pg_billing / "file_unused")
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     entitlements_store.set_plan(tenant_id="t2", plan_id="starter", status="active", source="admin")
     a = ledger.grant_pack(tenant_id="t2", credits=100, request_id="txn-1", source="apple")
@@ -77,7 +77,7 @@ def test_pg_grant_pack_idempotent_and_entitlement(pg_billing: Path) -> None:
 
 def test_pg_period_grant_reconciles_stale_zero_bootstrap(pg_billing: Path) -> None:
     ledger = CreditLedgerService(root=pg_billing / "file_unused")
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     entitlements_store.set_plan(tenant_id="t_boot", plan_id="none", status="active", source="admin")
     ledger.ensure_period_grant("t_boot")
@@ -90,7 +90,7 @@ def test_pg_period_grant_reconciles_stale_zero_bootstrap(pg_billing: Path) -> No
 
 def test_pg_period_grant_does_not_regrant_after_spend_down(pg_billing: Path) -> None:
     ledger = CreditLedgerService(root=pg_billing / "file_unused")
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     entitlements_store.set_plan(tenant_id="t_spent", plan_id="starter", status="active", source="admin")
     ledger.ensure_period_grant("t_spent")

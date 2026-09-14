@@ -33,7 +33,7 @@ def test_takeover_assignee_other_same_tenant(monkeypatch: pytest.MonkeyPatch) ->
             assert user_id == "op-other"
             return {"id": "op-other", "tenantId": "t1", "name": "Mohammad Ali", "email": "m@x.com"}
 
-    monkeypatch.setattr("services.user_service.user_service", _Users())
+    monkeypatch.setattr("services.team.user_service.user_service", _Users())
     operator_id, name = resolve_takeover_assignee(session, "op-other")
     assert operator_id == "op-other"
     assert name == "Mohammad Ali"
@@ -46,7 +46,7 @@ def test_takeover_assignee_rejects_other_tenant(monkeypatch: pytest.MonkeyPatch)
         def get_user_by_id(self, user_id: str) -> dict[str, str]:
             return {"id": user_id, "tenantId": "other", "name": "X"}
 
-    monkeypatch.setattr("services.user_service.user_service", _Users())
+    monkeypatch.setattr("services.team.user_service.user_service", _Users())
     with pytest.raises(HTTPException) as exc:
         resolve_takeover_assignee(session, "op-other")
     assert exc.value.status_code == 403
@@ -59,7 +59,7 @@ def test_takeover_assignee_missing_user(monkeypatch: pytest.MonkeyPatch) -> None
         def get_user_by_id(self, user_id: str) -> None:
             return None
 
-    monkeypatch.setattr("services.user_service.user_service", _Users())
+    monkeypatch.setattr("services.team.user_service.user_service", _Users())
     with pytest.raises(HTTPException) as exc:
         resolve_takeover_assignee(session, "missing")
     assert exc.value.status_code == 400

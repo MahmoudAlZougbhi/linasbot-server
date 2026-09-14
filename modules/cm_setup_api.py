@@ -8,8 +8,8 @@ from fastapi import HTTPException, Request
 
 from modules.api_security import require_permission
 from modules.core import app
-from services.cm.progress import progress_summary
-from services.cm.setup_chat import INTRO_MESSAGE
+from services.ai_setup.progress import progress_summary
+from services.ai_setup.setup_chat import INTRO_MESSAGE
 from services.dashboard_session_service import SessionRecord
 
 

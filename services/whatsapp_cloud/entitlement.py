@@ -35,7 +35,7 @@ def assert_whatsapp_connection_allowed(session: Session, tenant_id: str) -> None
             "WHATSAPP_EMBEDDED_SIGNUP_CONFIG_MISSING",
             "META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID is not configured",
         )
-    from services.membership.whatsapp_gate import WhatsAppPlanDenied, assert_whatsapp_plan_allowed
+    from services.billing.membership.whatsapp_gate import WhatsAppPlanDenied, assert_whatsapp_plan_allowed
 
     try:
         assert_whatsapp_plan_allowed(tenant_id)
@@ -73,7 +73,7 @@ def evaluate_ai_eligibility(session: Session, conn: WhatsAppConnection) -> tuple
         return False, "scopes_missing"
     if flags.require_pilot_entitlement and not tenant_has_whatsapp_pilot(session, conn.tenant_id):
         return False, "pilot_required"
-    from services.membership.whatsapp_gate import WhatsAppPlanDenied, assert_whatsapp_plan_allowed
+    from services.billing.membership.whatsapp_gate import WhatsAppPlanDenied, assert_whatsapp_plan_allowed
 
     try:
         assert_whatsapp_plan_allowed(conn.tenant_id)
@@ -86,7 +86,7 @@ def evaluate_ai_eligibility(session: Session, conn: WhatsAppConnection) -> tuple
         return False, "history_sync_in_progress"
     # Published CM required.
     try:
-        from services.cm.version_store import load_published_content
+        from services.ai_setup.version_store import load_published_content
 
         pointer, _sections = load_published_content(conn.tenant_id)
         if not pointer or not getattr(pointer, "content_version_id", None):
@@ -95,7 +95,7 @@ def evaluate_ai_eligibility(session: Session, conn: WhatsAppConnection) -> tuple
         return False, "published_cm_unavailable"
     # Credits: same remaining wallet as Dashboard. In-flight reserve is not a block.
     try:
-        from services.membership.generative_gate import generative_block_reason
+        from services.billing.membership.generative_gate import generative_block_reason
 
         reason = generative_block_reason(conn.tenant_id, honor_inflight_reserved=True)
         if reason:

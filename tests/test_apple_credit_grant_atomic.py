@@ -15,7 +15,7 @@ from db.models.apple_billing import AppleCreditGrantRow  # noqa: E402
 from db.models.credit_entitlements import CreditLedgerEntryRow  # noqa: E402
 from db.session import reset_engine_for_tests, whatsapp_session  # noqa: E402
 from services.apple_credit_grant_ops import grant_consumable_credits  # noqa: E402
-from services.entitlements_service import EntitlementsStore  # noqa: E402
+from services.billing.entitlements_service import EntitlementsStore  # noqa: E402
 
 
 @pytest.fixture()
@@ -33,7 +33,7 @@ def apple_pg_billing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     Base.metadata.create_all(engine)
     store = EntitlementsStore(root=tmp_path / "ents_unused")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
     yield tmp_path

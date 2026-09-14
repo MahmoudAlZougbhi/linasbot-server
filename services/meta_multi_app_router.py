@@ -70,7 +70,7 @@ async def _prepare_binding(
     app_config: MetaAppConfig,
     registry: MetaAppRegistry,
 ) -> tuple[tuple[MetaAssetBinding, MetaBindingCredential] | None, str]:
-    from services.channel_capability_state import (
+    from services.integrations.channel_capability_state import (
         binding_advanced_access_approved,
         comments_policy_allows,
     )

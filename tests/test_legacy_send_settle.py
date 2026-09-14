@@ -11,14 +11,14 @@ from services.ai_reply_turn_runtime import (
     settle_after_outbound,
     settle_reserved_credits,
 )
-from services.customer_ai.leftover_reserve import reset_leftover_pins_for_tests
-from services.membership.credit_reservation_index import (
+from services.billing.membership.credit_reservation_index import (
     list_stale_open,
     record_open,
     reset_credit_reservation_index_for_tests,
 )
-from services.membership.pending_settlement import list_pending, reset_pending_settlements_for_tests
-from services.membership.reservation_reconcile import watch_stale_legacy_credits
+from services.billing.membership.pending_settlement import list_pending, reset_pending_settlements_for_tests
+from services.billing.membership.reservation_reconcile import watch_stale_legacy_credits
+from services.brain.leftover_reserve import reset_leftover_pins_for_tests
 
 
 def setup_function() -> None:
@@ -48,7 +48,7 @@ def test_settle_with_reply_captures_after_send(monkeypatch) -> None:
         lambda *a, **k: calls.append("capture"),
     )
     monkeypatch.setattr("services.ai_reply_turn_runtime.persist_generated_reply", lambda *a, **k: None)
-    monkeypatch.setattr("services.customer_ai.billing.settle_after_send", lambda **k: calls.append("settle"))
+    monkeypatch.setattr("services.brain.billing.settle_after_send", lambda **k: calls.append("settle"))
     user_data = {"_logical_reply_id": "lid-2", "tenant_id": "shop"}
     settle_reserved_credits(user_data, reply="sent text")
     assert calls == ["capture", "settle"]
@@ -118,7 +118,7 @@ def test_finalize_delivery_captures_on_success(monkeypatch) -> None:
         "services.ai_reply_turn_runtime.capture_after_reply_persisted",
         lambda *a, **k: calls.append("capture"),
     )
-    monkeypatch.setattr("services.customer_ai.billing.settle_after_send", lambda **k: None)
+    monkeypatch.setattr("services.brain.billing.settle_after_send", lambda **k: None)
     monkeypatch.setattr(
         "services.ai_reply_turn_runtime.get_turn",
         lambda _lid: type(
@@ -180,7 +180,7 @@ def test_finalize_delivery_releases_brain_hold_on_never_submitted_fail(monkeypat
 def test_stale_credit_index_marks_unresolved_without_refund() -> None:
     rid = "rid-stale-1"
     record_open(tenant_id="idx-shop", reservation_id=rid, request_id="wa:mid", operation_type="whatsapp")
-    from services.membership import credit_reservation_index as index
+    from services.billing.membership import credit_reservation_index as index
 
     index._ITEMS[rid].created_at = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
     assert list_stale_open(older_than_seconds=3600)
@@ -193,14 +193,19 @@ def test_seed_index_from_known_file_ledger(tmp_path, monkeypatch) -> None:
     import json
     import time
 
-    from services.membership.credit_reservation_index import open_counts, reset_credit_reservation_index_for_tests
-    from services.membership.credit_reservation_scan import seed_from_known_ledgers
+    from services.billing.membership.credit_reservation_index import (
+        open_counts,
+        reset_credit_reservation_index_for_tests,
+    )
+    from services.billing.membership.credit_reservation_scan import seed_from_known_ledgers
 
     reset_credit_reservation_index_for_tests()
     ledger = tmp_path / "credit_ledger"
     ledger.mkdir()
-    monkeypatch.setattr("services.membership.credit_reservation_scan._DATA_ROOT", tmp_path)
-    monkeypatch.setattr("services.membership.credit_reservation_scan.known_credit_tenant_ids", lambda: ["hist-led"])
+    monkeypatch.setattr("services.billing.membership.credit_reservation_scan._DATA_ROOT", tmp_path)
+    monkeypatch.setattr(
+        "services.billing.membership.credit_reservation_scan.known_credit_tenant_ids", lambda: ["hist-led"]
+    )
     rid = "a" * 32
     (ledger / "hist-led.jsonl").write_text(
         json.dumps(
@@ -222,9 +227,12 @@ def test_seed_index_from_known_file_ledger(tmp_path, monkeypatch) -> None:
 
 
 def test_known_tenants_include_memory_settlement_and_index() -> None:
-    from services.membership.credit_reservation_index import record_open, reset_credit_reservation_index_for_tests
-    from services.membership.credit_reservation_scan import known_credit_tenant_ids
-    from services.membership.pending_settlement import reset_pending_settlements_for_tests, upsert
+    from services.billing.membership.credit_reservation_index import (
+        record_open,
+        reset_credit_reservation_index_for_tests,
+    )
+    from services.billing.membership.credit_reservation_scan import known_credit_tenant_ids
+    from services.billing.membership.pending_settlement import reset_pending_settlements_for_tests, upsert
 
     reset_credit_reservation_index_for_tests()
     reset_pending_settlements_for_tests()
@@ -245,8 +253,8 @@ def test_known_tenants_include_memory_settlement_and_index() -> None:
     known = known_credit_tenant_ids()
     assert "mem-settle" in known
     assert "mem-index" in known
-    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
-    from services.customer_ai.outbox import enqueue_envelope, reset_outbox_for_tests
+    from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
+    from services.brain.outbox import enqueue_envelope, reset_outbox_for_tests
 
     reset_outbox_for_tests()
     enqueue_envelope(
@@ -263,15 +271,15 @@ def test_known_tenants_include_memory_settlement_and_index() -> None:
 def test_known_credit_tenants_include_pg_reserve_rows(monkeypatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership.credit_reservation_scan import known_credit_tenant_ids
+    from services.billing.membership.credit_reservation_scan import known_credit_tenant_ids
 
-    monkeypatch.setattr("services.billing_backend.billing_uses_postgres", lambda: True)
+    monkeypatch.setattr("services.billing.billing_backend.billing_uses_postgres", lambda: True)
 
     @contextmanager
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.billing_backend.require_billing_pg_session", _session)
+    monkeypatch.setattr("services.billing.billing_backend.require_billing_pg_session", _session)
     monkeypatch.setattr(
         "services.credit_ledger_pg_store.list_reserve_tenant_ids",
         lambda _s: ["pg-reserve"],
@@ -283,13 +291,16 @@ def test_known_tenants_include_jsonl_without_balance(tmp_path, monkeypatch) -> N
     import json
     import time
 
-    from services.membership.credit_reservation_index import open_counts, reset_credit_reservation_index_for_tests
-    from services.membership.credit_reservation_scan import known_credit_tenant_ids, seed_from_known_ledgers
+    from services.billing.membership.credit_reservation_index import (
+        open_counts,
+        reset_credit_reservation_index_for_tests,
+    )
+    from services.billing.membership.credit_reservation_scan import known_credit_tenant_ids, seed_from_known_ledgers
 
     reset_credit_reservation_index_for_tests()
     ledger = tmp_path / "credit_ledger"
     ledger.mkdir()
-    monkeypatch.setattr("services.membership.credit_reservation_scan._DATA_ROOT", tmp_path)
+    monkeypatch.setattr("services.billing.membership.credit_reservation_scan._DATA_ROOT", tmp_path)
     rid = "b" * 32
     (ledger / "jsonl-only.jsonl").write_text(
         json.dumps(
@@ -312,12 +323,12 @@ def test_known_tenants_include_jsonl_without_balance(tmp_path, monkeypatch) -> N
 
 
 def test_seed_index_from_pending_reserved() -> None:
-    from services.membership.credit_reservation_index import (
+    from services.billing.membership.credit_reservation_index import (
         _ITEMS,
         open_counts,
         seed_from_pending_settlements,
     )
-    from services.membership.pending_settlement import upsert
+    from services.billing.membership.pending_settlement import upsert
 
     upsert(
         tenant_id="hist-shop",
@@ -334,7 +345,7 @@ def test_seed_index_from_pending_reserved() -> None:
 
 
 def test_open_counts_are_bounded() -> None:
-    from services.membership.credit_reservation_index import open_counts
+    from services.billing.membership.credit_reservation_index import open_counts
 
     record_open(tenant_id="idx-shop", reservation_id="rid-open-1", request_id="wa:a", operation_type="whatsapp")
     counts = open_counts(tenant_id="idx-shop")
@@ -346,15 +357,20 @@ def test_seed_does_not_reopen_captured_leftover(tmp_path, monkeypatch) -> None:
     import json
     import time
 
+    from services.billing.membership.credit_reservation_index import (
+        open_counts,
+        reset_credit_reservation_index_for_tests,
+    )
+    from services.billing.membership.credit_reservation_scan import leftover_op, seed_from_known_ledgers
     from services.credit_ledger_pg_store import list_open_leftover_reservations
-    from services.membership.credit_reservation_index import open_counts, reset_credit_reservation_index_for_tests
-    from services.membership.credit_reservation_scan import leftover_op, seed_from_known_ledgers
 
     reset_credit_reservation_index_for_tests()
     ledger = tmp_path / "credit_ledger"
     ledger.mkdir()
-    monkeypatch.setattr("services.membership.credit_reservation_scan._DATA_ROOT", tmp_path)
-    monkeypatch.setattr("services.membership.credit_reservation_scan.known_credit_tenant_ids", lambda: ["cap-led"])
+    monkeypatch.setattr("services.billing.membership.credit_reservation_scan._DATA_ROOT", tmp_path)
+    monkeypatch.setattr(
+        "services.billing.membership.credit_reservation_scan.known_credit_tenant_ids", lambda: ["cap-led"]
+    )
     rid = "c" * 32
     now = time.time() - 7200
     (ledger / "cap-led.jsonl").write_text(
@@ -395,8 +411,8 @@ def test_seed_does_not_reopen_captured_leftover(tmp_path, monkeypatch) -> None:
 def test_leftover_index_get_prefers_sql_over_stale_memory(monkeypatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership import credit_reservation_index as index
-    from services.membership.credit_reservation_index import OpenCreditReservation, record_open
+    from services.billing.membership import credit_reservation_index as index
+    from services.billing.membership.credit_reservation_index import OpenCreditReservation, record_open
 
     item = record_open(
         tenant_id="idx-sql",
@@ -419,9 +435,9 @@ def test_leftover_index_get_prefers_sql_over_stale_memory(monkeypatch) -> None:
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.credit_reservation_index_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.membership.credit_reservation_index_pg.pg_get", lambda _s, _rid: sql_row)
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.credit_reservation_index_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.credit_reservation_index_pg.pg_get", lambda _s, _rid: sql_row)
     found = index._get(item.reservation_id)
     assert found is not None
     assert found.state == "pending_settlement"
@@ -430,8 +446,8 @@ def test_leftover_index_get_prefers_sql_over_stale_memory(monkeypatch) -> None:
 def test_list_stale_open_unions_memory_and_sql(monkeypatch) -> None:
     from datetime import datetime, timedelta
 
-    from services.membership import credit_reservation_index as index
-    from services.membership.credit_reservation_index import OpenCreditReservation, list_stale_open, record_open
+    from services.billing.membership import credit_reservation_index as index
+    from services.billing.membership.credit_reservation_index import OpenCreditReservation, list_stale_open, record_open
 
     old = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
     item = record_open(
@@ -459,8 +475,8 @@ def test_list_stale_open_unions_memory_and_sql(monkeypatch) -> None:
 
 
 def test_open_counts_union_memory_and_sql(monkeypatch) -> None:
-    from services.membership import credit_reservation_index as index
-    from services.membership.credit_reservation_index import OpenCreditReservation, open_counts, record_open
+    from services.billing.membership import credit_reservation_index as index
+    from services.billing.membership.credit_reservation_index import OpenCreditReservation, open_counts, record_open
 
     record_open(
         tenant_id="idx-open-mem",

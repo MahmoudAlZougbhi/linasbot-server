@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from services.billing_backend import auth_tokens_use_postgres, require_auth_token_pg_session
+from services.billing.billing_backend import auth_tokens_use_postgres, require_auth_token_pg_session
 from storage.persistent_storage import _DATA_ROOT
 
 TokenPurpose = Literal["password_reset", "email_verify", "email_change"]

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_ai.billing import apply_message_billing, classify_result
-from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
-from services.customer_ai.contracts.turn import CustomerTurn
-from services.membership.lot_window import current_period_id
-from services.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests
-from services.membership.message_policy import message_units_for
+from services.billing.membership.lot_window import current_period_id
+from services.billing.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests
+from services.billing.membership.message_policy import message_units_for
+from services.brain.billing import apply_message_billing, classify_result
+from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.turn import CustomerTurn
 
 
 @pytest.fixture(autouse=True)
@@ -99,7 +99,7 @@ def test_legacy_comments_stay_uncharged_when_billing_off() -> None:
 
 def test_new_policy_debits_one_ai_comment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
-    monkeypatch.setattr("services.customer_ai.billing.ensure_included_grant", lambda _tid: None)
+    monkeypatch.setattr("services.brain.billing.ensure_included_grant", lambda _tid: None)
     grant_lot(tenant_id="cmt-shop", lot_id="inc", kind="included", period_id=current_period_id(), amount=5)
     result = apply_message_billing(
         _turn(),

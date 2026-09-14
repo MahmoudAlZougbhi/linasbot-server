@@ -116,7 +116,7 @@ def comment_permission_enforcement_decision(
     per_asset_enabled: bool,
     registry: MetaAppRegistry | None = None,
 ) -> dict[str, Any]:
-    from services.cm.actions import comments_enforcement_decision
+    from services.ai_setup.actions import comments_enforcement_decision
 
     base = comments_enforcement_decision(
         tenant_id=tenant_id,

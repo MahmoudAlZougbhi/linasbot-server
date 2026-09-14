@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from services.live_chat_contracts import utc_now
-from services.live_chat_service import live_chat_service
+from services.live_chat.contracts import utc_now
+from services.live_chat.service import live_chat_service
 from services.takeover_customer_notice import customer_human_handover_notice, public_staff_label
 
 

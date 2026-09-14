@@ -158,7 +158,7 @@ class MetaDmFollowUpAdapter:
     ) -> tuple[bool, str]:
         now_dt = now if isinstance(now, datetime) else datetime.now(UTC)
         platform = meta_platform_for_channel(self.channel)
-        from services.channel_capability_state import dm_capability_state
+        from services.integrations.channel_capability_state import dm_capability_state
 
         dm_state = dm_capability_state(job.tenant_id, platform)
         if not dm_state.get("requested_enabled"):

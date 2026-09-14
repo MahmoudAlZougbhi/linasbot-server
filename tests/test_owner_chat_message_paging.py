@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.owner_chat_store import OwnerChatMessage, OwnerChatStore
+from services.owner_copilot.chat_store import OwnerChatMessage, OwnerChatStore
 
 
 def _fill(store: OwnerChatStore, *, tenant_id: str, user_id: str, n: int) -> str:

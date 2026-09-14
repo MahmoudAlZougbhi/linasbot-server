@@ -9,8 +9,8 @@ from unittest.mock import patch
 
 import pytest
 
-from services.channel_capability_state import comment_capability_state, dm_capability_state
-from services.cm.actions import comments_enforcement_decision
+from services.ai_setup.actions import comments_enforcement_decision
+from services.integrations.channel_capability_state import comment_capability_state, dm_capability_state
 from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
 from services.meta_comment_permission_verification import bootstrap_unknown_comment_permissions
 from tests.meta_instagram_login_lifecycle_helpers import _binding
@@ -104,9 +104,9 @@ def test_facebook_comments_enforcement_still_allows_after_backfill(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("services.cm.constants.tenant_uses_cm_runtime", lambda _tenant: True)
+    monkeypatch.setattr("services.ai_setup.constants.tenant_uses_cm_runtime", lambda _tenant: True)
     monkeypatch.setattr(
-        "services.cm.actions.comments_action_enabled",
+        "services.ai_setup.actions.comments_action_enabled",
         lambda _tenant, channel: channel == "facebook",
     )
     binding = _facebook_page_binding(registry)
@@ -128,9 +128,11 @@ def test_facebook_comments_capability_not_unknown_after_backfill(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _facebook_page_binding(registry)
-    monkeypatch.setattr("services.channel_capability_state.get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr("services.channel_capability_state._action_requested", lambda *_a, **_k: True)
-    monkeypatch.setattr("services.channel_capability_state._tenant_comment_assets_enabled", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.integrations.channel_capability_state.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.channel_capability_state._action_requested", lambda *_a, **_k: True)
+    monkeypatch.setattr(
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled", lambda *_a, **_k: True
+    )
     bootstrap_unknown_comment_permissions(registry=registry)
     state = comment_capability_state("linas", "facebook")
     assert "unknown" not in state.get("comment_permission_statuses", [])
@@ -146,8 +148,8 @@ def test_instagram_dm_capability_unchanged_by_comment_permission_columns(
         auth_flow="instagram_login",
         webhook_fields=("messages", "messaging_postbacks", "comments"),
     )
-    monkeypatch.setattr("services.channel_capability_state.get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr("services.channel_capability_state._action_requested", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.integrations.channel_capability_state.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.channel_capability_state._action_requested", lambda *_a, **_k: True)
     state = dm_capability_state("tenant-a", "instagram")
     assert state["blocker_code"] != "comment_permissions_could_not_be_verified"
     assert state["connection_healthy"] is True
@@ -158,8 +160,8 @@ def test_facebook_dm_capability_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _facebook_page_binding(registry)
-    monkeypatch.setattr("services.channel_capability_state.get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr("services.channel_capability_state._action_requested", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.integrations.channel_capability_state.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.channel_capability_state._action_requested", lambda *_a, **_k: True)
     state = dm_capability_state("linas", "facebook")
     assert state["blocker_code"] != "comment_permissions_could_not_be_verified"
     assert state["connection_healthy"] is True
@@ -182,21 +184,21 @@ def test_legacy_simple_namespace_comment_capability_still_works() -> None:
     )
     registry = SimpleNamespace(get_credential=lambda _binding: credential)
     with (
-        patch("services.channel_capability_state.get_meta_app_registry", lambda: registry),
+        patch("services.integrations.channel_capability_state.get_meta_app_registry", lambda: registry),
         patch(
-            "services.channel_capability_state.canonical_channel_bindings",
+            "services.integrations.channel_capability_state.canonical_channel_bindings",
             lambda *_a, **_k: [binding],
         ),
         patch(
-            "services.channel_capability_state._action_requested",
+            "services.integrations.channel_capability_state._action_requested",
             lambda *_a, **_k: True,
         ),
         patch(
-            "services.channel_capability_state._tenant_comment_assets_enabled",
+            "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
             lambda *_a, **_k: True,
         ),
         patch(
-            "services.channel_capability_state._binding_connection_healthy",
+            "services.integrations.channel_capability_state._binding_connection_healthy",
             lambda *_a, **_k: True,
         ),
     ):

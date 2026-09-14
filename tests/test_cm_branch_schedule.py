@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.cm.branch_schedule import (
+from services.ai_setup.branch_schedule import (
     branches_section_has_unified_schedule,
     derive_off_days_section,
     derive_opening_hours_section,
@@ -11,8 +11,8 @@ from services.cm.branch_schedule import (
     normalize_branch_day,
     normalize_branches_payload,
 )
-from services.cm.off_days import resolve_off_day_facts
-from services.cm.schemas import (
+from services.ai_setup.off_days import resolve_off_day_facts
+from services.ai_setup.schemas import (
     BranchDaySchedule,
     BranchesSection,
     BranchRecord,
@@ -22,7 +22,7 @@ from services.cm.schemas import (
     OpeningHoursSchedule,
     OpeningHoursSection,
 )
-from services.cm.structured_resolver import resolve_branch_facts, resolve_opening_hours_facts
+from services.ai_setup.structured_resolver import resolve_branch_facts, resolve_opening_hours_facts
 
 
 def test_branch_weekly_schedule_summary() -> None:
@@ -117,7 +117,7 @@ def test_branches_section_has_unified_schedule() -> None:
 
 
 def test_derive_off_days_from_specific_rules() -> None:
-    from services.cm.schemas import OffDayRule
+    from services.ai_setup.schemas import OffDayRule
 
     section = BranchesSection(
         timezone="Asia/Beirut",

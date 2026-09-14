@@ -42,7 +42,7 @@ def rate_limit_widget(request: Request, *, session_id: str, widget_key: str) -> 
 
 
 def web_membership_gate(tenant_id: str) -> tuple[bool, str | None]:
-    from services.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
+    from services.billing.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
 
     try:
         assert_web_plan_allowed(tenant_id)

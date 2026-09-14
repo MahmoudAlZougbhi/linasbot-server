@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.owner_chat_store import (
+from services.owner_copilot.chat_store import (
     OwnerChatStore,
     auto_title_from_first_message,
     is_default_conversation_title,

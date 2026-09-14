@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from services.customer_ai.billing import apply_message_billing
-from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
-from services.customer_ai.contracts.turn import CustomerTurn
-from services.customer_ai.outbox import (
+from services.brain.billing import apply_message_billing
+from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.turn import CustomerTurn
+from services.brain.outbox import (
     _ITEMS,
     acknowledge_failed,
     acknowledge_pending_settlement,
@@ -94,7 +94,7 @@ def test_outbox_survives_memory_clear(tmp_path, monkeypatch) -> None:
         extra={"channel": "instagram_dm"},
     )
     _ITEMS.clear()
-    import services.customer_ai.outbox as outbox
+    import services.brain.outbox as outbox
 
     outbox._HYDRATED = False
     recovered = recover_unsent(tenant_id="disk-shop")
@@ -127,7 +127,7 @@ def test_mark_failed_does_not_overwrite_sql_sent(monkeypatch) -> None:
     from contextlib import contextmanager
     from dataclasses import replace
 
-    from services.customer_ai import outbox as box
+    from services.brain import outbox as box
 
     item = enqueue_envelope(
         tenant_id="sent-shop",
@@ -144,9 +144,9 @@ def test_mark_failed_does_not_overwrite_sql_sent(monkeypatch) -> None:
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.customer_ai.outbox_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.customer_ai.outbox_pg.pg_get", lambda _s, _oid: sql_sent)
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.brain.outbox_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.brain.outbox_pg.pg_get", lambda _s, _oid: sql_sent)
     marked = mark_failed(item.outbox_id)
     assert marked is not None
     assert marked.state == "sent"
@@ -156,7 +156,7 @@ def test_mark_failed_does_not_overwrite_sql_sent(monkeypatch) -> None:
 def test_outbox_counts_and_recover_union_memory_and_sql(monkeypatch) -> None:
     from contextlib import contextmanager
 
-    from services.customer_ai.outbox import OutboxItem, known_outbox_tenant_ids
+    from services.brain.outbox import OutboxItem, known_outbox_tenant_ids
 
     enqueue_envelope(
         tenant_id="mem-out",
@@ -180,15 +180,15 @@ def test_outbox_counts_and_recover_union_memory_and_sql(monkeypatch) -> None:
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.customer_ai.outbox_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.brain.outbox_pg.table_ready", lambda _s: True)
     monkeypatch.setattr(
-        "services.customer_ai.outbox_pg.pg_counts",
+        "services.brain.outbox_pg.pg_counts",
         lambda *_a, **_k: {"accepted": 1, "sent": 0, "pending_settlement": 0, "failed": 0},
     )
-    monkeypatch.setattr("services.customer_ai.outbox_pg.pg_outbox_ids", lambda *_a, **_k: {sql_item.outbox_id})
-    monkeypatch.setattr("services.customer_ai.outbox_pg.pg_tenant_ids", lambda *_a, **_k: ["sql-out"])
-    monkeypatch.setattr("services.customer_ai.outbox_pg.pg_list", lambda *_a, **_k: [sql_item])
+    monkeypatch.setattr("services.brain.outbox_pg.pg_outbox_ids", lambda *_a, **_k: {sql_item.outbox_id})
+    monkeypatch.setattr("services.brain.outbox_pg.pg_tenant_ids", lambda *_a, **_k: ["sql-out"])
+    monkeypatch.setattr("services.brain.outbox_pg.pg_list", lambda *_a, **_k: [sql_item])
     counts = outbox_counts()
     assert counts["accepted"] == 2
     tenants = known_outbox_tenant_ids()
@@ -203,7 +203,7 @@ def test_outbox_counts_and_recover_union_memory_and_sql(monkeypatch) -> None:
 def test_recover_unsent_skips_memory_row_already_known_in_sql(monkeypatch) -> None:
     from contextlib import contextmanager
 
-    from services.customer_ai.outbox import OutboxItem, reset_outbox_for_tests
+    from services.brain.outbox import OutboxItem, reset_outbox_for_tests
 
     reset_outbox_for_tests()
     item = enqueue_envelope(
@@ -219,10 +219,10 @@ def test_recover_unsent_skips_memory_row_already_known_in_sql(monkeypatch) -> No
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.customer_ai.outbox_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.customer_ai.outbox_pg.pg_list", lambda *_a, **_k: [])
-    monkeypatch.setattr("services.customer_ai.outbox_pg.pg_outbox_ids", lambda *_a, **_k: {item.outbox_id})
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.brain.outbox_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.brain.outbox_pg.pg_list", lambda *_a, **_k: [])
+    monkeypatch.setattr("services.brain.outbox_pg.pg_outbox_ids", lambda *_a, **_k: {item.outbox_id})
     assert recover_unsent(tenant_id="stale-out") == []
     sql_open = OutboxItem(
         outbox_id="sql-open:evt-open",
@@ -233,9 +233,9 @@ def test_recover_unsent_skips_memory_row_already_known_in_sql(monkeypatch) -> No
         state="accepted",
         envelope={"decision": "reply", "messages": [{"destination": "dm", "text": "SQL open"}]},
     )
-    monkeypatch.setattr("services.customer_ai.outbox_pg.pg_list", lambda *_a, **_k: [sql_open])
+    monkeypatch.setattr("services.brain.outbox_pg.pg_list", lambda *_a, **_k: [sql_open])
     monkeypatch.setattr(
-        "services.customer_ai.outbox_pg.pg_outbox_ids",
+        "services.brain.outbox_pg.pg_outbox_ids",
         lambda *_a, **_k: {item.outbox_id, sql_open.outbox_id},
     )
     recovered = recover_unsent(tenant_id="stale-out")
@@ -246,7 +246,7 @@ def test_hydrate_skips_disk_accepted_when_sql_already_has_id(tmp_path, monkeypat
     import json
     from contextlib import contextmanager
 
-    from services.customer_ai import outbox as outbox_mod
+    from services.brain import outbox as outbox_mod
 
     reset_outbox_for_tests()
     folder = tmp_path / "outbox"
@@ -273,11 +273,11 @@ def test_hydrate_skips_disk_accepted_when_sql_already_has_id(tmp_path, monkeypat
 
     monkeypatch.setattr(outbox_mod, "_root", lambda: folder)
     monkeypatch.setattr(outbox_mod, "_memory_forced", lambda: False)
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.customer_ai.outbox_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.customer_ai.outbox_pg.pg_list", lambda *_a, **_k: [])
-    monkeypatch.setattr("services.customer_ai.outbox_pg.pg_outbox_ids", lambda *_a, **_k: {oid})
-    monkeypatch.setattr("services.customer_ai.outbox_pg.pg_get", lambda *_a, **_k: object())
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.brain.outbox_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.brain.outbox_pg.pg_list", lambda *_a, **_k: [])
+    monkeypatch.setattr("services.brain.outbox_pg.pg_outbox_ids", lambda *_a, **_k: {oid})
+    monkeypatch.setattr("services.brain.outbox_pg.pg_get", lambda *_a, **_k: object())
     outbox_mod._ITEMS.clear()
     outbox_mod._HYDRATED = False
     outbox_mod._hydrate()

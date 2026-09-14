@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 import config
-from services.live_chat_contracts import (
+from services.live_chat.contracts import (
     parse_timestamp_utc,
     utc_now,
 )

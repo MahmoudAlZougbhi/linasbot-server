@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.customer_ai.evals.qa_tenants import (
+from services.brain.evals.qa_tenants import (
     clinic_c_products,
     clinic_c_qa_sections,
     linas_like_products,
@@ -10,10 +10,10 @@ from services.customer_ai.evals.qa_tenants import (
     shop_b_products,
     shop_b_qa_sections,
 )
-from services.customer_ai.retrieve.cards import cards_from_sections
-from services.customer_ai.retrieve.lexical import search_cards
-from services.customer_ai.retrieve.products import cards_from_products
-from services.customer_ai.search.store import query_similar, reset_memory_store, write_documents
+from services.brain.retrieve.cards import cards_from_sections
+from services.brain.retrieve.lexical import search_cards
+from services.brain.retrieve.products import cards_from_products
+from services.brain.search.store import query_similar, reset_memory_store, write_documents
 
 
 def test_same_product_name_keeps_tenant_prices() -> None:
@@ -77,7 +77,7 @@ def test_memory_store_same_doc_id_does_not_cross_tenants() -> None:
 
 
 def test_product_media_urls_stay_on_own_tenant() -> None:
-    from services.customer_ai.retrieve.products import evidence_from_product
+    from services.brain.retrieve.products import evidence_from_product
 
     linas = cards_from_products(linas_like_products())
     other = cards_from_products(shop_b_products())

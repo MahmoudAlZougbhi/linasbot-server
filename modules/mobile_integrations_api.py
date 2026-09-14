@@ -9,11 +9,13 @@ from fastapi.responses import JSONResponse
 
 from modules.api_security import require_permission, require_session, user_has_permission
 from modules.core import app
-from services.channel_capability_disconnect import (
+from services.credit_ledger_service import credit_ledger_service
+from services.integration_capabilities import list_tenant_integration_status
+from services.integrations.channel_capability_disconnect import (
     clear_channel_toggles_after_disconnect,
     clear_invalid_dm_enabled_state_async,
 )
-from services.channel_capability_toggles import (
+from services.integrations.channel_capability_toggles import (
     ChannelToggleError,
     attach_channel_toggles,
     clear_invalid_comments_enabled_state_async,
@@ -21,8 +23,6 @@ from services.channel_capability_toggles import (
     set_channel_toggle,
     supported_platforms,
 )
-from services.credit_ledger_service import credit_ledger_service
-from services.integration_capabilities import list_tenant_integration_status
 from services.meta_app_registry import MetaRegistryError, get_meta_app_registry
 from services.meta_connection_disconnect import disconnect_meta_binding_set
 from services.meta_oauth import MetaOAuthError
@@ -100,8 +100,8 @@ async def mobile_integration_toggles(
     else:
         raise HTTPException(status_code=400, detail="Body must include dm or comments boolean")
 
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     kind = f"safety:toggle:{platform_key}:{toggle}" if not enabled else f"integration:toggle:{platform_key}:{toggle}"
 
@@ -195,7 +195,7 @@ async def mobile_disconnect_platform(platform: str, request: Request) -> Any:
 
         actor = session.user_id or session.email or "mobile_disconnect"
         try:
-            from services.membership.edit_http import guarded_edit
+            from services.billing.membership.edit_http import guarded_edit
 
             with guarded_edit(
                 tenant_id=session.tenant_id,
@@ -219,7 +219,7 @@ async def mobile_disconnect_platform(platform: str, request: Request) -> Any:
 
     actor = session.user_id or session.email or "mobile_disconnect"
     try:
-        from services.membership.edit_http import guarded_edit
+        from services.billing.membership.edit_http import guarded_edit
 
         with guarded_edit(
             tenant_id=session.tenant_id,
@@ -254,7 +254,7 @@ async def mobile_reconcile_comments(platform: str, request: Request) -> Any:
     if platform_key not in supported_platforms():
         raise HTTPException(status_code=404, detail="Unknown platform")
     try:
-        from services.membership.edit_http import guarded_edit
+        from services.billing.membership.edit_http import guarded_edit
 
         with guarded_edit(
             tenant_id=session.tenant_id,
@@ -295,10 +295,10 @@ async def mobile_usage(request: Request) -> Any:
     """
 
     session = require_session(request)
+    from services.billing.entitlements_service import entitlements_store
+    from services.billing.plan_economics import PLAN_PRICES_USD, recommend_allowance
     from services.credit_ai_gate import remaining_credits
     from services.credit_buckets import split_credit_remaining
-    from services.entitlements_service import entitlements_store
-    from services.plan_economics import PLAN_PRICES_USD, recommend_allowance
 
     available = remaining_credits(session.tenant_id)
     reserved = 0
@@ -320,7 +320,7 @@ async def mobile_usage(request: Request) -> Any:
     )
     used = buckets["credits_used"]
     allowance = recommend_allowance(ent.plan_id) if ent.plan_id in PLAN_PRICES_USD else None
-    from services.tenant_mobile_dashboard.message_surface import overlay_message_fields
+    from services.dashboard.message_surface import overlay_message_fields
 
     messages = overlay_message_fields(session.tenant_id, ent.plan_id)
     return {

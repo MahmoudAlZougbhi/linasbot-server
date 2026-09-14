@@ -6,8 +6,8 @@ import re
 
 import pytest
 
-from services.cm.runtime_pipeline import finalize_response, prepare_response
-from services.cm.schemas import HandoffContact, HandoffMatrixRow, HandoffPolicy
+from services.ai_setup.runtime_pipeline import finalize_response, prepare_response
+from services.ai_setup.schemas import HandoffContact, HandoffMatrixRow, HandoffPolicy
 from services.local_qa_service import local_qa_service
 from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
@@ -42,7 +42,7 @@ async def test_no_published_version_is_honest_failure() -> None:
 @pytest.mark.asyncio
 async def test_restricted_topic_refused_and_never_offers_handoff_number() -> None:
     """T7/T23: restricted + booking intent together must NEVER return a WhatsApp number."""
-    from services.cm.schemas import initial_restricted_policy
+    from services.ai_setup.schemas import initial_restricted_policy
 
     tenant_id = "cm_runtime_test_restricted_booking"
     await publish_test_content(
@@ -120,7 +120,7 @@ async def test_faq_hit_skips_interpreter_and_generative_call(monkeypatch: pytest
         interpreter_calls["count"] += 1
         raise AssertionError("Query Interpreter must not run on a FAQ hit")
 
-    monkeypatch.setattr("services.cm.runtime_pipeline.interpret_query", _tracking_interpret_query)
+    monkeypatch.setattr("services.ai_setup.runtime_pipeline.interpret_query", _tracking_interpret_query)
 
     outcome = await prepare_response(
         tenant_id=tenant_id,
@@ -158,11 +158,11 @@ async def test_faq_miss_runs_interpreter_and_builds_packet() -> None:
 @pytest.mark.asyncio
 async def test_hash_published_pointer_is_honest_failure_not_legacy_fallback() -> None:
     """Published mode must reject hash-labeled pointers instead of reading legacy content."""
-    from services.cm.schemas import PublishedPointer, default_section_payload
-    from services.cm.version_store import write_published_pointer, write_version_content
+    from services.ai_setup.schemas import PublishedPointer, default_section_payload
+    from services.ai_setup.version_store import write_published_pointer, write_version_content
 
     tenant_id = "cm_runtime_test_hash_pointer"
-    from services.cm.constants import CM_SECTIONS
+    from services.ai_setup.constants import CM_SECTIONS
 
     sections = {section: default_section_payload(section) for section in CM_SECTIONS}
     checksums = write_version_content(tenant_id, "v_hash", sections)

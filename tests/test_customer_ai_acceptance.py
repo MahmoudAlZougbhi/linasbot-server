@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from services.cm.schemas import CommentRule, CommentsSection
-from services.customer_ai.actions.confirm import confirmation_valid
-from services.customer_ai.comment_normalize import normalize_comment_mode
-from services.customer_ai.comments.pipeline import deterministic_comment_result, winning_comment_mode
-from services.customer_ai.compiler.chunks import chunk_document, contextual_groups
-from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask
-from services.customer_ai.coverage import coverage_ok, omitted_task_types
-from services.customer_ai.evals.fixtures import knowledge_heavy_corpus, service_appointment_corpus
-from services.customer_ai.retrieve.cards import cards_from_sections
+from services.ai_setup.schemas import CommentRule, CommentsSection
+from services.brain.actions.confirm import confirmation_valid
+from services.brain.comment_normalize import normalize_comment_mode
+from services.brain.comments.pipeline import deterministic_comment_result, winning_comment_mode
+from services.brain.compiler.chunks import chunk_document, contextual_groups
+from services.brain.contracts.plan import PlannerPlan, PlannerTask
+from services.brain.coverage import coverage_ok, omitted_task_types
+from services.brain.evals.fixtures import knowledge_heavy_corpus, service_appointment_corpus
+from services.brain.retrieve.cards import cards_from_sections
 
 
 def test_coverage_detects_planner_omission() -> None:
@@ -23,7 +23,7 @@ def test_coverage_detects_planner_omission() -> None:
 
 
 def _answered_plan() -> tuple[str, PlannerPlan, dict[str, str]]:
-    from services.customer_ai.planner.heuristic import plan_message
+    from services.brain.planner.heuristic import plan_message
 
     original = "what is the laser price?"
     plan = plan_message(original)
@@ -45,7 +45,7 @@ def test_coverage_rejects_answered_dispositions_on_a_non_answer_decision() -> No
 
 
 def test_coverage_rejects_empty_content_decisions() -> None:
-    from services.customer_ai.coverage import delivery_ok
+    from services.brain.coverage import delivery_ok
 
     assert delivery_ok({"t1": "pending_delivery"}, reply_text="", decision="clarify") is False
     assert delivery_ok({"t1": "pending_delivery"}, reply_text="", decision="no_reply") is False
@@ -97,7 +97,7 @@ def test_seven_comment_modes_normalize() -> None:
 def test_ignore_comment_is_policy_suppressed(monkeypatch: pytest.MonkeyPatch) -> None:
     section = CommentsSection(rules=[CommentRule(id="ig", action="ignore", trigger_type="all_comments", keywords=[])])
     monkeypatch.setattr(
-        "services.customer_ai.comments.pipeline.load_published_comments_section",
+        "services.brain.comments.pipeline.load_published_comments_section",
         lambda _tid: section,
     )
     mode, decision = winning_comment_mode(tenant_id="t1", comment_text="price?")

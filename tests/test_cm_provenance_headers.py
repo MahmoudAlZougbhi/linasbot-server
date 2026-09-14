@@ -1,6 +1,6 @@
 """Provenance headers are remigrate markers — strip for owners and models."""
 
-from services.cm.provenance_headers import (
+from services.ai_setup.provenance_headers import (
     sanitize_ai_basics_payload,
     sanitize_section_payload,
     sanitize_style_payload,

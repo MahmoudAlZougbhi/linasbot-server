@@ -13,7 +13,7 @@ from services.apple_iap_effects import (
     lookup_tenant_by_app_account_token,
 )
 from services.apple_jws import decode_jws_payload
-from services.entitlements_service import EntitlementStatus, entitlements_store
+from services.billing.entitlements_service import EntitlementStatus, entitlements_store
 from services.iap_product_catalog import is_subscription_product
 from services.subscription_downgrade import (
     is_downgrade,

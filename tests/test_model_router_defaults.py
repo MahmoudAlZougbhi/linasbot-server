@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from services.cm.answer_generation import DEFAULT_CM_ANSWER_MODEL, cm_answer_model
+from services.ai_setup.answer_generation import DEFAULT_CM_ANSWER_MODEL, cm_answer_model
 from services.model_policy import MODEL_CUSTOMER_TERRA, MODEL_OWNER_SOL
-from services.owner_ai_model_router import route_owner_turn, router_config
+from services.owner_copilot.model_router import route_owner_turn, router_config
 from services.providers.base import provider_config
 
 

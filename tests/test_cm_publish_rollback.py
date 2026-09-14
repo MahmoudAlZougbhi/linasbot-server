@@ -6,11 +6,15 @@ import uuid
 
 import pytest
 
-from services.cm.cutover import evaluate_cutover_readiness, run_publish_rehearsal, seed_rehearsal_tenant_from_draft
-from services.cm.publish import PublishBlockedError, RollbackTargetError, publish_draft, rollback_to_version
-from services.cm.sot_audit import audit_sot_sources
-from services.cm.storage import get_draft, put_draft
-from services.cm.version_store import PublishedVersionError, load_published_content
+from services.ai_setup.cutover import (
+    evaluate_cutover_readiness,
+    run_publish_rehearsal,
+    seed_rehearsal_tenant_from_draft,
+)
+from services.ai_setup.publish import PublishBlockedError, RollbackTargetError, publish_draft, rollback_to_version
+from services.ai_setup.sot_audit import audit_sot_sources
+from services.ai_setup.storage import get_draft, put_draft
+from services.ai_setup.version_store import PublishedVersionError, load_published_content
 
 
 @pytest.mark.asyncio
@@ -45,7 +49,7 @@ async def test_second_publish_creates_new_immutable_version_and_records_previous
 
 @pytest.mark.asyncio
 async def test_publish_blocked_on_restricted_conflict_validation_error() -> None:
-    from services.cm.schemas import initial_restricted_policy
+    from services.ai_setup.schemas import initial_restricted_policy
 
     tenant_id = f"cm_publish_test_blocked_{uuid.uuid4().hex[:8]}"
 

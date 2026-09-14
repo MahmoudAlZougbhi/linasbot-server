@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from services.membership.plan_catalog import PLAN_CATALOG, plan_features
-from services.membership.whatsapp_gate import WhatsAppPlanDenied, assert_whatsapp_plan_allowed
-from services.plan_economics import PLAN_FEATURES
+from services.billing.membership.plan_catalog import PLAN_CATALOG, plan_features
+from services.billing.membership.whatsapp_gate import WhatsAppPlanDenied, assert_whatsapp_plan_allowed
+from services.billing.plan_economics import PLAN_FEATURES
 
 
 def test_whatsapp_tiktok_matrix_matches_product() -> None:
@@ -28,9 +28,9 @@ def test_whatsapp_tiktok_matrix_matches_product() -> None:
 
 
 def test_whatsapp_gate_blocks_lite_allows_starter(monkeypatch, tmp_path) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
-    from services.membership import whatsapp_gate as wg
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
+    from services.billing.membership import whatsapp_gate as wg
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)

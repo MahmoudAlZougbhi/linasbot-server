@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from services.cm.constants import CM_SECTIONS
-from services.cm.schemas import (
+from services.ai_setup.constants import CM_SECTIONS
+from services.ai_setup.schemas import (
     ActionsSection,
     AiBasics,
     AiLimitsSection,

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_ai.agent.action_gate import apply_action_gate
-from services.customer_ai.contracts.actions import ActionReceipt
-from services.customer_ai.contracts.turn import CustomerTurn
-from services.customer_ai.planner.heuristic import overlay_plan, plan_message
+from services.brain.agent.action_gate import apply_action_gate
+from services.brain.contracts.actions import ActionReceipt
+from services.brain.contracts.turn import CustomerTurn
+from services.brain.planner.heuristic import overlay_plan, plan_message
 
 
 @pytest.mark.asyncio
@@ -21,7 +21,7 @@ async def test_mixed_human_and_hours_continues_to_answer(monkeypatch: pytest.Mon
     async def fake_escalate(**_k):
         return ActionReceipt(action_id="handoff:t_human", action_type="escalate_to_human", state="success")
 
-    monkeypatch.setattr("services.customer_ai.actions.execute.escalate_to_human", fake_escalate)
+    monkeypatch.setattr("services.brain.actions.execute.escalate_to_human", fake_escalate)
     turn = CustomerTurn(tenant_id="brain-shop", customer_id="u1", conversation_id="c-mix", event_ids=["m1"])
     gated = await apply_action_gate(
         turn,
@@ -45,7 +45,7 @@ async def test_human_only_still_stops_at_handoff(monkeypatch: pytest.MonkeyPatch
     async def fake_escalate(**_k):
         return ActionReceipt(action_id="handoff:t_human", action_type="escalate_to_human", state="success")
 
-    monkeypatch.setattr("services.customer_ai.actions.execute.escalate_to_human", fake_escalate)
+    monkeypatch.setattr("services.brain.actions.execute.escalate_to_human", fake_escalate)
     turn = CustomerTurn(tenant_id="brain-shop", customer_id="u1", conversation_id="c-h", event_ids=["m2"])
     gated = await apply_action_gate(
         turn,

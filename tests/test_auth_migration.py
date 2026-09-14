@@ -58,7 +58,7 @@ def test_password_epoch_invalidates_session_without_default_password():
         "status": "active",
         "passwordEpoch": 1,
     }
-    with patch("services.user_service.user_service.get_user_by_id", return_value=fake_user):
+    with patch("services.team.user_service.user_service.get_user_by_id", return_value=fake_user):
         assert svc.get_valid_session(cookie) is None
 
 
@@ -74,7 +74,7 @@ def test_session_expiry_and_revoke():
         tenant_id="linas",
     )
     cookie = svc.cookie_value_for(record)
-    with patch("services.user_service.user_service.get_user_by_id", return_value=None):
+    with patch("services.team.user_service.user_service.get_user_by_id", return_value=None):
         assert svc.get_valid_session(cookie) is not None
         svc.revoke_session(cookie)
         assert svc.get_valid_session(cookie) is None
@@ -88,7 +88,7 @@ def test_revoke_all_for_user_marks_local_sessions():
     with patch("utils.utils.get_firestore_db", return_value=None):
         n = svc.revoke_all_for_user("u1")
     assert n >= 2
-    with patch("services.user_service.user_service.get_user_by_id", return_value=None):
+    with patch("services.team.user_service.user_service.get_user_by_id", return_value=None):
         assert svc.get_valid_session(svc.cookie_value_for(r1)) is None
         assert svc.get_valid_session(svc.cookie_value_for(r2)) is None
         assert svc.get_valid_session(svc.cookie_value_for(other)) is not None
@@ -97,8 +97,8 @@ def test_revoke_all_for_user_marks_local_sessions():
 def test_no_known_default_admin_password_in_user_service_source():
     from pathlib import Path
 
-    src = Path("services/user_service.py").read_text(encoding="utf-8")
-    auth_src = Path("services/user_service_auth.py").read_text(encoding="utf-8")
+    src = Path("services/team/user_service.py").read_text(encoding="utf-8")
+    auth_src = Path("services/team/user_service_auth.py").read_text(encoding="utf-8")
     # Avoid embedding the banned default password literal in the test file (secret scan).
     banned = "admin" + "123"
     assert banned not in src

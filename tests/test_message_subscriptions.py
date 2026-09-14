@@ -8,9 +8,9 @@ from decimal import Decimal
 
 import pytest
 
-from services.membership.catalog_admin import CatalogPublishBlocked, publish, reset_catalog_admin_for_tests
-from services.membership.cost_dashboard import global_dashboard, tenant_dashboard
-from services.membership.daily_edits import (
+from services.billing.membership.catalog_admin import CatalogPublishBlocked, publish, reset_catalog_admin_for_tests
+from services.billing.membership.cost_dashboard import global_dashboard, tenant_dashboard
+from services.billing.membership.daily_edits import (
     DailyEditLimitError,
     commit_edit,
     reserve_edit,
@@ -18,17 +18,22 @@ from services.membership.daily_edits import (
     set_tenant_override,
     status,
 )
-from services.membership.expense_journal import known_total, list_events, record_expense, reset_expenses_for_tests
-from services.membership.lot_window import current_period_id
-from services.membership.message_catalog import (
+from services.billing.membership.expense_journal import (
+    known_total,
+    list_events,
+    record_expense,
+    reset_expenses_for_tests,
+)
+from services.billing.membership.lot_window import current_period_id
+from services.billing.membership.message_catalog import (
     PAID_PLANS,
     UNCONFIGURED_FREE_FIELDS,
     free_publish_blocked,
     message_catalog_snapshot,
     require_message_plan,
 )
-from services.membership.message_flags import message_billing_cutover, message_billing_enabled
-from services.membership.message_ledger import (
+from services.billing.membership.message_flags import message_billing_cutover, message_billing_enabled
+from services.billing.membership.message_ledger import (
     InsufficientMessages,
     grant_lot,
     grant_purchased,
@@ -37,7 +42,7 @@ from services.membership.message_ledger import (
     reset_ledger_for_tests,
     settle,
 )
-from services.membership.message_policy import classify_turn, message_units_for
+from services.billing.membership.message_policy import classify_turn, message_units_for
 
 
 @pytest.fixture(autouse=True)
@@ -50,7 +55,7 @@ def _clean_stores(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_generative_gate_uses_messages_only_when_billing_on(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.membership.generative_gate import generative_block_reason
+    from services.billing.membership.generative_gate import generative_block_reason
 
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "false")
@@ -258,13 +263,13 @@ def test_public_plans_omit_message_topups_until_sale_ready(monkeypatch: pytest.M
 
 
 def test_message_gate_only_when_flag_on(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.contracts.turn import CustomerTurn
-    from services.customer_ai.gates import evaluate_gates
+    from services.brain.contracts.turn import CustomerTurn
+    from services.brain.gates import evaluate_gates
 
     turn = CustomerTurn(tenant_id="t-gate", customer_id="c1", conversation_id="conv")
-    monkeypatch.setattr("services.customer_ai.gates.live_handoff_active", lambda **_k: False)
-    monkeypatch.setattr("services.customer_ai.gates.read_published_pointer", lambda *_a, **_k: object())
-    monkeypatch.setattr("services.customer_ai.gates.find_published_restricted", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.brain.gates.live_handoff_active", lambda **_k: False)
+    monkeypatch.setattr("services.brain.gates.read_published_pointer", lambda *_a, **_k: object())
+    monkeypatch.setattr("services.brain.gates.find_published_restricted", lambda *_a, **_k: None)
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     decision = evaluate_gates(turn)
     assert decision.allow is False
@@ -282,10 +287,10 @@ def test_daily_edit_commit_is_idempotent() -> None:
 
 
 def test_failed_generate_releases_reservation(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.billing import apply_message_billing, reserve_generative
-    from services.customer_ai.contracts.reply import FinalReplyEnvelope, TurnResult
-    from services.customer_ai.contracts.turn import CustomerTurn
-    from services.membership.pending_settlement import get_pending, reset_pending_settlements_for_tests
+    from services.billing.membership.pending_settlement import get_pending, reset_pending_settlements_for_tests
+    from services.brain.billing import apply_message_billing, reserve_generative
+    from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
+    from services.brain.contracts.turn import CustomerTurn
 
     reset_pending_settlements_for_tests()
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
@@ -308,7 +313,7 @@ def test_failed_generate_releases_reservation(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_message_surface_hides_credit_quantities(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.tenant_mobile_dashboard.message_surface import (
+    from services.dashboard.message_surface import (
         overlay_message_fields,
         workspace_message_balance,
     )
@@ -396,7 +401,7 @@ def test_purchased_lot_used_after_included() -> None:
 
 
 def test_followup_locked_on_free_and_none() -> None:
-    from services.membership.feature_entitlements import faq_limits_for_plan, followup_allowed_for_plan
+    from services.billing.membership.feature_entitlements import faq_limits_for_plan, followup_allowed_for_plan
 
     assert followup_allowed_for_plan("free") is False
     assert followup_allowed_for_plan("lite") is True
@@ -405,8 +410,8 @@ def test_followup_locked_on_free_and_none() -> None:
 
 
 def test_followup_assert_waits_for_enforcement_flag(monkeypatch) -> None:
-    from services.entitlements_service import entitlements_store
-    from services.membership.feature_entitlements import FeatureDenied, assert_followup_allowed
+    from services.billing.entitlements_service import entitlements_store
+    from services.billing.membership.feature_entitlements import FeatureDenied, assert_followup_allowed
 
     entitlements_store.set_plan(tenant_id="free-tenant", plan_id="free", status="active", source="admin")
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
@@ -422,7 +427,7 @@ def test_followup_assert_waits_for_enforcement_flag(monkeypatch) -> None:
 
 
 def test_payment_readiness_blocks_google_and_annual() -> None:
-    from services.membership.catalog_admin import current_catalog
+    from services.billing.membership.catalog_admin import current_catalog
 
     ready = current_catalog()["payment_readiness"]
     assert ready["google"]["sale_ready"] is False
@@ -432,7 +437,7 @@ def test_payment_readiness_blocks_google_and_annual() -> None:
 
 
 def test_cost_period_bounds_today() -> None:
-    from services.membership.cost_dashboard import period_bounds
+    from services.billing.membership.cost_dashboard import period_bounds
 
     start, end = period_bounds("today")
     assert start and end
@@ -440,7 +445,7 @@ def test_cost_period_bounds_today() -> None:
 
 
 def test_set_plan_grants_included_when_billing_on(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     entitlements_store.set_plan(tenant_id="grant-tenant", plan_id="lite", status="active", source="admin")
@@ -448,8 +453,8 @@ def test_set_plan_grants_included_when_billing_on(monkeypatch: pytest.MonkeyPatc
 
 
 def test_conversion_dry_run_lists_credits_but_stays_blocked() -> None:
-    from services.entitlements_service import entitlements_store
-    from services.membership.conversion_dry_run import dry_run_credit_inventory
+    from services.billing.entitlements_service import entitlements_store
+    from services.billing.membership.conversion_dry_run import dry_run_credit_inventory
 
     entitlements_store.set_plan(tenant_id="inv-tenant", plan_id="lite", status="active", source="admin")
     result = dry_run_credit_inventory(["inv-tenant"])
@@ -461,7 +466,7 @@ def test_conversion_dry_run_lists_credits_but_stays_blocked() -> None:
 
 
 def test_stale_included_lot_does_not_spend() -> None:
-    from services.membership.reconcile import ledger_health
+    from services.billing.membership.reconcile import ledger_health
 
     grant_lot(tenant_id="stale", lot_id="old", kind="included", period_id="2025-01", amount=50)
     grant_purchased(tenant_id="stale", lot_id="pack", amount=2, source_transaction_id="txn-stale")

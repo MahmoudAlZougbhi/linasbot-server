@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from db.session import whatsapp_session
-from services.cm.actions import comments_action_enabled
+from services.ai_setup.actions import comments_action_enabled
 from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
 from services.tiktok_business.comment_context import tiktok_video_source
 from services.tiktok_business.comment_publish import create_comment_reply
@@ -19,7 +19,7 @@ from services.tiktok_business.scopes import comments_manage_ready
 
 
 def ai_generation_blocked(tenant_id: str) -> bool:
-    from services.membership.generative_gate import generative_ai_blocked
+    from services.billing.membership.generative_gate import generative_ai_blocked
 
     return generative_ai_blocked(tenant_id)
 
@@ -35,7 +35,7 @@ def _settle_comment_send(
     provider_message_id: str = "",
     extra_ids: tuple[str, ...] | list[str] = (),
 ) -> None:
-    from services.customer_ai.billing import settle_after_send
+    from services.brain.billing import settle_after_send
 
     settle_after_send(
         tenant_id=tenant_id,
@@ -115,7 +115,7 @@ async def process_tiktok_comment_ai(
             session.commit()
             return {"skipped": True, "reason": "permission_required"}
         if ai_generation_blocked(tenant_id):
-            from services.membership.generative_gate import generative_block_reason
+            from services.billing.membership.generative_gate import generative_block_reason
 
             blocked = generative_block_reason(tenant_id) or "insufficient_credits"
             job.delivery_status = "failed"
@@ -176,7 +176,7 @@ async def process_tiktok_comment_ai(
         comment_context=comment_ctx,
         provider_sender_id=author or comment_id,
     )
-    from services.customer_ai.comments.destinations import destinations_from_outcome, public_text_for_channel
+    from services.brain.comments.destinations import destinations_from_outcome, public_text_for_channel
 
     plan = destinations_from_outcome(outcome)
     reply_text = public_text_for_channel(plan, private_send_possible=False)
@@ -295,7 +295,7 @@ async def process_tiktok_comment_ai(
         cost=cost,
         diagnostics=ctx_diag,
     )
-    from services.live_chat_comment_sse import schedule_comment_inbox_sse
+    from services.live_chat.comment_sse import schedule_comment_inbox_sse
 
     schedule_comment_inbox_sse(
         tenant_id=tenant_id,

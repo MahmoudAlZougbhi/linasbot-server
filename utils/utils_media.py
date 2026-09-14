@@ -8,7 +8,7 @@ import os
 from typing import Any
 
 import config
-from services.live_chat_contracts import (
+from services.live_chat.contracts import (
     utc_now,
 )
 from utils.utils_firestore import get_firestore_db

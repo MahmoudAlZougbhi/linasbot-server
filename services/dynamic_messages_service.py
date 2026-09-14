@@ -126,7 +126,7 @@ DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
         "when_used": (
             "Sent when the CM runtime pipeline's deterministic validator rejects a generated "
             "answer twice (once, plus one constrained regeneration) — polite clarify/contact "
-            "handoff with no invented facts. See services/cm/runtime_pipeline.py."
+            "handoff with no invented facts. See services/ai_setup/runtime_pipeline.py."
         ),
         "messages": {
             "ar": "آسف، ما قدرت أتأكد من هالمعلومة هلق.",

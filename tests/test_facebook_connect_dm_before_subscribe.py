@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from services.channel_capability_toggles import (
+from services.integrations.channel_capability_toggles import (
     ChannelToggleError,
     enable_channel_defaults_after_connect,
 )
@@ -72,7 +72,7 @@ async def test_enable_channel_defaults_dm_only_allows_testing_binding(monkeypatc
         calls.append(kwargs)
         return {}
 
-    monkeypatch.setattr("services.channel_capability_toggles.set_channel_toggle", _set)
+    monkeypatch.setattr("services.integrations.channel_capability_toggles.set_channel_toggle", _set)
     await enable_channel_defaults_after_connect(
         tenant_id="linas",
         platform="facebook",
@@ -90,7 +90,7 @@ async def test_enable_channel_defaults_raises_when_dm_toggle_fails(monkeypatch) 
     async def _set(**_kwargs: Any) -> dict[str, Any]:
         raise ChannelToggleError("Connect this channel first.", status_code=409, code="CONNECT_REQUIRED")
 
-    monkeypatch.setattr("services.channel_capability_toggles.set_channel_toggle", _set)
+    monkeypatch.setattr("services.integrations.channel_capability_toggles.set_channel_toggle", _set)
     with pytest.raises(ChannelToggleError) as exc:
         await enable_channel_defaults_after_connect(
             tenant_id="linas",
@@ -125,7 +125,7 @@ async def test_facebook_activation_enables_dm_before_subscribe(
 
     monkeypatch.setattr(meta_oauth_activation, "inspect_binding_webhook_subscription", inspect)
     monkeypatch.setattr(
-        "services.channel_capability_toggles.enable_channel_defaults_after_connect",
+        "services.integrations.channel_capability_toggles.enable_channel_defaults_after_connect",
         enable,
     )
     monkeypatch.setattr(meta_oauth_activation, "subscribe_binding_webhook", subscribe)
@@ -167,7 +167,7 @@ async def test_facebook_activation_does_not_subscribe_when_dm_enable_fails(
 
     monkeypatch.setattr(meta_oauth_activation, "inspect_binding_webhook_subscription", inspect)
     monkeypatch.setattr(
-        "services.channel_capability_toggles.enable_channel_defaults_after_connect",
+        "services.integrations.channel_capability_toggles.enable_channel_defaults_after_connect",
         enable,
     )
     monkeypatch.setattr(meta_oauth_activation, "subscribe_binding_webhook", subscribe)

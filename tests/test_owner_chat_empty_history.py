@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.owner_chat_store import OwnerChatStore, messages_include_user_turn
+from services.owner_copilot.chat_store import OwnerChatStore, messages_include_user_turn
 
 
 def test_greeting_only_conversation_is_absent_from_history(tmp_path) -> None:

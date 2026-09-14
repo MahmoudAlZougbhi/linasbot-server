@@ -10,8 +10,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from services.entitlements_service import entitlements_store
-from services.plan_economics import PLAN_PRICES_USD
+from services.billing.entitlements_service import entitlements_store
+from services.billing.plan_economics import PLAN_PRICES_USD
 from storage.persistent_storage import _DATA_ROOT
 
 
@@ -100,13 +100,13 @@ class PlatformOwnerService:
             plan = str(t.get("plan_id") or "none")
             plan_mix[plan] = plan_mix.get(plan, 0) + 1
             plan_ids.append(plan)
-        from services.membership.catalog_revenue import revenue_pair
+        from services.billing.membership.catalog_revenue import revenue_pair
 
         revenue = revenue_pair(plan_ids)
         mrr = float(revenue["live_checkout_mrr_usd"])
         faq_analytics: dict[str, Any] = {}
         try:
-            from services.faq_metrics import platform_owner_faq_analytics
+            from services.faq.faq_metrics import platform_owner_faq_analytics
 
             faq_analytics = platform_owner_faq_analytics()
         except Exception:
@@ -126,9 +126,9 @@ class PlatformOwnerService:
         }
 
     def tenant_detail(self, tenant_id: str) -> dict[str, Any]:
+        from services.billing.membership.catalog_revenue import intended_price_usd
         from services.credit_ledger_service import credit_ledger_service
         from services.integration_capabilities import list_tenant_integration_status
-        from services.membership.catalog_revenue import intended_price_usd
 
         ent = entitlements_store.get(tenant_id)
         return {

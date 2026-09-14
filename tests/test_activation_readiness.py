@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from services.membership.activation_readiness import activation_readiness
-from services.membership.message_catalog import UNCONFIGURED_FREE_FIELDS
+from services.billing.membership.activation_readiness import activation_readiness
+from services.billing.membership.message_catalog import UNCONFIGURED_FREE_FIELDS
 
 
 def test_readiness_stays_blocked_and_does_not_enable() -> None:

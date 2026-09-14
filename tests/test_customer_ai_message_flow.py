@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from services.customer_ai.billing import apply_message_billing
-from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
-from services.customer_ai.contracts.turn import CustomerTurn, HistorySnapshot, VisibleMessage
-from services.customer_ai.outbox import reset_outbox_for_tests
-from services.customer_ai.turn_inspector import get_message_flow, list_message_flows
-from services.membership.expense_journal import reset_expenses_for_tests
-from services.membership.message_ledger import reset_ledger_for_tests
+from services.billing.membership.expense_journal import reset_expenses_for_tests
+from services.billing.membership.message_ledger import reset_ledger_for_tests
+from services.brain.billing import apply_message_billing
+from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.turn import CustomerTurn, HistorySnapshot, VisibleMessage
+from services.brain.outbox import reset_outbox_for_tests
+from services.brain.turn_inspector import get_message_flow, list_message_flows
 
 
 def setup_function() -> None:

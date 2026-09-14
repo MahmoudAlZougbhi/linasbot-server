@@ -94,8 +94,8 @@ def complete_captured_turn(
             pass
         raise
     refresh_operation_runtime(runtime)
-    from services.customer_ai.billing import settle_after_send
-    from services.customer_ai.history_ids import web_inbound_message_id
+    from services.brain.billing import settle_after_send
+    from services.brain.history_ids import web_inbound_message_id
 
     conversation_id = str((turn_result or {}).get("conversation_id") or "")
     web_mid = web_inbound_message_id(conversation_id, user_text) if conversation_id else ""

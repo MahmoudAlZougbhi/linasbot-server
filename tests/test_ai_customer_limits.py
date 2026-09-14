@@ -10,6 +10,7 @@ import pytest
 
 from services.ai_limits_enforcement import apply_inbound_word_limit, enforce_text_reply_quota
 from services.ai_limits_source import section_to_enforcement_updates, sync_enforcement_from_payload
+from services.ai_setup.schemas import AiLimitsSection
 from services.ai_usage_limits import AiUsageLimitsService, month_period_key
 from services.ai_usage_limits_settings import (
     day_period_key,
@@ -17,7 +18,6 @@ from services.ai_usage_limits_settings import (
     truncate_text_to_words,
     week_period_key,
 )
-from services.cm.schemas import AiLimitsSection
 
 
 @pytest.fixture()

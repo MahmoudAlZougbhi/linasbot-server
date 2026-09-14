@@ -24,7 +24,7 @@ def flags_snapshot() -> dict[str, Any]:
 
 
 def customer_answer_model_name() -> str:
-    """Deprecated stub — use services.customer_ai.providers.config.answer_model."""
+    """Deprecated stub — use services.brain.providers.config.answer_model."""
     return "customer_brain_answer"
 
 

@@ -6,11 +6,11 @@ from contextlib import contextmanager
 
 import pytest
 
-from services.customer_ai.actions.pending import _confirm_reply, attach_confirmation, try_confirm_pending
-from services.customer_ai.actions.requests import persist_request, request_source_channel
-from services.customer_ai.contracts.actions import ActionProposal, ActionProposalSet
-from services.customer_ai.contracts.turn import CustomerTurn
-from services.customer_ai.conversation_store import hydrate_turn_state, reset_conversation_store_for_tests
+from services.brain.actions.pending import _confirm_reply, attach_confirmation, try_confirm_pending
+from services.brain.actions.requests import persist_request, request_source_channel
+from services.brain.contracts.actions import ActionProposal, ActionProposalSet
+from services.brain.contracts.turn import CustomerTurn
+from services.brain.conversation_store import hydrate_turn_state, reset_conversation_store_for_tests
 from services.requests.ai_tool import build_context_from_user_data
 from services.requests.capture import normalize_source_channel
 from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT, SOURCE_CHANNELS
@@ -99,7 +99,7 @@ def test_persist_request_remerges_published_graph_keys(req_db, monkeypatch: pyte
     monkeypatch.setattr("services.requests.service.requests_capture_active", lambda _tid: True)
     monkeypatch.setattr("services.requests.service.published_configuration_version", lambda _tid: "v-web")
     monkeypatch.setattr(
-        "services.customer_ai.actions.requests.merge_fields_for_persist",
+        "services.brain.actions.requests.merge_fields_for_persist",
         lambda _tid, _kind, collected: {**{"name": "", "date": ""}, **dict(collected or {})},
     )
     receipt = persist_request(

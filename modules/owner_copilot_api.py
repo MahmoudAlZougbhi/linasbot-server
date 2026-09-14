@@ -7,11 +7,11 @@ from typing import Any
 from fastapi import HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-import modules.owner_ai_v2_api  # noqa: F401 — stream + attachments (Sol only)
+import modules.owner_copilot_stream_api  # noqa: F401 — stream + attachments (Sol only)
 from modules.api_security import require_session
 from modules.core import app
-from services.owner_ai_orchestrator import run_owner_turn
-from services.owner_chat_store import owner_chat_store
+from services.owner_copilot.chat_store import owner_chat_store
+from services.owner_copilot.orchestrator import run_owner_turn
 
 # Mobile opens at latest; older messages load via before= cursor.
 DEFAULT_MESSAGE_PAGE = 25
@@ -56,8 +56,8 @@ async def list_owner_conversations(request: Request) -> Any:
 @app.post("/api/owner-ai/conversations")
 async def create_owner_conversation(body: CreateConversationBody, request: Request) -> Any:
     session = require_session(request)
-    from services.owner_ai_greeting import build_greeting
-    from services.owner_ai_profile import coerce_language, language_from_accept_header, update_owner_profile
+    from services.owner_copilot.greeting import build_greeting
+    from services.owner_copilot.profile import coerce_language, language_from_accept_header, update_owner_profile
 
     lang = coerce_language(body.language) or language_from_accept_header(request.headers.get("accept-language"))
     if lang:
@@ -236,7 +236,7 @@ async def delete_owner_conversation(conversation_id: str, request: Request) -> A
 @app.get("/api/owner-ai/profile")
 async def get_owner_ai_profile(request: Request) -> Any:
     session = require_session(request)
-    from services.owner_ai_profile import read_owner_profile
+    from services.owner_copilot.profile import read_owner_profile
 
     return {"success": True, "profile": read_owner_profile(session.user_id)}
 
@@ -244,7 +244,7 @@ async def get_owner_ai_profile(request: Request) -> Any:
 @app.patch("/api/owner-ai/profile")
 async def patch_owner_ai_profile(body: ProfileUpdateBody, request: Request) -> Any:
     session = require_session(request)
-    from services.owner_ai_profile import update_owner_profile
+    from services.owner_copilot.profile import update_owner_profile
 
     updates = body.model_dump(exclude_none=True)
     profile = update_owner_profile(session.user_id, updates)

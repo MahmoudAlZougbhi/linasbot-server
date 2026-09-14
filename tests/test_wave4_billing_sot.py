@@ -47,7 +47,7 @@ def test_subscription_ui_reads_entitlements_and_usage() -> None:
 
 
 def test_entitlements_and_usage_compose_overlay_message_fields() -> None:
-    entitlements = (ROOT / "services/entitlements_service.py").read_text(encoding="utf-8")
+    entitlements = (ROOT / "services/billing/entitlements_service.py").read_text(encoding="utf-8")
     usage_api = (ROOT / "modules/mobile_integrations_api.py").read_text(encoding="utf-8")
     assert "overlay_message_fields" in entitlements
     assert "overlay_message_fields" in usage_api
@@ -55,8 +55,8 @@ def test_entitlements_and_usage_compose_overlay_message_fields() -> None:
 
 
 def test_entitlements_public_exposes_subscription_keys(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore, get_tenant_entitlement_public
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore, get_tenant_entitlement_public
 
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
     store = EntitlementsStore(root=tmp_path / "ent")
@@ -77,7 +77,7 @@ def test_entitlements_public_exposes_subscription_keys(tmp_path, monkeypatch: py
 def test_overlay_hides_remaining_until_message_billing_on(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.tenant_mobile_dashboard.message_surface import overlay_message_fields
+    from services.dashboard.message_surface import overlay_message_fields
 
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
     fields = overlay_message_fields("sot-off", "lite")

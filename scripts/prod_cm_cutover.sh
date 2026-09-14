@@ -37,8 +37,8 @@ def _load_env() -> None:
 _load_env()
 print("[cm-cutover] env_loaded=true")
 
-from services.cm.embeddings import assert_published_embedding_pin
-from services.cm.version_store import load_published_content
+from services.ai_setup.embeddings import assert_published_embedding_pin
+from services.ai_setup.version_store import load_published_content
 
 pointer, sections = load_published_content("${TENANT_ID}")
 assert_published_embedding_pin(pointer.embedding_provider, context="cutover_pointer")

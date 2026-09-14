@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from services.cm.schemas import AiBasics, AnswerPacket, StylePolicy
+from services.ai_setup.schemas import AiBasics, AnswerPacket, StylePolicy
 from services.guest_ai_service import build_guest_system_prompt
-from services.owner_ai_context import SYSTEM_PROMPT
-from services.owner_copilot_v2.brain_support import SYSTEM_V2
+from services.owner_copilot.brain_support import SYSTEM_V2
+from services.owner_copilot.context import SYSTEM_PROMPT
 from services.response_formatting import RESPONSE_FORMATTING_RULES
 
 
@@ -26,7 +26,7 @@ def test_guest_owner_and_customer_prompts_reuse_shared_formatting() -> None:
 
 
 def test_cm_answer_system_prompt_includes_formatting_rules() -> None:
-    from services.cm.answer_generation import _build_system_prompt
+    from services.ai_setup.answer_generation import _build_system_prompt
 
     packet = AnswerPacket(
         tenant_id="t1",

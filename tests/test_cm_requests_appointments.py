@@ -5,16 +5,16 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from services.cm.constants import CM_SECTIONS
-from services.cm.schemas import (
+from services.ai_setup.constants import CM_SECTIONS
+from services.ai_setup.schemas import (
     LocalizedLabels,
     RequestFieldDef,
     RequestsAppointmentsSection,
     default_section_payload,
 )
-from services.cm.section_guide import guide_for_section
-from services.cm.setup_chat import SECTION_MODELS
-from services.cm.validation import validate_cm
+from services.ai_setup.section_guide import guide_for_section
+from services.ai_setup.setup_chat import SECTION_MODELS
+from services.ai_setup.validation import validate_cm
 from services.requests.config_loader import (
     load_published_requests_config,
     requests_capture_active,
@@ -118,7 +118,7 @@ def tenant_data(tmp_path, monkeypatch: pytest.MonkeyPatch) -> str:
 
 
 def test_validate_cm_accepts_default_section(tenant_data: str) -> None:
-    from services.cm.storage import ensure_defaults, get_draft, put_draft
+    from services.ai_setup.storage import ensure_defaults, get_draft, put_draft
 
     ensure_defaults(tenant_id=tenant_data)
     result = validate_cm(tenant_id=tenant_data)
@@ -180,10 +180,10 @@ async def test_published_without_section_key_stays_inactive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Existing tenants whose published blob lacks the new section stay safe."""
-    from services.cm.embeddings import embedding_pin
-    from services.cm.schemas import PublishedPointer, default_section_payload
-    from services.cm.semantic_index import build_index
-    from services.cm.version_store import write_published_pointer, write_version_content
+    from services.ai_setup.embeddings import embedding_pin
+    from services.ai_setup.schemas import PublishedPointer, default_section_payload
+    from services.ai_setup.semantic_index import build_index
+    from services.ai_setup.version_store import write_published_pointer, write_version_content
     from tests.cm_test_helpers import install_mocked_openai_embeddings
 
     install_mocked_openai_embeddings(monkeypatch, published_mode=True)

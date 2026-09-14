@@ -12,7 +12,7 @@ MESSAGE_RESERVATION_PREFIX = "msg:"
 
 
 def followup_uses_message_ledger() -> bool:
-    from services.membership.message_flags import message_billing_enabled
+    from services.billing.membership.message_flags import message_billing_enabled
 
     return message_billing_enabled()
 

@@ -28,9 +28,9 @@ def web_store(tmp_path, monkeypatch):
 @pytest.fixture()
 def client(monkeypatch, web_store):
     monkeypatch.setenv("WEB_CHAT_PUBLIC_AVAILABILITY", "true")
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
-    from services.membership import web_gate as wg
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
+    from services.billing.membership import web_gate as wg
 
     ent = EntitlementsStore(root=web_store._root.parent / "ent")
     monkeypatch.setattr(es, "entitlements_store", ent)

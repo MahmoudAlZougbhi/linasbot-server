@@ -48,7 +48,7 @@ def _truthy(value: str | None) -> bool:
 
 
 def _print_cm_comment_actions(tenant_id: str) -> dict[str, bool]:
-    from services.cm.actions import (
+    from services.ai_setup.actions import (
         ACTION_FACEBOOK_COMMENTS,
         ACTION_INSTAGRAM_COMMENTS,
         action_enabled,
@@ -298,9 +298,9 @@ def _print_debug_permission_statuses(
 
 def _print_capability_probe(*, tenant_id: str) -> None:
     try:
-        from services.channel_capability_state import comment_capability_state, dm_capability_state
-        from services.entitlements_service import entitlements_store
-        from services.plan_economics import PLAN_PRICES_USD
+        from services.billing.entitlements_service import entitlements_store
+        from services.billing.plan_economics import PLAN_PRICES_USD
+        from services.integrations.channel_capability_state import comment_capability_state, dm_capability_state
     except Exception as exc:  # pragma: no cover - prod-only enrichment
         print(f"[scope-audit] capability_probe_skipped={type(exc).__name__}")
         return

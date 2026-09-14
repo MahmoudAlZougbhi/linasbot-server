@@ -13,8 +13,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from services.billing_backend import billing_uses_postgres
-from services.entitlements_service import entitlements_store
+from services.billing.billing_backend import billing_uses_postgres
+from services.billing.entitlements_service import entitlements_store
 from storage.persistent_storage import _DATA_ROOT
 
 LedgerOp = Literal[
@@ -105,7 +105,7 @@ class CreditLedgerService:
 
     def reservation_terminal(self, tenant_id: str, reservation_id: str) -> str | None:
         if billing_uses_postgres():
-            from services.billing_backend import require_billing_pg_session
+            from services.billing.billing_backend import require_billing_pg_session
             from services.credit_ledger_pg_store import reservation_state
 
             with require_billing_pg_session() as session:

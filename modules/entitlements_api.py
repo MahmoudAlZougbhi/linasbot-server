@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from modules.api_security import require_platform_owner, require_session
 from modules.core import app
-from services.entitlements_service import (
+from services.billing.entitlements_service import (
     EntitlementStatus,
     apply_store_notification,
     entitlements_store,

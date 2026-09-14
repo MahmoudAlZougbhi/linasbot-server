@@ -242,8 +242,8 @@ async def test_sfu_stale_worker_cannot_deliver_after_reclaim(tmp_path, monkeypat
     from db.models import Base
     from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpSequence
     from db.session import reset_engine_for_tests
+    from services.billing.entitlements_service import EntitlementsStore
     from services.credit_ledger_service import CreditLedgerService
-    from services.entitlements_service import EntitlementsStore
     from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
 
     url = f"sqlite:///{tmp_path / 'sfu_fence.db'}"
@@ -256,7 +256,7 @@ async def test_sfu_stale_worker_cannot_deliver_after_reclaim(tmp_path, monkeypat
     db = Session()
 
     ent_store = EntitlementsStore(root=tmp_path / "ents")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", ent_store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", ent_store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", ent_store)
     ledger = CreditLedgerService(root=tmp_path / "ledger")
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)

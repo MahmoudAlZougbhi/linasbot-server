@@ -9,11 +9,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from services.cm.atomic_io import read_json_object
-from services.cm.constants import CM_SECTIONS, DEFAULT_TENANT_ID
-from services.cm.paths import draft_dir
-from services.cm.schemas import SectionDraftEnvelope
-from services.cm.version_store import load_published_content, read_published_pointer
+from services.ai_setup.atomic_io import read_json_object
+from services.ai_setup.constants import CM_SECTIONS
+from services.ai_setup.paths import draft_dir
+from services.ai_setup.schemas import SectionDraftEnvelope
+from services.ai_setup.version_store import load_published_content, read_published_pointer
 from services.meta_comment_reply_settings import list_comment_reply_settings
 from services.tenant_runtime_config_service import (
     mark_migration_applied,

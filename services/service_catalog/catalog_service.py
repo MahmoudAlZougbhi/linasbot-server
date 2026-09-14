@@ -38,9 +38,9 @@ class ServiceCatalogService:
         return service_to_dict(row)
 
     def create_service(self, *, tenant_id: str, body: ServiceWriteBody) -> dict[str, Any]:
-        from services.membership.daily_edits import DailyEditLimitError
-        from services.membership.edit_http import guarded_edit
-        from services.membership.free_slots import SlotLimitError, assert_can_add_service
+        from services.billing.membership.daily_edits import DailyEditLimitError
+        from services.billing.membership.edit_http import guarded_edit
+        from services.billing.membership.free_slots import SlotLimitError, assert_can_add_service
 
         try:
             assert_can_add_service(tenant_id, self.repo.count_services(tenant_id=tenant_id))
@@ -79,8 +79,8 @@ class ServiceCatalogService:
         service_id: str,
         body: ServiceWriteBody,
     ) -> dict[str, Any]:
-        from services.membership.daily_edits import DailyEditLimitError
-        from services.membership.edit_http import guarded_edit
+        from services.billing.membership.daily_edits import DailyEditLimitError
+        from services.billing.membership.edit_http import guarded_edit
 
         try:
             with guarded_edit(
@@ -118,8 +118,8 @@ class ServiceCatalogService:
         return service_to_dict(refreshed)
 
     def delete_service(self, *, tenant_id: str, service_id: str) -> None:
-        from services.membership.daily_edits import DailyEditLimitError
-        from services.membership.edit_http import guarded_edit
+        from services.billing.membership.daily_edits import DailyEditLimitError
+        from services.billing.membership.edit_http import guarded_edit
 
         row = self.repo.get_service(tenant_id=tenant_id, service_id=service_id)
         if row is None:

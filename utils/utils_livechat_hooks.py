@@ -10,13 +10,13 @@ from typing import Any
 from firebase_admin import firestore
 
 import config
-from services.live_chat_contracts import (
+from services.live_chat.contracts import (
     extract_source_message_id as contract_extract_source_message_id,
 )
-from services.live_chat_contracts import (
+from services.live_chat.contracts import (
     is_duplicate_message as contract_is_duplicate_message,
 )
-from services.live_chat_contracts import (
+from services.live_chat.contracts import (
     parse_timestamp_utc,
     utc_now,
 )
@@ -150,7 +150,7 @@ async def _update_customer_name_from_external_after_save(
 
 def _invalidate_live_chat_cache() -> None:
     try:
-        from services.live_chat_service import live_chat_service
+        from services.live_chat.service import live_chat_service
 
         live_chat_service.invalidate_cache()
     except Exception:
@@ -161,7 +161,7 @@ def _refresh_live_chat_index_async(user_id: str, conversation_id: str) -> None:
     """Fire-and-forget index refresh so new messages populate live_chat_index."""
     try:
         canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
-        from services.live_chat_service import live_chat_service
+        from services.live_chat.service import live_chat_service
 
         print(f"🔄 [index-refresh] enqueue refresh user={canonical_user_id} conv={conversation_id}")
         asyncio.create_task(live_chat_service._refresh_index_for_conversation(canonical_user_id, conversation_id))
@@ -244,7 +244,7 @@ async def _ensure_live_chat_index_after_save(
     (otherwise the UI reads stale live_chat_index until the background task finishes).
     """
     try:
-        from services.live_chat_service import live_chat_service
+        from services.live_chat.service import live_chat_service
 
         must_await = force_await or _conversation_state_fields_changed(doc_before or {}, update_payload or {})
         if must_await:

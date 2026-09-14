@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from services.live_chat_contracts import UTC
-from services.live_chat_operator_idle import (
+from services.live_chat.contracts import UTC
+from services.live_chat.operator_idle import (
     OPERATOR_IDLE_RESUME_SECONDS,
     auto_resume_if_operator_idle,
     should_auto_resume_ai,
@@ -88,9 +88,9 @@ async def test_auto_resume_calls_resume_manual_mode() -> None:
     }
     with (
         patch("services.requests.manual_mode.resume_manual_mode", resume),
-        patch("services.live_chat_service.live_chat_service.invalidate_cache"),
+        patch("services.live_chat.service.live_chat_service.invalidate_cache"),
         patch(
-            "services.live_chat_service.live_chat_service._refresh_index_for_conversation",
+            "services.live_chat.service.live_chat_service._refresh_index_for_conversation",
             new_callable=AsyncMock,
         ),
     ):

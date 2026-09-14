@@ -19,13 +19,13 @@ def main() -> int:
     parser.add_argument("--tenant", default="")
     args = parser.parse_args()
 
-    from services.cm.constants import (
+    from services.ai_setup.constants import (
         cm_disable_linas_legacy_bridge,
         tenant_allows_legacy_bridge,
         tenant_has_published_cm,
         tenant_uses_cm_runtime,
     )
-    from services.cm.version_store import load_published_content, read_published_pointer
+    from services.ai_setup.version_store import load_published_content, read_published_pointer
 
     tenant_id = (args.tenant or "").strip()
     if not tenant_id:

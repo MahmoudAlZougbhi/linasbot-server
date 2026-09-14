@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "docs" / "evidence" / "system_copilot_v2" / "capability_manifest.json"
-TOOL_SCHEMAS = ROOT / "services" / "owner_copilot_v2" / "tool_schemas.py"
+TOOL_SCHEMAS = ROOT / "services" / "owner_copilot" / "tool_schemas.py"
 REGISTRY = ROOT / "services" / "system_knowledge_registry.py"
 
 

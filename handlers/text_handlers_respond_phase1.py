@@ -66,7 +66,7 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
                 pass
             return _PHASE_HALT
 
-    from services.cm.constants import tenant_uses_cm_runtime
+    from services.ai_setup.constants import tenant_uses_cm_runtime
 
     cm_tenant_id = str(user_data.get("tenant_id") or "").strip()
     if user_input_to_process and not tenant_uses_cm_runtime(cm_tenant_id):
@@ -96,7 +96,7 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
     current_preferred_lang = lang_result["detected_language"]
     response_language = lang_result["response_language"]
     # Customer reply language: multilingual detection (not limited by CM supported_languages).
-    from services.cm.language_policy import resolve_customer_response_language
+    from services.ai_setup.language_policy import resolve_customer_response_language
 
     _lang_tenant = str(user_data.get("tenant_id") or "").strip()
     response_language = resolve_customer_response_language(
@@ -111,10 +111,10 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
     # Instagram/Facebook never create or manage appointments inside the social DM.
     # Laser-specific branch/gender WhatsApp routing is legacy-bridge only.
     # Published CM tenants use the CM handoff pipeline (no Beirut/Antelias leakage).
-    from services.cm.constants import (
+    from services.ai_setup.constants import (
         tenant_allows_legacy_bridge as _tenant_allows_legacy_bridge,
     )
-    from services.cm.constants import (
+    from services.ai_setup.constants import (
         tenant_uses_cm_runtime as _tenant_uses_cm_runtime,
     )
     from services.social_contact_routing import (

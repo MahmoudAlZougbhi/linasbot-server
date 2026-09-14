@@ -21,7 +21,7 @@ from services.apple_iap_effects import (
     lookup_tenant_by_app_account_token,
     reverse_consumable_credits,
 )
-from services.entitlements_service import EntitlementStatus
+from services.billing.entitlements_service import EntitlementStatus
 from services.iap_product_catalog import is_credit_product, is_subscription_product
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ def handle_refund_or_revoke(
     tid, _ = resolve_tenant(tenant_id=tenant_id, payload=payload, source="assn")
     status: Literal["refunded", "revoked"] = "refunded" if notification_type == "REFUND" else "revoked"
     out: dict[str, Any] = {"notification_type": notification_type, "tenant_id": tid}
-    from services.membership.iap_message_grant import maybe_revoke_purchased_from_verified_txn
+    from services.billing.membership.iap_message_grant import maybe_revoke_purchased_from_verified_txn
 
     out["message_revoke"] = maybe_revoke_purchased_from_verified_txn(
         tenant_id=tid,
@@ -110,7 +110,7 @@ def handle_refund_reversed(
             transaction_id=transaction_id,
             allow_regrant_after_reverse=True,
         )
-        from services.membership.iap_message_grant import maybe_grant_purchased_from_verified_txn
+        from services.billing.membership.iap_message_grant import maybe_grant_purchased_from_verified_txn
 
         out["message_grant"] = maybe_grant_purchased_from_verified_txn(
             tenant_id=tid,
@@ -131,7 +131,7 @@ def handle_refund_reversed(
             notification_type="REFUND_REVERSED",
         )
     else:
-        from services.membership.iap_message_grant import maybe_grant_purchased_from_verified_txn
+        from services.billing.membership.iap_message_grant import maybe_grant_purchased_from_verified_txn
 
         out["message_grant"] = maybe_grant_purchased_from_verified_txn(
             tenant_id=tid,

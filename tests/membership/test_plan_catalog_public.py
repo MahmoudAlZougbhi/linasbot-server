@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
-from services.membership.plan_catalog import (
+from services.billing.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
+from services.billing.membership.plan_catalog import (
     CATALOG_VERSION,
     PUBLIC_PLAN_IDS,
     plan_features,
     public_plan_matrix,
 )
-from services.plan_economics import PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
+from services.billing.plan_economics import PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
 
 
 def test_public_matrix_is_five_plans_lite_to_max() -> None:
@@ -43,9 +43,9 @@ def test_catalog_features_gate_comments_and_creative() -> None:
 
 
 def test_comment_gate_allows_exempt_blocks_lite(monkeypatch, tmp_path) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
-    from services.membership import comment_gate as cg
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
+    from services.billing.membership import comment_gate as cg
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)

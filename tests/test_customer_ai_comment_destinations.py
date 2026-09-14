@@ -6,17 +6,17 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.customer_ai.comments.destinations import (
+from services.brain.comments.destinations import (
     CommentDestinations,
     coerce_comment_destinations,
     destinations_from_outcome,
     public_text_for_channel,
 )
-from services.customer_ai.comments.pipeline import apply_ai_comment_destinations
-from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
-from services.customer_ai.contracts.turn import CustomerTurn
-from services.customer_ai.outbound_destination import outbound_destination
-from services.customer_ai.runtime import _outcome
+from services.brain.comments.pipeline import apply_ai_comment_destinations
+from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.turn import CustomerTurn
+from services.brain.outbound_destination import outbound_destination
+from services.brain.runtime import _outcome
 
 
 def test_outbound_destination_labels_comments_not_dms() -> None:
@@ -32,7 +32,7 @@ def test_outbound_destination_labels_comments_not_dms() -> None:
 
 
 def test_faq_comment_turn_uses_comment_destination() -> None:
-    from services.customer_ai.faq_turn import faq_envelope
+    from services.brain.faq_turn import faq_envelope
 
     turn = CustomerTurn(
         tenant_id="t1",

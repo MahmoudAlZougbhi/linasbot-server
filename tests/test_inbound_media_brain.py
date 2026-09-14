@@ -103,7 +103,7 @@ async def test_cloud_audio_hydrate_keeps_transcript(monkeypatch) -> None:
         }
     )
     assert snapshot["transcript"] == "I want a facial"
-    from services.membership.expense_journal import list_events
+    from services.billing.membership.expense_journal import list_events
 
     events = list_events(tenant_id="cloud-stt-shop", category="stt")
     assert events

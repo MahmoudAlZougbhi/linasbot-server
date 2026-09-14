@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from services.owner_ai_cm_approval import CmPatchProposalStore
-from services.owner_copilot_v2.assent import (
+from services.owner_copilot.assent import (
     looks_like_owner_assent,
     pending_confirm_from_messages,
     resolve_pending_confirm_token,
 )
+from services.owner_copilot.cm_approval import CmPatchProposalStore
 
 
 @pytest.mark.parametrize(
@@ -70,7 +70,7 @@ def test_pending_confirm_from_messages_prefers_latest_token() -> None:
 
 def test_resolve_pending_confirm_from_cm_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     store = CmPatchProposalStore(root=tmp_path / "props")
-    monkeypatch.setattr("services.owner_ai_cm_approval.cm_patch_proposal_store", store)
+    monkeypatch.setattr("services.owner_copilot.cm_approval.cm_patch_proposal_store", store)
     prop = store.create(
         tenant_id="t1",
         user_id="u1",
@@ -83,7 +83,7 @@ def test_resolve_pending_confirm_from_cm_store(tmp_path: Path, monkeypatch: pyte
 
 
 def test_system_prompt_mentions_natural_assent() -> None:
-    from services.owner_copilot_v2.brain_support import SYSTEM_V2
+    from services.owner_copilot.brain_support import SYSTEM_V2
 
     assert "ok" in SYSTEM_V2
     assert "موافق" in SYSTEM_V2

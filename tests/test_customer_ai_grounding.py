@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_ai.budgets import DEFAULT_BUDGETS
-from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask
-from services.customer_ai.contracts.turn import CustomerTurn
-from services.customer_ai.grounding.facts import (
+from services.brain.budgets import DEFAULT_BUDGETS
+from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
+from services.brain.contracts.plan import PlannerPlan, PlannerTask
+from services.brain.contracts.turn import CustomerTurn
+from services.brain.grounding.facts import (
     evidence_supports_text,
     ungrounded_amounts,
     ungrounded_claims,
@@ -166,13 +166,13 @@ def _plan() -> PlannerPlan:
 @pytest.fixture
 def _no_provider_expense(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.membership.provider_expense.record_pending_provider",
+        "services.billing.membership.provider_expense.record_pending_provider",
         lambda **_kwargs: None,
     )
 
 
 async def _run_generate(monkeypatch: pytest.MonkeyPatch, replies: list[str], bundle: EvidenceBundle):
-    from services.customer_ai.generate.reply import generate_grounded_reply
+    from services.brain.generate.reply import generate_grounded_reply
 
     calls: list[str] = []
 
@@ -249,7 +249,7 @@ async def test_empty_evidence_never_generates_a_factual_reply(
 
 @pytest.mark.asyncio
 async def test_missing_openai_is_not_a_fake_answer(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.generate.reply import generate_grounded_reply
+    from services.brain.generate.reply import generate_grounded_reply
 
     monkeypatch.setenv("OPENAI_API_KEY", "")
     envelope = await generate_grounded_reply(
@@ -264,7 +264,7 @@ async def test_missing_openai_is_not_a_fake_answer(monkeypatch: pytest.MonkeyPat
 
 
 def test_system_prompt_and_rules_forbid_invention() -> None:
-    from services.customer_ai.compose.blocks import RULES_BLOCK, compose_evidence_context, system_prompt
+    from services.brain.compose.blocks import RULES_BLOCK, compose_evidence_context, system_prompt
 
     prompt = system_prompt()
     assert "ONLY" in prompt

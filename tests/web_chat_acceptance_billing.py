@@ -28,9 +28,9 @@ def truncate_billing_pg_tables(url: str) -> None:
 
 
 def wire_pg_billing_stores(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
-    from services.membership import web_gate as wg
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
+    from services.billing.membership import web_gate as wg
 
     ent = EntitlementsStore()
     monkeypatch.setattr(es, "entitlements_store", ent)
@@ -40,8 +40,8 @@ def wire_pg_billing_stores(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def seed_acceptance_credit_ledger(*, tenant_id: str = "biz", plan_id: str = "starter") -> int:
+    from services.billing.entitlements_service import entitlements_store
     from services.credit_ledger_service import credit_ledger_service
-    from services.entitlements_service import entitlements_store
 
     entitlements_store.set_plan(tenant_id=tenant_id, plan_id=plan_id, status="active", source="admin")
     credit_ledger_service.ensure_period_grant(tenant_id)

@@ -8,7 +8,8 @@ from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 
-from services.billing_backend import require_billing_pg_session
+from services.billing.billing_backend import require_billing_pg_session
+from services.billing.entitlements_service import entitlements_store
 from services.credit_ledger_pg_store import (
     append_entry,
     find_ops_by_request_id,
@@ -18,7 +19,6 @@ from services.credit_ledger_pg_store import (
     sum_positive_grant_credits,
     upsert_balance,
 )
-from services.entitlements_service import entitlements_store
 
 
 def pg_get_balance(tenant_id: str) -> int:

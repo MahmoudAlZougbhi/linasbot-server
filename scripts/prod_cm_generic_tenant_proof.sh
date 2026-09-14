@@ -39,11 +39,11 @@ load_env()
 os.environ.setdefault("LINASBOT_DATA_ROOT", "/opt/linasbot_data")
 os.environ.setdefault("ENVIRONMENT", "production")
 
-from services.cm.constants import tenant_uses_cm_runtime
-from services.cm.publish import publish_draft
-from services.cm.schemas import AiBasics, BranchesSection, BranchRecord, HandoffContact, HandoffMatrixRow, HandoffPolicy, LocalizedLabels, ServicesSection, ServiceRecord
-from services.cm.storage import ensure_defaults, get_draft, put_draft
-from services.cm.version_store import load_published_content
+from services.ai_setup.constants import tenant_uses_cm_runtime
+from services.ai_setup.publish import publish_draft
+from services.ai_setup.schemas import AiBasics, BranchesSection, BranchRecord, HandoffContact, HandoffMatrixRow, HandoffPolicy, LocalizedLabels, ServicesSection, ServiceRecord
+from services.ai_setup.storage import ensure_defaults, get_draft, put_draft
+from services.ai_setup.version_store import load_published_content
 from handlers.text_handlers_respond import _handle_published_cm_runtime
 
 PROOF_TENANT = "cutover_proof_saas"

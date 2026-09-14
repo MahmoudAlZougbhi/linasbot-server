@@ -9,10 +9,10 @@ from datetime import UTC
 from pathlib import Path
 from typing import Any
 
-from services.cm.atomic_io import atomic_write_json
-from services.cm.paths import published_pointer_path
-from services.cm.schemas import PublishedPointer, SectionDraftEnvelope
-from services.cm.version_store import read_published_pointer
+from services.ai_setup.atomic_io import atomic_write_json
+from services.ai_setup.paths import published_pointer_path
+from services.ai_setup.schemas import PublishedPointer, SectionDraftEnvelope
+from services.ai_setup.version_store import read_published_pointer
 from services.tenant_runtime_config_backend import tenant_runtime_config_postgres_required
 from services.tenant_runtime_config_service import (
     export_comment_settings_for_cache,
@@ -30,7 +30,7 @@ def _comment_settings_path(tenant_id: str) -> Path:
 
 
 def write_draft_cache(envelope: SectionDraftEnvelope) -> None:
-    from services.cm.storage import draft_section_path
+    from services.ai_setup.storage import draft_section_path
 
     path = draft_section_path(envelope.tenant_id, envelope.section)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -55,7 +55,7 @@ def rebuild_tenant_cache(tenant_id: str) -> dict[str, Any]:
         return {"skipped": True, "reason": "file_backend"}
     rebuilt: dict[str, Any] = {"drafts": 0, "comment_settings": False, "actions_cached": False}
     from db.session import whatsapp_session
-    from services.cm.constants import CM_SECTIONS
+    from services.ai_setup.constants import CM_SECTIONS
     from services.tenant_runtime_config_pg_store import get_draft_row, get_published_row
 
     with whatsapp_session() as session:
@@ -112,7 +112,7 @@ def local_cache_digest_mismatch(tenant_id: str) -> bool:
     if pointer is None:
         return True
     try:
-        from services.cm.version_store import load_published_content
+        from services.ai_setup.version_store import load_published_content
 
         _ptr, sections = load_published_content(tenant_id)
         local_actions = sections.get("actions") or {}

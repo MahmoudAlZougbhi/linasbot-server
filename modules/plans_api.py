@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from modules.core import app
-from services.membership.catalog_admin import effective_offer_fields
-from services.membership.feature_entitlements import additional_seats_for_plan, channel_flags_for_plan
-from services.membership.message_catalog import MESSAGE_CATALOG_VERSION
-from services.membership.message_flags import message_billing_cutover
-from services.membership.plan_catalog import catalog_snapshot, public_plan_matrix, topup_pack_matrix
+from services.billing.membership.catalog_admin import effective_offer_fields
+from services.billing.membership.feature_entitlements import additional_seats_for_plan, channel_flags_for_plan
+from services.billing.membership.message_catalog import MESSAGE_CATALOG_VERSION
+from services.billing.membership.message_flags import message_billing_cutover
+from services.billing.membership.plan_catalog import catalog_snapshot, public_plan_matrix, topup_pack_matrix
 
 
 @app.get("/api/public/plans")

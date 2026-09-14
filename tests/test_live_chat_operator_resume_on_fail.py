@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.live_chat_service import live_chat_service
+from services.live_chat.service import live_chat_service
 
 
 @pytest.mark.asyncio
@@ -16,11 +16,11 @@ async def test_failed_social_send_undoes_fresh_manual_pause() -> None:
 
     with (
         patch(
-            "services.live_chat_service_operator._try_acquire_operator_send_idempotency",
+            "services.live_chat.service_operator._try_acquire_operator_send_idempotency",
             new_callable=AsyncMock,
             return_value=(True, None),
         ),
-        patch("services.live_chat_service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
+        patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("instagram:1761", None)),
         patch("utils.utils.get_firestore_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
@@ -30,7 +30,7 @@ async def test_failed_social_send_undoes_fresh_manual_pause() -> None:
             return_value=pause_result,
         ),
         patch(
-            "services.live_chat_operator_social_delivery.deliver_social_operator_text",
+            "services.live_chat.operator_social_delivery.deliver_social_operator_text",
             new_callable=AsyncMock,
             return_value={"success": False, "delivered": False, "error": "meta_send_failed"},
         ),
@@ -60,11 +60,11 @@ async def test_instagram_send_does_not_open_whatsapp_postgres() -> None:
 
     with (
         patch(
-            "services.live_chat_service_operator._try_acquire_operator_send_idempotency",
+            "services.live_chat.service_operator._try_acquire_operator_send_idempotency",
             new_callable=AsyncMock,
             return_value=(True, None),
         ),
-        patch("services.live_chat_service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
+        patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("instagram:1761", None)),
         patch("utils.utils.get_firestore_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
@@ -74,7 +74,7 @@ async def test_instagram_send_does_not_open_whatsapp_postgres() -> None:
             return_value=MagicMock(activated=True, already_active=False, control_epoch=None),
         ),
         patch(
-            "services.live_chat_operator_social_delivery.deliver_social_operator_text",
+            "services.live_chat.operator_social_delivery.deliver_social_operator_text",
             new_callable=AsyncMock,
             return_value={"success": True, "delivered": True},
         ),
@@ -98,11 +98,11 @@ async def test_social_send_exception_undoes_fresh_pause() -> None:
     resume = AsyncMock(return_value=MagicMock(control_epoch=4, already_active=False, audit_recorded=False))
     with (
         patch(
-            "services.live_chat_service_operator._try_acquire_operator_send_idempotency",
+            "services.live_chat.service_operator._try_acquire_operator_send_idempotency",
             new_callable=AsyncMock,
             return_value=(True, None),
         ),
-        patch("services.live_chat_service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
+        patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("instagram:1761", None)),
         patch("utils.utils.get_firestore_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
@@ -112,7 +112,7 @@ async def test_social_send_exception_undoes_fresh_pause() -> None:
             return_value=MagicMock(activated=True, already_active=False, control_epoch=3),
         ),
         patch(
-            "services.live_chat_operator_social_delivery.deliver_social_operator_text",
+            "services.live_chat.operator_social_delivery.deliver_social_operator_text",
             new_callable=AsyncMock,
             side_effect=TimeoutError("graph hung"),
         ),
@@ -138,11 +138,11 @@ async def test_failed_social_image_send_undoes_fresh_pause() -> None:
     resume = AsyncMock(return_value=MagicMock(control_epoch=4, already_active=False, audit_recorded=False))
     with (
         patch(
-            "services.live_chat_service_operator._try_acquire_operator_send_idempotency",
+            "services.live_chat.service_operator._try_acquire_operator_send_idempotency",
             new_callable=AsyncMock,
             return_value=(True, None),
         ),
-        patch("services.live_chat_service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
+        patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("instagram:1761", None)),
         patch("utils.utils.get_firestore_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
@@ -157,7 +157,7 @@ async def test_failed_social_image_send_undoes_fresh_pause() -> None:
             return_value=MagicMock(activated=True, already_active=False, control_epoch=3),
         ),
         patch(
-            "services.live_chat_operator_social_delivery.deliver_social_operator_media",
+            "services.live_chat.operator_social_delivery.deliver_social_operator_media",
             new_callable=AsyncMock,
             return_value={"success": False, "delivered": False, "error": "meta_media_failed"},
         ),

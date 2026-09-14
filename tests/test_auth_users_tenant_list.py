@@ -12,7 +12,7 @@ from starlette.requests import Request
 from modules import auth_users_api
 from modules.api_security import resolve_permissions
 from services.dashboard_session_service import SessionRecord
-from services.user_service import UserService
+from services.team.user_service import UserService
 
 
 def _doc(doc_id: str, data: dict[str, Any]) -> MagicMock:

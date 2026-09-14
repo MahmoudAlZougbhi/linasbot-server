@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from services.user_service import user_service
+from services.team.user_service import user_service
 
 _KNOWN_BAD_PASSWORDS = frozenset(
     {

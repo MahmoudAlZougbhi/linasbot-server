@@ -19,7 +19,7 @@ async def retry_instagram_login_webhook_setup(binding_id: str, request: Request)
     binding = _tenant_binding(binding_id, session.tenant_id)
     if binding.auth_flow != "instagram_login":
         raise HTTPException(status_code=409, detail="Webhook retry applies only to Instagram Login connections")
-    from services.membership.edit_http import guarded_edit
+    from services.billing.membership.edit_http import guarded_edit
 
     try:
         with guarded_edit(

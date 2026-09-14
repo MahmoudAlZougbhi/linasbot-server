@@ -21,19 +21,28 @@ GONE_PATHS = (
     "config/montymobile_templates.json",
     "mobile/linas-ai/src/features/shared/SimpleResourceScreen.tsx",
     "modules/owner_ai_api.py",
+    "modules/owner_ai_v2_api.py",
     "services/booking",
     "services/api_integrations.py",
     "data/qa_database.json",
     "data/knowledge_files/marwa_extended_tool_rules.json",
+    "services/cm",
+    "services/customer_ai",
+    "services/owner_copilot_v2",
+    "services/owner_ai_orchestrator.py",
+    "services/live_chat_tenant.py",
+    "services/tenant_mobile_dashboard",
+    "services/membership",
+    "services/entitlements_service.py",
 )
 
 KEEP_PATHS = (
     "docs/KEEP_SURFACE.md",
-    "services/live_chat_tenant.py",
-    "services/tenant_mobile_dashboard/message_surface.py",
-    "services/customer_ai/search/reuse_vectors.py",
-    "services/customer_ai/history_ids.py",
-    "services/owner_copilot_v2/creative_policy.py",
+    "services/live_chat/tenant.py",
+    "services/dashboard/message_surface.py",
+    "services/brain/search/reuse_vectors.py",
+    "services/brain/history_ids.py",
+    "services/owner_copilot/creative_policy.py",
     "services/whatsapp_adapters/whatsapp_factory.py",
     "dashboard/src/pages/owner/OwnerOverview.jsx",
     "dashboard/src/pages/public/Landing.jsx",
@@ -49,14 +58,47 @@ GONE_IMPORT_FRAGMENTS = (
     "creative_studio_service",
     "modules.creative_api",
     "modules.owner_ai_api",
+    "modules.owner_ai_v2_api",
     "services.booking",
     "services.api_integrations",
+    "services.cm.",
+    "services.customer_ai.",
+    "services.owner_copilot_v2.",
+    "services.owner_ai_orchestrator",
+    "services.live_chat_tenant",
+    "services.tenant_mobile_dashboard.",
 )
 
 PY_ROOTS = ("services", "modules", "handlers", "scripts")
 UI_ROOTS = ("dashboard/src", "mobile/linas-ai/src")
 GONE_UI_NEEDLES = ("OwnerLab", "OwnerCopilotSetup", "SimpleResourceScreen", "CreativeDraft")
 SKIP_NAME_PARTS = ("/evals/artifacts/", "/node_modules/")
+
+DOMAIN_PACKAGES = (
+    "services/ai_setup",
+    "services/dashboard",
+    "services/smart_followup",
+    "services/faq",
+    "services/live_chat",
+    "services/requests",
+    "services/integrations",
+    "services/team",
+    "services/billing",
+    "services/owner_copilot",
+    "services/brain",
+    "services/brain/comments",
+    "services/brain/media",
+)
+
+
+def _import_is_gone(name: str) -> bool:
+    for frag in GONE_IMPORT_FRAGMENTS:
+        if frag.endswith("."):
+            if name == frag[:-1] or name.startswith(frag):
+                return True
+        elif name == frag or name.startswith(frag + "."):
+            return True
+    return False
 
 
 def test_deleted_legacy_paths_are_gone() -> None:
@@ -86,7 +128,7 @@ def test_live_python_does_not_import_deleted_modules() -> None:
             elif isinstance(node, ast.ImportFrom):
                 names = [node.module or ""]
             for name in names:
-                if any(frag in name for frag in GONE_IMPORT_FRAGMENTS):
+                if _import_is_gone(name):
                     offenders.append(f"{path.relative_to(ROOT)}:{name}")
     assert not offenders, offenders
 
@@ -105,20 +147,20 @@ def test_web_and_mobile_src_have_no_deleted_ui() -> None:
 
 
 def test_wave0_live_chat_is_tenant_fail_closed() -> None:
-    text = (ROOT / "services/live_chat_tenant.py").read_text(encoding="utf-8")
+    text = (ROOT / "services/live_chat/tenant.py").read_text(encoding="utf-8")
     assert "Fail-closed" in text
     assert "never infer linas" in text.lower() or "Never infer linas" in text
 
 
 def test_wave2_voyage_reuse_and_wave3_per_author_comments() -> None:
-    reuse = (ROOT / "services/customer_ai/search/reuse_vectors.py").read_text(encoding="utf-8")
-    history = (ROOT / "services/customer_ai/history_ids.py").read_text(encoding="utf-8")
+    reuse = (ROOT / "services/brain/search/reuse_vectors.py").read_text(encoding="utf-8")
+    history = (ROOT / "services/brain/history_ids.py").read_text(encoding="utf-8")
     assert "content_hash" in reuse
     assert "comment:{tid}:{ch}:{post}:{author}" in history
 
 
 def test_wave4_billing_sot_and_wave5_web_keep() -> None:
-    overlay = (ROOT / "services/tenant_mobile_dashboard/message_surface.py").read_text(encoding="utf-8")
+    overlay = (ROOT / "services/dashboard/message_surface.py").read_text(encoding="utf-8")
     billing = (ROOT / "mobile/linas-ai/src/features/billing/useBillingData.ts").read_text(encoding="utf-8")
     app = (ROOT / "dashboard/src/App.jsx").read_text(encoding="utf-8")
     landing = (ROOT / "dashboard/src/pages/public/Landing.jsx").read_text(encoding="utf-8")
@@ -155,11 +197,11 @@ def test_wave6_owner_stays_monty_stays_refused() -> None:
 
 
 def test_wave_a_fail_closed_and_deleted_clinic_paths() -> None:
-    history = (ROOT / "services/customer_ai/history_ids.py").read_text(encoding="utf-8")
-    constants = (ROOT / "services/cm/constants.py").read_text(encoding="utf-8")
+    history = (ROOT / "services/brain/history_ids.py").read_text(encoding="utf-8")
+    constants = (ROOT / "services/ai_setup/constants.py").read_text(encoding="utf-8")
     prompt = (ROOT / "utils/utils_prompt.py").read_text(encoding="utf-8")
     main = (ROOT / "main.py").read_text(encoding="utf-8")
-    catalog = (ROOT / "services/membership/plan_catalog.py").read_text(encoding="utf-8")
+    catalog = (ROOT / "services/billing/membership/plan_catalog.py").read_text(encoding="utf-8")
     webhook = (ROOT / "modules/webhook_handlers.py").read_text(encoding="utf-8")
     api_config = (ROOT / "api_config.py").read_text(encoding="utf-8")
     assert "if explicit:" not in history.split("def comment_conversation_id", 1)[1][:400]
@@ -172,3 +214,27 @@ def test_wave_a_fail_closed_and_deleted_clinic_paths() -> None:
     assert "boc-lb.com" not in api_config
     assert (ROOT / "modules/owner_copilot_api.py").is_file()
     assert (ROOT / "docs/BOC_NOT_IN_SAAS.md").is_file()
+
+
+def test_wave_b_domain_packages_match_drawer() -> None:
+    for rel in DOMAIN_PACKAGES:
+        assert (ROOT / rel).is_dir(), rel
+        assert (ROOT / rel / "__init__.py").is_file(), rel
+    main = (ROOT / "main.py").read_text(encoding="utf-8")
+    assert "grouped by product domain" in main
+    assert "modules.owner_ai_api" not in main
+    assert "import modules.owner_copilot_api" in main
+    assert not (ROOT / "modules/owner_ai_api.py").exists()
+    assert not (ROOT / "modules/owner_ai_v2_api.py").exists()
+    assert (ROOT / "modules/owner_copilot_stream_api.py").is_file()
+    oversize = []
+    skip = ("evals/artifacts", "__pycache__")
+    for rel in DOMAIN_PACKAGES:
+        for path in (ROOT / rel).rglob("*.py"):
+            text_path = str(path).replace("\\", "/")
+            if any(part in text_path for part in skip):
+                continue
+            lines = len(path.read_text(encoding="utf-8").splitlines())
+            if lines > 500:
+                oversize.append(f"{path.relative_to(ROOT)}:{lines}")
+    assert not oversize, oversize

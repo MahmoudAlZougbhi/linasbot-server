@@ -11,7 +11,7 @@ def evaluate_web_ai_eligibility(tenant_id: str, widget: WebChatWidgetConfig) -> 
     if not widget.site_url.strip():
         return False, "site_url_missing"
     try:
-        from services.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
+        from services.billing.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
 
         assert_web_plan_allowed(tenant_id)
     except WebPlanDenied:
@@ -19,7 +19,7 @@ def evaluate_web_ai_eligibility(tenant_id: str, widget: WebChatWidgetConfig) -> 
     except Exception:
         return False, "plan_check_failed"
     try:
-        from services.cm.version_store import load_published_content
+        from services.ai_setup.version_store import load_published_content
 
         pointer, _sections = load_published_content(tenant_id)
         if not pointer or not getattr(pointer, "content_version_id", None):
@@ -27,7 +27,7 @@ def evaluate_web_ai_eligibility(tenant_id: str, widget: WebChatWidgetConfig) -> 
     except Exception:
         return False, "published_cm_unavailable"
     try:
-        from services.membership.generative_gate import generative_block_reason
+        from services.billing.membership.generative_gate import generative_block_reason
 
         reason = generative_block_reason(tenant_id)
         if reason:

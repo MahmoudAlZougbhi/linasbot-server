@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from services.live_chat_channel import live_chat_event_tenant_id
-from services.live_chat_tenant import (
+from services.live_chat.channel import live_chat_event_tenant_id
+from services.live_chat.tenant import (
     conversation_tenant_fields,
     resolve_live_chat_tenant_id,
     row_belongs_to_tenant,

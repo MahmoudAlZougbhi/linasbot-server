@@ -65,7 +65,7 @@ async def test_worker_entry_phase1_uses_bootstrap_language_service() -> None:
     ctx["language_detection_service"] = _LangSvc()
 
     with mock.patch(
-        "services.cm.language_policy.resolve_customer_response_language",
+        "services.ai_setup.language_policy.resolve_customer_response_language",
         return_value="en",
     ):
         result = await text_handlers_respond_phase1(ctx)

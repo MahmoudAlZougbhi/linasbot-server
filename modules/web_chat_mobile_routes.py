@@ -31,7 +31,7 @@ async def mobile_web_chat_settings(request: Request) -> Any:
 @app.put("/api/mobile/web-chat")
 async def mobile_web_chat_update(request: Request, body: WebChatSettingsBody = Body(default={})) -> Any:
     session = require_permission(request, "settings")
-    from services.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
+    from services.billing.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
 
     try:
         assert_web_plan_allowed(session.tenant_id)
@@ -40,8 +40,8 @@ async def mobile_web_chat_update(request: Request, body: WebChatSettingsBody = B
             status_code=403,
             content={"success": False, "error": exc.code, "message": str(exc)},
         )
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     disable = body.enabled is False
     try:
@@ -66,7 +66,7 @@ async def mobile_web_chat_update(request: Request, body: WebChatSettingsBody = B
 @app.post("/api/mobile/web-chat/rotate-key")
 async def mobile_web_chat_rotate_key(request: Request) -> Any:
     session = require_permission(request, "settings")
-    from services.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
+    from services.billing.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
 
     try:
         assert_web_plan_allowed(session.tenant_id)
@@ -75,7 +75,7 @@ async def mobile_web_chat_rotate_key(request: Request) -> Any:
             status_code=403,
             content={"success": False, "error": exc.code, "message": str(exc)},
         )
-    from services.membership.edit_http import guarded_edit
+    from services.billing.membership.edit_http import guarded_edit
 
     with guarded_edit(
         tenant_id=session.tenant_id,

@@ -6,8 +6,8 @@ from unittest import mock
 
 import pytest
 
-from services.cm.comment_rules import CommentRuleDecision
-from services.customer_ai.comments.destinations import CommentDestinations
+from services.ai_setup.comment_rules import CommentRuleDecision
+from services.brain.comments.destinations import CommentDestinations
 from services.meta_comment_events import ResolvedMetaCommentEvent, parse_meta_comment_events
 from services.meta_comment_reply_settings import set_comment_reply_setting
 from services.meta_comment_rule_modes import (
@@ -60,9 +60,9 @@ async def test_ai_dm_calls_generate(tmp_path, monkeypatch) -> None:
             asset_id=binding.asset_id,
             enabled=True,
         )
-        monkeypatch.setattr("services.cm.constants.tenant_uses_cm_runtime", lambda _t: True)
+        monkeypatch.setattr("services.ai_setup.constants.tenant_uses_cm_runtime", lambda _t: True)
         monkeypatch.setattr(
-            "services.cm.comment_rules.evaluate_published_comment_rules",
+            "services.ai_setup.comment_rules.evaluate_published_comment_rules",
             lambda *a, **k: CommentRuleDecision(
                 action="reply_dm",
                 rule_mode="ai_dm",
@@ -106,9 +106,9 @@ async def test_static_dm_uses_template_not_brain(monkeypatch) -> None:
             asset_id=binding.asset_id,
             enabled=True,
         )
-        monkeypatch.setattr("services.cm.constants.tenant_uses_cm_runtime", lambda _t: True)
+        monkeypatch.setattr("services.ai_setup.constants.tenant_uses_cm_runtime", lambda _t: True)
         monkeypatch.setattr(
-            "services.cm.comment_rules.evaluate_published_comment_rules",
+            "services.ai_setup.comment_rules.evaluate_published_comment_rules",
             lambda *a, **k: CommentRuleDecision(
                 action="reply_dm",
                 rule_mode="static_dm",

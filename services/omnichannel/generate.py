@@ -187,7 +187,7 @@ async def _generate_canonical(
 
         return await generate_web_chat_reply(tenant_id=tenant_id, payload=payload)
     if surface == "comment":
-        from services.customer_ai.history_ids import comment_conversation_id
+        from services.brain.history_ids import comment_conversation_id
         from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
 
         comment_id = str(payload.get("comment_id") or payload.get("provider_event_id") or "")
@@ -211,7 +211,7 @@ async def _generate_canonical(
             provider_sender_id=author_id,
             comment_context={"comment_id": comment_id, "post_id": post_id},
         )
-        from services.customer_ai.comments.destinations import (
+        from services.brain.comments.destinations import (
             destinations_from_outcome,
             public_text_for_channel,
         )
@@ -241,8 +241,8 @@ async def _generate_canonical(
             )
             return "", None, str(getattr(outcome, "reason", "") or "engine_removed")
         return reply, None, None
-    from services.customer_ai.history_ids import conversation_id_for_brain, message_id_for_brain
-    from services.customer_ai.leftover_reserve import reserve_leftover_reply
+    from services.brain.history_ids import conversation_id_for_brain, message_id_for_brain
+    from services.brain.leftover_reserve import reserve_leftover_reply
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 
     sender = str(payload.get("sender_id") or payload.get("customer_wa_id") or payload.get("customer_open_id") or "")

@@ -72,8 +72,8 @@ def _set_whatsapp_ai_default(session: Any, connection_id: str, *, enabled: bool)
 @app.post("/api/whatsapp/cloud/connections/{connection_id}/ai/enable")
 async def whatsapp_enable_ai(connection_id: str, request: Request) -> Any:
     session = _require_wa_manager(request)
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(
@@ -89,7 +89,7 @@ async def whatsapp_enable_ai(connection_id: str, request: Request) -> Any:
 @app.post("/api/whatsapp/cloud/connections/{connection_id}/ai/disable")
 async def whatsapp_disable_ai(connection_id: str, request: Request) -> Any:
     session = _require_wa_manager(request)
-    from services.membership.edit_http import guarded_edit
+    from services.billing.membership.edit_http import guarded_edit
 
     with guarded_edit(
         tenant_id=session.tenant_id,
@@ -180,7 +180,7 @@ async def whatsapp_disconnect(connection_id: str, request: Request, body: dict[s
         conn = repo.get_tenant_connection(tenant_id=session.tenant_id, connection_id=connection_id)
         if conn is None:
             raise HTTPException(status_code=404, detail="connection_not_found")
-        from services.membership.edit_http import guarded_edit
+        from services.billing.membership.edit_http import guarded_edit
 
         with guarded_edit(
             tenant_id=session.tenant_id,

@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
-from services.membership.plan_catalog import (
+from services.billing.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
+from services.billing.membership.plan_catalog import (
     CATALOG_VERSION,
     PLAN_CATALOG,
     PUBLIC_PLAN_IDS,
     public_plan_matrix,
 )
-from services.membership.seats import SeatLimitExceeded, assert_can_add_seat, seat_usage
-from services.plan_economics import PLAN_FAQ_MAX_ENTRIES, PLAN_FEATURES, PLAN_PRICES_USD
+from services.billing.membership.seats import SeatLimitExceeded, assert_can_add_seat, seat_usage
+from services.billing.plan_economics import PLAN_FAQ_MAX_ENTRIES, PLAN_FEATURES, PLAN_PRICES_USD
 
 
 def test_frozen_matrix_exact_values() -> None:
@@ -63,9 +63,9 @@ def test_seat_owner_excluded_and_pending_count() -> None:
 
 
 def test_comment_gate_blocks_lite_allows_starter(monkeypatch, tmp_path) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
-    from services.membership import comment_gate as cg
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
+    from services.billing.membership import comment_gate as cg
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)
@@ -82,10 +82,10 @@ def test_comment_gate_blocks_lite_allows_starter(monkeypatch, tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_set_channel_toggle_comments_denied_on_lite(monkeypatch, tmp_path) -> None:
-    from services import entitlements_service as es
-    from services.channel_capability_toggles import ChannelToggleError, set_channel_toggle
-    from services.entitlements_service import EntitlementsStore
-    from services.membership import comment_gate as cg
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
+    from services.billing.membership import comment_gate as cg
+    from services.integrations.channel_capability_toggles import ChannelToggleError, set_channel_toggle
 
     store = EntitlementsStore(root=tmp_path / "ent2")
     monkeypatch.setattr(es, "entitlements_store", store)
@@ -94,7 +94,7 @@ async def test_set_channel_toggle_comments_denied_on_lite(monkeypatch, tmp_path)
     store.set_plan(tenant_id="biz2", plan_id="lite", status="active", source="admin")
     # CONNECT_REQUIRED runs before plan gate — stub a connected channel.
     monkeypatch.setattr(
-        "services.channel_capability_toggles.canonical_channel_bindings",
+        "services.integrations.channel_capability_toggles.canonical_channel_bindings",
         lambda *_a, **_k: [{"asset_id": "ig-connected"}],
     )
 
@@ -138,8 +138,8 @@ def test_iap_product_map_covers_five_monthly() -> None:
 
 
 def test_duplicate_iap_notification(monkeypatch, tmp_path) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore, apply_store_notification
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore, apply_store_notification
 
     root = tmp_path / "data"
     store = EntitlementsStore(root=root / "entitlements")

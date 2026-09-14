@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from services.cm.prod_migration import run_production_content_migration
-from services.cm.redistribution import redistribute_knowledge_draft, section_counts_snapshot
-from services.cm.schemas import KnowledgeSection, ServicesSection
-from services.cm.section_classifier import classify_article, detect_service_availability_conflicts
-from services.cm.storage import get_draft
+from services.ai_setup.prod_migration import run_production_content_migration
+from services.ai_setup.redistribution import redistribute_knowledge_draft, section_counts_snapshot
+from services.ai_setup.schemas import KnowledgeSection, ServicesSection
+from services.ai_setup.section_classifier import classify_article, detect_service_availability_conflicts
+from services.ai_setup.storage import get_draft
 
 
 def test_classifier_routes_known_misplaced_titles() -> None:
@@ -241,7 +241,7 @@ def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monke
     prices = get_draft("prices", tenant_id=tenant).payload
     assert "Beard area pricing" in str(prices.get("policy_text") or "")
 
-    from services.cm.schemas import CareSection
+    from services.ai_setup.schemas import CareSection
 
     care = CareSection.model_validate(get_draft("care", tenant_id=tenant).payload)
     checksums = {i.source_checksum for i in knowledge.items if i.source_checksum}
@@ -262,7 +262,7 @@ def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monke
 
 
 def test_policy_text_is_chunked_for_embeddings() -> None:
-    from services.cm.semantic_index import _MAX_EMBED_CHARS, _chunk_policy_text, _section_notes_entries
+    from services.ai_setup.semantic_index import _MAX_EMBED_CHARS, _chunk_policy_text, _section_notes_entries
 
     prefix = "--- redistributed from "
     policy = f"{prefix}id=a title=one ---\n" + ("alpha " * 200) + f"\n\n{prefix}id=b title=two ---\n" + ("beta " * 200)

@@ -44,8 +44,8 @@ def test_brain_retrieve_path_does_not_import_smart_retrieval() -> None:
 
 
 def test_product_questions_fail_closed_when_stale() -> None:
-    from services.customer_ai.search.product_freshness import product_questions_blocked, products_index_stale
-    from services.customer_ai.search.store import activate_pointer, mark_pointer_not_ready, reset_memory_store
+    from services.brain.search.product_freshness import product_questions_blocked, products_index_stale
+    from services.brain.search.store import activate_pointer, mark_pointer_not_ready, reset_memory_store
 
     reset_memory_store()
     activate_pointer(
@@ -67,8 +67,8 @@ def test_product_questions_fail_closed_when_stale() -> None:
 
 @pytest.mark.asyncio
 async def test_retrieve_published_fails_closed_on_stale_products(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.retrieve.orchestrate import RetrieveContext, retrieve_published
-    from services.customer_ai.search.store import activate_pointer, mark_pointer_not_ready, reset_memory_store
+    from services.brain.retrieve.orchestrate import RetrieveContext, retrieve_published
+    from services.brain.search.store import activate_pointer, mark_pointer_not_ready, reset_memory_store
 
     reset_memory_store()
     activate_pointer(
@@ -82,7 +82,7 @@ async def test_retrieve_published_fails_closed_on_stale_products(monkeypatch: py
     mark_pointer_not_ready(None, tenant_id="t-prod", source_family="products")
 
     monkeypatch.setattr(
-        "services.customer_ai.retrieve.orchestrate.load_published_content",
+        "services.brain.retrieve.orchestrate.load_published_content",
         lambda _tid: (_ for _ in ()).throw(RuntimeError("should not load")),
     )
     bundle = await retrieve_published(RetrieveContext(tenant_id="t-prod", query="cream price", families={"products"}))

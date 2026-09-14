@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from services.membership.reservation_gc import _created_at
+from services.billing.membership.reservation_gc import _created_at
 from services.web_chat.followup_message_ledger import credit_reservation_required, followup_uses_message_ledger
 
 
@@ -44,7 +44,7 @@ def test_web_adapter_and_delivery_honor_message_ledger() -> None:
 def test_reservation_insert_writes_created_at() -> None:
     from inspect import getsource
 
-    from services.membership import message_ledger_pg
+    from services.billing.membership import message_ledger_pg
 
     src = getsource(message_ledger_pg._insert_reservation)
     assert "created_at" in src
@@ -111,7 +111,7 @@ def test_try_reserve_uses_messages_not_credits(monkeypatch: pytest.MonkeyPatch) 
     from services.ai_reply_turn_runtime import try_reserve_for_ai
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
-    monkeypatch.setattr("services.membership.generative_gate.generative_ai_blocked", lambda _tid, **_kw: False)
+    monkeypatch.setattr("services.billing.membership.generative_gate.generative_ai_blocked", lambda _tid, **_kw: False)
     called = {"n": 0}
 
     def boom(**_kwargs):
@@ -126,9 +126,9 @@ def test_try_reserve_uses_messages_not_credits(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_preview_turn_does_not_hold_messages(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.billing import apply_message_billing, owner_preview_turn, reserve_generative
-    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
-    from services.customer_ai.contracts.turn import CustomerTurn
+    from services.brain.billing import apply_message_billing, owner_preview_turn, reserve_generative
+    from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+    from services.brain.contracts.turn import CustomerTurn
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     turn = CustomerTurn(
@@ -158,7 +158,7 @@ def test_preview_turn_does_not_hold_messages(monkeypatch: pytest.MonkeyPatch) ->
 def test_omni_and_request_persist_stay_honest() -> None:
     from inspect import getsource
 
-    from services.customer_ai.actions.requests import persist_request
+    from services.brain.actions.requests import persist_request
     from services.omnichannel import deliver
     from services.omnichannel.channel_web_chat import generate_web_chat_reply
     from services.omnichannel.channel_whatsapp import generate_whatsapp_reply
@@ -234,7 +234,7 @@ def test_sfu_worker_settles_leftover_credits() -> None:
 
 
 def test_leftover_reserve_skips_when_billing_on(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.leftover_reserve import reserve_leftover_reply
+    from services.brain.leftover_reserve import reserve_leftover_reply
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     assert reserve_leftover_reply(tenant_id="shop", request_id="omni:1", operation_type="omni") is None
@@ -265,11 +265,11 @@ def test_phase2_settles_cm_and_halt_paths() -> None:
 
 
 def test_reserve_generative_skips_leftover_conversation_pin(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.billing import reserve_generative
-    from services.customer_ai.contracts.turn import CustomerTurn
-    from services.customer_ai.leftover_reserve import _pin, reset_leftover_pins_for_tests
-    from services.membership.lot_window import current_period_id
-    from services.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests
+    from services.billing.membership.lot_window import current_period_id
+    from services.billing.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests
+    from services.brain.billing import reserve_generative
+    from services.brain.contracts.turn import CustomerTurn
+    from services.brain.leftover_reserve import _pin, reset_leftover_pins_for_tests
 
     reset_ledger_for_tests()
     reset_leftover_pins_for_tests()
@@ -285,10 +285,10 @@ def test_reserve_generative_skips_leftover_conversation_pin(monkeypatch: pytest.
 def test_settle_after_send_does_not_mint_when_leftover_owns_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.customer_ai.billing import settle_after_send
-    from services.customer_ai.leftover_reserve import _pin, reset_leftover_pins_for_tests
-    from services.membership.lot_window import current_period_id
-    from services.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests
+    from services.billing.membership.lot_window import current_period_id
+    from services.billing.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests
+    from services.brain.billing import settle_after_send
+    from services.brain.leftover_reserve import _pin, reset_leftover_pins_for_tests
 
     reset_ledger_for_tests()
     reset_leftover_pins_for_tests()

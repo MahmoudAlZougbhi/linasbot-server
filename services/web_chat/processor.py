@@ -132,7 +132,7 @@ async def process_web_chat_message(
     tid = widget.tenant_id
     eligible, reason = evaluate_web_ai_eligibility(tid, widget)
     if not eligible:
-        from services.membership.message_flags import message_billing_enabled
+        from services.billing.membership.message_flags import message_billing_enabled
 
         credit_paused = (
             "AI replies are paused until leftover credits are available."
@@ -328,7 +328,7 @@ async def process_web_chat_message(
     except PermissionError as exc:
         if runtime.record and (runtime.record.reservation_id or credit.reservation_id):
             fenced_failure_release(runtime, credit, conversation_id=conversation_id, user_text=text)
-        from services.membership.message_flags import message_billing_enabled
+        from services.billing.membership.message_flags import message_billing_enabled
 
         raise WebChatError(
             "insufficient_credits",

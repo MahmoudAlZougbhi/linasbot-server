@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.cm.response_validator import (
+from services.ai_setup.response_validator import (
     LANGUAGE_MISMATCH,
     PRICE_MISMATCH,
     RESTRICTED_SERVICE_OFFERED,
@@ -12,8 +12,8 @@ from services.cm.response_validator import (
     WA_NUMBER_MISMATCH,
     validate_response,
 )
-from services.cm.runtime_pipeline import finalize_response
-from services.cm.schemas import AnswerFact, AnswerPacket
+from services.ai_setup.runtime_pipeline import finalize_response
+from services.ai_setup.schemas import AnswerFact, AnswerPacket
 
 
 def _packet(**overrides) -> AnswerPacket:

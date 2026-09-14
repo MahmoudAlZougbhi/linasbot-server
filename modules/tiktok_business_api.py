@@ -51,7 +51,7 @@ async def tiktok_connect_start(request: Request, body: dict[str, Any] = Body(def
 async def tiktok_disconnect(request: Request) -> Any:
     session = require_permission(request, "settings")
     try:
-        from services.membership.edit_http import guarded_edit
+        from services.billing.membership.edit_http import guarded_edit
 
         with guarded_edit(
             tenant_id=session.tenant_id,

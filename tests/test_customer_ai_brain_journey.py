@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
-from services.customer_ai.contracts.turn import CustomerTurn
-from services.customer_ai.planner.heuristic import plan_message
-from services.customer_ai.turn_pipeline import run_dm_after_gates
+from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
+from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+from services.brain.contracts.turn import CustomerTurn
+from services.brain.planner.heuristic import plan_message
+from services.brain.turn_pipeline import run_dm_after_gates
 
 
 @pytest.mark.asyncio
@@ -34,10 +34,10 @@ async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytes
             ],
         )
 
-    monkeypatch.setattr("services.customer_ai.agent.loop.plan_turn", fake_plan)
-    monkeypatch.setattr("services.customer_ai.agent.multi_retrieve.retrieve_published", fake_retrieve)
+    monkeypatch.setattr("services.brain.agent.loop.plan_turn", fake_plan)
+    monkeypatch.setattr("services.brain.agent.multi_retrieve.retrieve_published", fake_retrieve)
     monkeypatch.setattr(
-        "services.cm.setup_resources.index_published_resources",
+        "services.ai_setup.setup_resources.index_published_resources",
         lambda _tid: {
             "res_before": {
                 "resource_ref": "res_before",
@@ -49,7 +49,7 @@ async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytes
         },
     )
     monkeypatch.setattr(
-        "services.customer_ai.actions.resources.resolve_published_resource",
+        "services.brain.actions.resources.resolve_published_resource",
         lambda **_k: {
             "ok": True,
             "resource": {"resource_ref": "res_before", "title": "Before photo"},
@@ -59,13 +59,13 @@ async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytes
     async def _no_confirm(*_a, **_k):
         return None
 
-    monkeypatch.setattr("services.customer_ai.turn_pipeline.try_confirm_pending", _no_confirm)
-    monkeypatch.setattr("services.customer_ai.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", _no_confirm)
+    monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
 
     async def _no_sem(*_a, **_k):
         return None
 
-    monkeypatch.setattr("services.customer_ai.turn_pipeline._semantic_faq_result", _no_sem)
+    monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", _no_sem)
 
     turn = CustomerTurn(tenant_id="brain-shop", conversation_id="c1", event_ids=["m1"], channel="instagram_dm")
     result = await run_dm_after_gates(turn, message="send me the before photo please", channel="instagram_dm")
@@ -87,14 +87,14 @@ async def test_booking_still_asks_confirmation(monkeypatch: pytest.MonkeyPatch) 
     async def _no_confirm(*_a, **_k):
         return None
 
-    monkeypatch.setattr("services.customer_ai.agent.loop.plan_turn", fake_plan)
-    monkeypatch.setattr("services.customer_ai.turn_pipeline.try_confirm_pending", _no_confirm)
-    monkeypatch.setattr("services.customer_ai.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.brain.agent.loop.plan_turn", fake_plan)
+    monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", _no_confirm)
+    monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
 
     async def _no_sem(*_a, **_k):
         return None
 
-    monkeypatch.setattr("services.customer_ai.turn_pipeline._semantic_faq_result", _no_sem)
+    monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", _no_sem)
     turn = CustomerTurn(tenant_id="brain-shop", conversation_id="c2", event_ids=["m2"], channel="whatsapp")
     result = await run_dm_after_gates(turn, message="I want to book a laser appointment", channel="whatsapp")
     assert result.extra.get("phase") == "actions_pending"
@@ -127,22 +127,22 @@ async def test_handoff_executes_receipt(monkeypatch: pytest.MonkeyPatch) -> None
         return plan
 
     async def fake_escalate(**_k):
-        from services.customer_ai.contracts.actions import ActionReceipt
+        from services.brain.contracts.actions import ActionReceipt
 
         return ActionReceipt(action_id="handoff:t_human", action_type="escalate_to_human", state="success")
 
     async def _no_confirm(*_a, **_k):
         return None
 
-    monkeypatch.setattr("services.customer_ai.agent.loop.plan_turn", fake_plan)
-    monkeypatch.setattr("services.customer_ai.turn_pipeline.try_confirm_pending", _no_confirm)
-    monkeypatch.setattr("services.customer_ai.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.brain.agent.loop.plan_turn", fake_plan)
+    monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", _no_confirm)
+    monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
 
     async def _no_sem(*_a, **_k):
         return None
 
-    monkeypatch.setattr("services.customer_ai.turn_pipeline._semantic_faq_result", _no_sem)
-    monkeypatch.setattr("services.customer_ai.actions.execute.escalate_to_human", fake_escalate)
+    monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", _no_sem)
+    monkeypatch.setattr("services.brain.actions.execute.escalate_to_human", fake_escalate)
     turn = CustomerTurn(tenant_id="brain-shop", customer_id="u1", conversation_id="c3", event_ids=["m3"])
     result = await run_dm_after_gates(turn, message="I want a human please", channel="instagram_dm")
     assert result.extra.get("phase") == "handoff"
@@ -151,9 +151,9 @@ async def test_handoff_executes_receipt(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_deep_knowledge_chunk_is_indexed_separately() -> None:
-    from services.customer_ai.compiler.chunks import chunk_document
-    from services.customer_ai.retrieve.cards import TitleCard
-    from services.customer_ai.search.index_job import document_rows
+    from services.brain.compiler.chunks import chunk_document
+    from services.brain.retrieve.cards import TitleCard
+    from services.brain.search.index_job import document_rows
 
     body = "# Intro\nWelcome.\n# Deep Policy\nOnly this later section mentions copper cooling gel.\n"
     chunks = chunk_document(document_id="knowledge:doc", body=body)

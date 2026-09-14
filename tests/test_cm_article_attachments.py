@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from services.cm.article_media import (
+from services.ai_setup.article_media import (
     format_attachments_block,
     store_article_media,
     validate_upload,
 )
-from services.cm.schemas import ArticleAttachment, ArticleRecord, KnowledgeSection
-from services.cm.semantic_index import _article_entries
+from services.ai_setup.schemas import ArticleAttachment, ArticleRecord, KnowledgeSection
+from services.ai_setup.semantic_index import _article_entries
 
 
 def test_article_record_accepts_attachments() -> None:

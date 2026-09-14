@@ -456,9 +456,9 @@ def test_config_key_presence_has_no_values():
 
 
 def _grant_whatsapp_plan(monkeypatch, tmp_path, tenant_id: str, plan_id: str = "starter") -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
-    from services.membership import whatsapp_gate as wg
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
+    from services.billing.membership import whatsapp_gate as wg
 
     store = EntitlementsStore(root=tmp_path / "ent-wa-plan")
     monkeypatch.setattr(es, "entitlements_store", store)

@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from services.cm.constants import require_tenant_id
-from services.cm.version_store import read_published_pointer
+from services.ai_setup.constants import require_tenant_id
+from services.ai_setup.version_store import read_published_pointer
 from services.ha_cm_peer_replicate import ha_cm_peer_replicate_enabled, replicate_published_cm_to_peer
 from services.tenant_runtime_config_backend import tenant_runtime_config_postgres_required
 from services.tenant_runtime_config_cache import rebuild_tenant_cache

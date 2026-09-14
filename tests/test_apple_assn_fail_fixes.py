@@ -21,8 +21,8 @@ from services.apple_assn_types import classify_assn_action, status_for_notificat
 from services.apple_iap_effects import get_or_create_app_account_token  # noqa: E402
 from services.apple_iap_processor import process_notification_v2  # noqa: E402
 from services.apple_notification_claim import claim_notification, finalize_notification  # noqa: E402
+from services.billing.entitlements_service import EntitlementsStore  # noqa: E402
 from services.credit_ledger_service import CreditLedgerService  # noqa: E402
-from services.entitlements_service import EntitlementsStore  # noqa: E402
 from services.store_iap_service import normalize_apple_status  # noqa: E402
 
 
@@ -52,13 +52,13 @@ def apple_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     ledger_root = tmp_path / "credit_ledger"
     store = EntitlementsStore(root=ent_root)
     ledger = CreditLedgerService(root=ledger_root)
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
     monkeypatch.setattr("services.apple_iap_effects.entitlements_store", store)
     monkeypatch.setattr("services.apple_credit_grant_ops.credit_ledger_service", ledger)
     monkeypatch.setattr("services.apple_renewal_info.entitlements_store", store)
-    monkeypatch.setattr("services.entitlements_service._DATA_ROOT", tmp_path)
+    monkeypatch.setattr("services.billing.entitlements_service._DATA_ROOT", tmp_path)
     yield tmp_path
     reset_engine_for_tests()
 
@@ -191,7 +191,7 @@ def test_processor_metadata_types_not_active(apple_env: Path, monkeypatch: pytes
     assert out.get("duplicate") is False
     assert out["classification"]["status"] is None
     assert out["classification"]["effect_kind"] == "metadata_only"
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     ent = entitlements_store.get("tenant_meta")
     # Fresh tenant: metadata-only must not activate.
@@ -212,7 +212,7 @@ def test_processor_one_time_charge_consumable(apple_env: Path, monkeypatch: pyte
     effect = out["effect"]
     nested = effect.get("effect") if isinstance(effect.get("effect"), dict) else effect
     assert int(nested.get("credits") or 0) == 2500
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     assert entitlements_store.get("tenant_otc").extra_credits == 2500
     assert entitlements_store.get("tenant_otc").status == "none"
@@ -229,7 +229,7 @@ def test_processor_one_time_charge_subscription_skipped(apple_env: Path, monkeyp
     _patch_decode(monkeypatch, outer=outer, txn=txn)
     out = process_notification_v2({"signedPayload": "signed.outer.payload"})
     assert out["effect"].get("skipped") is True
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     assert entitlements_store.get("tenant_otc_sub").status == "none"
 
@@ -247,7 +247,7 @@ def test_processor_unknown_type_ignored_no_effect(apple_env: Path, monkeypatch: 
     out = process_notification_v2({"signedPayload": "signed.outer.payload"})
     assert out.get("reason") == "failed_unknown_type"
     assert out["classification"]["action"] == "ignore"
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     assert entitlements_store.get("tenant_unk").status == "none"
     with whatsapp_session() as session:
@@ -298,7 +298,7 @@ def test_signed_renewal_info_grace_and_cancel(apple_env: Path, monkeypatch: pyte
     assert out["renewal"]["renewal_info"]["autoRenewStatus"] == 0
     assert out["renewal"]["renewal_info"]["isInBillingRetryPeriod"] is True
     assert out["renewal"]["hints"]["lifecycle"] == "grace"
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     ent = entitlements_store.get("tenant_ren")
     assert ent.status == "grace"
@@ -397,7 +397,7 @@ def test_concurrent_notification_one_effect(apple_env: Path, monkeypatch: pytest
     dup_flags = sorted(bool(r.get("duplicate")) for r in results)
     # SQLite may serialize; still exactly one non-duplicate effect path.
     assert dup_flags == [False, True]
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     assert entitlements_store.get("tenant_race").plan_id == "lite"
     assert entitlements_store.get("tenant_race").status == "active"

@@ -16,14 +16,14 @@ from services.ai_reply_lifecycle import (
     persist_generated_reply,
     put_turn,
 )
+from services.billing.entitlements_service import EntitlementsStore
 from services.credit_ledger_service import CreditLedgerService
-from services.entitlements_service import EntitlementsStore
 
 
 @pytest.fixture()
 def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CreditLedgerService:
     store = EntitlementsStore(root=tmp_path / "ents")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
     store.set_plan(tenant_id="t1", plan_id="starter", status="active", source="admin")
@@ -63,8 +63,8 @@ def test_capture_once_not_on_delivery_failure(ledger_env: CreditLedgerService, t
 
 
 def test_release_on_ai_failure_no_capture(ledger_env: CreditLedgerService, turn_store: None) -> None:
-    from services.customer_ai.leftover_reserve import reset_leftover_pins_for_tests
-    from services.membership.pending_settlement import reset_pending_settlements_for_tests
+    from services.billing.membership.pending_settlement import reset_pending_settlements_for_tests
+    from services.brain.leftover_reserve import reset_leftover_pins_for_tests
 
     reset_leftover_pins_for_tests()
     reset_pending_settlements_for_tests()
@@ -78,8 +78,8 @@ def test_release_on_ai_failure_no_capture(ledger_env: CreditLedgerService, turn_
     rec = get_turn(turn.logical_reply_id)
     assert rec is not None
     assert rec.credit_captured is False
-    from services.customer_ai.leftover_reserve import leftover_policy_for
-    from services.membership.pending_settlement import get_pending
+    from services.billing.membership.pending_settlement import get_pending
+    from services.brain.leftover_reserve import leftover_policy_for
 
     held = get_pending("t1", turn.credit_reservation_id or "")
     assert held is None or held.state == "released"
@@ -87,8 +87,8 @@ def test_release_on_ai_failure_no_capture(ledger_env: CreditLedgerService, turn_
 
 
 def test_capture_after_reply_persisted_settles_leftover_hold(ledger_env: CreditLedgerService, turn_store: None) -> None:
-    from services.customer_ai.leftover_reserve import leftover_policy_for, reset_leftover_pins_for_tests
-    from services.membership.pending_settlement import get_pending, reset_pending_settlements_for_tests
+    from services.billing.membership.pending_settlement import get_pending, reset_pending_settlements_for_tests
+    from services.brain.leftover_reserve import leftover_policy_for, reset_leftover_pins_for_tests
 
     reset_leftover_pins_for_tests()
     reset_pending_settlements_for_tests()
@@ -105,16 +105,16 @@ def test_capture_after_reply_persisted_settles_leftover_hold(ledger_env: CreditL
 
 
 def test_reserve_before_ai_persists_candidate_ids(ledger_env: CreditLedgerService, turn_store: None) -> None:
-    from services.customer_ai.leftover_reserve import reset_leftover_pins_for_tests
-    from services.membership.pending_settlement import reset_pending_settlements_for_tests
+    from services.billing.membership.pending_settlement import reset_pending_settlements_for_tests
+    from services.brain.leftover_reserve import reset_leftover_pins_for_tests
 
     reset_leftover_pins_for_tests()
     reset_pending_settlements_for_tests()
     ledger_env.ensure_period_grant("t1")
     turn = begin_turn(tenant_id="t1", channel="whatsapp", external_inbound_id="mid-pin")
     rid = reserve_before_ai(turn)
-    from services.customer_ai.leftover_reserve import leftover_policy_for
-    from services.membership.pending_settlement import get_pending
+    from services.billing.membership.pending_settlement import get_pending
+    from services.brain.leftover_reserve import leftover_policy_for
 
     held = get_pending("t1", rid or "", "")
     assert held is not None

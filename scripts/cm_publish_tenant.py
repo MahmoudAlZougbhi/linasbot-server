@@ -21,8 +21,8 @@ async def main() -> int:
     args = parser.parse_args()
 
     if args.dry_run:
-        from services.cm.constants import CM_SECTIONS
-        from services.cm.storage import ensure_defaults, get_draft
+        from services.ai_setup.constants import CM_SECTIONS
+        from services.ai_setup.storage import ensure_defaults, get_draft
 
         ensure_defaults(tenant_id=args.tenant_id)
         print(f"[dry-run] tenant={args.tenant_id} data_root={os.getenv('LINASBOT_DATA_ROOT')}")
@@ -31,8 +31,8 @@ async def main() -> int:
             print(f"  draft {section}: revision={env.revision} keys={list(env.payload.keys())[:8]}")
         return 0
 
-    from services.cm.publish import publish_draft
-    from services.cm.storage import ensure_defaults
+    from services.ai_setup.publish import publish_draft
+    from services.ai_setup.storage import ensure_defaults
 
     ensure_defaults(tenant_id=args.tenant_id)
     result = await publish_draft(tenant_id=args.tenant_id, published_by=args.published_by)

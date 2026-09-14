@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.token_wallet_models import (
+from services.billing.token_wallet_models import (
     is_unlimited_tenant,
     normalize_wallet_tenant_id,
     unlimited_tenant_ids,

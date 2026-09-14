@@ -46,8 +46,8 @@ def web_store(tmp_path, monkeypatch):
 @pytest.fixture()
 def contained_client(monkeypatch, web_store):
     monkeypatch.delenv(PUBLIC_AVAILABILITY_ENV, raising=False)
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
 
     ent = EntitlementsStore(root=web_store._root.parent / "ent")
     monkeypatch.setattr(es, "entitlements_store", ent)
@@ -230,11 +230,11 @@ def test_web_followup_schedule_noops_when_contained(monkeypatch, sfu_db) -> None
 @pytest.mark.asyncio
 async def test_web_worker_skips_without_credit_or_delivery(monkeypatch, sfu_db, tmp_path) -> None:
     monkeypatch.delenv(PUBLIC_AVAILABILITY_ENV, raising=False)
+    from services.billing.entitlements_service import EntitlementsStore
     from services.credit_ledger_service import CreditLedgerService
-    from services.entitlements_service import EntitlementsStore
 
     ent = EntitlementsStore(root=tmp_path / "sfu-ents")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", ent)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", ent)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", ent)
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
     ledger = CreditLedgerService(root=tmp_path / "sfu-ledger")
@@ -396,11 +396,11 @@ def test_meta_schedule_unaffected_when_web_contained(monkeypatch, sfu_db) -> Non
 @pytest.mark.asyncio
 async def test_meta_worker_unaffected_when_web_contained(monkeypatch, sfu_db, tmp_path) -> None:
     monkeypatch.delenv(PUBLIC_AVAILABILITY_ENV, raising=False)
+    from services.billing.entitlements_service import EntitlementsStore
     from services.credit_ledger_service import CreditLedgerService
-    from services.entitlements_service import EntitlementsStore
 
     ent = EntitlementsStore(root=tmp_path / "meta-ents")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", ent)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", ent)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", ent)
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
     ledger = CreditLedgerService(root=tmp_path / "meta-ledger")
@@ -451,7 +451,7 @@ async def test_meta_worker_unaffected_when_web_contained(monkeypatch, sfu_db, tm
             new=AsyncMock(return_value="Still need help?"),
         ),
         patch(
-            "services.channel_capability_state.dm_capability_state",
+            "services.integrations.channel_capability_state.dm_capability_state",
             return_value={"requested_enabled": True},
         ),
         patch(

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from services.cm.capability_gates import human_handoff_enabled, image_analysis_enabled, voice_processing_enabled
-from services.cm.schemas import AiLimitsSection
+from services.ai_setup.capability_gates import human_handoff_enabled, image_analysis_enabled, voice_processing_enabled
+from services.ai_setup.schemas import AiLimitsSection
 
 
 def test_capability_gates_read_published_ai_limits(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.cm.capability_gates.tenant_uses_cm_runtime", lambda _tid: True)
+    monkeypatch.setattr("services.ai_setup.capability_gates.tenant_uses_cm_runtime", lambda _tid: True)
 
     class _Pointer:
         content_version_id = "v_test"
@@ -23,13 +23,13 @@ def test_capability_gates_read_published_ai_limits(monkeypatch: pytest.MonkeyPat
             ).model_dump(mode="json")
         }
 
-    monkeypatch.setattr("services.cm.capability_gates.load_published_content", _load)
+    monkeypatch.setattr("services.ai_setup.capability_gates.load_published_content", _load)
     assert voice_processing_enabled("linas") is False
     assert image_analysis_enabled("linas") is True
 
 
 def test_human_handoff_enabled_prefers_ai_limits_field(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.cm.capability_gates.tenant_uses_cm_runtime", lambda _tid: True)
+    monkeypatch.setattr("services.ai_setup.capability_gates.tenant_uses_cm_runtime", lambda _tid: True)
 
     class _Pointer:
         content_version_id = "v_test"
@@ -45,12 +45,12 @@ def test_human_handoff_enabled_prefers_ai_limits_field(monkeypatch: pytest.Monke
             },
         }
 
-    monkeypatch.setattr("services.cm.capability_gates.load_published_content", _load)
+    monkeypatch.setattr("services.ai_setup.capability_gates.load_published_content", _load)
     assert human_handoff_enabled("linas") is False
 
 
 def test_human_handoff_enabled_falls_back_to_actions_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.cm.capability_gates.tenant_uses_cm_runtime", lambda _tid: True)
+    monkeypatch.setattr("services.ai_setup.capability_gates.tenant_uses_cm_runtime", lambda _tid: True)
 
     class _Pointer:
         content_version_id = "v_test"
@@ -66,12 +66,12 @@ def test_human_handoff_enabled_falls_back_to_actions_toggle(monkeypatch: pytest.
             },
         }
 
-    monkeypatch.setattr("services.cm.capability_gates.load_published_content", _load)
+    monkeypatch.setattr("services.ai_setup.capability_gates.load_published_content", _load)
     assert human_handoff_enabled("linas") is False
 
 
 def test_human_handoff_follows_published_human_request_rule(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.cm.capability_gates.tenant_uses_cm_runtime", lambda _tid: True)
+    monkeypatch.setattr("services.ai_setup.capability_gates.tenant_uses_cm_runtime", lambda _tid: True)
 
     class _Pointer:
         content_version_id = "v_test"
@@ -85,12 +85,12 @@ def test_human_handoff_follows_published_human_request_rule(monkeypatch: pytest.
             },
         }
 
-    monkeypatch.setattr("services.cm.capability_gates.load_published_content", _load)
+    monkeypatch.setattr("services.ai_setup.capability_gates.load_published_content", _load)
     assert human_handoff_enabled("linas") is True
 
 
 def test_disabled_human_request_rule_blocks_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.cm.capability_gates.tenant_uses_cm_runtime", lambda _tid: True)
+    monkeypatch.setattr("services.ai_setup.capability_gates.tenant_uses_cm_runtime", lambda _tid: True)
 
     class _Pointer:
         content_version_id = "v_test"
@@ -104,5 +104,5 @@ def test_disabled_human_request_rule_blocks_handoff(monkeypatch: pytest.MonkeyPa
             },
         }
 
-    monkeypatch.setattr("services.cm.capability_gates.load_published_content", _load)
+    monkeypatch.setattr("services.ai_setup.capability_gates.load_published_content", _load)
     assert human_handoff_enabled("linas") is False

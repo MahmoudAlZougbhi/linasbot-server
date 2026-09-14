@@ -39,7 +39,7 @@ def get_reconcile_metrics() -> dict[str, int]:
 
 
 def _release_unsent_message_hold(candidate: ReconcileCandidate, turn: Any) -> None:
-    from services.customer_ai.billing import settle_after_send
+    from services.brain.billing import settle_after_send
 
     inbound = "" if candidate.inbound_event_id.startswith("orphan:") else candidate.inbound_event_id
     extra = str(getattr(turn, "external_inbound_id", "") or "")

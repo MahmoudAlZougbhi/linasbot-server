@@ -272,7 +272,7 @@ def persist_meta_comment_accepted(resolved: ResolvedMetaCommentEvent, *, global_
     _mirror_unless_soak(persisted)
     _remember_persisted(persisted)
     if created and not _payload_is_soak(resolved.event):
-        from services.live_chat_comment_sse import schedule_meta_comment_inbound
+        from services.live_chat.comment_sse import schedule_meta_comment_inbound
 
         schedule_meta_comment_inbound(
             tenant_id=tenant_id,

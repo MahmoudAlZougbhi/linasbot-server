@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from services.cm.actions import comments_enforcement_decision, evaluate_comments_meta_readiness
+from services.ai_setup.actions import comments_enforcement_decision, evaluate_comments_meta_readiness
 from services.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
@@ -53,11 +53,11 @@ def registry(tmp_path: Path, instagram_env: None) -> MetaAppRegistry:
 
 def _enable_cm_comments(monkeypatch: pytest.MonkeyPatch, tenant_id: str = "tenant-a") -> None:
     monkeypatch.setattr(
-        "services.cm.actions.comments_action_enabled",
+        "services.ai_setup.actions.comments_action_enabled",
         lambda _tenant, channel: channel in {"instagram", "facebook"},
     )
     monkeypatch.setattr(
-        "services.cm.constants.tenant_uses_cm_runtime",
+        "services.ai_setup.constants.tenant_uses_cm_runtime",
         lambda _tenant: True,
     )
 
@@ -342,7 +342,7 @@ def test_webhook_and_polling_share_enforcement_decision(
 
 
 def test_toggle_stays_on_with_blocker_when_unknown(registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.channel_capability_state import comment_capability_state
+    from services.integrations.channel_capability_state import comment_capability_state
     from services.meta_comment_reply_settings import set_comment_reply_setting
 
     binding = _binding(
@@ -367,9 +367,9 @@ def test_toggle_stays_on_with_blocker_when_unknown(registry: MetaAppRegistry, mo
         comment_permission_token_fingerprint="",
         actor_id="test",
     )
-    monkeypatch.setattr("services.channel_capability_state.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.channel_capability_state.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: True,
     )
     state = comment_capability_state("tenant-a", "instagram")

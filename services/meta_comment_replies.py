@@ -170,7 +170,7 @@ async def process_meta_comment_event(
     if _already_sent_reply(binding, comment_id):
         return CommentReplyResult(status="ignored", reason="already_replied")
 
-    from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
+    from services.billing.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
 
     try:
         assert_comment_automation_allowed(binding.tenant_id)
@@ -184,7 +184,7 @@ async def process_meta_comment_event(
         asset_id=binding.asset_id,
     )
 
-    from services.cm.actions import comments_enforcement_decision
+    from services.ai_setup.actions import comments_enforcement_decision
     from services.meta_app_registry import get_meta_app_registry
 
     try:
@@ -220,8 +220,8 @@ async def process_meta_comment_event(
         allow_graph=not simulation,
     )
     post_id = str(event.get("post_id") or event.get("media_id") or "").strip()
-    from services.cm.comment_rules import evaluate_published_comment_rules
-    from services.cm.constants import tenant_uses_cm_runtime
+    from services.ai_setup.comment_rules import evaluate_published_comment_rules
+    from services.ai_setup.constants import tenant_uses_cm_runtime
 
     rule_decision = None
     if tenant_uses_cm_runtime(binding.tenant_id):
@@ -319,7 +319,7 @@ async def process_meta_comment_event(
                 provider_sender_id=str(event.get("author_id") or "").strip(),
                 provider_display_name=str(event.get("author_name") or "").strip(),
             )
-            from services.customer_ai.comments.destinations import coerce_comment_destinations
+            from services.brain.comments.destinations import coerce_comment_destinations
             from services.meta_comment_brain_send import send_comment_destinations
 
             plan = coerce_comment_destinations(generated)

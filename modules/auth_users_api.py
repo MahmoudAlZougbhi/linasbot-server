@@ -10,8 +10,8 @@ from modules.api_security import require_session
 from modules.auth_api_common import CreateUserRequest, UpdateUserRequest
 from modules.core import app
 from services.dashboard_session_service import session_service
+from services.team.user_service import user_service
 from services.tenant_custom_roles import tenant_custom_roles
-from services.user_service import user_service
 
 
 @app.get("/api/auth/users")
@@ -31,8 +31,8 @@ async def create_user(body: CreateUserRequest, request: Request) -> Any:
     requested_tenant = (body.tenant_id or session.tenant_id).strip()
     if requested_tenant != session.tenant_id:
         raise HTTPException(status_code=403, detail="Cross-tenant user provisioning is forbidden")
-    from services.entitlements_service import entitlements_store
-    from services.membership.seats import SeatLimitExceeded, assert_can_add_seat
+    from services.billing.entitlements_service import entitlements_store
+    from services.billing.membership.seats import SeatLimitExceeded, assert_can_add_seat
 
     ent = entitlements_store.get(session.tenant_id)
     if ent.plan_id in {"lite", "starter", "growth", "pro", "max"}:
@@ -114,7 +114,7 @@ async def delete_user(user_id: str, request: Request) -> Any:
     if target is None or str(target.get("tenantId") or "").strip() != session.tenant_id:
         raise HTTPException(status_code=404, detail="User not found")
     try:
-        from services.membership.edit_http import guarded_edit
+        from services.billing.membership.edit_http import guarded_edit
 
         with guarded_edit(
             tenant_id=str(session.tenant_id or ""),

@@ -7,19 +7,19 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from services.channel_capability_state import (
-    comment_capability_state,
-)
-from services.channel_capability_toggles import (
-    enable_channel_defaults_after_connect,
-    set_channel_toggle,
-)
-from services.cm.actions import (
+from services.ai_setup.actions import (
     ACTION_FACEBOOK_COMMENTS,
     ACTION_FACEBOOK_DM,
     ACTION_INSTAGRAM_COMMENTS,
     ACTION_INSTAGRAM_DM,
     published_action_enabled,
+)
+from services.integrations.channel_capability_state import (
+    comment_capability_state,
+)
+from services.integrations.channel_capability_toggles import (
+    enable_channel_defaults_after_connect,
+    set_channel_toggle,
 )
 from tests.test_channel_capability_toggles import (
     _Cred,
@@ -31,15 +31,15 @@ from tests.test_channel_capability_toggles import (
 def test_tenant_isolation_bindings(monkeypatch) -> None:
     other = _fb_binding(tenant_id="other", asset_id="page-other")
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda tenant_id, platform: [] if tenant_id == "linas" else [other],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _Registry(_Cred(("pages_messaging",))),
     )
     state = comment_capability_state("linas", "facebook")
@@ -63,23 +63,23 @@ async def test_disable_comments_keeps_dm_requested(monkeypatch) -> None:
     async def _publish(**_k):
         calls.append(("publish", True))
 
-    monkeypatch.setattr("services.channel_capability_toggles._sync_comment_assets", _sync)
-    monkeypatch.setattr("services.channel_capability_toggles._set_action_in_draft", _set_action)
-    monkeypatch.setattr("services.channel_capability_toggles._publish_actions", _publish)
+    monkeypatch.setattr("services.integrations.channel_capability_toggles._sync_comment_assets", _sync)
+    monkeypatch.setattr("services.integrations.channel_capability_toggles._set_action_in_draft", _set_action)
+    monkeypatch.setattr("services.integrations.channel_capability_toggles._publish_actions", _publish)
     monkeypatch.setattr(
-        "services.channel_capability_toggles.channel_toggle_states",
+        "services.integrations.channel_capability_toggles.channel_toggle_states",
         lambda *_a, **_k: {"dm": True, "comments": False},
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.comment_capability_state",
+        "services.integrations.channel_capability_toggles.comment_capability_state",
         lambda *_a, **_k: {"effective_enabled": False, "requested_enabled": False},
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.dm_capability_state",
+        "services.integrations.channel_capability_toggles.dm_capability_state",
         lambda *_a, **_k: {"effective_enabled": True, "requested_enabled": True},
     )
 
-    from services.channel_capability_toggles import set_channel_toggle
+    from services.integrations.channel_capability_toggles import set_channel_toggle
 
     result = await set_channel_toggle(
         tenant_id="linas",
@@ -120,28 +120,28 @@ async def test_toggle_dm_off_preserves_comments_when_only_published_exists(monke
         },
     )
 
-    from services.cm.storage import draft_section_path
+    from services.ai_setup.storage import draft_section_path
 
     assert not draft_section_path(tenant, "actions").exists()
 
     monkeypatch.setattr(
-        "services.channel_capability_toggles.canonical_channel_bindings",
+        "services.integrations.channel_capability_toggles.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding()],
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles._sync_comment_assets",
+        "services.integrations.channel_capability_toggles._sync_comment_assets",
         AsyncMock(return_value=None),
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.channel_toggle_states",
+        "services.integrations.channel_capability_toggles.channel_toggle_states",
         lambda *_a, **_k: {"dm": False, "comments": True},
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.comment_capability_state",
+        "services.integrations.channel_capability_toggles.comment_capability_state",
         lambda *_a, **_k: {"effective_enabled": True, "requested_enabled": True},
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.dm_capability_state",
+        "services.integrations.channel_capability_toggles.dm_capability_state",
         lambda *_a, **_k: {"effective_enabled": False, "requested_enabled": False},
     )
 
@@ -180,36 +180,36 @@ async def test_toggle_comments_on_preserves_dm_when_only_published_exists(monkey
         },
     )
 
-    from services.cm.storage import draft_section_path
+    from services.ai_setup.storage import draft_section_path
 
     assert not draft_section_path(tenant, "actions").exists()
 
     monkeypatch.setattr(
-        "services.channel_capability_toggles.canonical_channel_bindings",
+        "services.integrations.channel_capability_toggles.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding()],
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles._sync_comment_assets",
+        "services.integrations.channel_capability_toggles._sync_comment_assets",
         AsyncMock(return_value=None),
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles._ensure_comment_webhooks_for_platform",
+        "services.integrations.channel_capability_toggles._ensure_comment_webhooks_for_platform",
         AsyncMock(return_value=None),
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.comments_enable_blocker",
+        "services.integrations.channel_capability_toggles.comments_enable_blocker",
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.channel_toggle_states",
+        "services.integrations.channel_capability_toggles.channel_toggle_states",
         lambda *_a, **_k: {"dm": True, "comments": True},
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.comment_capability_state",
+        "services.integrations.channel_capability_toggles.comment_capability_state",
         lambda *_a, **_k: {"effective_enabled": True, "requested_enabled": True},
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.dm_capability_state",
+        "services.integrations.channel_capability_toggles.dm_capability_state",
         lambda *_a, **_k: {"effective_enabled": True, "requested_enabled": True},
     )
 
@@ -237,7 +237,7 @@ async def test_enable_channel_defaults_after_connect_enables_both(monkeypatch) -
             "dm_state": {},
         }
 
-    monkeypatch.setattr("services.channel_capability_toggles.set_channel_toggle", _set)
+    monkeypatch.setattr("services.integrations.channel_capability_toggles.set_channel_toggle", _set)
 
     await enable_channel_defaults_after_connect(
         tenant_id="linas",

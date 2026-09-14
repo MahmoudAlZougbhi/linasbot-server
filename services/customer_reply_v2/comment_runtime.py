@@ -30,7 +30,7 @@ async def run_customer_reply_v2_comment(
     comment_id: str = "",
     post_id: str = "",
 ) -> CustomerReplyOutcome:
-    from services.customer_ai.runtime import run_customer_ai_comment
+    from services.brain.runtime import run_customer_ai_comment
 
     if not comments_enabled:
         return CustomerReplyOutcome(stop=True, reason="comments_toggle_off", reply=None)

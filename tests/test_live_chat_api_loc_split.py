@@ -12,7 +12,7 @@ def _line_count(rel: str) -> int:
 def test_live_chat_api_modules_under_500_lines() -> None:
     assert _line_count("modules/live_chat_api.py") < 500
     assert _line_count("modules/live_chat_api_helpers.py") < 500
-    assert _line_count("services/live_chat_sse_broadcaster.py") < 500
+    assert _line_count("services/live_chat/sse_broadcaster.py") < 500
 
 
 def test_live_chat_events_endpoint_exists() -> None:

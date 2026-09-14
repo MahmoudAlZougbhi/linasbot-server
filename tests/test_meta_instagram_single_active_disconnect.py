@@ -74,7 +74,7 @@ async def test_instagram_route_clears_only_instagram_toggles(
         return True
 
     monkeypatch.setattr(
-        "services.channel_capability_disconnect.clear_channel_toggles_after_disconnect",
+        "services.integrations.channel_capability_disconnect.clear_channel_toggles_after_disconnect",
         clear_toggles,
     )
     response = await meta_connections_api.disconnect_meta_connection(direct.binding_id, _request())
@@ -115,7 +115,7 @@ async def test_linked_instagram_disconnect_never_unsubscribes_active_facebook_pa
         unexpected_provider_call,
     )
     monkeypatch.setattr(
-        "services.channel_capability_disconnect.clear_channel_toggles_after_disconnect",
+        "services.integrations.channel_capability_disconnect.clear_channel_toggles_after_disconnect",
         clear_toggles,
     )
 
@@ -164,7 +164,7 @@ async def test_facebook_route_leaves_both_instagram_histories_untouched(
         settle_without_graph,
     )
     monkeypatch.setattr(
-        "services.channel_capability_disconnect.clear_channel_toggles_after_disconnect",
+        "services.integrations.channel_capability_disconnect.clear_channel_toggles_after_disconnect",
         clear_toggles,
     )
     response = await meta_connections_api.disconnect_meta_connection(facebook.binding_id, _request())

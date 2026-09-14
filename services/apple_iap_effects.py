@@ -11,7 +11,7 @@ from services.apple_credit_grant_ops import (  # noqa: F401 — re-export for ca
     grant_consumable_credits,
     reverse_consumable_credits,
 )
-from services.entitlements_service import EntitlementStatus, apply_store_notification, entitlements_store
+from services.billing.entitlements_service import EntitlementStatus, apply_store_notification, entitlements_store
 from services.iap_product_catalog import (
     is_credit_product,
     is_subscription_product,

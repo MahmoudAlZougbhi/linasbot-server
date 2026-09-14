@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from services.cm.progress import list_section_fill_status, progress_summary
-from services.cm.schemas import default_section_payload
-from services.cm.storage import put_draft
+from services.ai_setup.progress import list_section_fill_status, progress_summary
+from services.ai_setup.schemas import default_section_payload
+from services.ai_setup.storage import put_draft
 
 
 @pytest.fixture()

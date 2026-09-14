@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.cm.constants import INITIAL_RESTRICTED_LABELS, INITIAL_RESTRICTED_TOPIC_IDS
-from services.cm.migration import migrate_legacy_fixture
-from services.cm.schemas import RestrictedPolicy, initial_restricted_policy
-from services.cm.storage import get_draft, put_draft
+from services.ai_setup.constants import INITIAL_RESTRICTED_LABELS, INITIAL_RESTRICTED_TOPIC_IDS
+from services.ai_setup.migration import migrate_legacy_fixture
+from services.ai_setup.schemas import RestrictedPolicy, initial_restricted_policy
+from services.ai_setup.storage import get_draft, put_draft
 
 
 def test_initial_restricted_catalog_exists_inactive_by_default() -> None:

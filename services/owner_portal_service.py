@@ -7,9 +7,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from services.billing_backend import billing_uses_postgres, require_billing_pg_session
+from services.billing.billing_backend import billing_uses_postgres, require_billing_pg_session
 from services.interaction_flow_logger import get_recent_flows
-from services.user_service import user_service
+from services.team.user_service import user_service
 from storage.persistent_storage import _DATA_ROOT
 
 _RANGE_DAYS = {
@@ -134,8 +134,8 @@ def list_subscribers(users: list[dict[str, Any]] | None = None) -> list[dict[str
 
 
 def _catalog_offer(plan_id: str) -> dict[str, Any]:
-    from services.membership.catalog_admin import effective_included_messages
-    from services.membership.catalog_revenue import intended_price_usd
+    from services.billing.membership.catalog_admin import effective_included_messages
+    from services.billing.membership.catalog_revenue import intended_price_usd
 
     try:
         included = effective_included_messages(plan_id)
@@ -148,7 +148,7 @@ def _catalog_offer(plan_id: str) -> dict[str, Any]:
 
 
 def _catalog_revenue(plan_ids: list[str]) -> dict[str, Any]:
-    from services.membership.catalog_revenue import revenue_pair
+    from services.billing.membership.catalog_revenue import revenue_pair
 
     return revenue_pair(plan_ids)
 

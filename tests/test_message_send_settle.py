@@ -6,13 +6,13 @@ from inspect import getsource
 
 import pytest
 
-from services.customer_ai.billing import apply_message_billing, settle_after_send
-from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
-from services.customer_ai.contracts.turn import CustomerTurn
-from services.customer_ai.outbox import outbox_counts, recover_unsent, reset_outbox_for_tests
-from services.membership.lot_window import current_period_id
-from services.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests, snapshot
-from services.membership.pending_settlement import reset_pending_settlements_for_tests
+from services.billing.membership.lot_window import current_period_id
+from services.billing.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests, snapshot
+from services.billing.membership.pending_settlement import reset_pending_settlements_for_tests
+from services.brain.billing import apply_message_billing, settle_after_send
+from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.turn import CustomerTurn
+from services.brain.outbox import outbox_counts, recover_unsent, reset_outbox_for_tests
 
 
 @pytest.fixture(autouse=True)
@@ -197,7 +197,7 @@ def test_omni_settle_matches_provider_mid_not_row_id() -> None:
 
 
 def test_web_chat_settle_matches_inbound_hash() -> None:
-    from services.customer_ai.history_ids import web_inbound_message_id
+    from services.brain.history_ids import web_inbound_message_id
 
     mid = web_inbound_message_id("web:sess", "hours?")
     turn, result = _generated(mid)
@@ -213,7 +213,7 @@ def test_web_chat_settle_matches_inbound_hash() -> None:
 
 
 def test_web_chat_fence_releases_inbound_hold() -> None:
-    from services.customer_ai.history_ids import web_inbound_message_id
+    from services.brain.history_ids import web_inbound_message_id
     from services.web_chat.operation_fence import fenced_failure_release, release_web_chat_message_hold
 
     mid = web_inbound_message_id("web:sess", "hours?")
@@ -233,7 +233,7 @@ def test_web_chat_fence_releases_inbound_hold() -> None:
 
 
 def test_web_chat_fence_does_not_invent_inbound_text() -> None:
-    from services.customer_ai.history_ids import web_inbound_message_id
+    from services.brain.history_ids import web_inbound_message_id
     from services.web_chat.operation_fence import release_web_chat_message_hold
 
     mid = web_inbound_message_id("web:sess", "hours?")
@@ -245,7 +245,7 @@ def test_web_chat_fence_does_not_invent_inbound_text() -> None:
 
 
 def test_tiktok_dm_settle_matches_minted_inbound() -> None:
-    from services.customer_ai.history_ids import bind_dm_ids
+    from services.brain.history_ids import bind_dm_ids
     from services.tiktok_business.messaging import _maybe_ai_dm, _settle_tiktok_dm_send
 
     _conv, mid = bind_dm_ids(conversation_id="tt-conv", message_id="", message="hours?")
@@ -352,8 +352,8 @@ def test_omni_generate_fail_releases_brain_hold() -> None:
 
 
 def test_reconcile_settles_alias_operation_id() -> None:
-    from services.membership.pending_settlement import record_pending_after_send
-    from services.membership.reservation_reconcile import run_reservation_reconcile
+    from services.billing.membership.pending_settlement import record_pending_after_send
+    from services.billing.membership.reservation_reconcile import run_reservation_reconcile
 
     turn, result = _generated("mid-alias")
     apply_message_billing(turn, result)
@@ -365,7 +365,7 @@ def test_reconcile_settles_alias_operation_id() -> None:
         provider_message_id="mid-alias",
         channel="instagram",
     )
-    from services.membership.pending_settlement import upsert
+    from services.billing.membership.pending_settlement import upsert
 
     upsert(
         tenant_id="send-shop",
@@ -434,7 +434,7 @@ def test_sfu_generation_fail_releases_minted_hold() -> None:
 
 
 def test_hold_policy_does_not_tag_message_holds_as_leftover(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.membership.hold_policy import hold_billing_policy
+    from services.billing.membership.hold_policy import hold_billing_policy
 
     assert hold_billing_policy(leftover_reservation_id="rid-1") == "legacy_credits"
     assert hold_billing_policy(leftover_reservation_id=None) == "message_units"
@@ -443,7 +443,7 @@ def test_hold_policy_does_not_tag_message_holds_as_leftover(monkeypatch: pytest.
 
 
 def test_ambiguous_holds_use_hold_policy_not_leftover_only() -> None:
-    from services.membership.pending_settlement import list_pending
+    from services.billing.membership.pending_settlement import list_pending
     from services.tiktok_business import messaging as tiktok_messaging
     from services.whatsapp_cloud.ai_bridge import _hold_after_ambiguous_send
 

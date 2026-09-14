@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.cm.resource_attachment import is_customer_visible_resource
+from services.ai_setup.resource_attachment import is_customer_visible_resource
 
 
 async def send_comment_rule_resources(

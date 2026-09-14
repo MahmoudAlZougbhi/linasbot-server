@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from services.cm.comment_rules import evaluate_comment_rules
-from services.cm.constants import CM_SECTIONS
-from services.cm.schemas import ArticleAttachment, CommentRule, CommentsSection, default_section_payload
+from services.ai_setup.comment_rules import evaluate_comment_rules
+from services.ai_setup.constants import CM_SECTIONS
+from services.ai_setup.schemas import ArticleAttachment, CommentRule, CommentsSection, default_section_payload
 
 
 def test_comments_in_cm_sections() -> None:
@@ -114,7 +114,7 @@ def test_comment_rule_accepts_post_ids_and_attachments() -> None:
 
 
 def test_comment_rule_accepts_selected_post_snapshots() -> None:
-    from services.cm.schemas import CommentRuleSelectedPost
+    from services.ai_setup.schemas import CommentRuleSelectedPost
 
     rule = CommentRule(
         id="r6",
@@ -139,7 +139,7 @@ def test_comment_rule_accepts_selected_post_snapshots() -> None:
 
 
 def test_selected_posts_scope_without_post_ids() -> None:
-    from services.cm.schemas import CommentRuleSelectedPost
+    from services.ai_setup.schemas import CommentRuleSelectedPost
 
     section = CommentsSection(
         rules=[
@@ -161,7 +161,7 @@ def test_selected_posts_scope_without_post_ids() -> None:
 
 
 def test_facebook_compound_post_id_matches_selected_page_post() -> None:
-    from services.cm.schemas import CommentRuleSelectedPost
+    from services.ai_setup.schemas import CommentRuleSelectedPost
 
     section = CommentsSection(
         rules=[

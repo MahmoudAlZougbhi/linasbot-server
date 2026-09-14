@@ -42,9 +42,9 @@ if not (os.environ.get("OPENAI_API_KEY") or "").strip():
     raise SystemExit("[cm-migrate] OPENAI_API_KEY missing after .env load")
 print("[cm-migrate] env_loaded=true")
 
-from services.cm.prod_migration import run_production_content_migration
-from services.cm.sot_audit import audit_sot_sources
-from services.cm.validation import validate_cm
+from services.ai_setup.prod_migration import run_production_content_migration
+from services.ai_setup.sot_audit import audit_sot_sources
+from services.ai_setup.validation import validate_cm
 
 report = run_production_content_migration(
     data_root=Path("${LINASBOT_DATA_ROOT}"),

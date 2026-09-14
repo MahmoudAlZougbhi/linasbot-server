@@ -74,12 +74,12 @@ Still not deleted (import-graph blocked or KEEP):
 - Smart Follow-Up live backend (`services/smart_followup`, `services/whatsapp_cloud/smart_followup`, `/api/whatsapp/smart-followup/*`)
 - `smart_messaging_*` files still used by scheduler/catalog/WA templates (HTTP already disabled)
 - `owner_ai_tools*` (WAVE B git-mv into `services/owner_copilot/`)
-- `owner_copilot_v2/creative_policy.py` KEEP as refusal
+- `owner_copilot/creative_policy.py` KEEP as refusal
 - Disabled API prefixes in `product_features.py` stay fail-closed even after HTTP modules are gone
 
 ## WAVE 2 — Customer Brain slim
 
-- Voyage entity + knowledge indexes skip Voyage calls when `content_hash` is unchanged (`services/customer_ai/search/reuse_vectors.py`).
+- Voyage entity + knowledge indexes skip Voyage calls when `content_hash` is unchanged (`services/brain/search/reuse_vectors.py`).
 - Expense records count only newly embedded rows.
 - Title helpers used by CM save go through `search_metadata.title_fields` (not Luna-named imports).
 - CM OpenAI `semantic_index` remains for `runtime_pipeline` FAQ semantic search (live handler). Brain retrieve stays Voyage-only. Do not treat CM OpenAI as a Brain fallback.
@@ -137,7 +137,7 @@ Live product paths must not import deleted Creative / Owner Lab / smart_retrieva
 | 6 | Mobile Screen union reachable-only; owner screen kept |
 | 7 | This freeze + matrix |
 
-Still not deleted (KEEP or import-graph blocked): Smart Follow-Up live backend, `smart_messaging_*` used by scheduler/templates, `owner_ai_tools*` (WAVE B git-mv into owner_copilot), CM OpenAI `semantic_index` (WAVE C), `creative_policy.py` refusal, disabled API prefixes in `product_features.py`.
+Still not deleted (KEEP or import-graph blocked): Smart Follow-Up live backend, `smart_messaging_*` used by scheduler/templates, CM OpenAI `semantic_index` (WAVE C), `creative_policy.py` refusal, disabled API prefixes in `product_features.py`.
 
 ## WAVE A — fail-closed tenants + delete clinic/BOC/v1/lab/train
 
@@ -146,12 +146,30 @@ MUST 1–8 executed:
 1. Missing tenant is 403 / skip / empty. No live `or "linas"` / `DEFAULT_TENANT_ID="linas"` fallback. `require_tenant_id` raises. Unprefixed IG/FB/TikTok ids are unscoped.
 2. Clinic `data/qa_database.json` + marwa rules deleted. `published_mode` always true. Clinic file corpus is not injected.
 3. `services/booking/**` and `api_integrations*` deleted. Runtime callers fail-closed via `services/saas_no_boc.py`. Doc: `docs/BOC_NOT_IN_SAAS.md`.
-4. Mobile Copilot HTTP is `modules/owner_copilot_api.py` (CRUD) + Sol stream (`owner_ai_v2_api`). `main.py` does not mount `owner_ai_api`. Owner turn is v2-only.
+4. Mobile Copilot HTTP is `modules/owner_copilot_api.py` (CRUD) + Sol stream (`owner_copilot_stream_api`). `main.py` does not mount `owner_ai_api`. Owner turn is v2-only.
 5. WA `/train` handlers unhooked from webhook/text/voice/photo paths.
 6. Lab allowlist is `lab` / `lab_*` only — linas is not a lab tenant.
-7. Creative flags purged from `plan_catalog`. Copilot Creative refusal stays in `owner_copilot_v2/creative_policy.py`.
+7. Creative flags purged from `plan_catalog`. Copilot Creative refusal stays in `owner_copilot/creative_policy.py`.
 8. Comment Brain ids are always `comment:{tenant}:{channel}:{post}:{author}`. Post-scoped conversation_id is ignored. Two authors on one post load two histories.
 
-Keep #677 media analysis. Owner AI tool modules stay until WAVE B domain `git mv`.
+Keep #677 media analysis.
+
+## WAVE B — domain packages match the mobile drawer
+
+| App surface | Package |
+|-------------|---------|
+| AI Setup | `services/ai_setup/` |
+| Dashboard | `services/dashboard/` |
+| Follow up | `services/smart_followup/` |
+| FAQ | `services/faq/` |
+| Live Chat | `services/live_chat/` |
+| Requests | `services/requests/` |
+| Integrations | `services/integrations/` |
+| Team | `services/team/` |
+| Subscription | `services/billing/` |
+| Owner Copilot | `services/owner_copilot/` |
+| Customer Brain | `services/brain/` (`brain/comments`, `brain/media`) |
+
+`main.py` imports are grouped by those domains. `modules/owner_copilot_api.py` is the Copilot HTTP mount; `modules/owner_ai_api.py` stays gone. `smart_messaging_*` remains for scheduler/templates (not a museum HTTP API). Channel capability status copy lives in `services/integrations/channel_capability_status.py` so the matrix file stays under 500 lines.
 
 

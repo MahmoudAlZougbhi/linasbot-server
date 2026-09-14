@@ -6,14 +6,14 @@ from datetime import UTC
 
 import pytest
 
-from services.membership.iap_message_grant import (
+from services.billing.membership.iap_message_grant import (
     apply_verified_stripe_message_checkout,
     grant_from_mapped_pack,
     maybe_revoke_purchased_from_verified_txn,
     stripe_checkout_kind,
 )
-from services.membership.message_flags import activation_flags_report
-from services.membership.message_ledger import remaining_messages, reserve, reset_ledger_for_tests
+from services.billing.membership.message_flags import activation_flags_report
+from services.billing.membership.message_ledger import remaining_messages, reserve, reset_ledger_for_tests
 
 
 @pytest.fixture(autouse=True)
@@ -110,7 +110,7 @@ def test_stripe_message_pack_stays_blocked_without_sale_ready(monkeypatch: pytes
 
 
 def test_refunded_plan_expires_included_lot(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     entitlements_store.set_plan(tenant_id="refund-grant", plan_id="lite", status="active", source="admin")
@@ -158,19 +158,19 @@ def test_activation_flags_report_requires_all_off() -> None:
 def test_stale_reservation_gc_marks_unresolved_without_refund() -> None:
     from datetime import datetime, timedelta
 
-    from services.membership.message_ledger import (
+    from services.billing.membership.message_ledger import (
         grant_lot,
         list_reservations,
         remaining_messages,
         reserve,
         reset_ledger_for_tests,
     )
-    from services.membership.pending_settlement import list_pending, reset_pending_settlements_for_tests
-    from services.membership.reservation_gc import release_stale_reservations, run_reservation_gc
+    from services.billing.membership.pending_settlement import list_pending, reset_pending_settlements_for_tests
+    from services.billing.membership.reservation_gc import release_stale_reservations, run_reservation_gc
 
     reset_ledger_for_tests()
     reset_pending_settlements_for_tests()
-    from services.membership.lot_window import current_period_id
+    from services.billing.membership.lot_window import current_period_id
 
     grant_lot(tenant_id="gc-shop", lot_id="inc", kind="included", period_id=current_period_id(), amount=5)
     reserve(tenant_id="gc-shop", operation_id="stuck", response_class="generated_ai")

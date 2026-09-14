@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.owner_copilot_v2.attachment_prompt import user_content_with_attachments
-from services.owner_copilot_v2.attachments import store_attachment, validate_upload
+from services.owner_copilot.attachment_prompt import user_content_with_attachments
+from services.owner_copilot.attachments import store_attachment, validate_upload
 
 
 def test_validate_upload_accepts_documents_and_rejects_exe() -> None:
@@ -25,7 +25,7 @@ def test_validate_upload_accepts_documents_and_rejects_exe() -> None:
 
 
 def test_user_message_includes_txt_body(tmp_path: Path, monkeypatch) -> None:
-    import services.owner_copilot_v2.attachments as att
+    import services.owner_copilot.attachments as att
 
     monkeypatch.setattr(att, "_root", lambda: tmp_path / "owner_attachments")
     stored = store_attachment(
@@ -48,7 +48,7 @@ def test_user_message_includes_txt_body(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_user_message_inlines_image_bytes(tmp_path: Path, monkeypatch) -> None:
-    import services.owner_copilot_v2.attachments as att
+    import services.owner_copilot.attachments as att
 
     monkeypatch.setattr(att, "_root", lambda: tmp_path / "owner_attachments")
     stored = store_attachment(

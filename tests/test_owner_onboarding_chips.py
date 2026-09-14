@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from services.entitlements_service import (
+from services.billing.entitlements_service import (
     EntitlementsStore,
     get_tenant_entitlement_public,
     is_subscription_exempt_tenant,
     tenant_has_app_access,
 )
-from services.owner_ai_onboarding import welcome_chips
+from services.owner_copilot.onboarding import welcome_chips
 
 
 def test_welcome_chips_new_stage_includes_setup_paths() -> None:
@@ -32,7 +32,7 @@ def test_welcome_chips_fully_configured_hides_setup() -> None:
 
 def test_app_access_requires_active_plan(tmp_path, monkeypatch) -> None:
     store = EntitlementsStore(root=tmp_path / "ent")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
     pub = get_tenant_entitlement_public("t-none")
     assert pub["app_access"] is False
@@ -48,7 +48,7 @@ def test_app_access_requires_active_plan(tmp_path, monkeypatch) -> None:
 def test_linas_tenant_is_not_exempt_without_env(tmp_path, monkeypatch) -> None:
     """tenant_id=linas is not subscription-exempt unless the env lists it."""
     store = EntitlementsStore(root=tmp_path / "ent")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.delenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", raising=False)
     assert is_subscription_exempt_tenant("linas") is False
     assert tenant_has_app_access("linas") is False
@@ -62,7 +62,7 @@ def test_linas_tenant_is_not_exempt_without_env(tmp_path, monkeypatch) -> None:
 
 def test_subscription_exempt_allowlist_is_explicit(tmp_path, monkeypatch) -> None:
     store = EntitlementsStore(root=tmp_path / "ent")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "clinic-x")
     assert is_subscription_exempt_tenant("clinic-x")
     assert tenant_has_app_access("clinic-x") is True
@@ -76,13 +76,13 @@ def test_subscription_exempt_allowlist_is_explicit(tmp_path, monkeypatch) -> Non
 def test_entitlements_public_survives_faq_errors(tmp_path, monkeypatch) -> None:
     """FAQ enrichment failure must not 500 entitlements/me (mobile fail-closes)."""
     store = EntitlementsStore(root=tmp_path / "ent")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
 
     def _boom(_tenant_id: str):
         raise RuntimeError("faq store unavailable")
 
-    monkeypatch.setattr("services.faq_entitlements.get_faq_entitlement", _boom)
+    monkeypatch.setattr("services.faq.faq_entitlements.get_faq_entitlement", _boom)
     pub = get_tenant_entitlement_public("linas")
     assert pub["app_access"] is True
     assert pub["subscription_exempt"] is True

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.cm.storage import put_draft
+from services.ai_setup.storage import put_draft
 from services.search_metadata.cm_apply import enrich_section_payload, last_cm_apply_stats
 from services.search_metadata.english import contains_non_english_script, english_only_or_empty
 from services.search_metadata.generate import (

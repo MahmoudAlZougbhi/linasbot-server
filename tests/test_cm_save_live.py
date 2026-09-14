@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-from services.cm.save_live import put_draft_and_go_live
-from services.cm.storage import get_draft, put_draft
-from services.cm.version_store import load_published_content, read_published_pointer
+from services.ai_setup.save_live import put_draft_and_go_live
+from services.ai_setup.storage import get_draft, put_draft
+from services.ai_setup.version_store import load_published_content, read_published_pointer
 from services.search_metadata.cm_apply import last_cm_apply_stats
 from services.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
 
@@ -136,7 +136,7 @@ async def test_hours_save_replaces_old_hours_for_tera(v2_env) -> None:
 
 @pytest.mark.asyncio
 async def test_appointment_rule_save_is_live_for_next_message(v2_env) -> None:
-    from services.cm.request_rules import format_request_rules_for_ai
+    from services.ai_setup.request_rules import format_request_rules_for_ai
     from services.requests.config_loader import load_published_requests_config
 
     tid = "t_save_live_req"
@@ -277,8 +277,8 @@ async def test_failed_activation_does_not_flip_live_pointer(v2_env, monkeypatch:
     async def _blocked(**_kwargs):
         return {"live": False, "reason": "publish_blocked", "message": "blocked"}
 
-    monkeypatch.setattr("services.cm.save_live.go_live_saved_section", _blocked)
-    from services.cm.save_live import put_draft_and_go_live as _save_fn
+    monkeypatch.setattr("services.ai_setup.save_live.go_live_saved_section", _blocked)
+    from services.ai_setup.save_live import put_draft_and_go_live as _save_fn
 
     envelope, activation = await _save_fn(
         section="knowledge",

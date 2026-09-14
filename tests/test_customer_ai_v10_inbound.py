@@ -27,7 +27,7 @@ def inbound_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     async def _no_desc(*_args: object, **_kwargs: object) -> str:
         return ""
 
-    monkeypatch.setattr("services.customer_ai.media_analysis.describe.describe_stills", _no_desc)
+    monkeypatch.setattr("services.brain.media.describe.describe_stills", _no_desc)
     monkeypatch.setattr("services.customer_reply_v2.inbound_media_enrich.describe_stills", _no_desc)
     return tmp_path
 
@@ -73,7 +73,7 @@ async def test_audio_uses_real_stt_path(inbound_env: Path) -> None:
     assert result.transcript == "بدي كريم after care"
     assert result.pipeline_text == "بدي كريم after care"
     assert luna_inbound_view(result)["transcript"] == "بدي كريم after care"
-    from services.membership.expense_journal import list_events
+    from services.billing.membership.expense_journal import list_events
 
     events = list_events(tenant_id="t-in", category="stt")
     assert events

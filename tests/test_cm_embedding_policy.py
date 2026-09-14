@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.cm.embeddings import (
+from services.ai_setup.embeddings import (
     OPENAI_EMBEDDING_MODEL_DEFAULT,
     HashEmbeddingForbiddenError,
     PublishedEmbeddingError,
@@ -14,7 +14,7 @@ from services.cm.embeddings import (
     embedding_pin,
     embedding_provider_name,
 )
-from services.cm.semantic_index import build_index, search
+from services.ai_setup.semantic_index import build_index, search
 from tests.cm_test_helpers import install_mocked_openai_embeddings
 
 

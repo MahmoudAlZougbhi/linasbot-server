@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from services.cm import bulk_fill as bf
+from services.ai_setup import bulk_fill as bf
 
 
 def test_store_and_peek_bulk_sections(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.cm.bulk_fill.tenant_cm_root",
+        "services.ai_setup.bulk_fill.tenant_cm_root",
         lambda tenant_id: tmp_path / tenant_id,
     )
     plan = bf.store_bulk_sections(

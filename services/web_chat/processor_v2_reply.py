@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.customer_ai.history_ids import web_inbound_message_id
+from services.brain.history_ids import web_inbound_message_id
 from services.web_chat.constants import CUSTOMER_REPLY_CHANNEL
 from services.web_chat.credit_fsm import WebChatCreditHandle
 from services.web_chat.operation_fence import fenced_failure_release
@@ -31,7 +31,7 @@ async def generate_web_chat_reply_text(
     attachment_types: list[str] | None = None,
 ) -> str:
     from services.ai_limits_enforcement import customer_reply_limit_message
-    from services.cm.language_policy import detect_and_resolve_customer_languages
+    from services.ai_setup.language_policy import detect_and_resolve_customer_languages
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
     from services.web_chat.operation_heartbeat import OperationLeaseHeartbeat
     from services.web_chat.processor import WebChatError

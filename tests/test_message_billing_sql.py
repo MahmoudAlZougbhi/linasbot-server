@@ -16,10 +16,10 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.membership.daily_edits import commit_edit, reserve_edit, reset_daily_edits_for_tests, status
-from services.membership.expense_journal import list_events, record_expense, reset_expenses_for_tests
-from services.membership.lot_window import current_period_id
-from services.membership.message_ledger import (
+from services.billing.membership.daily_edits import commit_edit, reserve_edit, reset_daily_edits_for_tests, status
+from services.billing.membership.expense_journal import list_events, record_expense, reset_expenses_for_tests
+from services.billing.membership.lot_window import current_period_id
+from services.billing.membership.message_ledger import (
     grant_lot,
     grant_purchased,
     remaining_messages,
@@ -28,13 +28,13 @@ from services.membership.message_ledger import (
     revoke_purchased,
     settle,
 )
-from services.membership.pending_settlement import (
+from services.billing.membership.pending_settlement import (
     list_pending,
     record_pending_after_send,
     reset_pending_settlements_for_tests,
 )
-from services.membership.pg_store import store_backend
-from services.membership.reconcile import ledger_health
+from services.billing.membership.pg_store import store_backend
+from services.billing.membership.reconcile import ledger_health
 
 
 @pytest.fixture()
@@ -50,11 +50,11 @@ def sql_message_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     reset_daily_edits_for_tests()
     reset_expenses_for_tests()
     reset_pending_settlements_for_tests()
-    from services.customer_ai.conversation_store import reset_conversation_store_for_tests
-    from services.customer_ai.outbox import reset_outbox_for_tests
-    from services.membership.catalog_admin import reset_catalog_admin_for_tests
-    from services.membership.credit_reservation_index import reset_credit_reservation_index_for_tests
-    from services.membership.processing_budgets import reset_processing_budgets_for_tests
+    from services.billing.membership.catalog_admin import reset_catalog_admin_for_tests
+    from services.billing.membership.credit_reservation_index import reset_credit_reservation_index_for_tests
+    from services.billing.membership.processing_budgets import reset_processing_budgets_for_tests
+    from services.brain.conversation_store import reset_conversation_store_for_tests
+    from services.brain.outbox import reset_outbox_for_tests
 
     reset_outbox_for_tests()
     reset_conversation_store_for_tests()
@@ -156,7 +156,7 @@ def test_sql_pending_settlement_survives_memory_clear(sql_message_store: Path) -
         provider_message_id="wamid-sql",
         channel="whatsapp",
     )
-    from services.membership.pending_settlement import _ITEMS
+    from services.billing.membership.pending_settlement import _ITEMS
 
     _ITEMS.clear()
     rows = list_pending(states=("pending_settlement",), tenant_id="sql-hold")
@@ -167,8 +167,8 @@ def test_sql_pending_settlement_survives_memory_clear(sql_message_store: Path) -
 
 
 def test_sql_outbox_survives_memory_clear(sql_message_store: Path) -> None:
-    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
-    from services.customer_ai.outbox import (
+    from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
+    from services.brain.outbox import (
         _ITEMS,
         enqueue_envelope,
         envelope_from_item,
@@ -187,7 +187,7 @@ def test_sql_outbox_survives_memory_clear(sql_message_store: Path) -> None:
         ),
         extra={"channel": "whatsapp"},
     )
-    from services.customer_ai import outbox as outbox_mod
+    from services.brain import outbox as outbox_mod
 
     _ITEMS.clear()
     outbox_mod._HYDRATED = False
@@ -215,10 +215,10 @@ def test_sql_outbox_survives_memory_clear(sql_message_store: Path) -> None:
 def test_sql_outbox_promotes_disk_when_pg_row_missing(sql_message_store: Path) -> None:
     from sqlalchemy import text
 
-    import services.customer_ai.outbox as outbox
+    import services.brain.outbox as outbox
     from db.session import whatsapp_session
-    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
-    from services.customer_ai.outbox import (
+    from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
+    from services.brain.outbox import (
         _ITEMS,
         enqueue_envelope,
         envelope_from_item,
@@ -245,8 +245,9 @@ def test_sql_outbox_promotes_disk_when_pg_row_missing(sql_message_store: Path) -
 
 
 def test_sql_outbox_conflict_keeps_original_envelope(sql_message_store: Path) -> None:
-    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
-    from services.customer_ai.outbox import (
+    from services.billing.membership.pg_store import optional_message_session
+    from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
+    from services.brain.outbox import (
         OutboxItem,
         enqueue_envelope,
         envelope_from_item,
@@ -254,8 +255,7 @@ def test_sql_outbox_conflict_keeps_original_envelope(sql_message_store: Path) ->
         recover_unsent,
         reset_outbox_for_tests,
     )
-    from services.customer_ai.outbox_pg import pg_upsert, table_ready
-    from services.membership.pg_store import optional_message_session
+    from services.brain.outbox_pg import pg_upsert, table_ready
 
     reset_outbox_for_tests()
     enqueue_envelope(
@@ -286,14 +286,14 @@ def test_sql_outbox_conflict_keeps_original_envelope(sql_message_store: Path) ->
 
 
 def test_sql_settlement_policy_survives_memory_clear(sql_message_store: Path) -> None:
-    from services.customer_ai.leftover_reserve import leftover_policy_for
-    from services.membership.pending_settlement import (
+    from services.billing.membership.pending_settlement import (
         _ITEMS,
         get_pending,
         known_settlement_tenant_ids,
         record_hold,
         reset_pending_settlements_for_tests,
     )
+    from services.brain.leftover_reserve import leftover_policy_for
 
     reset_pending_settlements_for_tests()
     record_hold(
@@ -308,7 +308,7 @@ def test_sql_settlement_policy_survives_memory_clear(sql_message_store: Path) ->
     assert leftover_policy_for("sql-pin", "conv-pin") == "legacy_credits"
     assert get_pending("sql-pin", "rid-pin", "mid-pin") is not None
     assert "sql-pin" in known_settlement_tenant_ids()
-    from services.membership.pending_settlement import upsert
+    from services.billing.membership.pending_settlement import upsert
 
     upsert(
         tenant_id="sql-pin",
@@ -324,8 +324,8 @@ def test_sql_settlement_policy_survives_memory_clear(sql_message_store: Path) ->
 
 
 def test_sql_settlement_hydrate_loads_pg_rows(sql_message_store: Path) -> None:
-    from services.membership import pending_settlement as pending
-    from services.membership.pending_settlement import record_hold, reset_pending_settlements_for_tests
+    from services.billing.membership import pending_settlement as pending
+    from services.billing.membership.pending_settlement import record_hold, reset_pending_settlements_for_tests
 
     reset_pending_settlements_for_tests()
     record_hold(
@@ -344,8 +344,8 @@ def test_sql_settlement_hydrate_loads_pg_rows(sql_message_store: Path) -> None:
 
 
 def test_sql_conversation_survives_memory_clear(sql_message_store: Path) -> None:
-    from services.customer_ai.contracts.turn import ConversationState
-    from services.customer_ai.conversation_store import (
+    from services.brain.contracts.turn import ConversationState
+    from services.brain.conversation_store import (
         _MEMORY,
         load_conversation,
         reset_conversation_store_for_tests,
@@ -366,8 +366,8 @@ def test_sql_conversation_survives_memory_clear(sql_message_store: Path) -> None
     assert raw["state"]["greeted"] is True
     assert raw["pending"][0]["task_id"] == "book"
     assert raw["history"][0]["text"] == "yes"
-    from services.customer_ai.conversation_store import known_conversation_tenant_ids
-    from services.membership.cost_dashboard import global_dashboard
+    from services.billing.membership.cost_dashboard import global_dashboard
+    from services.brain.conversation_store import known_conversation_tenant_ids
 
     _MEMORY.clear()
     assert "sql-conv" in known_conversation_tenant_ids()
@@ -376,8 +376,8 @@ def test_sql_conversation_survives_memory_clear(sql_message_store: Path) -> None
 
 
 def test_sql_catalog_survives_memory_clear(sql_message_store: Path) -> None:
-    from services.membership import catalog_admin as admin
-    from services.membership.catalog_admin import current_catalog, reset_catalog_admin_for_tests, update_draft
+    from services.billing.membership import catalog_admin as admin
+    from services.billing.membership.catalog_admin import current_catalog, reset_catalog_admin_for_tests, update_draft
 
     reset_catalog_admin_for_tests()
     update_draft(
@@ -396,7 +396,7 @@ def test_sql_catalog_survives_memory_clear(sql_message_store: Path) -> None:
 
 
 def test_sql_leftover_index_survives_memory_clear(sql_message_store: Path) -> None:
-    from services.membership.credit_reservation_index import (
+    from services.billing.membership.credit_reservation_index import (
         _ITEMS,
         known_index_tenant_ids,
         mark_closed,
@@ -412,7 +412,7 @@ def test_sql_leftover_index_survives_memory_clear(sql_message_store: Path) -> No
         request_id="wa:sql-idx",
         operation_type="whatsapp_customer_reply",
     )
-    from services.membership import credit_reservation_index as index_mod
+    from services.billing.membership import credit_reservation_index as index_mod
 
     _ITEMS.clear()
     index_mod._HYDRATED = False
@@ -427,7 +427,7 @@ def test_sql_leftover_index_survives_memory_clear(sql_message_store: Path) -> No
 
 
 def test_sql_processing_budgets_survive_memory_clear(sql_message_store: Path) -> None:
-    from services.membership.processing_budgets import (
+    from services.billing.membership.processing_budgets import (
         _ATTEMPTS,
         _CONCURRENT,
         _JOBS,
@@ -460,8 +460,8 @@ def test_sql_processing_budgets_survive_memory_clear(sql_message_store: Path) ->
 
 
 def test_sql_durable_tables_ready_without_enabling(sql_message_store: Path) -> None:
-    from services.membership.activation_readiness import activation_readiness
-    from services.membership.durable_tables import DURABLE_TABLES, durable_table_report
+    from services.billing.membership.activation_readiness import activation_readiness
+    from services.billing.membership.durable_tables import DURABLE_TABLES, durable_table_report
 
     report = durable_table_report()
     assert report["ready"] is True

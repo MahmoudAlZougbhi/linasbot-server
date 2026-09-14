@@ -118,19 +118,19 @@ def patch_entitlements(
     tenant_id: str = "biz",
     ent_root: Path | None = None,
 ) -> None:
-    from services.billing_backend import billing_uses_postgres
-    from services.entitlements_service import EntitlementsStore
+    from services.billing.billing_backend import billing_uses_postgres
+    from services.billing.entitlements_service import EntitlementsStore
     from tests.web_chat_acceptance_billing import wire_pg_billing_stores
 
     if billing_uses_postgres():
         wire_pg_billing_stores(monkeypatch)
-        from services.entitlements_service import entitlements_store
+        from services.billing.entitlements_service import entitlements_store
 
         entitlements_store.set_plan(tenant_id=tenant_id, plan_id="max", status="active", source="admin")
         return
 
-    from services import entitlements_service as es
-    from services.membership import web_gate as wg
+    from services.billing import entitlements_service as es
+    from services.billing.membership import web_gate as wg
 
     root = ent_root or Path(tempfile.mkdtemp(prefix="web_chat_ent_"))
     ent = EntitlementsStore(root=root / "ent")

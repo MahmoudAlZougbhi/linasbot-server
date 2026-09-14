@@ -38,7 +38,7 @@ load_env()
 os.environ.setdefault("LINASBOT_DATA_ROOT", "/opt/linasbot_data")
 os.environ.setdefault("ENVIRONMENT", "production")
 
-from services.cm.constants import (
+from services.ai_setup.constants import (
     CM_SECTIONS,
     cm_disable_linas_legacy_bridge,
     cm_emergency_force_legacy,
@@ -48,9 +48,9 @@ from services.cm.constants import (
     tenant_has_published_cm,
     tenant_uses_cm_runtime,
 )
-from services.cm.storage import get_draft
-from services.cm.validation import validate_cm
-from services.cm.version_store import load_published_content, read_published_pointer
+from services.ai_setup.storage import get_draft
+from services.ai_setup.validation import validate_cm
+from services.ai_setup.version_store import load_published_content, read_published_pointer
 from services.social_contact_routing import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
 
 EXPECTED_PHONES = {re.sub(r"\D", "", v) for v in DEFAULT_SOCIAL_WHATSAPP_CONTACTS.values()}

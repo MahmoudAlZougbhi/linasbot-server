@@ -6,10 +6,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from services.cm.schemas import DynamicMessageRecord, DynamicMessagesSection, FaqRecord, FaqSection, FaqVariant
-from services.customer_ai.faq_exact import faq_fast_path_safe, find_exact_faq
-from services.customer_ai.greeting import evaluate_greeting, inactivity_threshold
-from services.customer_ai.history import build_history_snapshot
+from services.ai_setup.schemas import DynamicMessageRecord, DynamicMessagesSection, FaqRecord, FaqSection, FaqVariant
+from services.brain.faq_exact import faq_fast_path_safe, find_exact_faq
+from services.brain.greeting import evaluate_greeting, inactivity_threshold
+from services.brain.history import build_history_snapshot
 
 
 def test_faq_exact_sends_approved_answer_only() -> None:
@@ -57,7 +57,7 @@ def test_greeting_uses_existing_12h_window(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_greeting_session_start(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.customer_ai.greeting.load_dynamic_messages",
+        "services.brain.greeting.load_dynamic_messages",
         lambda _tid: DynamicMessagesSection(
             items=[
                 DynamicMessageRecord(
@@ -97,12 +97,12 @@ def test_greeting_session_start(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_generated_dm_prepends_greeting(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
-    from services.customer_ai.contracts.turn import CustomerTurn
-    from services.customer_ai.turn_pipeline import _apply_greeting
+    from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
+    from services.brain.contracts.turn import CustomerTurn
+    from services.brain.turn_pipeline import _apply_greeting
 
     monkeypatch.setattr(
-        "services.customer_ai.turn_pipeline.evaluate_greeting",
+        "services.brain.turn_pipeline.evaluate_greeting",
         lambda **_k: type("G", (), {"eligible": True, "text": "Hello there"})(),
     )
     turn = CustomerTurn(tenant_id="t1", invocation_kind="dm")
@@ -120,17 +120,17 @@ def test_generated_dm_prepends_greeting(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_greeting_only_does_not_prepend_canned_line(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
-    from services.customer_ai.contracts.turn import CustomerTurn
-    from services.customer_ai.greeting import is_greeting_only
-    from services.customer_ai.turn_pipeline import _apply_greeting
+    from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
+    from services.brain.contracts.turn import CustomerTurn
+    from services.brain.greeting import is_greeting_only
+    from services.brain.turn_pipeline import _apply_greeting
 
     assert is_greeting_only("Hi") is True
     assert is_greeting_only("marhaba kifak") is True
     assert is_greeting_only("مرحبا كيفك") is True
     assert is_greeting_only("Hi, what time do you open?") is False
     monkeypatch.setattr(
-        "services.customer_ai.turn_pipeline.evaluate_greeting",
+        "services.brain.turn_pipeline.evaluate_greeting",
         lambda **_k: type("G", (), {"eligible": True, "text": "Hello from Lina's Laser"})(),
     )
     turn = CustomerTurn(tenant_id="t1", invocation_kind="dm")
@@ -144,9 +144,9 @@ def test_greeting_only_does_not_prepend_canned_line(monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.asyncio
 async def test_greeting_only_uses_identity_not_agent_retrieve(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
-    from services.customer_ai.contracts.turn import CustomerTurn
-    from services.customer_ai.turn_pipeline import run_dm_after_gates
+    from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+    from services.brain.contracts.turn import CustomerTurn
+    from services.brain.turn_pipeline import run_dm_after_gates
 
     async def no_confirm(*_a, **_k):
         return None
@@ -165,9 +165,9 @@ async def test_greeting_only_uses_identity_not_agent_retrieve(monkeypatch: pytes
             extra={"path": "identity_greeting"},
         )
 
-    monkeypatch.setattr("services.customer_ai.turn_pipeline.try_confirm_pending", no_confirm)
-    monkeypatch.setattr("services.customer_ai.agent.greeting_turn.identity_greeting_result", identity_hi)
-    monkeypatch.setattr("services.customer_ai.agent.loop.run_agentic_dm_path", boom)
+    monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", no_confirm)
+    monkeypatch.setattr("services.brain.agent.greeting_turn.identity_greeting_result", identity_hi)
+    monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", boom)
     turn = CustomerTurn(
         tenant_id="linas", conversation_id="c-hi", event_ids=["m-hi"], extra={"response_language": "en"}
     )
@@ -181,8 +181,8 @@ async def test_greeting_only_uses_identity_not_agent_retrieve(monkeypatch: pytes
 async def test_greeting_only_does_not_retrieve_knowledge_when_identity_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.customer_ai.contracts.turn import CustomerTurn
-    from services.customer_ai.turn_pipeline import run_dm_after_gates
+    from services.brain.contracts.turn import CustomerTurn
+    from services.brain.turn_pipeline import run_dm_after_gates
 
     async def no_confirm(*_a, **_k):
         return None
@@ -193,9 +193,9 @@ async def test_greeting_only_does_not_retrieve_knowledge_when_identity_fails(
     async def boom(*_a, **_k):
         raise AssertionError("greeting-only must not retrieve Knowledge SOPs")
 
-    monkeypatch.setattr("services.customer_ai.turn_pipeline.try_confirm_pending", no_confirm)
-    monkeypatch.setattr("services.customer_ai.agent.greeting_turn.identity_greeting_result", no_greet)
-    monkeypatch.setattr("services.customer_ai.agent.loop.run_agentic_dm_path", boom)
+    monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", no_confirm)
+    monkeypatch.setattr("services.brain.agent.greeting_turn.identity_greeting_result", no_greet)
+    monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", boom)
     turn = CustomerTurn(tenant_id="linas", conversation_id="c-hi2", event_ids=["m-hi2"])
     out = await run_dm_after_gates(turn, message="Hi", channel="instagram_dm")
     assert out.envelope.decision == "no_reply"
@@ -204,7 +204,7 @@ async def test_greeting_only_does_not_retrieve_knowledge_when_identity_fails(
 
 def test_greeting_follows_inbound_language(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.customer_ai.greeting.load_dynamic_messages",
+        "services.brain.greeting.load_dynamic_messages",
         lambda _tid: DynamicMessagesSection(
             items=[
                 DynamicMessageRecord(
@@ -239,7 +239,7 @@ def test_greeting_follows_inbound_language(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_greeting_not_repeated_after_history_hit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.customer_ai.greeting.load_dynamic_messages",
+        "services.brain.greeting.load_dynamic_messages",
         lambda _tid: DynamicMessagesSection(
             items=[
                 DynamicMessageRecord(
@@ -269,16 +269,16 @@ def test_greeting_not_repeated_after_history_hit(monkeypatch: pytest.MonkeyPatch
 
 @pytest.mark.asyncio
 async def test_flag_on_exact_faq_is_deterministic(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.faq_exact import FaqExactHit
-    from services.customer_ai.gates import GateDecision
+    from services.brain.faq_exact import FaqExactHit
+    from services.brain.gates import GateDecision
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 
     monkeypatch.setattr(
-        "services.customer_ai.runtime.evaluate_gates",
+        "services.brain.runtime.evaluate_gates",
         lambda turn, apply_credits=True, message="": GateDecision(True, "ok"),
     )
     monkeypatch.setattr(
-        "services.customer_ai.faq_turn.find_published_exact_faq",
+        "services.brain.faq_turn.find_published_exact_faq",
         lambda _tid, _msg: FaqExactHit("faq1", "en", "hours?", "We reply within one business day.", 1),
     )
     out = await run_customer_reply_v2_dm(
@@ -295,8 +295,8 @@ async def test_flag_on_exact_faq_is_deterministic(monkeypatch: pytest.MonkeyPatc
 
 
 def test_comment_inbound_includes_post_photo_or_video() -> None:
-    from services.customer_ai.contracts.turn import CustomerTurn
-    from services.customer_ai.turn_pipeline import inbound_task_text
+    from services.brain.contracts.turn import CustomerTurn
+    from services.brain.turn_pipeline import inbound_task_text
 
     turn = CustomerTurn(
         tenant_id="t1",

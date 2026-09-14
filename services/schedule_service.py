@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from services.entitlements_service import assert_feature
+from services.billing.entitlements_service import assert_feature
 from services.job_queue import job_queue
 from storage.persistent_storage import _DATA_ROOT
 

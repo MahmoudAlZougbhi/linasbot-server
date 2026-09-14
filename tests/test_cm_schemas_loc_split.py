@@ -1,10 +1,10 @@
-"""LOC split: services.cm.schemas re-exports content models under 500 lines."""
+"""LOC split: services.ai_setup.schemas re-exports content models under 500 lines."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from services.cm.schemas import (
+from services.ai_setup.schemas import (
     AiBasics,
     AiLimitsSection,
     BranchRecord,
@@ -20,13 +20,13 @@ def _line_count(rel: str) -> int:
 
 
 def test_cm_schema_modules_under_500_lines() -> None:
-    assert _line_count("services/cm/schemas.py") < 500
-    assert _line_count("services/cm/schemas_content.py") < 500
-    assert _line_count("services/cm/schemas_requests.py") < 500
+    assert _line_count("services/ai_setup/schemas.py") < 500
+    assert _line_count("services/ai_setup/schemas_content.py") < 500
+    assert _line_count("services/ai_setup/schemas_requests.py") < 500
 
 
 def test_public_schemas_import_still_exposes_content_and_runtime() -> None:
-    from services.cm.schemas import RequestsAppointmentsSection
+    from services.ai_setup.schemas import RequestsAppointmentsSection
 
     assert LocalizedLabels(en="Hello").en == "Hello"
     assert AiBasics().assistant_name == ""

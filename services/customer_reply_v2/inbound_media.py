@@ -124,7 +124,7 @@ async def store_inbound_image_from_url(user_data: dict[str, Any], url: str) -> s
     blob = fetched.get("bytes") or b""
     tenant_id = str(user_data.get("tenant_id") or user_data.get("tenantId") or "").strip()
     if blob and tenant_id:
-        from services.customer_ai.media_analysis.describe import describe_stills
+        from services.brain.media.describe import describe_stills
 
         visual = await describe_stills([blob], tenant_id=tenant_id, kind="image")
         if visual:
@@ -384,7 +384,7 @@ async def _ingest_image(
 def _journal_stt(tenant_id: str, spoken: dict[str, Any], filename: str) -> None:
     if not tenant_id:
         return
-    from services.membership.provider_expense import record_pending_provider
+    from services.billing.membership.provider_expense import record_pending_provider
 
     record_pending_provider(
         event_id=f"stt:{tenant_id}:{filename}",

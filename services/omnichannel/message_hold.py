@@ -16,11 +16,11 @@ def release_unsent_omni_hold(
 ) -> None:
     data = payload if isinstance(payload, dict) else {}
     if reservation_id:
-        from services.customer_ai.leftover_reserve import release_leftover_reply
+        from services.brain.leftover_reserve import release_leftover_reply
 
         release_leftover_reply(tenant_id, reservation_id)
-    from services.customer_ai.billing import settle_after_send
-    from services.customer_ai.history_ids import message_id_for_brain
+    from services.brain.billing import settle_after_send
+    from services.brain.history_ids import message_id_for_brain
 
     inbound = message_id_for_brain(data)
     comment_id = str(data.get("comment_id") or data.get("provider_event_id") or "")

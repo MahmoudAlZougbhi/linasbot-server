@@ -202,12 +202,12 @@ def resolve_social_whatsapp_number(env_name: str, *, tenant_id: str) -> str | No
         return override
 
     # CM AI CONTROL PLANE — published handoff contacts when this tenant uses CM runtime.
-    from services.cm.constants import tenant_uses_cm_runtime
+    from services.ai_setup.constants import tenant_uses_cm_runtime
 
     if tenant_uses_cm_runtime(tenant):
         try:
-            from services.cm.schemas import HandoffPolicy
-            from services.cm.version_store import load_published_content
+            from services.ai_setup.schemas import HandoffPolicy
+            from services.ai_setup.version_store import load_published_content
 
             _pointer, sections = load_published_content(tenant)
             policy = HandoffPolicy.model_validate(sections.get("handoff") or {})

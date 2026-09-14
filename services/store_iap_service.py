@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 from typing import Any, Literal
 
-from services.entitlements_service import EntitlementStatus, apply_store_notification
+from services.billing.entitlements_service import EntitlementStatus, apply_store_notification
+from services.billing.plan_economics import PLAN_PRICES_USD
 from services.iap_product_catalog import subscription_product_map
-from services.plan_economics import PLAN_PRICES_USD
 
 StoreSource = Literal["apple", "google"]
 
@@ -46,8 +46,8 @@ def iap_config_status() -> dict[str, Any]:
     apple_bundle = bool((os.getenv("APPLE_BUNDLE_ID") or "com.linasai.app").strip())
     google_sa = bool((os.getenv("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH") or "").strip())
     google_pkg = bool((os.getenv("GOOGLE_PLAY_PACKAGE_NAME") or "com.linasai.app").strip())
-    from services.membership.catalog_revenue import intended_price_usd
-    from services.membership.message_catalog import PUBLIC_PAID_PLAN_IDS
+    from services.billing.membership.catalog_revenue import intended_price_usd
+    from services.billing.membership.message_catalog import PUBLIC_PAID_PLAN_IDS
 
     return {
         "plans": PLAN_PRICES_USD,

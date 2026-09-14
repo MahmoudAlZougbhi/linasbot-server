@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from services.membership.catalog_revenue import intended_price_usd, live_checkout_mrr, revenue_pair
-from services.membership.cost_dashboard import global_dashboard
-from services.membership.expense_journal import expense_environment, record_expense, reset_expenses_for_tests
-from services.plan_economics import PLAN_PRICES_USD
+from services.billing.membership.catalog_revenue import intended_price_usd, live_checkout_mrr, revenue_pair
+from services.billing.membership.cost_dashboard import global_dashboard
+from services.billing.membership.expense_journal import expense_environment, record_expense, reset_expenses_for_tests
+from services.billing.plan_economics import PLAN_PRICES_USD
 
 
 @pytest.fixture(autouse=True)

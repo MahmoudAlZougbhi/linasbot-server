@@ -256,7 +256,7 @@ for root in repo_roots:
         sys.path.insert(0, str(root))
         break
 from services.meta_surface_secret_separation import evaluate_meta_surface_secret_separation
-from services.membership.message_flags import activation_flags_report
+from services.billing.membership.message_flags import activation_flags_report
 
 flag_report = activation_flags_report(values)
 for row in flag_report["flags"]:
@@ -341,8 +341,8 @@ if owners < 1 and active < 1:
     raise SystemExit("[preflight] NO_EXISTING_ADMIN_USERS")
 print("[preflight] existing_admin_retained=true (hashes unchanged by deploy; no default account created)")
 
-from services.membership.durable_tables import durable_table_report
-from services.membership.pg_store import optional_message_session, store_backend, tables_ready
+from services.billing.membership.durable_tables import durable_table_report
+from services.billing.membership.pg_store import optional_message_session, store_backend, tables_ready
 
 print(f"[preflight] message_store_backend={store_backend()}")
 tables_ok = False

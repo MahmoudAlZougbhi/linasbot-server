@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from services.customer_ai.leftover_reserve import leftover_policy_for, reset_leftover_pins_for_tests
-from services.membership.credit_reservation_index import open_counts, reset_credit_reservation_index_for_tests
-from services.membership.pending_settlement import reset_pending_settlements_for_tests
+from services.billing.membership.credit_reservation_index import open_counts, reset_credit_reservation_index_for_tests
+from services.billing.membership.pending_settlement import reset_pending_settlements_for_tests
+from services.brain.leftover_reserve import leftover_policy_for, reset_leftover_pins_for_tests
 from services.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
 
 

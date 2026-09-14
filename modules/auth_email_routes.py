@@ -17,7 +17,7 @@ from modules.auth_api_common import (
 )
 from modules.core import app
 from services.dashboard_session_service import SESSION_COOKIE_NAME, session_service
-from services.user_service import user_service
+from services.team.user_service import user_service
 
 
 @app.post("/api/auth/forgot-password")

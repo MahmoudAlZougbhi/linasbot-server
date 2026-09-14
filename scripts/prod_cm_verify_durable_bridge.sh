@@ -43,8 +43,8 @@ from pathlib import Path
 os.environ.setdefault("LINASBOT_DATA_ROOT", "/opt/linasbot_data")
 os.environ.setdefault("ENVIRONMENT", "production")
 
-from services.cm.constants import cm_disable_linas_legacy_bridge, tenant_has_published_cm, tenant_uses_cm_runtime
-from services.cm.durable_flags import (
+from services.ai_setup.constants import cm_disable_linas_legacy_bridge, tenant_has_published_cm, tenant_uses_cm_runtime
+from services.ai_setup.durable_flags import (
     CM_DISABLE_LINAS_LEGACY_BRIDGE,
     default_production_env_paths,
     parse_env_bool,

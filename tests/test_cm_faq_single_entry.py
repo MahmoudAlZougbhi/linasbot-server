@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.cm.constants import cm_faq_canonical
+from services.ai_setup.constants import cm_faq_canonical
 
 pytestmark = pytest.mark.usefixtures("enable_faq_plan")
 
@@ -54,11 +54,11 @@ async def test_livechat_like_still_writes_cm_faq_only(monkeypatch: pytest.Monkey
         return "السعر عشرين دولار."
 
     monkeypatch.setattr(
-        "services.cm.faq_integration.language_detection_service.translate_training_pair",
+        "services.ai_setup.faq_integration.language_detection_service.translate_training_pair",
         _fake_translate,
     )
     monkeypatch.setattr(
-        "services.cm.faq_integration._translate_to_arabic_script",
+        "services.ai_setup.faq_integration._translate_to_arabic_script",
         _fake_ar,
     )
 
@@ -74,7 +74,7 @@ async def test_livechat_like_still_writes_cm_faq_only(monkeypatch: pytest.Monkey
         raising=False,
     )
 
-    from services.cm.faq_integration import create_faq_pair_from_livechat, list_cm_faq
+    from services.ai_setup.faq_integration import create_faq_pair_from_livechat, list_cm_faq
 
     result = await create_faq_pair_from_livechat(
         question="shu se3r el laser?",

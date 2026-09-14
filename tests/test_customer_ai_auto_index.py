@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from services.customer_ai.providers.voyage_client import VoyageVectors
-from services.customer_ai.search.index_lifecycle import get_lifecycle, reset_lifecycle_for_tests
-from services.customer_ai.search.store import reset_memory_store, tenant_pointer_ready
-from services.membership.processing_budgets import reset_processing_budgets_for_tests
+from services.billing.membership.processing_budgets import reset_processing_budgets_for_tests
+from services.brain.providers.voyage_client import VoyageVectors
+from services.brain.search.index_lifecycle import get_lifecycle, reset_lifecycle_for_tests
+from services.brain.search.store import reset_memory_store, tenant_pointer_ready
 
 
 @pytest.fixture()
@@ -44,15 +44,15 @@ def mock_voyage(monkeypatch: pytest.MonkeyPatch) -> None:
         sid = getattr(space, "space_id", "knowledge")
         return [VoyageVectors(space_id=str(sid), vectors=[[0.3, 0.1, 0.0, 0.0] for _ in group]) for group in groups]
 
-    monkeypatch.setattr("services.customer_ai.search.index_job.voyage_configured", lambda: True)
-    monkeypatch.setattr("services.customer_ai.search.contextual_index.voyage_configured", lambda: True)
-    monkeypatch.setattr("services.customer_ai.search.index_job.embed_texts", _texts)
-    monkeypatch.setattr("services.customer_ai.search.contextual_index.embed_contextual_groups", _groups)
+    monkeypatch.setattr("services.brain.search.index_job.voyage_configured", lambda: True)
+    monkeypatch.setattr("services.brain.search.contextual_index.voyage_configured", lambda: True)
+    monkeypatch.setattr("services.brain.search.index_job.embed_texts", _texts)
+    monkeypatch.setattr("services.brain.search.contextual_index.embed_contextual_groups", _groups)
 
 
 @pytest.mark.asyncio
 async def test_new_tenant_publish_indexes_without_admin(tenant_fs: Path, mock_voyage: None) -> None:
-    from services.customer_ai.evals.auto_index_e2e import run_new_tenant_auto_index_e2e
+    from services.brain.evals.auto_index_e2e import run_new_tenant_auto_index_e2e
     from services.queues.handlers import get_handler
 
     assert get_handler("customer_ai_index") is not None
@@ -70,7 +70,7 @@ async def test_new_tenant_publish_indexes_without_admin(tenant_fs: Path, mock_vo
 
 @pytest.mark.asyncio
 async def test_durable_queue_marks_building_without_inline(monkeypatch: pytest.MonkeyPatch, tenant_fs: Path) -> None:
-    from services.customer_ai.search.index_schedule import schedule_tenant_index
+    from services.brain.search.index_schedule import schedule_tenant_index
 
     captured: dict[str, object] = {}
 
@@ -88,10 +88,10 @@ async def test_durable_queue_marks_building_without_inline(monkeypatch: pytest.M
             "manual_index_required": False,
         }
 
-    monkeypatch.setattr("services.customer_ai.search.index_schedule.uses_index_worker", lambda: True)
-    monkeypatch.setattr("services.customer_ai.search.index_schedule.enqueue_tenant_index", _enqueue)
+    monkeypatch.setattr("services.brain.search.index_schedule.uses_index_worker", lambda: True)
+    monkeypatch.setattr("services.brain.search.index_schedule.enqueue_tenant_index", _enqueue)
     monkeypatch.setattr(
-        "services.customer_ai.search.index_schedule.published_revision",
+        "services.brain.search.index_schedule.published_revision",
         lambda _tid: "rev-1",
     )
     out = await schedule_tenant_index("shop-a", revision="rev-1", reason="publish")
@@ -109,9 +109,9 @@ def result_not_inlined(out: dict[str, object]) -> bool:
 async def test_embed_failure_keeps_old_active_and_retries(
     tenant_fs: Path, mock_voyage: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from services.cm.publish import publish_draft
-    from services.customer_ai.evals.auto_index_e2e import seed_minimal_setup
-    from services.customer_ai.search.index_job import index_published_tenant
+    from services.ai_setup.publish import publish_draft
+    from services.brain.evals.auto_index_e2e import seed_minimal_setup
+    from services.brain.search.index_job import index_published_tenant
 
     seed_minimal_setup("retry-shop", price="80 USD", faq=True)
     first = await publish_draft(tenant_id="retry-shop", published_by="tester")
@@ -122,9 +122,9 @@ async def test_embed_failure_keeps_old_active_and_retries(
     async def _boom(*_a: object, **_k: object) -> tuple[list[list[float]], int]:
         raise RuntimeError("voyage_down")
 
-    from services.customer_ai.search.index_job import embed_document_rows_incremental as real_incremental
+    from services.brain.search.index_job import embed_document_rows_incremental as real_incremental
 
-    monkeypatch.setattr("services.customer_ai.search.index_job.embed_document_rows_incremental", _boom)
+    monkeypatch.setattr("services.brain.search.index_job.embed_document_rows_incremental", _boom)
     failed = await index_published_tenant("retry-shop", revision="will-fail")
     assert failed["ready"] is False
     assert get_lifecycle("retry-shop")["status"] == "FAILED"
@@ -132,7 +132,7 @@ async def test_embed_failure_keeps_old_active_and_retries(
     assert get_lifecycle("retry-shop")["active_version"] == old or old == first.content_version_id
 
     monkeypatch.setattr(
-        "services.customer_ai.search.index_job.embed_document_rows_incremental",
+        "services.brain.search.index_job.embed_document_rows_incremental",
         real_incremental,
     )
     again = await index_published_tenant("retry-shop", revision=first.content_version_id)
@@ -142,12 +142,12 @@ async def test_embed_failure_keeps_old_active_and_retries(
 
 @pytest.mark.asyncio
 async def test_tenant_isolation_and_product_change_enqueues(tenant_fs: Path, mock_voyage: None) -> None:
-    from services.cm.publish import publish_draft
-    from services.customer_ai.evals.auto_index_e2e import seed_minimal_setup
-    from services.customer_ai.providers.spaces import ENTITY_DOCUMENT
-    from services.customer_ai.search.index_schedule import run_tenant_index_job
-    from services.customer_ai.search.invalidate import notify_product_change
-    from services.customer_ai.search.store import query_similar
+    from services.ai_setup.publish import publish_draft
+    from services.brain.evals.auto_index_e2e import seed_minimal_setup
+    from services.brain.providers.spaces import ENTITY_DOCUMENT
+    from services.brain.search.index_schedule import run_tenant_index_job
+    from services.brain.search.invalidate import notify_product_change
+    from services.brain.search.store import query_similar
 
     seed_minimal_setup("iso-a", price="80 USD", faq=True)
     seed_minimal_setup("iso-b", price="80 USD", faq=True)
@@ -180,7 +180,7 @@ async def test_tenant_isolation_and_product_change_enqueues(tenant_fs: Path, moc
 
 
 def test_gate_accepts_retrieval_payload_with_status_key() -> None:
-    from services.customer_ai.evals.linas_real_index import _gate
+    from services.brain.evals.linas_real_index import _gate
 
     retrieval = {"status": "PASS", "detail": "recall_ok", "recall": 1.0, "tenant_id": "linas"}
     row = _gate(str(retrieval.get("status") or "FAIL"), str(retrieval.get("detail") or ""), **retrieval)
@@ -191,7 +191,7 @@ def test_gate_accepts_retrieval_payload_with_status_key() -> None:
 
 
 def test_isolation_probe_passes_before_first_active_pointer(tenant_fs: Path) -> None:
-    from services.customer_ai.evals.linas_real_index import isolation_probe
+    from services.brain.evals.linas_real_index import isolation_probe
 
     row = isolation_probe("brand-new-shop")
     assert row["status"] == "PASS"
@@ -201,7 +201,7 @@ def test_isolation_probe_passes_before_first_active_pointer(tenant_fs: Path) -> 
 
 
 def test_real_linas_resolver_refuses_lab(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.evals.linas_real_index import resolve_real_tenant_id
+    from services.brain.evals.linas_real_index import resolve_real_tenant_id
 
     monkeypatch.setenv("LINAS_REAL_TENANT_ID", "linas-lab")
     with pytest.raises(RuntimeError, match="refusing_lab"):
@@ -211,7 +211,7 @@ def test_real_linas_resolver_refuses_lab(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_owner_status_has_no_secret_keys() -> None:
-    from services.customer_ai.search.index_lifecycle import owner_status, upsert_lifecycle
+    from services.brain.search.index_lifecycle import owner_status, upsert_lifecycle
 
     upsert_lifecycle("vis-shop", status="ACTIVE", failure_reason="provider_error", embedding_model="voyage-4-large")
     row = owner_status("vis-shop")
@@ -224,7 +224,7 @@ def test_owner_status_has_no_secret_keys() -> None:
 
 
 def test_backfill_is_bounded(tenant_fs: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.search import index_backfill
+    from services.brain.search import index_backfill
 
     monkeypatch.setattr(index_backfill, "published_tenant_ids", lambda: ["t1", "t2", "t3", "t4"])
     monkeypatch.setattr(index_backfill, "tenant_needs_index", lambda _tid: True)
@@ -232,7 +232,7 @@ def test_backfill_is_bounded(tenant_fs: Path, monkeypatch: pytest.MonkeyPatch) -
     async def _sched(tid: str, **_k: object) -> dict[str, object]:
         return {"queued": True, "health": "BUILDING", "reason": "backfill"}
 
-    monkeypatch.setattr("services.customer_ai.search.index_schedule.schedule_tenant_index", _sched)
+    monkeypatch.setattr("services.brain.search.index_schedule.schedule_tenant_index", _sched)
 
     async def _run() -> None:
         out = await index_backfill.enqueue_stale_or_missing(limit=2, skip={"t1"})

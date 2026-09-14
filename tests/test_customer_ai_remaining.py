@@ -6,36 +6,36 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.cm.schemas import CommentRule, CommentsSection, RestrictedPolicy, RestrictedTopic
-from services.customer_ai.actions.confirm import confirmation_valid, material_fields_changed
-from services.customer_ai.actions.drafts import apply_draft_update
-from services.customer_ai.actions.resources import resolve_authorized_resource, send_resource
-from services.customer_ai.comments.pipeline import deterministic_comment_result, winning_comment_mode
-from services.customer_ai.contracts.actions import ActionProposal, ActionProposalSet
-from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
-from services.customer_ai.contracts.turn import ConversationState, CustomerTurn, MediaView
-from services.customer_ai.faq_freshness import faq_static_allowed, looks_like_dynamic_fact
-from services.customer_ai.followup.revalidate import revalidate_followup_send
-from services.customer_ai.gates import evaluate_gates
-from services.customer_ai.outbox_test import reset_saved_outbox, save_envelope_for_test, saved_outbox
-from services.customer_ai.policies.privacy import public_comment_safe
-from services.customer_ai.search.invalidate import mark_products_stale
-from services.customer_ai.search.store import query_similar, reset_memory_store, write_documents
-from services.customer_ai.turn_pipeline import inbound_task_text
-from services.customer_ai.visual import visual_retrieval_decision
+from services.ai_setup.schemas import CommentRule, CommentsSection, RestrictedPolicy, RestrictedTopic
+from services.brain.actions.confirm import confirmation_valid, material_fields_changed
+from services.brain.actions.drafts import apply_draft_update
+from services.brain.actions.resources import resolve_authorized_resource, send_resource
+from services.brain.comments.pipeline import deterministic_comment_result, winning_comment_mode
+from services.brain.contracts.actions import ActionProposal, ActionProposalSet
+from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
+from services.brain.contracts.turn import ConversationState, CustomerTurn, MediaView
+from services.brain.faq_freshness import faq_static_allowed, looks_like_dynamic_fact
+from services.brain.followup.revalidate import revalidate_followup_send
+from services.brain.gates import evaluate_gates
+from services.brain.outbox_test import reset_saved_outbox, save_envelope_for_test, saved_outbox
+from services.brain.policies.privacy import public_comment_safe
+from services.brain.search.invalidate import mark_products_stale
+from services.brain.search.store import query_similar, reset_memory_store, write_documents
+from services.brain.turn_pipeline import inbound_task_text
+from services.brain.visual import visual_retrieval_decision
 
 
 def test_restricted_gate_runs_before_faq(monkeypatch: pytest.MonkeyPatch) -> None:
     topic = RestrictedTopic(id="tattoo_removal", keywords=["tattoo"], active=True)
     monkeypatch.setattr(
-        "services.customer_ai.policies.restricted.load_restricted_policy",
+        "services.brain.policies.restricted.load_restricted_policy",
         lambda _tid: RestrictedPolicy(topics=[topic]),
     )
     monkeypatch.setattr(
-        "services.customer_ai.gates.read_published_pointer",
+        "services.brain.gates.read_published_pointer",
         lambda _tid: SimpleNamespace(revision="1"),
     )
-    monkeypatch.setattr("services.membership.generative_gate.generative_block_reason", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.billing.membership.generative_gate.generative_block_reason", lambda *_a, **_k: None)
     turn = CustomerTurn(tenant_id="t1", customer_id="u1")
     blocked = evaluate_gates(turn, apply_credits=False, message="do you do tattoo removal?")
     assert blocked.allow is False
@@ -52,14 +52,14 @@ def test_restricted_refuse_template_wins(monkeypatch: pytest.MonkeyPatch) -> Non
         refuse_template="We do not offer tattoo removal.",
     )
     monkeypatch.setattr(
-        "services.customer_ai.policies.restricted.load_restricted_policy",
+        "services.brain.policies.restricted.load_restricted_policy",
         lambda _tid: RestrictedPolicy(topics=[topic]),
     )
     monkeypatch.setattr(
-        "services.customer_ai.gates.read_published_pointer",
+        "services.brain.gates.read_published_pointer",
         lambda _tid: SimpleNamespace(revision="1"),
     )
-    monkeypatch.setattr("services.membership.generative_gate.generative_block_reason", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.billing.membership.generative_gate.generative_block_reason", lambda *_a, **_k: None)
     blocked = evaluate_gates(
         CustomerTurn(tenant_id="t1", customer_id="u1"),
         apply_credits=False,
@@ -70,7 +70,7 @@ def test_restricted_refuse_template_wins(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_safety_blocked_inbound_media_stops_turn(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.customer_ai.gates.read_published_pointer",
+        "services.brain.gates.read_published_pointer",
         lambda _tid: SimpleNamespace(revision="1"),
     )
     turn = CustomerTurn(tenant_id="t1", customer_id="u1", media=MediaView(safety_blocked=True))
@@ -81,7 +81,7 @@ def test_safety_blocked_inbound_media_stops_turn(monkeypatch: pytest.MonkeyPatch
 
 
 def test_conversation_store_isolates_same_conversation_id() -> None:
-    from services.customer_ai.conversation_store import (
+    from services.brain.conversation_store import (
         load_conversation,
         reset_conversation_store_for_tests,
         save_conversation,
@@ -108,9 +108,9 @@ def test_inbound_task_text_uses_transcript_and_file_extract() -> None:
 
 
 def test_live_human_control_blocks_turn(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.customer_ai.gates.live_handoff_active", lambda **_k: True)
+    monkeypatch.setattr("services.brain.gates.live_handoff_active", lambda **_k: True)
     monkeypatch.setattr(
-        "services.customer_ai.gates.read_published_pointer",
+        "services.brain.gates.read_published_pointer",
         lambda _tid: SimpleNamespace(revision="1"),
     )
     turn = CustomerTurn(tenant_id="t1", customer_id="u1")
@@ -119,9 +119,9 @@ def test_live_human_control_blocks_turn(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_shared_redis_takeover_blocks_without_local_flag(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.control import live_handoff_active
+    from services.brain.control import live_handoff_active
 
-    monkeypatch.setattr("services.customer_ai.control._local_takeover", lambda _uid: False)
+    monkeypatch.setattr("services.brain.control._local_takeover", lambda _uid: False)
     monkeypatch.setattr("services.scale.conversation_state_redis.get_takeover", lambda _key: True)
     monkeypatch.setattr(
         "services.scale.conversation_state_redis.shared_conv_state_fail_closed",
@@ -131,9 +131,9 @@ def test_shared_redis_takeover_blocks_without_local_flag(monkeypatch: pytest.Mon
 
 
 def test_shared_redis_unavailable_does_not_invent_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.control import live_handoff_active
+    from services.brain.control import live_handoff_active
 
-    monkeypatch.setattr("services.customer_ai.control._local_takeover", lambda _uid: False)
+    monkeypatch.setattr("services.brain.control._local_takeover", lambda _uid: False)
     monkeypatch.setattr("services.scale.conversation_state_redis.get_takeover", lambda _key: None)
     monkeypatch.setattr(
         "services.scale.conversation_state_redis.shared_conv_state_fail_closed",
@@ -143,9 +143,9 @@ def test_shared_redis_unavailable_does_not_invent_handoff(monkeypatch: pytest.Mo
 
 
 def test_stale_stored_handoff_clears_after_release(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.control import apply_live_control
+    from services.brain.control import apply_live_control
 
-    monkeypatch.setattr("services.customer_ai.control.live_handoff_active", lambda **_k: False)
+    monkeypatch.setattr("services.brain.control.live_handoff_active", lambda **_k: False)
     turn = CustomerTurn(
         tenant_id="t1",
         customer_id="u1",
@@ -195,7 +195,7 @@ def test_send_resource_rejects_url_and_wrong_tenant(monkeypatch: pytest.MonkeyPa
     assert receipt.reason == "invented_url"
 
     monkeypatch.setattr(
-        "services.customer_ai.actions.resources.resolve_published_resource",
+        "services.brain.actions.resources.resolve_published_resource",
         lambda **_k: {"ok": False, "error": "resource_not_found"},
     )
     missing = resolve_authorized_resource(tenant_id="t1", resource_ref="res_other")
@@ -204,10 +204,10 @@ def test_send_resource_rejects_url_and_wrong_tenant(monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.asyncio
 async def test_execute_send_resource_pending(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.actions.execute import execute_actions
+    from services.brain.actions.execute import execute_actions
 
     monkeypatch.setattr(
-        "services.customer_ai.actions.resources.resolve_published_resource",
+        "services.brain.actions.resources.resolve_published_resource",
         lambda **_k: {
             "ok": True,
             "resource": {"resource_ref": "res_1", "tenant_id": "t1", "source_item_id": "knowledge:k1"},
@@ -268,7 +268,7 @@ def test_public_comment_does_not_claim_unsent_dm(monkeypatch: pytest.MonkeyPatch
         ]
     )
     monkeypatch.setattr(
-        "services.customer_ai.comments.pipeline.load_published_comments_section",
+        "services.brain.comments.pipeline.load_published_comments_section",
         lambda _tid: section,
     )
     mode, decision = winning_comment_mode(tenant_id="t1", comment_text="price?")
@@ -325,7 +325,7 @@ def test_product_change_marks_index_stale() -> None:
         ],
         [[1.0, 0.0]],
     )
-    from services.customer_ai.search.store import activate_pointer
+    from services.brain.search.store import activate_pointer
 
     activate_pointer(None, tenant_id="t1", space_id="space", source_family="products", version="v1", count=1)
     out = mark_products_stale(None, "t1")
@@ -334,23 +334,23 @@ def test_product_change_marks_index_stale() -> None:
 
 @pytest.mark.asyncio
 async def test_rerank_skips_exact_and_keeps_fused_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.retrieve.cards import TitleCard
-    from services.customer_ai.retrieve.hybrid import HybridHit
-    from services.customer_ai.retrieve.rerank import rerank_hits, should_rerank
+    from services.brain.retrieve.cards import TitleCard
+    from services.brain.retrieve.hybrid import HybridHit
+    from services.brain.retrieve.rerank import rerank_hits, should_rerank
 
     card = TitleCard(item_id="services:hair", source_family="services", title="Hair", search_text="hair")
     exact = [HybridHit(card=card, lexical_score=1.0, semantic_score=0.2, fused_rank=0)]
     assert should_rerank(exact) is False
     monkeypatch.setenv("VOYAGE_API_KEY", "sk-test")
     monkeypatch.setattr(
-        "services.customer_ai.retrieve.rerank.voyage_configured",
+        "services.brain.retrieve.rerank.voyage_configured",
         lambda: True,
     )
 
     async def boom(**_k):
         raise RuntimeError("rerank_down")
 
-    monkeypatch.setattr("services.customer_ai.retrieve.rerank.rerank_texts", boom)
+    monkeypatch.setattr("services.brain.retrieve.rerank.rerank_texts", boom)
     second = TitleCard(item_id="services:botox", source_family="services", title="Botox", search_text="botox")
     fused = [
         HybridHit(card=card, lexical_score=0.4, semantic_score=0.9, fused_rank=0),
@@ -361,9 +361,9 @@ async def test_rerank_skips_exact_and_keeps_fused_on_failure(monkeypatch: pytest
 
 
 def test_index_job_does_not_claim_ready_without_pgvector(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.search.index_job import write_entity_candidate
+    from services.brain.search.index_job import write_entity_candidate
 
-    monkeypatch.setattr("services.customer_ai.search.store.probe_pgvector", lambda _session: False)
+    monkeypatch.setattr("services.brain.search.store.probe_pgvector", lambda _session: False)
     written = write_entity_candidate(
         object(),
         [
@@ -388,8 +388,8 @@ def test_index_job_does_not_claim_ready_without_pgvector(monkeypatch: pytest.Mon
 
 
 def test_ai_both_comment_uses_public_placeholder() -> None:
-    from services.customer_ai.comments.pipeline import apply_ai_comment_destinations
-    from services.customer_ai.contracts.reply import TurnResult
+    from services.brain.comments.pipeline import apply_ai_comment_destinations
+    from services.brain.contracts.reply import TurnResult
 
     generated = TurnResult(
         stop_reason="ok",
@@ -407,8 +407,8 @@ def test_ai_both_comment_uses_public_placeholder() -> None:
 
 
 def test_knowledge_index_rows_are_chunked() -> None:
-    from services.customer_ai.retrieve.cards import TitleCard
-    from services.customer_ai.search.index_job import document_rows
+    from services.brain.retrieve.cards import TitleCard
+    from services.brain.search.index_job import document_rows
 
     card = TitleCard(
         item_id="knowledge:hours",
@@ -424,7 +424,7 @@ def test_knowledge_index_rows_are_chunked() -> None:
 
 
 def test_fixture_eval_runner_has_no_live_spend() -> None:
-    from services.customer_ai.evals.runner import run_fixture_corpus
+    from services.brain.evals.runner import run_fixture_corpus
 
     report = run_fixture_corpus()
     assert report["live_spend"] is False
@@ -432,9 +432,9 @@ def test_fixture_eval_runner_has_no_live_spend() -> None:
 
 
 def test_branch_schedule_hydrates_hours() -> None:
-    from services.customer_ai.retrieve.cards import TitleCard
-    from services.customer_ai.retrieve.expand import expand_ranked
-    from services.customer_ai.retrieve.lexical import LexicalHit
+    from services.brain.retrieve.cards import TitleCard
+    from services.brain.retrieve.expand import expand_ranked
+    from services.brain.retrieve.lexical import LexicalHit
 
     card = TitleCard(item_id="hours:main", source_family="hours", title="Main", search_text="hours")
     sections = {

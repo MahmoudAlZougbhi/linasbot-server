@@ -49,7 +49,7 @@ async def process_meta_social_event(
     resolved_tenant_id = str(tenant_id or settings.tenant_id or "").strip()
     if not resolved_tenant_id:
         raise ValueError("tenant_id required for social messaging")
-    from services.channel_capability_runtime import meta_dm_replies_enabled
+    from services.integrations.channel_capability_runtime import meta_dm_replies_enabled
 
     if not meta_dm_replies_enabled(tenant_id=resolved_tenant_id, platform=channel):
         print(

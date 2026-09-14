@@ -11,10 +11,10 @@ from typing import Any
 
 import pytest
 
-from services.cm.embeddings import HASH_EMBEDDING_DIMENSIONS, _hash_embed_one, embedding_pin
-from services.cm.schemas import PublishedPointer, default_section_payload
-from services.cm.semantic_index import build_index
-from services.cm.version_store import write_published_pointer, write_version_content
+from services.ai_setup.embeddings import HASH_EMBEDDING_DIMENSIONS, _hash_embed_one, embedding_pin
+from services.ai_setup.schemas import PublishedPointer, default_section_payload
+from services.ai_setup.semantic_index import build_index
+from services.ai_setup.version_store import write_published_pointer, write_version_content
 
 
 def install_mocked_openai_embeddings(monkeypatch: pytest.MonkeyPatch, *, published_mode: bool = True) -> None:
@@ -30,11 +30,11 @@ def install_mocked_openai_embeddings(monkeypatch: pytest.MonkeyPatch, *, publish
     async def _fake_openai_embed_texts(texts: list[str]) -> list[list[float]]:
         return [_hash_embed_one(text, dimensions=HASH_EMBEDDING_DIMENSIONS) for text in texts]
 
-    monkeypatch.setattr("services.cm.embeddings._openai_embed_texts", _fake_openai_embed_texts)
+    monkeypatch.setattr("services.ai_setup.embeddings._openai_embed_texts", _fake_openai_embed_texts)
 
 
 def base_sections() -> dict[str, dict[str, Any]]:
-    from services.cm.constants import CM_SECTIONS
+    from services.ai_setup.constants import CM_SECTIONS
 
     return {section: default_section_payload(section) for section in CM_SECTIONS}
 

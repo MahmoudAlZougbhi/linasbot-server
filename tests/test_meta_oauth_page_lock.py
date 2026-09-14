@@ -207,7 +207,7 @@ def _registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistr
         return None
 
     monkeypatch.setattr(
-        "services.channel_capability_toggles.enable_channel_defaults_after_connect",
+        "services.integrations.channel_capability_toggles.enable_channel_defaults_after_connect",
         _enable_channel_defaults,
     )
 

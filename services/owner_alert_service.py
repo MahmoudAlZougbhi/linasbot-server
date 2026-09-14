@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.cm.constants import require_tenant_id
+from services.ai_setup.constants import require_tenant_id
 from services.owner_alert_store import owner_alert_store
 
 # Alert types that map to product requirements.

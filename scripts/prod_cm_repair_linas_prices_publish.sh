@@ -50,14 +50,14 @@ load_env()
 os.environ.setdefault("LINASBOT_DATA_ROOT", "/opt/linasbot_data")
 os.environ.setdefault("ENVIRONMENT", "production")
 
-from services.cm.constants import cm_publish_enabled
-from services.cm.pricing.catalog_resolve import disambiguate_matches, resolve_catalog_item_ids
-from services.cm.pricing.section import normalize_prices_section, section_catalog_items, section_price_entries
-from services.cm.publish import publish_draft
-from services.cm.publish_gate import ensure_publish_enabled
-from services.cm.storage import get_draft, put_draft
-from services.cm.validation import validate_cm
-from services.cm.version_store import load_published_content, read_published_pointer
+from services.ai_setup.constants import cm_publish_enabled
+from services.ai_setup.pricing.catalog_resolve import disambiguate_matches, resolve_catalog_item_ids
+from services.ai_setup.pricing.section import normalize_prices_section, section_catalog_items, section_price_entries
+from services.ai_setup.publish import publish_draft
+from services.ai_setup.publish_gate import ensure_publish_enabled
+from services.ai_setup.storage import get_draft, put_draft
+from services.ai_setup.validation import validate_cm
+from services.ai_setup.version_store import load_published_content, read_published_pointer
 
 tenant_id = "linas"
 report_dir = Path(os.environ["LINASBOT_DATA_ROOT"]) / "tenants" / tenant_id / "cm" / "reports"

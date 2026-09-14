@@ -8,14 +8,14 @@ from typing import Any
 
 import pytest
 
-from services.owner_copilot_v2.attachments import store_attachment, validate_upload
-from services.owner_copilot_v2.choices import make_choice_set, resolve_choice, setup_tone_choices
-from services.owner_copilot_v2.creative_policy import looks_like_creative_request
-from services.owner_copilot_v2.flags import flags_snapshot, owner_model_name, owner_recent_history_tokens
-from services.owner_copilot_v2.memory import estimate_messages_tokens, pack_recent_messages
-from services.owner_copilot_v2.models import StreamEvent
-from services.owner_copilot_v2.stream_protocol import encode_sse
-from services.owner_copilot_v2.tool_schemas import tool_names
+from services.owner_copilot.attachments import store_attachment, validate_upload
+from services.owner_copilot.choices import make_choice_set, resolve_choice, setup_tone_choices
+from services.owner_copilot.creative_policy import looks_like_creative_request
+from services.owner_copilot.flags import flags_snapshot, owner_model_name, owner_recent_history_tokens
+from services.owner_copilot.memory import estimate_messages_tokens, pack_recent_messages
+from services.owner_copilot.models import StreamEvent
+from services.owner_copilot.stream_protocol import encode_sse
+from services.owner_copilot.tool_schemas import tool_names
 
 
 def _fake_turn_credit(tenant_id: str, *, conversation_id: str = "") -> Any:
@@ -34,7 +34,7 @@ def test_owner_model_is_sol() -> None:
 
 
 def test_owner_max_output_tokens_scales_with_effort(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.owner_copilot_v2.flags import owner_max_output_tokens
+    from services.owner_copilot.flags import owner_max_output_tokens
 
     monkeypatch.delenv("LINAS_OWNER_MAX_OUTPUT_TOKENS", raising=False)
     assert owner_max_output_tokens(reasoning_effort="high") == 4096
@@ -47,7 +47,7 @@ def test_owner_max_output_tokens_scales_with_effort(monkeypatch: pytest.MonkeyPa
 @pytest.mark.asyncio
 async def test_sol_text_deltas_auto_continue_on_length(monkeypatch: pytest.MonkeyPatch) -> None:
     """finish_reason=length must continue instead of leaving a mid-sentence stump."""
-    from services.owner_copilot_v2 import provider as provider_mod
+    from services.owner_copilot import provider as provider_mod
 
     calls = {"n": 0}
 
@@ -153,7 +153,7 @@ def test_attachment_validation_and_tenant_store(tmp_path: Path, monkeypatch: pyt
     # Re-import root resolution is already at import time — store uses _DATA_ROOT.
     # Force write under tmp by patching tenant dir root via env may not rebuild Path;
     # call validate + store with monkeypatched module root.
-    import services.owner_copilot_v2.attachments as att
+    import services.owner_copilot.attachments as att
 
     monkeypatch.setattr(att, "_root", lambda: tmp_path / "owner_attachments")
 
@@ -171,7 +171,7 @@ def test_attachment_validation_and_tenant_store(tmp_path: Path, monkeypatch: pyt
     assert stored["ok"] is True
     aid = stored["attachment_id"]
     # Cross-tenant deny
-    from services.owner_copilot_v2.attachments import load_attachment_meta
+    from services.owner_copilot.attachments import load_attachment_meta
 
     assert load_attachment_meta(tenant_id="tenantB", attachment_id=aid) is None
     assert load_attachment_meta(tenant_id="tenantA", attachment_id=aid) is not None
@@ -191,11 +191,11 @@ def test_sse_encode_and_tool_schemas() -> None:
 
 @pytest.mark.asyncio
 async def test_stream_events_thinking_then_deltas(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.owner_copilot_v2.brain import iter_owner_turn_v2_events
+    from services.owner_copilot.brain import iter_owner_turn_v2_events
 
     monkeypatch.setenv("OWNER_COPILOT_V2", "true")
     monkeypatch.setattr(
-        "services.owner_ai_context.pack_owner_turn_context",
+        "services.owner_copilot.context.pack_owner_turn_context",
         lambda **_: {
             "system_prompt": "x",
             "account_summary": {"setup_stage": "new", "profile": {"preferred_language": "en"}},
@@ -213,11 +213,11 @@ async def test_stream_events_thinking_then_deltas(monkeypatch: pytest.MonkeyPatc
     async def _fake_tool_round(**kwargs: Any):
         yield ("delta", "Hello ")
         yield ("delta", "from Sol.")
-        from services.owner_copilot_v2.provider import ToolRoundResult
+        from services.owner_copilot.provider import ToolRoundResult
 
         yield ("result", ToolRoundResult(content="Hello from Sol.", tool_calls=[]))
 
-    monkeypatch.setattr("services.owner_copilot_v2.brain_stream_body.iter_sol_tool_round", _fake_tool_round)
+    monkeypatch.setattr("services.owner_copilot.brain_stream_body.iter_sol_tool_round", _fake_tool_round)
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
     monkeypatch.setattr("services.owner_copilot_credit.owner_turn_credit_begin", _fake_turn_credit)
     monkeypatch.setattr("services.owner_copilot_credit.owner_turn_credit_on_event", lambda *_a, **_k: None)
@@ -245,7 +245,7 @@ async def test_stream_events_thinking_then_deltas(monkeypatch: pytest.MonkeyPatc
 
 @pytest.mark.asyncio
 async def test_zero_credits_does_not_call_owner_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.owner_copilot_v2.brain import iter_owner_turn_v2_events
+    from services.owner_copilot.brain import iter_owner_turn_v2_events
 
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
     called = {"n": 0}
@@ -254,7 +254,7 @@ async def test_zero_credits_does_not_call_owner_model(monkeypatch: pytest.Monkey
         called["n"] += 1
         yield ("delta", "should-not-run")
 
-    monkeypatch.setattr("services.owner_copilot_v2.brain.iter_sol_tool_round", _fake_tool_round)
+    monkeypatch.setattr("services.owner_copilot.brain.iter_sol_tool_round", _fake_tool_round)
     events: list[str] = []
     async for ev in iter_owner_turn_v2_events(
         tenant_id="clinic-zero",
@@ -272,7 +272,7 @@ async def test_zero_credits_does_not_call_owner_model(monkeypatch: pytest.Monkey
 async def test_run_owner_turn_v2_returns_credits_paused_without_model(monkeypatch: pytest.MonkeyPatch) -> None:
     import warnings
 
-    from services.owner_copilot_v2.brain_run import run_owner_turn_v2
+    from services.owner_copilot.brain_run import run_owner_turn_v2
 
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
     called = {"n": 0}
@@ -281,7 +281,7 @@ async def test_run_owner_turn_v2_returns_credits_paused_without_model(monkeypatc
         called["n"] += 1
         yield ("delta", "should-not-run")
 
-    monkeypatch.setattr("services.owner_copilot_v2.brain.iter_sol_tool_round", _fake_tool_round)
+    monkeypatch.setattr("services.owner_copilot.brain.iter_sol_tool_round", _fake_tool_round)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         result = await run_owner_turn_v2(
@@ -298,9 +298,9 @@ async def test_run_owner_turn_v2_returns_credits_paused_without_model(monkeypatc
 
 
 def test_brain_lazy_exports_run_owner_turn_v2() -> None:
-    from services.owner_copilot_v2 import brain
-    from services.owner_copilot_v2.brain import run_owner_turn_v2 as lazy_run
-    from services.owner_copilot_v2.brain_run import run_owner_turn_v2 as direct_run
+    from services.owner_copilot import brain
+    from services.owner_copilot.brain import run_owner_turn_v2 as lazy_run
+    from services.owner_copilot.brain_run import run_owner_turn_v2 as direct_run
 
     assert brain.run_owner_turn_v2 is not None
     assert lazy_run is direct_run
@@ -308,7 +308,7 @@ def test_brain_lazy_exports_run_owner_turn_v2() -> None:
 
 @pytest.mark.asyncio
 async def test_shadow_mode_blocks_approve_writes(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.owner_copilot_v2.tool_dispatch import dispatch_v2_tool
+    from services.owner_copilot.tool_dispatch import dispatch_v2_tool
 
     monkeypatch.setenv("OWNER_COPILOT_WRITES", "false")
     result = await dispatch_v2_tool(
@@ -326,16 +326,16 @@ async def test_shadow_mode_blocks_approve_writes(monkeypatch: pytest.MonkeyPatch
 
 @pytest.mark.asyncio
 async def test_setup_next_step_and_choices(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.owner_copilot_v2.setup_flow import tool_setup_next_step
+    from services.owner_copilot.setup_flow import tool_setup_next_step
 
     monkeypatch.setattr(
-        "services.owner_ai_account_state.build_account_summary",
+        "services.owner_copilot.account_state.build_account_summary",
         lambda **_: {"setup_stage": "new", "cm": {"sections_present": 0, "sections_total": 17}},
     )
     result = await tool_setup_next_step(tenant_id="t1", role="admin", user_id="u1", action="status")
     assert result.ok is True
     assert result.data["same_cm_draft"] is True
-    from services.owner_copilot_v2.choices import choices_from_tool_result
+    from services.owner_copilot.choices import choices_from_tool_result
 
     ch = choices_from_tool_result("setup_next_step", result.data)
     assert 1 <= len(ch) <= 3
@@ -343,8 +343,8 @@ async def test_setup_next_step_and_choices(monkeypatch: pytest.MonkeyPatch) -> N
 
 @pytest.mark.asyncio
 async def test_price_list_fixture_extraction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import services.owner_copilot_v2.attachments as att
-    from services.owner_copilot_v2.vision_import import tool_extract_price_list
+    import services.owner_copilot.attachments as att
+    from services.owner_copilot.vision_import import tool_extract_price_list
 
     monkeypatch.setattr(att, "_root", lambda: tmp_path / "owner_attachments")
     fixture = {
@@ -383,13 +383,13 @@ async def test_price_list_fixture_extraction(tmp_path: Path, monkeypatch: pytest
 
 @pytest.mark.asyncio
 async def test_diagnose_meta_health_readonly(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.owner_ai_tools_base import ToolResult
-    from services.owner_copilot_v2.diagnosis_health import tool_diagnose_meta_health
+    from services.owner_copilot.diagnosis_health import tool_diagnose_meta_health
+    from services.owner_copilot.tools_base import ToolResult
 
     async def _integ(**_: Any) -> ToolResult:
         return ToolResult(ok=True, name="read_integrations", data={"any_connected": False, "integrations": {}})
 
-    monkeypatch.setattr("services.owner_ai_tools_read.tool_read_integrations", _integ)
+    monkeypatch.setattr("services.owner_copilot.tools_read.tool_read_integrations", _integ)
     result = await tool_diagnose_meta_health(tenant_id="t1", role="admin", channel="all")
     assert result.ok is True
     assert result.data.get("meta_mutations") is False
@@ -410,7 +410,7 @@ def test_capability_manifest_freshness() -> None:
 
 
 def test_system_v2_voice_is_warm_with_tasteful_emojis() -> None:
-    from services.owner_copilot_v2.brain_support import FINAL_ANSWER_NUDGE, SYSTEM_V2
+    from services.owner_copilot.brain_support import FINAL_ANSWER_NUDGE, SYSTEM_V2
     from services.response_formatting import RESPONSE_FORMATTING_RULES
 
     assert "warm, friendly" in SYSTEM_V2

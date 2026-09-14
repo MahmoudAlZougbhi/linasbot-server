@@ -119,7 +119,7 @@ def process_signed_transaction(
             product_id=product_id,
             transaction_id=transaction_id,
         )
-        from services.membership.iap_message_grant import maybe_grant_purchased_from_verified_txn
+        from services.billing.membership.iap_message_grant import maybe_grant_purchased_from_verified_txn
 
         effect["message_grant"] = maybe_grant_purchased_from_verified_txn(
             tenant_id=tid_resolved,

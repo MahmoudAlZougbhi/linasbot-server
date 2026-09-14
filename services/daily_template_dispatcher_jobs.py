@@ -5,16 +5,16 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from services.saas_no_boc import get_customer_appointments, send_appointment_reminders
 from services.daily_template_dispatcher_helpers import (
     _extract_appointments,
     _normalize_phone,
     _parse_api_datetime,
 )
 from services.message_logs_service import message_logs_service
+from services.saas_no_boc import get_customer_appointments, send_appointment_reminders
 from services.smart_messaging_catalog import TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS, normalize_template_id
+from services.team.user_persistence_service import user_persistence
 from services.template_schedule_service import template_schedule_service
-from services.user_persistence_service import user_persistence
 
 
 class DailyTemplateDispatcherJobsMixin:

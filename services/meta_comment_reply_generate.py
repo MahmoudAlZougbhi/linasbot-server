@@ -29,9 +29,9 @@ async def generate_comment_reply_text(
     Never falls back to Classic ``generate_answer_with_usage``. Non-CM tenants keep
     the pre-existing local FAQ matcher (not Classic CM generative).
     """
-    from services.cm.constants import tenant_uses_cm_runtime
-    from services.cm.language_policy import detect_and_resolve_customer_languages
-    from services.customer_ai.history_ids import comment_conversation_id
+    from services.ai_setup.constants import tenant_uses_cm_runtime
+    from services.ai_setup.language_policy import detect_and_resolve_customer_languages
+    from services.brain.history_ids import comment_conversation_id
 
     ctx = dict(comment_context or {})
     thread_id = comment_conversation_id(
@@ -83,7 +83,7 @@ async def generate_comment_reply_text(
                 type(v2_exc).__name__,
             )
             raise MetaCommentReplyGenerationError("customer reply generation failed") from v2_exc
-        from services.customer_ai.comments.destinations import destinations_from_outcome
+        from services.brain.comments.destinations import destinations_from_outcome
 
         plan = destinations_from_outcome(v2_outcome)
         return plan if plan.has_any else None

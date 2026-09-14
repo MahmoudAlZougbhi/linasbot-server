@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.membership.free_slots import SlotLimitError, assert_cm_section_slots
+from services.billing.membership.free_slots import SlotLimitError, assert_cm_section_slots
 
 
 def test_free_slots_off_by_default() -> None:
@@ -19,7 +19,7 @@ def test_free_slots_off_by_default() -> None:
 
 
 def test_free_branch_and_service_caps(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     monkeypatch.setenv("FREE_PLAN_ENFORCEMENT_ENABLED", "true")
     entitlements_store.set_plan(tenant_id="free-slots", plan_id="free", status="active", source="admin")
@@ -53,7 +53,7 @@ def test_free_branch_and_service_caps(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_whatsapp_history_maps_roles() -> None:
-    from services.customer_ai.history_whatsapp import rows_from_wa_messages
+    from services.brain.history_whatsapp import rows_from_wa_messages
 
     rows = rows_from_wa_messages(
         [

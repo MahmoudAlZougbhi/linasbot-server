@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from services.billing.entitlements_service import EntitlementsStore, apply_store_notification
 from services.credit_ledger_service import CreditLedgerService
-from services.entitlements_service import EntitlementsStore, apply_store_notification
 from services.mobile_refresh_token_service import MobileRefreshTokenService
-from services.owner_chat_store import OwnerChatStore
+from services.owner_copilot.chat_store import OwnerChatStore
 from services.platform_owner_service import PlatformOwnerService
 from services.safety_gateway import SafetyGateway
 
@@ -30,11 +30,11 @@ def test_entitlement_set_plan(tmp_path) -> None:
 
 def test_entitlement_notification_idempotent(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.entitlements_service._DATA_ROOT",
+        "services.billing.entitlements_service._DATA_ROOT",
         tmp_path,
     )
     monkeypatch.setattr(
-        "services.entitlements_service.entitlements_store",
+        "services.billing.entitlements_service.entitlements_store",
         EntitlementsStore(root=tmp_path / "entitlements"),
     )
     first = apply_store_notification(
@@ -58,7 +58,7 @@ def test_entitlement_notification_idempotent(tmp_path, monkeypatch) -> None:
 
 
 def test_credit_reserve_release(tmp_path, monkeypatch) -> None:
-    from services import entitlements_service as es
+    from services.billing import entitlements_service as es
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)

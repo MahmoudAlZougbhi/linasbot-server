@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from services.owner_ai_tools_faq import (
+from services.owner_copilot.tools_faq import (
     SmartAnswerProposalStore,
     tool_approve_smart_answer,
     tool_propose_smart_answer,
@@ -17,7 +17,7 @@ from services.owner_ai_tools_faq import (
 @pytest.fixture
 def proposal_store(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> SmartAnswerProposalStore:
     store = SmartAnswerProposalStore(root=tmp_path / "smart_answers")
-    monkeypatch.setattr("services.owner_ai_tools_faq.smart_answer_proposal_store", store)
+    monkeypatch.setattr("services.owner_copilot.tools_faq.smart_answer_proposal_store", store)
     return store
 
 
@@ -27,11 +27,11 @@ async def test_approve_smart_answer_activates_faq_live(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "services.owner_ai_tools_faq.resolve_permissions",
+        "services.owner_copilot.tools_faq.resolve_permissions",
         lambda _role, _tenant: {"contentManagers": True},
     )
     monkeypatch.setattr(
-        "services.faq_entitlements.assert_can_create_faq",
+        "services.faq.faq_entitlements.assert_can_create_faq",
         lambda _tid: {"faq_enabled": True},
     )
     create_faq_pair = AsyncMock(
@@ -51,8 +51,8 @@ async def test_approve_smart_answer_activates_faq_live(
             "content_version_id": "v1",
         }
     )
-    monkeypatch.setattr("services.cm.faq_integration.create_faq_pair", create_faq_pair)
-    monkeypatch.setattr("services.owner_ai_cm_approval.activate_cm_after_save", activate)
+    monkeypatch.setattr("services.ai_setup.faq_integration.create_faq_pair", create_faq_pair)
+    monkeypatch.setattr("services.owner_copilot.cm_approval.activate_cm_after_save", activate)
 
     proposed = await tool_propose_smart_answer(
         tenant_id="t1",
@@ -94,11 +94,11 @@ async def test_propose_smart_answer_preview_explains_savings(
 ) -> None:
     del proposal_store
     monkeypatch.setattr(
-        "services.owner_ai_tools_faq.resolve_permissions",
+        "services.owner_copilot.tools_faq.resolve_permissions",
         lambda _role, _tenant: {"contentManagers": True},
     )
     monkeypatch.setattr(
-        "services.faq_entitlements.assert_can_create_faq",
+        "services.faq.faq_entitlements.assert_can_create_faq",
         lambda _tid: {"faq_enabled": True},
     )
     result = await tool_propose_smart_answer(
@@ -119,7 +119,7 @@ async def test_propose_smart_answer_preview_explains_savings(
 
 
 def test_smart_answer_card_from_tool() -> None:
-    from services.owner_copilot_v2.cards import card_from_tool
+    from services.owner_copilot.cards import card_from_tool
 
     card = card_from_tool(
         "propose_smart_answer",

@@ -108,7 +108,7 @@ async def trigger_human_takeover(
         print(f"✅ Conversation marked as waiting_human in Firebase ({n} doc path(s))")
         try:
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
-            from services.live_chat_service import live_chat_service
+            from services.live_chat.service import live_chat_service
 
             live_chat_service.invalidate_cache()
             asyncio.create_task(
@@ -231,7 +231,7 @@ async def maybe_send_takeover_autoreply(
                     was_in_takeover = config.user_in_human_takeover_mode.get(user_id, False)
                     new_takeover = conv_data.get("human_takeover_active", False)
                     if new_takeover:
-                        from services.live_chat_operator_idle import auto_resume_if_operator_idle
+                        from services.live_chat.operator_idle import auto_resume_if_operator_idle
 
                         if await auto_resume_if_operator_idle(
                             conv_data=conv_data,

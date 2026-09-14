@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_ai.billing import apply_message_billing, classify_result
-from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
-from services.customer_ai.contracts.turn import CustomerTurn
-from services.customer_ai.outbox import reset_outbox_for_tests
-from services.membership.expense_journal import list_events, reset_expenses_for_tests
-from services.membership.message_ledger import reset_ledger_for_tests
+from services.billing.membership.expense_journal import list_events, reset_expenses_for_tests
+from services.billing.membership.message_ledger import reset_ledger_for_tests
+from services.brain.billing import apply_message_billing, classify_result
+from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.turn import CustomerTurn
+from services.brain.outbox import reset_outbox_for_tests
 
 
 @pytest.fixture(autouse=True)
@@ -80,8 +80,8 @@ def test_expenses_record_when_billing_is_off() -> None:
 
 def test_lab_turn_journals_expense_without_message_reserve(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
-    from services.membership.message_ledger import remaining_messages
-    from services.membership.period_grants import ensure_included_grant
+    from services.billing.membership.message_ledger import remaining_messages
+    from services.billing.membership.period_grants import ensure_included_grant
 
     ensure_included_grant("lab_shop")
     before = remaining_messages("lab_shop")
@@ -106,8 +106,8 @@ def test_lab_turn_journals_expense_without_message_reserve(monkeypatch: pytest.M
 
 
 def test_cost_dashboard_exposes_pending_breakdown() -> None:
-    from services.membership.cost_dashboard import global_dashboard
-    from services.membership.provider_expense import record_pending_provider
+    from services.billing.membership.cost_dashboard import global_dashboard
+    from services.billing.membership.provider_expense import record_pending_provider
 
     record_pending_provider(
         event_id="llm:dash-1",
@@ -129,7 +129,7 @@ def test_cost_dashboard_exposes_pending_breakdown() -> None:
 
 
 def test_faq_only_does_not_open_a_lot_when_billing_off() -> None:
-    from services.membership.message_ledger import remaining_messages
+    from services.billing.membership.message_ledger import remaining_messages
 
     apply_message_billing(
         _turn(),
@@ -148,14 +148,14 @@ def test_faq_only_does_not_open_a_lot_when_billing_off() -> None:
 def test_index_embed_records_pending_voyage(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
 
-    from services.customer_ai.retrieve.cards import TitleCard
-    from services.customer_ai.search.index_job import index_published_tenant
-    from services.customer_ai.search.store import reset_memory_store
-    from services.membership.processing_budgets import reset_processing_budgets_for_tests
+    from services.billing.membership.processing_budgets import reset_processing_budgets_for_tests
+    from services.brain.retrieve.cards import TitleCard
+    from services.brain.search.index_job import index_published_tenant
+    from services.brain.search.store import reset_memory_store
 
     reset_processing_budgets_for_tests()
     reset_memory_store()
-    monkeypatch.setattr("services.customer_ai.search.index_job.voyage_configured", lambda: True)
+    monkeypatch.setattr("services.brain.search.index_job.voyage_configured", lambda: True)
     card = TitleCard(
         item_id="services:svc1",
         source_family="services",
@@ -164,13 +164,13 @@ def test_index_embed_records_pending_voyage(monkeypatch: pytest.MonkeyPatch) -> 
         body="underarm laser",
         revision="r1",
     )
-    monkeypatch.setattr("services.customer_ai.search.index_job.load_published_cards", lambda _tid: [card])
-    monkeypatch.setattr("services.customer_ai.search.index_job.load_product_cards", lambda _tid: [])
+    monkeypatch.setattr("services.brain.search.index_job.load_published_cards", lambda _tid: [card])
+    monkeypatch.setattr("services.brain.search.index_job.load_product_cards", lambda _tid: [])
 
     async def _embed(rows: list[object]) -> list[list[float]]:
         return [[0.2, 0.1, 0.0, 0.0] for _ in rows]
 
-    monkeypatch.setattr("services.customer_ai.search.index_job.embed_document_rows", _embed)
+    monkeypatch.setattr("services.brain.search.index_job.embed_document_rows", _embed)
 
     async def _run() -> None:
         await index_published_tenant("idx-shop", revision="v-test")

@@ -12,9 +12,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from services.billing_backend import BillingBackendError, billing_uses_postgres
-from services.tenant_mobile_dashboard.activity import _is_reply, _normalize_platform
-from services.tenant_mobile_dashboard.usage import _load_entries, _normalize_usage_bucket
+from services.billing.billing_backend import BillingBackendError, billing_uses_postgres
+from services.dashboard.activity import _is_reply, _normalize_platform
+from services.dashboard.usage import _load_entries, _normalize_usage_bucket
 from storage.persistent_storage import _DATA_ROOT
 
 _ACTIVE_STATUSES = frozenset({"active", "trial", "grace"})
@@ -54,7 +54,7 @@ def _count_businesses(*, entitlements_root: Path | None) -> tuple[int | None, st
         return _count_file_subscribers(entitlements_root), "entitlements_files"
     if billing_uses_postgres():
         try:
-            from services.billing_backend import require_billing_pg_session
+            from services.billing.billing_backend import require_billing_pg_session
             from services.entitlements_pg_store import count_active_subscribers
 
             with require_billing_pg_session() as session:

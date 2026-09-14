@@ -14,7 +14,7 @@ from typing import Any
 import config
 from services.gender_recognition_service import get_gender_from_gpt
 from services.sentiment_escalation_service import sentiment_service
-from services.user_persistence_service import user_persistence
+from services.team.user_persistence_service import user_persistence
 from utils.utils import (
     detect_language,
     get_canonical_user_id_and_phone,
