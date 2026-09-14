@@ -48,6 +48,9 @@ _FORBIDDEN_SUBPROCESS_ENV = frozenset(
     }
 )
 
+# Canonical name in node .env / .env.example. Do not also read DEFAULT_TENANT_ID.
+HA_MAINTENANCE_TENANT_ENV = "LINASBOT_TENANT_ID"
+
 
 @dataclass(frozen=True)
 class MigrationEnvSnapshot:
@@ -309,6 +312,30 @@ def _stamped_versions() -> set[str]:
     return {str(row[0]) for row in rows}
 
 
+def ha_maintenance_tenant_id(mapping: dict[str, str]) -> str:
+    """Read the ops tenant for leftover HA maintenance CLIs.
+
+    tenant env for HA maintenance only — not Linas Laser product
+    """
+    tenant_id = str(mapping.get(HA_MAINTENANCE_TENANT_ENV) or "").strip()
+    if not tenant_id:
+        raise RuntimeError(
+            "set LINASBOT_TENANT_ID=<ops maintenance tenant> in the node .env "
+            "(HA maintenance only; not a product clinic restore)"
+        )
+    return tenant_id
+
+
+def skip_ha_tenant_runtime_config_file_migrate() -> str:
+    """HA admit does not copy node-local CM files into Postgres.
+
+    After CLEAN FINISH G the runtime SoT is Postgres. The one-shot
+    ``migrate_tenant`` copy is offline CLI only and must not bind HA
+    admit to a founder slug.
+    """
+    return "skipped"
+
+
 def _run_upgrade_subprocess(repo: Path, *, expected_head: str, env_snapshot: MigrationEnvSnapshot) -> None:
     reject_untracked_migration_paths(repo)
     python_bin = repo / "venv/bin/python"
@@ -367,16 +394,7 @@ def main() -> None:
             f"post-migration alembic stamp mismatch: expected={expected_head} actual={sorted(stamped_after)}"
         )
 
-    from services.tenant_runtime_config_backend import tenant_runtime_config_postgres_required
-
-    if tenant_runtime_config_postgres_required():
-        from scripts.ha.migrate_tenant_runtime_config_to_postgres import migrate_tenant
-        from services.ai_setup.constants import DEFAULT_TENANT_ID
-
-        tenant_id = (env_snapshot.mapping.get("DEFAULT_TENANT_ID") or DEFAULT_TENANT_ID).strip()
-        if not tenant_id:
-            raise RuntimeError("DEFAULT_TENANT_ID required for tenant runtime config migrate")
-        migrate_tenant(tenant_id=tenant_id, dry_run=False)
+    skip_ha_tenant_runtime_config_file_migrate()
 
     from services.web_chat.flags import get_web_chat_ha_readiness
 
