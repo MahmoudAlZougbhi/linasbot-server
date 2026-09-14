@@ -189,7 +189,7 @@ async def test_whatsapp_brain_blocks_lite(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 @pytest.mark.asyncio
-async def test_followup_gate_waits_for_enforcement_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_followup_gate_ignores_enforcement_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
     monkeypatch.delenv("FREE_PLAN_ENFORCEMENT_ENABLED", raising=False)
     from services.billing.entitlements_service import entitlements_store
@@ -219,7 +219,7 @@ async def test_followup_gate_waits_for_enforcement_flag(monkeypatch: pytest.Monk
         channel="instagram_dm",
         followup_goal="ask_if_still_needed",
     )
-    assert blocked.reason == "FOLLOWUP_DISABLED"
+    assert blocked.reason == "unpublished"
 
 
 @pytest.mark.asyncio

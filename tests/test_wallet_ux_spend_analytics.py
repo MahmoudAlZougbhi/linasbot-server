@@ -130,30 +130,26 @@ def test_dual_balance_credit_debit(wallet_svc: TokenWalletService) -> None:
     assert wallet_svc.get_wallet("acme").input_remaining == 800
 
 
-def test_preflight_requires_both_buckets(wallet_svc: TokenWalletService, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.token_metering.token_wallet_service", wallet_svc)
-    monkeypatch.setattr("services.billing.token_wallet_service.token_wallet_service", wallet_svc)
-    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
-    monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "linas")
-    with pytest.raises(InsufficientTokenBalance):
+def test_preflight_uses_credit_gate_not_token_wallet(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "services.billing.membership.generative_gate.generative_ai_blocked",
+        lambda *_a, **_k: True,
+    )
+    with pytest.raises(PermissionError):
         assert_tenant_can_use_ai("newbiz")
-    wallet_svc.credit("newbiz", input_tokens=10, output_tokens=0, reason="partial")
-    with pytest.raises(InsufficientTokenBalance) as exc:
-        assert_tenant_can_use_ai("newbiz")
-    assert exc.value.bucket == "output"
-    wallet_svc.credit("newbiz", input_tokens=0, output_tokens=10, reason="fill_output")
+    monkeypatch.setattr(
+        "services.billing.membership.generative_gate.generative_ai_blocked",
+        lambda *_a, **_k: False,
+    )
     assert_tenant_can_use_ai("newbiz")
 
 
-def test_debit_ai_usage_splits_prompt_completion(
-    wallet_svc: TokenWalletService, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr("services.token_metering.token_wallet_service", wallet_svc)
+def test_debit_ai_usage_does_not_touch_token_wallet(wallet_svc: TokenWalletService) -> None:
     wallet_svc.credit("metered", input_tokens=500, output_tokens=200, reason="seed")
-    debit_ai_usage(tenant_id="metered", prompt_tokens=100, completion_tokens=40, model="gpt-5.1")
+    assert debit_ai_usage(tenant_id="metered", prompt_tokens=100, completion_tokens=40, model="gpt-5.1") is None
     snap = wallet_svc.get_wallet("metered")
-    assert snap.input_remaining == 400
-    assert snap.output_remaining == 160
+    assert snap.input_remaining == 500
+    assert snap.output_remaining == 200
 
 
 def test_legacy_balance_migrates_80_20(wallet_svc: TokenWalletService) -> None:
@@ -173,12 +169,15 @@ def test_legacy_balance_migrates_80_20(wallet_svc: TokenWalletService) -> None:
     assert snap2.output_remaining == 200
 
 
-def test_unlimited_linas_unchanged(wallet_svc: TokenWalletService, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ai_preflight_does_not_treat_linas_as_unlimited(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "linas")
-    monkeypatch.setattr("services.token_metering.token_wallet_service", wallet_svc)
-    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
-    assert_tenant_can_use_ai("linas")
-    debit_ai_usage(tenant_id="linas", prompt_tokens=50, completion_tokens=10, model="gpt-5.1")
+    monkeypatch.setattr(
+        "services.billing.membership.generative_gate.generative_ai_blocked",
+        lambda *_a, **_k: True,
+    )
+    with pytest.raises(PermissionError):
+        assert_tenant_can_use_ai("linas")
+    assert debit_ai_usage(tenant_id="linas", prompt_tokens=50, completion_tokens=10, model="gpt-5.1") is None
 
 
 def test_spend_analytics_fb_ig_and_top_conversation() -> None:

@@ -225,12 +225,22 @@ def test_sfu_worker_settles_leftover_credits() -> None:
     assert "hold_billing_policy" in src[recon:]
 
 
-def test_leftover_reserve_skips_when_billing_on(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_leftover_reserve_uses_credits_even_if_message_billing_env_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from inspect import getsource
+
     from services.brain.leftover_reserve import reserve_leftover_reply
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
-    with pytest.raises(PermissionError):
-        reserve_leftover_reply(tenant_id="shop", request_id="omni:1", operation_type="omni")
+    monkeypatch.setattr(
+        "services.credit_ledger_service.credit_ledger_service.reserve",
+        lambda **_kwargs: "cred-leftover-1",
+    )
+    monkeypatch.setattr("services.brain.leftover_reserve.remember_leftover_hold", lambda **_kwargs: None)
+    leftover_id = reserve_leftover_reply(tenant_id="shop", request_id="omni:1", operation_type="omni")
+    assert leftover_id == "cred-leftover-1"
+    assert "message_billing_enabled" not in getsource(reserve_leftover_reply)
 
 
 def test_delayed_text_settles_leftover_credits() -> None:

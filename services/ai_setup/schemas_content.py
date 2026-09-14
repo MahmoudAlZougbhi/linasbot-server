@@ -203,6 +203,8 @@ class PriceRecord(CmBaseModel):
     unit: str | None = None
     branch_id: str | None = None
     notes: str | None = None
+    ai_search_title: str = ""
+    ai_search_description: str = ""
 
     @field_validator("amount")
     @classmethod

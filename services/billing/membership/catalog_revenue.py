@@ -1,4 +1,4 @@
-"""Message-catalog intended prices. Live checkout MRR stays on the credit catalog."""
+"""Plan prices for owner metrics. Intended and live checkout both use the credit catalog."""
 
 from __future__ import annotations
 
@@ -42,5 +42,5 @@ def revenue_pair(plan_ids: list[str]) -> dict[str, Any]:
     return {
         "live_checkout_mrr_usd": live_checkout_mrr(plan_ids),
         "intended_message_mrr_usd": intended_message_mrr(plan_ids),
-        "note": "intended_message_mrr_usd is the message catalog. live_checkout_mrr_usd is membership-v1 until cutover.",
+        "note": "intended_message_mrr_usd and live_checkout_mrr_usd both use the credit plan catalog.",
     }

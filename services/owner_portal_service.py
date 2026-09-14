@@ -183,6 +183,6 @@ def analytics(range_key: str) -> dict[str, Any]:
             "billing": "tenant entitlements + credit balances",
             "messages": "bounded Interaction Logs (latest 500 rows); not a full historical aggregate",
             "tiktok": "stored TikTok comments/DMs + interaction logs when connected",
-            "revenue": "live_checkout_mrr_usd is membership-v1. intended_message_mrr_usd is the message catalog.",
+            "revenue": "live_checkout_mrr_usd and intended_message_mrr_usd both use the credit plan catalog.",
         },
     }

@@ -31,6 +31,11 @@ def _memory(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def _message_ledger_idle() -> None:
+    assert remaining_messages("send-shop") == 5
+    assert snapshot("send-shop").reserved == 0
+
+
 def _generated(event_id: str = "mid-1") -> tuple[CustomerTurn, TurnResult]:
     turn = CustomerTurn(
         tenant_id="send-shop",
@@ -50,17 +55,14 @@ def _generated(event_id: str = "mid-1") -> tuple[CustomerTurn, TurnResult]:
     return turn, result
 
 
-def test_generate_holds_until_send() -> None:
+def test_generate_does_not_hold_message_units() -> None:
     turn, result = _generated()
     billed = apply_message_billing(turn, result)
-    assert billed.extra["billing_pending_send"] is True
-    assert billed.extra["message_units"] == 1
-    snap = snapshot("send-shop")
-    assert snap.reserved == 1
-    assert snap.remaining == 4
+    assert billed.extra.get("billing_pending_send") is not True
+    assert billed.extra["billing_policy"] == "legacy_credits"
+    _message_ledger_idle()
     settle_after_send(tenant_id="send-shop", operation_id="mid-1", accepted=True, channel="whatsapp")
-    assert remaining_messages("send-shop") == 4
-    assert snapshot("send-shop").reserved == 0
+    _message_ledger_idle()
 
 
 def test_failed_send_releases_hold() -> None:
@@ -82,8 +84,7 @@ def test_settle_matches_inbound_id_not_logical_reply() -> None:
         accepted=True,
         extra_ids=("mid-1",),
     )
-    assert remaining_messages("send-shop") == 4
-    assert snapshot("send-shop").reserved == 0
+    _message_ledger_idle()
 
 
 def test_never_submitted_releases_ready_message_hold() -> None:
@@ -192,8 +193,7 @@ def test_omni_settle_matches_provider_mid_not_row_id() -> None:
         accepted=True,
         extra_ids=extras,
     )
-    assert remaining_messages("send-shop") == 4
-    assert snapshot("send-shop").reserved == 0
+    _message_ledger_idle()
 
 
 def test_web_chat_settle_matches_inbound_hash() -> None:
@@ -208,8 +208,7 @@ def test_web_chat_settle_matches_inbound_hash() -> None:
         accepted=True,
         extra_ids=(mid,),
     )
-    assert remaining_messages("send-shop") == 4
-    assert snapshot("send-shop").reserved == 0
+    _message_ledger_idle()
 
 
 def test_web_chat_fence_releases_inbound_hold() -> None:
@@ -240,8 +239,7 @@ def test_web_chat_fence_does_not_invent_inbound_text() -> None:
     turn, result = _generated(mid)
     apply_message_billing(turn, result)
     release_web_chat_message_hold(tenant_id="send-shop", operation_key="visitor:client-key")
-    assert remaining_messages("send-shop") == 4
-    assert snapshot("send-shop").reserved == 1
+    _message_ledger_idle()
 
 
 def test_tiktok_dm_settle_matches_minted_inbound() -> None:
@@ -259,8 +257,7 @@ def test_tiktok_dm_settle_matches_minted_inbound() -> None:
         brain_mid=mid,
         accepted=True,
     )
-    assert remaining_messages("send-shop") == 4
-    assert snapshot("send-shop").reserved == 0
+    _message_ledger_idle()
     dm = getsource(_maybe_ai_dm)
     assert "bind_dm_ids" in dm
     assert "accepted=False" in dm
@@ -293,8 +290,7 @@ def test_whatsapp_settle_uses_intent_mid_when_inbound_empty() -> None:
         conversation_id="wa-conv",
         intent_mid="wamid.from-intent",
     )
-    assert remaining_messages("send-shop") == 4
-    assert snapshot("send-shop").reserved == 0
+    _message_ledger_idle()
 
 
 def test_sfu_revalidate_uses_live_customer_reply() -> None:
@@ -328,8 +324,7 @@ def test_sfu_settle_matches_minted_followup_id() -> None:
     turn, result = _generated("sfu:seq-1:2")
     apply_message_billing(turn, result)
     settle_followup_from_snapshot("send-shop", job, accepted=True)
-    assert remaining_messages("send-shop") == 4
-    assert snapshot("send-shop").reserved == 0
+    _message_ledger_idle()
 
 
 def test_omni_generate_fail_releases_brain_hold() -> None:
@@ -378,9 +373,8 @@ def test_reconcile_settles_alias_operation_id() -> None:
         extra={"candidate_ids": ["mid-alias"]},
     )
     report = run_reservation_reconcile()
-    assert report["settled"] >= 1
-    assert remaining_messages("send-shop") == 4
-    assert snapshot("send-shop").reserved == 0
+    assert report["settled"] == 0
+    _message_ledger_idle()
 
 
 def test_empty_generate_and_exception_release_message_hold() -> None:
@@ -437,8 +431,8 @@ def test_hold_policy_does_not_tag_message_holds_as_leftover(monkeypatch: pytest.
     from services.billing.membership.hold_policy import hold_billing_policy
 
     assert hold_billing_policy(leftover_reservation_id="rid-1") == "legacy_credits"
-    assert hold_billing_policy(leftover_reservation_id=None) == "message_units"
-    monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
+    assert hold_billing_policy(leftover_reservation_id=None) == "legacy_credits"
+    monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     assert hold_billing_policy(leftover_reservation_id=None) == "legacy_credits"
 
 
@@ -455,6 +449,6 @@ def test_ambiguous_holds_use_hold_policy_not_leftover_only() -> None:
     _hold_after_ambiguous_send("send-shop", None, "wamid.amb-1")
     rows = [item for item in list_pending() if item.operation_id == "wamid.amb-1"]
     assert rows
-    assert rows[0].billing_policy == "message_units"
+    assert rows[0].billing_policy == "legacy_credits"
     assert rows[0].state == "unresolved"
     assert rows[0].send_status != "sent"

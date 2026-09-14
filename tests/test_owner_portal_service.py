@@ -6,6 +6,7 @@ import pytest
 
 import services.interaction_flow_logger as flow_logger
 import services.owner_portal_service as portal
+from services.billing.plan_economics import PLAN_PRICES_USD
 
 
 def test_recent_flows_excludes_other_tenants_and_untagged_rows(monkeypatch):
@@ -49,7 +50,7 @@ def test_list_subscribers_groups_users_and_batches_billing(monkeypatch):
     assert rows[0]["roles"] == ["owner", "viewer"]
     assert rows[0]["credits_used"] == 45
     assert rows[0]["credits_remaining"] == 75
-    assert rows[0]["intended_included_messages"] == 3000
+    assert rows[0]["intended_included_messages"] is None
     assert rows[0]["intended_price_usd"] == 59.0
 
 
@@ -91,8 +92,8 @@ def test_analytics_keeps_legacy_credits_and_adds_catalog_mrr(monkeypatch):
     )
     data = portal.analytics("last_7_days")
     assert data["credits_total"] == 7000
-    assert data["intended_message_mrr_usd"] == 10.0
-    assert data["live_checkout_mrr_usd"] != data["intended_message_mrr_usd"]
+    assert data["intended_message_mrr_usd"] == PLAN_PRICES_USD["lite"]
+    assert data["live_checkout_mrr_usd"] == data["intended_message_mrr_usd"]
 
 
 @pytest.mark.asyncio
