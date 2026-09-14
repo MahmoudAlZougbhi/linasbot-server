@@ -5259,6 +5259,103 @@ check_canonical_env_security() {
   fi
 }
 
+reconcile_model_policy_env() {
+  # G fail-closes startup when leftover Laser-era model env overrides the
+  # Sol/Voyage/Terra policy. Unset those keys; do not restore Laser/Luna.
+  check_canonical_env_security || die "canonical .env failed security before model-policy reconcile"
+  local removed
+  removed="$(run_system_python_control - "$REPO_DIR/.env" <<'PY'
+import os
+import stat
+import sys
+import tempfile
+from pathlib import Path
+
+path = Path(sys.argv[1])
+policy = {
+    "LINAS_OWNER_MODEL": "gpt-5.6-sol",
+    "LINAS_OWNER_HELP_MODEL": "gpt-5.6-sol",
+    "LINAS_OWNER_CM_MODEL": "gpt-5.6-sol",
+    "LINAS_MODEL_OWNER_CHAT": "gpt-5.6-sol",
+    "LINAS_MODEL_SETUP": "gpt-5.6-sol",
+    "LINAS_MODEL_CREATIVE": "gpt-5.6-sol",
+    "LINAS_CREATIVE_MODEL": "gpt-5.6-sol",
+    "LINAS_CUSTOMER_MODEL": "gpt-5.6-terra",
+    "LINAS_CM_ANSWER_MODEL": "gpt-5.6-terra",
+    "LINAS_MODEL_CUSTOMER_DM": "gpt-5.6-terra",
+    "LINAS_CUSTOMER_HV_MODEL": "gpt-5.6-terra",
+    "LINAS_CUSTOMER_ANSWER_MODEL": "gpt-5.6-terra",
+    "LINAS_CUSTOMER_RETRIEVAL_MODEL": "voyage-4-large",
+}
+
+def unquote(raw: str) -> str:
+    value = raw.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        return value[1:-1]
+    return value
+
+before = path.lstat()
+if (
+    not stat.S_ISREG(before.st_mode)
+    or stat.S_ISLNK(before.st_mode)
+    or before.st_uid != 0
+    or before.st_gid != 0
+    or stat.S_IMODE(before.st_mode) != 0o600
+    or before.st_nlink != 1
+):
+    raise SystemExit("canonical .env is unsafe for model-policy reconcile")
+fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+try:
+    opened = os.fstat(fd)
+    if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
+        raise SystemExit("canonical .env changed while opening")
+    text = os.read(fd, opened.st_size).decode("utf-8")
+finally:
+    os.close(fd)
+removed: list[str] = []
+kept: list[str] = []
+for line in text.splitlines():
+    key = ""
+    if "=" in line and not line.lstrip().startswith("#"):
+        candidate, _, raw = line.partition("=")
+        candidate = candidate.strip()
+        if candidate in policy and unquote(raw) != policy[candidate]:
+            removed.append(candidate)
+            continue
+    kept.append(line)
+if not removed:
+    print("none")
+    raise SystemExit(0)
+replacement = ("\n".join(kept) + "\n").encode("utf-8")
+descriptor, temporary_name = tempfile.mkstemp(prefix=".env.model-policy.", dir=path.parent)
+temporary = Path(temporary_name)
+try:
+    os.write(descriptor, replacement)
+    os.fsync(descriptor)
+    os.fchmod(descriptor, 0o600)
+    os.fchown(descriptor, 0, 0)
+finally:
+    os.close(descriptor)
+os.replace(temporary, path)
+directory = os.open(path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+try:
+    os.fsync(directory)
+finally:
+    os.close(directory)
+print(",".join(removed))
+PY
+)"
+  log "model policy env reconciled; removed_keys=${removed}"
+}
+
+apply_model_policy_env_cluster() {
+  local peer_host="$1"
+  local expected_release_sha="$2"
+  reconcile_model_policy_env
+  remote_node "$peer_host" reconcile-model-policy-env
+  assert_cluster_runtime_env_parity "$peer_host" "$expected_release_sha" "$expected_release_sha"
+}
+
 audit_untracked_runtime() {
   local archive_parent="$1"
   local phase="$2"
@@ -10144,6 +10241,9 @@ node_dispatch() {
       validate_tx_dir "${2:-}"
       node_recover_admit "$1" "$2"
       ;;
+    reconcile-model-policy-env)
+      reconcile_model_policy_env
+      ;;
     recover-rollback)
       validate_sha "${1:-}"
       validate_tx_dir "${2:-}"
@@ -11039,6 +11139,7 @@ recover_deployment() {
       "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" \
       "" "$((300 + drain_seconds))")" = \
       "$lb_observed_at" || die "recovery LB attestation expired before commit admission"
+    apply_model_policy_env_cluster "$peer_host" "$target_sha"
     update_recovery_journal "commit-peer-admit"
     remote_node "$peer_host" recover-admit "$target_sha" "$tx_dir"
     assert_public_ready_after_peer_admission "$target_sha"
@@ -11571,6 +11672,7 @@ commit_target_deployment() {
   test "$(assert_fresh_lb_ready_attestation \
     "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" "" 600)" = \
     "$lb_observed_at" || die "commit LB attestation expired before peer admission"
+  apply_model_policy_env_cluster "$peer_host" "$target_sha"
   update_commit_journal "peer-admit-started" commit
   remote_node "$peer_host" recover-admit "$target_sha" "$tx_dir"
   assert_public_ready_after_peer_admission "$target_sha"
