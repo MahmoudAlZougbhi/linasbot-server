@@ -383,5 +383,5 @@ def test_external_tenant_never_inherits_lina_whatsapp_matrix(
             "SOCIAL_WHATSAPP_BEIRUT_FEMALE",
             tenant_id="linas",
         )
-        == "+96178847527"
+        is None
     )

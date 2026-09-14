@@ -6,28 +6,17 @@ from pathlib import Path
 
 from services.ai_setup.constants import INITIAL_RESTRICTED_LABELS, INITIAL_RESTRICTED_TOPIC_IDS
 from services.ai_setup.migration import migrate_legacy_fixture
-from services.ai_setup.schemas import RestrictedPolicy, initial_restricted_policy
+from services.ai_setup.schemas import LocalizedLabels, RestrictedPolicy, RestrictedTopic, initial_restricted_policy
 from services.ai_setup.storage import get_draft, put_draft
 
 
-def test_initial_restricted_catalog_exists_inactive_by_default() -> None:
-    assert INITIAL_RESTRICTED_TOPIC_IDS == (
-        "tattoo_removal",
-        "co2_laser",
-        "pigmentation_removal",
-        "facial_skin_cleaning",
-    )
-    assert INITIAL_RESTRICTED_LABELS["tattoo_removal"]["en"] == "Tattoo removal"
-    assert INITIAL_RESTRICTED_LABELS["co2_laser"]["en"] == "CO2 laser"
-    assert INITIAL_RESTRICTED_LABELS["pigmentation_removal"]["en"] == "Pigmentation removal"
-    assert INITIAL_RESTRICTED_LABELS["facial_skin_cleaning"]["en"] == "Facial / skin-cleaning sessions"
-
+def test_initial_restricted_catalog_is_empty() -> None:
+    assert INITIAL_RESTRICTED_TOPIC_IDS == ()
+    assert INITIAL_RESTRICTED_LABELS == {}
     inactive = initial_restricted_policy()
-    assert all(topic.active is False for topic in inactive.topics)
-    assert {topic.id for topic in inactive.topics} == set(INITIAL_RESTRICTED_TOPIC_IDS)
-
+    assert inactive.topics == []
     active = initial_restricted_policy(active=True)
-    assert {topic.id for topic in active.topics if topic.active} == set(INITIAL_RESTRICTED_TOPIC_IDS)
+    assert active.topics == []
 
 
 def test_migration_does_not_auto_restrict_by_topic_keywords() -> None:
@@ -47,7 +36,16 @@ def test_owner_activated_restricted_topics_still_surface_conflicts() -> None:
     env = get_draft("restricted", tenant_id=tenant_id, create_default=True)
     put_draft(
         "restricted",
-        payload=initial_restricted_policy(active=True).model_dump(mode="json"),
+        payload=RestrictedPolicy(
+            topics=[
+                RestrictedTopic(
+                    id="tattoo_removal",
+                    labels=LocalizedLabels(en="Tattoo removal", ar="إزالة الوشم", fr="Détatouage"),
+                    keywords=["tattoo"],
+                    active=True,
+                )
+            ]
+        ).model_dump(mode="json"),
         if_match=env.etag,
         tenant_id=tenant_id,
         updated_by="test",

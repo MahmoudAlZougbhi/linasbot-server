@@ -213,5 +213,13 @@ Matrix (see `tests/test_wave_g_acceptance_matrix.py`): every drawer tile; Live C
 
 Scale job-progress still uses historical Redis stage labels (`luna_started`). Those are stuck-threshold keys, not the customer Luna engine. Renaming them would change env/histogram names (infra — needs Mahmoud).
 
+## WAVE X1 — founder / Laser special-cases
+
+- Live Python must not treat tenant slug `linas` as an env override, analytics default, Meta deletion extra-id, or WhatsApp number matrix.
+- `INITIAL_RESTRICTED_TOPIC_IDS` / `INITIAL_RESTRICTED_LABELS` are empty. Owners add Restricted Topics themselves.
+- `DEFAULT_SOCIAL_WHATSAPP_CONTACTS` is empty. Unpublished tenants resolve no clinic WhatsApp numbers.
+- Prod apply/stage scripts write `LINAS_CUSTOMER_AI_LAB=false` (never `true`).
+- Authenticated KEEP APIs (Live Chat, Requests, WhatsApp, Copilot, CM, billing, …) use one allowlist for every tenant. Founder slug `linas` is not exempt. Missing session tenant is 403. Meta connection activate requires published CM for every tenant.
+- Evidence: `docs/FINAL_CLEANUP_VERIFY.md`. Tests: `tests/test_wave_x1_founder_cleanup.py`.
 
 

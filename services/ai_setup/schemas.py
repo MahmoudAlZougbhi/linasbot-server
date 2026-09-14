@@ -354,8 +354,7 @@ def utc_now() -> datetime:
 def initial_restricted_topics(*, active: bool = False) -> list[RestrictedTopic]:
     """Catalog of optional Restricted Topics for owner configuration.
 
-    Topics are inactive by default. Migration must not auto-restrict recovered Lina files
-    from this hardcoded list; the owner activates topics explicitly in the Restricted UI.
+    Topics are inactive by default. The platform ships no industry topic catalog.
     """
     topics: list[RestrictedTopic] = []
     for topic_id in INITIAL_RESTRICTED_TOPIC_IDS:

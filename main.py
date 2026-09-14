@@ -167,8 +167,7 @@ if __name__ == "__main__":
         # Initialize Firebase and load bot assets
         initialize_firestore()
         config.load_bot_assets()
-        config.load_training_data()
-        print("🤖 Lina's Laser AI Bot is ready!")
+        print("Linas AI is ready.")
         if os.path.exists(INDEX_HTML_PATH):
             print("📊 Dashboard: http://localhost:8003/")
         else:

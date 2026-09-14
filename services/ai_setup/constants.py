@@ -28,37 +28,9 @@ def require_tenant_id(tenant_id: str | None = None) -> str:
     return tid
 
 
-# Initial Restricted defaults (plan D8) — owner may change in an approved published version.
-# Catalog is clinic-shaped historically; new tenants do not auto-activate these topics.
-INITIAL_RESTRICTED_TOPIC_IDS: Final[tuple[str, ...]] = (
-    "tattoo_removal",
-    "co2_laser",
-    "pigmentation_removal",
-    "facial_skin_cleaning",
-)
-
-INITIAL_RESTRICTED_LABELS: Final[dict[str, dict[str, str]]] = {
-    "tattoo_removal": {
-        "en": "Tattoo removal",
-        "ar": "إزالة الوشم",
-        "fr": "Détatouage",
-    },
-    "co2_laser": {
-        "en": "CO2 laser",
-        "ar": "ليزر CO2",
-        "fr": "Laser CO2",
-    },
-    "pigmentation_removal": {
-        "en": "Pigmentation removal",
-        "ar": "إزالة التصبغات",
-        "fr": "Traitement de la pigmentation",
-    },
-    "facial_skin_cleaning": {
-        "en": "Facial / skin-cleaning sessions",
-        "ar": "جلسات تنظيف البشرة / فيشل",
-        "fr": "Soins du visage / nettoyage de peau",
-    },
-}
+# New tenants start with an empty Restricted catalog. Owners add topics in AI Setup.
+INITIAL_RESTRICTED_TOPIC_IDS: Final[tuple[str, ...]] = ()
+INITIAL_RESTRICTED_LABELS: Final[dict[str, dict[str, str]]] = {}
 
 
 def cm_emergency_force_legacy() -> bool:

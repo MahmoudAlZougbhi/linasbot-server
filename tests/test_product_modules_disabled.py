@@ -117,10 +117,8 @@ def test_disabled_modules_blocked_for_saas_tenant(monkeypatch) -> None:
     assert res.json()["code"] == "PRODUCT_MODULE_DISABLED"
 
     live = client.get("/api/live-chat/unified-chats")
-    # Live Chat is restored for Linas, but still fail-closed for other tenants
-    # until the store has an explicit tenant-aware query path.
-    assert live.status_code == 403
-    assert live.json()["error"] == "Tenant-isolated API unavailable"
+    assert live.status_code == 200
+    assert live.json() == {"reached": True}
 
     # CM still allowed for SaaS (not a disabled module)
     allowed = client.get("/api/cm/meta")

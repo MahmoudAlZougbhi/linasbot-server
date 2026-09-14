@@ -1,8 +1,7 @@
 """Canonical remaining-credit gate for Owner Copilot and channel AI.
 
 Dashboard remaining and every AI generation gate must use ``remaining_credits``.
-This is the credit ledger spend wallet — not the prepaid token wallet, and not
-the Linas Laser founder exemption (``linas`` only).
+This is the credit ledger spend wallet — not the prepaid token wallet.
 """
 
 from __future__ import annotations

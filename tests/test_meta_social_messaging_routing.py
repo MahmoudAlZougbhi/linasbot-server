@@ -17,8 +17,7 @@ from tests.meta_social_messaging_helpers import _social_user_data
 
 class SocialRoutingRegressionTests(unittest.TestCase):
     def test_defaults_use_wa_me_not_wa_link(self):
-        phone = DEFAULT_SOCIAL_WHATSAPP_CONTACTS["SOCIAL_WHATSAPP_BEIRUT_FEMALE"]
-        url = wa_me_url(phone)
+        url = wa_me_url("+15551234567")
         self.assertTrue(url.startswith("https://wa.me/"))
         self.assertNotIn("wa.link", url)
 
@@ -45,8 +44,8 @@ class SocialRoutingRegressionTests(unittest.TestCase):
             language="en",
         )
         self.assertIsNotNone(result)
-        self.assertIn("78847527", result.reply)
-        self.assertIn("https://wa.me/96178847527", result.reply)
+        self.assertIn("being updated", result.reply.lower())
+        self.assertNotIn("wa.me/", result.reply.lower())
 
 
 class SocialHandoffStateMachineTests(unittest.TestCase):
@@ -114,20 +113,23 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
         after_branch = route_social_contact_request("Beirut", ud, "en")
         self.assertIn("men or women", after_branch.reply.lower())
         completed = route_social_contact_request("Women", ud, "en")
-        self.assertIn("https://wa.me/96178847527", completed.reply)
+        self.assertIn("being updated", completed.reply.lower())
+        self.assertNotIn("wa.me/", completed.reply.lower())
         self.assertFalse(self._flow_keys(ud))
 
     def test_completed_male_flow_is_reused_only_as_scoped_durable_preference(self):
         ud = self._fb()
         first = route_social_contact_request("Book a Beirut appointment for men", ud, "en")
-        self.assertIn("https://wa.me/96171534928", first.reply)
+        self.assertIn("being updated", first.reply.lower())
+        self.assertNotIn("wa.me/", first.reply.lower())
         self.assertEqual(first.preference_to_persist, "male")
         self.assertFalse(self._flow_keys(ud))
 
         started = route_social_contact_request("I want to book an appointment with a human", ud, "en")
         self.assertIn(self.BRANCH_EN, started.reply)
         after_branch = route_social_contact_request("Beirut", ud, "en")
-        self.assertIn("https://wa.me/96171534928", after_branch.reply)
+        self.assertIn("being updated", after_branch.reply.lower())
+        self.assertNotIn("wa.me/", after_branch.reply.lower())
         self.assertNotIn("men or women", after_branch.reply.lower())
 
     @staticmethod
@@ -140,7 +142,8 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
         self.assertIn("men or women", route_social_contact_request("Beirut", ud, "en").reply.lower())
 
         completed = route_social_contact_request("Women", ud, "en")
-        self.assertIn("https://wa.me/96178847527", completed.reply)
+        self.assertIn("being updated", completed.reply.lower())
+        self.assertNotIn("wa.me/", completed.reply.lower())
         self.assertEqual(completed.preference_to_persist, "female")
         self.assertEqual(get_social_booking_preference(ud), "female")
         self.assertFalse(self._flow_keys(ud))
@@ -155,7 +158,8 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
         started = route_social_contact_request("I want to book an appointment", returning, "en")
         self.assertIn(self.BRANCH_EN, started.reply)
         completed = route_social_contact_request("Beirut", returning, "en")
-        self.assertIn("https://wa.me/96178847527", completed.reply)
+        self.assertIn("being updated", completed.reply.lower())
+        self.assertNotIn("wa.me/", completed.reply.lower())
         self.assertNotIn("men or women", completed.reply.lower())
         self.assertFalse(self._flow_keys(returning))
 
@@ -197,10 +201,9 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
         returning = self._fb(sender="change-preference-customer")
         persisted = self._persisted_preference(returning, "female")
         restore_social_booking_preference(returning, persisted)
-        self.assertIn(
-            "https://wa.me/96178847527",
-            route_social_contact_request("Book in Beirut", returning, "en").reply,
-        )
+        reply = route_social_contact_request("Book in Beirut", returning, "en").reply
+        self.assertIn("being updated", reply.lower())
+        self.assertNotIn("wa.me/", reply.lower())
 
     def test_natural_preference_change_phrases_normalize_to_canonical_values(self):
         men = self._fb(sender="phrase-men")
@@ -219,12 +222,14 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
         self.assertIn(self.BRANCH_EN, route_social_contact_request("Book an appointment", ud, "en").reply)
         self.assertIn(self.BRANCH_EN, route_social_contact_request("for my wife", ud, "en").reply)
         override = route_social_contact_request("Beirut", ud, "en")
-        self.assertIn("https://wa.me/96178847527", override.reply)
+        self.assertIn("being updated", override.reply.lower())
+        self.assertNotIn("wa.me/", override.reply.lower())
         self.assertIsNone(override.preference_to_persist)
         self.assertEqual(get_social_booking_preference(ud), "male")
 
         later = route_social_contact_request("Book in Beirut", ud, "en")
-        self.assertIn("https://wa.me/96171534928", later.reply)
+        self.assertIn("being updated", later.reply.lower())
+        self.assertNotIn("wa.me/", later.reply.lower())
 
     def test_new_explicit_request_replaces_partial_flow_fields(self):
         ud = self._fb()
@@ -248,8 +253,10 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
 
         first_after_branch = route_social_contact_request("Beirut", first, "en")
         second_after_gender = route_social_contact_request("Women", second, "en")
-        self.assertIn("https://wa.me/96178847527", first_after_branch.reply)
-        self.assertIn("https://wa.me/96178847527", second_after_gender.reply)
+        self.assertIn("being updated", first_after_branch.reply.lower())
+        self.assertNotIn("wa.me/", first_after_branch.reply.lower())
+        self.assertIn("being updated", second_after_gender.reply.lower())
+        self.assertNotIn("wa.me/", second_after_gender.reply.lower())
         self.assertFalse(self._flow_keys(first))
         self.assertFalse(self._flow_keys(second))
 
@@ -276,8 +283,10 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
 
         facebook_result = route_social_contact_request("Beirut", facebook, "en")
         instagram_result = route_social_contact_request("Women", instagram, "en")
-        self.assertIn("https://wa.me/96178847527", facebook_result.reply)
-        self.assertIn("https://wa.me/96178847527", instagram_result.reply)
+        self.assertIn("being updated", facebook_result.reply.lower())
+        self.assertNotIn("wa.me/", facebook_result.reply.lower())
+        self.assertIn("being updated", instagram_result.reply.lower())
+        self.assertNotIn("wa.me/", instagram_result.reply.lower())
         self.assertFalse(self._flow_keys(facebook))
         self.assertFalse(self._flow_keys(instagram))
 
@@ -286,12 +295,14 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
         self.assertIn(self.BRANCH_EN, route_social_contact_request("Book an appointment", ud, "en").reply)
         self.assertIn("men or women", route_social_contact_request("Beirut", ud, "en").reply.lower())
         completed = route_social_contact_request("Women", ud, "en")
-        self.assertIn("https://wa.me/96178847527", completed.reply)
+        self.assertIn("being updated", completed.reply.lower())
+        self.assertNotIn("wa.me/", completed.reply.lower())
 
     def test_current_request_with_branch_and_gender_completes_without_extra_questions(self):
         ud = self._fb()
         completed = route_social_contact_request("Book a Beirut appointment for Women", ud, "en")
-        self.assertIn("https://wa.me/96178847527", completed.reply)
+        self.assertIn("being updated", completed.reply.lower())
+        self.assertNotIn("wa.me/", completed.reply.lower())
         self.assertNotIn(self.BRANCH_EN, completed.reply)
         self.assertNotIn("Men or Women", completed.reply)
 
@@ -321,8 +332,8 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
         self.assertIn("men or women", r2.reply.lower())
         r3 = route_social_contact_request("male", ud, "en")
         self.assertIsNotNone(r3)
-        self.assertIn("71226082", r3.reply)
-        self.assertIn("https://wa.me/", r3.reply)
+        self.assertIn("being updated", r3.reply.lower())
+        self.assertNotIn("wa.me/", r3.reply.lower())
         self.assertFalse(any(str(k).startswith("social_contact_flow") for k in ud))
 
     def test_beirut_female_mapping_unchanged(self):
@@ -330,7 +341,7 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
         route_social_contact_request("book appointment", ud, "en")
         route_social_contact_request("Beirut", ud, "en")
         result = route_social_contact_request("female", ud, "en")
-        self.assertIn("78847527", result.reply)
+        self.assertIn("being updated", result.reply.lower())
 
     def test_new_topic_during_pending_handoff_returns_to_ai(self):
         ud = self._ig()
@@ -385,13 +396,7 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
         self.assertFalse(any(str(k).startswith("social_contact_flow") for k in ud))
 
     def test_whatsapp_matrix_keys_unchanged(self):
-        expected = {
-            "SOCIAL_WHATSAPP_BEIRUT_FEMALE": "+96178847527",
-            "SOCIAL_WHATSAPP_ANTELIAS_FEMALE": "+96170707354",
-            "SOCIAL_WHATSAPP_BEIRUT_MALE": "+96171534928",
-            "SOCIAL_WHATSAPP_ANTELIAS_MALE": "+96171226082",
-        }
-        self.assertEqual(DEFAULT_SOCIAL_WHATSAPP_CONTACTS, expected)
+        self.assertEqual(DEFAULT_SOCIAL_WHATSAPP_CONTACTS, {})
         self.assertNotIn("SOCIAL_WHATSAPP_TATTOO_REMOVAL", DEFAULT_SOCIAL_WHATSAPP_CONTACTS)
 
 

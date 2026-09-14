@@ -259,13 +259,14 @@ async def activate_meta_connection(binding_id: str, request: Request) -> Any:
     binding = _tenant_binding(binding_id, session.tenant_id)
     if binding.app_key not in {APP_A_KEY, APP_B_KEY} or binding.status not in {"testing", "inactive"}:
         raise HTTPException(status_code=409, detail="Connection is not eligible for activation")
-    if session.tenant_id != "linas":
-        from services.ai_setup.version_store import load_published_content
+    if session.tenant_id.strip() == "":
+        raise HTTPException(status_code=403, detail="tenant_id required")
+    from services.ai_setup.version_store import load_published_content
 
-        try:
-            load_published_content(session.tenant_id)
-        except Exception as exc:
-            raise HTTPException(status_code=409, detail="Tenant AI content is not published") from exc
+    try:
+        load_published_content(session.tenant_id)
+    except Exception as exc:
+        raise HTTPException(status_code=409, detail="Tenant AI content is not published") from exc
     registry = get_meta_app_registry()
     previous = _active_conflict(binding)
     try:

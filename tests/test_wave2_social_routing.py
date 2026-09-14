@@ -12,17 +12,8 @@ from services.conversation_router import is_human_request
 from services.social_contact_routing import (
     DEFAULT_SOCIAL_WHATSAPP_CONTACTS,
     is_appointment_request,
-    phone_digits,
     route_social_contact_request,
-    wa_me_url,
 )
-
-REQUIRED = {
-    "SOCIAL_WHATSAPP_BEIRUT_FEMALE": "96178847527",
-    "SOCIAL_WHATSAPP_ANTELIAS_FEMALE": "96170707354",
-    "SOCIAL_WHATSAPP_BEIRUT_MALE": "96171534928",
-    "SOCIAL_WHATSAPP_ANTELIAS_MALE": "96171226082",
-}
 
 
 def social_user_data(channel: str = "instagram") -> dict:
@@ -34,11 +25,8 @@ def social_user_data(channel: str = "instagram") -> dict:
     }
 
 
-def test_contact_matrix_exact():
-    for key, digits in REQUIRED.items():
-        got = phone_digits(DEFAULT_SOCIAL_WHATSAPP_CONTACTS[key])
-        assert got == digits
-        assert wa_me_url(DEFAULT_SOCIAL_WHATSAPP_CONTACTS[key]) == f"https://wa.me/{digits}"
+def test_contact_matrix_empty():
+    assert DEFAULT_SOCIAL_WHATSAPP_CONTACTS == {}
 
 
 def test_hours_not_booking():
@@ -89,7 +77,7 @@ def test_tattoo_request_refuses_without_whatsapp():
     assert "isn't one of the services" in out.reply.lower()
 
 
-def test_full_laser_handoff_women_beirut():
+def test_booking_handoff_has_no_clinic_whatsapp():
     ud = social_user_data()
     r1 = route_social_contact_request("بدي احجز", ud, "ar")
     assert r1 is not None
@@ -97,7 +85,8 @@ def test_full_laser_handoff_women_beirut():
     assert r2 is not None
     r3 = route_social_contact_request("female", ud, "en")
     assert r3 is not None
-    assert "wa.me/96178847527" in r3.reply
+    assert "wa.me/" not in r3.reply.lower()
+    assert "96178847527" not in r3.reply
 
 
 def test_greetings_stay_on_ai():

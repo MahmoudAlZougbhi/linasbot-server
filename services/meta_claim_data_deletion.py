@@ -104,13 +104,7 @@ def _event_stable_identities(raw: dict[str, Any]) -> frozenset[str]:
         )
     except Exception:
         pass
-    # Historical Linas identities changed shape when a channel gained/lost a
-    # second active asset. Preserve both exact contracts without consulting the
-    # mutable current registry topology.
-    if tenant_id.strip().lower() == "linas":
-        candidates.update({f"{channel}:{sender_id}", f"{channel}:{asset_id}:{sender_id}"})
-    else:
-        candidates.add(f"{tenant_id.strip().lower()}:{channel}:{asset_id}:{sender_id}")
+    candidates.add(f"{tenant_id.strip().lower()}:{channel}:{asset_id}:{sender_id}")
     return frozenset(value for value in candidates if value)
 
 

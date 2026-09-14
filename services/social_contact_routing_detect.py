@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import dataclass
 
@@ -20,14 +19,8 @@ SOCIAL_CONTACT_FLOW_TTL_SECONDS = 30 * 60
 SOCIAL_BOOKING_PREFERENCES_FIELD = "social_booking_preferences"
 SOCIAL_BOOKING_PREFERENCE_MEMORY_PREFIX = "social_booking_preference::v1::"
 
-# Public business WhatsApp contacts for supported laser booking handoff (env overrides per key).
-# Tattoo removal is intentionally absent — unsupported services never receive a WhatsApp route.
-DEFAULT_SOCIAL_WHATSAPP_CONTACTS = {
-    "SOCIAL_WHATSAPP_BEIRUT_FEMALE": "+96178847527",
-    "SOCIAL_WHATSAPP_ANTELIAS_FEMALE": "+96170707354",
-    "SOCIAL_WHATSAPP_BEIRUT_MALE": "+96171534928",
-    "SOCIAL_WHATSAPP_ANTELIAS_MALE": "+96171226082",
-}
+# No platform-wide WhatsApp numbers. Published CM handoff is the only SoT.
+DEFAULT_SOCIAL_WHATSAPP_CONTACTS: dict[str, str] = {}
 
 _APPOINTMENT_RE = re.compile(
     r"(?:"
@@ -188,50 +181,36 @@ def wa_me_url(phone: str) -> str:
 
 
 def resolve_social_whatsapp_number(env_name: str, *, tenant_id: str) -> str | None:
-    """Resolve public WhatsApp contact for a matrix key.
+    """Resolve public WhatsApp contact from published CM handoff only.
 
-    Precedence:
-    1. Explicit env override for that exact key (ops).
-    2. When ``CM_RUNTIME_MODE=published``, the published CM handoff contact
-       (``env_name.lower()``) — never silently fall back to code defaults.
-    3. Tracked ``DEFAULT_SOCIAL_WHATSAPP_CONTACTS`` (legacy mode only).
+    Missing tenant raises. Missing published contact returns None (no founder matrix).
     """
     tenant = _require_tenant_id(tenant_id, context="social WhatsApp contact resolution")
-    override = (os.getenv(env_name) or "").strip() if tenant == "linas" else ""
-    if override:
-        return override
+    contact_id = env_name.strip().lower()
 
-    # CM AI CONTROL PLANE — published handoff contacts when this tenant uses CM runtime.
     from services.ai_setup.constants import tenant_uses_cm_runtime
 
-    if tenant_uses_cm_runtime(tenant):
-        try:
-            from services.ai_setup.schemas import HandoffPolicy
-            from services.ai_setup.version_store import load_published_content
+    if not tenant_uses_cm_runtime(tenant):
+        return None
+    try:
+        from services.ai_setup.schemas import HandoffPolicy
+        from services.ai_setup.version_store import load_published_content
 
-            _pointer, sections = load_published_content(tenant)
-            policy = HandoffPolicy.model_validate(sections.get("handoff") or {})
-            contact_id = env_name.strip().lower()
-            for contact in policy.contacts:
-                if contact.id != contact_id:
-                    continue
-                dtype, value = contact.resolved_destination()
-                if not value:
-                    return None
-                if dtype in {"whatsapp", "phone"}:
-                    return value
+        _pointer, sections = load_published_content(tenant)
+        policy = HandoffPolicy.model_validate(sections.get("handoff") or {})
+        for contact in policy.contacts:
+            if contact.id != contact_id:
+                continue
+            dtype, value = contact.resolved_destination()
+            if not value:
                 return None
-        except Exception as exc:
-            print(f"[social_contact_routing] published handoff resolve failed for {env_name}: {exc}")
+            if dtype in {"whatsapp", "phone"}:
+                return value
             return None
+    except Exception as exc:
+        print(f"[social_contact_routing] published handoff resolve failed for {env_name}: {exc}")
         return None
-
-    # Never leak Lina's deterministic contact matrix into a SaaS tenant that has
-    # not published its own handoff policy.
-    if tenant != "linas":
-        return None
-    default = DEFAULT_SOCIAL_WHATSAPP_CONTACTS.get(env_name)
-    return default.strip() if default else None
+    return None
 
 
 def clear_social_contact_flow(user_data: dict) -> None:

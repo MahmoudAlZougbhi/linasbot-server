@@ -37,6 +37,7 @@ __all__ = (
     "check_rate_limit",
     "client_ip",
     "get_request_session",
+    "is_keep_tenant_api_path",
     "is_platform_owner",
     "is_production_env",
     "is_public_api",
@@ -276,6 +277,47 @@ def required_permission_for(method: str, path: str) -> str | None:
     return "settings"
 
 
+# Authenticated product APIs every tenant may hit. Museum paths stay 403 for everyone.
+_KEEP_TENANT_API_PREFIXES: tuple[str, ...] = (
+    "/api/auth",
+    "/api/meta/connections",
+    "/api/cm",
+    "/api/faq",
+    "/api/billing",
+    "/api/owner-ai",
+    "/api/owner-copilot",
+    "/api/mobile",
+    "/api/tiktok",
+    "/api/comments/inbox",
+    "/api/entitlements",
+    "/api/schedule",
+    "/api/platform",
+    "/api/safety",
+    "/api/queue",
+    "/api/live-chat",
+    "/api/requests",
+    "/api/whatsapp",
+    "/api/flow",
+    "/api/dashboard",
+    "/api/web-chat",
+    "/api/omnichannel",
+    "/api/apple",
+    "/api/plans",
+    "/api/media",
+    "/api/guest",
+)
+
+
+def is_keep_tenant_api_path(path: str) -> bool:
+    p = path if path.startswith("/") else f"/{path}"
+    if len(p) > 1 and p.endswith("/"):
+        p = p.rstrip("/")
+    for prefix in _KEEP_TENANT_API_PREFIXES:
+        if p == prefix or p.startswith(prefix + "/"):
+            return True
+    return False
+
+
 def get_request_session(request: Request) -> SessionRecord | None:
     return getattr(request.state, "dashboard_session", None)
 
@@ -335,8 +377,7 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
                 content={"success": False, "error": "Authentication required"},
             )
 
-        # Wave 1: legacy product modules are disabled for ALL tenants (including linas).
-        # Handlers remain in the repo but normal authenticated access is blocked.
+        # Disabled product prefixes stay 403 for every tenant. KEEP APIs share one allowlist.
         if is_disabled_api_path(path):
             return JSONResponse(
                 status_code=403,
@@ -347,27 +388,12 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-        # The legacy dashboard control planes still operate on Lina's production
-        # stores. External App B tenants are deliberately fail-closed to every
-        # legacy API until that surface has an explicit tenant-aware query path.
-        # Their self-service surface is Meta connection management, Content
-        # Management (tenant-scoped drafts/publish), and authentication.
-        if session.tenant_id != "linas" and not (
-            path.startswith("/api/auth/")
-            or path.startswith("/api/meta/connections")
-            or path.startswith("/api/cm")
-            or path.startswith("/api/faq/")
-            or path.startswith("/api/billing/")
-            or path.startswith("/api/owner-ai/")
-            or path.startswith("/api/mobile/")
-            or path.startswith("/api/tiktok")
-            or path.startswith("/api/comments/inbox")
-            or path.startswith("/api/entitlements/")
-            or path.startswith("/api/schedule/")
-            or path.startswith("/api/platform/")
-            or path.startswith("/api/safety/")
-            or path.startswith("/api/queue/")
-        ):
+        if not (session.tenant_id or "").strip():
+            return JSONResponse(
+                status_code=403,
+                content={"success": False, "error": "tenant_id required"},
+            )
+        if not is_keep_tenant_api_path(path):
             return JSONResponse(
                 status_code=403,
                 content={"success": False, "error": "Tenant-isolated API unavailable"},

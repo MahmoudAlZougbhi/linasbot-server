@@ -18,5 +18,5 @@ def gate_snapshot() -> dict[str, Any]:
         "brain_permanent": True,
         "experimental_allowlist_removed": True,
         "lab_runtime_gate_removed": True,
-        "note": "Lab UI may still use LINAS_CUSTOMER_AI_LAB for the isolated Owner Lab page only.",
+        "note": "LINAS_CUSTOMER_AI_LAB stays off in production. Owner Lab HTTP is gone.",
     }

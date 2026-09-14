@@ -282,6 +282,10 @@ async def test_lina_app_b_activation_is_rejected_before_any_subscription(
     monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr("modules.meta_connections_api_lifecycle.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr("modules.meta_connections_api_lifecycle.subscribe_binding_webhook", subscribe)
+    monkeypatch.setattr(
+        "services.ai_setup.version_store.load_published_content",
+        lambda _tenant: ({}, {}),
+    )
     with pytest.raises(HTTPException) as blocked:
         await meta_connections_api.activate_meta_connection(binding.binding_id, _request("linas"))
     assert blocked.value.status_code == 409
