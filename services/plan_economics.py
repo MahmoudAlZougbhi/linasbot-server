@@ -118,21 +118,16 @@ def recommend_allowance(plan_id: str) -> PlanAllowanceRecommendation:
     store = price * APP_STORE_FEE_PCT
     infra = INFRA_ALLOC_USD[plan_id]
     margin = (price - store - infra - final_cost) / price if price else 0.0
-    features = plan_features(plan_id)
 
     # Rough operational mix labels for dashboards (not used to size credits).
     seeds: dict[str, dict[str, int]] = {
         "lite": {"dm": 400, "owner": 60, "setup": 20, "images": 0, "videos": 0},
         "starter": {"dm": 800, "owner": 120, "setup": 40, "images": 0, "videos": 0},
         "growth": {"dm": 3500, "owner": 250, "setup": 60, "images": 0, "videos": 0},
-        "pro": {"dm": 6000, "owner": 400, "setup": 80, "images": 40, "videos": 4},
-        "max": {"dm": 12000, "owner": 800, "setup": 120, "images": 100, "videos": 12},
+        "pro": {"dm": 6000, "owner": 400, "setup": 80, "images": 0, "videos": 0},
+        "max": {"dm": 12000, "owner": 800, "setup": 120, "images": 0, "videos": 0},
     }
     mix = dict(seeds[plan_id])
-    if not features.get("image_generation"):
-        mix["images"] = 0
-    if not features.get("video_generation"):
-        mix["videos"] = 0
 
     return PlanAllowanceRecommendation(
         plan_id=plan_id,

@@ -26,6 +26,9 @@ os.environ.setdefault("META_REGISTRY_BACKEND", "file")
 # outside ENVIRONMENT=test). Published-mode tests override to openai + a mocked transport.
 os.environ.setdefault("CM_EMBEDDING_PROVIDER", "hash")
 os.environ.setdefault("DISABLE_API_DOCS", "true")
+# Tests still use founder tenant id `linas` without a paid plan. Production env
+# must list exempt tenants explicitly — never invent linas.
+os.environ.setdefault("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
 os.environ.pop("ALLOW_DEBUG_SIMULATE_WEBHOOK", None)
 
 

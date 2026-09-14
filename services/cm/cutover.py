@@ -15,7 +15,7 @@ import copy
 from dataclasses import dataclass
 from typing import Any
 
-from services.cm.constants import CM_SECTIONS, DEFAULT_TENANT_ID
+from services.cm.constants import CM_SECTIONS, require_tenant_id
 from services.cm.publish import PublishBlockedError, publish_draft
 from services.cm.sot_audit import audit_sot_sources
 from services.cm.storage import get_draft, put_draft
@@ -25,7 +25,7 @@ REHEARSAL_TENANT_SUFFIX = "__cutover_rehearsal"
 
 
 def rehearsal_tenant_id(tenant_id: str | None = None) -> str:
-    base = (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+    base = require_tenant_id(tenant_id)
     return f"{base}{REHEARSAL_TENANT_SUFFIX}"
 
 
@@ -35,7 +35,7 @@ def seed_rehearsal_tenant_from_draft(*, tenant_id: str | None = None) -> str:
     Idempotent: safe to call repeatedly (each call re-syncs the rehearsal draft to the latest
     real draft). The real tenant's draft is only ever read here, never written.
     """
-    source_tid = (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+    source_tid = require_tenant_id(tenant_id)
     target_tid = rehearsal_tenant_id(source_tid)
 
     for section in CM_SECTIONS:
@@ -94,7 +94,7 @@ def evaluate_cutover_readiness(*, tenant_id: str | None = None) -> ReadinessGate
     sources are surfaced as a warning list for human review, not a hard blocker — some legacy
     sources (e.g. booking/CRM flows) are explicitly out of CM's scope for this phase.
     """
-    tid = (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+    tid = require_tenant_id(tenant_id)
     validation = validate_cm(tenant_id=tid)
     audit = audit_sot_sources()
 

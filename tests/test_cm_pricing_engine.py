@@ -369,8 +369,8 @@ def test_channel_maps_to_exactly_one_tenant() -> None:
             page_id="PAGE_B",
             mappings=mappings,
         )
-    # Empty mappings → single-tenant default (no Lina hardcoding)
-    assert resolve_tenant_from_channel(channel="instagram", account_id="x", mappings=None) == "linas"
+    # Empty mappings → no tenant invented (fail-closed).
+    assert resolve_tenant_from_channel(channel="instagram", account_id="x", mappings=None) == ""
 
 
 def test_fixed_final_total_and_category_condition() -> None:

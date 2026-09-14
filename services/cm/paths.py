@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.cm.constants import DEFAULT_TENANT_ID
+from services.cm.constants import require_tenant_id
 from storage.persistent_storage import get_data_root
 
 
 def tenant_cm_root(tenant_id: str | None = None) -> Path:
-    tid = (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+    tid = require_tenant_id(tenant_id)
     root = Path(get_data_root()) / "tenants" / tid / "cm"
     return root
 

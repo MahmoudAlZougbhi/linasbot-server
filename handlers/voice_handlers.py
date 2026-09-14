@@ -19,7 +19,6 @@ import config
 
 # We'll call text_handlers.handle_message directly, but need to pass all required args
 from handlers.text_handlers import handle_message as handle_text_message_from_voice
-from handlers.training_handlers import handle_training_input
 from services.analytics_events import analytics  # 📊 ANALYTICS
 from services.customer_reply_v2.inbound_media import mark_inbound_attachment
 from services.llm_core_service import client as openai_client  # Assuming this is correct
@@ -64,21 +63,6 @@ async def handle_voice_message(
             return
     except Exception as exc:
         print(f"[handle_voice_message] voice gate lookup failed for {tenant_id}: {exc}")
-
-    if config.user_in_training_mode.get(user_id, False):
-        print(
-            f"[handle_voice_message] INFO: User ...{str(user_id)[-4:]} in training mode. Handing over to handle_training_input."
-        )
-        # Pass necessary data directly to handle_training_input for voice processing in training mode
-        await handle_training_input(
-            user_id=user_id,
-            user_name=user_name,
-            audio_data_bytes=audio_data_bytes,  # Pass audio bytes directly
-            user_data=user_data,
-            send_message_func=send_message_func,
-            send_action_func=send_action_func,
-        )
-        return
 
     if not PYDUB_AVAILABLE:
         await send_message_func(user_id, "عذراً، معالجة الرسائل الصوتية غير متاحة حالياً. الرجاء إرسال رسالتك نصياً.")

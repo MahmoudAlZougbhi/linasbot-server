@@ -68,4 +68,4 @@ def resolve_tenant_from_channel(
         return next(iter(hits))
     if mappings:
         raise UnknownTenantMappingError("no tenant mapping for channel identity")
-    return default_tenant_id
+    return (default_tenant_id or "").strip()

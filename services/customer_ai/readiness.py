@@ -15,7 +15,10 @@ def _gate(status: str, detail: str = "") -> dict[str, str]:
     return {"status": status, "detail": detail}
 
 
-def brain_readiness_report(*, tenant_id: str = "linas") -> dict[str, Any]:
+def brain_readiness_report(*, tenant_id: str) -> dict[str, Any]:
+    from services.cm.constants import require_tenant_id
+
+    tenant_id = require_tenant_id(tenant_id)
     from services.customer_ai.flags import (
         assert_safe_brain_cutover,
         emergency_legacy_reply_enabled,
@@ -148,9 +151,10 @@ def main() -> int:
     import json
     import sys
 
-    tenant = "linas"
-    if len(sys.argv) > 1 and sys.argv[1].strip():
-        tenant = sys.argv[1].strip()
+    if len(sys.argv) < 2 or not sys.argv[1].strip():
+        print("tenant_id required", file=sys.stderr)
+        return 2
+    tenant = sys.argv[1].strip()
     report = brain_readiness_report(tenant_id=tenant)
     print(json.dumps(report, indent=2, sort_keys=True))
     # Exit 0 for report generation; production-ready is a separate gate set.

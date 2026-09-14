@@ -56,16 +56,13 @@ def resolve_meta_live_chat_tenant(tenant_id: str | None, user_id: str) -> str:
         except Exception:
             return str(embedded_tenant).strip().lower()
 
-    parts = [p.strip() for p in str(user_id or "").split(":") if p.strip()]
-    if len(parts) in {2, 3} and parts[0].lower() in _META_CHANNELS:
-        # compose_social_user_id omits tenant prefix for linas-branded threads.
-        return "linas"
-
-    fallback = str(tenant_id or "linas").strip()
+    explicit = str(tenant_id or "").strip()
+    if not explicit:
+        return ""
     try:
-        return normalize_meta_tenant_id(fallback)
+        return normalize_meta_tenant_id(explicit)
     except Exception:
-        return fallback.lower()
+        return explicit.lower()
 
 
 async def deliver_live_chat_meta_operator_text(

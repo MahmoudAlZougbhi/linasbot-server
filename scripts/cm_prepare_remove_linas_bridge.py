@@ -16,7 +16,7 @@ import sys
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tenant", default="linas")
+    parser.add_argument("--tenant", default="")
     args = parser.parse_args()
 
     from services.cm.constants import (
@@ -27,7 +27,9 @@ def main() -> int:
     )
     from services.cm.version_store import load_published_content, read_published_pointer
 
-    tenant_id = (args.tenant or "linas").strip()
+    tenant_id = (args.tenant or "").strip()
+    if not tenant_id:
+        raise SystemExit("tenant_id required")
     pointer = read_published_pointer(tenant_id)
     report: dict[str, object] = {
         "tenant_id": tenant_id,

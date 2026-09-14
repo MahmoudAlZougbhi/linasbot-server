@@ -330,10 +330,10 @@ def _is_out_of_clinic_scope_query(text: str) -> bool:
 
 def _build_out_of_scope_reply(lang: str) -> str:
     messages = {
-        "ar": "أنا مخصّصة فقط لخدمات عيادة ليناز ليزر. فيني ساعدك بأي سؤال عن خدمات الليزر، الأسعار، أو المواعيد.",
-        "franco": "أنا مخصّصة فقط لخدمات عيادة ليناز ليزر. فيني ساعدك بأي سؤال عن خدمات الليزر، الأسعار، أو المواعيد.",
-        "en": "I can only help with Linas Laser clinic services. I can assist with laser services, pricing, and appointments.",
-        "fr": "Je peux uniquement aider concernant les services de la clinique Linas Laser : services laser, prix et rendez-vous.",
+        "ar": "أنا مخصّصة فقط لخدمات هذا العمل المنشورة. فيني ساعدك بأي سؤال عن الخدمات، الأسعار، أو الطلبات.",
+        "franco": "أنا مخصّصة فقط لخدمات هذا العمل المنشورة. فيني ساعدك بأي سؤال عن الخدمات، الأسعار، أو الطلبات.",
+        "en": "I can only help with this business's published services, prices, and requests.",
+        "fr": "Je peux uniquement aider concernant les services, prix et demandes publiés de cette entreprise.",
     }
     return messages.get((lang or "ar").lower(), messages["ar"])
 

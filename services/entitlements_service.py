@@ -6,11 +6,8 @@ Postgres SoT when LINAS_BILLING_BACKEND=postgres (default); file when explicitly
 
 Subscription gate exemption (explicit allowlist only — not a hidden fallback):
   Env ``SUBSCRIPTION_EXEMPT_TENANT_IDS`` (comma-separated tenant ids).
-  Default: ``linas`` — the reserved Linas Laser founder clinic tenant
-  (``DEFAULT_TENANT_ID`` / ``LINASBOT_TENANT_ID``). Everyone else remains
-  gated on an active/trial/grace paid plan. Set the env to a different
-  comma-separated id list to replace the default; do not broaden the gate
-  globally.
+  Default: empty — no tenant is exempt unless the env lists them.
+  Missing tenant_id never becomes linas.
 """
 
 from __future__ import annotations
@@ -32,8 +29,7 @@ from storage.persistent_storage import _DATA_ROOT as _DEFAULT_DATA_ROOT
 # Overridable in tests
 _DATA_ROOT = _DEFAULT_DATA_ROOT
 
-# Linas Laser founder clinic — reserved tenant_id (see services/cm/constants.DEFAULT_TENANT_ID).
-DEFAULT_SUBSCRIPTION_EXEMPT_TENANTS = frozenset({"linas"})
+DEFAULT_SUBSCRIPTION_EXEMPT_TENANTS = frozenset()
 
 
 def _catalog_features(plan_id: str) -> dict[str, Any]:
@@ -45,9 +41,9 @@ def _catalog_features(plan_id: str) -> dict[str, Any]:
 
 def subscription_exempt_tenant_ids() -> frozenset[str]:
     """Explicit tenant ids that receive app_access without a paid plan."""
-    raw = (os.getenv("SUBSCRIPTION_EXEMPT_TENANT_IDS") or "linas").strip()
+    raw = (os.getenv("SUBSCRIPTION_EXEMPT_TENANT_IDS") or "").strip()
     ids = {part.strip().lower() for part in raw.split(",") if part.strip()}
-    return frozenset(ids or DEFAULT_SUBSCRIPTION_EXEMPT_TENANTS)
+    return frozenset(ids)
 
 
 def is_subscription_exempt_tenant(tenant_id: str | None) -> bool:
@@ -191,8 +187,8 @@ entitlements_store = EntitlementsStore()
 def tenant_has_app_access(tenant_id: str) -> bool:
     """True when the tenant may use the authenticated app (active/trial/grace).
 
-    Explicit subscription-exempt tenants (``SUBSCRIPTION_EXEMPT_TENANT_IDS``,
-    default ``linas`` / Linas Laser) also receive app_access without a plan.
+    Explicit subscription-exempt tenants (``SUBSCRIPTION_EXEMPT_TENANT_IDS``)
+    also receive app_access without a plan. Empty env means nobody is exempt.
     """
     if is_subscription_exempt_tenant(tenant_id):
         return True

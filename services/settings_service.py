@@ -48,7 +48,7 @@ class SettingsService:
         """Get default settings"""
         return {
             "general": {
-                "botName": "Marwa AI Assistant",
+                "botName": "Customer Assistant",
                 "defaultLanguage": "ar",
                 "responseTimeout": 5,
                 "enableVoice": True,

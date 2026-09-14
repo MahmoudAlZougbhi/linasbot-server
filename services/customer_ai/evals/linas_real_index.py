@@ -7,7 +7,6 @@ import json
 import os
 from typing import Any
 
-from services.cm.constants import DEFAULT_TENANT_ID
 from services.cm.version_store import read_published_pointer
 from services.customer_ai.evals.artifacts import durable_report_path
 from services.customer_ai.flags import voyage_configured
@@ -34,7 +33,9 @@ def _gate(*parts: Any, **extra: Any) -> dict[str, Any]:
 
 def resolve_real_tenant_id() -> str:
     override = (os.getenv("LINAS_REAL_TENANT_ID") or "").strip()
-    tid = override or DEFAULT_TENANT_ID
+    tid = (override or "").strip()
+    if not tid:
+        raise ValueError("tenant_id required")
     if tid in LAB_TENANTS:
         raise RuntimeError("refusing_lab_tenant_as_real_linas")
     if not tid:

@@ -117,6 +117,8 @@ def _enqueue_operator_text(
 
         channel, sender_id, asset_id, _embedded = parse_meta_live_chat_user_id(user_id)
         tenant = resolve_meta_live_chat_tenant(tenant_id, user_id)
+        if not tenant:
+            return {"success": False, "error": "tenant_required", "delivered": False}
         return enqueue_live_chat_operator_text(
             tenant_id=tenant,
             channel=channel,
@@ -130,7 +132,9 @@ def _enqueue_operator_text(
     from services.live_chat_tiktok_operator import parse_tiktok_live_chat_user_id
 
     sender_id, connection_id, embedded_tenant = parse_tiktok_live_chat_user_id(user_id)
-    tenant = str(tenant_id or embedded_tenant or "linas").strip()
+    tenant = str(tenant_id or embedded_tenant or "").strip()
+    if not tenant:
+        return {"success": False, "error": "tenant_required", "delivered": False}
     return enqueue_live_chat_operator_text(
         tenant_id=tenant,
         channel="tiktok",

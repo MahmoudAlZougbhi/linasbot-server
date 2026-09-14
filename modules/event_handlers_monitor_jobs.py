@@ -7,7 +7,7 @@ import json
 import os
 
 import config
-from services.api_integrations import (
+from services.saas_no_boc import (
     get_missed_appointments,
     get_paused_appointments_between_dates,
     log_report_event,

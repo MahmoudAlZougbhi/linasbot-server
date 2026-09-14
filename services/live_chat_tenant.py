@@ -1,4 +1,7 @@
-"""Live Chat tenant identity. Fail-closed when tenant_id cannot be proven."""
+"""Live Chat tenant identity. Fail-closed when tenant_id cannot be proven.
+
+Never infer linas for unprefixed Meta/TikTok/WhatsApp/web ids.
+"""
 
 from __future__ import annotations
 
@@ -7,9 +10,6 @@ from typing import Any
 from fastapi import HTTPException
 
 _SOCIAL_CHANNELS = frozenset({"instagram", "facebook", "messenger", "tiktok", "whatsapp", "web"})
-# Unprefixed Meta/TikTok IDs are the historical linas compose_social_user_id contract.
-# WhatsApp phone ids and web:visitor ids are used by every tenant — never infer linas for those.
-_LINAS_UNPREFIXED_CHANNELS = frozenset({"instagram", "facebook", "messenger", "tiktok"})
 
 
 def normalize_live_chat_tenant_id(raw: Any) -> str:
@@ -41,10 +41,6 @@ def _tenant_from_user_id(user_id: Any) -> str:
     parts = [p.strip() for p in uid.split(":") if p.strip()]
     if len(parts) >= 4 and parts[1].lower() in _SOCIAL_CHANNELS:
         return normalize_live_chat_tenant_id(parts[0])
-    if len(parts) >= 3 and parts[0].lower() in _LINAS_UNPREFIXED_CHANNELS and parts[1].lower() not in _SOCIAL_CHANNELS:
-        return "linas"
-    if len(parts) == 2 and parts[0].lower() in _LINAS_UNPREFIXED_CHANNELS:
-        return "linas"
     return ""
 
 

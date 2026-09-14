@@ -17,7 +17,16 @@ RESPONSE_LANGUAGE_MAP: Final[dict[str, str]] = {
     "franco": "ar",
 }
 
-DEFAULT_TENANT_ID: Final[str] = os.getenv("LINASBOT_TENANT_ID", "linas").strip() or "linas"
+DEFAULT_TENANT_ID: Final[str] = os.getenv("LINASBOT_TENANT_ID", "").strip()
+
+
+def require_tenant_id(tenant_id: str | None = None) -> str:
+    """Fail-closed: never invent a tenant (including linas) when the id is missing."""
+    tid = (tenant_id or "").strip()
+    if not tid:
+        raise ValueError("tenant_id required")
+    return tid
+
 
 # Initial Restricted defaults (plan D8) — owner may change in an approved published version.
 # Catalog is clinic-shaped historically; new tenants do not auto-activate these topics.

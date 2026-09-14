@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from services.api_integrations import get_customer_appointments, send_appointment_reminders
+from services.saas_no_boc import get_customer_appointments, send_appointment_reminders
 from services.daily_template_dispatcher_helpers import (
     _extract_appointments,
     _normalize_phone,

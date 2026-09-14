@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from services.cm.conflict_validation import validate_restricted_conflicts
-from services.cm.constants import DEFAULT_TENANT_ID
+from services.cm.constants import require_tenant_id
 from services.cm.migration import migrate_legacy_fixture
 from services.cm.prod_migration_stage import resolve_live_data_root, stage_live_data_for_migration
 from services.cm.schemas import (
@@ -165,9 +165,9 @@ def _import_ai_basics_from_prompt(*, staging_root: Path, tenant_id: str, updated
                     settings_notes.append(f"{key}={settings[key]!r}")
 
     ai = AiBasics(
-        assistant_name="Linas",
-        clinic_name="Linas Laser",
-        identity_summary="Linas Laser clinic assistant. Answer from published AI Setup facts only.",
+        assistant_name="",
+        clinic_name="",
+        identity_summary="Answer from published AI Setup facts only. Never invent a business name.",
         advanced_instructions=prompt_text,
         notes=("app_settings: " + "; ".join(settings_notes)) if settings_notes else None,
     )
@@ -340,7 +340,7 @@ def run_production_content_migration(
     app_data_root: str | Path | None = None,
 ) -> dict[str, Any]:
     """Full production draft migration: stage → fixture migrate → seed → restore scrub."""
-    tid = (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+    tid = require_tenant_id(tenant_id)
     root = resolve_live_data_root(data_root)
     staging = Path(staging_root)
     stage_report = stage_live_data_for_migration(

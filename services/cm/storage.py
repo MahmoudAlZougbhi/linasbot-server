@@ -9,7 +9,7 @@ from pathlib import Path
 from types import ModuleType
 
 from services.cm.atomic_io import atomic_write_json, compute_checksum, read_json_object
-from services.cm.constants import CM_SECTIONS, DEFAULT_TENANT_ID
+from services.cm.constants import CM_SECTIONS, require_tenant_id
 from services.cm.paths import draft_dir, ensure_cm_dirs, tenant_cm_root
 from services.cm.schemas import SectionDraftEnvelope, default_section_payload, utc_now
 
@@ -66,7 +66,7 @@ _HELD_TENANTS = threading.local()
 
 
 def _process_lock(tenant_id: str) -> threading.RLock:
-    key = (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+    key = require_tenant_id(tenant_id)
     with _PROCESS_LOCKS_GUARD:
         lock = _PROCESS_LOCKS.get(key)
         if lock is None:
@@ -76,7 +76,7 @@ def _process_lock(tenant_id: str) -> threading.RLock:
 
 
 def _normalize_tenant(tenant_id: str | None) -> str:
-    return (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+    return require_tenant_id(tenant_id)
 
 
 def _validate_section(section: str) -> str:

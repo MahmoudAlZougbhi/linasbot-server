@@ -50,8 +50,8 @@ def test_live_chat_event_tenant_id_from_prefixed_social_ids() -> None:
     assert live_chat_event_tenant_id("linas:facebook:page:user") == "linas"
     assert live_chat_event_tenant_id("shop:tiktok:open:id") == "shop"
     assert live_chat_event_tenant_id("+96170123456") == ""
-    assert live_chat_event_tenant_id("tiktok:open_id") == "linas"
-    assert live_chat_event_tenant_id("instagram:178414") == "linas"
+    assert live_chat_event_tenant_id("tiktok:open_id") == ""
+    assert live_chat_event_tenant_id("instagram:178414") == ""
 
 
 def _event(event_type: str, data: dict) -> dict:

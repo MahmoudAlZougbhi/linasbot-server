@@ -188,7 +188,9 @@ required = [
 voyage_ok = report("VOYAGE_API_KEY", min_len=20)
 lab_raw = (values.get("LINAS_CUSTOMER_AI_LAB") or "").strip().lower()
 lab_on = lab_raw in {"1", "true", "yes", "on"}
-print(f"[preflight] LINAS_CUSTOMER_AI_LAB: set={str(bool(lab_raw)).lower()} enabled={str(lab_on).lower()} allowed=true")
+print(f"[preflight] LINAS_CUSTOMER_AI_LAB: set={str(bool(lab_raw)).lower()} enabled={str(lab_on).lower()} allowed=false_in_prod")
+if lab_on:
+    raise SystemExit("[preflight] LINAS_CUSTOMER_AI_LAB must stay off in production")
 if not voyage_ok:
     raise SystemExit("[preflight] VOYAGE_API_KEY_REQUIRED_FOR_CUSTOMER_BRAIN")
 

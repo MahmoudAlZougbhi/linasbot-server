@@ -150,40 +150,19 @@ async def test_cm_approval_flow(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) 
 @pytest.mark.asyncio
 async def test_owner_turn_help_and_publish_confirm(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.owner_ai_orchestrator import run_owner_turn
+    from services.owner_copilot_v2.models import OwnerV2TurnResult
 
-    monkeypatch.setenv("OWNER_COPILOT_V2", "false")
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
-    monkeypatch.setattr(
-        "services.owner_ai_context.pack_owner_turn_context",
-        lambda **_: {
-            "system_prompt": "x",
-            "account_summary": {"setup_stage": "new", "profile": {"preferred_language": "en"}},
-            "knowledge_block": "",
-            "capabilities": ["system_copilot"],
-            "recent_messages": [],
-            "conversation_summary": None,
-            "reply_language": "en",
-            "preferred_language": "en",
-            "cm_full_dump": False,
-            "full_history": False,
-        },
-    )
-    monkeypatch.setattr(
-        "services.owner_ai_model_router.owner_chat_usage_tracker.record",
-        lambda **_: {},
-    )
 
-    async def _fake_owner_llm(**_kwargs: Any) -> str:
-        return (
-            "I’m your System Copilot. I can help with CM setup, integrations, usage, "
-            "and ops — ask specifically what you need."
+    async def _fake_v2(**kwargs: Any) -> OwnerV2TurnResult:
+        text = str(kwargs.get("user_text") or "")
+        if "publish" in text.lower():
+            return OwnerV2TurnResult(reply_text="Confirm publish", pending_confirmation="publish_cm")
+        return OwnerV2TurnResult(
+            reply_text="I’m your System Copilot. I can help with CM setup, integrations, usage, and ops."
         )
 
-    monkeypatch.setattr(
-        "services.owner_ai_natural_reply.generate_owner_conversational_reply",
-        _fake_owner_llm,
-    )
-
+    monkeypatch.setattr("services.owner_copilot_v2.brain_run.run_owner_turn_v2", _fake_v2)
     help_turn = await run_owner_turn(
         tenant_id="t1",
         user_id="u1",
@@ -196,21 +175,6 @@ async def test_owner_turn_help_and_publish_confirm(monkeypatch: pytest.MonkeyPat
         or "capabilities" in help_turn.reply_text.lower()
         or help_turn.tool_calls
     )
-
-    async def _publish(**kwargs: Any) -> Any:
-        from services.owner_ai_tools_base import ToolResult
-
-        del kwargs
-        return ToolResult(
-            ok=True,
-            name="publish_cm",
-            data={"action": "publish_cm"},
-            requires_confirmation=True,
-            confirmation_token="publish_cm",
-            error="Confirmation required before publish",
-        )
-
-    monkeypatch.setattr("services.owner_ai_tools.dispatch_tool", _publish)
     pub = await run_owner_turn(
         tenant_id="t1",
         user_id="u1",

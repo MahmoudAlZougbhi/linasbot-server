@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 import config
-from services.api_integrations import (
+from services.saas_no_boc import (
     check_next_appointment,
     get_customer_appointments,
     get_customer_by_phone,

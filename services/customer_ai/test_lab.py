@@ -16,14 +16,10 @@ def lab_enabled() -> bool:
 
 
 def lab_turn_tenant_allowed(tenant_id: str) -> bool:
-    from services.cm.constants import DEFAULT_TENANT_ID
-
     tid = (tenant_id or "").strip()
     if not tid:
         return False
-    if tid == "lab" or tid.startswith("lab_"):
-        return True
-    return tid == DEFAULT_TENANT_ID
+    return tid == "lab" or tid.startswith("lab_")
 
 
 async def run_lab_turn(

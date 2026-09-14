@@ -38,13 +38,12 @@ def get_system_instruction(
 
     ===== CM AI CONTROL PLANE =====
     Customer answers for published tenants use the CM runtime pipeline — not this helper.
-    This helper remains for the temporary linas legacy bridge only; do not gate file injection
-    on a global env flag (that would blank Linas legacy context incorrectly).
+    Published-mode is always on for SaaS: clinic file corpus is never injected.
     """
     _ = qa_reference  # compatibility placeholder
     user_gender_str = config.user_gender.get(user_id, "unknown")
 
-    published_mode = False
+    published_mode = True
     if published_mode:
         include_price_list = False
 

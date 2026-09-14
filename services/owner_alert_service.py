@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.cm.constants import DEFAULT_TENANT_ID
+from services.cm.constants import require_tenant_id
 from services.owner_alert_store import owner_alert_store
 
 # Alert types that map to product requirements.
@@ -102,7 +102,7 @@ class OwnerAlertService:
         trigger_source: str | None = None,
         dedupe_seconds: float = 1800.0,
     ) -> dict[str, Any] | None:
-        tid = (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+        tid = require_tenant_id(tenant_id)
         atype = (alert_type or TYPE_HUMAN_REQUEST).strip() or TYPE_HUMAN_REQUEST
         if owner_alert_store.recent_duplicate(
             tenant_id=tid,

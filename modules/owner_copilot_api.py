@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+import modules.owner_ai_v2_api  # noqa: F401 — stream + attachments (Sol only)
 from modules.api_security import require_session
 from modules.core import app
 from services.owner_ai_orchestrator import run_owner_turn

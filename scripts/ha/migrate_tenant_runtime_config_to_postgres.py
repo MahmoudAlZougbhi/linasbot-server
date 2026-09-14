@@ -100,10 +100,13 @@ def migrate_tenant(*, tenant_id: str, dry_run: bool = True) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Migrate tenant runtime config to Postgres")
-    parser.add_argument("--tenant", default=DEFAULT_TENANT_ID)
+    parser.add_argument("--tenant", default="")
     parser.add_argument("--apply", action="store_true", help="Apply migration (default dry-run)")
     args = parser.parse_args()
-    result = migrate_tenant(tenant_id=args.tenant, dry_run=not args.apply)
+    tenant_id = (args.tenant or "").strip()
+    if not tenant_id:
+        raise SystemExit("tenant_id required")
+    result = migrate_tenant(tenant_id=tenant_id, dry_run=not args.apply)
     print(json.dumps(result, indent=2))
 
 

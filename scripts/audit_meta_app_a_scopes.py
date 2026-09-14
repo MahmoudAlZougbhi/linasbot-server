@@ -121,7 +121,9 @@ def main() -> None:
     app_id = (os.getenv("META_APP_ID") or os.getenv("META_APP_A_ID") or "").strip()
     if app_id != "2963733803971681":
         raise SystemExit("Refusing unexpected Meta App ID")
-    tenant_id = (os.getenv("META_COMMENT_AUDIT_TENANT") or "linas").strip() or "linas"
+    tenant_id = (os.getenv("META_COMMENT_AUDIT_TENANT") or "").strip()
+    if not tenant_id:
+        raise SystemExit("META_COMMENT_AUDIT_TENANT required")
     expected_page_id = (os.getenv("META_SCOPE_AUDIT_PAGE_ID") or "378696005334409").strip()
     expected_instagram_id = (os.getenv("META_SCOPE_AUDIT_INSTAGRAM_ID") or "17841413184256533").strip()
     registry = get_meta_app_registry()

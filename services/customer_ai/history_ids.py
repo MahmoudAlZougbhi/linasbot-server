@@ -30,10 +30,8 @@ def comment_conversation_id(
     post_id: str = "",
     author_id: str = "",
 ) -> str:
-    """Per-author comment Brain history. Do not share a post-wide thread."""
-    explicit = (conversation_id or "").strip()
-    if explicit:
-        return explicit
+    """Per-author comment Brain history. Never honor a post-scoped conversation_id."""
+    _ = conversation_id  # callers may still pass post/comment ids; ignore them
     tid = (tenant_id or "").strip()
     author = (author_id or "").strip()
     if not tid or not author:

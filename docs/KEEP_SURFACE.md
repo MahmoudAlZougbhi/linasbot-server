@@ -54,7 +54,7 @@ Drawer:
 - Inbox, waiting queue, counters, thread reads, and operator mutations filter by session `tenant_id`.
 - Missing tenant on a row or session is fail-closed (hidden / 403), not inferred as another workspace.
 - WhatsApp phone-only user ids do **not** inherit tenant `linas`. Tenant must be on the conversation/index payload (inbound save stamps it when known).
-- Unprefixed Instagram/Facebook/TikTok ids still map to `linas` only because `compose_social_user_id` omits the tenant prefix for that workspace.
+- Unprefixed Instagram/Facebook/TikTok ids are unscoped unless `tenant_id` is stamped on the payload or the id is `{tenant}:{channel}:{asset}:{sender}`.
 - Unified inbox memory/disk cache is per-tenant. Legacy unscoped disk cache is refused.
 - Firestore composite: `tenant_id` ASC + `last_message_at` DESC (owner-activated deploy; see `docs/FIRESTORE_INDEXES.md`). If the composite is missing, recency is scanned then foreign rows are dropped.
 
@@ -73,9 +73,7 @@ Still not deleted (import-graph blocked or KEEP):
 
 - Smart Follow-Up live backend (`services/smart_followup`, `services/whatsapp_cloud/smart_followup`, `/api/whatsapp/smart-followup/*`)
 - `smart_messaging_*` files still used by scheduler/catalog/WA templates (HTTP already disabled)
-- Clinic corpus `data/*` — prompt path still injects when `published_mode` is false
-- Owner AI v1 HTTP CRUD (`modules/owner_ai_api.py`) — mobile conversations/profile still depend on it
-- Booking / `api_integrations_*` — BOC is not in the SaaS app; gate stays OFF (`LINASLASER_BOC_BOOKING_ENABLED`); stack still imported
+- `owner_ai_tools*` (WAVE B git-mv into `services/owner_copilot/`)
 - `owner_copilot_v2/creative_policy.py` KEEP as refusal
 - Disabled API prefixes in `product_features.py` stay fail-closed even after HTTP modules are gone
 
@@ -139,6 +137,21 @@ Live product paths must not import deleted Creative / Owner Lab / smart_retrieva
 | 6 | Mobile Screen union reachable-only; owner screen kept |
 | 7 | This freeze + matrix |
 
-Still not deleted (KEEP or import-graph blocked): Smart Follow-Up live backend, `smart_messaging_*` used by scheduler/templates, clinic `data/*` prompt inject when unpublished, Owner AI v1 HTTP CRUD, BOC booking stack with gate OFF, `creative_policy.py` refusal, disabled API prefixes in `product_features.py`.
+Still not deleted (KEEP or import-graph blocked): Smart Follow-Up live backend, `smart_messaging_*` used by scheduler/templates, `owner_ai_tools*` (WAVE B git-mv into owner_copilot), CM OpenAI `semantic_index` (WAVE C), `creative_policy.py` refusal, disabled API prefixes in `product_features.py`.
+
+## WAVE A — fail-closed tenants + delete clinic/BOC/v1/lab/train
+
+MUST 1–8 executed:
+
+1. Missing tenant is 403 / skip / empty. No live `or "linas"` / `DEFAULT_TENANT_ID="linas"` fallback. `require_tenant_id` raises. Unprefixed IG/FB/TikTok ids are unscoped.
+2. Clinic `data/qa_database.json` + marwa rules deleted. `published_mode` always true. Clinic file corpus is not injected.
+3. `services/booking/**` and `api_integrations*` deleted. Runtime callers fail-closed via `services/saas_no_boc.py`. Doc: `docs/BOC_NOT_IN_SAAS.md`.
+4. Mobile Copilot HTTP is `modules/owner_copilot_api.py` (CRUD) + Sol stream (`owner_ai_v2_api`). `main.py` does not mount `owner_ai_api`. Owner turn is v2-only.
+5. WA `/train` handlers unhooked from webhook/text/voice/photo paths.
+6. Lab allowlist is `lab` / `lab_*` only — linas is not a lab tenant.
+7. Creative flags purged from `plan_catalog`. Copilot Creative refusal stays in `owner_copilot_v2/creative_policy.py`.
+8. Comment Brain ids are always `comment:{tenant}:{channel}:{post}:{author}`. Post-scoped conversation_id is ignored. Two authors on one post load two histories.
+
+Keep #677 media analysis. Owner AI tool modules stay until WAVE B domain `git mv`.
 
 

@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from services.api_integrations import send_appointment_reminders
+from services.saas_no_boc import send_appointment_reminders
 from services.appointment_scheduler_parse import parse_appointment_date
 from services.smart_messaging import smart_messaging
 from services.user_persistence_service import user_persistence

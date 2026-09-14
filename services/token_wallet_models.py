@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-DEFAULT_UNLIMITED_TENANTS = frozenset({"linas"})
+DEFAULT_UNLIMITED_TENANTS = frozenset()
 
 # One-time legacy split (documented; do not invent other ratios).
 LEGACY_INPUT_SHARE = 0.80
@@ -44,12 +44,11 @@ class InsufficientTokenBalance(Exception):
 
 
 def unlimited_tenant_ids() -> frozenset[str]:
-    # Explicit product config: env default lists founder clinic "linas" as unlimited.
-    # This is NOT a request-path coalesce — missing tenant_id on API/service calls
-    # must still fail closed via normalize_wallet_tenant_id / callers.
-    raw = (os.getenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS") or "linas").strip()
+    # Explicit product config only. Empty env means no unlimited tenants.
+    # Missing tenant_id on API/service calls still fail closed via normalize_wallet_tenant_id.
+    raw = (os.getenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS") or "").strip()
     ids = {part.strip().lower() for part in raw.split(",") if part.strip()}
-    return frozenset(ids or DEFAULT_UNLIMITED_TENANTS)
+    return frozenset(ids)
 
 
 def normalize_wallet_tenant_id(tenant_id: str | None) -> str:

@@ -34,14 +34,10 @@ async def run_customer_reply_v2_comment(
 
     if not comments_enabled:
         return CustomerReplyOutcome(stop=True, reason="comments_toggle_off", reply=None)
-    context = comment_context if isinstance(comment_context, dict) else {}
-    from services.customer_ai.history_ids import conversation_id_for_brain
-
-    thread = conversation_id_for_brain(payload=context) or str(context.get("thread_id") or comment_id or post_id or "")
     return await run_customer_ai_comment(
         tenant_id=tenant_id,
         comment_text=comment_text,
-        conversation_id=thread,
+        conversation_id="",
         detected_language=detected_language,
         response_language=response_language,
         channel=channel,

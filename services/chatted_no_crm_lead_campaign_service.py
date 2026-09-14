@@ -11,7 +11,7 @@ from datetime import date, datetime
 from typing import Any
 
 import config
-from services.api_integrations import get_customer_appointments, get_customer_by_phone
+from services.saas_no_boc import get_customer_appointments, get_customer_by_phone
 from services.customer_appointment_helpers import (
     extract_customer_appointments_list as _extract_customer_appointments_list,
 )

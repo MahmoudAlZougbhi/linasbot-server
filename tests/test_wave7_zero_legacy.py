@@ -20,6 +20,11 @@ GONE_PATHS = (
     "dashboard/src/pages/owner/OwnerCopilotSetup.jsx",
     "config/montymobile_templates.json",
     "mobile/linas-ai/src/features/shared/SimpleResourceScreen.tsx",
+    "modules/owner_ai_api.py",
+    "services/booking",
+    "services/api_integrations.py",
+    "data/qa_database.json",
+    "data/knowledge_files/marwa_extended_tool_rules.json",
 )
 
 KEEP_PATHS = (
@@ -43,6 +48,9 @@ GONE_IMPORT_FRAGMENTS = (
     "owner_ai_tools_creative",
     "creative_studio_service",
     "modules.creative_api",
+    "modules.owner_ai_api",
+    "services.booking",
+    "services.api_integrations",
 )
 
 PY_ROOTS = ("services", "modules", "handlers", "scripts")
@@ -144,3 +152,23 @@ def test_wave6_owner_stays_monty_stays_refused() -> None:
         "requests_appointments",
     ):
         assert tile in hub
+
+
+def test_wave_a_fail_closed_and_deleted_clinic_paths() -> None:
+    history = (ROOT / "services/customer_ai/history_ids.py").read_text(encoding="utf-8")
+    constants = (ROOT / "services/cm/constants.py").read_text(encoding="utf-8")
+    prompt = (ROOT / "utils/utils_prompt.py").read_text(encoding="utf-8")
+    main = (ROOT / "main.py").read_text(encoding="utf-8")
+    catalog = (ROOT / "services/membership/plan_catalog.py").read_text(encoding="utf-8")
+    webhook = (ROOT / "modules/webhook_handlers.py").read_text(encoding="utf-8")
+    api_config = (ROOT / "api_config.py").read_text(encoding="utf-8")
+    assert "if explicit:" not in history.split("def comment_conversation_id", 1)[1][:400]
+    assert 'os.getenv("LINASBOT_TENANT_ID", "linas")' not in constants
+    assert "published_mode = True" in prompt
+    assert "modules.owner_ai_api" not in main
+    assert "modules.owner_copilot_api" in main
+    assert "creative_studio" not in catalog
+    assert "start_training_mode" not in webhook
+    assert "boc-lb.com" not in api_config
+    assert (ROOT / "modules/owner_copilot_api.py").is_file()
+    assert (ROOT / "docs/BOC_NOT_IN_SAAS.md").is_file()

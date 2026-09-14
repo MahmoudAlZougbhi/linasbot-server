@@ -45,18 +45,16 @@ def test_app_access_requires_active_plan(tmp_path, monkeypatch) -> None:
     assert pub2["subscription_exempt"] is False
 
 
-def test_linas_laser_tenant_exempt_from_subscription_without_plan(tmp_path, monkeypatch) -> None:
-    """Linas Laser (tenant_id=linas) gets app_access via explicit allowlist only."""
+def test_linas_tenant_is_not_exempt_without_env(tmp_path, monkeypatch) -> None:
+    """tenant_id=linas is not subscription-exempt unless the env lists it."""
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
     monkeypatch.delenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", raising=False)
-    assert is_subscription_exempt_tenant("linas")
-    assert tenant_has_app_access("linas") is True
+    assert is_subscription_exempt_tenant("linas") is False
+    assert tenant_has_app_access("linas") is False
     pub = get_tenant_entitlement_public("linas")
-    assert pub["app_access"] is True
-    assert pub["subscription_exempt"] is True
-    assert pub["subscription_required"] is False
-    assert pub["plan_id"] == "none"
+    assert pub["app_access"] is False
+    assert pub["subscription_exempt"] is False
     # Other tenants stay gated.
     assert is_subscription_exempt_tenant("acme-co") is False
     assert tenant_has_app_access("acme-co") is False
@@ -79,7 +77,7 @@ def test_entitlements_public_survives_faq_errors(tmp_path, monkeypatch) -> None:
     """FAQ enrichment failure must not 500 entitlements/me (mobile fail-closes)."""
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
-    monkeypatch.delenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", raising=False)
+    monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
 
     def _boom(_tenant_id: str):
         raise RuntimeError("faq store unavailable")

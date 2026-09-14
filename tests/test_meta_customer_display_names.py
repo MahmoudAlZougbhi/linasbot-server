@@ -133,7 +133,7 @@ async def test_fetch_participant_profile_facebook_fields():
 @pytest.mark.asyncio
 async def test_graph_name_replaces_legacy_placeholder(monkeypatch: pytest.MonkeyPatch):
     sender_id = "IGSID_REAL_NAME"
-    user_id = f"instagram:{sender_id}"
+    user_id = "linas:instagram:17841413184256533:IGSID_REAL_NAME"
     config.user_names[user_id] = "Instagram Customer"
     captured: dict[str, Any] = {}
 
@@ -186,7 +186,7 @@ async def test_graph_name_replaces_legacy_placeholder(monkeypatch: pytest.Monkey
 @pytest.mark.asyncio
 async def test_webhook_name_used_without_graph(monkeypatch: pytest.MonkeyPatch):
     sender_id = "PSID_WEBHOOK_NAME"
-    user_id = f"facebook:{sender_id}"
+    user_id = "linas:facebook:378696005334409:PSID_WEBHOOK_NAME"
     captured: dict[str, Any] = {}
 
     async def restore(_user_id: str) -> dict[str, Any]:
@@ -226,7 +226,7 @@ async def test_webhook_name_used_without_graph(monkeypatch: pytest.MonkeyPatch):
 @pytest.mark.asyncio
 async def test_honest_fallback_when_graph_unavailable(monkeypatch: pytest.MonkeyPatch):
     sender_id = "IGSID_NO_PROFILE"
-    user_id = f"instagram:{sender_id}"
+    user_id = "linas:instagram:17841413184256533:IGSID_NO_PROFILE"
     captured: dict[str, Any] = {}
 
     async def restore(_user_id: str) -> dict[str, Any]:

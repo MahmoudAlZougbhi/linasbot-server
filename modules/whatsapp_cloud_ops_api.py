@@ -359,8 +359,11 @@ async def whatsapp_app_review_readiness(request: Request) -> Any:
         raise HTTPException(status_code=403, detail="platform_owner_required")
     from services.whatsapp_cloud.app_review_readiness import build_app_review_readiness
 
+    tenant_id = str(request.query_params.get("tenant_id") or getattr(session, "tenant_id", "") or "").strip()
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="tenant_id_required")
     try:
-        return build_app_review_readiness(tenant_id="linas")
+        return build_app_review_readiness(tenant_id=tenant_id)
     except WhatsAppDatabaseUnavailable:
         return JSONResponse(status_code=503, content={"success": False, "error": "WHATSAPP_DB_UNAVAILABLE"})
 

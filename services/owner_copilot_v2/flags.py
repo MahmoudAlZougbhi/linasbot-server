@@ -13,8 +13,8 @@ def _truthy(name: str, default: str = "false") -> bool:
 
 
 def owner_copilot_v2_enabled() -> bool:
-    """Master switch for Sol brain + streaming/cards/choices protocol."""
-    return _truthy("OWNER_COPILOT_V2", "true")
+    """Sol brain is the only Owner Copilot path. V1 is deleted."""
+    return True
 
 
 def owner_copilot_writes_enabled() -> bool:

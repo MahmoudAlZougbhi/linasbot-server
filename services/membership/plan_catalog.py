@@ -123,11 +123,6 @@ def plan_features(plan_id: str) -> dict[str, bool]:
         "tenant_analytics": True,
         "instagram_dm": True,
         "facebook_dm": True,
-        # Creative / media remain higher-tier product gates (unchanged policy beyond comments/FAQ/seats)
-        "creative_studio": plan_id in {"pro", "max"},
-        "scheduling": plan_id in {"pro", "max"},
-        "image_generation": plan_id in {"pro", "max"},
-        "video_generation": plan_id in {"pro", "max"},
         "advanced_capabilities": plan_id == "max",
     }
 

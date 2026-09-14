@@ -80,13 +80,12 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
     # New tenants without publish get an honest unpublished message (never Marwa/Linas).
     # No classic GPT fallback. Unpublished tenants get the unpublished message.
     from services.cm.constants import (
-        DEFAULT_TENANT_ID,
         UNPUBLISHED_AI_MESSAGE,
         tenant_allows_legacy_bridge,
         tenant_uses_cm_runtime,
     )
 
-    cm_tenant_id = user_data.get("tenant_id") or DEFAULT_TENANT_ID
+    cm_tenant_id = str(user_data.get("tenant_id") or "").strip()
     if tenant_uses_cm_runtime(cm_tenant_id):
         cm_reply, cm_metadata = await _handle_published_cm_runtime(
             tenant_id=cm_tenant_id,

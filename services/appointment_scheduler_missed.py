@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from services.api_integrations import (
+from services.saas_no_boc import (
     get_paused_appointments_between_dates,
     send_appointment_reminders,
 )

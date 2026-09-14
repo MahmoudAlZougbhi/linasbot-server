@@ -7,10 +7,6 @@ from collections import defaultdict, deque
 from typing import Any
 
 from storage.persistent_storage import (
-    KNOWLEDGE_BASE_FILE,
-    PRICE_LIST_FILE,
-    STYLE_GUIDE_FILE,
-    SYSTEM_PROMPT_TEMPLATE_FILE,
     ensure_dirs,
 )
 
@@ -272,30 +268,17 @@ MESSAGE_COMBINING_DELAY = 3.0  # seconds
 
 
 # --- Bot Welcome Messages (Language-specific) ---
-# Founder-clinic (Lina's Laser / Marwa) copy. CM-published tenants should prefer
-# published CM welcome / ai_basics — these strings are legacy WhatsApp boot copy,
-# not a privilege default. Override per language via WELCOME_MESSAGE_<LANG>.
+# Generic WhatsApp boot copy. Published CM welcome / ai_basics override this.
+# Override per language via WELCOME_MESSAGE_<LANG>.
 def _welcome_message(lang: str, default: str) -> str:
     return (os.getenv(f"WELCOME_MESSAGE_{lang.upper()}") or "").strip() or default
 
 
 WELCOME_MESSAGES = {
-    "ar": _welcome_message(
-        "ar",
-        "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناز ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧",
-    ),
-    "en": _welcome_message(
-        "en",
-        "Hello! 😊\nThis is Marwa AI Assistant – your smart AI assistant from Lina's Laser Center.\nHow are you? How can I help you today? 🧠✨\n\nYou can talk to me in any way you prefer – even with your voice! 🎤\nI'm here to help you with anything you need, easily and quickly.\nReady? Let's chat! 🤖💬\n\nBy the way, to help and serve you better, could you please tell us if you are male or female? 👦👧",
-    ),
-    "fr": _welcome_message(
-        "fr",
-        "Bonjour ! 😊\nC'est Marwa AI Assistant – votre assistant intelligent de Lina's Laser Center.\nComment allez-vous ? Comment puis-je vous aider aujourd'hui ? 🧠✨\n\nYou can talk to me in any way you prefer – even by voice! 🎤\nI'm here to help you with anything you need, easily and quickly.\nReady? Let's chat! 🤖💬\n\nAu fait, afin de mieux vous aider et de vous offrir le meilleur service, pourriez-vous nous dire si vous êtes un homme ou une femme ? 👦👧",
-    ),
-    "franco": _welcome_message(
-        "franco",
-        "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناز ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧",
-    ),
+    "ar": _welcome_message("ar", "مرحباً! كيف يمكنني مساعدتك؟"),
+    "en": _welcome_message("en", "Hello! How can I help you today?"),
+    "fr": _welcome_message("fr", "Bonjour ! Comment puis-je vous aider ?"),
+    "franco": _welcome_message("franco", "مرحباً! كيف يمكنني مساعدتك؟"),
 }
 
 # --- Gender Question Variations ---
@@ -396,83 +379,21 @@ CUSTOM_TRAINING_DATA_MAP: dict[Any, Any] = {}  # Map for quick lookup of custom 
 
 
 def load_bot_assets() -> None:
-    """
-    Loads static bot assets (price list, style guide, knowledge base) from persistent storage.
-
-    Published CM tenants do not use these files for customer answers. They remain loaded
-    only to support the temporary linas legacy bridge until Wave 6 migration.
-    """
+    """SaaS is published-CM only — clinic file corpus is never injected."""
     global PRICE_LIST, BOT_STYLE_GUIDE, CORE_KNOWLEDGE_BASE, SYSTEM_PROMPT_TEMPLATE
 
     ensure_dirs()
-
-    try:
-        with open(PRICE_LIST_FILE, encoding="utf-8") as f:
-            PRICE_LIST = f.read().strip()
-        print("✅ تم تحميل قائمة الأسعار من " + str(PRICE_LIST_FILE))
-    except FileNotFoundError:
-        PRICE_LIST = "قائمة الأسعار غير متوفرة. الرجاء إبلاغ المسؤول."
-        print("❌ تحذير: ملف قائمة الأسعار غير موجود. الرجاء إنشاءه.")
-    except Exception as e:
-        PRICE_LIST = "خطأ في تحميل قائمة الأسعار."
-        print(f"❌ خطأ في تحميل قائمة الأسعار: {e}")
-
-    try:
-        with open(STYLE_GUIDE_FILE, encoding="utf-8") as f:
-            BOT_STYLE_GUIDE = f.read().strip()
-        print("✅ تم تحميل دليل الأسلوب من " + str(STYLE_GUIDE_FILE))
-    except FileNotFoundError:
-        BOT_STYLE_GUIDE = "الردود يجب أن تكون ودودة، حماسية، ومرحة، وأن تعكس خبرة واحترافية المركز."
-        print("❌ تحذير: ملف دليل الأسلوب غير موجود. الرجاء إنشاءه.")
-    except Exception as e:
-        BOT_STYLE_GUIDE = "خطأ في تحميل دليل الأسلوب."
-        print(f"❌ خطأ في تحميل دليل الأسلوب: {e}")
-
-    try:
-        with open(KNOWLEDGE_BASE_FILE, encoding="utf-8") as f:
-            CORE_KNOWLEDGE_BASE = f.read().strip()
-        print("✅ تم تحميل قاعدة المعرفة الأساسية من " + str(KNOWLEDGE_BASE_FILE))
-    except FileNotFoundError:
-        # Owner-confirmed: laser hair removal only — never claim tattoo/CO₂/pigmentation/facial.
-        # Hours/prices are not invented here; restore knowledge_base.txt for authoritative facts.
-        CORE_KNOWLEDGE_BASE = (
-            "Linas Laser: laser hair removal only. "
-            "Do not offer tattoo removal, CO2 laser, pigmentation removal, or facial/skin-cleaning. "
-            "Do not invent prices, hours, branches, or WhatsApp numbers when the knowledge file is missing."
-        )
-        print("❌ تحذير: ملف قاعدة المعرفة غير موجود. الرجاء إنشاءه.")
-    except Exception as e:
-        CORE_KNOWLEDGE_BASE = "خطأ في تحميل قاعدة المعرفة الأساسية."
-        print(f"❌ خطأ في تحميل قاعدة المعرفة: {e}")
-
-    try:
-        with open(SYSTEM_PROMPT_TEMPLATE_FILE, encoding="utf-8") as f:
-            SYSTEM_PROMPT_TEMPLATE = f.read()
-        if SYSTEM_PROMPT_TEMPLATE.strip():
-            print("✅ تم تحميل قالب system prompt من " + str(SYSTEM_PROMPT_TEMPLATE_FILE))
-        else:
-            print("ℹ️ ملف قالب system prompt فارغ. سيتم إرسال system prompt فارغ كما هو.")
-    except FileNotFoundError:
-        SYSTEM_PROMPT_TEMPLATE = ""
-        print("ℹ️ ملف قالب system prompt غير موجود. سيتم استخدام قيمة فارغة.")
-    except Exception as e:
-        SYSTEM_PROMPT_TEMPLATE = ""
-        print(f"❌ خطأ في تحميل قالب system prompt: {e}")
+    PRICE_LIST = ""
+    BOT_STYLE_GUIDE = ""
+    CORE_KNOWLEDGE_BASE = ""
+    SYSTEM_PROMPT_TEMPLATE = ""
 
 
 def load_training_data() -> None:
-    """
-    DEPRECATED: This function is no longer used.
-    Q&A data is now managed through API database (qa_database_service.py)
-    conversation_log.jsonl is kept for historical reference only.
-    """
+    """Clinic /train corpus is not loaded. FAQ lives in published CM."""
     global CUSTOM_TRAINING_DATA, CUSTOM_TRAINING_DATA_MAP
     CUSTOM_TRAINING_DATA.clear()
     CUSTOM_TRAINING_DATA_MAP.clear()
-
-    print("ℹ️ load_training_data() is deprecated - Q&A now managed via API database")
-    # Do NOT load conversation_log.jsonl anymore
-    # All Q&A is handled by qa_database_service.py (API-based)
 
 
 # --- Initialize Bot Assets on startup ---

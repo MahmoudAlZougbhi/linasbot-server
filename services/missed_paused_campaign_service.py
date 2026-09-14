@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import config
-from services.api_integrations import get_paused_appointments_between_dates
+from services.saas_no_boc import get_paused_appointments_between_dates
 from services.message_logs_service import message_logs_service
 from services.smart_messaging import smart_messaging
 from services.user_persistence_service import user_persistence

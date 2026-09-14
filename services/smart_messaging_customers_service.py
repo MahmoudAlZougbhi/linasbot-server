@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from services.api_integrations import send_appointment_reminders
+from services.saas_no_boc import send_appointment_reminders
 from services.smart_messaging_catalog import (
     TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS,
     normalize_template_id,

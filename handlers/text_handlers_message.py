@@ -19,7 +19,6 @@ from handlers.text_handlers_message_takeover import (
     maybe_send_takeover_autoreply,
     resolve_conversation_doc_ref,
 )
-from handlers.training_handlers import handle_training_input
 from services.meta_outbound_attempts import meta_outbound_send_purpose
 from services.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
 from services.sentiment_escalation_service import sentiment_service
@@ -60,33 +59,15 @@ async def handle_message(
         config.user_last_bot_response_time[user_id] = datetime.datetime.now()
     if user_id not in config.user_greeting_stage:
         config.user_greeting_stage[user_id] = 0
-    # FIX: Only set to "unknown" if gender is not already a valid value
-    # This prevents overwriting gender restored from Firestore after restart
     current_gender = config.user_gender.get(user_id)
     if current_gender not in ["male", "female"]:
         config.user_gender[user_id] = "unknown"
     if user_id not in config.gender_attempts:
         config.gender_attempts[user_id] = 0
-    if user_id not in config.user_in_training_mode:
-        config.user_in_training_mode[user_id] = False
     if user_id not in config.user_photo_analysis_count:
         config.user_photo_analysis_count[user_id] = 0
     if user_id not in config.user_in_human_takeover_mode:
         config.user_in_human_takeover_mode[user_id] = False
-
-    # Check if user is in training mode
-    if config.user_in_training_mode.get(user_id, False):
-        print(
-            f"[handle_message] INFO: User ...{str(user_id)[-4:]} in training mode. Handing over to handle_training_input."
-        )
-        await handle_training_input(
-            user_id=user_id,
-            user_input_text=user_input_text,
-            user_data=user_data,
-            send_message_func=send_message_func,
-            send_action_func=send_action_func,
-        )
-        return
 
     raw_msg = user_input_text.strip()
 

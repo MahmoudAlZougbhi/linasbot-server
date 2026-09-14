@@ -8,15 +8,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-import httpx
-from dotenv import load_dotenv
-
-import api_config
 from services.language_detection_service import language_detection_service
 from services.qa_database_service_match import QADatabaseServiceMatchMixin
-
-# Load environment variables (.env then .env.local via core; load_dotenv for standalone scripts)
-load_dotenv()
 
 
 class QADatabaseService(QADatabaseServiceMatchMixin):
@@ -26,14 +19,15 @@ class QADatabaseService(QADatabaseServiceMatchMixin):
     """
 
     def __init__(self) -> None:
-        self.base_url = api_config.LINASLASER_API_BASE_URL
-        self.token = api_config.LINASLASER_API_TOKEN
-        self.match_threshold = 0.7  # 70% similarity threshold
+        self.base_url = ""
+        self.token = ""
+        self.match_threshold = 0.7
 
-        if not self.base_url or not self.token:
-            raise ValueError("Missing API credentials: LINASLASER_API_BASE_URL or LINASLASER_API_TOKEN")
-
-        print(f"🤖 QADatabaseService initialized with API: {self.base_url}")
+    async def _make_api_request(
+        self, method: str, endpoint: str, data: dict | None = None, params: dict | None = None
+    ) -> dict:
+        _ = (method, endpoint, data, params)
+        return {"success": False, "error": "boc_not_in_saas", "message": "BOC is not in SaaS"}
 
     @staticmethod
     def _normalize_language(language: str | None, default: str = "ar") -> str:
@@ -71,45 +65,6 @@ class QADatabaseService(QADatabaseServiceMatchMixin):
             return cast(str, qa.get("answer", ""))
 
         return cast(str, qa.get("answer", ""))
-
-    async def _make_api_request(
-        self, method: str, endpoint: str, data: dict | None = None, params: dict | None = None
-    ) -> dict:
-        """Make authenticated API request to backend"""
-        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
-
-        url = f"{self.base_url}{endpoint}"
-
-        print(f"🌐 API Request: {method} {url}")
-        print(f"🔑 Token: {(self.token or '')[:20]}...")
-        if data:
-            print(f"📦 Data: {data}")
-
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
-            try:
-                if method == "GET":
-                    response = await client.get(url, headers=headers, params=params)
-                elif method == "POST":
-                    response = await client.post(url, headers=headers, json=data)
-                elif method == "PUT":
-                    response = await client.put(url, headers=headers, json=data)
-                elif method == "DELETE":
-                    response = await client.delete(url, headers=headers)
-                else:
-                    raise ValueError(f"Unsupported HTTP method: {method}")
-
-                print(f"📡 Response Status: {response.status_code}")
-                print(f"📡 Response Headers: {dict(response.headers)}")
-
-                response.raise_for_status()
-                return cast(dict[Any, Any], response.json())
-
-            except httpx.HTTPStatusError as e:
-                print(f"❌ API Error ({e.response.status_code}): {e.response.text[:500]}")
-                return {"success": False, "error": f"HTTP {e.response.status_code}", "message": e.response.text}
-            except Exception as e:
-                print(f"❌ Request Error: {e}")
-                return {"success": False, "error": str(e)}
 
     async def create_qa_pair(
         self,

@@ -15,7 +15,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from services.cm.constants import CM_SECTIONS, DEFAULT_TENANT_ID
+from services.cm.constants import CM_SECTIONS, require_tenant_id
 from services.cm.embeddings import embedding_pin
 from services.cm.schemas import EmbeddingPin, PublishedPointer, PublishManifest, utc_now
 from services.cm.semantic_index import build_index
@@ -58,7 +58,7 @@ class PublishResult:
 
 
 def _normalize_tenant(tenant_id: str | None) -> str:
-    return (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+    return require_tenant_id(tenant_id)
 
 
 def _collect_draft_sections(tenant_id: str) -> dict[str, dict[str, Any]]:

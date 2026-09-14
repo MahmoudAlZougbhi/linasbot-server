@@ -24,10 +24,11 @@ def test_parse_linas_multi_asset_meta_user_id() -> None:
 
 
 def test_resolve_meta_live_chat_tenant() -> None:
-    assert resolve_meta_live_chat_tenant("shop-9", "instagram:1761620091644326") == "linas"
-    assert resolve_meta_live_chat_tenant("shop-9", "facebook:page1:user1") == "linas"
-    assert resolve_meta_live_chat_tenant("shop-9", "shop-1:instagram:page1:user1") == "shop-1"
+    assert resolve_meta_live_chat_tenant("shop-9", "instagram:1761620091644326") == "shop-9"
+    assert resolve_meta_live_chat_tenant("shop-9", "facebook:page1:user1") == "shop-9"
+    assert resolve_meta_live_chat_tenant("shop-1", "shop-1:instagram:page1:user1") == "shop-1"
     assert resolve_meta_live_chat_tenant(None, "tenant-a:facebook:p:u") == "tenant-a"
+    assert resolve_meta_live_chat_tenant(None, "instagram:1761620091644326") == ""
 
 
 def test_is_meta_dm_live_chat_user() -> None:

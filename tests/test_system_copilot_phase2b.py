@@ -267,33 +267,20 @@ def test_faq_metrics_and_token_cost_smoke(tmp_path: Any) -> None:
 @pytest.mark.asyncio
 async def test_owner_turn_diagnosis_intent(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.owner_ai_orchestrator import run_owner_turn
-    from services.owner_ai_tools_base import ToolResult
+    from services.owner_copilot_v2.models import OwnerV2TurnResult
 
-    monkeypatch.setenv("OWNER_COPILOT_V2", "false")
+    captured: dict[str, str] = {}
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
-    monkeypatch.setattr(
-        "services.owner_ai_context.pack_owner_turn_context",
-        lambda **_: {
-            "system_prompt": "x",
-            "account_summary": {"setup_stage": "ready", "profile": {"preferred_language": "en"}},
-            "knowledge_block": "",
-            "capabilities": ["self_diagnosis"],
-            "recent_messages": [],
-            "conversation_summary": None,
-            "reply_language": "en",
-            "preferred_language": "en",
-            "cm_full_dump": False,
-            "full_history": False,
-        },
-    )
-    monkeypatch.setattr("services.owner_ai_model_router.owner_chat_usage_tracker.record", lambda **_: {})
 
-    async def _dispatch(name: str, **kwargs: Any) -> ToolResult:
-        del kwargs
-        assert name == "get_recent_customer_interactions"
-        return ToolResult(ok=True, name=name, data={"interactions": [], "count": 0})
+    async def _fake_v2(**kwargs: Any) -> OwnerV2TurnResult:
+        captured["tenant"] = str(kwargs.get("tenant_id") or "")
+        captured["text"] = str(kwargs.get("user_text") or "")
+        return OwnerV2TurnResult(
+            reply_text="Here is the customer activity summary.",
+            tool_calls=[{"name": "get_recent_customer_interactions", "arguments": "{}"}],
+        )
 
-    monkeypatch.setattr("services.owner_ai_tools.dispatch_tool", _dispatch)
+    monkeypatch.setattr("services.owner_copilot_v2.brain_run.run_owner_turn_v2", _fake_v2)
     turn = await run_owner_turn(
         tenant_id="t1",
         user_id="u1",
@@ -301,6 +288,8 @@ async def test_owner_turn_diagnosis_intent(monkeypatch: pytest.MonkeyPatch) -> N
         conversation_id="c1",
         user_text="That was a bad reply — diagnose it",
     )
+    assert captured["tenant"] == "t1"
+    assert "diagnose" in captured["text"].lower()
     assert turn.tool_calls
     assert turn.tool_calls[0]["name"] == "get_recent_customer_interactions"
 

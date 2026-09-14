@@ -12,7 +12,7 @@ import re
 from typing import cast
 
 import config
-from services.api_integrations import get_customer_by_phone
+from services.saas_no_boc import get_customer_by_phone
 from utils.phone_utils import normalize_phone
 from utils.utils import get_firestore_db, get_user_state_from_firestore
 

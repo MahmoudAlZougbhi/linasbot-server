@@ -166,7 +166,9 @@ class TrainingModeManager:
                 messages=[
                     {
                         "role": "system",
-                        "content": """You are a professional content writer for Lina's Laser Center.
+                        "content": """You are a professional content writer for this tenant.
+
+Write from published AI Setup facts only. Never invent a clinic name.
                         Rewrite the given answer to be more professional, friendly, and informative.
                         Keep the same language as the input. Add relevant emojis.
                         Be concise but complete. Maximum 2-3 sentences.""",

@@ -112,7 +112,7 @@ def test_entitlements_public_includes_web_for_max(tmp_path, monkeypatch) -> None
 def test_entitlements_public_web_true_for_exempt_tenant(tmp_path, monkeypatch) -> None:
     from services.entitlements_service import get_tenant_entitlement_public
 
-    monkeypatch.delenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", raising=False)
+    monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
     pub = get_tenant_entitlement_public("linas")
     assert pub["subscription_exempt"] is True
     assert pub["web"] is True

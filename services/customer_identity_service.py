@@ -55,7 +55,7 @@ async def resolve_customer_from_external(normalized_phone: str) -> dict[str, Any
     result: dict[str, Any] = {"exists": False, "name": None, "external_id": None, "gender": None}
 
     try:
-        from services.api_integrations import get_customer_by_phone
+        from services.saas_no_boc import get_customer_by_phone
 
         response = await get_customer_by_phone(phone=api_phone)
         if response and response.get("success") and response.get("data"):

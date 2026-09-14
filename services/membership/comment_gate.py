@@ -13,8 +13,7 @@ class CommentAutomationDenied(PermissionError):
 def assert_comment_automation_allowed(tenant_id: str) -> None:
     """Fail closed for paid tenants without comment_automation.
 
-    Subscription-exempt tenants (default: ``linas``) are allowed — they are not
-    on the public paid matrix and must keep founder clinic comments workable.
+    Subscription-exempt tenants (``SUBSCRIPTION_EXEMPT_TENANT_IDS``) are allowed.
     Catalog features are SoT; stored entitlement.features may be stale.
     """
 

@@ -80,7 +80,7 @@ class OwnerV2TurnResult:
     creative_draft: dict[str, Any] | None = None  # always None in V2
 
     def to_legacy_owner_turn(self) -> dict[str, Any]:
-        """Shape compatible with modules/owner_ai_api non-stream response."""
+        """Shape compatible with modules/owner_copilot_api non-stream response."""
         return {
             "reply_text": self.reply_text,
             "tool_calls": self.tool_calls,

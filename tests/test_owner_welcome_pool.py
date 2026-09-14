@@ -81,7 +81,7 @@ def test_build_greeting_uses_pool_not_llm(monkeypatch) -> None:
     assert "pick_welcome" in greeting_src
     assert "openai" not in greeting_src.lower()
     assert "generate" not in greeting_src.lower()
-    api_src = Path("modules/owner_ai_api.py").read_text(encoding="utf-8")
+    api_src = Path("modules/owner_copilot_api.py").read_text(encoding="utf-8")
     assert "build_greeting" in api_src
     assert "chat.completions" not in api_src
 

@@ -73,8 +73,8 @@ def test_clinic_tenants_are_not_linas_exempt(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.delenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", raising=False)
     monkeypatch.delenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", raising=False)
-    assert is_subscription_exempt_tenant("linas") is True
-    assert is_unlimited_tenant("linas") is True
+    assert is_subscription_exempt_tenant("linas") is False
+    assert is_unlimited_tenant("linas") is False
     for tid in ("ok-clinic", "clinic", "linas-clinic", "linas_clinic"):
         assert is_subscription_exempt_tenant(tid) is False
         assert is_unlimited_tenant(tid) is False

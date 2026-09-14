@@ -68,9 +68,68 @@ async def test_comment_ai_loads_history_and_parent(monkeypatch: pytest.MonkeyPat
     )
     assert outcome.stop is False
     assert loaded["user_id"] == "ig:user"
-    assert loaded["conversation_id"] == "thread-1"
+    assert loaded["conversation_id"] == "comment:c-shop:instagram_comment:p1:ig:user"
     assert "how much" in captured["history"]
     assert captured["caption"] == "Spring facial"
+
+
+@pytest.mark.asyncio
+async def test_two_authors_same_post_use_separate_histories(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str] = []
+
+    async def fake_history(**kwargs):
+        seen.append(str(kwargs.get("conversation_id") or ""))
+        return HistorySnapshot()
+
+    monkeypatch.setattr("services.customer_ai.runtime.load_history_snapshot", fake_history)
+    monkeypatch.setattr("services.customer_ai.runtime.winning_comment_mode", lambda **_k: (None, None))
+    monkeypatch.setattr(
+        "services.customer_ai.runtime.evaluate_gates",
+        lambda *_a, **_k: type("G", (), {"allow": True, "reason": "", "detail": {}})(),
+    )
+    monkeypatch.setattr("services.customer_ai.runtime.apply_live_control", lambda turn: turn)
+
+    async def fake_run(turn, *, message, channel):
+        from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+
+        return TurnResult(
+            stop_reason="ok",
+            envelope=FinalReplyEnvelope(
+                decision="reply",
+                messages=[OutboundMessage(destination="comment", text="ok")],
+            ),
+        )
+
+    monkeypatch.setattr("services.customer_ai.runtime.run_dm_after_gates", fake_run)
+    monkeypatch.setattr(
+        "services.customer_ai.comments.pipeline.apply_ai_comment_destinations",
+        lambda result, _mode: result,
+    )
+    monkeypatch.setattr("services.customer_ai.runtime.apply_message_billing", lambda _turn, result: result)
+
+    from services.customer_ai.runtime import run_customer_ai_comment
+    from services.entitlements_service import entitlements_store
+
+    entitlements_store.set_plan(tenant_id="shop", plan_id="starter", status="active", source="admin")
+    await run_customer_ai_comment(
+        tenant_id="shop",
+        comment_text="hi",
+        post_id="p1",
+        conversation_id="comment:shop:instagram_comment:p1",
+        provider_sender_id="alice",
+    )
+    await run_customer_ai_comment(
+        tenant_id="shop",
+        comment_text="hi",
+        post_id="p1",
+        conversation_id="comment:shop:instagram_comment:p1",
+        provider_sender_id="bob",
+    )
+    assert seen == [
+        "comment:shop:instagram_comment:p1:alice",
+        "comment:shop:instagram_comment:p1:bob",
+    ]
+    assert seen[0] != seen[1]
 
 
 @pytest.mark.asyncio
@@ -164,7 +223,7 @@ async def test_followup_gate_waits_for_enforcement_flag(monkeypatch: pytest.Monk
 
 
 @pytest.mark.asyncio
-async def test_omni_comment_passes_thread_context(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_omni_comment_does_not_pass_post_scoped_conversation_id(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.customer_reply_v2.models import CustomerReplyOutcome
     from services.omnichannel.generate import _generate_canonical
 
@@ -193,9 +252,8 @@ async def test_omni_comment_passes_thread_context(monkeypatch: pytest.MonkeyPatc
     assert text == "ok"
     assert captured["comment_id"] == "c9"
     assert captured["post_id"] == "p1"
-    assert captured["caption"] == "Spring facial"
-    assert captured["parent_comment"] == "how much"
-    assert captured["comment_context"]["conversation_id"]
+    assert captured["provider_sender_id"] == "ig:user"
+    assert "conversation_id" not in captured["comment_context"]
 
 
 @pytest.mark.asyncio
@@ -232,7 +290,7 @@ async def test_meta_generate_passes_comment_ids(monkeypatch: pytest.MonkeyPatch)
     assert captured["post_id"] == "p1"
     assert captured["caption"] == "Spring facial"
     assert captured["parent_comment"] == "how much"
-    assert captured["comment_context"]["conversation_id"].startswith("comment:t1:instagram:")
+    assert "conversation_id" not in (captured.get("comment_context") or {})
 
 
 def test_comment_path_is_permanent_brain(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -268,14 +326,14 @@ def test_static_and_ai_comments_use_per_author_thread() -> None:
 
     first = comment_conversation_id(
         tenant_id="shop",
-        conversation_id="",
+        conversation_id="thread-1",
         channel="instagram_comment",
         post_id="p1",
         author_id="ig:alice",
     )
     second = comment_conversation_id(
         tenant_id="shop",
-        conversation_id="",
+        conversation_id="thread-1",
         channel="instagram_comment",
         post_id="p1",
         author_id="ig:bob",
@@ -284,17 +342,18 @@ def test_static_and_ai_comments_use_per_author_thread() -> None:
     assert second == "comment:shop:instagram_comment:p1:ig:bob"
     assert first != second
     assert comment_conversation_id(tenant_id="shop", channel="instagram_comment", post_id="p1") == ""
-    assert comment_conversation_id(tenant_id="shop", conversation_id="thread-1", post_id="p1") == "thread-1"
+    assert comment_conversation_id(tenant_id="shop", conversation_id="thread-1", post_id="p1") == ""
     src = getsource(run_customer_ai_comment)
     assert src.count("comment_conversation_id") >= 1
     assert "author_id" in src
 
 
-def test_comment_runtime_binds_existing_comment_or_post_id() -> None:
+def test_comment_runtime_does_not_bind_post_or_comment_id() -> None:
     from inspect import getsource
 
     from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
 
     src = getsource(run_customer_reply_v2_comment)
-    assert "conversation_id_for_brain" in src
-    assert "comment_id or post_id" in src
+    assert "conversation_id_for_brain" not in src
+    assert "comment_id or post_id" not in src
+    assert "conversation_id=" in src

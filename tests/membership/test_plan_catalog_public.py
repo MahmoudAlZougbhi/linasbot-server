@@ -33,10 +33,13 @@ def test_catalog_features_gate_comments_and_creative() -> None:
     assert plan_features("starter")["whatsapp"] is True
     assert plan_features("growth")["tiktok"] is True
     assert plan_features("pro")["tiktok"] is True
-    assert PLAN_FEATURES["pro"]["image_generation"] is True
-    assert PLAN_FEATURES["growth"]["image_generation"] is False
+    assert "image_generation" not in PLAN_FEATURES["pro"]
+    assert "video_generation" not in PLAN_FEATURES["pro"]
+    assert "creative_studio" not in PLAN_FEATURES["pro"]
     assert recommend_allowance("lite").included_credits == 7000
     assert recommend_allowance("starter").included_credits == 17500
+    assert recommend_allowance("pro").included_images == 0
+    assert recommend_allowance("pro").included_videos == 0
 
 
 def test_comment_gate_allows_exempt_blocks_lite(monkeypatch, tmp_path) -> None:

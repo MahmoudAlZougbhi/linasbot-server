@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from services.cm.constants import CM_SECTIONS, DEFAULT_TENANT_ID
+from services.cm.constants import CM_SECTIONS, require_tenant_id
 from services.cm.paths import archive_dir, draft_dir, versions_dir
 from services.cm.schemas import CareSection, FaqSection, KnowledgeSection
 from services.cm.storage import get_draft
@@ -47,7 +47,7 @@ def _file_meta(path: Path, *, category: str, destination: str) -> dict[str, Any]
 
 def build_source_inventory(*, tenant_id: str | None = None, data_root: Path | None = None) -> dict[str, Any]:
     """Build metadata ledger of CM drafts, published pointer, archives, and staged legacy files."""
-    tid = (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+    tid = require_tenant_id(tenant_id)
     root = Path(data_root) if data_root is not None else Path(get_data_root())
 
     pointer = read_published_pointer(tid)
@@ -232,7 +232,7 @@ def build_source_inventory(*, tenant_id: str | None = None, data_root: Path | No
 
 
 def write_inventory_report(report: dict[str, Any], *, tenant_id: str | None = None) -> Path:
-    tid = (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+    tid = require_tenant_id(tenant_id)
     out_dir = archive_dir(tid) / "inventory"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "latest_inventory.json"

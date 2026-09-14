@@ -39,7 +39,7 @@ async def deliver_live_chat_tiktok_operator_text(
     text: str,
 ) -> dict[str, Any]:
     sender_id, connection_id, embedded_tenant = parse_tiktok_live_chat_user_id(user_id)
-    tenant = str(tenant_id or embedded_tenant or "linas").strip()
+    tenant = str(tenant_id or embedded_tenant or "").strip()
     if not tenant:
         return {"success": False, "error": "tenant_required_for_tiktok_send", "delivered": False}
     conv_id = str(conversation_id or sender_id or "").strip()

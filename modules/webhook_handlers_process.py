@@ -17,7 +17,7 @@ from modules.webhook_handlers_parse import (
     _count_images_in_single_message,
     _count_non_empty_lines,
 )
-from services.api_integrations import log_report_event
+from services.saas_no_boc import log_report_event
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 from utils.utils import set_human_takeover_status
 
@@ -293,11 +293,7 @@ async def _process_parsed_message_impl(parsed_message: dict[str, Any], adapter: 
             if await try_handle_session_rating_reply(user_id, user_input_text, adapter):
                 return
 
-        if user_input_text.lower() == "/exit":
-            from modules.webhook_handlers import exit_training_mode_whatsapp
-
-            await exit_training_mode_whatsapp(user_id)
-        elif user_input_text.lower() == "/daily_report":
+        if user_input_text.lower() == "/daily_report":
             from modules.webhook_handlers import generate_daily_report_command_whatsapp
 
             await generate_daily_report_command_whatsapp(user_id)

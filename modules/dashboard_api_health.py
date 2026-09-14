@@ -264,26 +264,34 @@ async def ready() -> Any:
             from db.session import ping_whatsapp_db
 
             db_health = ping_whatsapp_db()
-            tenant_id = (os.getenv("DEFAULT_TENANT_ID") or "linas").strip() or "linas"
-            migrated = migration_is_applied(tenant_id=tenant_id)
-            revision = shared_revision_for_tenant(tenant_id)
-            cache_ok = True
-            if local_cache_digest_mismatch(tenant_id):
-                try:
-                    rebuild_tenant_cache(tenant_id)
-                except Exception:
-                    cache_ok = False
-            trc_ok = bool(db_health.get("reachable")) and migrated and cache_ok
-            checks["tenant_runtime_config"] = {
-                "ok": trc_ok,
-                "backend": "postgres",
-                "db_reachable": bool(db_health.get("reachable")),
-                "migration_applied": migrated,
-                "shared_revision": revision,
-                "cache_ok": cache_ok,
-            }
-            if not trc_ok:
+            tenant_id = (os.getenv("DEFAULT_TENANT_ID") or os.getenv("LINASBOT_TENANT_ID") or "").strip()
+            if not tenant_id:
+                checks["tenant_runtime_config"] = {
+                    "ok": False,
+                    "backend": "postgres",
+                    "error": "tenant_id required",
+                }
                 overall_ok = False
+            else:
+                migrated = migration_is_applied(tenant_id=tenant_id)
+                revision = shared_revision_for_tenant(tenant_id)
+                cache_ok = True
+                if local_cache_digest_mismatch(tenant_id):
+                    try:
+                        rebuild_tenant_cache(tenant_id)
+                    except Exception:
+                        cache_ok = False
+                trc_ok = bool(db_health.get("reachable")) and migrated and cache_ok
+                checks["tenant_runtime_config"] = {
+                    "ok": trc_ok,
+                    "backend": "postgres",
+                    "db_reachable": bool(db_health.get("reachable")),
+                    "migration_applied": migrated,
+                    "shared_revision": revision,
+                    "cache_ok": cache_ok,
+                }
+                if not trc_ok:
+                    overall_ok = False
         else:
             checks["tenant_runtime_config"] = {"ok": True, "backend": "file", "required": False}
     except Exception as e:

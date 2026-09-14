@@ -55,7 +55,7 @@ class SmartMessagingTemplatesMixin:
                 "ar": """🔔 تذكير بموعدك
 
 مرحباً {{customer_name}}! 
-نذكرك بموعدك غداً في مركز لينا ليزر:
+نذكرك بموعدك غداً:
 
 📅 التاريخ: {{appointment_date}}
 ⏰ ��لوقت: {{appointment_time}}
@@ -70,7 +70,7 @@ class SmartMessagingTemplatesMixin:
                 "en": """🔔 Appointment Reminder
 
 Hi {{customer_name}}!
-This is a reminder of your appointment tomorrow at Lina's Laser Center:
+This is a reminder of your appointment tomorrow:
 
 📅 Date: {{appointment_date}}
 ⏰ Time: {{appointment_time}}
@@ -85,7 +85,7 @@ Looking forward to seeing you! 💜""",
                 "fr": """🔔 Rappel de Rendez-vous
 
 Bonjour {{customer_name}}!
-Ceci est un rappel de votre rendez-vous demain au Centre Laser Lina:
+Ceci est un rappel de votre rendez-vous demain:
 
 📅 Date: {{appointment_date}}
 ⏰ Heure: {{appointment_time}}
@@ -227,7 +227,7 @@ Nous sommes toujours là pour vous 💜""",
             "sent_for_pause": {
                 "ar": """🌸 مرحباً {{customer_name}}
 
-نذكرك بموعدك المؤجل في مركز لينا ليزر:
+نذكرك بموعدك المؤجل:
 
 💆 الخدمة: {{service_name}}
 📅 التاريخ: {{appointment_date}}
@@ -241,7 +241,7 @@ Nous sommes toujours là pour vous 💜""",
 نتطلع لخدمتك 💜""",
                 "en": """🌸 Hi {{customer_name}}
 
-We're following up on your paused appointment at Lina's Laser Center:
+We're following up on your paused appointment:
 
 💆 Service: {{service_name}}
 📅 Date: {{appointment_date}}
@@ -255,7 +255,7 @@ To book or ask anything:
 We're here for you 💜""",
                 "fr": """🌸 Bonjour {{customer_name}}
 
-Suite à votre rendez-vous en pause au Centre Laser Lina:
+Suite à votre rendez-vous en pause:
 
 💆 Service: {{service_name}}
 📅 Date: {{appointment_date}}
