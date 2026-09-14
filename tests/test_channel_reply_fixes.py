@@ -65,7 +65,7 @@ def test_thread_status_uses_takeover_not_stale_active_label() -> None:
 def test_meta_adapter_skips_whitespace_only_send() -> None:
     import asyncio
 
-    from services.meta_messaging import MetaMessagingAdapter
+    from services.integrations.meta.meta_messaging import MetaMessagingAdapter
 
     adapter = MetaMessagingAdapter(
         access_token="unit-token",

@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from modules.api_security import is_social_user_id
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     APP_B_KEY,
     LINAS_INSTAGRAM_ACCOUNT_ID,

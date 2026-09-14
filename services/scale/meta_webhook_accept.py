@@ -13,15 +13,15 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from typing import Any
 
-from services.meta_comment_events import ResolvedMetaCommentEvent
-from services.meta_controlled_evidence import log_meta_controlled_evidence, meta_evidence_surface
-from services.meta_cross_flow_dedup import (
+from services.integrations.meta.meta_comment_events import ResolvedMetaCommentEvent
+from services.integrations.meta.meta_controlled_evidence import log_meta_controlled_evidence, meta_evidence_surface
+from services.integrations.meta.meta_cross_flow_dedup import (
     GLOBAL_COMMENT_CLAIM_NAMESPACE,
     GLOBAL_DM_CLAIM_NAMESPACE,
     global_comment_claim_key,
     global_dm_claim_key,
 )
-from services.meta_multi_app_router import ResolvedMetaEvent
+from services.integrations.meta.meta_multi_app_router import ResolvedMetaEvent
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 
@@ -212,7 +212,7 @@ async def process_inline_meta_comment(
     process_comment: ProcessComment,
 ) -> None:
     from services.durable_event_claim import complete_event_claim, release_event_claim, run_under_event_claim
-    from services.meta_comment_replies import comment_reply_requires_retry
+    from services.integrations.meta.meta_comment_replies import comment_reply_requires_retry
     from services.scale.meta_ingress import mark_dm_completed, mark_dm_failed, mark_dm_processing
 
     evidence_surface = meta_evidence_surface(kind="meta_comment", channel=resolved.binding.channel)
@@ -323,7 +323,7 @@ async def accept_meta_dm_events(
     log_prefix: str = "[meta-social]",
     authenticated_outcome: str = "",
 ) -> MetaWebhookAcceptCounts:
-    from services.meta_inbound_deletion_fence import (
+    from services.integrations.meta.meta_inbound_deletion_fence import (
         InboundBindingDeletionFencedError,
         InboundDeletionFenceStoreError,
     )
@@ -400,7 +400,7 @@ async def accept_meta_comment_events(
     process_comment: ProcessComment,
     authenticated_outcome: str = "",
 ) -> MetaWebhookAcceptCounts:
-    from services.meta_inbound_deletion_fence import (
+    from services.integrations.meta.meta_inbound_deletion_fence import (
         InboundBindingDeletionFencedError,
         InboundDeletionFenceStoreError,
     )

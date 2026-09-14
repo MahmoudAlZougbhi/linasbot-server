@@ -29,7 +29,7 @@ def test_text_handlers_message_source_excludes_sec047_debug_patterns() -> None:
 async def test_session_greeting_send_has_task_local_semantic_purpose(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.meta_outbound_attempts import current_meta_outbound_send_purpose
+    from services.integrations.meta.meta_outbound_attempts import current_meta_outbound_send_purpose
 
     user_id = "facebook:semantic-greeting"
     user_data = {

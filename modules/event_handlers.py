@@ -13,7 +13,7 @@ from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFac
 def repair_meta_registry_before_readiness() -> None:
     """Apply the local compatibility repair before startup can become ready."""
 
-    from services.meta_app_registry import get_meta_app_registry, meta_multi_app_registry_enabled
+    from services.integrations.meta.meta_app_registry import get_meta_app_registry, meta_multi_app_registry_enabled
 
     if meta_multi_app_registry_enabled():
         get_meta_app_registry().archive_superseded_duplicate_bindings(actor_id="meta-registry-startup-repair")
@@ -57,7 +57,7 @@ async def startup_event() -> None:
 
         await start_smart_messaging_scheduler(app.state)
 
-        from services.meta_instagram_login_lifecycle import start_instagram_login_lifecycle
+        from services.integrations.meta.meta_instagram_login_lifecycle import start_instagram_login_lifecycle
 
         await start_instagram_login_lifecycle(app.state)
         print("✅ Instagram Login lifecycle scheduler started")
@@ -80,7 +80,7 @@ async def shutdown_event() -> None:
     except Exception as e:
         print(f"⚠️ Drain coordinator error: {type(e).__name__}")
     try:
-        from services.meta_instagram_login_lifecycle import stop_instagram_login_lifecycle
+        from services.integrations.meta.meta_instagram_login_lifecycle import stop_instagram_login_lifecycle
 
         await stop_instagram_login_lifecycle(app.state)
     except Exception as e:

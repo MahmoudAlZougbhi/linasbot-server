@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-import services.meta_outbound_attempts as attempts
+import services.integrations.meta.meta_outbound_attempts as attempts
 from tests.meta_compliance_helpers import (
     _FakeFirestore,
     _GoogleLikeFirestore,
@@ -111,7 +111,7 @@ async def test_binding_deletion_fence_prevents_provider_call(
     purpose: attempts.MetaOutboundPurpose,
 ) -> None:
     binding_id = "binding-being-deleted"
-    from services.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
+    from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
 
     fence_ref = firestore_binding_deletion_fence_ref(outbound_store, binding_id)
     fence_ref.set({"status": "fenced"})
@@ -145,7 +145,7 @@ async def test_fence_installed_after_reservation_still_prevents_provider_call(
 ) -> None:
     binding_id = "binding-fenced-after-reservation"
     real_begin = attempts.begin_meta_outbound_attempt
-    from services.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
+    from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
 
     async def begin_then_fence(**kwargs: Any) -> attempts.MetaOutboundAttemptDecision:
         decision = await real_begin(**kwargs)

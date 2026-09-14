@@ -42,11 +42,11 @@ def test_soak_create_uses_direct_firestore_create(monkeypatch: pytest.MonkeyPatc
     cache_calls: list[object] = []
     monkeypatch.setattr("utils.utils.get_firestore_db", lambda: object())
     monkeypatch.setattr(
-        "services.meta_inbound_deletion_fence._firestore_event_ref",
+        "services.integrations.meta.meta_inbound_deletion_fence._firestore_event_ref",
         lambda *_a, **_k: ref,
     )
     monkeypatch.setattr(
-        "services.meta_inbound_deletion_fence.create_firestore_event_unless_fenced",
+        "services.integrations.meta.meta_inbound_deletion_fence.create_firestore_event_unless_fenced",
         lambda **kwargs: fence_calls.append(kwargs) or ({}, True),
     )
     monkeypatch.setattr(
@@ -79,7 +79,7 @@ def test_soak_create_returns_existing_row_on_already_exists(monkeypatch: pytest.
     ref.existing = {"event_id": "ibe_soak", "state": "queued"}
     monkeypatch.setattr("utils.utils.get_firestore_db", lambda: object())
     monkeypatch.setattr(
-        "services.meta_inbound_deletion_fence._firestore_event_ref",
+        "services.integrations.meta.meta_inbound_deletion_fence._firestore_event_ref",
         lambda *_a, **_k: ref,
     )
     record = SimpleNamespace(
@@ -109,7 +109,7 @@ def test_production_create_still_uses_fenced_transaction(monkeypatch: pytest.Mon
         return kwargs["document"], True
 
     monkeypatch.setattr(
-        "services.meta_inbound_deletion_fence.create_firestore_event_unless_fenced",
+        "services.integrations.meta.meta_inbound_deletion_fence.create_firestore_event_unless_fenced",
         fake_create,
     )
     record = SimpleNamespace(
@@ -140,7 +140,7 @@ def test_soak_flag_without_arm_uses_deletion_fence(monkeypatch: pytest.MonkeyPat
         return kwargs["document"], True
 
     monkeypatch.setattr(
-        "services.meta_inbound_deletion_fence.create_firestore_event_unless_fenced",
+        "services.integrations.meta.meta_inbound_deletion_fence.create_firestore_event_unless_fenced",
         fake_create,
     )
     monkeypatch.setattr(

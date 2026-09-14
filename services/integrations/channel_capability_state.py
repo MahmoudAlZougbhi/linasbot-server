@@ -26,15 +26,15 @@ from services.integrations.channel_capability_status import (
     empty_capability_state,
     status_and_blocker,
 )
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     META_CHANNEL_SCOPES,
     get_meta_app_configs,
     get_meta_app_registry,
 )
-from services.meta_comment_reply_settings import get_comment_reply_setting
-from services.meta_graph_routing import required_comment_scopes_for_binding
-from services.meta_instagram_login_subscription import COMMENTS_SUBSCRIPTION_FIELD
+from services.integrations.meta.meta_comment_reply_settings import get_comment_reply_setting
+from services.integrations.meta.meta_graph_routing import required_comment_scopes_for_binding
+from services.integrations.meta.meta_instagram_login_subscription import COMMENTS_SUBSCRIPTION_FIELD
 
 ChannelPlatform = Literal["instagram", "facebook"]
 CapabilityKey = Literal["dm", "comments"]
@@ -229,7 +229,7 @@ def _missing_scopes_for_capability(
 
 
 def _comment_permission_status_for_binding(binding: Any, *, registry: Any) -> str:
-    from services.meta_comment_permission_verification import effective_comment_permission_status
+    from services.integrations.meta.meta_comment_permission_verification import effective_comment_permission_status
 
     try:
         credential = registry.get_credential(binding)
@@ -244,7 +244,9 @@ def _comment_permission_status_for_binding(binding: Any, *, registry: Any) -> st
     status = effective_comment_permission_status(binding, credential)
     if status != "unknown":
         return status
-    from services.meta_comment_permission_verification import verify_comment_permission_from_stored_scopes
+    from services.integrations.meta.meta_comment_permission_verification import (
+        verify_comment_permission_from_stored_scopes,
+    )
 
     inferred, _source = verify_comment_permission_from_stored_scopes(binding, credential)
     return inferred

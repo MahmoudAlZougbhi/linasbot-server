@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaBindingConflictError,
@@ -18,7 +18,7 @@ from services.meta_app_registry import (
     binding_exclusive_asset_key,
     get_meta_registry_readiness,
 )
-from services.meta_connection_disconnect import disconnect_meta_binding_set
+from services.integrations.meta.meta_connection_disconnect import disconnect_meta_binding_set
 from services.mobile_integrations_display import bindings_for_disconnect
 from tests.meta_instagram_single_active_support import (
     INSTAGRAM_ID,

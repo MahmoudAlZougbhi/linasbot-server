@@ -8,8 +8,8 @@ from typing import Any
 from fastapi import HTTPException, Request
 
 from modules.core import app
-from services.apple_iap_processor import process_notification_v2
-from services.apple_jws import AppleJwsError
+from services.billing.apple.apple_iap_processor import process_notification_v2
+from services.billing.apple.apple_jws import AppleJwsError
 
 logger = logging.getLogger(__name__)
 

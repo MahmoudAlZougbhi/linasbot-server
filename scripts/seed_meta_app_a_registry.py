@@ -15,14 +15,14 @@ from scripts.validate_meta_social_token import (
     _request_json,
     validate_payloads,
 )
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_EXPECTED_ID,
     APP_A_KEY,
     MetaAppRegistry,
     MetaBindingCredential,
     get_meta_app_configs,
 )
-from services.meta_facebook_scope_policy import (
+from services.integrations.meta.meta_facebook_scope_policy import (
     FACEBOOK_PAGE_BINDING_SCOPES,
     facebook_page_granular_targets_are_allowlisted,
     normalize_facebook_page_token_scopes,

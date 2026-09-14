@@ -7,7 +7,7 @@ import pytest
 
 import services.durable_event_claim as claims
 import services.scale.inbound_event_store as event_store
-from services.meta_claim_data_deletion import (
+from services.integrations.meta.meta_claim_data_deletion import (
     MetaClaimDeletionActiveError,
     MetaClaimDeletionError,
     apply_shared_meta_claim_deletion_plan,

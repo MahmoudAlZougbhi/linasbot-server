@@ -9,10 +9,10 @@ from pydantic import BaseModel, Field
 
 from modules.api_security import require_session
 from modules.core import app
-from services.apple_app_store_client import iap_credentials_configured
-from services.apple_iap_effects import get_or_create_app_account_token
-from services.apple_iap_processor import AppleIapProcessorError, process_signed_transaction
-from services.apple_jws import AppleJwsError
+from services.billing.apple.apple_app_store_client import iap_credentials_configured
+from services.billing.apple.apple_iap_effects import get_or_create_app_account_token
+from services.billing.apple.apple_iap_processor import AppleIapProcessorError, process_signed_transaction
+from services.billing.apple.apple_jws import AppleJwsError
 
 
 class VerifyBody(BaseModel):

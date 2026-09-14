@@ -124,7 +124,7 @@ async def receive_webhook(request: Request) -> Any:
 
         authenticated = False
         if app_secret:
-            from services.meta_messaging import verify_meta_signature
+            from services.integrations.meta.meta_messaging import verify_meta_signature
 
             if verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"), app_secret):
                 authenticated = True

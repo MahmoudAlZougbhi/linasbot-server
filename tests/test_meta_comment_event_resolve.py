@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest import mock
 
-from services.meta_app_registry import APP_A_KEY, MetaBindingCredential
-from services.meta_comment_events import resolve_registry_comment_events
+from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaBindingCredential
+from services.integrations.meta.meta_comment_events import resolve_registry_comment_events
 from tests.test_meta_comment_replies import (
     _binding,
     _facebook_comment_payload,

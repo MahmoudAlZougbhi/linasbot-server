@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from services.ai_setup.schemas import CommentRule, CommentsSection
 from services.ai_setup.version_store import PublishedVersionError, load_published_content
-from services.meta_comment_post_ids import comment_post_ids_match
+from services.integrations.meta.meta_comment_post_ids import comment_post_ids_match
 
 CommentAction = Literal["reply_comment", "reply_dm", "ignore", "reply_comment_and_dm"]
 

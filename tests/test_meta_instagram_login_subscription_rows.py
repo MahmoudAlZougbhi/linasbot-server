@@ -7,10 +7,10 @@ from pathlib import Path
 import httpx
 import pytest
 
-from services.meta_app_registry import MetaAppRegistry
-from services.meta_instagram_login_config import INSTAGRAM_LOGIN_GRAPH_API_VERSION
-from services.meta_instagram_login_subscription import ensure_instagram_login_webhook_subscription
-from services.meta_instagram_login_subscription_graph import parse_subscription_snapshot
+from services.integrations.meta.meta_app_registry import MetaAppRegistry
+from services.integrations.meta.meta_instagram_login_config import INSTAGRAM_LOGIN_GRAPH_API_VERSION
+from services.integrations.meta.meta_instagram_login_subscription import ensure_instagram_login_webhook_subscription
+from services.integrations.meta.meta_instagram_login_subscription_graph import parse_subscription_snapshot
 from tests.meta_instagram_login_lifecycle_helpers import FULL_SCOPES, INSTAGRAM_ID, _binding
 
 INSTAGRAM_APP_ID = "1035856539045307"
@@ -233,7 +233,7 @@ def test_parse_fields_only_row_without_ig_user_id_still_fails_closed(instagram_e
 
 @pytest.mark.asyncio
 async def test_read_requests_subscribed_fields_on_get(instagram_env: None) -> None:
-    from services.meta_instagram_login_subscription_graph import (
+    from services.integrations.meta.meta_instagram_login_subscription_graph import (
         INSTAGRAM_SUBSCRIBED_APPS_READ_FIELDS,
         read_instagram_login_subscription,
     )

@@ -47,7 +47,7 @@ def _source_channel_for_meta(channel: str) -> str:
 
 def resolve_meta_live_chat_tenant(tenant_id: str | None, user_id: str) -> str:
     """Map Live Chat social user_id formats to the Meta binding tenant."""
-    from services.meta_app_registry import normalize_meta_tenant_id
+    from services.integrations.meta.meta_app_registry import normalize_meta_tenant_id
 
     _, _, _, embedded_tenant = parse_meta_live_chat_user_id(user_id)
     if embedded_tenant:
@@ -80,7 +80,7 @@ async def deliver_live_chat_meta_operator_text(
 
     account = str(asset_id or "").strip()
     if not account:
-        from services.meta_app_registry import get_meta_app_registry
+        from services.integrations.meta.meta_app_registry import get_meta_app_registry
 
         registry = get_meta_app_registry()
         bindings = [

@@ -8,7 +8,7 @@ from typing import Any
 import fakeredis
 import pytest
 
-import services.meta_outbound_attempts as attempts
+import services.integrations.meta.meta_outbound_attempts as attempts
 from services.queues.meta_inbound_soak_gate import maybe_finish_soak_at_openai_gate
 from services.scale.soak_arm import is_armed, job_requests_soak_simulation, set_soak_redis_for_tests
 from tests.meta_compliance_helpers import _FakeFirestore

@@ -133,7 +133,7 @@ def validate_state_invariants(state: dict[str, Any]) -> list[str]:
 def validate_credential_decryption(state: dict[str, Any], master_secret: str) -> list[str]:
     """Prove every credential opens with the canonical key; return safe codes."""
 
-    from services.meta_app_registry_common import MetaCredentialCipher, MetaCredentialError
+    from services.integrations.meta.meta_app_registry_common import MetaCredentialCipher, MetaCredentialError
 
     credentials = state.get("credentials")
     if not isinstance(credentials, dict):
@@ -181,14 +181,14 @@ def main(argv: list[str] | None = None) -> int:
                 args.env_file,
                 require_postgres_backend=not args.allow_non_postgres_backend,
             )
-        from services.meta_app_registry_backend import resolve_meta_registry_backend
+        from services.integrations.meta.meta_app_registry_backend import resolve_meta_registry_backend
 
         backend = resolve_meta_registry_backend()
         if backend != "postgres" and not args.allow_non_postgres_backend:
             raise RuntimeError("effective Meta registry backend is not exactly postgres")
 
         from db.session import whatsapp_session
-        from services.meta_app_registry_pg_store import (
+        from services.integrations.meta.meta_app_registry_pg_store import (
             acquire_registry_advisory_lock,
             load_registry_tables_snapshot,
             registry_tables_fingerprint,
@@ -220,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
                 _locked_registry_source,
                 _normalize_file_state_for_postgres,
             )
-            from services.meta_app_registry_pg_store import state_fingerprint
+            from services.integrations.meta.meta_app_registry_pg_store import state_fingerprint
 
             with _locked_registry_source(store) as (file_state, _source_info):
                 file_fp = state_fingerprint(_normalize_file_state_for_postgres(file_state))

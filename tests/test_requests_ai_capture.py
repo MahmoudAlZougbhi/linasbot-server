@@ -185,7 +185,7 @@ def test_public_comment_refused(req_db, monkeypatch):
 
 
 def test_wa_me_not_forced_when_capture_active(monkeypatch):
-    from services.social_contact_routing import (
+    from services.integrations.social.social_contact_routing import (
         route_social_contact_request,
         should_force_wa_me_booking_handoff,
     )
@@ -204,7 +204,7 @@ def test_wa_me_not_forced_when_capture_active(monkeypatch):
 
 
 def test_wa_me_booking_still_runs_when_capture_inactive(monkeypatch):
-    from services.social_contact_routing import route_social_contact_request
+    from services.integrations.social.social_contact_routing import route_social_contact_request
 
     monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _tid: False)
     ud = {
@@ -219,7 +219,7 @@ def test_wa_me_booking_still_runs_when_capture_inactive(monkeypatch):
 
 
 def test_human_handoff_still_allowed_when_capture_active(monkeypatch):
-    from services.social_contact_routing import route_social_contact_request
+    from services.integrations.social.social_contact_routing import route_social_contact_request
 
     monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _tid: True)
     ud = {

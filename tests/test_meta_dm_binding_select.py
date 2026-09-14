@@ -7,9 +7,9 @@ from typing import Any
 
 import pytest
 
-from services.meta_app_registry import MetaAppRegistry
-from services.meta_dm_binding_select import select_binding_for_meta_dm
-from services.meta_messaging import MetaMessagingAdapter
+from services.integrations.meta.meta_app_registry import MetaAppRegistry
+from services.integrations.meta.meta_dm_binding_select import select_binding_for_meta_dm
+from services.integrations.meta.meta_messaging import MetaMessagingAdapter
 from services.requests.constants import SOURCE_CHANNEL_INSTAGRAM_DM
 from services.requests.delivery import deliver_meta_dm
 from tests.test_meta_graph_routing import INSTAGRAM_ID, _instagram_binding
@@ -67,8 +67,8 @@ async def test_deliver_meta_dm_sends_with_instagram_login_host(
         async def close(self) -> None:
             return None
 
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr("services.meta_messaging.MetaMessagingAdapter", FakeAdapter)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_messaging.MetaMessagingAdapter", FakeAdapter)
 
     result = await deliver_meta_dm(
         tenant_id="tenant-a",
@@ -98,8 +98,8 @@ async def test_deliver_meta_dm_honors_adapter_success_false(
         async def close(self) -> None:
             return None
 
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr("services.meta_messaging.MetaMessagingAdapter", FakeAdapter)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_messaging.MetaMessagingAdapter", FakeAdapter)
 
     result = await deliver_meta_dm(
         tenant_id="tenant-a",

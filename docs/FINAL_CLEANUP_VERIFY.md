@@ -17,6 +17,8 @@ Date: 2026-09-14.
 
 **Wave X6:** preview queue deleted after WA header URL retarget; git phone map empty; app_settings museum keys dropped; gender GPT helper gone; evals renamed off Laser/prod lab overlay. Token wallet + message catalog kept for Owner Catalog / Copilot.
 
+**Wave X7:** flat `services/meta_*.py` and `services/apple_*.py` folded into `services/integrations/meta/` and `services/billing/apple/`; WA template helper under `integrations/whatsapp/`; social contact routing moved (not deleted).
+
 
 
 ## Method

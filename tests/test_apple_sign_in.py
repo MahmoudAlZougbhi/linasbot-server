@@ -21,15 +21,15 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services import apple_sign_in_service as sign_in  # noqa: E402
-from services.apple_identity_service import (  # noqa: E402
+from services.billing.apple import apple_sign_in_service as sign_in  # noqa: E402
+from services.billing.apple.apple_identity_service import (  # noqa: E402
     AppleIdentityError,
     find_by_apple_sub,
     get_or_create_app_account_token,
     link_apple_identity,
     unlink_apple_identity,
 )
-from services.apple_sign_in_service import (  # noqa: E402
+from services.billing.apple.apple_sign_in_service import (  # noqa: E402
     AppleSignInError,
     is_private_relay_email,
     nonce_matches,
@@ -239,14 +239,14 @@ def test_unlink_requires_other_login(pg_env: Path, monkeypatch: pytest.MonkeyPat
     link_apple_identity(tenant_id="t1", user_id="u1", sub="sub-y", email=None)
 
     monkeypatch.setattr(
-        "services.apple_identity_service.user_service.get_user_by_id",
+        "services.billing.apple.apple_identity_service.user_service.get_user_by_id",
         lambda _uid: {"id": "u1", "password": "", "passwordLoginEnabled": False},
     )
     with pytest.raises(AppleIdentityError, match="another login"):
         unlink_apple_identity(user_id="u1", sub="sub-y")
 
     monkeypatch.setattr(
-        "services.apple_identity_service.user_service.get_user_by_id",
+        "services.billing.apple.apple_identity_service.user_service.get_user_by_id",
         lambda _uid: {"id": "u1", "password": "hash", "passwordLoginEnabled": True},
     )
     out = unlink_apple_identity(user_id="u1", sub="sub-y")
@@ -306,7 +306,7 @@ def test_existing_social_apple_account_logs_in(
 
 
 def test_secrets_status_no_key_material(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services import apple_secrets
+    from services.billing.apple import apple_secrets
 
     missing = tmp_path / "missing.p8"
     monkeypatch.setenv("APPLE_SIGN_IN_PRIVATE_KEY_PATH", str(missing))

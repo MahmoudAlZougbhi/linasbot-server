@@ -9,7 +9,7 @@ import pytest
 
 import config
 from services import social_messaging_processor
-from services.meta_messaging import (
+from services.integrations.meta.meta_messaging import (
     SOCIAL_DISPLAY_NAME_FALLBACK,
     MetaMessagingAdapter,
     MetaMessagingSettings,

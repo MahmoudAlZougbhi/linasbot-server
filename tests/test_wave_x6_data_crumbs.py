@@ -22,14 +22,14 @@ def test_wave_x6_preview_and_gender_gone() -> None:
     assert not leftover, leftover
     keep = (
         "services/integrations/whatsapp/template_header_image.py",
-        "services/whatsapp_cloud_template_service_payload.py",
+        "services/integrations/whatsapp/cloud_template_payload.py",
         "services/billing/token_wallet_service.py",
         "services/billing/membership/message_catalog.py",
         "data/phone_to_room_mapping.json",
     )
     missing = [rel for rel in keep if not (ROOT / rel).exists()]
     assert not missing, missing
-    payload = (ROOT / "services/whatsapp_cloud_template_service_payload.py").read_text(encoding="utf-8")
+    payload = (ROOT / "services/integrations/whatsapp/cloud_template_payload.py").read_text(encoding="utf-8")
     assert "services.integrations.whatsapp.template_header_image" in payload
     assert "message_preview_service" not in payload
 

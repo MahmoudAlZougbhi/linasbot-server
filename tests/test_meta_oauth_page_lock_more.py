@@ -10,11 +10,14 @@ from typing import Any
 
 import pytest
 
-from services import meta_oauth_activation
-from services.meta_app_registry import APP_A_KEY, MetaCredentialError
-from services.meta_oauth import MetaOAuthError
-from services.meta_oauth_activation import activate_validated_facebook_pages
-from services.meta_subject_deletion_guard import MetaSubjectDeletionChangedError, MetaSubjectDeletionLease
+from services.integrations.meta import meta_oauth_activation
+from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaCredentialError
+from services.integrations.meta.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_oauth_activation import activate_validated_facebook_pages
+from services.integrations.meta.meta_subject_deletion_guard import (
+    MetaSubjectDeletionChangedError,
+    MetaSubjectDeletionLease,
+)
 from tests.test_meta_oauth_page_lock import (
     _registry,
     _validated_page,

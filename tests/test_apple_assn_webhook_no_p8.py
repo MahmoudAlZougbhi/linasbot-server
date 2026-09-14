@@ -14,8 +14,8 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.apple_iap_effects import get_or_create_app_account_token  # noqa: E402
-from services.apple_iap_processor import process_notification_v2  # noqa: E402
+from services.billing.apple.apple_iap_effects import get_or_create_app_account_token  # noqa: E402
+from services.billing.apple.apple_iap_processor import process_notification_v2  # noqa: E402
 from services.billing.entitlements_service import EntitlementsStore  # noqa: E402
 from services.credit_ledger_service import CreditLedgerService  # noqa: E402
 
@@ -42,8 +42,8 @@ def apple_env_no_p8(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
-    monkeypatch.setattr("services.apple_iap_effects.entitlements_store", store)
-    monkeypatch.setattr("services.apple_credit_grant_ops.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.apple.apple_iap_effects.entitlements_store", store)
+    monkeypatch.setattr("services.billing.apple.apple_credit_grant_ops.credit_ledger_service", ledger)
     monkeypatch.setattr("services.billing.entitlements_service._DATA_ROOT", tmp_path)
     yield tmp_path
     reset_engine_for_tests()
@@ -51,7 +51,7 @@ def apple_env_no_p8(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.mark.asyncio
 async def test_assn_webhook_works_without_p8(apple_env_no_p8: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.apple_app_store_client import iap_credentials_configured
+    from services.billing.apple.apple_app_store_client import iap_credentials_configured
 
     assert iap_credentials_configured() is False
 
@@ -79,7 +79,7 @@ async def test_assn_webhook_works_without_p8(apple_env_no_p8: Path, monkeypatch:
 def test_process_notification_without_p8_when_decode_mocked(
     apple_env_no_p8: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from services.apple_app_store_client import iap_credentials_configured
+    from services.billing.apple.apple_app_store_client import iap_credentials_configured
 
     assert iap_credentials_configured() is False
     token = get_or_create_app_account_token(tenant_id="tenant_nop8", user_id="user_nop8")
@@ -106,7 +106,7 @@ def test_process_notification_without_p8_when_decode_mocked(
             return outer
         return txn
 
-    monkeypatch.setattr("services.apple_iap_processor.decode_jws_payload", _decode)
+    monkeypatch.setattr("services.billing.apple.apple_iap_processor.decode_jws_payload", _decode)
     out = process_notification_v2({"signedPayload": "signed.outer.nop8"})
     assert out.get("ok") is True
     assert out.get("duplicate") is False

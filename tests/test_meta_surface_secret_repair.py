@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from services.meta_surface_secret_separation import (
+from services.integrations.meta.meta_surface_secret_separation import (
     COLLISION_EXIT,
     FACEBOOK_SIGNING_ALIAS_MISMATCH,
     RELEASE_ONLY_VERIFY_MODES,

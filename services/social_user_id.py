@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.meta_app_registry import MetaChannel, get_meta_app_registry, normalize_meta_tenant_id
+from services.integrations.meta.meta_app_registry import MetaChannel, get_meta_app_registry, normalize_meta_tenant_id
 
 
 def tenant_channel_has_multiple_active_assets(tenant_id: str, channel: MetaChannel) -> bool:

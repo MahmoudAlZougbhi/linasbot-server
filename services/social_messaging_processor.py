@@ -7,7 +7,11 @@ from typing import Any
 
 import config
 from handlers.text_handlers import handle_message
-from services.meta_messaging import MetaMessagingAdapter, MetaMessagingSettings, resolve_meta_send_account_id
+from services.integrations.meta.meta_messaging import (
+    MetaMessagingAdapter,
+    MetaMessagingSettings,
+    resolve_meta_send_account_id,
+)
 from services.social_customer_name import resolve_social_customer_display_name as _resolve_social_customer_display_name
 from services.social_delayed_wait import await_delayed_processing as _await_delayed_processing
 from services.social_image_quota import (
@@ -125,7 +129,7 @@ async def process_meta_social_event(
         if simulation:
             user_data["_meta_social_lab_simulation"] = True
         # Bounded handoff TTL: drop expired channel-scoped social_contact_flow blobs.
-        from services.social_contact_routing import (
+        from services.integrations.social.social_contact_routing import (
             expire_social_contact_flows_in_user_data,
             restore_social_booking_preference,
         )
@@ -164,8 +168,8 @@ async def process_meta_social_event(
                 customer_image_limit_message,
                 enforce_image_analysis_quota,
             )
-            from services.meta_controlled_evidence import meta_evidence_surface
-            from services.meta_outbound_attempts import (
+            from services.integrations.meta.meta_controlled_evidence import meta_evidence_surface
+            from services.integrations.meta.meta_outbound_attempts import (
                 confirm_image_quota_consumed,
                 finalize_allowed_image_quota,
                 reconcile_image_quota_receipt,
@@ -368,7 +372,7 @@ async def process_meta_social_event(
             image_url: str | None = None,
             audio_url: str | None = None,
         ) -> Any:
-            from services.meta_social_text_send import send_meta_social_outbound
+            from services.integrations.meta.meta_social_text_send import send_meta_social_outbound
 
             return await send_meta_social_outbound(
                 namespaced_id=_namespaced_id,

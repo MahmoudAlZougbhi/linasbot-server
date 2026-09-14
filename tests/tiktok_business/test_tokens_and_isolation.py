@@ -6,11 +6,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from services.integrations.meta.meta_app_registry import MetaCredentialError
 from services.integrations.tiktok.crypto import open_tiktok_tokens, seal_tiktok_tokens
 from services.integrations.tiktok.repository import TikTokRepository
 from services.integrations.tiktok.scopes import comments_manage_ready, messaging_send_ready
 from services.integrations.tiktok.status import tiktok_integration_row
-from services.meta_app_registry import MetaCredentialError
 from tests.tiktok_business.conftest import seed_connection
 
 
@@ -93,7 +93,7 @@ def test_disconnect_revokes_only_tiktok(tt_db, monkeypatch) -> None:
         called["meta"] += 1
         raise AssertionError("Meta disconnect must not run")
 
-    monkeypatch.setattr("services.meta_connection_disconnect.disconnect_meta_binding_set", _boom)
+    monkeypatch.setattr("services.integrations.meta.meta_connection_disconnect.disconnect_meta_binding_set", _boom)
     repo = TikTokRepository(tt_db)
     connection = repo.get_active_for_tenant("linas")
     assert connection is not None

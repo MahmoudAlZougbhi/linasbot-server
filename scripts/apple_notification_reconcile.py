@@ -30,9 +30,9 @@ def _process_history_pages(
     notification_type: str,
     max_pages: int = _MAX_HISTORY_PAGES,
 ) -> dict[str, Any]:
-    from services.apple_app_store_client import apple_app_store_client
-    from services.apple_iap_processor import process_notification_v2
-    from services.apple_jws import sha256_hex
+    from services.billing.apple.apple_app_store_client import apple_app_store_client
+    from services.billing.apple.apple_iap_processor import process_notification_v2
+    from services.billing.apple.apple_jws import sha256_hex
 
     processed = 0
     duplicates = 0
@@ -90,12 +90,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    from services.apple_app_store_client import (
+    from services.billing.apple.apple_app_store_client import (
         AppleIapConfigError,
         iap_credentials_configured,
         iap_key_id,
     )
-    from services.apple_iap_processor import reconcile_original_transaction
+    from services.billing.apple.apple_iap_processor import reconcile_original_transaction
 
     if not iap_credentials_configured():
         print(json.dumps({"ok": False, "error": "Apple IAP credentials not configured"}))

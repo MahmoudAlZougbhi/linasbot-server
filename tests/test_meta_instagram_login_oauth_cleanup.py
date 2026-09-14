@@ -8,26 +8,26 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaBindingCredential,
 )
-from services.meta_instagram_login_oauth import (
+from services.integrations.meta.meta_instagram_login_oauth import (
     begin_instagram_login,
     complete_instagram_login,
 )
-from services.meta_instagram_login_subscription import (
+from services.integrations.meta.meta_instagram_login_subscription import (
     INSTAGRAM_LOGIN_CLEANUP_DELETE_ERROR,
     INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
     InstagramLoginSubscriptionState,
 )
-from services.meta_instagram_login_subscription_recovery import (
+from services.integrations.meta.meta_instagram_login_subscription_recovery import (
     retry_instagram_login_cleanup,
     retry_instagram_login_orphan_cleanup,
 )
-from services.meta_oauth import MetaOAuthError
-from services.meta_oauth_return import mobile_oauth_failure_reason
+from services.integrations.meta.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_oauth_return import mobile_oauth_failure_reason
 from tests.meta_instagram_login_oauth_support import (
     _stage_direct_binding,
     _start_state,
@@ -161,7 +161,7 @@ async def test_fresh_reconnect_is_not_blocked_by_revoked_cleanup_marker_token(
         actor_id="cleanup-marker",
     )
     monkeypatch.setattr(
-        "services.meta_instagram_login_oauth_tokens.time.time",
+        "services.integrations.meta.meta_instagram_login_oauth_tokens.time.time",
         lambda: marked.created_at + 301.0,
     )
     seen_authorizations: list[str] = []

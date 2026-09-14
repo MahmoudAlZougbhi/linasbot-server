@@ -171,7 +171,7 @@ def test_readiness_and_webhook_http_auth(tmp_path, monkeypatch):
         body = b'{"object":"whatsapp_business_account"}'
         denied = client.post("/webhook/whatsapp-cloud", content=body)
         assert denied.status_code == 403
-        from services.meta_app_registry import APP_A_KEY, get_meta_app_configs
+        from services.integrations.meta.meta_app_registry import APP_A_KEY, get_meta_app_configs
 
         app_a = get_meta_app_configs()[APP_A_KEY]
         secret = (app_a.app_secret if app_a is not None else "").encode()

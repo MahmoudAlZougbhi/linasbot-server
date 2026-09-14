@@ -10,7 +10,7 @@ from typing import Any
 
 from google.cloud import firestore
 
-from services.meta_messaging import scrub_legacy_meta_channel_placeholder
+from services.integrations.meta.meta_messaging import scrub_legacy_meta_channel_placeholder
 
 # In-memory fallback when Firestore idempotency is unavailable (single-process only).
 _operator_send_idempotency_keys: dict[str, float] = {}

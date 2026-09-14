@@ -7,17 +7,17 @@ import json
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaOAuthStateError,
 )
-from services.meta_oauth import (
+from services.integrations.meta.meta_oauth import (
     MetaOAuthError,
     begin_meta_business_login,
     complete_meta_business_login,
 )
-from services.meta_oauth_graph import restore_binding_webhook_subscription
+from services.integrations.meta.meta_oauth_graph import restore_binding_webhook_subscription
 from tests.meta_oauth_support import (
     PAGE_SCOPES,
     _start_state,

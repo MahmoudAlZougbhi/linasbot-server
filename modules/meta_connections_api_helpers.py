@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAssetBinding,
     MetaRegistryError,

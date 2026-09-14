@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 import services.scale.inbound_event_store as event_store
-from services.meta_messaging import parse_meta_messaging_events
+from services.integrations.meta.meta_messaging import parse_meta_messaging_events
 from services.scale.inbound_event_store import InboundEventRecord
 from tests.meta_compliance_helpers import _FakeFirestore
 

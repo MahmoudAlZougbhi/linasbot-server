@@ -13,7 +13,7 @@ import pytest
 from starlette.requests import Request
 
 from modules import meta_messaging_webhook
-from services.meta_comment_events import ResolvedMetaCommentEvent
+from services.integrations.meta.meta_comment_events import ResolvedMetaCommentEvent
 
 APP_A_SECRET = "feed-webhook-test-secret"
 PAGE_ID = "page_feed_test_1"

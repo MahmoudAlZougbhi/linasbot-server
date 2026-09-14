@@ -57,7 +57,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             sys.path.insert(0, project_root)
         with open(os.devnull, "w", encoding="utf-8") as output_sink:
             with redirect_stdout(output_sink), redirect_stderr(output_sink):
-                from services.meta_inbound_retention import redact_expired_terminal_inbound_events
+                from services.integrations.meta.meta_inbound_retention import redact_expired_terminal_inbound_events
 
                 result = redact_expired_terminal_inbound_events(
                     apply=bool(args.apply),

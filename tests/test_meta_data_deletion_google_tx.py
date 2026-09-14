@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from services.meta_app_registry import APP_A_KEY
-from services.meta_data_deletion import (
+from services.integrations.meta.meta_app_registry import APP_A_KEY
+from services.integrations.meta.meta_data_deletion import (
     _DeletionBindingScope,
     _finalize_shared_request,
     _get_or_create_shared_request,

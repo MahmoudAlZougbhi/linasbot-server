@@ -9,7 +9,7 @@ os.environ.setdefault("LINASLASER_API_TOKEN", "test-token")
 os.environ.setdefault("DASHBOARD_AUTH_SECRET", "wave2-test-secret")
 
 from services.conversation_router import is_human_request
-from services.social_contact_routing import (
+from services.integrations.social.social_contact_routing import (
     DEFAULT_SOCIAL_WHATSAPP_CONTACTS,
     is_appointment_request,
     route_social_contact_request,

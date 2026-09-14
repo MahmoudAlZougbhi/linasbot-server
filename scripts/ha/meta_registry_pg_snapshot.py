@@ -90,7 +90,7 @@ def _secure_parent(path: Path) -> None:
 
 
 def encode_encrypted_snapshot(snapshot: dict[str, Any], *, recovery_secret: str) -> dict[str, Any]:
-    from services.meta_app_registry_pg_store import registry_tables_fingerprint
+    from services.integrations.meta.meta_app_registry_pg_store import registry_tables_fingerprint
 
     plaintext = _canonical_bytes(snapshot)
     nonce = os.urandom(12)
@@ -111,7 +111,7 @@ def encode_encrypted_snapshot(snapshot: dict[str, Any], *, recovery_secret: str)
 
 
 def decode_encrypted_snapshot(envelope: dict[str, Any], *, recovery_secret: str) -> dict[str, Any]:
-    from services.meta_app_registry_pg_store import registry_tables_fingerprint
+    from services.integrations.meta.meta_app_registry_pg_store import registry_tables_fingerprint
 
     if not isinstance(envelope, dict) or envelope.get("format") != SNAPSHOT_FORMAT:
         raise ValueError("unsupported Meta registry snapshot format")
@@ -295,7 +295,7 @@ def _default_pre_restore_path(source: Path) -> Path:
 
 def _snapshot_command(args: argparse.Namespace) -> int:
     from db.session import whatsapp_session
-    from services.meta_app_registry_pg_store import (
+    from services.integrations.meta.meta_app_registry_pg_store import (
         acquire_registry_advisory_lock,
         load_registry_tables_snapshot,
         registry_tables_fingerprint,
@@ -321,7 +321,7 @@ def _snapshot_command(args: argparse.Namespace) -> int:
 
 
 def _verify_command(args: argparse.Namespace) -> int:
-    from services.meta_app_registry_pg_store import registry_tables_fingerprint
+    from services.integrations.meta.meta_app_registry_pg_store import registry_tables_fingerprint
 
     snapshot = read_encrypted_snapshot(args.path, recovery_secret=args.snapshot_recovery_secret)
     _validate_snapshot_contents(snapshot, args.snapshot_master_secret)
@@ -331,7 +331,10 @@ def _verify_command(args: argparse.Namespace) -> int:
         return 0
 
     from db.session import whatsapp_session
-    from services.meta_app_registry_pg_store import acquire_registry_advisory_lock, load_registry_tables_snapshot
+    from services.integrations.meta.meta_app_registry_pg_store import (
+        acquire_registry_advisory_lock,
+        load_registry_tables_snapshot,
+    )
 
     with whatsapp_session(require=True) as session:
         acquire_registry_advisory_lock(session)
@@ -348,7 +351,7 @@ def _verify_command(args: argparse.Namespace) -> int:
 
 def _restore_command(args: argparse.Namespace) -> int:
     from db.session import whatsapp_session
-    from services.meta_app_registry_pg_store import (
+    from services.integrations.meta.meta_app_registry_pg_store import (
         acquire_registry_advisory_lock,
         load_registry_tables_snapshot,
         registry_tables_fingerprint,

@@ -30,10 +30,10 @@ from datetime import UTC
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
+from services.integrations.meta.meta_messaging import verify_meta_signature  # noqa: E402
 from services.integrations.whatsapp.entitlement import tenant_connection_status_payload  # noqa: E402
 from services.integrations.whatsapp.repository import WhatsAppCloudRepository, connection_public_view  # noqa: E402
 from services.integrations.whatsapp.webhook_parser import parse_whatsapp_cloud_payload  # noqa: E402
-from services.meta_messaging import verify_meta_signature  # noqa: E402
 
 
 @pytest.fixture()
@@ -438,7 +438,7 @@ def test_history_events_never_create_outbound_intent(wa_db, monkeypatch):
 
 
 def test_mobile_deep_link_never_operator_login():
-    from services.meta_oauth_return import oauth_completion_redirect_url
+    from services.integrations.meta.meta_oauth_return import oauth_completion_redirect_url
 
     url = oauth_completion_redirect_url(return_surface="mobile", meta_connection="success")
     assert url.startswith("linasai://integrations")

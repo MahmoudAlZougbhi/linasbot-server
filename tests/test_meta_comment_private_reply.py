@@ -5,8 +5,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from services.meta_app_registry import APP_A_KEY, MetaAssetBinding
-from services.meta_comment_private_reply import send_comment_private_reply
+from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaAssetBinding
+from services.integrations.meta.meta_comment_private_reply import send_comment_private_reply
 
 
 def _binding(channel: str) -> MetaAssetBinding:

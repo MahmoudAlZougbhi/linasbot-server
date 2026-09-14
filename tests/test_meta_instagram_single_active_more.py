@@ -8,12 +8,12 @@ from typing import Any
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     MetaAppRegistry,
 )
-from services.meta_connection_disconnect import disconnect_meta_binding_set
-from services.meta_instagram_login_subscription import ensure_instagram_login_webhook_subscription
-from services.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_connection_disconnect import disconnect_meta_binding_set
+from services.integrations.meta.meta_instagram_login_subscription import ensure_instagram_login_webhook_subscription
+from services.integrations.meta.meta_oauth import MetaOAuthError
 from services.mobile_integrations_display import bindings_for_disconnect
 from tests.meta_instagram_single_active_support import (
     INSTAGRAM_ID,
@@ -32,7 +32,7 @@ async def test_direct_instagram_disconnect_uses_exact_provider_endpoint(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     facebook, _linked, direct = _activate_direct(registry)
     facebook_before = next(item for item in registry.list_bindings() if item.binding_id == facebook.binding_id)
@@ -73,7 +73,7 @@ async def test_direct_instagram_disconnect_uses_exact_provider_endpoint(
             )
 
         monkeypatch.setattr(
-            "services.meta_connection_disconnect.disconnect_binding_webhook",
+            "services.integrations.meta.meta_connection_disconnect.disconnect_binding_webhook",
             disconnect_with_client,
         )
         targets = bindings_for_disconnect(
@@ -102,7 +102,7 @@ async def test_direct_instagram_disconnect_accepts_already_absent_provider_subsc
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     staged = _stage_direct_instagram(registry)
     direct = registry.activate_staged_binding(
@@ -131,7 +131,7 @@ async def test_direct_instagram_provider_failure_leaves_retry_credential_then_co
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     staged = _stage_direct_instagram(registry)
     direct = registry.activate_staged_binding(
@@ -163,7 +163,7 @@ async def test_stale_direct_disconnect_keeps_new_active_direct_subscription(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     old_staged = _stage_direct_instagram(registry)
     old = registry.activate_staged_binding(
@@ -203,7 +203,7 @@ async def test_direct_connect_waits_for_disconnect_lock_and_refuses_stale_resubs
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     staged = _stage_direct_instagram(registry)
     direct = registry.activate_staged_binding(
@@ -249,7 +249,7 @@ async def test_group_provider_failure_still_disconnects_all_instagram_targets_fi
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     facebook, linked = _facebook_and_linked_instagram(registry)
     direct = _stage_direct_instagram(registry)
@@ -287,7 +287,7 @@ async def test_periodic_recovery_finishes_crash_after_group_status_commit(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_instagram_login_lifecycle as lifecycle_module
+    import services.integrations.meta.meta_instagram_login_lifecycle as lifecycle_module
 
     facebook, linked = _facebook_and_linked_instagram(registry)
     direct = _stage_direct_instagram(registry)

@@ -145,7 +145,7 @@ def test_comments_action_gate_and_readiness() -> None:
     assert readiness["live_verified"] is False
     assert "pages_manage_engagement" in readiness["scopes_missing"]
 
-    from services.meta_app_registry import MetaAssetBinding, MetaBindingCredential
+    from services.integrations.meta.meta_app_registry import MetaAssetBinding, MetaBindingCredential
 
     binding = MetaAssetBinding(
         binding_id="fb-test",

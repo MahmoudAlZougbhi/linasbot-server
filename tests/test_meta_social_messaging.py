@@ -3,7 +3,7 @@
 import unittest
 from unittest import mock
 
-from services.meta_messaging import (
+from services.integrations.meta.meta_messaging import (
     InMemoryMessageDeduper,
     MetaMessagingSettings,
     get_meta_messaging_readiness,

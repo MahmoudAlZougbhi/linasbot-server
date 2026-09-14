@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.meta_app_webhook_subscription import ensure_app_page_webhook_subscription
-from services.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_app_webhook_subscription import ensure_app_page_webhook_subscription
+from services.integrations.meta.meta_oauth import MetaOAuthError
 
 
 @pytest.mark.asyncio
@@ -22,7 +22,10 @@ async def test_ensure_app_page_webhook_subscription_posts_include_values(
     client.post = AsyncMock(return_value=response)
     app = type("App", (), {"app_id": "app_1", "app_secret": "secret", "graph_api_version": "v24.0"})()
 
-    with patch("services.meta_app_webhook_subscription.get_meta_app_configs", return_value={"linas_first_party": app}):
+    with patch(
+        "services.integrations.meta.meta_app_webhook_subscription.get_meta_app_configs",
+        return_value={"linas_first_party": app},
+    ):
         await ensure_app_page_webhook_subscription(client=client)
 
     kwargs = client.post.await_args.kwargs

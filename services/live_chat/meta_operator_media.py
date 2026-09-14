@@ -5,8 +5,8 @@ from __future__ import annotations
 import base64
 from typing import Any
 
+from services.integrations.meta.meta_attachment_send import attachment_type_for_mime, send_stored_meta_attachment
 from services.live_chat.meta_operator import parse_meta_live_chat_user_id, resolve_meta_live_chat_tenant
-from services.meta_attachment_send import attachment_type_for_mime, send_stored_meta_attachment
 
 
 def decode_operator_media_payload(payload: str) -> bytes:
@@ -23,9 +23,9 @@ async def _build_meta_adapter_for_live_chat_user(
     tenant_id: str | None,
     user_id: str,
 ) -> tuple[Any, str, str, str]:
-    from services.meta_app_registry import get_meta_app_configs, get_meta_app_registry
-    from services.meta_graph_routing import build_messaging_settings_for_binding
-    from services.meta_messaging import MetaMessagingAdapter, resolve_meta_send_account_id
+    from services.integrations.meta.meta_app_registry import get_meta_app_configs, get_meta_app_registry
+    from services.integrations.meta.meta_graph_routing import build_messaging_settings_for_binding
+    from services.integrations.meta.meta_messaging import MetaMessagingAdapter, resolve_meta_send_account_id
     from services.requests.delivery import _meta_bindings_for_account
 
     channel, sender_id, asset_id, _embedded_tenant = parse_meta_live_chat_user_id(user_id)
@@ -51,7 +51,7 @@ async def _build_meta_adapter_for_live_chat_user(
     candidates = _meta_bindings_for_account(registry, tenant_id=tenant, account=account, meta_channels=(channel,))
     if not candidates:
         raise ValueError("meta_binding_not_found")
-    from services.meta_dm_binding_select import select_binding_for_meta_dm
+    from services.integrations.meta.meta_dm_binding_select import select_binding_for_meta_dm
 
     binding = select_binding_for_meta_dm(candidates, channel=channel, registry=registry)
     if binding is None:
@@ -122,7 +122,7 @@ async def deliver_live_chat_meta_operator_media(
     except ValueError as exc:
         return {"success": False, "delivered": False, "error": str(exc)}
     except Exception as exc:
-        from services.meta_session_invalidated import mark_if_session_invalidated
+        from services.integrations.meta.meta_session_invalidated import mark_if_session_invalidated
 
         mark_if_session_invalidated(exc, binding_id=binding_id, require_invalidation_wording=True)
         return {"success": False, "delivered": False, "error": str(exc)[:180]}

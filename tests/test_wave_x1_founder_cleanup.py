@@ -35,7 +35,7 @@ def _live_py() -> list[Path]:
 
 def test_wave_x1_restricted_and_whatsapp_defaults_empty() -> None:
     from services.ai_setup.constants import INITIAL_RESTRICTED_LABELS, INITIAL_RESTRICTED_TOPIC_IDS
-    from services.social_contact_routing_detect import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
+    from services.integrations.social.social_contact_routing_detect import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
 
     assert INITIAL_RESTRICTED_TOPIC_IDS == ()
     assert INITIAL_RESTRICTED_LABELS == {}

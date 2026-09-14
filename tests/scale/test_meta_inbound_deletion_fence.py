@@ -9,14 +9,14 @@ from typing import Any
 import pytest
 
 import services.scale.inbound_event_store as event_store
-from services.meta_inbound_deletion_fence import (
+from services.integrations.meta.meta_inbound_deletion_fence import (
     InboundBindingDeletionFencedError,
     InboundDeletionFenceStoreError,
     firestore_binding_deletion_fence_ref,
     install_inbound_binding_deletion_fences,
     local_binding_deletion_is_fenced,
 )
-from services.meta_inbound_retention import (
+from services.integrations.meta.meta_inbound_retention import (
     inbound_redaction_has_blockers,
     redact_inbound_events_for_bindings,
 )
@@ -154,7 +154,7 @@ def test_ingress_tombs_local_copy_if_fence_lands_before_cache(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import services.meta_inbound_deletion_fence as fence_service
+    import services.integrations.meta.meta_inbound_deletion_fence as fence_service
 
     db = _FakeFirestore()
     root = _patch_stores(monkeypatch, tmp_path, db)
@@ -289,7 +289,7 @@ def test_create_does_not_read_fence_inside_event_transaction(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import services.meta_inbound_deletion_fence as fence_service
+    import services.integrations.meta.meta_inbound_deletion_fence as fence_service
 
     db = _FakeFirestore()
     _patch_stores(monkeypatch, tmp_path, db)

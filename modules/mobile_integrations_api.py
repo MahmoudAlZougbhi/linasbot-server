@@ -23,9 +23,9 @@ from services.integrations.channel_capability_toggles import (
     set_channel_toggle,
     supported_platforms,
 )
-from services.meta_app_registry import MetaRegistryError, get_meta_app_registry
-from services.meta_connection_disconnect import disconnect_meta_binding_set
-from services.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_app_registry import MetaRegistryError, get_meta_app_registry
+from services.integrations.meta.meta_connection_disconnect import disconnect_meta_binding_set
+from services.integrations.meta.meta_oauth import MetaOAuthError
 from services.mobile_integrations_display import bindings_for_disconnect, enrich_mobile_integration_rows
 
 ToggleKey = Literal["dm", "comments"]
@@ -65,7 +65,7 @@ async def mobile_integrations(request: Request) -> Any:
         except Exception:
             pass
     try:
-        from services.meta_session_invalidated import probe_tenant_meta_sessions
+        from services.integrations.meta.meta_session_invalidated import probe_tenant_meta_sessions
 
         await probe_tenant_meta_sessions(session.tenant_id)
     except Exception:

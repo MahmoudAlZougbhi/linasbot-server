@@ -24,7 +24,7 @@ from scripts.ha.target_platform_readiness_preflight import (
     live_ready_is_platform_admissible,
 )
 
-REGISTRY_PATH = "services/meta_app_registry.py"
+REGISTRY_PATH = "services/integrations/meta/meta_app_registry.py"
 HEALTH_PATH = "modules/dashboard_api_health.py"
 
 

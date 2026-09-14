@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from services.meta_app_registry import APP_A_KEY
+from services.integrations.meta.meta_app_registry import APP_A_KEY
 
 
 def _fb_binding(**kwargs):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import config
-from services.meta_messaging import (
+from services.integrations.meta.meta_messaging import (
     SOCIAL_DISPLAY_NAME_FALLBACK,
     MetaMessagingAdapter,
     is_unresolved_social_display_name,

@@ -196,7 +196,7 @@ class UserPersistenceService:
             print("[social-preference] persistence_unavailable")
             return False
 
-        from services.social_contact_routing import SOCIAL_BOOKING_PREFERENCES_FIELD
+        from services.integrations.social.social_contact_routing import SOCIAL_BOOKING_PREFERENCES_FIELD
 
         app_id_for_firestore = "linas-ai-bot-backend"
         user_doc_ref = db.collection("artifacts").document(app_id_for_firestore).collection("users").document(user_id)

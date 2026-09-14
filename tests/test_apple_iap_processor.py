@@ -16,8 +16,8 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 from db.models import Base  # noqa: E402
 from db.models.apple_billing import AppleAppAccountTokenRow  # noqa: E402
 from db.session import reset_engine_for_tests, whatsapp_session  # noqa: E402
-from services.apple_iap_effects import get_or_create_app_account_token  # noqa: E402
-from services.apple_iap_processor import (  # noqa: E402
+from services.billing.apple.apple_iap_effects import get_or_create_app_account_token  # noqa: E402
+from services.billing.apple.apple_iap_processor import (  # noqa: E402
     process_notification_v2,
     process_signed_transaction,
 )
@@ -55,8 +55,8 @@ def apple_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
-    monkeypatch.setattr("services.apple_iap_effects.entitlements_store", store)
-    monkeypatch.setattr("services.apple_credit_grant_ops.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.apple.apple_iap_effects.entitlements_store", store)
+    monkeypatch.setattr("services.billing.apple.apple_credit_grant_ops.credit_ledger_service", ledger)
     monkeypatch.setattr(
         "services.billing.entitlements_service._DATA_ROOT",
         tmp_path,
@@ -111,7 +111,7 @@ def _credit_payload(
 def test_idempotent_subscription_apply(apple_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     payload = _sub_payload(transaction_id="txn_sub_1")
     monkeypatch.setattr(
-        "services.apple_iap_processor.decode_jws_payload",
+        "services.billing.apple.apple_iap_processor.decode_jws_payload",
         lambda *_a, **_k: payload,
     )
     first = process_signed_transaction(
@@ -179,7 +179,7 @@ def test_refund_reverse_once(apple_env: Path) -> None:
         decoded_payload=payload,
         skip_jws_verify=True,
     )
-    from services.apple_iap_effects import reverse_consumable_credits
+    from services.billing.apple.apple_iap_effects import reverse_consumable_credits
     from services.billing.entitlements_service import entitlements_store
     from services.credit_ledger_service import credit_ledger_service
 
@@ -210,7 +210,7 @@ def test_notification_replay(apple_env: Path, monkeypatch: pytest.MonkeyPatch) -
             return outer
         return txn
 
-    monkeypatch.setattr("services.apple_iap_processor.decode_jws_payload", _decode)
+    monkeypatch.setattr("services.billing.apple.apple_iap_processor.decode_jws_payload", _decode)
     first = process_notification_v2({"signedPayload": "signed.outer.payload"})
     second = process_notification_v2({"signedPayload": "signed.outer.payload"})
     assert first.get("duplicate") is False

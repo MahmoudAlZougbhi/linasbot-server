@@ -7,11 +7,11 @@ from typing import Any
 import pytest
 
 from modules import meta_connections_api
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     MetaAppRegistry,
     MetaRegistryError,
 )
-from services.meta_connection_disconnect import disconnect_meta_binding_set
+from services.integrations.meta.meta_connection_disconnect import disconnect_meta_binding_set
 from services.mobile_integrations_display import bindings_for_disconnect
 from tests.meta_instagram_single_active_support import (
     INSTAGRAM_ID,
@@ -107,11 +107,11 @@ async def test_linked_instagram_disconnect_never_unsubscribes_active_facebook_pa
         return True
 
     monkeypatch.setattr(
-        "services.meta_oauth_graph.inspect_binding_webhook_subscription",
+        "services.integrations.meta.meta_oauth_graph.inspect_binding_webhook_subscription",
         unexpected_provider_call,
     )
     monkeypatch.setattr(
-        "services.meta_oauth_graph._unsubscribe_binding_webhook_locked_raw",
+        "services.integrations.meta.meta_oauth_graph._unsubscribe_binding_webhook_locked_raw",
         unexpected_provider_call,
     )
     monkeypatch.setattr(
@@ -160,7 +160,7 @@ async def test_facebook_route_leaves_both_instagram_histories_untouched(
         return True
 
     monkeypatch.setattr(
-        "services.meta_connection_disconnect.disconnect_binding_webhook",
+        "services.integrations.meta.meta_connection_disconnect.disconnect_binding_webhook",
         settle_without_graph,
     )
     monkeypatch.setattr(
@@ -203,7 +203,7 @@ async def test_disconnect_retry_archives_commit_then_throw_credential(
         )
 
     monkeypatch.setattr(
-        "services.meta_connection_disconnect.disconnect_binding_webhook",
+        "services.integrations.meta.meta_connection_disconnect.disconnect_binding_webhook",
         commit_then_throw,
     )
     targets = bindings_for_disconnect("tenant-a", "instagram", registry=registry)
@@ -248,7 +248,7 @@ async def test_disconnect_postcondition_detects_new_hidden_sibling_then_retry_se
         return changed
 
     monkeypatch.setattr(
-        "services.meta_connection_disconnect.disconnect_binding_webhook",
+        "services.integrations.meta.meta_connection_disconnect.disconnect_binding_webhook",
         settle_and_inject,
     )
     targets = bindings_for_disconnect(

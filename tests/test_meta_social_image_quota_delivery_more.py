@@ -61,7 +61,7 @@ async def test_fully_allowed_quota_consumed_and_terminal_replays_never_reconsume
     runtime: _FakeFirestore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services import meta_outbound_attempts as attempts
+    from services.integrations.meta import meta_outbound_attempts as attempts
 
     runtime.quota_mode = "allowed"  # type: ignore[attr-defined]
     adapter = _Adapter([_accepted("primary-after-allowed-replays")])
@@ -115,7 +115,7 @@ async def test_greeting_gender_ack_and_primary_use_independent_durable_purposes(
     runtime: _FakeFirestore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.meta_outbound_attempts import meta_outbound_send_purpose
+    from services.integrations.meta.meta_outbound_attempts import meta_outbound_send_purpose
 
     adapter = _Adapter(
         [
@@ -167,7 +167,7 @@ async def test_ambiguous_greeting_latches_primary_even_when_retry_skips_greeting
     runtime: _FakeFirestore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.meta_outbound_attempts import meta_outbound_send_purpose
+    from services.integrations.meta.meta_outbound_attempts import meta_outbound_send_purpose
 
     adapter = _Adapter([{"success": True, "provider": "meta"}])
     _install_adapter(monkeypatch, adapter)
@@ -207,10 +207,10 @@ async def test_quota_mismatch_reservation_is_reconciled_after_deletion_fence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import services.ai_limits_enforcement as limits
-    from services import meta_outbound_attempts as attempts
     from services.ai_usage_limits import QuotaDecision
-    from services.meta_claim_data_deletion import build_shared_meta_claim_deletion_plan
-    from services.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
+    from services.integrations.meta import meta_outbound_attempts as attempts
+    from services.integrations.meta.meta_claim_data_deletion import build_shared_meta_claim_deletion_plan
+    from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
 
     calls: list[bool] = []
 

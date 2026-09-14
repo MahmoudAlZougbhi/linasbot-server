@@ -7,10 +7,10 @@ import logging
 from dataclasses import asdict
 from typing import Any
 
-from services.meta_app_registry import MetaAssetBinding
-from services.meta_comment_events import ResolvedMetaCommentEvent
-from services.meta_controlled_evidence import log_meta_controlled_evidence, meta_evidence_surface
-from services.meta_messaging import MetaMessagingSettings
+from services.integrations.meta.meta_app_registry import MetaAssetBinding
+from services.integrations.meta.meta_comment_events import ResolvedMetaCommentEvent
+from services.integrations.meta.meta_controlled_evidence import log_meta_controlled_evidence, meta_evidence_surface
+from services.integrations.meta.meta_messaging import MetaMessagingSettings
 from services.queues.handlers import PermanentJobError
 from services.queues.models import QueueJob
 from services.scale.inbound_event_store import TERMINAL_STATES, get_inbound_event, mark_inbound_state
@@ -27,7 +27,10 @@ async def _settle_failed_event_claim(rec: Any, *, terminal: bool, claim_handle: 
     """Complete terminal claims or release retryable ones without leaking payloads."""
 
     from services.durable_event_claim import complete_event_claim, release_event_claim
-    from services.meta_cross_flow_dedup import GLOBAL_COMMENT_CLAIM_NAMESPACE, GLOBAL_DM_CLAIM_NAMESPACE
+    from services.integrations.meta.meta_cross_flow_dedup import (
+        GLOBAL_COMMENT_CLAIM_NAMESPACE,
+        GLOBAL_DM_CLAIM_NAMESPACE,
+    )
 
     if rec.kind == "meta_dm":
         namespace = GLOBAL_DM_CLAIM_NAMESPACE
@@ -60,7 +63,7 @@ def _resolve_active_registry_binding(
 ) -> MetaAssetBinding:
     """Follow an authenticated binding's replacement chain without crossing assets."""
 
-    from services.meta_live_binding import resolve_live_outbound_binding
+    from services.integrations.meta.meta_live_binding import resolve_live_outbound_binding
 
     return resolve_live_outbound_binding(data, binding_data)
 
@@ -78,8 +81,8 @@ def _settings_from_snapshot(
 
     binding_id = str(binding_data.get("binding_id") or data.get("binding_id") or "").strip()
     if binding_id and binding_id != "legacy-single-app":
-        from services.meta_app_registry import get_meta_app_configs, get_meta_app_registry
-        from services.meta_graph_routing import build_messaging_settings_for_binding
+        from services.integrations.meta.meta_app_registry import get_meta_app_configs, get_meta_app_registry
+        from services.integrations.meta.meta_graph_routing import build_messaging_settings_for_binding
 
         registry = get_meta_app_registry()
         binding = _resolve_active_registry_binding(data, binding_data)
@@ -93,7 +96,7 @@ def _settings_from_snapshot(
             app_config=app_config,
         )
 
-    from services.meta_messaging import get_meta_messaging_settings
+    from services.integrations.meta.meta_messaging import get_meta_messaging_settings
 
     settings = get_meta_messaging_settings()
     if not settings.page_access_token:
@@ -156,7 +159,10 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
         renew_event_claim,
         try_claim_event_handle,
     )
-    from services.meta_cross_flow_dedup import GLOBAL_COMMENT_CLAIM_NAMESPACE, GLOBAL_DM_CLAIM_NAMESPACE
+    from services.integrations.meta.meta_cross_flow_dedup import (
+        GLOBAL_COMMENT_CLAIM_NAMESPACE,
+        GLOBAL_DM_CLAIM_NAMESPACE,
+    )
 
     if rec.kind == "meta_dm":
         claim_namespace = GLOBAL_DM_CLAIM_NAMESPACE
@@ -207,7 +213,7 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
     try:
         if rec.kind == "meta_dm":
             from services.durable_event_claim import complete_event_claim
-            from services.meta_cross_flow_dedup import GLOBAL_DM_CLAIM_NAMESPACE
+            from services.integrations.meta.meta_cross_flow_dedup import GLOBAL_DM_CLAIM_NAMESPACE
             from services.social_messaging_processor import (
                 meta_social_outcome_requires_retry,
                 process_meta_social_event,
@@ -314,8 +320,11 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
 
         if rec.kind == "meta_comment":
             from services.durable_event_claim import complete_event_claim
-            from services.meta_comment_replies import comment_reply_requires_retry, process_meta_comment_event
-            from services.meta_cross_flow_dedup import GLOBAL_COMMENT_CLAIM_NAMESPACE
+            from services.integrations.meta.meta_comment_replies import (
+                comment_reply_requires_retry,
+                process_meta_comment_event,
+            )
+            from services.integrations.meta.meta_cross_flow_dedup import GLOBAL_COMMENT_CLAIM_NAMESPACE
 
             settings = _settings_from_snapshot(rec.settings_snapshot, rec.binding_snapshot)
             evidence_surface = meta_evidence_surface(

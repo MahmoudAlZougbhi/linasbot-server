@@ -4,7 +4,7 @@ import json
 import unittest
 from unittest import mock
 
-from services.meta_messaging import (
+from services.integrations.meta.meta_messaging import (
     InMemoryMessageDeduper,
     MetaMessagingAdapter,
     parse_meta_messaging_events,

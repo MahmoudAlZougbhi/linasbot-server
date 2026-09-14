@@ -9,7 +9,7 @@ import pytest
 from starlette.requests import Request
 
 from services.dashboard_session_service import SessionRecord
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaBindingCredential,
@@ -172,6 +172,8 @@ def _patch_direct_provider_cleanup(monkeypatch: pytest.MonkeyPatch) -> list[str]
         calls.append("delete")
         present = False
 
-    monkeypatch.setattr("services.meta_oauth_graph.inspect_instagram_login_webhook_subscription", inspect)
-    monkeypatch.setattr("services.meta_oauth_graph.unsubscribe_instagram_login_webhook_raw", delete)
+    monkeypatch.setattr(
+        "services.integrations.meta.meta_oauth_graph.inspect_instagram_login_webhook_subscription", inspect
+    )
+    monkeypatch.setattr("services.integrations.meta.meta_oauth_graph.unsubscribe_instagram_login_webhook_raw", delete)
     return calls

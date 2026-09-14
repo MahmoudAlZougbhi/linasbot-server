@@ -13,7 +13,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from modules.core import app
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAssetBinding,
     MetaChannel,
@@ -21,20 +21,20 @@ from services.meta_app_registry import (
     meta_multi_app_registry_enabled,
     verify_any_meta_challenge_token,
 )
-from services.meta_comment_events import (
+from services.integrations.meta.meta_comment_events import (
     ResolvedMetaCommentEvent,
     count_raw_comment_changes,
     resolve_registry_comment_events,
     summarize_comment_resolve_drops,
 )
-from services.meta_comment_replies import process_meta_comment_event
-from services.meta_messaging import (
+from services.integrations.meta.meta_comment_replies import process_meta_comment_event
+from services.integrations.meta.meta_messaging import (
     InMemoryMessageDeduper,
     get_meta_messaging_settings,
     parse_meta_messaging_events,
     verify_meta_signature,
 )
-from services.meta_multi_app_router import (
+from services.integrations.meta.meta_multi_app_router import (
     ResolvedMetaEvent,
     registry_auth_flow_for_webhook_object,
     resolve_registry_events,
@@ -117,7 +117,7 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
     registry_enabled = meta_multi_app_registry_enabled()
     signed_app = None
     signature_header = request.headers.get("X-Hub-Signature-256")
-    from services.meta_webhook_signature_diag import log_webhook_signature_result
+    from services.integrations.meta.meta_webhook_signature_diag import log_webhook_signature_result
 
     if registry_enabled:
         signed_app = identify_signed_meta_app(raw_body, signature_header)
@@ -228,7 +228,7 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             log_prefix="[meta-social]",
         )
     except Exception as exc:
-        from services.meta_inbound_deletion_fence import InboundDeletionFenceStoreError
+        from services.integrations.meta.meta_inbound_deletion_fence import InboundDeletionFenceStoreError
 
         if isinstance(exc, InboundDeletionFenceStoreError):
             raise HTTPException(status_code=503, detail="Inbound deletion fence store unavailable") from exc
@@ -268,7 +268,7 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             process_comment=process_meta_comment_event,
         )
     except Exception as exc:
-        from services.meta_inbound_deletion_fence import InboundDeletionFenceStoreError
+        from services.integrations.meta.meta_inbound_deletion_fence import InboundDeletionFenceStoreError
 
         if isinstance(exc, InboundDeletionFenceStoreError):
             raise HTTPException(status_code=503, detail="Inbound deletion fence store unavailable") from exc

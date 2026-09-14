@@ -8,8 +8,8 @@ from unittest import mock
 import pytest
 from fastapi.testclient import TestClient
 
-from services.meta_app_registry import APP_A_KEY
-from services.meta_data_deletion import (
+from services.integrations.meta.meta_app_registry import APP_A_KEY
+from services.integrations.meta.meta_data_deletion import (
     MetaDeletionResult,
     MetaSignedRequestError,
     deletion_confirmation_code,

@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
-from services.meta_live_binding import resolve_live_outbound_binding
+from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
+from services.integrations.meta.meta_live_binding import resolve_live_outbound_binding
 from services.queues.handlers import PermanentJobError
 from services.scale.inbound_event_reconcile_live import action_if_ingress_job_already_owns
 from services.scale.message_combine_schedule import schedule_combine_flush
@@ -76,7 +76,7 @@ def _authorize(registry: MetaAppRegistry, *, token: str, reconnect: bool = False
 
 
 def test_b_reconnect_supersedes_old_and_selects_new(registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
     old = _authorize(registry, token="old-token")
     new = _authorize(registry, token="new-token", reconnect=True)
     refreshed_old = next(
@@ -106,7 +106,7 @@ def test_b_reconnect_supersedes_old_and_selects_new(registry: MetaAppRegistry, m
 def test_c_pending_combine_reresolves_active_instagram(
     registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
     old = _authorize(registry, token="old-token")
     new = _authorize(registry, token="new-token", reconnect=True)
     live = resolve_live_outbound_binding(
@@ -172,7 +172,7 @@ def test_e_reconcile_catchup_only_when_outbound_was_sent(monkeypatch: pytest.Mon
 def test_j_superseded_instagram_credential_never_selected(
     registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
     old = _authorize(registry, token="old-token")
     _authorize(registry, token="new-token", reconnect=True)
     with pytest.raises(PermanentJobError):

@@ -10,18 +10,18 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
 )
-from services.meta_oauth import (
+from services.integrations.meta.meta_oauth import (
     MetaOAuthError,
     begin_meta_business_login,
     complete_meta_business_login,
     normalize_oauth_flow_channel,
 )
-from services.meta_oauth_return import mobile_oauth_failure_reason
-from services.meta_subject_deletion_guard import meta_deletion_subject_hmac
+from services.integrations.meta.meta_oauth_return import mobile_oauth_failure_reason
+from services.integrations.meta.meta_subject_deletion_guard import meta_deletion_subject_hmac
 from tests.meta_compliance_helpers import _FakeFirestore, _set_fake_meta_deletion_request
 from tests.meta_oauth_support import (
     INTEGRATION_SCOPES,
@@ -101,7 +101,7 @@ def test_facebook_and_instagram_connect_use_separate_auth_paths(
         "https://www.linasaibot.com/oauth/instagram/callback",
     )
     monkeypatch.setenv("PUBLIC_URL", "https://www.linasaibot.com")
-    from services.meta_instagram_login_oauth import begin_instagram_login
+    from services.integrations.meta.meta_instagram_login_oauth import begin_instagram_login
 
     facebook_url = begin_meta_business_login(
         tenant_id="tenant-a",

@@ -16,9 +16,9 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 from modules import meta_instagram_login_webhook, meta_messaging_webhook
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
-from services.meta_instagram_login_config import verify_instagram_login_webhook_signature
-from services.meta_messaging import InMemoryMessageDeduper
+from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
+from services.integrations.meta.meta_instagram_login_config import verify_instagram_login_webhook_signature
+from services.integrations.meta.meta_messaging import InMemoryMessageDeduper
 from tests.meta_compliance_helpers import _FakeFirestore
 
 IG_ID = "17841413184256533"
@@ -119,8 +119,8 @@ def registry_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegi
         audit_path=tmp_path / "audit.jsonl",
         master_secret="ig-dm-isolation-secret-tests-1234567890",
     )
-    monkeypatch.setattr("services.meta_multi_app_router.get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr("services.meta_comment_events.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_multi_app_router.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_comment_events.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(
         meta_messaging_webhook,
         "get_meta_messaging_settings",
@@ -315,7 +315,7 @@ async def test_k_instagram_comments_still_accepted(
     registry_env: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.meta_comment_replies import CommentReplyResult
+    from services.integrations.meta.meta_comment_replies import CommentReplyResult
 
     _ig_login(registry_env)
     processed: list[str] = []

@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from services.social_contact_routing import SOCIAL_BOOKING_PREFERENCES_FIELD
+from services.integrations.social.social_contact_routing import SOCIAL_BOOKING_PREFERENCES_FIELD
 from services.team import user_persistence_service
 from services.team.user_persistence_service import UserPersistenceService
 

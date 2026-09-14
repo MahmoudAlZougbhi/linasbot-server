@@ -14,7 +14,7 @@ from services.ai_setup.constants import CM_SECTIONS
 from services.ai_setup.paths import draft_dir
 from services.ai_setup.schemas import SectionDraftEnvelope
 from services.ai_setup.version_store import load_published_content, read_published_pointer
-from services.meta_comment_reply_settings import list_comment_reply_settings
+from services.integrations.meta.meta_comment_reply_settings import list_comment_reply_settings
 from services.tenant_runtime_config_service import (
     mark_migration_applied,
     migration_is_applied,

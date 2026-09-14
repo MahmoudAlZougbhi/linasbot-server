@@ -6,11 +6,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.meta_graph_routing import (
+from services.integrations.meta.meta_graph_routing import (
     build_messaging_settings_for_binding,
     instagram_login_send_account_id,
 )
-from services.meta_messaging import MetaMessagingAdapter, MetaMessagingSettings, resolve_meta_send_account_id
+from services.integrations.meta.meta_messaging import (
+    MetaMessagingAdapter,
+    MetaMessagingSettings,
+    resolve_meta_send_account_id,
+)
 
 IGSID = "17841413184256533"
 LOGIN_USER_ID = "17841400001112223"
@@ -146,8 +150,8 @@ def test_facebook_login_instagram_still_sends_via_page_id() -> None:
 
 @pytest.mark.usefixtures("instagram_login_env")
 def test_built_settings_keep_igsid_and_expose_login_user_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.meta_app_registry import APP_A_KEY, MetaBindingCredential, get_meta_app_configs
-    from services.meta_app_registry_common import MetaAssetBinding
+    from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaBindingCredential, get_meta_app_configs
+    from services.integrations.meta.meta_app_registry_common import MetaAssetBinding
 
     binding = MetaAssetBinding(
         binding_id="b35f221a73fc0000",

@@ -12,8 +12,8 @@ import pytest
 
 import services.durable_event_claim as durable_claims
 import services.scale.inbound_event_store as event_store
-from services.meta_app_registry import APP_A_KEY
-from services.meta_data_deletion import (
+from services.integrations.meta.meta_app_registry import APP_A_KEY
+from services.integrations.meta.meta_data_deletion import (
     MetaDeletionStoreUnavailableError,
     _DeletionBindingScope,
     _finalize_shared_request,
@@ -24,7 +24,10 @@ from services.meta_data_deletion import (
     process_pending_meta_deletion_requests,
     read_deletion_status,
 )
-from services.meta_subject_deletion_guard import acquire_meta_oauth_subject_guard, meta_deletion_subject_hmac
+from services.integrations.meta.meta_subject_deletion_guard import (
+    acquire_meta_oauth_subject_guard,
+    meta_deletion_subject_hmac,
+)
 from tests.meta_compliance_helpers import APP_SECRET, _FakeDocument, _FakeFirestore
 from tests.test_meta_compliance_deletion import APP_A_ID, _binding, _ledger, _Registry, _write_ledger
 
@@ -43,7 +46,7 @@ def _configure_ha_stores(
     tmp_path: Path,
     db: _FakeFirestore | None,
 ) -> tuple[dict[str, Path], dict[str, Path]]:
-    import services.meta_data_deletion as deletion_service
+    import services.integrations.meta.meta_data_deletion as deletion_service
     import utils.utils
 
     roots = {"node01": tmp_path / "node01", "node02": tmp_path / "node02"}

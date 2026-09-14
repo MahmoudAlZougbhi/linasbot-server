@@ -143,7 +143,7 @@ def _tenant_meta_bindings(tenant_id: str) -> tuple[list[Any], dict[str, set[str]
     bindings: list[Any] = []
     granted_by_channel: dict[str, set[str]] = {ch: set() for ch in _META_CHANNELS}
     try:
-        from services.meta_app_registry import get_meta_app_registry
+        from services.integrations.meta.meta_app_registry import get_meta_app_registry
 
         registry = get_meta_app_registry()
         bindings = [

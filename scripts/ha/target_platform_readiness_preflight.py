@@ -241,7 +241,7 @@ def evaluate_target_platform_ready(source_root: Path) -> dict[str, Any]:
     root = str(source_root.resolve())
     if sys.path[:1] != [root]:
         sys.path.insert(0, root)
-    from services.meta_app_registry import get_meta_registry_readiness
+    from services.integrations.meta.meta_app_registry import get_meta_registry_readiness
 
     meta_ok, meta_checks = get_meta_registry_readiness()
     if not isinstance(meta_checks, dict):

@@ -74,7 +74,7 @@ async def handle_tiktok_comment_ai(job: QueueJob) -> dict[str, Any]:
 
 
 async def handle_meta_social_comment_sync(job: QueueJob) -> dict[str, Any]:
-    from services.meta_social_comment_sync_jobs import handle_meta_social_comment_sync as _impl
+    from services.integrations.meta.meta_social_comment_sync_jobs import handle_meta_social_comment_sync as _impl
 
     return await _impl(job)
 

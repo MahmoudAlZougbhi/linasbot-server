@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from services.meta_controlled_evidence import log_meta_controlled_evidence, meta_evidence_surface
+from services.integrations.meta.meta_controlled_evidence import log_meta_controlled_evidence, meta_evidence_surface
 
 
 def test_surface_mapping_is_closed_and_does_not_reflect_unknown_input() -> None:

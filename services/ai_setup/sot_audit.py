@@ -77,7 +77,7 @@ LEGACY_BUSINESS_FACT_SOURCES: tuple[SotSource, ...] = (
         id="default_whatsapp_contacts",
         description="Hardcoded default WhatsApp handoff numbers",
         kind="code_default",
-        module="services.social_contact_routing",
+        module="services.integrations.social.social_contact_routing",
         attribute="DEFAULT_SOCIAL_WHATSAPP_CONTACTS",
     ),
     SotSource(
@@ -95,7 +95,7 @@ SCAN_TARGET_FILES: tuple[str, ...] = (
     "handlers/text_handlers_respond.py",
     "services/brain/reply/orchestrator.py",
     "services/local_qa_service.py",
-    "services/social_contact_routing.py",
+    "services/integrations/social/social_contact_routing.py",
     "config.py",
     "utils/utils.py",
 )

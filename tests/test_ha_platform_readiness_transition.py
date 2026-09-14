@@ -18,7 +18,7 @@ from scripts.ha.target_platform_readiness_preflight import (
     materialize_target_archive,
     reclaim_volatile_target_ready,
 )
-from services.meta_app_registry import MetaAppRegistry
+from services.integrations.meta.meta_app_registry import MetaAppRegistry
 from tests.test_production_readiness import _activate, _stub_platform_dependencies
 
 pytest_plugins = ("tests.meta_app_registry_fixtures",)
@@ -59,7 +59,7 @@ def test_facebook_only_old_ready_is_503_target_artifact_is_200(
     _activate(registry, "facebook")
     assert _legacy_all_flags_ready(facebook_active=True, instagram_active=False, platform_ok=True) is False
     _stub_platform_dependencies(monkeypatch, tmp_path)
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
     report = evaluate_target_platform_ready(ROOT)
     assert report["ok"] is True
     assert report["status_code"] == 200
@@ -78,7 +78,7 @@ async def test_target_http_ready_stays_200_when_instagram_is_inactive(
 
     _stub_platform_dependencies(monkeypatch, tmp_path)
     _activate(registry, "facebook")
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
     response = await dashboard_api_health.ready()
     assert isinstance(response, JSONResponse)
     body = json.loads(response.body)

@@ -9,16 +9,16 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaAssetBinding,
     MetaBindingCredential,
 )
-from services.meta_instagram_login_config import (
+from services.integrations.meta.meta_instagram_login_config import (
     META_INSTAGRAM_LOGIN_REQUEST_SCOPES,
 )
-from services.meta_instagram_login_oauth import (
+from services.integrations.meta.meta_instagram_login_oauth import (
     begin_instagram_login,
 )
 from tests.meta_compliance_helpers import _FakeFirestore

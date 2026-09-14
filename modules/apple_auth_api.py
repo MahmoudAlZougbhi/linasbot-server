@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from modules.api_security import require_session
 from modules.core import app
 from modules.mobile_auth_api import issue_mobile_tokens
-from services.apple_identity_service import (
+from services.billing.apple.apple_identity_service import (
     AppleIdentityError,
     find_active_apple_sub_for_user,
     find_by_apple_sub,
@@ -21,8 +21,11 @@ from services.apple_identity_service import (
     unlink_all_apple_for_user,
     unlink_apple_identity,
 )
-from services.apple_revoke_outbox import maybe_store_refresh_from_authorization_code, revoke_on_account_delete
-from services.apple_sign_in_service import AppleSignInError, is_private_relay_email, verify_identity_token
+from services.billing.apple.apple_revoke_outbox import (
+    maybe_store_refresh_from_authorization_code,
+    revoke_on_account_delete,
+)
+from services.billing.apple.apple_sign_in_service import AppleSignInError, is_private_relay_email, verify_identity_token
 from services.dashboard_session_service import session_service
 from services.mobile_refresh_token_service import mobile_refresh_token_service
 from services.social_account_sign_in import is_social_only_account

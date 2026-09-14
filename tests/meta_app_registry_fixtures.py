@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from services.meta_app_registry import MetaAppRegistry
+from services.integrations.meta.meta_app_registry import MetaAppRegistry
 
 
 @pytest.fixture

@@ -7,24 +7,24 @@ import asyncio
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaBindingConflictError,
     MetaBindingCredential,
 )
-from services.meta_instagram_login_oauth import (
+from services.integrations.meta.meta_instagram_login_oauth import (
     complete_instagram_login,
 )
-from services.meta_instagram_login_subscription import (
+from services.integrations.meta.meta_instagram_login_subscription import (
     INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
     InstagramLoginSubscriptionState,
 )
-from services.meta_instagram_login_subscription_recovery import (
+from services.integrations.meta.meta_instagram_login_subscription_recovery import (
     retry_instagram_login_cleanup,
 )
-from services.meta_oauth import MetaOAuthError
-from services.meta_subject_deletion_guard import (
+from services.integrations.meta.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_subject_deletion_guard import (
     MetaSubjectDeletionChangedError,
     MetaSubjectDeletionLease,
 )
@@ -170,7 +170,7 @@ async def test_cancellation_after_provider_subscribe_is_shielded_and_archived(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_instagram_login_oauth_complete as oauth
+    import services.integrations.meta.meta_instagram_login_oauth_complete as oauth
 
     actual_ensure = oauth.ensure_instagram_login_webhook_subscription
     provider_methods: list[str] = []
@@ -212,7 +212,7 @@ async def test_failed_compensation_persists_and_restart_finishes_cleanup(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_instagram_login_oauth_complete as oauth
+    import services.integrations.meta.meta_instagram_login_oauth_complete as oauth
 
     page_id = "112233445566778"
     facebook = registry.authorize_oauth_asset(

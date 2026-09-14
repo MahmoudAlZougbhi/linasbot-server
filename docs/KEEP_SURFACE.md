@@ -262,6 +262,14 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - **Kept on purpose:** `services/billing/token_wallet_*` and `services/billing/membership/message_catalog.py` — Owner Catalog, Copilot wallet reads, and `/api/wallet` still import them.
 - Tests: `tests/test_wave_x6_data_crumbs.py`.
 
+## WAVE X7 — Meta + Apple fold
+
+- `services/meta_*.py` → `services/integrations/meta/` (no shims; HTTP stays `modules/meta_*`).
+- `services/apple_*.py` → `services/billing/apple/` including Sign-In (`apple_sign_in_service`) because it shares Apple secrets with IAP. HTTP stays `modules/apple_*`.
+- WhatsApp Cloud template helper → `services/integrations/whatsapp/cloud_template_service.py` + `cloud_template_payload.py` (not the Cloud API coexistence package).
+- `social_contact_routing*` moved to `services/integrations/social/` (still live: published CM WhatsApp handoff, SFU `is_social_channel`). Not deleted.
+- Tests: `tests/test_wave_x7_structure.py`.
+
 
 
 

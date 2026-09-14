@@ -11,8 +11,8 @@ import pytest
 
 from services.ai_setup.actions import comments_enforcement_decision
 from services.integrations.channel_capability_state import comment_capability_state, dm_capability_state
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
-from services.meta_comment_permission_verification import bootstrap_unknown_comment_permissions
+from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
+from services.integrations.meta.meta_comment_permission_verification import bootstrap_unknown_comment_permissions
 from tests.meta_instagram_login_lifecycle_helpers import _binding
 
 
@@ -90,7 +90,7 @@ def test_pre_lb_backfill_keeps_facebook_comments_granted(registry: MetaAppRegist
 
 
 def test_backfill_leaves_no_unknown_active_bindings_when_scopes_present(registry: MetaAppRegistry) -> None:
-    from services.meta_comment_permission_verification import (
+    from services.integrations.meta.meta_comment_permission_verification import (
         bootstrap_unknown_comment_permissions,
         count_active_bindings_with_unknown_comment_permission,
     )

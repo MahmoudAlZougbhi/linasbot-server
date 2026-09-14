@@ -138,7 +138,7 @@ def test_string_generate_result_stays_public_only() -> None:
 
 @pytest.mark.asyncio
 async def test_simulated_send_posts_private_before_public_claim() -> None:
-    from services.meta_comment_brain_send import send_comment_destinations
+    from services.integrations.meta.meta_comment_brain_send import send_comment_destinations
 
     binding = SimpleNamespace(
         tenant_id="t1",
@@ -172,7 +172,7 @@ async def test_simulated_send_posts_private_before_public_claim() -> None:
 
 @pytest.mark.asyncio
 async def test_ai_both_skips_public_when_already_replied() -> None:
-    from services.meta_comment_brain_send import send_comment_destinations
+    from services.integrations.meta.meta_comment_brain_send import send_comment_destinations
 
     binding = SimpleNamespace(
         tenant_id="t1",
@@ -205,7 +205,7 @@ async def test_ai_both_skips_public_when_already_replied() -> None:
 
 @pytest.mark.asyncio
 async def test_public_claim_skipped_when_private_send_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.meta_comment_brain_send import send_comment_destinations
+    from services.integrations.meta.meta_comment_brain_send import send_comment_destinations
 
     async def fail_dm(**_k):
         return {"ok": False, "hard_fail": True, "status": "failed", "reason": "private_reply:denied"}
@@ -213,8 +213,8 @@ async def test_public_claim_skipped_when_private_send_fails(monkeypatch: pytest.
     async def public_send(**_k):
         raise AssertionError("public claim must not send after private failure")
 
-    monkeypatch.setattr("services.meta_comment_brain_send._guarded_private_dm", fail_dm)
-    monkeypatch.setattr("services.meta_comment_brain_send._guarded_public_reply", public_send)
+    monkeypatch.setattr("services.integrations.meta.meta_comment_brain_send._guarded_private_dm", fail_dm)
+    monkeypatch.setattr("services.integrations.meta.meta_comment_brain_send._guarded_public_reply", public_send)
     binding = SimpleNamespace(
         tenant_id="t1",
         channel="facebook",
@@ -244,11 +244,11 @@ async def test_public_claim_skipped_when_private_send_fails(monkeypatch: pytest.
 
 @pytest.mark.asyncio
 async def test_empty_destinations_release_hold(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.meta_comment_brain_send import send_comment_destinations
+    from services.integrations.meta.meta_comment_brain_send import send_comment_destinations
 
     settled: list[dict] = []
     monkeypatch.setattr(
-        "services.meta_comment_brain_send._settle_comment_send",
+        "services.integrations.meta.meta_comment_brain_send._settle_comment_send",
         lambda **k: settled.append(k),
     )
     binding = SimpleNamespace(tenant_id="t1", channel="facebook", binding_id="b", asset_id="p", app_key="A")

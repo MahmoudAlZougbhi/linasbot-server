@@ -7,9 +7,12 @@ from pathlib import Path
 import httpx
 import pytest
 
-from services.meta_app_registry import MetaAppRegistry
-from services.meta_instagram_login_capabilities import binding_ready_for_comments, binding_ready_for_dm
-from services.meta_instagram_login_subscription import (
+from services.integrations.meta.meta_app_registry import MetaAppRegistry
+from services.integrations.meta.meta_instagram_login_capabilities import (
+    binding_ready_for_comments,
+    binding_ready_for_dm,
+)
+from services.integrations.meta.meta_instagram_login_subscription import (
     INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR,
     INSTAGRAM_LOGIN_SUBSCRIPTION_WRITE_REJECTED_ERROR,
     ensure_instagram_login_webhook_subscription,
@@ -172,7 +175,7 @@ async def test_unresolved_accepted_write_is_deferred_without_repost(
     async def no_sleep(_delay: float) -> None:
         return None
 
-    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    monkeypatch.setattr("services.integrations.meta.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
     binding = _binding(
         registry,
         auth_flow="instagram_login",
@@ -214,7 +217,7 @@ async def test_deferred_comments_verification_preserves_verified_dm_fields(
     async def no_sleep(_delay: float) -> None:
         return None
 
-    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    monkeypatch.setattr("services.integrations.meta.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
     binding = _binding(registry, auth_flow="instagram_login", scopes=FULL_SCOPES)
     credential = registry.get_credential(binding)
     methods: list[str] = []
@@ -260,7 +263,7 @@ async def test_transient_verify_failure_preserves_prior_partial_dm_proof(
     async def no_sleep(_delay: float) -> None:
         return None
 
-    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    monkeypatch.setattr("services.integrations.meta.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
     binding = _binding(
         registry,
         auth_flow="instagram_login",
@@ -300,7 +303,7 @@ async def test_successful_empty_verify_clears_prior_partial_proof(
     async def no_sleep(_delay: float) -> None:
         return None
 
-    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    monkeypatch.setattr("services.integrations.meta.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
     binding = _binding(
         registry,
         auth_flow="instagram_login",

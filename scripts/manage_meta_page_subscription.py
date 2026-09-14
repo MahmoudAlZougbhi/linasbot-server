@@ -41,7 +41,7 @@ def _subscription_writer_lock(config: MetaConfig) -> AbstractContextManager[None
     repo_dir = str(Path(__file__).resolve().parents[1])
     if repo_dir not in sys.path:
         sys.path.insert(0, repo_dir)
-    from services.meta_oauth_page_lock import (
+    from services.integrations.meta.meta_oauth_page_lock import (
         lock_facebook_page_subscription_operation_sync,
         page_lock_target_from_env_file,
     )

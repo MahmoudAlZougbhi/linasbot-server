@@ -575,7 +575,7 @@ async def test_binding_fence_prevents_new_ai_or_global_claim(
 ) -> None:
     db, _ = shared_ledger
     binding_id = "binding-deletion-fenced"
-    from services.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
+    from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
 
     firestore_binding_deletion_fence_ref(db, binding_id).set({"status": "fenced"})
     handle = await claims.try_claim_event_handle(

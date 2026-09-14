@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services import meta_oauth
-from services.meta_oauth_graph import MetaOAuthError as GraphError
-from services.meta_oauth_graph import _safe_json as graph_safe_json
-from services.meta_oauth_graph import subscribe_binding_webhook as graph_subscribe
+from services.integrations.meta import meta_oauth
+from services.integrations.meta.meta_oauth_graph import MetaOAuthError as GraphError
+from services.integrations.meta.meta_oauth_graph import _safe_json as graph_safe_json
+from services.integrations.meta.meta_oauth_graph import subscribe_binding_webhook as graph_subscribe
 
 
 def _line_count(rel: str) -> int:
@@ -15,8 +15,8 @@ def _line_count(rel: str) -> int:
 
 
 def test_meta_oauth_modules_under_500_lines() -> None:
-    assert _line_count("services/meta_oauth.py") < 500
-    assert _line_count("services/meta_oauth_graph.py") < 500
+    assert _line_count("services/integrations/meta/meta_oauth.py") < 500
+    assert _line_count("services/integrations/meta/meta_oauth_graph.py") < 500
 
 
 def test_meta_oauth_preserves_public_api() -> None:

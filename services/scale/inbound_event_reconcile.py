@@ -25,7 +25,10 @@ _MAX_ATTEMPTS = 8
 
 
 def _claim_contract(rec: InboundEventRecord) -> tuple[str, str]:
-    from services.meta_cross_flow_dedup import GLOBAL_COMMENT_CLAIM_NAMESPACE, GLOBAL_DM_CLAIM_NAMESPACE
+    from services.integrations.meta.meta_cross_flow_dedup import (
+        GLOBAL_COMMENT_CLAIM_NAMESPACE,
+        GLOBAL_DM_CLAIM_NAMESPACE,
+    )
 
     if rec.kind == "meta_dm":
         return GLOBAL_DM_CLAIM_NAMESPACE, "meta_social_dm_global_claims"

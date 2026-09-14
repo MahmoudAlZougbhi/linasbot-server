@@ -21,7 +21,7 @@ from services.integrations.channel_capability_toggles import (
     attach_channel_toggles,
     channel_toggle_states,
 )
-from services.meta_app_registry import APP_A_KEY
+from services.integrations.meta.meta_app_registry import APP_A_KEY
 
 
 def test_action_ids_match_cm_schema() -> None:

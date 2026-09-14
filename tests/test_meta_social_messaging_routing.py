@@ -2,7 +2,7 @@
 
 import unittest
 
-from services.social_contact_routing import (
+from services.integrations.social.social_contact_routing import (
     DEFAULT_SOCIAL_WHATSAPP_CONTACTS,
     SOCIAL_BOOKING_PREFERENCES_FIELD,
     SocialContactScopeError,
@@ -361,7 +361,7 @@ class SocialHandoffStateMachineTests(unittest.TestCase):
         self.assertIsNotNone(again)
 
     def test_expired_handoff_state_returns_to_ai(self):
-        from services import social_contact_routing as scr
+        from services.integrations.social import social_contact_routing as scr
 
         ud = self._ig()
         route_social_contact_request("bade 7jez", ud, "en")

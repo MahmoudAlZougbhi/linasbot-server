@@ -10,8 +10,8 @@ os.environ.setdefault("LINASLASER_API_BASE_URL", "https://example.com")
 os.environ.setdefault("LINASLASER_API_TOKEN", "test-token")
 os.environ.setdefault("DASHBOARD_AUTH_SECRET", "wave3-test-secret")
 
-from services.social_contact_routing import route_social_contact_request
-from services.social_contact_routing_detect import (
+from services.integrations.social.social_contact_routing import route_social_contact_request
+from services.integrations.social.social_contact_routing_detect import (
     SocialContactScopeError,
     resolve_social_whatsapp_number,
 )

@@ -7,8 +7,8 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from services.meta_app_registry import MetaAppRegistry
-from services.meta_instagram_login_oauth import begin_instagram_login
+from services.integrations.meta.meta_app_registry import MetaAppRegistry
+from services.integrations.meta.meta_instagram_login_oauth import begin_instagram_login
 from tests.meta_compliance_helpers import _FakeFirestore
 
 

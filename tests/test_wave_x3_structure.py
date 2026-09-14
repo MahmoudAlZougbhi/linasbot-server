@@ -24,7 +24,7 @@ KEEP = (
     "services/integrations/tiktok",
     "services/integrations/web_chat",
     "services/integrations/omnichannel",
-    "services/whatsapp_cloud_template_service.py",
+    "services/integrations/whatsapp/cloud_template_service.py",
     "dashboard/src/pages/public/Landing.jsx",
     "dashboard/src/pages/owner/OwnerOverview.jsx",
 )

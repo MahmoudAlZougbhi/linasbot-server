@@ -12,8 +12,8 @@ from sqlalchemy import create_engine
 
 from db.models import Base
 from db.session import reset_engine_for_tests, whatsapp_session
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, get_meta_app_configs
-from services.meta_app_registry_pg_store import (
+from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaAppRegistry, get_meta_app_configs
+from services.integrations.meta.meta_app_registry_pg_store import (
     load_registry_tables_snapshot,
     load_state,
     registry_tables_fingerprint,

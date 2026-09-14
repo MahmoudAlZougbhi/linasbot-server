@@ -48,7 +48,7 @@ def _firestore_try_claim(
     )
     fence_ref = None
     if meta_binding_id:
-        from services.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
+        from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
 
         fence_ref = firestore_binding_deletion_fence_ref(db, meta_binding_id)
     if not hasattr(db, "transaction"):

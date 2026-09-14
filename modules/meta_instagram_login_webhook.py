@@ -11,20 +11,24 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from modules.core import app
-from services.meta_app_registry import APP_A_KEY, get_meta_app_configs, meta_multi_app_registry_enabled
-from services.meta_comment_events import (
+from services.integrations.meta.meta_app_registry import (
+    APP_A_KEY,
+    get_meta_app_configs,
+    meta_multi_app_registry_enabled,
+)
+from services.integrations.meta.meta_comment_events import (
     count_raw_comment_changes,
     resolve_registry_comment_events,
     summarize_comment_resolve_drops,
 )
-from services.meta_comment_replies import process_meta_comment_event
-from services.meta_instagram_login_config import (
+from services.integrations.meta.meta_comment_replies import process_meta_comment_event
+from services.integrations.meta.meta_instagram_login_config import (
     instagram_login_config_status,
     verify_instagram_login_challenge_token,
     verify_instagram_login_webhook_signature,
 )
-from services.meta_messaging import InMemoryMessageDeduper, get_meta_messaging_settings
-from services.meta_multi_app_router import resolve_registry_events
+from services.integrations.meta.meta_messaging import InMemoryMessageDeduper, get_meta_messaging_settings
+from services.integrations.meta.meta_multi_app_router import resolve_registry_events
 from services.scale.meta_webhook_accept import accept_meta_comment_events, accept_meta_dm_events
 from services.social_messaging_processor import process_meta_social_event
 
@@ -74,8 +78,8 @@ async def receive_instagram_login_webhook(request: Request) -> Any:
     if not instagram_login_config_status().configured:
         raise HTTPException(status_code=503, detail="Instagram Login is not configured")
     signature_header = request.headers.get("X-Hub-Signature-256")
-    from services.meta_instagram_login_config import instagram_login_app_id
-    from services.meta_webhook_signature_diag import log_webhook_signature_result
+    from services.integrations.meta.meta_instagram_login_config import instagram_login_app_id
+    from services.integrations.meta.meta_webhook_signature_diag import log_webhook_signature_result
 
     signature_ok = verify_instagram_login_webhook_signature(raw_body, signature_header)
     log_webhook_signature_result(

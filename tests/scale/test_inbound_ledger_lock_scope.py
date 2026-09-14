@@ -28,7 +28,7 @@ def _record(event_id: str) -> InboundEventRecord:
 
 
 def test_create_releases_flock_before_firestore(monkeypatch, tmp_path: Path) -> None:
-    import services.meta_inbound_deletion_fence as fence
+    import services.integrations.meta.meta_inbound_deletion_fence as fence
     import utils.utils
 
     root = tmp_path / "inbound"
@@ -76,7 +76,7 @@ def test_create_releases_flock_before_firestore(monkeypatch, tmp_path: Path) -> 
 
 
 def test_put_releases_flock_before_firestore(monkeypatch, tmp_path: Path) -> None:
-    import services.meta_inbound_deletion_fence as fence
+    import services.integrations.meta.meta_inbound_deletion_fence as fence
     import utils.utils
 
     root = tmp_path / "inbound"

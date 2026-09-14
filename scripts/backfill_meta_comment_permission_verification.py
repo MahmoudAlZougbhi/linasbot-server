@@ -31,8 +31,8 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        from services.meta_app_registry import get_meta_app_registry
-        from services.meta_comment_permission_verification import (
+        from services.integrations.meta.meta_app_registry import get_meta_app_registry
+        from services.integrations.meta.meta_comment_permission_verification import (
             bootstrap_unknown_comment_permissions,
             count_active_bindings_with_unknown_comment_permission,
         )

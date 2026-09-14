@@ -6,8 +6,12 @@ from typing import Any
 
 import httpx
 
-from services.meta_app_registry import MetaAssetBinding, get_meta_app_registry, get_meta_graph_api_version
-from services.meta_graph_routing import graph_api_url
+from services.integrations.meta.meta_app_registry import (
+    MetaAssetBinding,
+    get_meta_app_registry,
+    get_meta_graph_api_version,
+)
+from services.integrations.meta.meta_graph_routing import graph_api_url
 
 _POST_PAGE_SIZE = 25
 _PREVIEW_CHARS = 160
@@ -127,7 +131,7 @@ async def _graph_list_posts(
     after: str,
     limit: int,
 ) -> dict[str, Any]:
-    from services.meta_app_registry import MetaCredentialError
+    from services.integrations.meta.meta_app_registry import MetaCredentialError
 
     registry = get_meta_app_registry()
     try:
