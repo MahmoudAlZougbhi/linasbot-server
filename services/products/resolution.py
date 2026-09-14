@@ -1,8 +1,7 @@
-"""Product resolution priority — server-enforced order before Luna/image."""
+"""Product resolution priority — server-enforced order before image."""
 
 from __future__ import annotations
 
-import asyncio
 import re
 from typing import Any
 from urllib.parse import urlparse
@@ -60,11 +59,9 @@ def resolve_product_priority(
     conversation_id: str | None = None,
     reply_to_message_id: str | None = None,
     image_bytes: bytes | None = None,
-    use_luna_fallback: bool = True,
 ) -> dict[str, Any]:
-    """Apply resolution priority: name → reply-to → URL → context → image → Luna."""
+    """Apply resolution priority: name → reply-to → URL → context → image."""
     from services.products.crv2_tools import crv2_find_product_by_image
-    from services.products.luna_title_resolver import resolve_product_titles_with_luna
 
     result: dict[str, Any] = {
         "resolver": None,
@@ -168,24 +165,6 @@ def resolve_product_priority(
                 ambiguous=bool(image_hit.get("ambiguous")),
             )
             return result
-
-    # 6. Luna only when local name search fails.
-    if use_luna_fallback and name_hint:
-        try:
-            asyncio.get_running_loop()
-            from concurrent.futures import ThreadPoolExecutor
-
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                luna_matches = pool.submit(
-                    asyncio.run,
-                    resolve_product_titles_with_luna(session, tenant_id=tenant_id, query=name_hint),
-                ).result(timeout=45)
-        except RuntimeError:
-            luna_matches = asyncio.run(resolve_product_titles_with_luna(session, tenant_id=tenant_id, query=name_hint))
-        if len(luna_matches) == 1:
-            result.update(resolver="luna_title_match", match=luna_matches[0], matches=luna_matches)
-        elif luna_matches:
-            result.update(resolver="luna_title_match", matches=luna_matches, ambiguous=True)
 
     # Unknown URL alone → no guess (handled by empty result).
     if url_hint and not name_hint and not result.get("matches"):

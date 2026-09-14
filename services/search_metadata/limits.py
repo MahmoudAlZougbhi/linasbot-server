@@ -23,9 +23,9 @@ METADATA_SECTIONS = frozenset(
     }
 )
 
-# Luna must see every title in these sections (not the first 80 only).
+# Retrieval indexes every title in these sections (not the first 80 only).
 # Knowledge/services/faq stay pageable because they can be thousands of files.
-LUNA_FULL_TITLE_SECTIONS = frozenset(
+FULL_TITLE_SECTIONS = frozenset(
     {
         "requests_appointments",
         "comments",

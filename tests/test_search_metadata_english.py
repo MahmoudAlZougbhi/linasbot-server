@@ -88,7 +88,7 @@ def test_non_english_llm_output_retries_then_saves_english(monkeypatch) -> None:
     monkeypatch.setenv("ENVIRONMENT", "development")
     reset_metadata_generator()
     monkeypatch.setattr("services.search_metadata.generate._llm_enabled", lambda: True)
-    monkeypatch.setattr("services.search_metadata.generate._generate_with_luna", fake_luna)
+    monkeypatch.setattr("services.search_metadata.generate._generate_search_metadata", fake_luna)
     from services.search_metadata.generate import last_generate_stats
 
     meta = generate_search_metadata(
@@ -115,7 +115,7 @@ def test_retry_still_non_english_fails_save(monkeypatch) -> None:
 
     reset_metadata_generator()
     monkeypatch.setattr("services.search_metadata.generate._llm_enabled", lambda: True)
-    monkeypatch.setattr("services.search_metadata.generate._generate_with_luna", fake_luna)
+    monkeypatch.setattr("services.search_metadata.generate._generate_search_metadata", fake_luna)
 
     with pytest.raises(MetadataPreparationError) as exc:
         generate_search_metadata(

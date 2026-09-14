@@ -81,8 +81,8 @@ Still not deleted (import-graph blocked or KEEP):
 
 - Voyage entity + knowledge indexes skip Voyage calls when `content_hash` is unchanged (`services/brain/search/reuse_vectors.py`).
 - Expense records count only newly embedded rows.
-- Title helpers used by CM save go through `search_metadata.title_fields` (not Luna-named imports).
-- CM OpenAI `semantic_index` remains for `runtime_pipeline` FAQ semantic search (live handler). Brain retrieve stays Voyage-only. Do not treat CM OpenAI as a Brain fallback.
+- Title helpers used by CM save go through `search_metadata.title_fields`.
+- FAQ/Brain retrieve is Voyage-only. CM OpenAI `semantic_index` is not used on publish.
 
 ## WAVE 3 — Comments / hub
 
@@ -124,7 +124,7 @@ This wave does **not** flip `MESSAGE_BILLING_ENABLED`. Credit ledger, leftover_r
 
 ## WAVE 7 — Zero-legacy freeze
 
-Live product paths must not import deleted Creative / Owner Lab / smart_retrieval / archive modules. Monty names stay only on the refuse list. `luna_titles.py` is a title-helper shim (`DEAD_LUNA_ENGINE`), not a customer retrieval engine. CM OpenAI `semantic_index` stays for the live CM FAQ handler; Brain retrieve stays Voyage-only.
+Live product paths must not import deleted Creative / Owner Lab / smart_retrieval / archive modules. Monty names stay only on the refuse list. Customer retrieval is Voyage (`voyage-4-large` / Brain). `title_fields` is the title helper. CM publish does not build an OpenAI file semantic_index.
 
 | Wave | What KEEP / done |
 | --- | --- |
@@ -137,7 +137,15 @@ Live product paths must not import deleted Creative / Owner Lab / smart_retrieva
 | 6 | Mobile Screen union reachable-only; owner screen kept |
 | 7 | This freeze + matrix |
 
-Still not deleted (KEEP or import-graph blocked): Smart Follow-Up live backend, `smart_messaging_*` used by scheduler/templates, CM OpenAI `semantic_index` (WAVE C), `creative_policy.py` refusal, disabled API prefixes in `product_features.py`.
+Still not deleted (KEEP or import-graph blocked): Smart Follow-Up live backend, `smart_messaging_*` used by scheduler/templates, `creative_policy.py` refusal, disabled API prefixes in `product_features.py`.
+
+## WAVE C — Voyage-only index; Luna names purged from retrieval
+
+- CM publish builds the Brain Voyage index only (`schedule_tenant_index` + `content_hash` reuse). It does not call OpenAI `semantic_index.build_index`.
+- FAQ/knowledge semantic hits in `runtime_pipeline` go through `services/ai_setup/voyage_search.py` → Brain retrieve.
+- `model_policy` customer retrieval = `voyage-4-large`, not an LLM.
+- Deleted `luna_titles.py` and `luna_title_resolver.py`. Product match is deterministic title search. Search-metadata generation uses Sol.
+- Keep #677 media analysis (`brain/media`).
 
 ## WAVE A — fail-closed tenants + delete clinic/BOC/v1/lab/train
 

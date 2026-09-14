@@ -1,8 +1,8 @@
 """Make an AI Setup section Save immediately Live for customer replies.
 
 Does not add a user-facing Draft→Publish step. After ``put_draft`` (which already
-runs save-time Luna on changed items only), this flips the published pointer using
-the existing publish machinery so Luna/Terra read the new revision on the next message.
+runs save-time search metadata on changed items only), this flips the published pointer
+so Customer Brain reads the new revision on the next message.
 """
 
 from __future__ import annotations

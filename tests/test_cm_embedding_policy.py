@@ -1,11 +1,11 @@
-"""Prove published-mode semantic embeddings are real (openai) and hash is test-only."""
+"""Prove published-mode embeddings pin Voyage; hash is test-only."""
 
 from __future__ import annotations
 
 import pytest
 
 from services.ai_setup.embeddings import (
-    OPENAI_EMBEDDING_MODEL_DEFAULT,
+    VOYAGE_EMBEDDING_MODEL_DEFAULT,
     HashEmbeddingForbiddenError,
     PublishedEmbeddingError,
     assert_embedding_provider_allowed,
@@ -15,15 +15,14 @@ from services.ai_setup.embeddings import (
     embedding_provider_name,
 )
 from services.ai_setup.semantic_index import build_index, search
-from tests.cm_test_helpers import install_mocked_openai_embeddings
 
 
-def test_default_provider_name_is_openai_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_default_provider_name_is_voyage_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CM_EMBEDDING_PROVIDER", raising=False)
-    assert embedding_provider_name() == "openai"
+    assert embedding_provider_name() == "voyage"
     pin = embedding_pin()
-    assert pin.provider == "openai"
-    assert pin.model == OPENAI_EMBEDDING_MODEL_DEFAULT
+    assert pin.provider == "voyage"
+    assert pin.model == VOYAGE_EMBEDDING_MODEL_DEFAULT
 
 
 def test_hash_allowed_in_test_harness(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -51,6 +50,10 @@ async def test_embed_texts_allows_hash_only_in_test_harness(monkeypatch: pytest.
 def test_published_embedding_pin_rejects_hash() -> None:
     with pytest.raises(PublishedEmbeddingError, match="hash"):
         assert_published_embedding_pin("hash", context="pointer")
+
+
+def test_published_embedding_pin_accepts_voyage() -> None:
+    assert_published_embedding_pin("voyage", context="pointer")
 
 
 @pytest.mark.asyncio
@@ -81,44 +84,3 @@ async def test_production_search_rejects_hash_index_manifest(monkeypatch: pytest
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     with pytest.raises(PublishedEmbeddingError):
         await search(tenant_id=tenant_id, index_id="idx_hash_policy", query="price")
-
-
-@pytest.mark.asyncio
-async def test_published_mode_uses_openai_provider_end_to_end(monkeypatch: pytest.MonkeyPatch) -> None:
-    install_mocked_openai_embeddings(monkeypatch, published_mode=True)
-    tenant_id = "cm_embed_policy_openai"
-    sections = {
-        "faq": {
-            "items": [
-                {
-                    "qa_group_id": "qa_price",
-                    "variants": [
-                        {
-                            "language": "en",
-                            "question": "What is the laser hair removal price?",
-                            "answer": "20 USD",
-                        }
-                    ],
-                    "tags": [],
-                }
-            ]
-        },
-        "knowledge": {"items": []},
-        "care": {"items": []},
-    }
-    pin = embedding_pin()
-    assert pin.provider == "openai"
-    assert pin.model == "text-embedding-3-small"
-    manifest = await build_index(
-        tenant_id=tenant_id, content_version_id="v1", sections=sections, index_id="idx_openai_policy"
-    )
-    assert manifest["embedding"]["provider"] == "openai"
-    hits = await search(
-        tenant_id=tenant_id,
-        index_id="idx_openai_policy",
-        query="laser hair removal price",
-        kind="faq",
-        top_k=1,
-    )
-    assert hits
-    assert hits[0]["source_id"].startswith("faq:")

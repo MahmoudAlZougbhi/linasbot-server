@@ -1,4 +1,4 @@
-"""Apply save-time Luna metadata to one Product row only."""
+"""Apply save-time search metadata to one Product row only."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def product_grounded_content(row: Any) -> str:
 
 
 def enrich_product_row(row: Any, *, previous: dict[str, Any] | None = None) -> bool:
-    """Regenerate English search metadata for this product only. Returns True if Luna ran."""
+    """Regenerate English search metadata for this product only. Returns True if generation ran."""
     current = product_content_payload(row)
     _LAST_PRODUCT_APPLY.update({"product_id": str(getattr(row, "id", "") or ""), "generated": False})
     if previous is not None and content_fingerprint(current) == content_fingerprint(previous):

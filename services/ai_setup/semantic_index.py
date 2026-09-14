@@ -1,7 +1,7 @@
-"""Tenant-scoped semantic index over FAQ + Knowledge/Care content (plan §9 / §13.1 / D11).
+"""Tenant-scoped FAQ/knowledge entry extractors.
 
-Built from CM section payloads (draft for Lab preview, or a published version's content at
-publish time). Index files live only under ``{DATA_ROOT}/tenants/{tenant_id}/cm/indexes/``.
+Live publish indexes with Voyage (Brain). This module remains for test-only hash
+indexes and catalog-entry helpers. Do not call ``build_index`` from publish.
 """
 
 from __future__ import annotations

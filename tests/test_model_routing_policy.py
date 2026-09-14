@@ -9,7 +9,6 @@ import pytest
 
 from services.llm_core_service import build_chat_completion_kwargs
 from services.model_policy import (
-    MODEL_CUSTOMER_LUNA,
     MODEL_CUSTOMER_TERRA,
     MODEL_OWNER_SOL,
     assert_customer_social_model,
@@ -23,7 +22,7 @@ def _assert_payload(kwargs: dict[str, Any], *, model: str, effort: str) -> None:
     assert kwargs["model"] == model
     assert kwargs.get("reasoning_effort") == effort
     assert "gpt-5.6" != model  # never generic alias
-    assert model in {MODEL_OWNER_SOL, MODEL_CUSTOMER_TERRA, MODEL_CUSTOMER_LUNA}
+    assert model in {MODEL_OWNER_SOL, MODEL_CUSTOMER_TERRA}
 
 
 @pytest.mark.parametrize(

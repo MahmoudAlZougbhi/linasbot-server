@@ -1,6 +1,6 @@
 """Request definition graphs compiled from owner natural-language instructions.
 
-Luna compiles. The system never invents fields that the owner did not name.
+The compiler never invents fields that the owner did not name.
 """
 
 from __future__ import annotations

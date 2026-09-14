@@ -18,7 +18,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     record(
         "greeting_ar",
         "REAL OPENAI",
-        ok=bool(out.reply) and tr["luna_called"] and tr["tera_called"] and tr["faq_direct"] is not True,
+        ok=bool(out.reply) and tr["voyage_called"] and tr["tera_called"] and tr["faq_direct"] is not True,
         reason=out.reason,
         trace=tr,
     )
@@ -28,7 +28,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     record(
         "service_price_full_body",
         "REAL OPENAI",
-        ok=has_price(out.reply) and tr["luna_called"],
+        ok=has_price(out.reply) and tr["voyage_called"],
         reason=out.reason,
         trace=tr,
         evidence_has_service=any("svc_full_body" in str(x) for x in tr["selected_source_ids"]),
@@ -40,7 +40,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     record(
         "location_hours_antelias",
         "REAL OPENAI",
-        ok=("19" in reply or "٧" in reply or "7" in reply) and tr["luna_called"],
+        ok=("19" in reply or "٧" in reply or "7" in reply) and tr["voyage_called"],
         reason=out.reason,
         trace=tr,
     )
@@ -50,7 +50,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     record(
         "faq_direct_hours",
         "REAL DATABASE/RETRIEVAL",
-        ok=tr["faq_direct"] is True and tr["luna_called"] is False and "10" in (out.reply or ""),
+        ok=tr["faq_direct"] is True and tr["voyage_called"] is False and "10" in (out.reply or ""),
         reason=out.reason,
         trace=tr,
     )
@@ -61,7 +61,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     record(
         "faq_mixed_not_direct",
         "REAL OPENAI",
-        ok=tr["faq_direct"] is not True and tr["luna_called"] is True,
+        ok=tr["faq_direct"] is not True and tr["voyage_called"] is True,
         reason=out.reason,
         trace=tr,
     )
@@ -72,7 +72,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     record(
         "product_exact",
         "REAL OPENAI",
-        ok=("19" in body or "cream" in body.lower() or "كريم" in body) and tr["luna_called"],
+        ok=("19" in body or "cream" in body.lower() or "كريم" in body) and tr["voyage_called"],
         reason=out.reason,
         trace=tr,
     )
@@ -82,7 +82,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     record(
         "product_typo",
         "REAL OPENAI",
-        ok=tr["luna_called"] and out.reason != "safety_block",
+        ok=tr["voyage_called"] and out.reason != "safety_block",
         reason=out.reason,
         trace=tr,
     )
@@ -93,7 +93,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     record(
         "appointment_draft_create",
         "REAL OPENAI",
-        ok=tr["luna_called"]
+        ok=tr["voyage_called"]
         and (draft.get("ok") is True or "اسم" in (out.reply or "") or "name" in (out.reply or "").lower()),
         reason=out.reason,
         trace=tr,
@@ -137,7 +137,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
 
     out = await dm("بدي موعد Full Body وكمان After Care Cream", conversation_id="c_multi", provider_sender_id="u_multi")
     tr = trace(out, message="بدي موعد Full Body وكمان After Care Cream", channel="instagram_dm")
-    record("multi_intent_appointment_order", "REAL OPENAI", ok=tr["luna_called"], reason=out.reason, trace=tr)
+    record("multi_intent_appointment_order", "REAL OPENAI", ok=tr["voyage_called"], reason=out.reason, trace=tr)
 
     now = time.time()
     out_old = await dm(
@@ -188,7 +188,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     record(
         "ig_comment_business_knowledge",
         "REAL OPENAI",
-        ok=tr["luna_called"] and ("299" in (out.reply or "") or "19" in (out.reply or "") or bool(out.reply)),
+        ok=tr["voyage_called"] and ("299" in (out.reply or "") or "19" in (out.reply or "") or bool(out.reply)),
         reason=out.reason,
         trace=tr,
         note="Comment runtime only. No Meta Graph comment was posted.",
@@ -198,7 +198,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     record(
         "fb_comment_business_knowledge",
         "REAL OPENAI",
-        ok=tr["luna_called"],
+        ok=tr["voyage_called"],
         reason=out.reason,
         trace=tr,
         note="Comment runtime only. No Meta Graph comment was posted.",
@@ -237,7 +237,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     record(
         "post_specific_rule",
         "REAL OPENAI",
-        ok=tr["comment_rule_id"] in {"rule_post_branch", "rule_ai_global"} or tr["luna_called"],
+        ok=tr["comment_rule_id"] in {"rule_post_branch", "rule_ai_global"} or tr["voyage_called"],
         reason=out.reason,
         trace=tr,
     )

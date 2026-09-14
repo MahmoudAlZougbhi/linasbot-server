@@ -1,4 +1,4 @@
-"""Save-time Luna English metadata: full content of the changed item only."""
+"""Save-time English metadata: full content of the changed item only."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from services.search_metadata.generate import (
     reset_metadata_generator,
     set_metadata_generator,
 )
-from services.search_metadata.luna_titles import luna_title_fields
+from services.search_metadata.title_fields import retrieval_title_fields
 
 
 def _recording_generator(calls: list[dict]) -> None:
@@ -294,7 +294,7 @@ def test_deleted_item_leaves_no_orphan_metadata() -> None:
 
 
 def test_legacy_missing_metadata_does_not_fail_luna_view() -> None:
-    fields = luna_title_fields({"id": "legacy", "title": "12b", "body": "hello"})
+    fields = retrieval_title_fields({"id": "legacy", "title": "12b", "body": "hello"})
     assert fields["original_title"] == "12b"
     assert fields["ai_search_title"] == ""
     assert fields["title"] == "12b"

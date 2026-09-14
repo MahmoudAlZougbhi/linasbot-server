@@ -7,7 +7,7 @@ from typing import Any
 
 from services.ai_setup.resource_attachment import resource_summary
 from services.customer_reply_v2.models import ItemIndexEntry
-from services.search_metadata.limits import LUNA_FULL_TITLE_SECTIONS
+from services.search_metadata.limits import FULL_TITLE_SECTIONS
 from services.search_metadata.title_fields import retrieval_title_fields
 
 MAX_ITEMS_PER_SECTION = 80
@@ -16,7 +16,7 @@ MAX_EVIDENCE_CHARS = 12000
 
 
 def _rows_for_index(section_id: str, rows: list[Any]) -> list[Any]:
-    if section_id in LUNA_FULL_TITLE_SECTIONS:
+    if section_id in FULL_TITLE_SECTIONS:
         return rows
     return rows[:MAX_ITEMS_PER_SECTION]
 

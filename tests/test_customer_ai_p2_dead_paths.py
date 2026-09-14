@@ -15,7 +15,7 @@ def test_smart_retrieval_module_removed() -> None:
 
 
 def test_brain_path_does_not_import_luna_retrieval_engine() -> None:
-    root = Path(__file__).resolve().parents[1] / "services" / "customer_ai"
+    root = Path(__file__).resolve().parents[1] / "services" / "brain"
     offenders: list[str] = []
     needles = ("gpt-5.6-luna", "resolve_customer_retrieval_policy", "luna_retrieval")
     for path in root.rglob("*.py"):
@@ -27,7 +27,7 @@ def test_brain_path_does_not_import_luna_retrieval_engine() -> None:
 
 
 def test_brain_retrieve_path_does_not_import_smart_retrieval() -> None:
-    root = Path(__file__).resolve().parents[1] / "services" / "customer_ai"
+    root = Path(__file__).resolve().parents[1] / "services" / "brain"
     offenders: list[str] = []
     for path in root.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))

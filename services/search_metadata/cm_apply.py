@@ -1,4 +1,4 @@
-"""Apply save-time Luna metadata to one CM section payload (changed items only)."""
+"""Apply save-time search metadata to one CM section payload (changed items only)."""
 
 from __future__ import annotations
 

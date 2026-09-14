@@ -130,10 +130,10 @@ def generate_search_metadata(request: dict[str, Any]) -> SearchMetadata:
         raise MetadataPreparationError()
     produced = SearchMetadata()
     try:
-        produced = _generate_with_luna(request)
+        produced = _generate_search_metadata(request)
         _LAST_GENERATE["llm_calls"] = 1
     except Exception:
-        logger.exception("search_metadata_luna_failed kind=%s", request.get("kind"))
+        logger.exception("search_metadata_generate_failed kind=%s", request.get("kind"))
         _LAST_GENERATE["failed"] = True
     try:
         return _accept(produced)
@@ -141,7 +141,7 @@ def generate_search_metadata(request: dict[str, Any]) -> SearchMetadata:
         retry_req = dict(request)
         retry_req["english_retry"] = True
         try:
-            produced = _generate_with_luna(retry_req)
+            produced = _generate_search_metadata(retry_req)
             _LAST_GENERATE["llm_calls"] = int(_LAST_GENERATE["llm_calls"] or 0) + 1
             _LAST_GENERATE["retries"] = 1
             _LAST_GENERATE["failed"] = False
@@ -149,7 +149,7 @@ def generate_search_metadata(request: dict[str, Any]) -> SearchMetadata:
         except MetadataPreparationError:
             raise
         except Exception:
-            logger.exception("search_metadata_luna_english_retry_failed kind=%s", request.get("kind"))
+            logger.exception("search_metadata_english_retry_failed kind=%s", request.get("kind"))
             _LAST_GENERATE.update({"failed": True, "saved_empty": True})
             raise MetadataPreparationError() from None
 
@@ -164,9 +164,9 @@ def _llm_enabled() -> bool:
     return bool((os.getenv("OPENAI_API_KEY") or "").strip())
 
 
-def _generate_with_luna(request: dict[str, Any]) -> SearchMetadata:
+def _generate_search_metadata(request: dict[str, Any]) -> SearchMetadata:
     from services.llm_core_service import build_chat_completion_kwargs, client
-    from services.model_policy import MODEL_CUSTOMER_LUNA
+    from services.model_policy import MODEL_OWNER_SOL
 
     include_keywords = bool(request.get("include_keywords"))
     weak = bool(request.get("weak_description"))
@@ -207,7 +207,7 @@ def _generate_with_luna(request: dict[str, Any]) -> SearchMetadata:
         ensure_ascii=False,
     )
     kwargs = build_chat_completion_kwargs(
-        model=MODEL_CUSTOMER_LUNA,
+        model=MODEL_OWNER_SOL,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},

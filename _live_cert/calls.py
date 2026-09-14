@@ -21,11 +21,11 @@ def trace(out: Any, *, message: str, channel: str) -> dict[str, Any]:
         "reply": getattr(out, "reply", None),
         "error": getattr(out, "error", None),
         "faq_direct": meta.get("faq_direct_reply"),
-        "luna_called": "luna_retrieval" in ops,
+        "voyage_called": "voyage_retrieval" in ops or "brain_retrieve" in ops,
         "tera_called": any(str(op).startswith("tera_") for op in ops),
         "selected_source_ids": list(meta.get("selected_source_ids") or []),
         "tool_trace": list(meta.get("tool_trace") or []),
-        "luna_recommended_tera_effort": meta.get("luna_recommended_tera_effort"),
+        "retrieval_recommended_terra_effort": meta.get("retrieval_recommended_terra_effort"),
         "retrieval_requested": meta.get("requested_reasoning_effort_retrieval")
         or meta.get("reasoning_effort_retrieval"),
         "retrieval_effective": meta.get("reasoning_effort_retrieval"),
@@ -116,15 +116,11 @@ async def probe_openai(key: str) -> dict[str, Any]:
     t0 = time.perf_counter()
     models = await client.models.list()
     ids = sorted({m.id for m in models.data})
-    want = ["gpt-5.6-luna", "gpt-5.6-terra", "text-embedding-3-small", "gpt-4o-transcribe"]
+    want = ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-4o-transcribe"]
     present = {m: m in ids for m in want}
-    embed = await client.embeddings.create(model="text-embedding-3-small", input="v10 live cert ping")
-    usage = getattr(embed, "usage", None)
     return {
         "ok": True,
         "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
         "models_present": present,
-        "embedding_dim": len(embed.data[0].embedding),
-        "embed_tokens": getattr(usage, "total_tokens", None) if usage else None,
         "model_count": len(ids),
     }

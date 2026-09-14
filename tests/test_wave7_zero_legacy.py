@@ -34,6 +34,8 @@ GONE_PATHS = (
     "services/tenant_mobile_dashboard",
     "services/membership",
     "services/entitlements_service.py",
+    "services/search_metadata/luna_titles.py",
+    "services/products/luna_title_resolver.py",
 )
 
 KEEP_PATHS = (
@@ -41,6 +43,7 @@ KEEP_PATHS = (
     "services/live_chat/tenant.py",
     "services/dashboard/message_surface.py",
     "services/brain/search/reuse_vectors.py",
+    "services/search_metadata/title_fields.py",
     "services/brain/history_ids.py",
     "services/owner_copilot/creative_policy.py",
     "services/whatsapp_adapters/whatsapp_factory.py",
@@ -67,6 +70,8 @@ GONE_IMPORT_FRAGMENTS = (
     "services.owner_ai_orchestrator",
     "services.live_chat_tenant",
     "services.tenant_mobile_dashboard.",
+    "services.products.luna_title_resolver",
+    "services.search_metadata.luna_titles",
 )
 
 PY_ROOTS = ("services", "modules", "handlers", "scripts")
@@ -176,7 +181,7 @@ def test_wave6_owner_stays_monty_stays_refused() -> None:
     nav = (ROOT / "mobile/linas-ai/src/app/navigation.ts").read_text(encoding="utf-8")
     areas = (ROOT / "mobile/linas-ai/src/features/control/controlAreas.ts").read_text(encoding="utf-8")
     factory = (ROOT / "services/whatsapp_adapters/whatsapp_factory.py").read_text(encoding="utf-8")
-    titles = (ROOT / "services/search_metadata/luna_titles.py").read_text(encoding="utf-8")
+    titles = (ROOT / "services/search_metadata/title_fields.py").read_text(encoding="utf-8")
     hub = (ROOT / "mobile/linas-ai/src/features/cm/cmSections.ts").read_text(encoding="utf-8")
     assert "name: 'resource'" not in nav
     assert "| { name: 'owner' }" in nav
@@ -184,7 +189,7 @@ def test_wave6_owner_stays_monty_stays_refused() -> None:
     assert "CONTROL_ITEMS" not in areas
     assert "montymobile" in factory
     assert "_UNSUPPORTED_LEGACY_PROVIDERS" in factory
-    assert "DEAD_LUNA_ENGINE" in titles
+    assert "retrieval_title_fields" in titles
     for tile in (
         "knowledge",
         "ai_basics",
@@ -238,3 +243,38 @@ def test_wave_b_domain_packages_match_drawer() -> None:
             if lines > 500:
                 oversize.append(f"{path.relative_to(ROOT)}:{lines}")
     assert not oversize, oversize
+
+
+def test_wave_c_voyage_only_and_luna_titles_gone() -> None:
+    publish = (ROOT / "services/ai_setup/publish.py").read_text(encoding="utf-8")
+    policy = (ROOT / "services/model_policy.py").read_text(encoding="utf-8")
+    pipeline = (ROOT / "services/ai_setup/runtime_pipeline.py").read_text(encoding="utf-8")
+    assert "from services.ai_setup.semantic_index import build_index" not in publish
+    assert "VOYAGE_PROVIDER" in publish or "voyage" in publish.lower()
+    assert "customer_social_retrieval_voyage" in policy
+    assert "customer_social_retrieval_luna" not in policy
+    assert "gpt-5.6-luna" not in policy
+    assert "voyage_search" in pipeline
+    assert not (ROOT / "services/search_metadata/luna_titles.py").exists()
+    assert not (ROOT / "services/products/luna_title_resolver.py").exists()
+    assert (ROOT / "services/search_metadata/title_fields.py").is_file()
+    assert (ROOT / "services/brain/search/reuse_vectors.py").is_file()
+    assert (ROOT / "services/ai_setup/voyage_search.py").is_file()
+
+
+def test_wave_c_customer_runtime_has_no_luna_engine_names() -> None:
+    roots = (
+        ROOT / "services/ai_setup",
+        ROOT / "services/products",
+        ROOT / "services/search_metadata",
+        ROOT / "services/customer_reply_v2",
+        ROOT / "services/model_policy.py",
+    )
+    offenders: list[str] = []
+    for root in roots:
+        paths = [root] if root.is_file() else list(root.rglob("*.py"))
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            if "luna" in text.lower():
+                offenders.append(str(path.relative_to(ROOT)))
+    assert not offenders, offenders

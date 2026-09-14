@@ -180,33 +180,27 @@ async def test_published_without_section_key_stays_inactive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Existing tenants whose published blob lacks the new section stay safe."""
-    from services.ai_setup.embeddings import embedding_pin
     from services.ai_setup.schemas import PublishedPointer, default_section_payload
-    from services.ai_setup.semantic_index import build_index
     from services.ai_setup.version_store import write_published_pointer, write_version_content
+    from services.brain.budgets import DEFAULT_BUDGETS
+    from services.brain.providers.spaces import ENTITY_MODEL
+    from services.brain.providers.spaces import PROVIDER as VOYAGE_PROVIDER
     from tests.cm_test_helpers import install_mocked_openai_embeddings
 
     install_mocked_openai_embeddings(monkeypatch, published_mode=True)
     legacy_sections = {name: default_section_payload(name) for name in CM_SECTIONS if name != "requests_appointments"}
     version_id = f"v_{tenant_data}_legacy"
     checksums = write_version_content(tenant_data, version_id, legacy_sections)
-    index_manifest = await build_index(
-        tenant_id=tenant_data,
-        content_version_id=version_id,
-        sections=legacy_sections,
-        index_id=f"idx_{tenant_data}_legacy",
-    )
-    pin = embedding_pin()
     write_published_pointer(
         tenant_data,
         PublishedPointer(
             content_version_id=version_id,
-            index_version_id=str(index_manifest["index_id"]),
+            index_version_id=version_id,
             checksums=checksums,
-            embedding_provider=pin.provider,
-            embedding_model=pin.model,
-            embedding_version=pin.version,
-            embedding_dimensions=pin.dimensions,
+            embedding_provider=VOYAGE_PROVIDER,
+            embedding_model=ENTITY_MODEL,
+            embedding_version="1",
+            embedding_dimensions=DEFAULT_BUDGETS.embedding_dimensions,
         ),
     )
     assert load_published_requests_config(tenant_data) is None

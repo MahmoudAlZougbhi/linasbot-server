@@ -84,7 +84,9 @@ class PlanAllowanceRecommendation:
 
 
 def _text_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    pricing = MODEL_PRICING.get(model) or MODEL_PRICING["gpt-5.6-luna"]
+    pricing = MODEL_PRICING.get(model)
+    if pricing is None:
+        raise RuntimeError(f"unknown_model_pricing:{model}")
     return (input_tokens / 1_000_000) * float(pricing["input"]) + (output_tokens / 1_000_000) * float(pricing["output"])
 
 

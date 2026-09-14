@@ -20,7 +20,6 @@ from typing import Any
 from services.ai_setup.answer_packet import build_answer_packet
 from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
 from services.ai_setup.embeddings import (
-    HashEmbeddingForbiddenError,
     PublishedEmbeddingError,
     assert_published_embedding_pin,
 )
@@ -34,7 +33,6 @@ from services.ai_setup.schemas import (
     RestrictedPolicy,
     ServicesSection,
 )
-from services.ai_setup.semantic_index import search as semantic_search
 from services.ai_setup.structured_resolver import (
     active_restricted_ids,
     find_restricted_topic,
@@ -46,6 +44,7 @@ from services.ai_setup.structured_resolver import (
     resolve_service_facts,
 )
 from services.ai_setup.version_store import PublishedVersionError, load_published_content
+from services.ai_setup.voyage_search import search_kind as semantic_search
 from services.dynamic_messages_service import get_dynamic_message
 from services.local_qa_service import local_qa_service
 
@@ -214,13 +213,13 @@ async def prepare_response(
 
     try:
         semantic_hits = await semantic_search(
-            tenant_id=tenant_id, index_id=index_id, query=message, kind="faq", language=detected_language, top_k=1
+            tenant_id=tenant_id, query=message, kind="faq", language=detected_language, top_k=1
         )
         if not semantic_hits:
             semantic_hits = await semantic_search(
-                tenant_id=tenant_id, index_id=index_id, query=message, kind="faq", language=None, top_k=1
+                tenant_id=tenant_id, query=message, kind="faq", language=None, top_k=1
             )
-    except (FileNotFoundError, ValueError, KeyError, HashEmbeddingForbiddenError, PublishedEmbeddingError) as exc:
+    except Exception as exc:
         return PipelineOutcome(stop=True, reason="index_unavailable", error=str(exc))
 
     if semantic_hits and float(semantic_hits[0].get("score") or 0) >= SEMANTIC_FAQ_MIN_SCORE:
@@ -338,12 +337,12 @@ async def prepare_response(
     chunks: list[AnswerChunk] = []
     try:
         for kind in ("knowledge", "care"):
-            hits = await semantic_search(tenant_id=tenant_id, index_id=index_id, query=message, kind=kind, top_k=2)
+            hits = await semantic_search(tenant_id=tenant_id, query=message, kind=kind, top_k=2)
             for hit in hits:
                 chunks.append(
                     AnswerChunk(source_id=hit["source_id"], text=str(hit.get("text") or ""), score=hit.get("score"))
                 )
-    except (FileNotFoundError, ValueError, KeyError, HashEmbeddingForbiddenError, PublishedEmbeddingError) as exc:
+    except Exception as exc:
         return PipelineOutcome(stop=True, reason="index_unavailable", error=str(exc))
 
     # Step 13 — Assemble the grounded packet for the caller's existing large-AI pipeline.

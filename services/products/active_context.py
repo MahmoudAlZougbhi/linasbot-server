@@ -11,9 +11,7 @@ from sqlalchemy.orm import Session
 
 from db.models.products import ProductConversationContext
 
-CONTEXT_SOURCES = frozenset(
-    {"title_search", "luna_title_match", "image_match", "url_match", "reply_to_product", "manual"}
-)
+CONTEXT_SOURCES = frozenset({"title_search", "image_match", "url_match", "reply_to_product", "manual"})
 
 
 def _uuid() -> str:

@@ -1,4 +1,4 @@
-"""Active product titles for Luna fallback inside the same retrieval loop."""
+"""Active product titles paged for Brain product lookup."""
 
 from __future__ import annotations
 

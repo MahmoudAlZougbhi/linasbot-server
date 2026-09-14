@@ -157,14 +157,14 @@ async def process_web_chat_message(
     inbound_media: dict[str, Any] | None = None
     attachment_types: list[str] | None = None
     if attachments:
-        from services.customer_reply_v2.inbound_media import ingest_inbound_attachments, luna_inbound_view
+        from services.customer_reply_v2.inbound_media import inbound_media_view, ingest_inbound_attachments
 
         inbound = await ingest_inbound_attachments(
             tenant_id=tid,
             attachments=attachments,
             caption=text,
         )
-        inbound_media = luna_inbound_view(inbound)
+        inbound_media = inbound_media_view(inbound)
         if inbound.safety_image_urls:
             inbound_media["safety_image_urls"] = list(inbound.safety_image_urls)
         attachment_types = list(inbound.attachment_types)

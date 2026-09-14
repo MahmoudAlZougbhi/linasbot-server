@@ -64,7 +64,7 @@ def _print_cm_comment_actions(tenant_id: str) -> dict[str, bool]:
     print(f"[scope-audit] cm_action_{ACTION_FACEBOOK_COMMENTS}={states['facebook']}")
     print(f"[scope-audit] cm_action_{ACTION_INSTAGRAM_COMMENTS}={states['instagram']}")
     print(f"[scope-audit] cm_disable_linas_legacy_bridge={os.getenv('CM_DISABLE_LINAS_LEGACY_BRIDGE', '')}")
-    print(f"[scope-audit] customer_retrieval_model={os.getenv('LINAS_CUSTOMER_RETRIEVAL_MODEL', 'gpt-5.6-luna')}")
+    print(f"[scope-audit] customer_retrieval_model={os.getenv('LINAS_CUSTOMER_RETRIEVAL_MODEL', 'voyage-4-large')}")
     print(f"[scope-audit] customer_answer_model={os.getenv('LINAS_CUSTOMER_ANSWER_MODEL', 'gpt-5.6-terra')}")
     print(f"[scope-audit] customer_media_context={os.getenv('CUSTOMER_MEDIA_CONTEXT_ENABLED', 'true')}")
     print(

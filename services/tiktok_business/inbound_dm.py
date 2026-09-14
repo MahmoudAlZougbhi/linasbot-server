@@ -61,12 +61,12 @@ async def hydrate_tiktok_inbound_media(*, tenant_id: str, content: dict[str, Any
     attachments = attachments_from_content(content)
     caption = message_text_from_content(content)
     if attachments and tenant_id:
-        from services.customer_reply_v2.inbound_media import ingest_inbound_attachments, luna_inbound_view
+        from services.customer_reply_v2.inbound_media import inbound_media_view, ingest_inbound_attachments
 
         result = await ingest_inbound_attachments(
             tenant_id=tenant_id,
             attachments=attachments,
             caption=caption,
         )
-        return luna_inbound_view(result)
+        return inbound_media_view(result)
     return inbound_from_attachment_type(_kind_from_content(content or {}), transcript=caption)

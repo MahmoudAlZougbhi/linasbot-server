@@ -99,7 +99,7 @@ async def test_v2_generated_reply_never_calls_classic_generate() -> None:
             "completion_tokens": 40,
             "tokens": 140,
             "model": "gpt-5.6-terra",
-            "requested_model_retrieval": "gpt-5.6-luna",
+            "requested_model_retrieval": "voyage-4-large",
             "requested_model_answer": "gpt-5.6-terra",
             "reasoning_effort_answer": "medium",
         },
@@ -123,7 +123,7 @@ async def test_v2_generated_reply_never_calls_classic_generate() -> None:
     assert metadata["customer_reply_ai_v2"] is True
     assert metadata["classic_fallback"] is False
     assert reply == "A friendly, on-language answer with no invented facts."
-    assert metadata["requested_model_retrieval"] == "gpt-5.6-luna"
+    assert metadata["requested_model_retrieval"] == "voyage-4-large"
     assert metadata["requested_model_answer"] == "gpt-5.6-terra"
 
 

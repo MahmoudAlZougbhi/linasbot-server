@@ -1,10 +1,7 @@
-"""Configurable embedding provider for the CM semantic index (plan D11 / Phase 5).
+"""Configurable embedding provider. Live FAQ/Brain retrieve is Voyage-only.
 
-Production / published-mode semantic retrieval uses a real OpenAI-compatible embedding
-model (default ``text-embedding-3-small``). Deterministic ``hash`` embeddings exist only
-for automated tests (``ENVIRONMENT=test`` / ``PYTEST_CURRENT_TEST``) and are rejected when
-``CM_RUNTIME_MODE=published`` or outside the test harness — never silently swapped for
-keyword, filename, lexical, or legacy content fallbacks.
+Deterministic ``hash`` embeddings exist only for automated tests
+(``ENVIRONMENT=test``). Published pointers must pin ``voyage``.
 """
 
 from __future__ import annotations
@@ -15,12 +12,11 @@ from dataclasses import dataclass
 from typing import Final
 
 HASH_EMBEDDING_DIMENSIONS = 64
-OPENAI_EMBEDDING_MODEL_DEFAULT = "text-embedding-3-small"
-OPENAI_EMBEDDING_DIMENSIONS_DEFAULT = 1536
+VOYAGE_EMBEDDING_MODEL_DEFAULT = "voyage-4-large"
+VOYAGE_EMBEDDING_DIMENSIONS_DEFAULT = 1024
 EMBEDDING_MANIFEST_VERSION = "1"
 
-# Real semantic providers permitted for published / non-test index build & search.
-PRODUCTION_EMBEDDING_PROVIDERS: Final[frozenset[str]] = frozenset({"openai"})
+PRODUCTION_EMBEDDING_PROVIDERS: Final[frozenset[str]] = frozenset({"voyage"})
 TEST_ONLY_EMBEDDING_PROVIDERS: Final[frozenset[str]] = frozenset({"hash"})
 
 
@@ -38,7 +34,7 @@ class PublishedEmbeddingError(RuntimeError):
 
 
 def embedding_provider_name() -> str:
-    return (os.getenv("CM_EMBEDDING_PROVIDER") or "openai").strip().lower() or "openai"
+    return (os.getenv("CM_EMBEDDING_PROVIDER") or "voyage").strip().lower() or "voyage"
 
 
 def hash_embeddings_allowed() -> bool:
@@ -53,14 +49,12 @@ def hash_embeddings_allowed() -> bool:
 
 def assert_embedding_provider_allowed(provider: str | None = None) -> str:
     """Resolve and enforce provider policy. Returns the normalized provider name."""
-    resolved = (provider or embedding_provider_name()).strip().lower() or "openai"
+    resolved = (provider or embedding_provider_name()).strip().lower() or "voyage"
     if resolved in TEST_ONLY_EMBEDDING_PROVIDERS:
-        # Hash embeddings remain test-only via ENVIRONMENT=test (hash_embeddings_allowed).
-        # Do not gate on the global runtime label — SoT is per-tenant published CM.
         if not hash_embeddings_allowed():
             raise HashEmbeddingForbiddenError(
                 "CM_EMBEDDING_PROVIDER=hash is test-only. "
-                "Set ENVIRONMENT=test for unit tests, or use the default openai provider."
+                "Set ENVIRONMENT=test for unit tests, or use the default voyage provider."
             )
         return resolved
     if resolved not in PRODUCTION_EMBEDDING_PROVIDERS:
@@ -110,14 +104,14 @@ def embedding_pin() -> EmbeddingPinInfo:
             dimensions=HASH_EMBEDDING_DIMENSIONS,
         )
     model = (
-        os.getenv("CM_EMBEDDING_MODEL") or OPENAI_EMBEDDING_MODEL_DEFAULT
-    ).strip() or OPENAI_EMBEDDING_MODEL_DEFAULT
+        os.getenv("CM_EMBEDDING_MODEL") or VOYAGE_EMBEDDING_MODEL_DEFAULT
+    ).strip() or VOYAGE_EMBEDDING_MODEL_DEFAULT
     dims_raw = os.getenv("CM_EMBEDDING_DIMENSIONS")
     try:
-        dims = int(dims_raw) if dims_raw else OPENAI_EMBEDDING_DIMENSIONS_DEFAULT
+        dims = int(dims_raw) if dims_raw else VOYAGE_EMBEDDING_DIMENSIONS_DEFAULT
     except ValueError:
-        dims = OPENAI_EMBEDDING_DIMENSIONS_DEFAULT
-    return EmbeddingPinInfo(provider="openai", model=model, version=EMBEDDING_MANIFEST_VERSION, dimensions=dims)
+        dims = VOYAGE_EMBEDDING_DIMENSIONS_DEFAULT
+    return EmbeddingPinInfo(provider="voyage", model=model, version=EMBEDDING_MANIFEST_VERSION, dimensions=dims)
 
 
 def _hash_embed_one(text: str, dimensions: int = HASH_EMBEDDING_DIMENSIONS) -> list[float]:
@@ -145,15 +139,15 @@ async def embed_texts(texts: list[str], *, provider: str | None = None) -> list[
     resolved_provider = assert_embedding_provider_allowed(provider)
     if resolved_provider == "hash":
         return [_hash_embed_one(text) for text in texts]
-    return await _openai_embed_texts(texts)
+    return await _voyage_embed_texts(texts)
 
 
-async def _openai_embed_texts(texts: list[str]) -> list[list[float]]:
-    from services.llm_core_service import client as openai_client
+async def _voyage_embed_texts(texts: list[str]) -> list[list[float]]:
+    from services.brain.providers.spaces import ENTITY_DOCUMENT
+    from services.brain.providers.voyage_client import embed_texts as voyage_embed
 
-    pin = embedding_pin()
-    response = await openai_client.embeddings.create(model=pin.model, input=texts)
-    return [item.embedding for item in response.data]
+    part = await voyage_embed(ENTITY_DOCUMENT, texts)
+    return list(part.vectors)
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:

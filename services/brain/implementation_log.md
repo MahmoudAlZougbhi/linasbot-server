@@ -124,7 +124,7 @@ Owner Portal → Brain lab → **Run fixture evals** / **Run verification exerci
 ## P2 cleanup (16–21) — done this pass
 
 - Legacy `smart_retrieval_service` is DEAD (callables raise); Brain retrieve must not import it
-- `customer_reply_v2.flags` stubs use Brain naming; search_metadata `luna_titles` is a dead-name shim over `title_fields`
+- `customer_reply_v2.flags` stubs use Brain naming; search_metadata titles go through `title_fields`
 - `TurnBudgets.repair_attempts=1` kept (honest). `generate/reply.py` must use it for one grounding repair — P1 owns that wiring; do not drop the budget to 0.
 - CM publish returns `brain_index_status` (best-effort Voyage index); Owner force-reindex is the retry path
 - Product questions fail closed with `product_index_stale` via `get_source_pointer_ready` + product_freshness

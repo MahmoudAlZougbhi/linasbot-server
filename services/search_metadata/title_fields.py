@@ -1,7 +1,4 @@
-"""Retrieval view: original user title + AI search title + short AI description.
-
-Not a generative Luna engine. Prefer this module over luna_titles.
-"""
+"""Retrieval view: original user title + AI search title + short AI description."""
 
 from __future__ import annotations
 

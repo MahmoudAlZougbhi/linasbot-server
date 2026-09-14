@@ -1,4 +1,4 @@
-"""Save-time Luna search metadata (English-only, incremental, not a retrieval rewrite)."""
+"""Save-time search metadata (English-only, incremental, not a retrieval rewrite)."""
 
 from __future__ import annotations
 

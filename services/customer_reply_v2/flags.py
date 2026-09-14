@@ -1,4 +1,4 @@
-"""Deprecated customer-engine flag stubs. Brain uses providers.config — do not revive Luna/Terra."""
+"""Deprecated customer-engine flag stubs. Brain uses providers.config — do not revive a retrieval LLM."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ def flags_snapshot() -> dict[str, Any]:
         "customer_engine": "brain_or_removed",
         "v10": False,
         "semantic_retrieval_legacy": False,
-        "note": "Luna/Terra generative engines removed; Customer Brain is the only reply engine when enabled.",
+        "note": "Customer Brain is the only reply engine when enabled; retrieval is Voyage embeddings.",
     }
 
 
@@ -29,5 +29,5 @@ def customer_answer_model_name() -> str:
 
 
 def customer_retrieval_model_name() -> str:
-    """Deprecated stub — Brain uses Voyage entity spaces, not Luna."""
+    """Deprecated stub — Brain uses Voyage entity spaces, not an LLM retriever."""
     return "customer_brain_voyage_entity"

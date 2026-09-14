@@ -16,9 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from services.ai_setup.constants import CM_SECTIONS, require_tenant_id
-from services.ai_setup.embeddings import embedding_pin
 from services.ai_setup.schemas import EmbeddingPin, PublishedPointer, PublishManifest, utc_now
-from services.ai_setup.semantic_index import build_index
 from services.ai_setup.storage import get_draft, tenant_server_lock
 from services.ai_setup.validation import validate_cm
 from services.ai_setup.version_store import (
@@ -29,6 +27,9 @@ from services.ai_setup.version_store import (
     write_version_content,
     write_version_manifest,
 )
+from services.brain.budgets import DEFAULT_BUDGETS
+from services.brain.providers.spaces import ENTITY_MODEL
+from services.brain.providers.spaces import PROVIDER as VOYAGE_PROVIDER
 
 
 class PublishBlockedError(RuntimeError):
@@ -186,15 +187,13 @@ async def publish_draft_sections(
     content_version_id = f"v_{uuid.uuid4().hex[:12]}"
     checksums = write_version_content(tid, content_version_id, sections)
 
-    index_manifest = await build_index(tenant_id=tid, content_version_id=content_version_id, sections=sections)
-    index_version_id = str(index_manifest["index_id"])
-
-    pin = embedding_pin()
+    # Voyage Brain index only — do not build a second OpenAI file semantic_index.
+    index_version_id = content_version_id
     embedding = EmbeddingPin(
-        provider=pin.provider,
-        model=pin.model,
-        version=pin.version,
-        dimensions=pin.dimensions,
+        provider=VOYAGE_PROVIDER,
+        model=ENTITY_MODEL,
+        version="1",
+        dimensions=DEFAULT_BUDGETS.embedding_dimensions,
     )
     manifest = PublishManifest(
         tenant_id=tid,
@@ -212,10 +211,10 @@ async def publish_draft_sections(
         content_version_id=content_version_id,
         index_version_id=index_version_id,
         checksums=checksums,
-        embedding_provider=pin.provider,
-        embedding_model=pin.model,
-        embedding_version=pin.version,
-        embedding_dimensions=pin.dimensions,
+        embedding_provider=embedding.provider,
+        embedding_model=embedding.model,
+        embedding_version=embedding.version,
+        embedding_dimensions=embedding.dimensions,
         updated_at=utc_now(),
     )
     with tenant_server_lock(tid):
@@ -295,7 +294,7 @@ async def publish_faq_only(
     published_by: str = "unknown",
     notes: str | None = None,
 ) -> PublishResult:
-    """Atomic FAQ-only publish: draft FAQ over published base + semantic index rebuild."""
+    """Atomic FAQ-only publish: draft FAQ over published base + Voyage Brain index."""
     return await publish_draft_sections(
         tenant_id=tenant_id,
         published_by=published_by,
