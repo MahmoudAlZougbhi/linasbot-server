@@ -444,7 +444,9 @@ def test_concurrent_same_client_key_one_operation(tmp_path, monkeypatch, accepta
             side_effect=lambda **_kwargs: __import__(
                 "services.integrations.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
             ).PersistResult(
-                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+                outcome=__import__(
+                    "services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]
+                ).PersistOutcome.CREATED,
                 conversation_id=f"web:{tenant_id}:{bundle.session_id}",
             )
         ),

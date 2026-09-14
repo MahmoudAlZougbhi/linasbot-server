@@ -106,7 +106,10 @@ async def test_generate_web_reply_skips_customer_ai_when_silenced() -> None:
 
     run_ai = AsyncMock()
     with (
-        patch("services.integrations.web_chat.takeover_gate.maybe_silence_web_chat_for_takeover", AsyncMock(return_value=True)),
+        patch(
+            "services.integrations.web_chat.takeover_gate.maybe_silence_web_chat_for_takeover",
+            AsyncMock(return_value=True),
+        ),
         patch("services.brain.reply.orchestrator.run_customer_reply_v2_dm", run_ai),
     ):
         reply = await generate_web_chat_reply_text(

@@ -285,8 +285,12 @@ async def test_capture_failure_replay_reconciles_without_release(tmp_path, monke
     monkeypatch.setattr(
         "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
-            return_value=__import__("services.integrations.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
-                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+            return_value=__import__(
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult"]
+            ).PersistResult(
+                outcome=__import__(
+                    "services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]
+                ).PersistOutcome.CREATED,
                 conversation_id="conv",
             )
         ),

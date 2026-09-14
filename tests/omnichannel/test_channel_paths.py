@@ -317,7 +317,9 @@ async def test_tiktok_exception_before_submit_is_not_marked_submitted(monkeypatc
 
     monkeypatch.setattr("services.integrations.omnichannel.channel_tiktok.whatsapp_session", fake_session)
     monkeypatch.setattr("services.integrations.omnichannel.channel_tiktok.TikTokRepository", lambda _s: Repo())
-    monkeypatch.setattr("services.integrations.omnichannel.channel_tiktok.tiktok_dm_live_allowed", lambda _c: (True, ""))
+    monkeypatch.setattr(
+        "services.integrations.omnichannel.channel_tiktok.tiktok_dm_live_allowed", lambda _c: (True, "")
+    )
 
     async def token(*_a, **_k):
         return "tok"

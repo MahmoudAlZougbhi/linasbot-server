@@ -194,7 +194,9 @@ def test_slow_ai_heartbeat_prevents_second_provider_call(tmp_path, monkeypatch, 
             side_effect=lambda **_kwargs: __import__(
                 "services.integrations.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
             ).PersistResult(
-                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+                outcome=__import__(
+                    "services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]
+                ).PersistOutcome.CREATED,
                 conversation_id=f"web:{widget.tenant_id}:{bundle.session_id}",
             )
         ),

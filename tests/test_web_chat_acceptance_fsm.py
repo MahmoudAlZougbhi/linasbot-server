@@ -103,8 +103,12 @@ async def test_released_operation_same_client_key_retry_converges_without_integr
     monkeypatch.setattr(
         "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
-            return_value=__import__("services.integrations.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
-                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+            return_value=__import__(
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult"]
+            ).PersistResult(
+                outcome=__import__(
+                    "services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]
+                ).PersistOutcome.CREATED,
                 conversation_id="conv",
             )
         ),
@@ -162,8 +166,12 @@ async def test_fsm_capture_failure_enters_billing_pending(tmp_path, monkeypatch,
     monkeypatch.setattr(
         "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
-            return_value=__import__("services.integrations.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
-                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+            return_value=__import__(
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult"]
+            ).PersistResult(
+                outcome=__import__(
+                    "services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]
+                ).PersistOutcome.CREATED,
                 conversation_id="conv",
             )
         ),
@@ -247,7 +255,9 @@ async def test_fsm_followup_queue_failure_then_recovery(tmp_path, monkeypatch, a
     monkeypatch.setattr(
         "services.integrations.web_chat.persistence.persist_web_chat_message",
         AsyncMock(
-            return_value=__import__("services.integrations.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
+            return_value=__import__(
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult"]
+            ).PersistResult(
                 outcome="created",
                 conversation_id=f"web:{tenant_id}:{visitor_id}",
             )

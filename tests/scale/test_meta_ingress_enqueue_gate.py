@@ -249,7 +249,9 @@ def test_soak_payload_skips_postgres_mirror(monkeypatch: pytest.MonkeyPatch) -> 
     import services.scale.meta_ingress as ingress
 
     called: list[object] = []
-    monkeypatch.setattr("services.integrations.omnichannel.dual_write.mirror_meta_inbound", lambda record: called.append(record))
+    monkeypatch.setattr(
+        "services.integrations.omnichannel.dual_write.mirror_meta_inbound", lambda record: called.append(record)
+    )
     soak = SimpleNamespace(payload={"_linas_soak_simulation": True})
     live = SimpleNamespace(payload={"text": "hello"})
     ingress._mirror_unless_soak(soak)  # type: ignore[arg-type]
