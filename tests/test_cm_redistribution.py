@@ -22,21 +22,26 @@ def test_classifier_routes_known_misplaced_titles() -> None:
         (
             "</Tattoo_Removal_Training_Philosophy>",
             "Tattoo removal training philosophy. We offer tattoo removal.",
-            ["services", "knowledge"],
+            ["knowledge"],
         ),
         (
             "</CO2_Laser_Training_Philosophy>",
             "CO2 laser training philosophy for offered resurfacing.",
-            ["services", "knowledge"],
+            ["knowledge"],
         ),
         (
             "</DPL_Whitening_Training_Philosophy>",
             "DPL whitening training philosophy.",
-            ["services", "knowledge"],
+            ["knowledge"],
         ),
         (
             "</Laser_Hair_Removal_Training_Philosophy_For_Men_And_Women>",
             "Laser hair removal training philosophy for men and women.",
+            ["knowledge"],
+        ),
+        (
+            "Sample Catalog Service Training Philosophy",
+            "Sample catalog service training philosophy. We offer sample catalog service.",
             ["services", "knowledge"],
         ),
         (
@@ -100,8 +105,8 @@ def test_classifier_routes_known_misplaced_titles() -> None:
 def test_classifier_philosophy_wins_over_booking_language_in_body() -> None:
     result = classify_article(
         article_id="t",
-        title="</Tattoo_Removal_Training_Philosophy>",
-        body="Tattoo removal training. Mention submit_booking_intent and appointment rules for this service.",
+        title="Sample Catalog Service Training Philosophy",
+        body="Sample catalog service training. Mention submit_booking_intent and appointment rules for this service.",
     )
     assert result.targets == ["services", "knowledge"]
     assert result.keep_in_knowledge_active is True
@@ -109,12 +114,12 @@ def test_classifier_philosophy_wins_over_booking_language_in_body() -> None:
 
     result = classify_article(
         article_id="t",
-        title="</Tattoo_Removal_Training_Philosophy>",
-        body="Tattoo removal is offered. CO2 and DPL whitening guidance included.",
+        title="Sample Catalog Service Training Philosophy",
+        body="Sample catalog service is offered. Membership plan guidance included.",
     )
     assert "restricted" not in result.targets
     assert result.keep_in_knowledge_active is True
-    assert any(s.id == "tattoo_removal" and s.available for s in result.service_derivations)
+    assert any(s.id == "sample_catalog_service" and s.available for s in result.service_derivations)
 
 
 def test_educational_without_availability_stays_knowledge_only() -> None:
@@ -130,16 +135,16 @@ def test_educational_without_availability_stays_knowledge_only() -> None:
 def test_availability_conflict_is_surfaced() -> None:
     a = classify_article(
         article_id="a",
-        title="Tattoo offered",
-        body="We offer tattoo removal.",
+        title="Sample catalog offered",
+        body="We offer sample catalog service.",
     )
     b = classify_article(
         article_id="b",
-        title="Tattoo not offered",
-        body="We do not offer tattoo removal.",
+        title="Sample catalog not offered",
+        body="We do not offer sample catalog service.",
     )
     conflicts = detect_service_availability_conflicts([a, b])
-    assert any(c["service_id"] == "tattoo_removal" for c in conflicts)
+    assert any(c["service_id"] == "sample_catalog_service" for c in conflicts)
 
 
 def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monkeypatch) -> None:
@@ -229,9 +234,8 @@ def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monke
     from services.ai_setup.pricing.section import section_catalog_items
 
     catalog = {item.id: item for item in section_catalog_items(prices)}
-    assert "laser_hair_removal" in catalog
-    assert "tattoo_removal" in catalog
-    assert catalog["tattoo_removal"].active is True
+    assert "laser_hair_removal" not in catalog
+    assert "tattoo_removal" not in catalog
 
     handoff = get_draft("handoff", tenant_id=tenant).payload
     assert "Appointment booking rules" in str(handoff.get("policy_text") or "")

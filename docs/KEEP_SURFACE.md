@@ -243,6 +243,15 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - Museum prefixes (`/api/smart-messaging`, `/api/test*`, clinic settings) stay 403.
 - Marketing `/` `/about` `/contact` `/pricing` `/features` and `/owner/*` portal routes remain in `App.jsx`.
 
+## WAVE X5 — remaining Laser / lab ops
+
+- `customer-brain-env-apply-ha.yml` writes and asserts `LINAS_CUSTOMER_AI_LAB=false` (same as X1 prod scripts).
+- `customer-brain-live-lab-ha.yml` is retired: no production SSH, dispatch refuses.
+- `prod_migration` does not seed `laser_hair_removal`, shave-before-laser, or clinic Beirut/Antelias branches.
+- `section_classifier` `_SERVICE_SPECS` are generic SaaS fixtures only (no Laser/tattoo/CO2/DPL catalog).
+- `LINASLASER_API_*` in `config.py` is a deprecated alias of `EXTERNAL_API_*`. `LINASLASER_BOC_BOOKING_ENABLED` stays the fail-closed BOC env name.
+- Tests: `tests/test_wave_x5_lab_ops.py`.
+
 
 
 

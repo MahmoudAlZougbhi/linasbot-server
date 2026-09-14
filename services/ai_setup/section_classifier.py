@@ -128,34 +128,21 @@ _STYLE_MARKERS = (
     "response style",
 )
 
+# Generic SaaS fixtures only — no clinic Laser / tattoo / CO2 / DPL catalog.
 _SERVICE_SPECS: tuple[tuple[tuple[str, ...], str, LocalizedLabels, str, tuple[str, ...]], ...] = (
     (
-        ("tattoo removal", "tattoo_removal", "وشم", "تاتو", "pico"),
-        "tattoo_removal",
-        LocalizedLabels(en="Laser tattoo removal", ar="إزالة الوشم بالليزر", fr="Détatouage laser"),
-        "laser",
-        ("tattoo", "وشم", "تاتو", "pico"),
+        ("sample catalog service", "sample_catalog_service"),
+        "sample_catalog_service",
+        LocalizedLabels(en="Sample catalog service", ar="خدمة الكتالوج", fr="Service catalogue"),
+        "general",
+        ("sample catalog",),
     ),
     (
-        ("co2 laser", "co₂ laser", "co2_laser", "resurfacing"),
-        "co2_laser",
-        LocalizedLabels(en="CO₂ laser", ar="ليزر CO2", fr="Laser CO2"),
-        "laser",
-        ("co2", "co₂", "resurfacing"),
-    ),
-    (
-        ("dpl", "whitening", "pigmentation", "dpl_whitening"),
-        "dpl_whitening",
-        LocalizedLabels(en="DPL whitening", ar="تبييض DPL", fr="Blanchiment DPL"),
-        "skin",
-        ("dpl", "whitening", "تبييض", "pigmentation"),
-    ),
-    (
-        ("laser hair removal", "laser_hair_removal", "hair removal", "épilation", "إزالة الشعر"),
-        "laser_hair_removal",
-        LocalizedLabels(en="Laser hair removal", ar="إزالة الشعر بالليزر", fr="Épilation laser"),
-        "laser",
-        ("laser", "hair removal", "ليزر", "épilation"),
+        ("membership plan", "membership_plan"),
+        "membership_plan",
+        LocalizedLabels(en="Membership plan", ar="خطة عضوية", fr="Formule d'abonnement"),
+        "general",
+        ("membership plan",),
     ),
 )
 

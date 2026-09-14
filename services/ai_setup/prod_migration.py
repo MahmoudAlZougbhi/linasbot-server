@@ -1,11 +1,10 @@
 """Production AI Setup migration helpers (copy-first, no invented facts).
 
 Stages live ``LINASBOT_DATA_ROOT`` content into the fixture-shaped ``legacy/`` tree expected by
-:func:`services.ai_setup.migration.migrate_legacy_fixture`, then applies owner-confirmed Lina
-structured seeding (branches, laser handoff contacts, preparation guidance) without inventing
-prices/hours/phones.
+:func:`services.ai_setup.migration.migrate_legacy_fixture`, then seeds empty structured defaults.
+Owners author branches, services, care, and handoff in CM. No clinic Laser corpus is seeded.
 
-Keyword topic scrub is revoked: recovered Lina files stay active/visible/AI-usable based on
+Keyword topic scrub is revoked: recovered files stay active/visible/AI-usable based on
 actual content status, not filename/topic keywords.
 """
 
@@ -22,32 +21,17 @@ from services.ai_setup.migration import migrate_legacy_fixture
 from services.ai_setup.prod_migration_stage import resolve_live_data_root, stage_live_data_for_migration
 from services.ai_setup.schemas import (
     AiBasics,
-    ArticleRecord,
     BranchesSection,
-    BranchHours,
-    BranchRecord,
-    CareSection,
     DynamicMessageRecord,
     DynamicMessagesSection,
-    GenderAudience,
-    HandoffContact,
-    HandoffMatrixRow,
     HandoffPolicy,
     LanguagePolicy,
-    LocalizedLabels,
     PricesSection,
     RestrictedPolicy,
-    ServiceRecord,
     StylePolicy,
 )
 from services.ai_setup.scrub_restore import restore_keyword_scrubbed_content
 from services.ai_setup.storage import get_draft, put_draft
-from services.social_contact_routing import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
-
-SHAVE_CARE_BODY = (
-    "Customers are advised to shave at home one day before a laser hair-removal session. "
-    "If hair remains at the appointment, staff may use an electric shaver."
-)
 
 __all__ = [
     "resolve_live_data_root",
@@ -192,7 +176,7 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
         "restricted",
         RestrictedPolicy(
             topics=[],
-            notes="Restricted Topics are owner-configured. Migration does not auto-restrict recovered Lina files by topic keywords.",
+            notes="Restricted Topics are owner-configured. Migration does not auto-restrict recovered files by topic keywords.",
         ).model_dump(mode="json"),
         tenant_id=tenant_id,
         updated_by=updated_by,
@@ -206,63 +190,21 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
         updated_by=updated_by,
     )
 
-    branches = BranchesSection(
-        items=[
-            BranchRecord(
-                id="beirut",
-                labels=LocalizedLabels(en="Beirut (Ramlet El Bayda)", ar="بيروت (الرملة البيضاء)", fr="Beyrouth"),
-                address="",
-                hours=BranchHours(),
-                available=True,
-                notes="Address/hours not invented during migration; author from proven production sources.",
-            ),
-            BranchRecord(
-                id="antelias",
-                labels=LocalizedLabels(en="Antelias", ar="أنطلياس", fr="Antélias"),
-                address="",
-                hours=BranchHours(),
-                available=True,
-                notes="Address/hours not invented during migration; author from proven production sources.",
-            ),
-        ]
+    _put_section(
+        "branches",
+        BranchesSection(items=[]).model_dump(mode="json"),
+        tenant_id=tenant_id,
+        updated_by=updated_by,
     )
-    _put_section("branches", branches.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
-    seeded["branches"] = ["beirut", "antelias"]
+    seeded["branches"] = []
 
-    contacts: list[HandoffContact] = []
-    matrix: list[HandoffMatrixRow] = []
-    mapping = {
-        "SOCIAL_WHATSAPP_BEIRUT_FEMALE": ("beirut", "female"),
-        "SOCIAL_WHATSAPP_BEIRUT_MALE": ("beirut", "male"),
-        "SOCIAL_WHATSAPP_ANTELIAS_FEMALE": ("antelias", "female"),
-        "SOCIAL_WHATSAPP_ANTELIAS_MALE": ("antelias", "male"),
-    }
-    for env_name, phone in DEFAULT_SOCIAL_WHATSAPP_CONTACTS.items():
-        branch_id, gender_raw = mapping[env_name]
-        gender: GenderAudience = "female" if gender_raw == "female" else "male"
-        contact_id = env_name.lower()
-        contacts.append(
-            HandoffContact(
-                id=contact_id,
-                phone_e164=phone if phone.startswith("+") else f"+{phone}",
-                label=env_name,
-                gender=gender,
-                branch_id=branch_id,
-            )
-        )
-        matrix.append(
-            HandoffMatrixRow(
-                id=f"row_{contact_id}",
-                contact_id=contact_id,
-                enabled=True,
-                gender=gender,
-                branch_id=branch_id,
-                topic_id=None,
-            )
-        )
-    handoff = HandoffPolicy(contacts=contacts, matrix=matrix)
-    _put_section("handoff", handoff.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
-    seeded["handoff_contacts"] = [c.id for c in contacts]
+    _put_section(
+        "handoff",
+        HandoffPolicy().model_dump(mode="json"),
+        tenant_id=tenant_id,
+        updated_by=updated_by,
+    )
+    seeded["handoff_contacts"] = []
 
     seeded["style"] = _import_style_files(staging_root=staging_root, tenant_id=tenant_id, updated_by=updated_by)
     seeded["ai_basics"] = _import_ai_basics_from_prompt(
@@ -272,26 +214,7 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
         staging_root=staging_root, tenant_id=tenant_id, updated_by=updated_by
     )
 
-    care_env = get_draft("care", tenant_id=tenant_id, create_default=True)
-    care = CareSection.model_validate(care_env.payload)
-    care_items = [item for item in care.items if item.id != "care_shave_before_laser"]
-    care_items.append(
-        ArticleRecord(
-            id="care_shave_before_laser",
-            title="Shave before laser hair removal",
-            body=SHAVE_CARE_BODY,
-            language="en",
-            tags=["preparation", "laser_hair_removal", "owner_confirmed"],
-            status="active",
-        )
-    )
-    _put_section(
-        "care",
-        CareSection(items=care_items, notes=care.notes).model_dump(mode="json"),
-        tenant_id=tenant_id,
-        updated_by=updated_by,
-    )
-    seeded["care_shave"] = True
+    seeded["care_shave"] = False
 
     from services.ai_setup.pricing.migration import migrate_staged_price_files_to_catalog
 
@@ -314,21 +237,10 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
     prices_env = get_draft("prices", tenant_id=tenant_id, create_default=True)
     prices = merge_service_records_into_prices(
         PricesSection.model_validate(prices_env.payload),
-        {
-            "laser_hair_removal": ServiceRecord(
-                id="laser_hair_removal",
-                labels=LocalizedLabels(
-                    en="Laser hair removal",
-                    ar="إزالة الشعر بالليزر",
-                    fr="Épilation laser",
-                ),
-                available=True,
-                aliases=["laser", "ليزر", "épilation", "hair removal"],
-            )
-        },
+        {},
     )
     _put_section("prices", prices.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
-    seeded["services"] = ["laser_hair_removal"]
+    seeded["services"] = []
 
     return seeded
 

@@ -81,7 +81,6 @@ REMOTE_WORKFLOWS = frozenset(
         "cm-linas-content-audit.yml",
         "cm-production-cutover.yml",
         "customer-brain-env-apply-ha.yml",
-        "customer-brain-live-lab-ha.yml",
         "customer-brain-linas-index-ha.yml",
         "bootstrap-meta-ha.yml",
         "deploy.yml",

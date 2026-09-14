@@ -1,5 +1,6 @@
-# Two-node HA: stage VOYAGE_API_KEY + Customer Brain lab flags, then commit via restart.
+# Two-node HA: stage VOYAGE_API_KEY + Customer Brain support flags, then commit via restart.
 # Never prints secret values. Brain is permanent (no enable flag).
+# LINAS_CUSTOMER_AI_LAB is written and asserted false (never true).
 name: Customer Brain Env Apply HA
 
 on:
@@ -134,7 +135,7 @@ jobs:
                 raise SystemExit("[brain-env-stage] voyage length_too_short")
             updates = {
                 "VOYAGE_API_KEY": voyage,
-                "LINAS_CUSTOMER_AI_LAB": "true",
+                "LINAS_CUSTOMER_AI_LAB": "false",
                 "EMERGENCY_LEGACY_REPLY_ENABLED": "false",
                 "MESSAGE_BILLING_CUTOVER": "false",
                 "MESSAGE_BILLING_ENABLED": "false",
@@ -223,7 +224,7 @@ jobs:
                 raise SystemExit("[brain-env-stage] voyage length_too_short")
             updates = {
                 "VOYAGE_API_KEY": voyage,
-                "LINAS_CUSTOMER_AI_LAB": "true",
+                "LINAS_CUSTOMER_AI_LAB": "false",
                 "EMERGENCY_LEGACY_REPLY_ENABLED": "false",
                 "MESSAGE_BILLING_CUTOVER": "false",
                 "MESSAGE_BILLING_ENABLED": "false",
@@ -291,7 +292,7 @@ jobs:
             if exp_fp != got_fp:
                 raise SystemExit("[brain-env-ha] process voyage fingerprint mismatch")
             for flag, want in (
-                ("LINAS_CUSTOMER_AI_LAB", "true"),
+                ("LINAS_CUSTOMER_AI_LAB", "false"),
                 ("EMERGENCY_LEGACY_REPLY_ENABLED", "false"),
                 ("MESSAGE_BILLING_CUTOVER", "false"),
             ):
@@ -332,7 +333,7 @@ jobs:
             if exp_fp != got_fp:
                 raise SystemExit("[brain-env-ha] peer process voyage fingerprint mismatch")
             for flag, want in (
-                ("LINAS_CUSTOMER_AI_LAB", "true"),
+                ("LINAS_CUSTOMER_AI_LAB", "false"),
                 ("EMERGENCY_LEGACY_REPLY_ENABLED", "false"),
                 ("MESSAGE_BILLING_CUTOVER", "false"),
             ):
