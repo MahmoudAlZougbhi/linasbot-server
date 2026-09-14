@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import httpx
 
-from services.smart_messaging_catalog import normalize_template_id
+from services.live_chat.template_ids import normalize_template_id
 from services.whatsapp_cloud_template_service_payload import WhatsAppCloudTemplatePayloadMixin
 
 # Internal IDs that map to a different key under config/templates (and thus a different Meta `name`).

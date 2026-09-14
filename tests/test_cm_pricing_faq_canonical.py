@@ -66,18 +66,6 @@ async def test_livechat_like_writes_canonical_cm_faq_only(monkeypatch: pytest.Mo
         _fake_ar,
     )
 
-    remote_calls: list[str] = []
-
-    async def _forbidden_remote(**_kwargs):  # type: ignore[no-untyped-def]
-        remote_calls.append("remote")
-        raise AssertionError("remote QA must not be called")
-
-    monkeypatch.setattr(
-        "services.qa_database_service.qa_db_service.create_qa_pair",
-        _forbidden_remote,
-        raising=False,
-    )
-
     result = await create_faq_pair_from_livechat(
         question="shu se3r el laser?",
         answer="ashreen dolar",
@@ -90,7 +78,6 @@ async def test_livechat_like_writes_canonical_cm_faq_only(monkeypatch: pytest.Mo
     assert result["count_created"] == 4
     groups = list_cm_faq(tenant_id="tenant_livechat_faq")
     assert any(g["qa_group_id"] == result["qa_group_id"] for g in groups)
-    assert remote_calls == []
 
 
 def test_duplicate_detection_exact_normalized() -> None:

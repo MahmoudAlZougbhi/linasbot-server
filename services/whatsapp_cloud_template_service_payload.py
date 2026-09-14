@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any
 
-from services.smart_messaging_catalog import normalize_template_id
+from services.live_chat.template_ids import normalize_template_id
 from utils.phone_utils import normalize_phone
 
 

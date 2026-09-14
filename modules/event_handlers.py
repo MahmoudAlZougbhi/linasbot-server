@@ -6,9 +6,6 @@ Handles initialization of WhatsApp provider and scheduling services.
 from __future__ import annotations
 
 # Preserve extracted job modules as part of the event-handlers package surface.
-from modules import event_handlers_monitor_jobs as event_handlers_monitor_jobs  # noqa: F401
-from modules import event_handlers_populate_jobs as event_handlers_populate_jobs  # noqa: F401
-from modules import event_handlers_scheduler as event_handlers_scheduler  # noqa: F401
 from modules.core import app
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
@@ -50,10 +47,10 @@ async def startup_event() -> None:
 
         traceback.print_exc()
 
-    # Initialize Smart Messaging Scheduler
+    # KEEP runtime schedulers (Smart Follow-Up + channel reconcile)
     try:
         print("=" * 60)
-        print("📅 INITIALIZING SMART MESSAGING SCHEDULER")
+        print("INITIALIZING RUNTIME SCHEDULER")
         print("=" * 60)
 
         from modules.event_handlers_scheduler import start_smart_messaging_scheduler
@@ -66,8 +63,7 @@ async def startup_event() -> None:
         print("✅ Instagram Login lifecycle scheduler started")
 
     except Exception as e:
-        print(f"❌ ERROR initializing Smart Messaging Scheduler: {e}")
-        print("⚠️ Smart messaging will not work")
+        print(f"❌ ERROR initializing runtime scheduler: {e}")
         import traceback
 
         traceback.print_exc()
@@ -91,7 +87,7 @@ async def shutdown_event() -> None:
         print(f"❌ Error shutting down Instagram Login lifecycle: {e}")
     try:
         if hasattr(app.state, "scheduler"):
-            print("🛑 Shutting down Smart Messaging Scheduler...")
+            print("🛑 Shutting down runtime scheduler...")
             app.state.scheduler.shutdown()
             print("✅ Scheduler shut down successfully")
     except Exception as e:

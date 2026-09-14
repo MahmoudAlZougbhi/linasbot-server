@@ -49,8 +49,6 @@ _ROUTE_MODULES = (
     "modules.live_chat_api",
     "modules.media_api",
     "modules.local_qa_api",
-    "modules.content_files_api",
-    "modules.instructions_api",
     "modules.flow_api",
     "modules.webhook_handlers",
     "modules.meta_connections_api",

@@ -5,7 +5,9 @@ Date: 2026-09-14.
 
 `POST-CLEANUP-STATUS.md` is **not in the repo**. Baseline used instead: `docs/KEEP_SURFACE.md` (WAVE 0–G) plus a fresh import-graph on live Python (`services/`, `modules/`, `handlers/`, `utils/`, `storage/`, `db/`, `main.py`, `config.py`). Do not treat WAVE 0–G as already complete.
 
-**Wave X1 (this branch):** founder `linas` env/analytics/Meta/API exemptions removed; Laser `INITIAL_RESTRICTED` and clinic WhatsApp matrix emptied; prod lab scripts write `false`; KEEP Live Chat/Requests/WhatsApp on the shared tenant API allowlist. Museum files (`smart_messaging_*`, training, appointment scheduler) still present — X2.
+**Wave X1:** founder `linas` env/analytics/Meta/API exemptions removed; Laser `INITIAL_RESTRICTED` and clinic WhatsApp matrix emptied; prod lab scripts write `false`; KEEP Live Chat/Requests/WhatsApp on the shared tenant API allowlist.
+
+**Wave X2 (this branch, stacked on X1):** museum `smart_messaging_*`, appointment scheduler, daily dispatcher, training handlers, clinic holidays, `qa_database_service`, and 410 content-files/instructions HTTP are **deleted**. `normalize_template_id` moved to `services/live_chat/template_ids.py`. SFU worker stays on the runtime scheduler. `customer_reply_v2` remains a live facade (MOVE in X3). Laser `prod_migration` seed still writes `laser_hair_removal` (not deleted — redistribution tests depend on it).
 
 ## Method
 
@@ -226,11 +228,11 @@ Training trio + `photo_analysis_service`; appointment_scheduler*; campaign servi
 
 ## A–D scoreboard
 
-| Area | Result |
-| --- | --- |
-| A Founder/Laser | **FAIL** |
-| B Museum | **FAIL** |
-| C Sprawl | **FAIL** (263 flat; channels not under `integrations/`) |
-| D Freeze GONE | **PASS** (source) |
+| Area | Result at `036d3857` | After X1 | After X2 |
+| --- | --- | --- | --- |
+| A Founder/Laser | **FAIL** | live special-cases **PASS**; Laser classifier/prod_migration seed remain | same (seed leftover) |
+| B Museum | **FAIL** | still present | **PASS** for proven-dead list; `customer_reply_v2` MOVE leftover |
+| C Sprawl | **FAIL** (263 flat; channels not under `integrations/`) | unchanged | flat count down by museum files; channels still X3 |
+| D Freeze GONE | **PASS** (source) | PASS | PASS |
 
-Phase 2 order: **X1 → X2 → X3 → X4**. If SFU or WA template tests break, MOVE catalog helpers; do not delete `smart_messaging_catalog` first.
+Phase 2 order: **X1 → X2 → X3 → X4**. X3: fold channels under `integrations/`, `customer_reply_v2` → `brain/`, comments_inbox fold. If SFU or WA template tests break, MOVE catalog helpers; do not delete `smart_messaging_catalog` first (already moved in X2).
