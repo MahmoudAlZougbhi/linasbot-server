@@ -45,9 +45,10 @@ WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN")  # The access token for Met
 WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")  # Your specific WhatsApp phone number ID
 WHATSAPP_BUSINESS_ACCOUNT_ID = os.getenv("WHATSAPP_BUSINESS_ACCOUNT_ID")  # Your WhatsApp Business Account ID
 
-# Internal API for Lina’s Laser Clinic
-LINASLASER_API_BASE_URL = os.getenv("LINASLASER_API_BASE_URL")
-LINASLASER_API_TOKEN = os.getenv("LINASLASER_API_TOKEN")
+# Deprecated clinic aliases of EXTERNAL_API_*. Prefer EXTERNAL_API_*.
+# LINASLASER_BOC_BOOKING_ENABLED stays the fail-closed BOC env name (always off).
+LINASLASER_API_BASE_URL = os.getenv("EXTERNAL_API_BASE_URL") or os.getenv("LINASLASER_API_BASE_URL")
+LINASLASER_API_TOKEN = os.getenv("EXTERNAL_API_TOKEN") or os.getenv("LINASLASER_API_TOKEN")
 
 # --- Firebase Firestore Configuration (NEW) ---
 # Path to your Firebase service account key JSON file.
@@ -73,6 +74,7 @@ AI_PRIMARY_ORCHESTRATION = os.getenv("AI_PRIMARY_ORCHESTRATION", "true").strip()
 # After operator releases chat to bot: block auto re-escalation (handover_degree / error→handover) for this many minutes.
 POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES = int(os.getenv("POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES", "45"))
 
+# Booking flags (deprecated LINASLASER_* env names; values stay fail-closed defaults).
 # Booking: when True, chat_response may infer body_part_ids from conversation + fuzzy CRM row match (legacy path).
 BOOKING_LEGACY_INFERENCE = os.getenv("LINASLASER_BOOKING_LEGACY_INFERENCE", "false").strip().lower() in (
     "1",

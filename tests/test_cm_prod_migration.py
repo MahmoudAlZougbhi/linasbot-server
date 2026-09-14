@@ -96,7 +96,7 @@ def test_stage_and_migrate_keeps_topic_content_active(tmp_path: Path) -> None:
         tenant_id="cm_prod_mig_test",
         updated_by="test",
     )
-    assert report["seeded"]["services"] == ["laser_hair_removal"]
+    assert report["seeded"]["services"] == []
     assert report["scrub"]["disabled"] is True
     assert report["scrub"]["faq_removed"] == []
     assert report["seeded"]["dynamic_messages"]["imported"] >= 1

@@ -7,7 +7,9 @@ Date: 2026-09-14.
 
 **Wave X1:** founder `linas` env/analytics/Meta/API exemptions removed; Laser `INITIAL_RESTRICTED` and clinic WhatsApp matrix emptied; prod lab scripts write `false`; KEEP Live Chat/Requests/WhatsApp on the shared tenant API allowlist.
 
-**Wave X2:** museum `smart_messaging_*`, appointment scheduler, daily dispatcher, training handlers, clinic holidays, `qa_database_service`, and 410 content-files/instructions HTTP are **deleted**. `normalize_template_id` moved to `services/live_chat/template_ids.py`. SFU worker stays on the runtime scheduler. Laser `prod_migration` seed still writes `laser_hair_removal`.
+**Wave X2:** museum `smart_messaging_*`, appointment scheduler, daily dispatcher, training handlers, clinic holidays, `qa_database_service`, and 410 content-files/instructions HTTP are **deleted**. `normalize_template_id` moved to `services/live_chat/template_ids.py`. SFU worker stays on the runtime scheduler.
+
+**Wave X5:** prod workflows write/assert `LINAS_CUSTOMER_AI_LAB=false`; live-lab workflow retired; `prod_migration` no longer seeds `laser_hair_removal`; classifier `_SERVICE_SPECS` are generic SaaS fixtures; `LINASLASER_API_*` is a deprecated `EXTERNAL_API_*` alias.
 
 **Wave X3:** `customer_reply_v2` → `services/brain/reply/`; comments inbox → `services/live_chat/comments_inbox/`; WA/TikTok/web_chat/omnichannel → `services/integrations/`. Meta `services/meta_*.py` still flat.
 
