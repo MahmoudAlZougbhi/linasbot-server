@@ -170,6 +170,10 @@ def test_env_cannot_silently_override_customer_or_owner(monkeypatch: pytest.Monk
     monkeypatch.setenv("LINAS_OWNER_MODEL", "gpt-5.6-luna")
     with pytest.raises(RuntimeError, match="LINAS_MODEL_POLICY_INVALID"):
         validate_model_policy_config()
+    monkeypatch.setenv("LINAS_CUSTOMER_RETRIEVAL_MODEL", "gpt-5.6-luna")
+    with pytest.raises(RuntimeError, match="LINAS_MODEL_POLICY_INVALID"):
+        validate_model_policy_config()
+    monkeypatch.delenv("LINAS_CUSTOMER_RETRIEVAL_MODEL", raising=False)
     monkeypatch.setenv("LINAS_OWNER_MODEL", MODEL_OWNER_SOL)
     monkeypatch.setenv("LINAS_CUSTOMER_MODEL", MODEL_CUSTOMER_TERRA)
     snap = validate_model_policy_config()

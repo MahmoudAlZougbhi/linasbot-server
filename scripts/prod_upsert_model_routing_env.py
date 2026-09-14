@@ -23,6 +23,7 @@ UPDATES = {
     "LINAS_CM_ANSWER_MODEL": "gpt-5.6-terra",
     "LINAS_MODEL_CUSTOMER_DM": "gpt-5.6-terra",
     "LINAS_CUSTOMER_HV_MODEL": "gpt-5.6-terra",
+    "LINAS_CUSTOMER_RETRIEVAL_MODEL": "voyage-4-large",
 }
 
 
