@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
 from services.integrations.web_chat.flags import web_chat_containment_active
+from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
 
 
 def maybe_schedule_web_followup_after_ai_reply(

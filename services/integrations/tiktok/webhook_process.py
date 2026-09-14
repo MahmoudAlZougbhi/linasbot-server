@@ -33,7 +33,12 @@ async def process_tiktok_webhook_payload(*, raw_body: bytes, payload: dict[str, 
         if isinstance(parsed, dict):
             content = parsed
 
-    from services.integrations.omnichannel.enqueue import AMBIGUOUS_ENQUEUE, enqueue_job, queue_is_durable, should_defer_to_worker
+    from services.integrations.omnichannel.enqueue import (
+        AMBIGUOUS_ENQUEUE,
+        enqueue_job,
+        queue_is_durable,
+        should_defer_to_worker,
+    )
 
     job_payload = {
         "event_id": event_id,

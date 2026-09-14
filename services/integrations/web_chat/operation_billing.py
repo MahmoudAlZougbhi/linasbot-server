@@ -10,7 +10,12 @@ from services.integrations.web_chat.operation import (
     operation_session,
     web_chat_operation_repository,
 )
-from services.integrations.web_chat.operation_fsm import OperationFsmError, OperationRecord, OperationState, is_terminal_state
+from services.integrations.web_chat.operation_fsm import (
+    OperationFsmError,
+    OperationRecord,
+    OperationState,
+    is_terminal_state,
+)
 
 
 def reconcile_billing_pending(

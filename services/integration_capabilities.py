@@ -225,7 +225,10 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
     try:
         from db.session import whatsapp_db_configured, whatsapp_session
         from services.integrations.whatsapp.config import get_whatsapp_cloud_flags
-        from services.integrations.whatsapp.entitlement import assert_whatsapp_connection_allowed, connection_status_payload
+        from services.integrations.whatsapp.entitlement import (
+            assert_whatsapp_connection_allowed,
+            connection_status_payload,
+        )
         from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
         flags = get_whatsapp_cloud_flags()

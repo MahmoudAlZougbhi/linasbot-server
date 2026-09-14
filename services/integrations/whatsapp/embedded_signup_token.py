@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from services.meta_app_registry import APP_A_EXPECTED_ID
 from services.integrations.whatsapp.config import WHATSAPP_REQUIRED_SCOPES
 from services.integrations.whatsapp.embedded_signup_session import SignupAssetError
+from services.meta_app_registry import APP_A_EXPECTED_ID
 
 
 def _as_dict(value: Any) -> dict[str, Any]:

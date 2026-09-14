@@ -14,9 +14,9 @@ from services.integrations.omnichannel.headers import parse_meta_usage, parse_re
 from services.integrations.omnichannel.limiter import DistributedProviderLimiter
 from services.integrations.omnichannel.meta_errors import MetaProviderError
 from services.integrations.omnichannel.queues import logical_for_channel, outbound_logical, physical_queue_for
+from services.integrations.tiktok.comment_sync import enqueue_tiktok_comment_ai
 from services.rate_limit_service import RateLimitService
 from services.scale.provider_limiter import ProviderLimiter
-from services.integrations.tiktok.comment_sync import enqueue_tiktok_comment_ai
 
 
 def test_dms_and_comments_use_different_physical_queues():

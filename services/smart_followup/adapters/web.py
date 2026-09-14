@@ -8,8 +8,6 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob, WhatsAppSmartFollowUpSettings
-from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
-from services.smart_followup.types import FollowUpConversationView, FollowUpSendResult
 from services.integrations.web_chat.flags import web_chat_containment_active
 from services.integrations.web_chat.followup_delivery import (
     FollowUpSessionBoundaryError,
@@ -19,6 +17,8 @@ from services.integrations.web_chat.operation_fsm import OperationFsmError
 from services.integrations.web_chat.processor import compose_web_user_id
 from services.integrations.web_chat.session_binding import resolve_durable_visitor_binding
 from services.integrations.web_chat.store import web_chat_store
+from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
+from services.smart_followup.types import FollowUpConversationView, FollowUpSendResult
 
 
 class WebFollowUpAdapter:

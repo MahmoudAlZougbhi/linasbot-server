@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.live_chat.channel import is_web_live_chat_user
 from services.integrations.web_chat.constants import USER_ID_PREFIX
+from services.live_chat.channel import is_web_live_chat_user
 
 
 def parse_web_visitor_session_id(user_id: str, conversation_id: str | None = None) -> str:

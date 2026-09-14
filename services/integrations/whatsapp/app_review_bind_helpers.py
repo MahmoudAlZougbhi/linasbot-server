@@ -7,13 +7,13 @@ import os
 import uuid
 from typing import Any
 
-from services.meta_app_registry import APP_A_EXPECTED_ID, APP_A_KEY, get_meta_app_configs
 from services.integrations.whatsapp.config import WHATSAPP_REQUIRED_SCOPES
 from services.integrations.whatsapp.graph_client import (
     WhatsAppGraphError,
     debug_token,
     fetch_waba_phone_numbers,
 )
+from services.meta_app_registry import APP_A_EXPECTED_ID, APP_A_KEY, get_meta_app_configs
 
 # Constants mirrored from app_review_bind for helper use.
 APP_REVIEW_SOURCE = "meta_app_review_test"

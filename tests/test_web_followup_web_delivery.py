@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob
-from services.smart_followup.adapters.web import WebFollowUpAdapter
-from services.smart_followup.types import FollowUpConversationView, FollowUpSendResult
 from services.integrations.web_chat.config_models import WebChatWidgetConfig
 from services.integrations.web_chat.followup_delivery import deliver_web_followup_message
 from services.integrations.web_chat.processor import compose_web_user_id
+from services.smart_followup.adapters.web import WebFollowUpAdapter
+from services.smart_followup.types import FollowUpConversationView, FollowUpSendResult
 from tests.web_chat_acceptance_billing import seed_acceptance_credit_ledger
 from tests.web_chat_acceptance_support import patch_acceptance_eligibility, seed_acceptance_widget, seed_widget_config
 

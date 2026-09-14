@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.queues.models import QueueJob
 from services.integrations.tiktok.comment_ai import process_tiktok_comment_ai
+from services.queues.models import QueueJob
 
 
 async def handle_tiktok_comment_sync(job: QueueJob) -> dict[str, Any]:

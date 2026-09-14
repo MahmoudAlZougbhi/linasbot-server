@@ -9,13 +9,13 @@ from typing import Any
 from db.session import whatsapp_session
 from services.ai_setup.actions import ACTION_TIKTOK_DM, action_enabled, load_actions_section
 from services.brain.reply.orchestrator import run_customer_reply_v2_dm
-from services.social_user_id import compose_social_user_id
 from services.integrations.tiktok.errors import TikTokCapabilityGatedError
 from services.integrations.tiktok.http_client import tiktok_request
 from services.integrations.tiktok.oauth import ensure_fresh_token
 from services.integrations.tiktok.repository import TikTokRepository
 from services.integrations.tiktok.repository_content import TikTokContentRepository
 from services.integrations.tiktok.scopes import messaging_read_ready, messaging_send_ready
+from services.social_user_id import compose_social_user_id
 
 
 async def send_business_message(
@@ -114,10 +114,10 @@ async def _maybe_ai_dm(snapshot: dict[str, Any]) -> None:
 
     if generative_ai_blocked(tenant_id):
         return
-    from services.job_queue import job_queue
     from services.integrations.omnichannel.accept import accept_and_enqueue
     from services.integrations.omnichannel.contract import NormalizedInbound
     from services.integrations.omnichannel.store import payload_hash
+    from services.job_queue import job_queue
     from services.queues.config import redis_required
 
     if redis_required() and getattr(job_queue, "production_ready", False):

@@ -248,8 +248,8 @@ async def execute_guarded_meta_send(
         result = await send()
     except BaseException as exc:
         if decision.kind == "send":
-            from services.meta_session_invalidated import mark_if_session_invalidated
             from services.integrations.omnichannel.meta_errors import finish_status_for_send_exception
+            from services.meta_session_invalidated import mark_if_session_invalidated
 
             mark_if_session_invalidated(
                 exc,

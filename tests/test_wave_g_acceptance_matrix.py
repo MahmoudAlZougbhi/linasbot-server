@@ -106,8 +106,8 @@ def test_wave_g_live_mounts_have_no_forbidden_imports() -> None:
 
 
 def test_wave_g_no_live_test_lab_or_monty_or_linas_fallback() -> None:
-    from services.product_features import is_disabled_api_path
     from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
+    from services.product_features import is_disabled_api_path
 
     assert is_disabled_api_path("/api/test") is True
     assert is_disabled_api_path("/api/test-message") is True

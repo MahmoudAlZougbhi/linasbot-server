@@ -20,6 +20,9 @@ os.environ["META_CREDENTIAL_ENCRYPTION_KEY"] = "x" * 32
 from db.models import Base  # noqa: E402
 from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
+from services.integrations.web_chat.flags import PUBLIC_AVAILABILITY_ENV, flags_snapshot  # noqa: E402
+from services.integrations.web_chat.store import WebChatStore  # noqa: E402
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
 from services.requests.constants import (  # noqa: E402
     SOURCE_CHANNEL_FACEBOOK_MESSENGER,
     SOURCE_CHANNEL_WEB_CHAT,
@@ -29,9 +32,6 @@ from services.smart_followup.adapters.web import WebFollowUpAdapter  # noqa: E40
 from services.smart_followup.hooks import schedule_after_ai_reply  # noqa: E402
 from services.smart_followup.settings_service import update_settings  # noqa: E402
 from services.smart_followup.types import FollowUpConversationView  # noqa: E402
-from services.integrations.web_chat.flags import PUBLIC_AVAILABILITY_ENV, flags_snapshot  # noqa: E402
-from services.integrations.web_chat.store import WebChatStore  # noqa: E402
-from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
 
 
 @pytest.fixture()

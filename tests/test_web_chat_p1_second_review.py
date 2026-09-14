@@ -10,14 +10,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob
-from services.smart_followup.constants import CLAIM_STALE_SECONDS
-from services.smart_followup.types import FollowUpConversationView, FollowUpSendResult
-from services.smart_followup.worker_job import process_one_followup_job
 from services.integrations.web_chat.delivery_outbox import ack_pending_messages
 from services.integrations.web_chat.followup_delivery import deliver_web_followup_message, reconcile_followup_credit
 from services.integrations.web_chat.operation_fsm import OperationState, stable_operation_key
 from services.integrations.web_chat.processor import WebChatError, process_web_chat_message
 from services.integrations.web_chat.store_pg import WebChatPgStore
+from services.smart_followup.constants import CLAIM_STALE_SECONDS
+from services.smart_followup.types import FollowUpConversationView, FollowUpSendResult
+from services.smart_followup.worker_job import process_one_followup_job
 from tests.test_web_chat_acceptance_fsm import _widget_and_visitor
 from tests.test_web_followup_web_delivery import _reserve_followup_credit
 from tests.web_chat_acceptance_billing import assert_acceptance_ledger_equation, fetch_pg_ledger_snapshot

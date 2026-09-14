@@ -44,8 +44,8 @@ def _generate_holds_until_send() -> bool:
     from handlers.text_handlers_respond_phase2 import text_handlers_respond_phase2
     from services.ai_reply_turn_runtime import _capture_ready_turn, on_ai_generated, settle_after_outbound
     from services.brain.billing import settle_after_send
-    from services.smart_followup.worker_job import process_one_followup_job
     from services.integrations.whatsapp.ai_bridge import _release_reservation
+    from services.smart_followup.worker_job import process_one_followup_job
 
     generated = getsource(on_ai_generated)
     phase2 = getsource(text_handlers_respond_phase2)
