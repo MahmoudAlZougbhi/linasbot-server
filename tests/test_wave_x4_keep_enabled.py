@@ -49,7 +49,7 @@ def test_wave_x4_marketing_portal_and_domain_packages() -> None:
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
     assert 'path="/" element={<Landing />}' in app
     assert "OwnerOverview" in app
-    assert "path=\"/features\"" in app or "path='/features'" in app
+    assert 'path="/features"' in app or "path='/features'" in app
     assert "/owner/lab" not in app
     for needle in (
         "modules.cm_api",
