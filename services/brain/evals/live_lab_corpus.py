@@ -14,14 +14,14 @@ def lab_published_sections() -> dict[str, Any]:
         "knowledge": {
             "items": [
                 {
-                    "id": "aftercare_laser",
-                    "title": "Laser aftercare",
+                    "id": "aftercare_consult",
+                    "title": "Consultation aftercare",
                     "body": (
-                        "Do not wash the treated area for 24 hours after laser. "
+                        "Do not wash the treated area for 24 hours after a consultation. "
                         "Avoid sun exposure for 48 hours. Use SPF 50 when outdoors."
                     ),
                     "status": "active",
-                    "ai_search_description": "laser aftercare wash sun spf",
+                    "ai_search_description": "consultation aftercare wash sun spf",
                 },
                 {
                     "id": "refund_policy",
@@ -138,10 +138,10 @@ def lab_published_sections() -> dict[str, Any]:
         "prices": {
             "catalog": [
                 {
-                    "id": "laser",
-                    "labels": {"en": "Laser hair removal", "ar": "إزالة الشعر"},
-                    "aliases": ["lazer", "laser", "شيل شعر", "hair removal"],
-                    "description": "laser hair removal full session",
+                    "id": "consultation",
+                    "labels": {"en": "Consultation", "ar": "إزالة الشعر"},
+                    "aliases": ["consult", "consultation", "استشارة"],
+                    "description": "consultation full session",
                     "active": True,
                 },
                 {
@@ -154,8 +154,8 @@ def lab_published_sections() -> dict[str, Any]:
             ],
             "price_entries": [
                 {
-                    "id": "laser_antelias",
-                    "catalog_item_id": "laser",
+                    "id": "consult_antelias",
+                    "catalog_item_id": "consultation",
                     "branch_id": "antelias",
                     "amount": 60,
                     "currency": "USD",
@@ -163,8 +163,8 @@ def lab_published_sections() -> dict[str, Any]:
                     "active": True,
                 },
                 {
-                    "id": "laser_verdun",
-                    "catalog_item_id": "laser",
+                    "id": "consult_verdun",
+                    "catalog_item_id": "consultation",
                     "branch_id": "verdun",
                     "amount": 75,
                     "currency": "USD",
@@ -187,8 +187,8 @@ def lab_published_sections() -> dict[str, Any]:
 def retrieval_eval_cases() -> list[dict[str, Any]]:
     """Query → expected source_id(s) for live contextual/hybrid recall."""
     return [
-        {"id": "service_en", "q": "laser hair removal", "relevant": {"laser"}, "families": {"services"}},
-        {"id": "price_ar", "q": "قدي سعر إزالة الشعر", "relevant": {"laser"}, "families": {"services"}},
+        {"id": "service_en", "q": "consultation", "relevant": {"consultation"}, "families": {"services"}},
+        {"id": "price_ar", "q": "قدي سعر الاستشارة", "relevant": {"consultation"}, "families": {"services"}},
         {"id": "branch", "q": "Antelias phone", "relevant": {"antelias"}, "families": {"branches"}},
         {
             "id": "hours",
@@ -204,13 +204,23 @@ def retrieval_eval_cases() -> list[dict[str, Any]]:
         },
         {"id": "hours_arabizi", "q": "shu aw2at el dawem", "relevant": {"antelias_hours"}, "families": {"hours"}},
         {"id": "faq", "q": "Is parking available?", "relevant": {"faq_parking"}, "families": {"faq"}},
-        {"id": "knowledge", "q": "after laser can I wash?", "relevant": {"aftercare_laser"}, "families": {"knowledge"}},
+        {
+            "id": "knowledge",
+            "q": "after consultation can I wash?",
+            "relevant": {"aftercare_consult"},
+            "families": {"knowledge"},
+        },
         {
             "id": "product_fr",
             "q": "politique de remboursement",
             "relevant": {"refund_policy"},
             "families": {"knowledge"},
         },
-        {"id": "mixed", "q": "بدي laser aftercare", "relevant": {"aftercare_laser"}, "families": {"knowledge"}},
+        {
+            "id": "mixed",
+            "q": "بدي consultation aftercare",
+            "relevant": {"aftercare_consult"},
+            "families": {"knowledge"},
+        },
         {"id": "botox_care", "q": "botox aftercare lie down", "relevant": {"botox_care"}, "families": {"care"}},
     ]

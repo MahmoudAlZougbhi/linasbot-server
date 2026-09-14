@@ -53,7 +53,6 @@ class SettingsService:
                 "responseTimeout": 5,
                 "enableVoice": True,
                 "enableImages": True,
-                "enableTraining": True,
             },
             "notifications": {"notificationsEnabled": True, "emailAlerts": True, "humanTakeoverNotifyMobiles": ""},
             "security": {"sessionTimeout": 24},

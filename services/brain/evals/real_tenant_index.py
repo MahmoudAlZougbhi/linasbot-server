@@ -1,4 +1,4 @@
-"""Production runner: index+activate the real Linas tenant (never linas-lab)."""
+"""Index+activate a real published tenant (never eval-lab)."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from services.brain.search.index_backfill import enqueue_stale_or_missing
 from services.brain.search.index_lifecycle import owner_status
 from services.brain.search.store import query_similar, tenant_pointer_ready
 
-REPORT_PATH = durable_report_path("linas_real_index_latest.json")
-LAB_TENANTS = frozenset({"linas-lab", "linas-lab-b"})
+REPORT_PATH = durable_report_path("real_tenant_index_latest.json")
+LAB_TENANTS = frozenset({"linas-lab", "linas-lab-b", "eval-lab-a", "eval-lab-b"})
 
 
 def _gate(*parts: Any, **extra: Any) -> dict[str, Any]:
@@ -37,7 +37,7 @@ def resolve_real_tenant_id() -> str:
     if not tid:
         raise ValueError("tenant_id required")
     if tid in LAB_TENANTS:
-        raise RuntimeError("refusing_lab_tenant_as_real_linas")
+        raise RuntimeError("refusing_lab_tenant_as_real")
     if not tid:
         raise RuntimeError("missing_real_tenant_id")
     return tid
@@ -46,7 +46,7 @@ def resolve_real_tenant_id() -> str:
 def isolation_probe(tenant_id: str) -> dict[str, Any]:
     from services.brain.providers.spaces import ENTITY_DOCUMENT
 
-    other = "linas-lab-isolation"
+    other = "eval-lab-isolation"
     session: Any | None = None
     live = False
     other_ready = False

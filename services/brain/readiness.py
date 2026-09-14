@@ -78,26 +78,7 @@ def brain_readiness_report(*, tenant_id: str) -> dict[str, Any]:
     except Exception:
         artifact = None
 
-    # Live lab artifact overrides offline NOT_RUN / code-only PASS where executed.
-    try:
-        import json
-
-        from services.brain.evals.artifacts import durable_report_path
-
-        live_path = durable_report_path("live_lab_latest.json")
-        live = json.loads(live_path.read_text(encoding="utf-8")) if live_path.exists() else None
-        live_gates = (live or {}).get("gates") if isinstance(live, dict) else None
-        if isinstance(live_gates, dict):
-            for name, row in live_gates.items():
-                if name not in gates:
-                    gates[name] = _gate(str(row.get("status") or "NOT_RUN"), str(row.get("detail") or "live_lab"))
-                    continue
-                status = str(row.get("status") or "")
-                # Never promote BLOCKED/NOT_RUN/FAIL into PASS via offline; live is authoritative.
-                if status in {"PASS", "FAIL", "BLOCKED", "NOT_RUN"}:
-                    gates[name] = _gate(status, str(row.get("detail") or "live_lab"))
-    except Exception:
-        live = None
+    # Live lab artifacts are eval-only. Production readiness does not overlay them.
 
     checks: dict[str, bool] = {
         "openai_configured": openai_configured(),

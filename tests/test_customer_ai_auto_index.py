@@ -180,7 +180,7 @@ async def test_tenant_isolation_and_product_change_enqueues(tenant_fs: Path, moc
 
 
 def test_gate_accepts_retrieval_payload_with_status_key() -> None:
-    from services.brain.evals.linas_real_index import _gate
+    from services.brain.evals.real_tenant_index import _gate
 
     retrieval = {"status": "PASS", "detail": "recall_ok", "recall": 1.0, "tenant_id": "linas"}
     row = _gate(str(retrieval.get("status") or "FAIL"), str(retrieval.get("detail") or ""), **retrieval)
@@ -191,7 +191,7 @@ def test_gate_accepts_retrieval_payload_with_status_key() -> None:
 
 
 def test_isolation_probe_passes_before_first_active_pointer(tenant_fs: Path) -> None:
-    from services.brain.evals.linas_real_index import isolation_probe
+    from services.brain.evals.real_tenant_index import isolation_probe
 
     row = isolation_probe("brand-new-shop")
     assert row["status"] == "PASS"
@@ -200,8 +200,8 @@ def test_isolation_probe_passes_before_first_active_pointer(tenant_fs: Path) -> 
     assert row["pointer_ready"] is False
 
 
-def test_real_linas_resolver_refuses_lab(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.brain.evals.linas_real_index import resolve_real_tenant_id
+def test_real_tenant_resolver_refuses_lab(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.brain.evals.real_tenant_index import resolve_real_tenant_id
 
     monkeypatch.setenv("LINAS_REAL_TENANT_ID", "linas-lab")
     with pytest.raises(RuntimeError, match="refusing_lab"):

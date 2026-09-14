@@ -252,6 +252,16 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - `LINASLASER_API_*` in `config.py` is a deprecated alias of `EXTERNAL_API_*`. `LINASLASER_BOC_BOOKING_ENABLED` stays the fail-closed BOC env name.
 - Tests: `tests/test_wave_x5_lab_ops.py`.
 
+## WAVE X6 — data / preview crumbs
+
+- WhatsApp template IMAGE header URL lives in `services/integrations/whatsapp/template_header_image.py`. `message_preview_service*` and `data/message_preview_queue.json` are deleted (queue was unused after X2).
+- Git `data/phone_to_room_mapping.json` is empty. Missing file resolves empty (fail-closed). No founder phones in the repo.
+- `data/app_settings.json` has no smartMessaging schedules, booking body-part map, or `enableTraining`.
+- `gender_recognition_service` deleted (barrel re-export only; no live callers).
+- Brain evals: `real_tenant_index` / `golden_pack` / `shop_a_qa_sections`. Live-lab tenant ids are `eval-lab-a` / `eval-lab-b`. Production readiness does not overlay `live_lab_latest.json`.
+- **Kept on purpose:** `services/billing/token_wallet_*` and `services/billing/membership/message_catalog.py` — Owner Catalog, Copilot wallet reads, and `/api/wallet` still import them.
+- Tests: `tests/test_wave_x6_data_crumbs.py`.
+
 
 
 

@@ -52,7 +52,7 @@ class LiveChatPhoneMixin:
     def _build_phone_variants(self, value: Any) -> set:
         """
         Build comparable phone variants to support mixed country-code/local searches.
-        Example: +96176466674 -> {96176466674, 76466674, 6466674}
+        Example: +96171111111 -> {96171111111, 71111111, 1111111}
         """
         digits = self._normalize_phone_digits(value)
         if not digits:
@@ -160,7 +160,7 @@ class LiveChatPhoneMixin:
         room_to_phone: dict[str, Any] = {}
 
         mapping_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             "data",
             "phone_to_room_mapping.json",
         )

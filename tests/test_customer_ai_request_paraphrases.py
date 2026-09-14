@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from services.ai_setup.request_rules import format_request_rules_for_ai
-from services.brain.evals.qa_tenants import linas_like_qa_sections, shop_b_qa_sections
+from services.brain.evals.qa_tenants import shop_a_qa_sections, shop_b_qa_sections
 from services.brain.planner.heuristic import overlay_plan, plan_message
 
 
@@ -71,7 +71,7 @@ def test_overlay_keeps_hours_when_llm_only_sees_knowledge() -> None:
 
 
 def test_linas_qa_rules_block_is_not_shop_b() -> None:
-    linas = format_request_rules_for_ai(linas_like_qa_sections()["requests_appointments"])
+    linas = format_request_rules_for_ai(shop_a_qa_sections()["requests_appointments"])
     other = format_request_rules_for_ai(shop_b_qa_sections()["requests_appointments"])
     assert "APPOINTMENT" in linas
     assert "HUMAN" in linas

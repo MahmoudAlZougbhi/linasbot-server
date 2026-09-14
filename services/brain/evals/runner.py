@@ -12,7 +12,7 @@ from services.brain.evals.fixtures import (
     product_retailer_corpus,
     service_appointment_corpus,
 )
-from services.brain.evals.golden_pack_linas import run_golden_pack_linas
+from services.brain.evals.golden_pack import run_golden_pack
 from services.brain.planner.heuristic import plan_message
 from services.brain.retrieve.cards import cards_from_sections
 from services.brain.retrieve.expand import expand_ranked
@@ -77,7 +77,7 @@ def run_fixture_corpus() -> dict[str, Any]:
                 }
             )
     contract = run_contract_cases()
-    golden = run_golden_pack_linas()
+    golden = run_golden_pack()
     from services.brain.evals.latency_bench import run_latency_benchmark
     from services.brain.evals.suite_runner import run_offline_suite
 
@@ -97,7 +97,7 @@ def run_fixture_corpus() -> dict[str, Any]:
         "case_count": total_cases,
         "cases": cases,
         "contract_cases": contract.get("cases") or [],
-        "golden_pack_linas": golden,
+        "golden_pack": golden,
         "offline_suite": {
             "ok": offline.get("ok"),
             "gates": offline.get("gates"),

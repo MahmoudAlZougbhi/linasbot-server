@@ -12,7 +12,6 @@ from collections import deque
 from typing import Any
 
 import config
-from services.gender_recognition_service import get_gender_from_gpt
 from services.sentiment_escalation_service import sentiment_service
 from services.team.user_persistence_service import user_persistence
 from utils.utils import (
@@ -48,7 +47,6 @@ __all__ = [
     "get_conversation_last_ai_response_at",
     "get_last_bot_message_from_conversation",
     "get_canonical_user_id_and_phone",
-    "get_gender_from_gpt",
     "sentiment_service",
     "user_persistence",
     "_delayed_processing_tasks",

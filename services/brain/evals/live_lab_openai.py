@@ -13,11 +13,11 @@ GateFn = Callable[..., dict[str, Any]]
 
 _CASES: tuple[dict[str, str], ...] = (
     {"id": "faq_en", "message": "What is your refund policy?", "lang": "en"},
-    {"id": "price_ar", "message": "شو سعر إزالة الشعر بالليزر أنطلياس؟", "lang": "ar"},
+    {"id": "price_ar", "message": "شو سعر الاستشارة أنطلياس؟", "lang": "ar"},
     {"id": "hours_en", "message": "What are Antelias branch hours on Monday?", "lang": "en"},
     {"id": "branch_fr", "message": "Quelle est l'adresse de la branche Verdun?", "lang": "fr"},
-    {"id": "arabizi", "message": "badek price laser antelias?", "lang": "arabizi"},
-    {"id": "unsupported_book", "message": "Book me tomorrow at 3pm for laser", "lang": "en"},
+    {"id": "arabizi", "message": "badek price consultation antelias?", "lang": "arabizi"},
+    {"id": "unsupported_book", "message": "Book me tomorrow at 3pm for consultation", "lang": "en"},
     {"id": "handoff", "message": "I want to talk to a human agent please", "lang": "en"},
 )
 

@@ -10,8 +10,8 @@ def service_appointment_corpus() -> dict[str, Any]:
         "prices": {
             "catalog": [
                 {
-                    "id": "laser",
-                    "labels": {"en": "Laser hair removal", "ar": "إزالة الشعر"},
+                    "id": "consultation",
+                    "labels": {"en": "Consultation", "ar": "استشارة"},
                     "aliases": ["lazer"],
                     "active": True,
                 }
@@ -19,7 +19,7 @@ def service_appointment_corpus() -> dict[str, Any]:
             "price_entries": [
                 {
                     "id": "e1",
-                    "catalog_item_id": "laser",
+                    "catalog_item_id": "consultation",
                     "amount": 80,
                     "currency": "USD",
                     "unit": "session",

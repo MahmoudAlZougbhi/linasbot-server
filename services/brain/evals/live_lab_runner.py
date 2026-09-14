@@ -29,8 +29,8 @@ from services.brain.retrieve.hybrid import search_hybrid
 from services.brain.search.store import query_similar
 from services.brain.tools.registry import list_tools
 
-LAB_TENANT = "linas-lab"
-OTHER_TENANT = "linas-lab-b"
+LAB_TENANT = "eval-lab-a"
+OTHER_TENANT = "eval-lab-b"
 REPORT_PATH = durable_report_path("live_lab_latest.json")
 
 

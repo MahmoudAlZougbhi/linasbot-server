@@ -1,4 +1,4 @@
-"""Golden pack for Linas / hospitality-style Customer Brain offline checks."""
+"""Golden pack for hospitality-style Customer Brain offline checks."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def _case(case_id: str, *, ok: bool, detail: dict[str, Any] | None = None) -> di
     return {"id": case_id, "ok": ok, "detail": detail or {}}
 
 
-def run_golden_pack_linas() -> dict[str, Any]:
+def run_golden_pack() -> dict[str, Any]:
     """Critical offline cases: FAQ, price, hours, ambiguity, fail-closed."""
     cases: list[dict[str, Any]] = []
     sections = {**hospitality_corpus(), **service_appointment_corpus()}
@@ -34,7 +34,7 @@ def run_golden_pack_linas() -> dict[str, Any]:
     )
 
     # Price query should retrieve service cards when present.
-    price_hits = search_cards(cards, "laser hair removal price", families={"services"}, limit=3)
+    price_hits = search_cards(cards, "consultation price", families={"services"}, limit=3)
     price_ok = bool(price_hits) and price_hits[0].card.source_family == "services"
     cases.append(
         _case("price_lexical_hit", ok=price_ok, detail={"top": price_hits[0].card.item_id if price_hits else ""})
@@ -59,7 +59,7 @@ def run_golden_pack_linas() -> dict[str, Any]:
     )
 
     # Ambiguity: multi-task plan should not collapse to a single family.
-    multi = plan_message("What is the laser price and what are the branch hours?")
+    multi = plan_message("What is the consultation price and what are the branch hours?")
     families = {fam for task in multi.tasks for fam in task.source_families}
     cases.append(
         _case(
@@ -73,14 +73,14 @@ def run_golden_pack_linas() -> dict[str, Any]:
     bundle = EvidenceBundle(
         items=[
             EvidenceItem(
-                evidence_id="services:laser",
+                evidence_id="services:consultation",
                 source_family="services",
-                source_id="laser",
-                text="Laser hair removal\n99.0 USD / session",
+                source_id="consultation",
+                text="Consultation\n99.0 USD / session",
             )
         ]
     )
-    invented = "Laser is 250 USD and we are open 03:00"
+    invented = "Consultation is 250 USD and we are open 03:00"
     cases.append(
         _case(
             "fail_closed_price",
@@ -91,7 +91,7 @@ def run_golden_pack_linas() -> dict[str, Any]:
     cases.append(
         _case(
             "grounded_price_ok",
-            ok=evidence_supports_text("Laser hair removal is 99.0 USD", bundle),
+            ok=evidence_supports_text("Consultation is 99.0 USD", bundle),
         )
     )
 
@@ -102,7 +102,7 @@ def run_golden_pack_linas() -> dict[str, Any]:
     ok = all(bool(item.get("ok")) for item in cases)
     return {
         "ok": ok,
-        "pack": "golden_pack_linas",
+        "pack": "golden_pack",
         "live_spend": False,
         "case_count": len(cases),
         "cases": cases,
