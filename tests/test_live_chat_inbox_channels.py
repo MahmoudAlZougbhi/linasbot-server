@@ -6,14 +6,14 @@ from unittest.mock import patch
 
 import pytest
 
-from services.live_chat_channel import (
+from services.live_chat.channel import (
     coerce_live_chat_user_id,
     live_chat_channel_matches,
     normalize_live_chat_channel,
     resolve_live_chat_channel,
 )
-from services.live_chat_contracts import utc_now
-from services.live_chat_service import live_chat_service
+from services.live_chat.contracts import utc_now
+from services.live_chat.service import live_chat_service
 
 
 def test_resolve_channel_from_user_id_prefixes() -> None:
@@ -113,14 +113,14 @@ def test_unified_chats_api_declares_channel_query() -> None:
     src = Path("modules/live_chat_api.py").read_text(encoding="utf-8")
     assert 'channel: str = Query(default="all"' in src
     assert "channel=inbox_channel" in src
-    unified = Path("services/live_chat_service_unified.py").read_text(encoding="utf-8")
+    unified = Path("services/live_chat/service_unified.py").read_text(encoding="utf-8")
     assert "wanted_channel" in unified
     assert '"channel": row_channel' in unified
     assert "tenant_id" in unified
-    assert "_store_unified_inbox" in Path("services/live_chat_service_inbox_cache.py").read_text(encoding="utf-8")
+    assert "_store_unified_inbox" in Path("services/live_chat/service_inbox_cache.py").read_text(encoding="utf-8")
     assert "tenant_id=workspace" in src
     assert '"error": "request_failed"' in src
-    assert "tiktok" in Path("services/live_chat_channel.py").read_text(encoding="utf-8")
+    assert "tiktok" in Path("services/live_chat/channel.py").read_text(encoding="utf-8")
 
 
 def test_unlabeled_index_rows_stay_visible_on_all() -> None:
@@ -134,7 +134,7 @@ def test_unlabeled_index_rows_stay_visible_on_all() -> None:
 
 
 def test_frontend_format_fills_missing_user_id() -> None:
-    from services.live_chat_channel import coerce_live_chat_user_id
+    from services.live_chat.channel import coerce_live_chat_user_id
 
     assert coerce_live_chat_user_id({}, conversation_id="wa-orphan") == "wa-orphan"
     formatted = live_chat_service._to_frontend_chat_format(
@@ -202,7 +202,7 @@ async def test_unified_chats_uses_disk_cache_when_firestore_missing() -> None:
         page_size=20,
         counters=svc._empty_counters(),
     )
-    with patch("services.live_chat_service_unified.get_firestore_db", return_value=None):
+    with patch("services.live_chat.service_unified.get_firestore_db", return_value=None):
         result = await svc.get_unified_chats(search="", page=1, page_size=20, filter_state="all", tenant_id="t-cache")
     assert result.get("success") is True
     assert len(result.get("chats") or []) == 1

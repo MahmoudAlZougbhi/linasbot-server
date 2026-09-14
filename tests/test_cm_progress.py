@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from services.cm.progress import list_section_fill_status, progress_summary
-from services.cm.schemas import default_section_payload
-from services.cm.storage import put_draft
+from services.ai_setup.progress import list_section_fill_status, progress_summary
+from services.ai_setup.schemas import default_section_payload
+from services.ai_setup.storage import put_draft
 
 
 @pytest.fixture()
@@ -50,7 +50,7 @@ def test_progress_marks_filled_complete(tenant_root: Path) -> None:
     rows = list_section_fill_status("progress-tenant", create_missing=False)
     by_sec = {r["section"]: r["status"] for r in rows}
     assert by_sec["ai_basics"] == "complete"
-    assert by_sec["services"] == "incomplete"
+    assert by_sec["prices"] == "incomplete"
     summary = progress_summary("progress-tenant", create_missing=False)
     assert summary["complete"] >= 1
     assert "ai_basics" in summary["complete_sections"]

@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import config
 from services.ai_reply_turn_runtime import settle_after_outbound, settle_reserved_credits
-from services.customer_ai.history_ids import conversation_id_from_user_data, message_id_for_brain
+from services.brain.history_ids import conversation_id_from_user_data, message_id_for_brain
 from services.customer_reply_v2.inbound_media import inbound_payload_from_user_data as _inbound_from_user_data
 
 _PHASE_HALT = "_PHASE_HALT"
@@ -79,14 +79,13 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
     # Published CM is the SoT when this tenant has an active published version.
     # New tenants without publish get an honest unpublished message (never Marwa/Linas).
     # No classic GPT fallback. Unpublished tenants get the unpublished message.
-    from services.cm.constants import (
-        DEFAULT_TENANT_ID,
+    from services.ai_setup.constants import (
         UNPUBLISHED_AI_MESSAGE,
         tenant_allows_legacy_bridge,
         tenant_uses_cm_runtime,
     )
 
-    cm_tenant_id = user_data.get("tenant_id") or DEFAULT_TENANT_ID
+    cm_tenant_id = str(user_data.get("tenant_id") or "").strip()
     if tenant_uses_cm_runtime(cm_tenant_id):
         cm_reply, cm_metadata = await _handle_published_cm_runtime(
             tenant_id=cm_tenant_id,

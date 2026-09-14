@@ -271,7 +271,7 @@ def test_service_rejects_unknown_media(products_env: Path) -> None:
 
 def test_product_media_upload_consumes_daily_edit(products_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from modules.core import app
-    from services.membership.daily_edits import reset_daily_edits_for_tests, set_platform_baseline, status
+    from services.billing.membership.daily_edits import reset_daily_edits_for_tests, set_platform_baseline, status
 
     monkeypatch.setenv("LINAS_MESSAGE_STORE", "memory")
     reset_daily_edits_for_tests()

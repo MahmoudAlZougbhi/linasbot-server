@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.ai_setup.schemas import AiLimitsSection
 from services.ai_usage_limits import AiLimitSettings, ai_usage_limits_service, normalize_ai_limit_settings
-from services.cm.schemas import AiLimitsSection
 
 
 def section_to_enforcement_updates(section: AiLimitsSection) -> dict[str, Any]:
@@ -46,7 +46,7 @@ def sync_enforcement_from_payload(tenant_id: str, payload: dict[str, object] | N
 
 def _published_ai_limits_section(tenant_id: str) -> AiLimitsSection | None:
     try:
-        from services.cm.version_store import PublishedVersionError, load_published_content
+        from services.ai_setup.version_store import PublishedVersionError, load_published_content
 
         _pointer, sections = load_published_content(tenant_id)
         raw = sections.get("ai_limits")

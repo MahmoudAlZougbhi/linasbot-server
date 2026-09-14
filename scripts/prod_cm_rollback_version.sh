@@ -52,9 +52,9 @@ def _load_env() -> None:
 
 _load_env()
 
-from services.cm.constants import cm_publish_enabled
-from services.cm.publish import RollbackTargetError, rollback_to_version
-from services.cm.version_store import read_published_pointer
+from services.ai_setup.constants import cm_publish_enabled
+from services.ai_setup.publish import RollbackTargetError, rollback_to_version
+from services.ai_setup.version_store import read_published_pointer
 
 tenant_id = os.environ["LINASBOT_TENANT_ID"]
 target = os.environ["CM_ROLLBACK_CONTENT_VERSION_ID"]

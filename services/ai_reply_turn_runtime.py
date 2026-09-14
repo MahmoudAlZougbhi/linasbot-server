@@ -83,7 +83,7 @@ def try_reserve_for_ai(user_data: dict[str, Any]) -> bool:
     if not tenant_id:
         user_data["_ai_credit_blocked"] = True
         return False
-    from services.membership.generative_gate import generative_ai_blocked
+    from services.billing.membership.generative_gate import generative_ai_blocked
 
     if generative_ai_blocked(tenant_id):
         user_data["_ai_credit_blocked"] = True
@@ -142,7 +142,7 @@ def on_ai_generated(ctx: dict[str, Any]) -> None:
 
 
 def _message_settle_ids(user_data: dict[str, Any]) -> tuple[str, ...]:
-    from services.customer_ai.history_ids import conversation_id_from_user_data
+    from services.brain.history_ids import conversation_id_from_user_data
 
     return (
         str(user_data.get("_logical_reply_id") or ""),
@@ -154,8 +154,8 @@ def _message_settle_ids(user_data: dict[str, Any]) -> tuple[str, ...]:
 
 
 def _settle_unsent_message(user_data: dict[str, Any]) -> None:
-    from services.customer_ai.billing import settle_after_send
-    from services.customer_ai.history_ids import message_id_for_brain
+    from services.brain.billing import settle_after_send
+    from services.brain.history_ids import message_id_for_brain
 
     lid = str(user_data.get("_logical_reply_id") or "")
     inbound = message_id_for_brain(user_data)
@@ -189,8 +189,8 @@ def _capture_ready_turn(user_data: dict[str, Any], *, flow_meta: dict[str, Any] 
         model=meta.get("final_response_model") or meta.get("model"),
     )
     user_data["_credit_captured_for_turn"] = True
-    from services.customer_ai.billing import settle_after_send
-    from services.customer_ai.history_ids import message_id_for_brain
+    from services.brain.billing import settle_after_send
+    from services.brain.history_ids import message_id_for_brain
 
     inbound = message_id_for_brain(user_data)
     settle_after_send(

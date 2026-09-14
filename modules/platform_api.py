@@ -12,8 +12,8 @@ from modules.core import app
 from services.dashboard_session_service import session_service
 from services.owner_portal_service import analytics, list_subscribers
 from services.platform_owner_service import platform_owner_service
+from services.team.user_service import user_service
 from services.tenant_custom_roles import tenant_custom_roles
-from services.user_service import user_service
 
 
 class PlatformUserUpdateBody(BaseModel):

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services import owner_ai_tools_cm_content as cm
-from services.owner_ai_tools_cm_upsert import tool_propose_cm_article_upsert as upsert_propose
+from services.owner_copilot import tools_cm_content as cm
+from services.owner_copilot.tools_cm_upsert import tool_propose_cm_article_upsert as upsert_propose
 
 
 def _line_count(rel: str) -> int:
@@ -13,8 +13,8 @@ def _line_count(rel: str) -> int:
 
 
 def test_owner_ai_cm_content_modules_under_500_lines() -> None:
-    assert _line_count("services/owner_ai_tools_cm_content.py") < 500
-    assert _line_count("services/owner_ai_tools_cm_upsert.py") < 500
+    assert _line_count("services/owner_copilot/tools_cm_content.py") < 500
+    assert _line_count("services/owner_copilot/tools_cm_upsert.py") < 500
 
 
 def test_owner_ai_cm_content_preserves_public_api() -> None:

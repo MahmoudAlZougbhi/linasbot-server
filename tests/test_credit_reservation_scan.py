@@ -11,21 +11,26 @@ def test_seed_uses_postgres_even_when_open_list_is_empty(tmp_path, monkeypatch: 
     import json
     import time
 
-    from services.membership.credit_reservation_index import open_counts, reset_credit_reservation_index_for_tests
-    from services.membership.credit_reservation_scan import seed_from_known_ledgers
+    from services.billing.membership.credit_reservation_index import (
+        open_counts,
+        reset_credit_reservation_index_for_tests,
+    )
+    from services.billing.membership.credit_reservation_scan import seed_from_known_ledgers
 
     reset_credit_reservation_index_for_tests()
     ledger = tmp_path / "credit_ledger"
     ledger.mkdir()
-    monkeypatch.setattr("services.membership.credit_reservation_scan._DATA_ROOT", tmp_path)
-    monkeypatch.setattr("services.membership.credit_reservation_scan.known_credit_tenant_ids", lambda: ["pg-sot"])
-    monkeypatch.setattr("services.billing_backend.billing_uses_postgres", lambda: True)
+    monkeypatch.setattr("services.billing.membership.credit_reservation_scan._DATA_ROOT", tmp_path)
+    monkeypatch.setattr(
+        "services.billing.membership.credit_reservation_scan.known_credit_tenant_ids", lambda: ["pg-sot"]
+    )
+    monkeypatch.setattr("services.billing.billing_backend.billing_uses_postgres", lambda: True)
 
     @contextmanager
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.billing_backend.require_billing_pg_session", _session)
+    monkeypatch.setattr("services.billing.billing_backend.require_billing_pg_session", _session)
     monkeypatch.setattr("services.credit_ledger_pg_store.list_open_leftover_reservations", lambda *_a, **_k: [])
     rid = "e" * 32
     (ledger / "pg-sot.jsonl").write_text(
@@ -48,8 +53,8 @@ def test_seed_uses_postgres_even_when_open_list_is_empty(tmp_path, monkeypatch: 
 
 
 def test_open_counts_skip_memory_row_already_closed_in_sql(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.membership import credit_reservation_index as index
-    from services.membership.credit_reservation_index import OpenCreditReservation, open_counts, record_open
+    from services.billing.membership import credit_reservation_index as index
+    from services.billing.membership.credit_reservation_index import OpenCreditReservation, open_counts, record_open
 
     record_open(
         tenant_id="idx-closed",
@@ -74,7 +79,7 @@ def test_open_counts_skip_memory_row_already_closed_in_sql(monkeypatch: pytest.M
 
 
 def test_record_open_reopens_settled_index_row() -> None:
-    from services.membership.credit_reservation_index import (
+    from services.billing.membership.credit_reservation_index import (
         mark_closed,
         open_counts,
         record_open,
@@ -114,8 +119,11 @@ def test_record_open_reopens_settled_index_row() -> None:
 def test_sql_miss_does_not_revive_stale_reserved_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership import credit_reservation_index as index
-    from services.membership.credit_reservation_index import record_open, reset_credit_reservation_index_for_tests
+    from services.billing.membership import credit_reservation_index as index
+    from services.billing.membership.credit_reservation_index import (
+        record_open,
+        reset_credit_reservation_index_for_tests,
+    )
 
     reset_credit_reservation_index_for_tests()
     record_open(
@@ -130,9 +138,9 @@ def test_sql_miss_does_not_revive_stale_reserved_lookup(monkeypatch: pytest.Monk
         yield object()
 
     monkeypatch.setattr(index, "_memory_forced", lambda: False)
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.credit_reservation_index_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.membership.credit_reservation_index_pg.pg_get", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.credit_reservation_index_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.credit_reservation_index_pg.pg_get", lambda *_a, **_k: None)
     assert index._get("rid-miss") is None
     persisted: list[str] = []
     monkeypatch.setattr(index, "_persist", lambda row: persisted.append(row.state))
@@ -151,8 +159,11 @@ def test_hydrate_skips_disk_reserved_when_sql_already_has_id(tmp_path, monkeypat
     import json
     from contextlib import contextmanager
 
-    from services.membership import credit_reservation_index as index
-    from services.membership.credit_reservation_index import open_counts, reset_credit_reservation_index_for_tests
+    from services.billing.membership import credit_reservation_index as index
+    from services.billing.membership.credit_reservation_index import (
+        open_counts,
+        reset_credit_reservation_index_for_tests,
+    )
 
     reset_credit_reservation_index_for_tests()
     folder = tmp_path / "credit_reservation_index"
@@ -177,14 +188,14 @@ def test_hydrate_skips_disk_reserved_when_sql_already_has_id(tmp_path, monkeypat
 
     monkeypatch.setattr(index, "_root", lambda: folder)
     monkeypatch.setattr(index, "_memory_forced", lambda: False)
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.credit_reservation_index_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.membership.credit_reservation_index_pg.pg_list", lambda *_a, **_k: [])
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.credit_reservation_index_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.credit_reservation_index_pg.pg_list", lambda *_a, **_k: [])
     monkeypatch.setattr(
-        "services.membership.credit_reservation_index_pg.pg_reservation_ids",
+        "services.billing.membership.credit_reservation_index_pg.pg_reservation_ids",
         lambda *_a, **_k: {"rid-disk"},
     )
-    monkeypatch.setattr("services.membership.credit_reservation_index_pg.pg_get", lambda *_a, **_k: object())
+    monkeypatch.setattr("services.billing.membership.credit_reservation_index_pg.pg_get", lambda *_a, **_k: object())
     index._ITEMS.clear()
     index._HYDRATED = False
     index._hydrate()
@@ -196,14 +207,19 @@ def test_seed_does_not_reopen_capture_keyed_by_request_id(tmp_path, monkeypatch:
     import json
     import time
 
-    from services.membership.credit_reservation_index import open_counts, reset_credit_reservation_index_for_tests
-    from services.membership.credit_reservation_scan import leftover_closed, seed_from_known_ledgers
+    from services.billing.membership.credit_reservation_index import (
+        open_counts,
+        reset_credit_reservation_index_for_tests,
+    )
+    from services.billing.membership.credit_reservation_scan import leftover_closed, seed_from_known_ledgers
 
     reset_credit_reservation_index_for_tests()
     ledger = tmp_path / "credit_ledger"
     ledger.mkdir()
-    monkeypatch.setattr("services.membership.credit_reservation_scan._DATA_ROOT", tmp_path)
-    monkeypatch.setattr("services.membership.credit_reservation_scan.known_credit_tenant_ids", lambda: ["req-cap"])
+    monkeypatch.setattr("services.billing.membership.credit_reservation_scan._DATA_ROOT", tmp_path)
+    monkeypatch.setattr(
+        "services.billing.membership.credit_reservation_scan.known_credit_tenant_ids", lambda: ["req-cap"]
+    )
     rid = "f" * 32
     now = time.time() - 7200
     (ledger / "req-cap.jsonl").write_text(

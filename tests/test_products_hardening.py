@@ -1,10 +1,9 @@
-"""AI Products final hardening — Luna chunking, image index HA, priority, reply-to."""
+"""AI Products final hardening — image index HA, priority, reply-to."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine, event
@@ -19,7 +18,6 @@ from services.products.image_fingerprint import (  # noqa: E402
     compute_fingerprint,
 )
 from services.products.image_index import find_image_candidates  # noqa: E402
-from services.products.luna_title_resolver import TITLES_PER_CHUNK  # noqa: E402
 from services.products.media import store_product_media  # noqa: E402
 from services.products.outbound_hook import (  # noqa: E402
     maybe_record_product_outbound,
@@ -105,7 +103,7 @@ def test_two_node_image_index_shared_db(products_env: Path) -> None:
     assert hits[0]["product_id"]
 
 
-def test_inactive_excluded_from_luna_candidates(products_env: Path) -> None:
+def test_inactive_excluded_from_customer_candidates(products_env: Path) -> None:
     with whatsapp_session(require=True) as session:
         svc = ProductsService(session)
         svc.create_product(
@@ -126,44 +124,6 @@ def test_inactive_excluded_from_luna_candidates(products_env: Path) -> None:
         names = {row.name for row in rows}
     assert "Hidden Item" not in names
     assert "Visible Item" in names
-
-
-@pytest.mark.asyncio
-async def test_luna_chunks_all_titles(products_env: Path) -> None:
-    from services.membership.daily_edits import reset_daily_edits_for_tests, set_platform_baseline
-
-    reset_daily_edits_for_tests()
-    set_platform_baseline(TITLES_PER_CHUNK + 10)
-    with whatsapp_session(require=True) as session:
-        svc = ProductsService(session)
-        for i in range(TITLES_PER_CHUNK + 5):
-            svc.create_product(
-                tenant_id="tenant-luna-chunk",
-                body=ProductWriteBody(
-                    description="test product", name=f"Catalog Item {i:03d}", sizes=[], colors=[], links=[]
-                ),
-            )
-
-    call_count = 0
-
-    async def fake_chunk(*, tenant_id: str, query_text: str, rows: list, limit: int):
-        nonlocal call_count
-        call_count += 1
-        return ([rows[0].id] if rows else []), 10, 5
-
-    with patch("services.products.luna_title_resolver._luna_match_chunk", side_effect=fake_chunk):
-        with patch("services.token_metering.debit_ai_usage"):
-            from services.products.luna_title_resolver import resolve_product_titles_with_luna
-
-            with whatsapp_session(require=True) as session:
-                with patch("services.token_metering.assert_tenant_can_use_ai"):
-                    results = await resolve_product_titles_with_luna(
-                        session,
-                        tenant_id="tenant-luna-chunk",
-                        query="Catalog Item 099",
-                    )
-    assert call_count >= 2
-    assert len(results) >= 1
 
 
 def test_name_before_image_priority(products_env: Path) -> None:

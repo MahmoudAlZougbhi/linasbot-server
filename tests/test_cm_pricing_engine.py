@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from services.cm.paths import indexes_dir, tenant_cm_root
-from services.cm.pricing.audit import audit_no_linas_pricing_in_code
-from services.cm.pricing.catalog_resolve import disambiguate_matches, resolve_catalog_item_ids
-from services.cm.pricing.engine import compute_quote
-from services.cm.pricing.migration import (
+from services.ai_setup.paths import indexes_dir, tenant_cm_root
+from services.ai_setup.pricing.audit import audit_no_linas_pricing_in_code
+from services.ai_setup.pricing.catalog_resolve import disambiguate_matches, resolve_catalog_item_ids
+from services.ai_setup.pricing.engine import compute_quote
+from services.ai_setup.pricing.migration import (
     build_prices_section_from_rows,
     extract_price_rows_from_json_obj,
     seed_example_discount_rule_subtotal,
 )
-from services.cm.pricing.schemas import (
+from services.ai_setup.pricing.schemas import (
     CatalogCategory,
     CatalogItem,
     DiscountRule,
@@ -26,9 +26,9 @@ from services.cm.pricing.schemas import (
     RuleCondition,
     RuleConditionGroup,
 )
-from services.cm.pricing.validation import validate_pricing_section
-from services.cm.storage import get_draft, put_draft
-from services.cm.version_store import version_dir
+from services.ai_setup.pricing.validation import validate_pricing_section
+from services.ai_setup.storage import get_draft, put_draft
+from services.ai_setup.version_store import version_dir
 from tests.cm_pricing_engine_helpers import _fixture_linas_style, _fixture_retail, _fixture_salon, _labels
 
 
@@ -73,7 +73,7 @@ def test_one_engine_serves_three_business_fixtures() -> None:
         assert quote.currency == expected_currency
         assert quote.tenant_id == tenant_id
         assert quote.final_total == expected_final
-        assert quote.provenance["engine"] == "services.cm.pricing.engine.compute_quote"
+        assert quote.provenance["engine"] == "services.ai_setup.pricing.engine.compute_quote"
 
 
 def test_tenant_isolation_storage_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -303,7 +303,7 @@ def test_migration_extract_does_not_invent() -> None:
 
 
 def test_migration_extract_content_file_and_map() -> None:
-    from services.cm.pricing.migration import extract_price_rows_from_text
+    from services.ai_setup.pricing.migration import extract_price_rows_from_text
 
     content_obj = {
         "id": "pf1",
@@ -352,7 +352,11 @@ def test_audit_no_linas_pricing_engine_in_code() -> None:
 
 
 def test_channel_maps_to_exactly_one_tenant() -> None:
-    from services.cm.tenant_resolve import AmbiguousTenantError, UnknownTenantMappingError, resolve_tenant_from_channel
+    from services.ai_setup.tenant_resolve import (
+        AmbiguousTenantError,
+        UnknownTenantMappingError,
+        resolve_tenant_from_channel,
+    )
 
     mappings = {
         "instagram_account_ids": {"IG_A": "tenant_a"},
@@ -369,8 +373,8 @@ def test_channel_maps_to_exactly_one_tenant() -> None:
             page_id="PAGE_B",
             mappings=mappings,
         )
-    # Empty mappings → single-tenant default (no Lina hardcoding)
-    assert resolve_tenant_from_channel(channel="instagram", account_id="x", mappings=None) == "linas"
+    # Empty mappings → no tenant invented (fail-closed).
+    assert resolve_tenant_from_channel(channel="instagram", account_id="x", mappings=None) == ""
 
 
 def test_fixed_final_total_and_category_condition() -> None:

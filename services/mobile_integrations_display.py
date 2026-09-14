@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from services.channel_capability_state import _binding_connection_healthy, canonical_channel_bindings
+from services.integrations.channel_capability_state import _binding_connection_healthy, canonical_channel_bindings
 from services.meta_app_registry import get_meta_app_registry
 from services.meta_app_registry_session import PASSWORD_CHANGED_RECONNECT
 from services.meta_session_invalidated import latest_password_changed_binding

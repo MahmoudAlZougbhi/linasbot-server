@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, TypeGuard
 
-from services.cm.comment_rules import CommentRuleDecision
+from services.ai_setup.comment_rules import CommentRuleDecision
 from services.meta_app_registry import MetaAssetBinding
 
 if TYPE_CHECKING:
@@ -189,7 +189,7 @@ async def _guarded_public_reply(
         definitive=_provider_rejection_is_definitive,
     )
     if result.get("ok"):
-        from services.live_chat_comment_sse import schedule_comment_inbox_sse
+        from services.live_chat.comment_sse import schedule_comment_inbox_sse
 
         schedule_comment_inbox_sse(
             tenant_id=str(binding.tenant_id or ""),

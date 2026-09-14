@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from services.apple_iap_effects import apply_subscription_effect
-from services.entitlements_service import EntitlementsStore, apply_store_notification
+from services.billing.entitlements_service import EntitlementsStore, apply_store_notification
 from services.subscription_downgrade import (
     is_downgrade,
     schedule_pending_downgrade,
@@ -19,7 +19,7 @@ from services.subscription_downgrade import (
 @pytest.fixture()
 def ent_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> EntitlementsStore:
     store = EntitlementsStore(root=tmp_path / "entitlements")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.apple_iap_effects.entitlements_store", store)
     monkeypatch.setattr("services.subscription_downgrade.entitlements_store", store)
     return store

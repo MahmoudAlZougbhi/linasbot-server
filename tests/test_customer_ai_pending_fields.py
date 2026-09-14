@@ -6,17 +6,17 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from services.customer_ai.actions.pending import attach_confirmation, try_confirm_pending
-from services.customer_ai.actions.request_fields import merge_proposal_fields_with_prior
-from services.customer_ai.contracts.actions import ActionProposal, ActionProposalSet
-from services.customer_ai.contracts.turn import ConversationState, CustomerTurn, HistorySnapshot
-from services.customer_ai.conversation_store import (
+from services.brain.actions.pending import attach_confirmation, try_confirm_pending
+from services.brain.actions.request_fields import merge_proposal_fields_with_prior
+from services.brain.contracts.actions import ActionProposal, ActionProposalSet
+from services.brain.contracts.turn import ConversationState, CustomerTurn, HistorySnapshot
+from services.brain.conversation_store import (
     hydrate_turn_state,
     load_conversation,
     reset_conversation_store_for_tests,
     save_conversation,
 )
-from services.customer_ai.history_ids import bind_dm_ids, web_inbound_message_id
+from services.brain.history_ids import bind_dm_ids, web_inbound_message_id
 
 
 @pytest.fixture(autouse=True)
@@ -91,7 +91,7 @@ async def test_confirm_passes_merged_collected_fields(monkeypatch: pytest.Monkey
         captured["message"] = message
         return [{"action_type": "start_request", "state": "success"}]
 
-    monkeypatch.setattr("services.customer_ai.actions.pending._execute", fake_execute)
+    monkeypatch.setattr("services.brain.actions.pending._execute", fake_execute)
     turn = CustomerTurn(tenant_id="t1", conversation_id="c1", event_ids=["m1"])
     attach_confirmation(
         turn,
@@ -127,23 +127,23 @@ def test_bind_dm_ids_uses_existing_ids_only() -> None:
 
 @pytest.mark.asyncio
 async def test_brain_dm_fails_closed_without_ids(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.runtime import run_customer_ai_dm
+    from services.brain.runtime import run_customer_ai_dm
 
-    monkeypatch.setattr("services.customer_ai.runtime.assert_channel_plan_allowed", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.brain.runtime.assert_channel_plan_allowed", lambda *_a, **_k: None)
     monkeypatch.setattr(
-        "services.customer_ai.runtime.evaluate_gates",
+        "services.brain.runtime.evaluate_gates",
         lambda *_a, **_k: type("G", (), {"allow": True, "reason": "", "detail": {}})(),
     )
-    monkeypatch.setattr("services.customer_ai.runtime.apply_live_control", lambda turn: turn)
+    monkeypatch.setattr("services.brain.runtime.apply_live_control", lambda turn: turn)
     monkeypatch.setattr(
-        "services.customer_ai.runtime.load_history_snapshot",
+        "services.brain.runtime.load_history_snapshot",
         AsyncMock(return_value=HistorySnapshot()),
     )
 
     async def boom(*_a, **_k):
         raise AssertionError("billed path must not run without inbound ids")
 
-    monkeypatch.setattr("services.customer_ai.runtime._run_billed", boom)
+    monkeypatch.setattr("services.brain.runtime._run_billed", boom)
     outcome = await run_customer_ai_dm(tenant_id="t1", message="hi", channel="instagram_dm")
     assert outcome.stop is True
     assert outcome.reason == "failed_closed"
@@ -151,7 +151,7 @@ async def test_brain_dm_fails_closed_without_ids(monkeypatch: pytest.MonkeyPatch
 
 
 def test_load_conversation_prefers_sql_over_stale_memory(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai import conversation_store as store
+    from services.brain import conversation_store as store
 
     monkeypatch.setattr(store, "_persist_enabled", lambda: True)
     monkeypatch.setattr(store, "_persist_pg", lambda *_a, **_k: None)
@@ -180,7 +180,7 @@ def test_load_conversation_prefers_sql_over_stale_memory(monkeypatch: pytest.Mon
 
 
 def test_save_conversation_keeps_sql_history_when_memory_stale(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai import conversation_store as store
+    from services.brain import conversation_store as store
 
     monkeypatch.setattr(store, "_persist_enabled", lambda: True)
     monkeypatch.setattr(store, "_persist_pg", lambda *_a, **_k: None)
@@ -206,7 +206,7 @@ def test_save_conversation_keeps_sql_history_when_memory_stale(monkeypatch: pyte
 
 
 def test_load_conversation_sql_miss_does_not_revive_memory(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai import conversation_store as store
+    from services.brain import conversation_store as store
 
     monkeypatch.setattr(store, "_persist_enabled", lambda: True)
     monkeypatch.setattr(store, "_sql_ready", lambda: True)
@@ -224,7 +224,7 @@ def test_load_conversation_sql_miss_does_not_revive_memory(monkeypatch: pytest.M
 
 
 def test_save_conversation_sql_miss_does_not_copy_stale_history(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai import conversation_store as store
+    from services.brain import conversation_store as store
 
     monkeypatch.setattr(store, "_persist_enabled", lambda: True)
     monkeypatch.setattr(store, "_sql_ready", lambda: True)

@@ -29,11 +29,17 @@ async def generate_comment_reply_text(
     Never falls back to Classic ``generate_answer_with_usage``. Non-CM tenants keep
     the pre-existing local FAQ matcher (not Classic CM generative).
     """
-    from services.cm.constants import tenant_uses_cm_runtime
-    from services.cm.language_policy import detect_and_resolve_customer_languages
+    from services.ai_setup.constants import tenant_uses_cm_runtime
+    from services.ai_setup.language_policy import detect_and_resolve_customer_languages
+    from services.brain.history_ids import comment_conversation_id
 
     ctx = dict(comment_context or {})
-    thread_id = str(ctx.get("conversation_id") or f"comment:{tenant_id}:{channel}:{ctx.get('post_id') or 'thread'}")
+    thread_id = comment_conversation_id(
+        tenant_id=tenant_id,
+        channel=channel,
+        post_id=str(ctx.get("post_id") or ""),
+        author_id=provider_sender_id,
+    )
     _lang = detect_and_resolve_customer_languages(
         tenant_id=tenant_id,
         message=comment_text,
@@ -47,7 +53,7 @@ async def generate_comment_reply_text(
 
         social_channel = "facebook_comment" if channel == "facebook" else "instagram_comment"
         enriched = ctx
-        enriched.setdefault("conversation_id", thread_id)
+        enriched.pop("conversation_id", None)
         if instructions and "asset_instructions" not in enriched:
             enriched["asset_instructions"] = instructions.strip()[:800]
         if policy_text and "comments_policy" not in enriched:
@@ -77,7 +83,7 @@ async def generate_comment_reply_text(
                 type(v2_exc).__name__,
             )
             raise MetaCommentReplyGenerationError("customer reply generation failed") from v2_exc
-        from services.customer_ai.comments.destinations import destinations_from_outcome
+        from services.brain.comments.destinations import destinations_from_outcome
 
         plan = destinations_from_outcome(v2_outcome)
         return plan if plan.has_any else None

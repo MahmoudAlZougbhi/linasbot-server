@@ -9,7 +9,7 @@ WHATSAPP_PUBLIC_GATE_REASON = "whatsapp_advanced_access_pending"
 
 
 def tiktok_dm_live_allowed(connection: Any | None = None) -> tuple[bool, str]:
-    from services.cm.actions import ACTION_TIKTOK_DM, action_enabled, load_actions_section
+    from services.ai_setup.actions import ACTION_TIKTOK_DM, action_enabled, load_actions_section
     from services.tiktok_business.scopes import messaging_send_ready
 
     if connection is None:

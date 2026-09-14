@@ -116,7 +116,6 @@ def crv2_search_product_by_title(
     tenant_id: str,
     title: str,
     limit: int = 5,
-    use_luna_fallback: bool = False,
     conversation_id: str | None = None,
     title_offset: int = 0,
     alternate_queries: list[str] | None = None,
@@ -141,25 +140,8 @@ def crv2_search_product_by_title(
         alternate_queries=queries[1:],
     )
     resolver = "deterministic"
-    extra_luna_agent = False
     titles_fallback: dict[str, Any] | None = None
-    if not matches and use_luna_fallback:
-        from services.products.luna_title_resolver import resolve_product_titles_with_luna
-
-        luna_matches = _run_async(
-            resolve_product_titles_with_luna(
-                session,
-                tenant_id=tenant_id,
-                query=search_title,
-                limit=limit,
-                alternate_queries=queries,
-            )
-        )
-        extra_luna_agent = True
-        if luna_matches:
-            matches = luna_matches
-            resolver = "luna"
-    if not matches and not use_luna_fallback:
+    if not matches:
         titles_fallback = list_active_product_titles(session, tenant_id=tenant_id, offset=title_offset)
         resolver = "titles_fallback"
     slim = [slim_product_match(row) for row in matches]
@@ -169,7 +151,7 @@ def crv2_search_product_by_title(
             tenant_id=tenant_id,
             conversation_id=conversation_id,
             product_id=str(slim[0]["id"]),
-            source="luna_title_match" if resolver == "luna" else "title_search",
+            source="title_search",
         )
     out: dict[str, Any] = {
         "tool": "search_product_by_title",
@@ -180,7 +162,7 @@ def crv2_search_product_by_title(
         "resolver": resolver,
         "match_count": len(slim),
         "matches": slim,
-        "extra_luna_agent": extra_luna_agent,
+        "extra_title_pages": bool(titles_fallback),
         "full_catalog": False,
         "product_match_found": bool(slim),
         "ambiguous": len(slim) > 1,
@@ -290,7 +272,6 @@ def crv2_find_product_by_image(
             tenant_id=tenant_id,
             title=known,
             limit=5,
-            use_luna_fallback=False,
             conversation_id=conversation_id,
         )
         if int(titled.get("match_count") or 0) >= 1:

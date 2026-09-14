@@ -31,7 +31,7 @@ async def run_customer_reply_v2_dm(
     followup_goal: str = "",
 ) -> CustomerReplyOutcome:
     """Stable entry point for all DM channels — Brain only, no enable flag."""
-    from services.customer_ai.runtime import run_customer_ai_dm
+    from services.brain.runtime import run_customer_ai_dm
 
     return await run_customer_ai_dm(
         tenant_id=tenant_id,

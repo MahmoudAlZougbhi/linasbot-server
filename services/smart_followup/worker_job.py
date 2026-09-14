@@ -32,7 +32,7 @@ def _release(tenant_id: str, reservation_id: str | None) -> None:
     if not reservation_id:
         return
     try:
-        from services.customer_ai.leftover_reserve import release_leftover_reply
+        from services.brain.leftover_reserve import release_leftover_reply
 
         release_leftover_reply(tenant_id, reservation_id)
     except Exception:
@@ -42,7 +42,7 @@ def _release(tenant_id: str, reservation_id: str | None) -> None:
 def _capture(tenant_id: str, reservation_id: str | None) -> bool:
     if not reservation_id:
         return False
-    from services.customer_ai.leftover_reserve import capture_leftover_reply
+    from services.brain.leftover_reserve import capture_leftover_reply
 
     ok = capture_leftover_reply(
         tenant_id=tenant_id,
@@ -58,7 +58,7 @@ def _capture(tenant_id: str, reservation_id: str | None) -> bool:
 def _settle_leftover(tenant_id: str, reservation_id: str | None, *, sent: bool) -> None:
     if sent:
         if not _capture(tenant_id, reservation_id):
-            from services.membership.reservation_reconcile import hold_failed_capture_after_send
+            from services.billing.membership.reservation_reconcile import hold_failed_capture_after_send
 
             hold_failed_capture_after_send(
                 tenant_id=tenant_id,
@@ -128,7 +128,7 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
         claim_generation = claim_generation_of(job)
 
         tenant_id = job.tenant_id
-        from services.membership.feature_entitlements import FeatureDenied, assert_followup_allowed
+        from services.billing.membership.feature_entitlements import FeatureDenied, assert_followup_allowed
 
         try:
             assert_followup_allowed(tenant_id)
@@ -160,14 +160,14 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             job = _fence_job(session, job_id=job_id, worker_id=worker_id, claim_generation=claim_generation)
             if job is None:
                 return {"job_id": job_id, "status": "missing"}
-            from services.membership.message_flags import message_billing_enabled
+            from services.billing.membership.message_flags import message_billing_enabled
             from services.smart_followup.billing_ids import leftover_followup_pins
 
             pins = leftover_followup_pins(job)
             if message_billing_enabled():
                 reservation_id = str(job.reservation_id or "").strip() or None
                 if reservation_id:
-                    from services.customer_ai.leftover_reserve import remember_leftover_hold
+                    from services.brain.leftover_reserve import remember_leftover_hold
 
                     remember_leftover_hold(
                         tenant_id=tenant_id,
@@ -177,7 +177,7 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
                         pin_ids=pins,
                     )
             else:
-                from services.customer_ai.leftover_reserve import reserve_leftover_reply
+                from services.brain.leftover_reserve import reserve_leftover_reply
 
                 request_id = canonical_sfu_credit_request_id(job.idempotency_key)
                 reservation_id = reserve_leftover_reply(
@@ -305,8 +305,8 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             sfu.maybe_complete_sequence(job.sequence_id)
             return {"job_id": job_id, "status": "skipped", "reason": reason}
 
-        from services.customer_ai.control import live_handoff_active
-        from services.customer_ai.followup.revalidate import revalidate_followup_send
+        from services.brain.control import live_handoff_active
+        from services.brain.followup.revalidate import revalidate_followup_send
 
         trigger_at = _utc_dt(getattr(sequence, "trigger_ai_sent_at", None) if sequence else None)
         last_inbound = _utc_dt(getattr(conv, "last_inbound_at", None))
@@ -378,8 +378,8 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             settle_followup_from_snapshot(tenant_id, snapshot, accepted=True)
             leftover_captured = _capture(tenant_id, reservation_id)
             if reservation_id and not leftover_captured:
-                from services.membership.hold_policy import hold_billing_policy
-                from services.membership.reservation_reconcile import hold_failed_capture_after_send
+                from services.billing.membership.hold_policy import hold_billing_policy
+                from services.billing.membership.reservation_reconcile import hold_failed_capture_after_send
 
                 hold_failed_capture_after_send(
                     tenant_id=tenant_id,
@@ -440,8 +440,8 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
 
         if send_result.reconciliation or send_result.status == "reconciliation_required":
             if send_result.provider_message_id:
-                from services.membership.hold_policy import hold_billing_policy
-                from services.membership.reservation_reconcile import hold_failed_capture_after_send
+                from services.billing.membership.hold_policy import hold_billing_policy
+                from services.billing.membership.reservation_reconcile import hold_failed_capture_after_send
 
                 hold_failed_capture_after_send(
                     tenant_id=tenant_id,
@@ -452,8 +452,8 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
                     channel="smart_followup",
                 )
             else:
-                from services.membership.hold_policy import hold_billing_policy
-                from services.membership.pending_settlement import upsert
+                from services.billing.membership.hold_policy import hold_billing_policy
+                from services.billing.membership.pending_settlement import upsert
 
                 upsert(
                     tenant_id=tenant_id,

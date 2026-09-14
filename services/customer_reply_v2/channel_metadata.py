@@ -1,4 +1,4 @@
-"""Typed channel metadata for Luna and Tera (DM vs comment, public vs private)."""
+"""Typed channel metadata for Brain (DM vs comment, public vs private)."""
 
 from __future__ import annotations
 

@@ -119,7 +119,7 @@ def _settle_confirmed_send(
         except Exception:
             reservation_id = ""
     if reservation_id:
-        from services.customer_ai.leftover_reserve import capture_leftover_reply
+        from services.brain.leftover_reserve import capture_leftover_reply
 
         capture_leftover_reply(
             tenant_id,
@@ -128,7 +128,7 @@ def _settle_confirmed_send(
             operation_id=request_id,
             provider_message_id=provider_wamid,
         )
-    from services.customer_ai.billing import settle_after_send
+    from services.brain.billing import settle_after_send
 
     settle_after_send(
         tenant_id=tenant_id,
@@ -168,12 +168,12 @@ def release_unsent_ai_outbound(
             rid = ""
     if rid:
         try:
-            from services.customer_ai.leftover_reserve import release_leftover_reply
+            from services.brain.leftover_reserve import release_leftover_reply
 
             release_leftover_reply(tenant_id, rid)
         except Exception:
             emit_wa_event("credit_release_failed", tenant_id=tenant_id)
-    from services.customer_ai.billing import settle_after_send
+    from services.brain.billing import settle_after_send
 
     settle_after_send(
         tenant_id=tenant_id,

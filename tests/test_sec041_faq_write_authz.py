@@ -86,7 +86,7 @@ class TestCmFaqWriteAuthz:
             },
         )
         create = AsyncMock(return_value={"success": True, "qa_group_id": "qa_x", "count_created": 4})
-        monkeypatch.setattr("services.cm.faq_integration.create_faq_pair_from_livechat", create)
+        monkeypatch.setattr("services.ai_setup.faq_integration.create_faq_pair_from_livechat", create)
         response = client.post(
             "/api/cm/faq/from-livechat",
             json={"question": "q", "answer": "a", "language": "en"},
@@ -97,7 +97,7 @@ class TestCmFaqWriteAuthz:
     def test_cm_faq_variant_patch_wrong_tenant_cannot_save(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from services.cm.faq_integration import FaqIntegrationError
+        from services.ai_setup.faq_integration import FaqIntegrationError
 
         _clear_client_auth(client)
         _set_session(client, role="admin", user_id="faq-admin-a", tenant_id="tenant_a")
@@ -136,11 +136,11 @@ class TestCmFaqWriteAuthz:
         monkeypatch.setattr("modules.cm_faq_api.create_faq_pair", _create)
         monkeypatch.setattr("modules.cm_faq_api.find_duplicate_faq_groups", lambda **kwargs: [])
         monkeypatch.setattr(
-            "services.faq_entitlements.assert_can_create_faq",
+            "services.faq.faq_entitlements.assert_can_create_faq",
             lambda tenant_id: {"faq_enabled": True},
         )
         monkeypatch.setattr(
-            "services.faq_entitlements.get_faq_entitlement",
+            "services.faq.faq_entitlements.get_faq_entitlement",
             lambda tenant_id: {"faq_enabled": True, "quota_display": "ok"},
         )
 

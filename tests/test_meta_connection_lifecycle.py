@@ -78,7 +78,7 @@ def registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistry
         return None
 
     monkeypatch.setattr(
-        "services.channel_capability_toggles.enable_channel_defaults_after_connect",
+        "services.integrations.channel_capability_toggles.enable_channel_defaults_after_connect",
         _enable_channel_defaults,
     )
     return MetaAppRegistry(
@@ -137,7 +137,7 @@ async def test_disconnect_archives_credential_and_clears_webhooks(
         return True
 
     monkeypatch.setattr(
-        "services.channel_capability_disconnect.clear_channel_toggles_after_disconnect",
+        "services.integrations.channel_capability_disconnect.clear_channel_toggles_after_disconnect",
         clear_toggles,
     )
 
@@ -162,7 +162,7 @@ async def test_disconnect_then_oauth_connect_uses_new_credential(
         return None
 
     monkeypatch.setattr(
-        "services.channel_capability_toggles.enable_channel_defaults_after_connect",
+        "services.integrations.channel_capability_toggles.enable_channel_defaults_after_connect",
         noop_subscribe,
     )
     binding = _active_facebook_binding(registry, token="old-page-token-private")

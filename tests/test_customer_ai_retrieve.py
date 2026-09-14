@@ -6,16 +6,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.customer_ai.grounding.facts import evidence_supports_text, ungrounded_amounts
-from services.customer_ai.planner.heuristic import plan_message
-from services.customer_ai.providers.voyage_client import VoyageVectors
-from services.customer_ai.retrieve.cards import cards_from_sections
-from services.customer_ai.retrieve.expand import expand_hits
-from services.customer_ai.retrieve.hybrid import search_hybrid
-from services.customer_ai.retrieve.lexical import LexicalHit
-from services.customer_ai.retrieve.orchestrate import retrieve_cards
-from services.customer_ai.retrieve.products import cards_from_products, evidence_from_product
+from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
+from services.brain.grounding.facts import evidence_supports_text, ungrounded_amounts
+from services.brain.planner.heuristic import plan_message
+from services.brain.providers.voyage_client import VoyageVectors
+from services.brain.retrieve.cards import cards_from_sections
+from services.brain.retrieve.expand import expand_hits
+from services.brain.retrieve.hybrid import search_hybrid
+from services.brain.retrieve.lexical import LexicalHit
+from services.brain.retrieve.orchestrate import retrieve_cards
+from services.brain.retrieve.products import cards_from_products, evidence_from_product
 
 
 def test_inactive_products_are_not_searchable() -> None:
@@ -158,7 +158,7 @@ async def test_hybrid_mocked_ranks_hair_over_botox(monkeypatch: pytest.MonkeyPat
             vectors.append([0.95, 0.05] if "hair" in lowered or "شعر" in lowered else [0.05, 0.95])
         return VoyageVectors(space.space_id, vectors)
 
-    monkeypatch.setattr("services.customer_ai.retrieve.hybrid.embed_texts", fake_embed)
+    monkeypatch.setattr("services.brain.retrieve.hybrid.embed_texts", fake_embed)
     sections = {
         "prices": {
             "catalog": [
@@ -173,8 +173,8 @@ async def test_hybrid_mocked_ranks_hair_over_botox(monkeypatch: pytest.MonkeyPat
 
 @pytest.mark.asyncio
 async def test_hybrid_uses_stored_index_without_document_embeds(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.providers.spaces import ENTITY_DOCUMENT
-    from services.customer_ai.search.store import reset_memory_store, write_documents
+    from services.brain.providers.spaces import ENTITY_DOCUMENT
+    from services.brain.search.store import reset_memory_store, write_documents
 
     reset_memory_store()
     calls: list[str] = []
@@ -185,7 +185,7 @@ async def test_hybrid_uses_stored_index_without_document_embeds(monkeypatch: pyt
         assert len(texts) == 1
         return VoyageVectors(space.space_id, [[1.0, 0.0]])
 
-    monkeypatch.setattr("services.customer_ai.retrieve.hybrid.embed_texts", fake_embed)
+    monkeypatch.setattr("services.brain.retrieve.hybrid.embed_texts", fake_embed)
     write_documents(
         None,
         [
@@ -214,9 +214,9 @@ async def test_hybrid_uses_stored_index_without_document_embeds(monkeypatch: pyt
 
 
 def test_product_expand_hydrates_from_repository(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.retrieve.cards import TitleCard
-    from services.customer_ai.retrieve.expand import expand_hits
-    from services.customer_ai.retrieve.lexical import LexicalHit
+    from services.brain.retrieve.cards import TitleCard
+    from services.brain.retrieve.expand import expand_hits
+    from services.brain.retrieve.lexical import LexicalHit
 
     row = SimpleNamespace(
         id="serum-1",
@@ -228,7 +228,7 @@ def test_product_expand_hydrates_from_repository(monkeypatch: pytest.MonkeyPatch
         updated_at="2026-03-01T00:00:00+00:00",
     )
     monkeypatch.setattr(
-        "services.customer_ai.retrieve.products.load_product_evidence",
+        "services.brain.retrieve.products.load_product_evidence",
         lambda tenant_id, product_id: evidence_from_product(row) if product_id == "serum-1" else None,
     )
     card = TitleCard(
@@ -261,7 +261,7 @@ def test_archived_knowledge_is_not_carded() -> None:
 async def test_hybrid_prefers_pg_session_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import contextmanager
 
-    from services.customer_ai.search.store import StoreHit, StoreQueryResult
+    from services.brain.search.store import StoreHit, StoreQueryResult
 
     sessions: list[object] = []
 
@@ -291,9 +291,9 @@ async def test_hybrid_prefers_pg_session_when_available(monkeypatch: pytest.Monk
             ],
         )
 
-    monkeypatch.setattr("services.customer_ai.retrieve.hybrid.embed_texts", fake_embed)
+    monkeypatch.setattr("services.brain.retrieve.hybrid.embed_texts", fake_embed)
     monkeypatch.setattr("db.session.whatsapp_session", _session)
-    monkeypatch.setattr("services.customer_ai.search.store.query_similar", fake_query)
+    monkeypatch.setattr("services.brain.search.store.query_similar", fake_query)
     sections = {"prices": {"catalog": [{"id": "hair", "labels": {"en": "Hair Removal"}, "active": True}]}}
     hits = await search_hybrid(
         cards_from_sections(sections),
@@ -306,9 +306,9 @@ async def test_hybrid_prefers_pg_session_when_available(monkeypatch: pytest.Monk
 
 
 def test_knowledge_expand_prefers_winning_chunk() -> None:
-    from services.customer_ai.retrieve.cards import TitleCard
-    from services.customer_ai.retrieve.expand import expand_hits
-    from services.customer_ai.retrieve.lexical import LexicalHit
+    from services.brain.retrieve.cards import TitleCard
+    from services.brain.retrieve.expand import expand_hits
+    from services.brain.retrieve.lexical import LexicalHit
 
     sections = {
         "knowledge": {
@@ -336,8 +336,8 @@ def test_knowledge_expand_prefers_winning_chunk() -> None:
 
 
 def test_validate_drops_archived_section_winners() -> None:
-    from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
-    from services.customer_ai.retrieve.validate import validate_evidence
+    from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
+    from services.brain.retrieve.validate import validate_evidence
 
     bundle = EvidenceBundle(
         outcome="found",
@@ -356,9 +356,9 @@ def test_validate_drops_archived_section_winners() -> None:
 
 
 def test_followup_compose_includes_goal_instruction() -> None:
-    from services.customer_ai.compose.blocks import compose_evidence_context
-    from services.customer_ai.contracts.evidence import EvidenceBundle
-    from services.customer_ai.contracts.plan import PlannerPlan
+    from services.brain.compose.blocks import compose_evidence_context
+    from services.brain.contracts.evidence import EvidenceBundle
+    from services.brain.contracts.plan import PlannerPlan
 
     text = compose_evidence_context(
         identity=None,
@@ -372,7 +372,7 @@ def test_followup_compose_includes_goal_instruction() -> None:
 
 def test_knowledge_cards_include_attachment_captions(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.cm.article_media.format_attachments_block",
+        "services.ai_setup.article_media.format_attachments_block",
         lambda attachments, tenant_id=None: "CASE EXAMPLES\n- [file] menu.txt: weekend hours",
     )
     sections = {

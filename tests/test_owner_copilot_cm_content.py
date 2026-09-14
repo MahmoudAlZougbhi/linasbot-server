@@ -6,9 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from services.cm.storage import ensure_defaults, get_draft, put_draft
-from services.owner_ai_cm_approval import CmPatchProposalStore, approve_cm_patch
-from services.owner_ai_tools_cm_content import (
+from services.ai_setup.storage import ensure_defaults, get_draft, put_draft
+from services.owner_copilot.cm_approval import CmPatchProposalStore, approve_cm_patch
+from services.owner_copilot.tool_schemas import tool_names
+from services.owner_copilot.tools_cm_content import (
     tool_list_cm_articles,
     tool_list_cm_faq,
     tool_propose_cm_article_upsert,
@@ -16,8 +17,7 @@ from services.owner_ai_tools_cm_content import (
     tool_read_cm_article,
     tool_read_cm_faq,
 )
-from services.owner_ai_tools_read import tool_read_cm
-from services.owner_copilot_v2.tool_schemas import tool_names
+from services.owner_copilot.tools_read import tool_read_cm
 
 
 @pytest.fixture()
@@ -127,7 +127,7 @@ async def test_propose_cm_article_upsert_then_approve(
     del tenant_root
     _seed_knowledge()
     store = CmPatchProposalStore(root=tmp_path / "proposals")
-    monkeypatch.setattr("services.owner_ai_cm_approval.cm_patch_proposal_store", store)
+    monkeypatch.setattr("services.owner_copilot.cm_approval.cm_patch_proposal_store", store)
 
     proposed = await tool_propose_cm_article_upsert(
         tenant_id="t1",
@@ -142,11 +142,11 @@ async def test_propose_cm_article_upsert_then_approve(
     pid = proposed.data["proposal_id"]
 
     monkeypatch.setattr(
-        "services.cm.validation.validate_cm",
+        "services.ai_setup.validation.validate_cm",
         lambda **_: {"errors": [], "warnings": []},
     )
     monkeypatch.setattr(
-        "services.faq_cm_invalidation.invalidate_faq_for_cm_patch",
+        "services.faq.faq_cm_invalidation.invalidate_faq_for_cm_patch",
         lambda **_: {"stale_groups": [], "stale_rows": 0, "reason": "cm_patch:knowledge"},
     )
 
@@ -213,13 +213,13 @@ async def test_faq_list_read_and_upsert(tenant_root: Path, monkeypatch: pytest.M
     assert len(read.data["item"]["variants"]) == 2
 
     store = CmPatchProposalStore(root=tmp_path / "faq_proposals")
-    monkeypatch.setattr("services.owner_ai_cm_approval.cm_patch_proposal_store", store)
+    monkeypatch.setattr("services.owner_copilot.cm_approval.cm_patch_proposal_store", store)
     monkeypatch.setattr(
-        "services.cm.validation.validate_cm",
+        "services.ai_setup.validation.validate_cm",
         lambda **_: {"errors": [], "warnings": []},
     )
     monkeypatch.setattr(
-        "services.faq_cm_invalidation.invalidate_faq_for_cm_patch",
+        "services.faq.faq_cm_invalidation.invalidate_faq_for_cm_patch",
         lambda **_: {"stale_groups": [], "stale_rows": 0, "reason": "cm_patch:faq"},
     )
 
@@ -280,34 +280,31 @@ async def test_read_cm_large_section_returns_full_item_bodies_not_summary(
     """Full-read path must not collapse items to count-only stubs."""
     del tenant_root
     ensure_defaults(tenant_id="t1")
-    env = get_draft("services", tenant_id="t1")
+    env = get_draft("prices", tenant_id="t1")
     items = []
     for i in range(40):
         items.append(
             {
                 "id": f"svc_{i}",
                 "labels": {"en": f"Service {i}", "ar": f"خدمة {i}", "fr": f"Service {i}"},
-                "available": True,
-                "category": "laser",
-                "aliases": [],
-                "audience": "general",
+                "active": True,
                 "notes": ("Detailed service body " * 50) + f" END{i}",
             }
         )
     put_draft(
-        "services",
-        payload={"items": items, "notes": "catalog"},
+        "prices",
+        payload={"catalog": items, "notes": "catalog"},
         if_match=env.etag,
         tenant_id="t1",
         updated_by="tester",
     )
 
-    first = await tool_read_cm(tenant_id="t1", role="admin", section="services")
+    first = await tool_read_cm(tenant_id="t1", role="admin", section="prices")
     assert first.ok is True
     draft = first.data["draft"]
     assert "payload_preview" not in draft
     assert isinstance(draft.get("payload"), dict)
-    page = draft["payload"]["items"]
+    page = draft["payload"]["catalog"]
     assert isinstance(page, list) and len(page) >= 1
     assert "notes" in page[0]
     assert "END0" in str(page[0].get("notes") or "")
@@ -317,13 +314,13 @@ async def test_read_cm_large_section_returns_full_item_bodies_not_summary(
         rest = await tool_read_cm(
             tenant_id="t1",
             role="admin",
-            section="services",
+            section="prices",
             items_offset=int(draft["items_next_offset"]),
         )
         assert rest.ok is True
         rest_draft = rest.data["draft"]
         assert isinstance(rest_draft.get("payload"), dict)
-        rest_items = rest_draft["payload"]["items"]
+        rest_items = rest_draft["payload"]["catalog"]
         assert isinstance(rest_items, list) and len(rest_items) >= 1
         assert "notes" in rest_items[0]
 
@@ -353,7 +350,7 @@ def test_v2_schemas_include_cm_content_tools() -> None:
     ):
         assert required in names
 
-    from services.owner_copilot_v2.tool_schemas import OWNER_V2_TOOL_SCHEMAS
+    from services.owner_copilot.tool_schemas import OWNER_V2_TOOL_SCHEMAS
 
     read_cm = next(t for t in OWNER_V2_TOOL_SCHEMAS if t["function"]["name"] == "read_cm")
     props = read_cm["function"]["parameters"]["properties"]
@@ -362,10 +359,10 @@ def test_v2_schemas_include_cm_content_tools() -> None:
 
 
 def test_system_v2_smart_audit_vs_explicit_full_dump() -> None:
-    from services.owner_copilot_v2.brain import MAX_TOOL_ROUNDS
-    from services.owner_copilot_v2.brain_support import SYSTEM_V2
-    from services.owner_copilot_v2.flags import owner_max_output_tokens
-    from services.owner_copilot_v2.tool_schemas import OWNER_V2_TOOL_SCHEMAS
+    from services.owner_copilot.brain import MAX_TOOL_ROUNDS
+    from services.owner_copilot.brain_support import SYSTEM_V2
+    from services.owner_copilot.flags import owner_max_output_tokens
+    from services.owner_copilot.tool_schemas import OWNER_V2_TOOL_SCHEMAS
 
     assert "must NOT dump all CM" in SYSTEM_V2
     assert "concise overview" in SYSTEM_V2 or "concise" in SYSTEM_V2
@@ -385,23 +382,23 @@ def test_system_v2_smart_audit_vs_explicit_full_dump() -> None:
 
 
 def test_compact_read_never_returns_item_count_only_stub() -> None:
-    from services.owner_ai_tools_cm_content import compact_read_cm_draft
+    from services.owner_copilot.tools_cm_content import compact_read_cm_draft
 
     payload = {
-        "items": [
+        "catalog": [
             {
                 "id": f"x{i}",
                 "labels": {"en": f"N{i}"},
-                "available": True,
+                "active": True,
                 "notes": "BODY" * 500,
             }
             for i in range(30)
         ],
         "notes": None,
     }
-    out = compact_read_cm_draft(payload, section="services")
+    out = compact_read_cm_draft(payload, section="prices")
     assert "payload_preview" not in out
     assert isinstance(out.get("payload"), dict)
-    items = out["payload"]["items"]
+    items = out["payload"]["catalog"]
     assert isinstance(items, list)
     assert all(isinstance(row, dict) and "notes" in row for row in items)

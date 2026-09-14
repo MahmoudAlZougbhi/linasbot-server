@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from services.channel_capability_state import canonical_channel_bindings
+from services.integrations.channel_capability_state import canonical_channel_bindings
 from services.meta_app_registry import APP_A_KEY, get_meta_app_registry, get_meta_graph_api_version
 from services.meta_app_registry_session import PASSWORD_CHANGED_RECONNECT
 from services.meta_graph_routing import graph_api_url

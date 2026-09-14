@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.owner_chat_store import OwnerChatStore
+from services.owner_copilot.chat_store import OwnerChatStore
 
 
 def test_set_archived_roundtrip(tmp_path):

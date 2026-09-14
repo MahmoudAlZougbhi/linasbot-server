@@ -16,16 +16,6 @@ from services.ai_reply_lifecycle import (
 logger = logging.getLogger(__name__)
 
 
-def _ledger_has_reference(wallet_svc: Any, tenant_id: str, reference: str) -> bool:
-    try:
-        for row in wallet_svc.recent_ledger(tenant_id, limit=300):
-            if str(row.get("reference") or "") == reference:
-                return True
-    except Exception:
-        return False
-    return False
-
-
 def reserve_before_ai(turn: AiReplyTurnRecord, *, credits: int = 1) -> str | None:
     """Reserve credits/tokens before model call. Returns reservation_id or None for wallet-only path."""
     if turn.credit_reservation_id:
@@ -35,12 +25,6 @@ def reserve_before_ai(turn: AiReplyTurnRecord, *, credits: int = 1) -> str | Non
         return None
     request_id = new_reservation_request_id(turn.logical_reply_id)
     try:
-        from services.membership.message_flags import message_billing_enabled
-
-        if message_billing_enabled():
-            turn.state = "AI_PROCESSING"
-            put_turn(turn)
-            return None
         from services.credit_ledger_service import credit_ledger_service
 
         credit_ledger_service.ensure_period_grant(tenant_id)
@@ -51,8 +35,8 @@ def reserve_before_ai(turn: AiReplyTurnRecord, *, credits: int = 1) -> str | Non
             operation_type="customer_ai_reply",
             request_id=request_id,
         )
-        from services.customer_ai.leftover_reserve import _pin
-        from services.membership.pending_settlement import record_hold
+        from services.billing.membership.pending_settlement import record_hold
+        from services.brain.leftover_reserve import _pin
 
         aliases: list[str] = []
         for item in (
@@ -81,7 +65,7 @@ def reserve_before_ai(turn: AiReplyTurnRecord, *, credits: int = 1) -> str | Non
                 if item
             ],
         )
-        from services.membership.credit_reservation_index import record_open
+        from services.billing.membership.credit_reservation_index import record_open
 
         record_open(
             tenant_id=tenant_id,
@@ -110,7 +94,7 @@ def capture_after_reply_persisted(
     cost_usd: float | None = None,
     model: str | None = None,
 ) -> dict[str, Any]:
-    """Capture exactly once when reply is persisted. Uses ledger reservation or token wallet debit."""
+    """Capture exactly once when reply is persisted. Uses the credit ledger reservation."""
     turn = get_turn(logical_reply_id)
     if turn is None:
         return {"skipped": True, "reason": "turn_missing"}
@@ -119,18 +103,6 @@ def capture_after_reply_persisted(
 
     capture_ref = f"capture:{logical_reply_id}"
     result: dict[str, Any] = {"logical_reply_id": logical_reply_id}
-
-    from services.membership.message_flags import message_billing_enabled
-
-    if message_billing_enabled() and not turn.credit_reservation_id:
-        turn.credit_captured = True
-        turn.credit_capture_ref = capture_ref
-        turn.state = "CREDIT_CAPTURED_ONCE"
-        put_turn(turn)
-        mark_state(logical_reply_id, "CREDIT_CAPTURED_ONCE", credit_captured=True, credit_capture_ref=capture_ref)
-        result["skipped"] = True
-        result["reason"] = "message_ledger"
-        return result
 
     if turn.credit_reservation_id:
         from services.credit_ledger_service import credit_ledger_service
@@ -144,7 +116,7 @@ def capture_after_reply_persisted(
             )
             result.update(cap)
             try:
-                from services.customer_ai.leftover_reserve import complete_leftover_capture
+                from services.brain.leftover_reserve import complete_leftover_capture
 
                 complete_leftover_capture(
                     turn.tenant_id,
@@ -155,7 +127,7 @@ def capture_after_reply_persisted(
             except Exception:
                 pass
         except Exception:
-            from services.membership.reservation_reconcile import hold_failed_capture_after_send
+            from services.billing.membership.reservation_reconcile import hold_failed_capture_after_send
 
             hold_failed_capture_after_send(
                 tenant_id=turn.tenant_id,
@@ -164,28 +136,14 @@ def capture_after_reply_persisted(
                 billing_policy="legacy_credits",
                 channel=model_provider or model or "customer_ai_reply",
             )
-            from services.membership.credit_reservation_index import mark_closed
+            from services.billing.membership.credit_reservation_index import mark_closed
 
             mark_closed(turn.credit_reservation_id, state="pending_settlement")
             result["pending_settlement"] = True
             return result
-    elif turn.tenant_id and (prompt_tokens or completion_tokens or turn.prompt_tokens):
-        from services.token_metering import debit_ai_usage
-        from services.token_wallet_service import token_wallet_service
-
-        if not _ledger_has_reference(token_wallet_service, turn.tenant_id, capture_ref):
-            debit_ai_usage(
-                tenant_id=turn.tenant_id,
-                prompt_tokens=prompt_tokens or turn.prompt_tokens,
-                completion_tokens=completion_tokens or turn.completion_tokens,
-                cost_usd=cost_usd or turn.cost_usd,
-                model=model or turn.model,
-                reference=capture_ref,
-            )
-        result["op"] = "token_wallet_debit"
     else:
         result["skipped"] = True
-        result["reason"] = "no_metering_path"
+        result["reason"] = "no_credit_reservation"
 
     turn.credit_captured = True
     turn.credit_capture_ref = capture_ref
@@ -208,9 +166,9 @@ def release_on_ai_failure(logical_reply_id: str) -> dict[str, Any]:
             from services.credit_ledger_service import credit_ledger_service
 
             out = credit_ledger_service.release(tenant_id=turn.tenant_id, reservation_id=rid)
-            from services.customer_ai.leftover_reserve import _unpin
-            from services.membership.credit_reservation_index import mark_closed
-            from services.membership.pending_settlement import get_pending, upsert
+            from services.billing.membership.credit_reservation_index import mark_closed
+            from services.billing.membership.pending_settlement import get_pending, upsert
+            from services.brain.leftover_reserve import _unpin
 
             held = get_pending(turn.tenant_id, rid)
             aliases = [rid, logical_reply_id, turn.external_inbound_id, turn.inbound_event_id]

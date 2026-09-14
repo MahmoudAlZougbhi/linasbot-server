@@ -6,12 +6,12 @@ import copy
 
 import pytest
 
-from services.cm.embeddings import HASH_EMBEDDING_DIMENSIONS, cosine_similarity, embed_texts, embedding_pin
-from services.cm.paths import indexes_dir
-from services.cm.query_interpreter import interpret_query, interpret_query_deterministic, interpreter_llm_enabled
-from services.cm.schemas import RestrictedPolicy, ServicesSection, initial_restricted_policy
-from services.cm.semantic_index import build_index, load_index, search
-from services.cm.shadow_eval import run_shadow_eval
+from services.ai_setup.embeddings import HASH_EMBEDDING_DIMENSIONS, cosine_similarity, embed_texts, embedding_pin
+from services.ai_setup.paths import indexes_dir
+from services.ai_setup.query_interpreter import interpret_query, interpret_query_deterministic, interpreter_llm_enabled
+from services.ai_setup.schemas import RestrictedPolicy, initial_restricted_policy
+from services.ai_setup.semantic_index import build_index, load_index, search
+from services.ai_setup.shadow_eval import run_shadow_eval
 from services.local_qa_service import local_qa_service
 
 pytestmark = pytest.mark.usefixtures("enable_faq_plan")
@@ -109,10 +109,8 @@ def test_interpreter_llm_disabled_by_default(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_deterministic_interpreter_extracts_booking_and_restricted() -> None:
     restricted = initial_restricted_policy(active=True)
-    services = ServicesSection(items=[])
     result = interpret_query_deterministic(
         "I want to book an appointment for tattoo removal",
-        services=services,
         restricted=restricted,
     )
     assert result.booking_requested is True
@@ -147,7 +145,7 @@ async def test_interpret_query_defaults_to_deterministic_only(monkeypatch: pytes
 
 @pytest.mark.asyncio
 async def test_shadow_eval_runs_only_on_provided_questions_and_reports_faq_hits() -> None:
-    from services.cm.faq_integration import create_faq_pair
+    from services.ai_setup.faq_integration import create_faq_pair
 
     tenant_id = "cm_shadow_test_basic"
 
@@ -155,7 +153,7 @@ async def test_shadow_eval_runs_only_on_provided_questions_and_reports_faq_hits(
         targets = target_languages or []
         return {"success": True, "translations": {lang: {"question": question, "answer": answer} for lang in targets}}
 
-    import services.cm.faq_integration as faq_integration_module
+    import services.ai_setup.faq_integration as faq_integration_module
 
     original = faq_integration_module.language_detection_service.translate_training_pair
     faq_integration_module.language_detection_service.translate_training_pair = _fake_translate

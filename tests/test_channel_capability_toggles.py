@@ -4,22 +4,22 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from services.channel_capability_state import (
+from services.ai_setup.actions import (
+    ACTION_FACEBOOK_COMMENTS,
+    ACTION_FACEBOOK_DM,
+    ACTION_INSTAGRAM_COMMENTS,
+    ACTION_INSTAGRAM_DM,
+)
+from services.integrations.channel_capability_state import (
     _comment_webhook_subscribed,
     _dm_webhook_subscribed,
     comment_capability_state,
     dm_capability_state,
 )
-from services.channel_capability_toggles import (
+from services.integrations.channel_capability_toggles import (
     action_id_for,
     attach_channel_toggles,
     channel_toggle_states,
-)
-from services.cm.actions import (
-    ACTION_FACEBOOK_COMMENTS,
-    ACTION_FACEBOOK_DM,
-    ACTION_INSTAGRAM_COMMENTS,
-    ACTION_INSTAGRAM_DM,
 )
 from services.meta_app_registry import APP_A_KEY
 
@@ -34,7 +34,7 @@ def test_action_ids_match_cm_schema() -> None:
 
 def test_attach_toggles_only_on_meta_channels(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_toggles.dm_capability_state",
+        "services.integrations.channel_capability_toggles.dm_capability_state",
         lambda _tenant, platform: {
             "requested_enabled": platform == "instagram",
             "permission_present": True,
@@ -50,7 +50,7 @@ def test_attach_toggles_only_on_meta_channels(monkeypatch) -> None:
         },
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.comment_capability_state",
+        "services.integrations.channel_capability_toggles.comment_capability_state",
         lambda _tenant, platform: {
             "requested_enabled": False,
             "permission_present": platform != "instagram",
@@ -83,7 +83,7 @@ def test_attach_toggles_only_on_meta_channels(monkeypatch) -> None:
 
 def test_channel_toggle_states_defaults_when_unpublished(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_toggles.comment_capability_state",
+        "services.integrations.channel_capability_toggles.comment_capability_state",
         lambda *_a, **_k: {
             "requested_enabled": False,
             "permission_present": False,
@@ -99,7 +99,7 @@ def test_channel_toggle_states_defaults_when_unpublished(monkeypatch) -> None:
         },
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.dm_capability_state",
+        "services.integrations.channel_capability_toggles.dm_capability_state",
         lambda *_a, **_k: {
             "requested_enabled": False,
             "permission_present": False,
@@ -185,22 +185,22 @@ class _Registry:
 
 def test_comment_capability_false_toggle_never_effective_without_permissions(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_ig_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _Registry(_Cred(("instagram_basic", "instagram_manage_messages"))),
     )
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: True,
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: True)
     state = comment_capability_state("linas", "instagram")
     assert state["requested_enabled"] is True
     assert state["permission_present"] is False
@@ -213,20 +213,20 @@ def test_comment_capability_false_toggle_never_effective_without_permissions(mon
 
 def test_comment_capability_meta_approval_when_advanced_access_missing(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _Registry(_Cred(("pages_messaging",))),
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: False)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: False)
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: False,
     )
     # Public tenant without Advanced Access stays blocked.
@@ -240,20 +240,20 @@ def test_comment_capability_meta_approval_when_advanced_access_missing(monkeypat
 
 def test_comment_capability_linas_missing_scopes_not_meta_approval(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _Registry(_Cred(("pages_messaging",))),
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: False)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: False)
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: False,
     )
     state = comment_capability_state("linas", "facebook")
@@ -265,15 +265,15 @@ def test_comment_capability_linas_missing_scopes_not_meta_approval(monkeypatch) 
 
 def test_comment_capability_effective_only_when_all_gates_pass(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding()],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _Registry(
             _Cred(
                 (
@@ -285,10 +285,10 @@ def test_comment_capability_effective_only_when_all_gates_pass(monkeypatch) -> N
         ),
     )
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: True,
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: True)
     state = comment_capability_state("linas", "facebook")
     assert state["connection_healthy"] is True
     assert state["permission_present"] is True
@@ -302,22 +302,22 @@ def test_comment_capability_effective_only_when_all_gates_pass(monkeypatch) -> N
 
 def test_comment_capability_ready_when_gates_pass_but_not_requested(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding()],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _Registry(_Cred(("pages_messaging", "pages_read_user_content", "pages_manage_engagement"))),
     )
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: False,
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: True)
     state = comment_capability_state("linas", "facebook")
     assert state["status"] == "ready"
     assert state["effective_enabled"] is False
@@ -325,22 +325,22 @@ def test_comment_capability_ready_when_gates_pass_but_not_requested(monkeypatch)
 
 def test_comment_capability_webhook_setup_required(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _Registry(_Cred(("pages_messaging", "pages_read_user_content", "pages_manage_engagement"))),
     )
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: False,
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: True)
     state = comment_capability_state("linas", "facebook")
     assert state["status"] == "webhook_setup_required"
     assert state["blocker_code"] == "missing_comment_webhook"
@@ -348,15 +348,15 @@ def test_comment_capability_webhook_setup_required(monkeypatch) -> None:
 
 def test_comment_capability_unhealthy_token(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding()],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _Registry(
             _Cred(
                 ("pages_messaging", "pages_read_user_content", "pages_manage_engagement"),
@@ -365,10 +365,10 @@ def test_comment_capability_unhealthy_token(monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: True,
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: True)
     state = comment_capability_state("linas", "facebook")
     assert state["connection_healthy"] is False
     assert state["effective_enabled"] is False
@@ -377,15 +377,15 @@ def test_comment_capability_unhealthy_token(monkeypatch) -> None:
 
 def test_dm_capability_effective_when_requested_and_healthy(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _Registry(
             _Cred(
                 (
@@ -410,18 +410,18 @@ def test_public_direct_instagram_dm_requires_its_own_app_approval(monkeypatch) -
         webhook_subscribed_fields=("messages", "messaging_postbacks", "comments"),
     )
     monkeypatch.setattr(
-        "services.channel_capability_state._action_requested",
+        "services.integrations.channel_capability_state._action_requested",
         lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [binding],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _Registry(_Cred(("instagram_business_basic", "instagram_business_manage_messages"))),
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: True)
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_ADVANCED_ACCESS_APPROVED", "false")
 
     blocked = dm_capability_state("customer_a", "instagram")

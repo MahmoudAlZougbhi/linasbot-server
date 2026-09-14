@@ -14,11 +14,11 @@ from fastapi.responses import JSONResponse
 
 from modules.api_security import require_permission, require_session
 from modules.core import app
-from services.cm.constants import CM_SECTIONS, PUBLISH_DISABLED_MESSAGE, cm_faq_canonical, cm_runtime_mode
-from services.cm.provenance_headers import sanitize_section_payload
-from services.cm.publish import PublishBlockedError, publish_draft, publish_faq_only
-from services.cm.publish_gate import PublishDisabledError, ensure_publish_enabled, publish_status
-from services.cm.storage import ConflictError, UnknownSectionError, get_draft, put_draft
+from services.ai_setup.constants import CM_SECTIONS, PUBLISH_DISABLED_MESSAGE, cm_faq_canonical, cm_runtime_mode
+from services.ai_setup.provenance_headers import sanitize_section_payload
+from services.ai_setup.publish import PublishBlockedError, publish_draft, publish_faq_only
+from services.ai_setup.publish_gate import PublishDisabledError, ensure_publish_enabled, publish_status
+from services.ai_setup.storage import ConflictError, UnknownSectionError, get_draft, put_draft
 from services.dashboard_session_service import SessionRecord
 from services.search_metadata.errors import (
     METADATA_PREPARATION_CODE,
@@ -64,7 +64,7 @@ def _session_tenant(session: SessionRecord) -> str:
 
 
 def _brain_index_payload(tenant_id: str) -> dict[str, Any]:
-    from services.customer_ai.search.index_lifecycle import owner_status
+    from services.brain.search.index_lifecycle import owner_status
 
     return owner_status(tenant_id)
 
@@ -81,7 +81,7 @@ async def cm_meta(request: Request) -> Any:
     session = require_session(request)
     status = publish_status()
     tenant_id = _session_tenant(session)
-    from services.cm.constants import (
+    from services.ai_setup.constants import (
         tenant_allows_legacy_bridge,
         tenant_has_published_cm,
         tenant_uses_cm_runtime,
@@ -94,8 +94,8 @@ async def cm_meta(request: Request) -> Any:
     else:
         tenant_runtime = "unpublished"
 
-    from services.membership.daily_edits import decision_payload
-    from services.membership.daily_edits import status as daily_edit_status
+    from services.billing.membership.daily_edits import decision_payload
+    from services.billing.membership.daily_edits import status as daily_edit_status
 
     return {
         "success": True,
@@ -148,7 +148,7 @@ async def cm_put_draft(
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Request body must include a payload object")
 
-    from services.membership.daily_edits import (
+    from services.billing.membership.daily_edits import (
         DailyEditLimitError,
         commit_edit,
         release_edit,
@@ -157,8 +157,8 @@ async def cm_put_draft(
 
     edit_op: str | None = None
     try:
-        from services.cm.storage import get_draft
-        from services.membership.edit_http import payloads_equivalent
+        from services.ai_setup.storage import get_draft
+        from services.billing.membership.edit_http import payloads_equivalent
 
         current = None
         try:
@@ -169,7 +169,7 @@ async def cm_put_draft(
         if same:
             edit_op = None
         else:
-            from services.membership.free_slots import SlotLimitError, assert_cm_section_slots
+            from services.billing.membership.free_slots import SlotLimitError, assert_cm_section_slots
 
             try:
                 assert_cm_section_slots(
@@ -182,7 +182,7 @@ async def cm_put_draft(
                 raise HTTPException(status_code=402, detail={"error": exc.code, "message": str(exc)}) from exc
             edit_op = reserve_cm_section(tenant_id=tenant_id, section=name, payload=payload)
     except DailyEditLimitError as exc:
-        from services.membership.edit_http import limit_response
+        from services.billing.membership.edit_http import limit_response
 
         return limit_response(exc)
 
@@ -237,7 +237,7 @@ async def cm_put_draft(
 
         sync_enforcement_from_payload(tenant_id, envelope.payload if hasattr(envelope, "payload") else payload)
 
-    from services.cm.save_live import go_live_saved_section
+    from services.ai_setup.save_live import go_live_saved_section
 
     activation = await go_live_saved_section(
         tenant_id=tenant_id,
@@ -283,8 +283,8 @@ async def cm_publish(request: Request, body: dict[str, Any] = Body(default={})) 
 
     notes = body.get("notes") if isinstance(body.get("notes"), str) else None
     scope = str(body.get("scope") or "all").strip().lower()
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     etags = {}
     for section in CM_SECTIONS:
@@ -345,9 +345,9 @@ async def cm_unpublish(request: Request) -> Any:
     except PublishDisabledError as exc:
         return _publish_disabled_response(exc.message)
 
-    from services.cm.version_store import clear_published_pointer, read_published_pointer
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.ai_setup.version_store import clear_published_pointer, read_published_pointer
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     previous = read_published_pointer(tenant_id)
     try:

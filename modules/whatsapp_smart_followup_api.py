@@ -85,8 +85,8 @@ async def smart_followup_put_settings(request: Request, body: dict[str, Any] = B
         expected_version = int(expected) if expected is not None else None
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="invalid_settings_version") from exc
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(tenant_id=session.tenant_id, kind="followup:settings", payload=body):
@@ -163,7 +163,7 @@ async def smart_followup_preview(request: Request, body: dict[str, Any] = Body(d
     """Safe preview — never sends WhatsApp and does not hold leftover credits or message units."""
     session = _require_manager(request)
     goal = str(body.get("goal") or "gentle_check_in").strip()
-    from services.membership.message_flags import message_billing_enabled
+    from services.billing.membership.message_flags import message_billing_enabled
 
     billing = message_billing_enabled()
     disclose = {
@@ -195,7 +195,7 @@ async def smart_followup_preview(request: Request, body: dict[str, Any] = Body(d
             ]
             conn = connections[0]
             if billing:
-                from services.membership.generative_gate import generative_block_reason
+                from services.billing.membership.generative_gate import generative_block_reason
 
                 reason = generative_block_reason(session.tenant_id)
                 if reason:

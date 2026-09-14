@@ -11,7 +11,7 @@ import httpx
 
 from config import WHATSAPP_API_TOKEN
 from modules.core import whatsapp_api_client
-from services.api_integrations import log_report_event
+from services.saas_no_boc import log_report_event
 
 
 async def send_whatsapp_message(

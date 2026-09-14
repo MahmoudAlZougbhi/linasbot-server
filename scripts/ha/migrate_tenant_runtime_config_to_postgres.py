@@ -9,11 +9,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from services.cm.atomic_io import read_json_object
-from services.cm.constants import CM_SECTIONS, DEFAULT_TENANT_ID
-from services.cm.paths import draft_dir
-from services.cm.schemas import SectionDraftEnvelope
-from services.cm.version_store import load_published_content, read_published_pointer
+from services.ai_setup.atomic_io import read_json_object
+from services.ai_setup.constants import CM_SECTIONS
+from services.ai_setup.paths import draft_dir
+from services.ai_setup.schemas import SectionDraftEnvelope
+from services.ai_setup.version_store import load_published_content, read_published_pointer
 from services.meta_comment_reply_settings import list_comment_reply_settings
 from services.tenant_runtime_config_service import (
     mark_migration_applied,
@@ -100,10 +100,13 @@ def migrate_tenant(*, tenant_id: str, dry_run: bool = True) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Migrate tenant runtime config to Postgres")
-    parser.add_argument("--tenant", default=DEFAULT_TENANT_ID)
+    parser.add_argument("--tenant", default="")
     parser.add_argument("--apply", action="store_true", help="Apply migration (default dry-run)")
     args = parser.parse_args()
-    result = migrate_tenant(tenant_id=args.tenant, dry_run=not args.apply)
+    tenant_id = (args.tenant or "").strip()
+    if not tenant_id:
+        raise SystemExit("tenant_id required")
+    result = migrate_tenant(tenant_id=tenant_id, dry_run=not args.apply)
     print(json.dumps(result, indent=2))
 
 

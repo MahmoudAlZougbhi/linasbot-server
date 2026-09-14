@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from services.cm.resource_attachment import (
+from services.ai_setup.resource_attachment import (
     ResourceAttachment,
     customer_resource_descriptors,
     resource_summary,
     validate_owner_resource_fields,
 )
-from services.cm.schemas import ArticleAttachment, ArticleRecord, BranchAttachment, BranchRecord
-from services.cm.setup_resources import resolve_published_resource, summary_for_item
+from services.ai_setup.schemas import ArticleAttachment, ArticleRecord, BranchAttachment, BranchRecord
+from services.ai_setup.setup_resources import resolve_published_resource, summary_for_item
 from tests.cm_test_helpers import publish_test_content
 
 pytest_plugins = ("tests.customer_reply_ai_v2_fixtures",)

@@ -1,6 +1,6 @@
 {
   "general": {
-    "botName": "Lina's Laser Bot",
+    "botName": "Customer Assistant",
     "defaultLanguage": "ar",
     "responseTimeout": 5,
     "enableVoice": true,
@@ -10,7 +10,7 @@
   "notifications": {
     "notificationsEnabled": true,
     "emailAlerts": true,
-    "humanTakeoverNotifyMobiles": "+96171412604"
+    "humanTakeoverNotifyMobiles": ""
   },
   "security": {
     "sessionTimeout": 24

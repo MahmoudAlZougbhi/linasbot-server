@@ -238,8 +238,8 @@ async def test_sfu_worker_duplicate_visible_delivery_never_releases_reservation(
     from db.models import Base
     from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob, WhatsAppSmartFollowUpSequence
     from db.session import reset_engine_for_tests
+    from services.billing.entitlements_service import EntitlementsStore
     from services.credit_ledger_service import CreditLedgerService
-    from services.entitlements_service import EntitlementsStore
     from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
     from services.smart_followup.types import FollowUpConversationView
     from services.smart_followup.worker_job import process_one_followup_job
@@ -254,7 +254,7 @@ async def test_sfu_worker_duplicate_visible_delivery_never_releases_reservation(
     db = Session()
 
     ent_store = EntitlementsStore(root=tmp_path / "ents")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", ent_store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", ent_store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", ent_store)
     ledger = CreditLedgerService(root=tmp_path / "ledger")
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)

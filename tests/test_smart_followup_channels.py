@@ -44,11 +44,11 @@ def sfu_db(tmp_path, monkeypatch):
 @pytest.fixture()
 def sfu_credit_entitlement(tmp_path, monkeypatch):
     """Provision active credits for SFU worker routing tests."""
+    from services.billing.entitlements_service import EntitlementsStore
     from services.credit_ledger_service import CreditLedgerService
-    from services.entitlements_service import EntitlementsStore
 
     store = EntitlementsStore(root=tmp_path / "sfu-ents")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
     ledger = CreditLedgerService(root=tmp_path / "sfu-ledger")
@@ -219,7 +219,7 @@ async def test_meta_worker_routes_to_deliver_meta_dm(sfu_db, sfu_credit_entitlem
             new=AsyncMock(return_value="Still need help?"),
         ),
         patch(
-            "services.channel_capability_state.dm_capability_state",
+            "services.integrations.channel_capability_state.dm_capability_state",
             return_value={"requested_enabled": True},
         ),
         patch(

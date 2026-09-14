@@ -19,7 +19,7 @@ from services.email_dispatch import (
     send_password_changed_email,
 )
 from services.mail_service import mail_configured
-from services.user_service import user_service
+from services.team.user_service import user_service
 
 
 class RequestEmailChangeRequest(BaseModel):

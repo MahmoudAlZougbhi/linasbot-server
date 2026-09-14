@@ -425,7 +425,7 @@ jobs:
           test -f docs/DEPLOY_AUTH_MIGRATION_CHECKLIST.md
           test -f .github/workflows/deploy.yml
           test -f scripts/prod_cm_preserve_durable_flags.sh
-          test -f services/cm/durable_flags.py
+          test -f services/ai_setup/durable_flags.py
           grep -Fq 'Standalone deploy.sh is disabled.' deploy.sh
           grep -Fq 'manual protected .github/workflows/deploy.yml' deploy.sh
           grep -Fq 'Single-node release break-glass is disabled in product code.' deploy.sh

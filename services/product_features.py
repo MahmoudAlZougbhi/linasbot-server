@@ -113,21 +113,14 @@ LEGACY_BOOKING_TOOL_NAMES: frozenset[str] = frozenset(
     }
 )
 
-# Single runtime gate for BOC / LinasLaser Agent booking. Default OFF — zero network when disabled.
-# See docs/requests/BOC_FUTURE_INTEGRATION.md. Do not enable in production without owner approval.
+# Single runtime: BOC is not in SaaS. Always off.
 BOC_BOOKING_ENABLED_ENV: Final[str] = "LINASLASER_BOC_BOOKING_ENABLED"
-BOC_BOOKING_DISABLED_CODE: Final[str] = "boc_booking_disabled"
-
-
-def _env_flag_true(name: str, *, default: str = "false") -> bool:
-    import os
-
-    return (os.getenv(name) or default).strip().lower() in ("1", "true", "yes", "on")
+BOC_BOOKING_DISABLED_CODE: Final[str] = "boc_not_in_saas"
 
 
 def boc_booking_enabled() -> bool:
-    """True only when LINASLASER_BOC_BOOKING_ENABLED is explicitly on (default: off)."""
-    return _env_flag_true(BOC_BOOKING_ENABLED_ENV, default="false")
+    """BOC is not in SaaS. Always false."""
+    return False
 
 
 def legacy_booking_tools_disabled() -> bool:
@@ -146,11 +139,7 @@ def boc_disabled_response(*, operation: str = "request") -> dict:
         "success": False,
         "error": BOC_BOOKING_DISABLED_CODE,
         "boc_booking_enabled": False,
-        "message": (
-            "BOC / LinasLaser Agent booking is disabled "
-            f"({BOC_BOOKING_ENABLED_ENV} is not true). "
-            f"No network call was made for {operation}."
-        ),
+        "message": "BOC is not in SaaS. No network call was made.",
     }
 
 
@@ -165,33 +154,12 @@ def boc_job_skipped_response(*, operation: str) -> dict:
 
 
 def boc_booking_readiness() -> dict:
-    """
-    Readiness fragment for GET /api/ready.
-
-    When OFF: healthy without token, base URL, or booking IDs.
-    When ON: requires configured base URL + token (values never returned).
-    """
-    import os
-
-    enabled = boc_booking_enabled()
-    if not enabled:
-        return {
-            "ok": True,
-            "enabled": False,
-            "token_required": False,
-            "booking_ids_required": False,
-            "jobs_allowed": False,
-        }
-
-    base = (os.getenv("EXTERNAL_API_BASE_URL") or "").strip() or (os.getenv("LINASLASER_API_BASE_URL") or "").strip()
-    token = (os.getenv("EXTERNAL_API_TOKEN") or "").strip() or (os.getenv("LINASLASER_API_TOKEN") or "").strip()
-    configured = bool(base) and bool(token)
+    """Readiness fragment for GET /api/ready. BOC is not in SaaS."""
     return {
-        "ok": configured,
-        "enabled": True,
-        "token_required": True,
-        "booking_ids_required": True,
-        "jobs_allowed": True,
-        "base_url_configured": bool(base),
-        "token_configured": bool(token),
+        "ok": True,
+        "enabled": False,
+        "token_required": False,
+        "booking_ids_required": False,
+        "jobs_allowed": False,
+        "note": "BOC is not in SaaS",
     }

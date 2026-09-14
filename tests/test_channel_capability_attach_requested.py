@@ -6,7 +6,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from services.channel_capability_toggles import attach_channel_toggles, sync_published_comment_assets_if_enabled
+from services.integrations.channel_capability_toggles import (
+    attach_channel_toggles,
+    sync_published_comment_assets_if_enabled,
+)
 
 
 def test_attach_keeps_requested_comments_on_when_permissions_missing(monkeypatch) -> None:
@@ -16,9 +19,9 @@ def test_attach_keeps_requested_comments_on_when_permissions_missing(monkeypatch
         writes.append(kwargs)
         raise AssertionError("attach must not persist comments off")
 
-    monkeypatch.setattr("services.channel_capability_toggles._set_action_in_draft", _set_action)
+    monkeypatch.setattr("services.integrations.channel_capability_toggles._set_action_in_draft", _set_action)
     monkeypatch.setattr(
-        "services.channel_capability_toggles.dm_capability_state",
+        "services.integrations.channel_capability_toggles.dm_capability_state",
         lambda *_a, **_k: {
             "requested_enabled": True,
             "permission_present": True,
@@ -34,7 +37,7 @@ def test_attach_keeps_requested_comments_on_when_permissions_missing(monkeypatch
         },
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.comment_capability_state",
+        "services.integrations.channel_capability_toggles.comment_capability_state",
         lambda *_a, **_k: {
             "requested_enabled": True,
             "permission_present": False,
@@ -63,7 +66,7 @@ async def test_connect_sync_turns_local_comment_assets_on_when_switch_is_on(monk
     clear = AsyncMock(return_value=True)
     sync_assets = AsyncMock()
     monkeypatch.setattr(
-        "services.channel_capability_toggles.comment_capability_state",
+        "services.integrations.channel_capability_toggles.comment_capability_state",
         lambda *_a, **_k: {
             "requested_enabled": True,
             "permission_present": False,
@@ -71,10 +74,10 @@ async def test_connect_sync_turns_local_comment_assets_on_when_switch_is_on(monk
         },
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.clear_invalid_comments_enabled_state_async",
+        "services.integrations.channel_capability_toggles.clear_invalid_comments_enabled_state_async",
         clear,
     )
-    monkeypatch.setattr("services.channel_capability_toggles._sync_comment_assets", sync_assets)
+    monkeypatch.setattr("services.integrations.channel_capability_toggles._sync_comment_assets", sync_assets)
 
     await sync_published_comment_assets_if_enabled(tenant_id="linas", platform="facebook")
     clear.assert_not_called()

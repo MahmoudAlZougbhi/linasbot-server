@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 
 from db.models.apple_billing import AppleCreditGrantRow
 from db.session import whatsapp_session
-from services.billing_backend import billing_uses_postgres
+from services.billing.billing_backend import billing_uses_postgres
 from services.credit_ledger_service import credit_ledger_service
 from services.iap_product_catalog import map_credit_product
 

@@ -8,7 +8,7 @@ from fastapi import HTTPException, Request
 
 from modules.api_security import require_platform_owner
 from modules.core import app
-from services.customer_ai.search.force_reindex import force_reindex_tenant
+from services.brain.search.force_reindex import force_reindex_tenant
 
 
 @app.post("/api/platform/customer-ai-index/{tenant_id}/reindex")

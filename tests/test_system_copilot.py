@@ -6,10 +6,10 @@ from typing import Any
 
 import pytest
 
-from services.owner_ai_cm_approval import CmPatchProposalStore, approve_cm_patch, propose_cm_patch
-from services.owner_ai_context import estimate_context_tokens, pack_owner_turn_context, summarize_conversation
-from services.owner_ai_model_router import OwnerChatUsageTracker, classify_owner_route, route_owner_turn
-from services.owner_ai_profile import address_line, never_infer_gender_from_identity, normalize_gender
+from services.owner_copilot.cm_approval import CmPatchProposalStore, approve_cm_patch, propose_cm_patch
+from services.owner_copilot.context import estimate_context_tokens, pack_owner_turn_context, summarize_conversation
+from services.owner_copilot.model_router import OwnerChatUsageTracker, classify_owner_route, route_owner_turn
+from services.owner_copilot.profile import address_line, never_infer_gender_from_identity, normalize_gender
 from services.system_knowledge_registry import registry_route_errors, valid_mobile_routes
 from services.system_knowledge_retrieval import retrieve_capabilities
 
@@ -43,7 +43,7 @@ def test_never_infer_gender_from_email_or_name() -> None:
 
 def test_context_compaction_flags(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.owner_ai_context.build_account_summary",
+        "services.owner_copilot.context.build_account_summary",
         lambda **_: {
             "setup_stage": "new",
             "cm": {"sections_present": 0, "sections_total": 15, "published": False, "missing_sample": []},
@@ -95,7 +95,7 @@ def test_model_router_and_usage_tracking(tmp_path: Any) -> None:
 @pytest.mark.asyncio
 async def test_cm_approval_flow(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     store = CmPatchProposalStore(root=tmp_path / "proposals")
-    monkeypatch.setattr("services.owner_ai_cm_approval.cm_patch_proposal_store", store)
+    monkeypatch.setattr("services.owner_copilot.cm_approval.cm_patch_proposal_store", store)
 
     preview = {
         "section": "style",
@@ -110,7 +110,7 @@ async def test_cm_approval_flow(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) 
         del kwargs
         return preview
 
-    monkeypatch.setattr("services.owner_ai_cm_approval.build_patch_preview", _fake_preview)
+    monkeypatch.setattr("services.owner_copilot.cm_approval.build_patch_preview", _fake_preview)
 
     proposed = propose_cm_patch(
         tenant_id="t1",
@@ -127,13 +127,13 @@ async def test_cm_approval_flow(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) 
         saved_calls.append(kwargs)
         return {"section": "style", "revision": 2, "etag": "e2", "payload": {"tone": "friendly"}}
 
-    monkeypatch.setattr("services.cm.setup_chat.apply_section_patch", _fake_apply)
+    monkeypatch.setattr("services.ai_setup.setup_chat.apply_section_patch", _fake_apply)
     monkeypatch.setattr(
-        "services.cm.validation.validate_cm",
+        "services.ai_setup.validation.validate_cm",
         lambda **_: {"errors": [], "warnings": []},
     )
     monkeypatch.setattr(
-        "services.faq_cm_invalidation.invalidate_faq_for_cm_patch",
+        "services.faq.faq_cm_invalidation.invalidate_faq_for_cm_patch",
         lambda **_: {"stale_groups": [], "stale_rows": 0, "reason": "cm_patch:style"},
     )
 
@@ -149,41 +149,20 @@ async def test_cm_approval_flow(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) 
 
 @pytest.mark.asyncio
 async def test_owner_turn_help_and_publish_confirm(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.owner_ai_orchestrator import run_owner_turn
+    from services.owner_copilot.models import OwnerV2TurnResult
+    from services.owner_copilot.orchestrator import run_owner_turn
 
-    monkeypatch.setenv("OWNER_COPILOT_V2", "false")
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
-    monkeypatch.setattr(
-        "services.owner_ai_context.pack_owner_turn_context",
-        lambda **_: {
-            "system_prompt": "x",
-            "account_summary": {"setup_stage": "new", "profile": {"preferred_language": "en"}},
-            "knowledge_block": "",
-            "capabilities": ["system_copilot"],
-            "recent_messages": [],
-            "conversation_summary": None,
-            "reply_language": "en",
-            "preferred_language": "en",
-            "cm_full_dump": False,
-            "full_history": False,
-        },
-    )
-    monkeypatch.setattr(
-        "services.owner_ai_model_router.owner_chat_usage_tracker.record",
-        lambda **_: {},
-    )
 
-    async def _fake_owner_llm(**_kwargs: Any) -> str:
-        return (
-            "I’m your System Copilot. I can help with CM setup, integrations, usage, "
-            "and ops — ask specifically what you need."
+    async def _fake_v2(**kwargs: Any) -> OwnerV2TurnResult:
+        text = str(kwargs.get("user_text") or "")
+        if "publish" in text.lower():
+            return OwnerV2TurnResult(reply_text="Confirm publish", pending_confirmation="publish_cm")
+        return OwnerV2TurnResult(
+            reply_text="I’m your System Copilot. I can help with CM setup, integrations, usage, and ops."
         )
 
-    monkeypatch.setattr(
-        "services.owner_ai_natural_reply.generate_owner_conversational_reply",
-        _fake_owner_llm,
-    )
-
+    monkeypatch.setattr("services.owner_copilot.brain_run.run_owner_turn_v2", _fake_v2)
     help_turn = await run_owner_turn(
         tenant_id="t1",
         user_id="u1",
@@ -196,21 +175,6 @@ async def test_owner_turn_help_and_publish_confirm(monkeypatch: pytest.MonkeyPat
         or "capabilities" in help_turn.reply_text.lower()
         or help_turn.tool_calls
     )
-
-    async def _publish(**kwargs: Any) -> Any:
-        from services.owner_ai_tools_base import ToolResult
-
-        del kwargs
-        return ToolResult(
-            ok=True,
-            name="publish_cm",
-            data={"action": "publish_cm"},
-            requires_confirmation=True,
-            confirmation_token="publish_cm",
-            error="Confirmation required before publish",
-        )
-
-    monkeypatch.setattr("services.owner_ai_tools.dispatch_tool", _publish)
     pub = await run_owner_turn(
         tenant_id="t1",
         user_id="u1",
@@ -222,10 +186,10 @@ async def test_owner_turn_help_and_publish_confirm(monkeypatch: pytest.MonkeyPat
 
 
 def test_greeting_stages(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.owner_ai_greeting import build_greeting
+    from services.owner_copilot.greeting import build_greeting
 
     monkeypatch.setattr(
-        "services.owner_ai_greeting.read_owner_profile",
+        "services.owner_copilot.greeting.read_owner_profile",
         lambda _uid: {
             "display_name": None,
             "gender": "unset",
@@ -234,7 +198,7 @@ def test_greeting_stages(monkeypatch: pytest.MonkeyPatch) -> None:
             "address_prompt_asked": False,
         },
     )
-    monkeypatch.setattr("services.owner_ai_greeting.resolve_setup_stage", lambda _tid: "new")
+    monkeypatch.setattr("services.owner_copilot.greeting.resolve_setup_stage", lambda _tid: "new")
     g = build_greeting(tenant_id="t1", user_id="u1", language="en")
     from services.welcome_pool import format_welcome, lines_for
 
@@ -248,7 +212,7 @@ def test_greeting_stages(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_owner_and_guest_prompts_share_friendly_emoji_voice() -> None:
     from services.guest_ai_service import build_guest_greeting, build_guest_system_prompt
-    from services.owner_ai_context import SYSTEM_PROMPT
+    from services.owner_copilot.context import SYSTEM_PROMPT
     from services.response_formatting import RESPONSE_FORMATTING_RULES
 
     assert "tasteful emojis" in SYSTEM_PROMPT

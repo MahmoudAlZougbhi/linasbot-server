@@ -35,18 +35,9 @@ def compose_social_user_id(
     channel_name = str(channel or "").strip().lower()
     asset = str(asset_id or "").strip()
     sender = str(sender_id or "").strip()
-    scoped = multi_asset_channel
-    if scoped is None:
-        try:
-            scoped = tenant_channel_has_multiple_active_assets(tenant, channel_name)  # type: ignore[arg-type]
-        except Exception:
-            scoped = False
+    _ = multi_asset_channel
     try:
         tenant = normalize_meta_tenant_id(tenant)
     except Exception:
         tenant = tenant.lower()
-    if tenant == "linas" and not scoped:
-        return f"{channel_name}:{sender}"
-    if tenant == "linas":
-        return f"{channel_name}:{asset}:{sender}"
     return f"{tenant}:{channel_name}:{asset}:{sender}"

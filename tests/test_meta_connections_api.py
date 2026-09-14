@@ -294,8 +294,8 @@ async def test_reconnect_atomically_replaces_provider_then_removes_old_subscript
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.cm import constants as cm_constants
-    from services.cm import version_store
+    from services.ai_setup import constants as cm_constants
+    from services.ai_setup import version_store
 
     page_id = "111222333"
     old = registry.activate_binding(
@@ -574,7 +574,7 @@ async def test_facebook_disconnect_succeeds_when_meta_unsubscribe_fails(
     monkeypatch.setattr(graph, "inspect_binding_webhook_subscription", inspect)
     monkeypatch.setattr(graph, "_unsubscribe_binding_webhook_locked_raw", boom)
     monkeypatch.setattr(
-        "services.channel_capability_disconnect.clear_channel_toggles_after_disconnect",
+        "services.integrations.channel_capability_disconnect.clear_channel_toggles_after_disconnect",
         clear_toggles,
     )
 

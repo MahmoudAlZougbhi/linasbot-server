@@ -10,9 +10,9 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from services.cm.atomic_io import compute_checksum, read_json_object
-from services.cm.paths import indexes_dir, published_pointer_path, versions_dir
-from services.cm.schemas import PublishedPointer
+from services.ai_setup.atomic_io import compute_checksum, read_json_object
+from services.ai_setup.paths import indexes_dir, published_pointer_path, versions_dir
+from services.ai_setup.schemas import PublishedPointer
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 _SSH_OPTIONS = (

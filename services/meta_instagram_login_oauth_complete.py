@@ -349,7 +349,7 @@ async def complete_instagram_login(
                         # Durable recovery will retry stale marker cleanup.
                         continue
         current_registry.archive_superseded_duplicate_bindings(actor_id=actor_id)
-        from services.channel_capability_toggles import enable_channel_defaults_after_connect
+        from services.integrations.channel_capability_toggles import enable_channel_defaults_after_connect
 
         try:
             await enable_channel_defaults_after_connect(

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.cm.migration import migrate_legacy_fixture
-from services.cm.paths import archive_dir
-from services.cm.schemas import FaqSection, HandoffPolicy, KnowledgeSection
-from services.cm.storage import get_draft
+from services.ai_setup.migration import migrate_legacy_fixture
+from services.ai_setup.paths import archive_dir
+from services.ai_setup.schemas import FaqSection, HandoffPolicy, KnowledgeSection
+from services.ai_setup.storage import get_draft
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "cm_migration"
 
@@ -31,7 +31,7 @@ def test_migration_routes_prep_knowledge_file_into_care_section() -> None:
     tenant_id = "cm_migration_test_care_routing"
     migrate_legacy_fixture(source_root=FIXTURE_ROOT, tenant_id=tenant_id)
 
-    from services.cm.schemas import CareSection
+    from services.ai_setup.schemas import CareSection
 
     care_env = get_draft("care", tenant_id=tenant_id)
     care_section = CareSection.model_validate(care_env.payload)
@@ -64,8 +64,8 @@ def test_migration_does_not_auto_flag_tattoo_content_as_restricted() -> None:
 
 
 def test_owner_restricted_policy_flags_tattoo_conflict() -> None:
-    from services.cm.schemas import initial_restricted_policy
-    from services.cm.storage import put_draft
+    from services.ai_setup.schemas import initial_restricted_policy
+    from services.ai_setup.storage import put_draft
 
     tenant_id = "cm_migration_test_owner_restricted"
     migrate_legacy_fixture(source_root=FIXTURE_ROOT, tenant_id=tenant_id)

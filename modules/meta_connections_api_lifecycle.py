@@ -14,7 +14,7 @@ from modules.meta_connections_api_helpers import (
     _active_conflict,
     _tenant_binding,
 )
-from services.channel_capability_toggles import ensure_comment_webhook_for_binding
+from services.integrations.channel_capability_toggles import ensure_comment_webhook_for_binding
 from services.meta_app_registry import (
     APP_A_KEY,
     APP_B_KEY,
@@ -217,7 +217,7 @@ async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
         )
         if not targets:
             targets = [binding]
-        from services.membership.edit_http import guarded_edit
+        from services.billing.membership.edit_http import guarded_edit
 
         with guarded_edit(
             tenant_id=session.tenant_id,
@@ -239,7 +239,7 @@ async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     # Force DM + Comments OFF once no active binding remains for this platform.
     if platform in {"instagram", "facebook"}:
-        from services.channel_capability_disconnect import clear_channel_toggles_after_disconnect
+        from services.integrations.channel_capability_disconnect import clear_channel_toggles_after_disconnect
 
         await clear_channel_toggles_after_disconnect(
             tenant_id=session.tenant_id,
@@ -260,7 +260,7 @@ async def activate_meta_connection(binding_id: str, request: Request) -> Any:
     if binding.app_key not in {APP_A_KEY, APP_B_KEY} or binding.status not in {"testing", "inactive"}:
         raise HTTPException(status_code=409, detail="Connection is not eligible for activation")
     if session.tenant_id != "linas":
-        from services.cm.version_store import load_published_content
+        from services.ai_setup.version_store import load_published_content
 
         try:
             load_published_content(session.tenant_id)
@@ -304,7 +304,7 @@ async def rollback_meta_connection(binding_id: str, request: Request) -> Any:
     )
     if previous is None or previous.tenant_id != session.tenant_id:
         raise HTTPException(status_code=409, detail="Previous Meta connection is unavailable")
-    from services.membership.edit_http import guarded_edit
+    from services.billing.membership.edit_http import guarded_edit
 
     try:
         with guarded_edit(
@@ -345,7 +345,7 @@ async def update_meta_comment_replies(
     enabled = bool(body.get("enabled"))
     instructions = str(body.get("instructions") or "").strip()
     if enabled:
-        from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
+        from services.billing.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
 
         try:
             assert_comment_automation_allowed(binding.tenant_id)
@@ -359,8 +359,8 @@ async def update_meta_comment_replies(
             ),
         )
     if enabled:
-        from services.cm.actions import comments_action_enabled
-        from services.cm.constants import tenant_uses_cm_runtime
+        from services.ai_setup.actions import comments_action_enabled
+        from services.ai_setup.constants import tenant_uses_cm_runtime
 
         if tenant_uses_cm_runtime(binding.tenant_id) and not comments_action_enabled(
             binding.tenant_id, binding.channel
@@ -379,8 +379,8 @@ async def update_meta_comment_replies(
         channel=binding.channel,
         asset_id=binding.asset_id,
     )
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(
@@ -429,7 +429,7 @@ async def update_meta_comment_replies(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     public = binding.public_dict()
-    from services.cm.actions import comments_enforcement_decision
+    from services.ai_setup.actions import comments_enforcement_decision
 
     credential = registry.get_credential(binding)
     comment_decision = comments_enforcement_decision(

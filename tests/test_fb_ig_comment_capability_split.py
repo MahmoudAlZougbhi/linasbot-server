@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from services.channel_capability_state import comment_capability_state
+from services.integrations.channel_capability_state import comment_capability_state
 from services.meta_app_registry import APP_A_KEY
 from services.meta_oauth import _business_login_request_scopes, normalize_oauth_flow_channel
 
@@ -56,17 +56,17 @@ def test_facebook_oauth_scopes_exclude_instagram_manage_comments() -> None:
 
 def test_facebook_comment_blocker_message_excludes_instagram_scope(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_state.canonical_channel_bindings",
+        "services.integrations.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding()],
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.get_meta_app_registry",
+        "services.integrations.channel_capability_state.get_meta_app_registry",
         lambda: _MapRegistry({"fb-b1": _Cred(("pages_messaging",))}),
     )
-    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: False)
-    monkeypatch.setattr("services.channel_capability_state._action_requested", lambda *_a, **_k: False)
+    monkeypatch.setattr("services.integrations.channel_capability_state._advanced_access_approved", lambda: False)
+    monkeypatch.setattr("services.integrations.channel_capability_state._action_requested", lambda *_a, **_k: False)
     monkeypatch.setattr(
-        "services.channel_capability_state._tenant_comment_assets_enabled",
+        "services.integrations.channel_capability_state._tenant_comment_assets_enabled",
         lambda *_a, **_k: False,
     )
     state = comment_capability_state("linas", "facebook")

@@ -32,8 +32,8 @@ def _data_root() -> Path:
 
 
 def _import_wallets(session: Session, wallets_dir: Path, dry_run: bool) -> tuple[int, int]:
-    from services.token_wallet_file_store import TokenWalletFileStore
-    from services.token_wallet_pg_store import import_ledger_lines, upsert_wallet_from_file_dict
+    from services.billing.token_wallet_file_store import TokenWalletFileStore
+    from services.billing.token_wallet_pg_store import import_ledger_lines, upsert_wallet_from_file_dict
 
     store = TokenWalletFileStore(wallets_dir)
     wallet_count = 0
@@ -63,7 +63,7 @@ def _import_wallets(session: Session, wallets_dir: Path, dry_run: bool) -> tuple
 
 
 def _import_stripe_events(session: Session, events_dir: Path, dry_run: bool) -> int:
-    from services.billing_pg_store import import_stripe_event
+    from services.billing.billing_pg_store import import_stripe_event
 
     count = 0
     if not events_dir.is_dir():
@@ -88,7 +88,7 @@ def _import_stripe_events(session: Session, events_dir: Path, dry_run: bool) -> 
 
 
 def _import_admin_credit(session: Session, idem_dir: Path, dry_run: bool) -> int:
-    from services.billing_pg_store import import_admin_credit_key
+    from services.billing.billing_pg_store import import_admin_credit_key
 
     count = 0
     if not idem_dir.is_dir():

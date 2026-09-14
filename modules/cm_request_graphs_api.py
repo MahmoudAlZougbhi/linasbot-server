@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from modules.api_security import require_permission, require_session
 from modules.core import app
-from services.cm.storage import ConflictError
+from services.ai_setup.storage import ConflictError
 from services.request_graphs.cm_sync import DraftMatchRequired, delete_with_optional_draft, publish_with_optional_draft
 from services.request_graphs.db_guard import RequestGraphsDbError, request_graphs_session
 from services.request_graphs.service import list_active_graphs, preview_graph
@@ -41,8 +41,8 @@ def _conflict(exc: ConflictError) -> JSONResponse:
 @app.post("/api/cm/request-graphs/preview")
 async def request_graph_preview(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
     session = require_session(request)
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(tenant_id=session.tenant_id, kind="request-graph:preview", payload=body):
@@ -66,8 +66,8 @@ async def request_graph_publish(request: Request, body: dict[str, Any] = Body(de
             status_code=400,
             detail={"code": "source_item_id_required", "message": "source_item_id_required"},
         )
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(tenant_id=session.tenant_id, kind="request-graph:publish", payload=body):
@@ -114,8 +114,8 @@ async def request_graph_delete(request: Request, body: dict[str, Any] = Body(def
             status_code=400,
             detail={"code": "definition_id_required", "message": "definition_id_required"},
         )
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(tenant_id=session.tenant_id, kind="request-graph:delete", payload=body):

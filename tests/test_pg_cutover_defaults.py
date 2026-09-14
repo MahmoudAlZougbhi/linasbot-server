@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from services.billing_backend import (
+from services.billing.billing_backend import (
     BillingBackendError,
     auth_tokens_use_postgres,
     billing_uses_postgres,
@@ -47,15 +47,15 @@ def test_billing_fail_closed_no_file_write(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.delenv("LINAS_WHATSAPP_DATABASE_URL", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
     from db.session import reset_engine_for_tests
+    from services.billing.entitlements_service import EntitlementsStore
     from services.credit_ledger_service import CreditLedgerService
-    from services.entitlements_service import EntitlementsStore
 
     reset_engine_for_tests()
     ledger_root = tmp_path / "credit_ledger"
     ents_root = tmp_path / "entitlements"
     ledger = CreditLedgerService(root=ledger_root)
     store = EntitlementsStore(root=ents_root)
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
 

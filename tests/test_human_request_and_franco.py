@@ -2,12 +2,12 @@
 
 import pytest
 
-from services.cm.language_policy import resolve_customer_response_language
-from services.cm.progress_quality import assess_section_fill
-from services.cm.query_interpreter import HUMAN_INTENT_RE
-from services.cm.request_rules import normalize_request_rule_item
-from services.cm.setup_chat import SETUP_SECTION_ORDER
-from services.owner_copilot_v2.setup_flow import SETUP_SECTIONS
+from services.ai_setup.language_policy import resolve_customer_response_language
+from services.ai_setup.progress_quality import assess_section_fill
+from services.ai_setup.query_interpreter import HUMAN_INTENT_RE
+from services.ai_setup.request_rules import normalize_request_rule_item
+from services.ai_setup.setup_chat import SETUP_SECTION_ORDER
+from services.owner_copilot.setup_flow import SETUP_SECTIONS
 from services.request_graphs.compiler import destination_from_type
 from services.requests.constants import REQUEST_TYPES
 
@@ -45,10 +45,10 @@ def test_owner_setup_does_not_interview_languages() -> None:
 
 @pytest.mark.asyncio
 async def test_copilot_cannot_patch_languages(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.owner_ai_tools_write import tool_propose_cm_patch
+    from services.owner_copilot.tools_write import tool_propose_cm_patch
 
     monkeypatch.setattr(
-        "services.owner_ai_tools_write.resolve_permissions",
+        "services.owner_copilot.tools_write.resolve_permissions",
         lambda role, _extra: {"contentManagers": True},
     )
     blocked = await tool_propose_cm_patch(

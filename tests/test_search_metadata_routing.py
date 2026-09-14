@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from services.cm.request_rules import format_request_rules_for_ai
+from services.ai_setup.request_rules import format_request_rules_for_ai
 from services.customer_reply_v2.retrieval_item_index import record_content
-from services.search_metadata.luna_titles import luna_title_fields
+from services.search_metadata.title_fields import retrieval_title_fields
 
 
-def test_luna_title_fields_show_original_plus_ai() -> None:
-    fields = luna_title_fields(
+def test_retrieval_title_fields_show_original_plus_ai() -> None:
+    fields = retrieval_title_fields(
         {
             "id": "k1",
             "title": "12b",

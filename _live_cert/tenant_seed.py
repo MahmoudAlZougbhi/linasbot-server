@@ -115,7 +115,7 @@ def make_assets() -> dict[str, Path]:
 
 
 def _store_cm(*, filename: str, content: bytes, content_type: str) -> dict[str, Any]:
-    from services.cm.article_media import store_article_media
+    from services.ai_setup.article_media import store_article_media
 
     return store_article_media(
         tenant_id=TENANT_ID,
@@ -282,7 +282,7 @@ def seed_graphs() -> dict[str, Any]:
 
 def grant_test_credits() -> dict[str, Any]:
     from services.credit_ledger_service import credit_ledger_service
-    from services.token_wallet_service import token_wallet_service
+    from services.billing.token_wallet_service import token_wallet_service
 
     ledger = credit_ledger_service.grant_pack(
         tenant_id=TENANT_ID,

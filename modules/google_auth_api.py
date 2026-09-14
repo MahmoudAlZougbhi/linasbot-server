@@ -21,8 +21,8 @@ from services.google_identity_service import (
 )
 from services.google_sign_in_service import GoogleSignInError, verify_identity_token
 from services.social_account_sign_in import is_social_only_account
+from services.team.user_service import user_service
 from services.tenant_registration_service import allocate_tenant_id
-from services.user_service import user_service
 
 logger = logging.getLogger(__name__)
 

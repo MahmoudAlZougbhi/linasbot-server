@@ -1,4 +1,4 @@
-"""English-only checks for internal Luna search metadata.
+"""English-only checks for internal search metadata.
 
 Rejects non-Latin scripts and common Latin-script non-English (French, Spanish,
 German, Italian). Search metadata is internal; original user content is unchanged.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from inspect import getsource
 
-from services.customer_ai.actions.request_fields import merge_fields_for_persist, published_request_fields
+from services.brain.actions.request_fields import merge_fields_for_persist, published_request_fields
 from services.request_graphs.cm_sync import publish_with_optional_draft
 
 
@@ -36,7 +36,7 @@ def test_published_request_fields_fail_closed_without_db() -> None:
 
 def test_merge_fields_for_persist_keeps_values_and_published_keys(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.customer_ai.actions.request_fields.published_request_fields",
+        "services.brain.actions.request_fields.published_request_fields",
         lambda _tid, _kind: {"collected_fields": {"name": "", "date": ""}, "graph_id": "g1"},
     )
     assert merge_fields_for_persist("t1", "APPOINTMENT", {"name": "Ada"}) == {"name": "Ada", "date": ""}

@@ -7,7 +7,7 @@ from datetime import UTC
 from typing import Any
 
 from db.session import whatsapp_session
-from services.cm.schemas import SectionDraftEnvelope
+from services.ai_setup.schemas import SectionDraftEnvelope
 from services.tenant_runtime_config_backend import (
     require_tenant_runtime_config_postgres,
     tenant_runtime_config_postgres_required,

@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 import config
-from services.live_chat_contracts import utc_now
+from services.live_chat.contracts import utc_now
 from utils.conversation_save_result import FirestoreSaveOutcome, FirestoreSaveStatus
 from utils.utils_context import append_turn_to_user_context_memory
 from utils.utils_conversation_save_existing import save_message_when_conversation_id
@@ -222,7 +222,7 @@ async def save_conversation_message_to_firestore(
     channel = str(user_data.get("channel") or "").strip().lower()
     if channel:
         customer_info["channel"] = channel
-    from services.live_chat_tenant import conversation_tenant_fields
+    from services.live_chat.tenant import conversation_tenant_fields
 
     tenant_fields = conversation_tenant_fields(
         user_id=canonical_user_id,

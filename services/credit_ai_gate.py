@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.membership.plan_catalog import is_highest_catalog_plan
+from services.billing.membership.plan_catalog import is_highest_catalog_plan
 
 
 def remaining_credits(tenant_id: str | None) -> int:
@@ -65,8 +65,7 @@ def upgrade_plan_allowed(plan_id: str | None) -> bool:
 
 def owner_credits_paused_payload(tenant_id: str | None) -> dict[str, Any]:
     """Structured Copilot pause payload. Copilot still spends leftover credits."""
-    from services.entitlements_service import entitlements_store
-    from services.membership.message_flags import message_billing_enabled
+    from services.billing.entitlements_service import entitlements_store
 
     tid = (tenant_id or "").strip().lower()
     remaining = remaining_credits(tid) if tid else 0
@@ -78,5 +77,5 @@ def owner_credits_paused_payload(tenant_id: str | None) -> dict[str, Any]:
         "remaining": remaining,
         "plan_id": plan_id,
         "show_upgrade": show_upgrade,
-        "actions": {"buy_credits": not message_billing_enabled(), "upgrade_plan": show_upgrade},
+        "actions": {"buy_credits": True, "upgrade_plan": show_upgrade},
     }

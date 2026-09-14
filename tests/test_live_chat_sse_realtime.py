@@ -10,17 +10,17 @@ import pytest
 from fastapi.routing import APIRoute
 
 from modules.live_chat_api_helpers import broadcast_sse_event, session_allows_live_chat_sse_event
-from services.live_chat_channel import live_chat_event_tenant_id
-from services.live_chat_sse_broadcaster import live_chat_sse_broadcaster
+from services.live_chat.channel import live_chat_event_tenant_id
+from services.live_chat.sse_broadcaster import live_chat_sse_broadcaster
 
 
 def test_live_chat_api_and_sse_modules_under_500_lines() -> None:
     for rel in (
         "modules/live_chat_api.py",
         "modules/live_chat_api_helpers.py",
-        "services/live_chat_sse_broadcaster.py",
-        "services/live_chat_channel.py",
-        "services/live_chat_tenant.py",
+        "services/live_chat/sse_broadcaster.py",
+        "services/live_chat/channel.py",
+        "services/live_chat/tenant.py",
     ):
         assert len(Path(rel).read_text(encoding="utf-8").splitlines()) < 500, rel
 
@@ -50,8 +50,8 @@ def test_live_chat_event_tenant_id_from_prefixed_social_ids() -> None:
     assert live_chat_event_tenant_id("linas:facebook:page:user") == "linas"
     assert live_chat_event_tenant_id("shop:tiktok:open:id") == "shop"
     assert live_chat_event_tenant_id("+96170123456") == ""
-    assert live_chat_event_tenant_id("tiktok:open_id") == "linas"
-    assert live_chat_event_tenant_id("instagram:178414") == "linas"
+    assert live_chat_event_tenant_id("tiktok:open_id") == ""
+    assert live_chat_event_tenant_id("instagram:178414") == ""
 
 
 def _event(event_type: str, data: dict) -> dict:

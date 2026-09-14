@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from services.membership.catalog_admin import (
+from services.billing.membership.catalog_admin import (
     CatalogPublishBlocked,
     current_catalog,
     effective_offer_fields,
@@ -14,15 +14,21 @@ from services.membership.catalog_admin import (
     reset_catalog_admin_for_tests,
     update_draft,
 )
-from services.membership.cost_dashboard import global_dashboard, tenant_dashboard
-from services.membership.iap_message_grant import (
+from services.billing.membership.cost_dashboard import global_dashboard, tenant_dashboard
+from services.billing.membership.iap_message_grant import (
     grant_from_mapped_pack,
     maybe_grant_purchased_from_verified_txn,
 )
-from services.membership.lot_window import current_period_id
-from services.membership.message_catalog import offer_fields_for_plan
-from services.membership.message_flags import message_billing_cutover
-from services.membership.message_ledger import grant_lot, remaining_messages, reserve, reset_ledger_for_tests, settle
+from services.billing.membership.lot_window import current_period_id
+from services.billing.membership.message_catalog import offer_fields_for_plan
+from services.billing.membership.message_flags import message_billing_cutover
+from services.billing.membership.message_ledger import (
+    grant_lot,
+    remaining_messages,
+    reserve,
+    reset_ledger_for_tests,
+    settle,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -45,8 +51,8 @@ def test_public_plans_faq_capacity_from_message_catalog() -> None:
     body = asyncio.run(public_plans())
     lite = next(plan for plan in body["plans"] if plan["plan_id"] == "lite")
     assert lite["faq_capacity"] == 50
-    assert lite["included_messages"] == 550
-    assert lite["intended_price_usd"] == 10
+    assert lite["included_messages"] is None
+    assert lite["intended_price_usd"] == 9.99
     assert lite["comment_automation"] is False
     assert lite["whatsapp"] is False
     assert lite["web"] is False
@@ -76,13 +82,13 @@ def test_paid_plan_draft_does_not_change_public_until_publish() -> None:
 
     public = asyncio.run(public_plans())
     public_lite = next(plan for plan in public["plans"] if plan["plan_id"] == "lite")
-    assert public_lite["included_messages"] == 550
+    assert public_lite["included_messages"] is None
     assert public_lite["faq_capacity"] == 50
-    assert public_lite["intended_price_usd"] == 10
+    assert public_lite["intended_price_usd"] == 9.99
     with pytest.raises(CatalogPublishBlocked):
         publish(actor="owner")
     assert current_catalog()["published"] is False
-    assert effective_offer_fields("lite")["included_messages"] == 550
+    assert effective_offer_fields("lite")["included_messages"] is None
 
 
 def test_draft_rejects_free_plan_overlay() -> None:
@@ -95,7 +101,7 @@ def test_catalog_admin_persists_outside_memory_store(monkeypatch: pytest.MonkeyP
     monkeypatch.delenv("LINAS_BILLING_BACKEND", raising=False)
     monkeypatch.delenv("LINAS_WHATSAPP_DATABASE_URL", raising=False)
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
-    from services.membership import catalog_admin as admin
+    from services.billing.membership import catalog_admin as admin
 
     admin.reset_catalog_admin_for_tests()
     update_draft(actor="owner", changes={"plans": {"lite": {"included_messages": 600}}}, reason="disk")
@@ -111,7 +117,7 @@ def test_catalog_admin_persists_outside_memory_store(monkeypatch: pytest.MonkeyP
 
 
 def test_comments_locked_on_lite_and_free() -> None:
-    from services.membership.feature_entitlements import (
+    from services.billing.membership.feature_entitlements import (
         channel_flags_for_plan,
         comments_allowed_for_plan,
         tiktok_allowed_for_plan,
@@ -133,8 +139,8 @@ def test_comments_locked_on_lite_and_free() -> None:
 
 
 def test_entitlements_me_overlays_message_channel_flags(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore, get_tenant_entitlement_public
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore, get_tenant_entitlement_public
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)
@@ -148,7 +154,7 @@ def test_entitlements_me_overlays_message_channel_flags(tmp_path, monkeypatch: p
     assert pub["price_usd"] == 9.99
     assert pub["additional_seats"] == 0
     assert pub["message_billing_active"] is False
-    assert pub["included_messages"] == 550
+    assert pub["included_messages"] is None
     assert pub["available_messages"] is None
     store.set_plan(tenant_id="grow-ent", plan_id="growth", status="active", source="admin")
     grow = get_tenant_entitlement_public("grow-ent")
@@ -159,7 +165,7 @@ def test_entitlements_me_overlays_message_channel_flags(tmp_path, monkeypatch: p
 
 
 def test_ledger_health_reports_memory_store() -> None:
-    from services.membership.reconcile import ledger_health
+    from services.billing.membership.reconcile import ledger_health
 
     health = ledger_health("store-check")
     assert health["store"] == "memory"
@@ -192,7 +198,7 @@ def test_usage_classes_split_faq_and_generative() -> None:
 
 
 def test_cost_dashboard_filters_by_model() -> None:
-    from services.membership.expense_journal import record_expense, reset_expenses_for_tests
+    from services.billing.membership.expense_journal import record_expense, reset_expenses_for_tests
 
     reset_expenses_for_tests()
     record_expense(
@@ -228,14 +234,14 @@ def test_iap_grant_stays_off_without_cutover_or_pack(monkeypatch: pytest.MonkeyP
         product_id="com.linasai.credits.2500",
         transaction_id="txn-credit",
     )
-    assert skipped == {"granted": False, "reason": "cutover_off"}
+    assert skipped == {"granted": False, "reason": "credits_meter_only"}
     monkeypatch.setenv("MESSAGE_BILLING_CUTOVER", "true")
     unmapped = maybe_grant_purchased_from_verified_txn(
         tenant_id="iap-shop",
         product_id="com.linasai.credits.2500",
         transaction_id="txn-credit",
     )
-    assert unmapped == {"granted": False, "reason": "unmapped_or_unpriced_pack"}
+    assert unmapped == {"granted": False, "reason": "credits_meter_only"}
     assert remaining_messages("iap-shop") == 0
 
 
@@ -245,20 +251,20 @@ def test_iap_grant_from_explicit_sale_ready_pack() -> None:
         transaction_id="txn-pack-1",
         pack={"pack_id": "messages_100", "quantity": 100, "price_usd": 4, "sale_ready": True},
     )
-    assert result["granted"] is True
-    assert result["amount"] == 100
-    assert remaining_messages("pack-shop") == 100
+    assert result["granted"] is False
+    assert result["reason"] == "credits_meter_only"
+    assert remaining_messages("pack-shop") == 0
     again = grant_from_mapped_pack(
         tenant_id="pack-shop",
         transaction_id="txn-pack-1",
         pack={"pack_id": "messages_100", "quantity": 100, "price_usd": 4, "sale_ready": True},
     )
-    assert again["granted"] is True
-    assert remaining_messages("pack-shop") == 100
+    assert again["granted"] is False
+    assert remaining_messages("pack-shop") == 0
 
 
 def test_force_reindex_unpublished() -> None:
-    from services.customer_ai.search.force_reindex import force_reindex_tenant
+    from services.brain.search.force_reindex import force_reindex_tenant
 
     result = asyncio.run(force_reindex_tenant("no-pointer-tenant"))
     assert result["ready"] is False
@@ -266,15 +272,15 @@ def test_force_reindex_unpublished() -> None:
 
 
 def test_force_reindex_uses_processing_budget(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.cm.schemas import PublishedPointer
-    from services.customer_ai.search.force_reindex import force_reindex_tenant
-    from services.membership.processing_budgets import begin_job, reset_processing_budgets_for_tests
+    from services.ai_setup.schemas import PublishedPointer
+    from services.billing.membership.processing_budgets import begin_job, reset_processing_budgets_for_tests
+    from services.brain.search.force_reindex import force_reindex_tenant
 
     reset_processing_budgets_for_tests()
     begin_job("busy-tenant")
     begin_job("busy-tenant")
     monkeypatch.setattr(
-        "services.customer_ai.search.force_reindex.read_published_pointer",
+        "services.brain.search.force_reindex.read_published_pointer",
         lambda _tid: PublishedPointer(
             content_version_id="v1",
             index_version_id="i1",
@@ -307,7 +313,7 @@ def test_google_notification_attaches_cutover_off_grant(monkeypatch: pytest.Monk
         }
     )
     assert result["applied"] is True
-    assert result["message_grant"] == {"granted": False, "reason": "cutover_off"}
+    assert result["message_grant"] == {"granted": False, "reason": "credits_meter_only"}
 
 
 def test_google_unmapped_sku_grants_only_sale_ready_pack(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -333,11 +339,11 @@ def test_google_unmapped_sku_grants_only_sale_ready_pack(monkeypatch: pytest.Mon
         transaction_id="txn-pack",
         pack={"pack_id": "messages_100", "quantity": 100, "price_usd": 4, "sale_ready": True},
     )
-    assert granted["granted"] is True
+    assert granted["granted"] is False
 
 
 def test_offline_eval_contract_cases() -> None:
-    from services.customer_ai.evals.runner import run_fixture_corpus
+    from services.brain.evals.runner import run_fixture_corpus
 
     result = run_fixture_corpus()
     assert result["live_spend"] is False
@@ -373,9 +379,9 @@ def test_offline_eval_contract_cases() -> None:
 async def test_copilot_read_usage_keeps_credits_off_message_remaining(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
-    from services.owner_ai_tools_read import tool_read_usage
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
+    from services.owner_copilot.tools_read import tool_read_usage
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)
@@ -384,23 +390,21 @@ async def test_copilot_read_usage_keeps_credits_off_message_remaining(
     assert result.ok is True
     assert result.data["wallet_unit"] == "credits"
     assert result.data["message_billing_active"] is False
-    assert result.data["included_messages"] == 550
+    assert result.data["included_messages"] is None
     assert result.data["available_messages"] is None
     assert "leftover credits" in result.data["speak_as"]
 
 
 def test_cost_dashboard_grants_included_when_billing_on(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)
     store.set_plan(tenant_id="lite-cost", plan_id="lite", status="active", source="admin")
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     dash = tenant_dashboard("lite-cost")
-    assert dash["messages"]["message_billing_active"] is True
-    assert dash["messages"]["allocated"] == 550
-    assert dash["messages"]["remaining"] == 550
+    assert dash["messages"]["message_billing_active"] is False
 
 
 def test_topup_pack_product_id_draft_stays_unpriced() -> None:
@@ -455,10 +459,10 @@ def test_owner_portal_wires_catalog_and_costs() -> None:
 
 
 def test_cost_dashboard_includes_processing_and_edit_tenants() -> None:
-    from services.customer_ai.contracts.turn import ConversationState
-    from services.customer_ai.conversation_store import reset_conversation_store_for_tests, save_conversation
-    from services.membership.daily_edits import commit_edit, reserve_edit, reset_daily_edits_for_tests
-    from services.membership.processing_budgets import consume_attempt, reset_processing_budgets_for_tests
+    from services.billing.membership.daily_edits import commit_edit, reserve_edit, reset_daily_edits_for_tests
+    from services.billing.membership.processing_budgets import consume_attempt, reset_processing_budgets_for_tests
+    from services.brain.contracts.turn import ConversationState
+    from services.brain.conversation_store import reset_conversation_store_for_tests, save_conversation
 
     reset_processing_budgets_for_tests()
     reset_daily_edits_for_tests()

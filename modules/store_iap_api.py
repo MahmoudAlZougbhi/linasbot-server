@@ -20,7 +20,7 @@ from services.store_iap_service import (
 
 
 def apply_google_notification_effect(parsed: dict[str, Any]) -> dict[str, Any]:
-    from services.membership.iap_message_grant import (
+    from services.billing.membership.iap_message_grant import (
         maybe_grant_purchased_from_verified_txn,
         maybe_revoke_purchased_from_verified_txn,
     )

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from services.cm.article_media import validate_upload
-from services.cm.schemas import BranchAttachment, BranchesSection, BranchRecord, LocalizedLabels
-from services.cm.structured_resolver import resolve_branch_facts
+from services.ai_setup.article_media import validate_upload
+from services.ai_setup.schemas import BranchAttachment, BranchesSection, BranchRecord, LocalizedLabels
+from services.ai_setup.structured_resolver import resolve_branch_facts
 
 
 def test_branch_record_accepts_attachments() -> None:

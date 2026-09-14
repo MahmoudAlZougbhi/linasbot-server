@@ -9,8 +9,8 @@ import pytest
 from starlette.requests import Request
 
 from modules import meta_connections_api, meta_connections_api_lifecycle
-from services.channel_capability_toggles import set_channel_toggle
 from services.dashboard_session_service import SessionRecord
+from services.integrations.channel_capability_toggles import set_channel_toggle
 from services.meta_app_registry import APP_A_KEY
 from services.meta_oauth import MetaOAuthError
 from services.meta_oauth_return import (
@@ -256,10 +256,12 @@ async def test_legacy_comment_enable_uses_direct_instagram_subscription(monkeypa
         ),
     )
     monkeypatch.setattr(meta_connections_api_lifecycle, "ensure_comment_webhook_for_binding", _ensure)
-    monkeypatch.setattr("services.membership.comment_gate.assert_comment_automation_allowed", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.cm.constants.tenant_uses_cm_runtime", lambda *_a, **_k: False)
     monkeypatch.setattr(
-        "services.cm.actions.comments_enforcement_decision",
+        "services.billing.membership.comment_gate.assert_comment_automation_allowed", lambda *_a, **_k: None
+    )
+    monkeypatch.setattr("services.ai_setup.constants.tenant_uses_cm_runtime", lambda *_a, **_k: False)
+    monkeypatch.setattr(
+        "services.ai_setup.actions.comments_enforcement_decision",
         lambda **_k: {
             "allow": True,
             "reason": "enabled",
@@ -328,44 +330,44 @@ async def test_duplicate_enable_comments_re_ensures_comment_webhooks(monkeypatch
     )
 
     monkeypatch.setattr(
-        "services.channel_capability_toggles._ensure_comment_webhooks_for_platform",
+        "services.integrations.channel_capability_toggles._ensure_comment_webhooks_for_platform",
         _ensure_platform,
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.canonical_channel_bindings",
+        "services.integrations.channel_capability_toggles.canonical_channel_bindings",
         lambda *_a, **_k: [binding],
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.get_comment_reply_setting",
+        "services.integrations.channel_capability_toggles.get_comment_reply_setting",
         lambda **_k: SimpleNamespace(enabled=False, instructions=""),
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.set_comment_reply_setting",
+        "services.integrations.channel_capability_toggles.set_comment_reply_setting",
         lambda **_k: None,
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.get_meta_app_configs",
+        "services.integrations.channel_capability_toggles.get_meta_app_configs",
         lambda: {APP_A_KEY: SimpleNamespace(graph_api_version="v24.0")},
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.comments_enable_blocker",
+        "services.integrations.channel_capability_toggles.comments_enable_blocker",
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles._set_action_in_draft",
+        "services.integrations.channel_capability_toggles._set_action_in_draft",
         lambda **_k: SimpleNamespace(),
     )
 
     async def _publish(**_k):
         return None
 
-    monkeypatch.setattr("services.channel_capability_toggles._publish_actions", _publish)
+    monkeypatch.setattr("services.integrations.channel_capability_toggles._publish_actions", _publish)
     monkeypatch.setattr(
-        "services.channel_capability_toggles.channel_toggle_states",
+        "services.integrations.channel_capability_toggles.channel_toggle_states",
         lambda *_a, **_k: {"dm": True, "comments": True},
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.comment_capability_state",
+        "services.integrations.channel_capability_toggles.comment_capability_state",
         lambda *_a, **_k: {
             "effective_enabled": True,
             "requested_enabled": True,
@@ -374,7 +376,7 @@ async def test_duplicate_enable_comments_re_ensures_comment_webhooks(monkeypatch
         },
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles.dm_capability_state",
+        "services.integrations.channel_capability_toggles.dm_capability_state",
         lambda *_a, **_k: {"effective_enabled": True, "requested_enabled": True},
     )
 

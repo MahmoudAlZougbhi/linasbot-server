@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from services.cm.article_media import load_media_bytes, load_media_meta
-from services.cm.setup_resources import resolve_published_resource
+from services.ai_setup.article_media import load_media_bytes, load_media_meta
+from services.ai_setup.setup_resources import resolve_published_resource
 
 SendFn = Callable[..., Awaitable[Any]]
 

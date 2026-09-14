@@ -78,7 +78,7 @@ class MetaCommentProcessorTests(unittest.IsolatedAsyncioTestCase):
             return {"allow": True, "reason": "", "readiness": {}}
 
         self._enforcement_patch = mock.patch(
-            "services.cm.actions.comments_enforcement_decision",
+            "services.ai_setup.actions.comments_enforcement_decision",
             side_effect=_enforcement,
         )
         self._enforcement_patch.start()

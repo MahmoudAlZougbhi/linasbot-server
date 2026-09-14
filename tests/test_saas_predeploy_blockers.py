@@ -8,14 +8,14 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from services.cm.actions import (
+from services.ai_setup.actions import (
     ACTION_FACEBOOK_COMMENTS,
     comments_enforcement_decision,
     evaluate_comments_meta_readiness,
 )
-from services.cm.off_days import evaluate_off_days, resolve_off_day_facts
-from services.cm.runtime_pipeline import prepare_response
-from services.cm.schemas import (
+from services.ai_setup.off_days import evaluate_off_days, resolve_off_day_facts
+from services.ai_setup.runtime_pipeline import prepare_response
+from services.ai_setup.schemas import (
     ActionsSection,
     AiBasics,
     HandoffContact,
@@ -24,7 +24,7 @@ from services.cm.schemas import (
     OffDayRule,
     OffDaysSection,
 )
-from services.cm.structured_resolver import resolve_handoff
+from services.ai_setup.structured_resolver import resolve_handoff
 from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
 
@@ -193,7 +193,7 @@ def test_legacy_bridge_kill_switch(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("CM_DISABLE_LINAS_LEGACY_BRIDGE", "true")
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
     # Re-import path uses env each call
-    from services.cm import constants as cm_constants
+    from services.ai_setup import constants as cm_constants
 
     assert cm_constants.cm_disable_linas_legacy_bridge() is True
     assert cm_constants.tenant_allows_legacy_bridge("linas") is False

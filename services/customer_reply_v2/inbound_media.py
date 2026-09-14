@@ -124,7 +124,7 @@ async def store_inbound_image_from_url(user_data: dict[str, Any], url: str) -> s
     blob = fetched.get("bytes") or b""
     tenant_id = str(user_data.get("tenant_id") or user_data.get("tenantId") or "").strip()
     if blob and tenant_id:
-        from services.customer_ai.media_analysis.describe import describe_stills
+        from services.brain.media.describe import describe_stills
 
         visual = await describe_stills([blob], tenant_id=tenant_id, kind="image")
         if visual:
@@ -155,7 +155,7 @@ def store_inbound_image_base64(
 
 def mark_inbound_attachment(user_data: dict[str, Any], kind: str, **extra: Any) -> None:
     """Stamp the shared inbound-media view. Do not store image bytes here."""
-    inbound = dict(user_data.get("inbound_media_for_luna") or {})
+    inbound = dict(user_data.get("inbound_media_for_brain") or {})
     types = [str(item) for item in (inbound.get("attachment_types") or []) if str(item).strip()]
     label = (kind or "").strip()
     if label and label not in types:
@@ -165,12 +165,12 @@ def mark_inbound_attachment(user_data: dict[str, Any], kind: str, **extra: Any) 
         if value is None:
             continue
         inbound[key] = value
-    user_data["inbound_media_for_luna"] = inbound
+    user_data["inbound_media_for_brain"] = inbound
 
 
 def inbound_payload_from_user_data(user_data: dict[str, Any] | None, *, has_image: bool = False) -> dict[str, Any]:
     data = user_data if isinstance(user_data, dict) else {}
-    inbound = dict(data.get("inbound_media_for_luna") or {})
+    inbound = dict(data.get("inbound_media_for_brain") or {})
     urls = data.get("inbound_safety_image_urls")
     if urls:
         inbound["safety_image_urls"] = [str(u) for u in urls if str(u).strip()]
@@ -192,8 +192,8 @@ def inbound_payload_from_user_data(user_data: dict[str, Any] | None, *, has_imag
     return inbound
 
 
-def luna_inbound_view(result: InboundMediaResult) -> dict[str, Any]:
-    """Structured inbound for Luna: ids and counts, no bytes/storage keys."""
+def inbound_media_view(result: InboundMediaResult) -> dict[str, Any]:
+    """Structured inbound for Brain: ids and counts, no bytes/storage keys."""
     return {
         "attachment_types": list(result.attachment_types),
         "image_media_id": result.image_media_id or "",
@@ -384,7 +384,7 @@ async def _ingest_image(
 def _journal_stt(tenant_id: str, spoken: dict[str, Any], filename: str) -> None:
     if not tenant_id:
         return
-    from services.membership.provider_expense import record_pending_provider
+    from services.billing.membership.provider_expense import record_pending_provider
 
     record_pending_provider(
         event_id=f"stt:{tenant_id}:{filename}",

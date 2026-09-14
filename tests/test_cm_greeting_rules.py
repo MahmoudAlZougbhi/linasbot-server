@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from services.cm.greeting_rules import (
+from services.ai_setup.greeting_rules import (
     greeting_rule_has_text,
     greeting_rule_trigger_ok,
     normalize_greeting_item,
     sanitize_dynamic_messages_payload,
 )
-from services.cm.schemas import DynamicMessageRecord, DynamicMessagesSection
+from services.ai_setup.schemas import DynamicMessageRecord, DynamicMessagesSection
 
 
 def test_legacy_single_greeting_migrates_to_one_rule() -> None:

@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from services.cm.constants import CM_SECTIONS
-from services.cm.runtime_pipeline import prepare_response
-from services.cm.schemas import (
+from services.ai_setup.constants import CM_SECTIONS
+from services.ai_setup.runtime_pipeline import prepare_response
+from services.ai_setup.schemas import (
     OpeningHoursDay,
     OpeningHoursSchedule,
     OpeningHoursSection,
     default_section_payload,
 )
-from services.cm.structured_resolver import resolve_opening_hours_facts
+from services.ai_setup.structured_resolver import resolve_opening_hours_facts
 from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
 

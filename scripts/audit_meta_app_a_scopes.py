@@ -48,7 +48,7 @@ def _truthy(value: str | None) -> bool:
 
 
 def _print_cm_comment_actions(tenant_id: str) -> dict[str, bool]:
-    from services.cm.actions import (
+    from services.ai_setup.actions import (
         ACTION_FACEBOOK_COMMENTS,
         ACTION_INSTAGRAM_COMMENTS,
         action_enabled,
@@ -64,7 +64,7 @@ def _print_cm_comment_actions(tenant_id: str) -> dict[str, bool]:
     print(f"[scope-audit] cm_action_{ACTION_FACEBOOK_COMMENTS}={states['facebook']}")
     print(f"[scope-audit] cm_action_{ACTION_INSTAGRAM_COMMENTS}={states['instagram']}")
     print(f"[scope-audit] cm_disable_linas_legacy_bridge={os.getenv('CM_DISABLE_LINAS_LEGACY_BRIDGE', '')}")
-    print(f"[scope-audit] customer_retrieval_model={os.getenv('LINAS_CUSTOMER_RETRIEVAL_MODEL', 'gpt-5.6-luna')}")
+    print(f"[scope-audit] customer_retrieval_model={os.getenv('LINAS_CUSTOMER_RETRIEVAL_MODEL', 'voyage-4-large')}")
     print(f"[scope-audit] customer_answer_model={os.getenv('LINAS_CUSTOMER_ANSWER_MODEL', 'gpt-5.6-terra')}")
     print(f"[scope-audit] customer_media_context={os.getenv('CUSTOMER_MEDIA_CONTEXT_ENABLED', 'true')}")
     print(
@@ -121,7 +121,9 @@ def main() -> None:
     app_id = (os.getenv("META_APP_ID") or os.getenv("META_APP_A_ID") or "").strip()
     if app_id != "2963733803971681":
         raise SystemExit("Refusing unexpected Meta App ID")
-    tenant_id = (os.getenv("META_COMMENT_AUDIT_TENANT") or "linas").strip() or "linas"
+    tenant_id = (os.getenv("META_COMMENT_AUDIT_TENANT") or "").strip()
+    if not tenant_id:
+        raise SystemExit("META_COMMENT_AUDIT_TENANT required")
     expected_page_id = (os.getenv("META_SCOPE_AUDIT_PAGE_ID") or "378696005334409").strip()
     expected_instagram_id = (os.getenv("META_SCOPE_AUDIT_INSTAGRAM_ID") or "17841413184256533").strip()
     registry = get_meta_app_registry()
@@ -296,9 +298,9 @@ def _print_debug_permission_statuses(
 
 def _print_capability_probe(*, tenant_id: str) -> None:
     try:
-        from services.channel_capability_state import comment_capability_state, dm_capability_state
-        from services.entitlements_service import entitlements_store
-        from services.plan_economics import PLAN_PRICES_USD
+        from services.billing.entitlements_service import entitlements_store
+        from services.billing.plan_economics import PLAN_PRICES_USD
+        from services.integrations.channel_capability_state import comment_capability_state, dm_capability_state
     except Exception as exc:  # pragma: no cover - prod-only enrichment
         print(f"[scope-audit] capability_probe_skipped={type(exc).__name__}")
         return

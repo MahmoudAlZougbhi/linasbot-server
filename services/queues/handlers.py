@@ -134,7 +134,7 @@ async def handle_combine_flush(job: QueueJob) -> dict[str, Any]:
 
 
 async def handle_customer_ai_index(job: QueueJob) -> dict[str, Any]:
-    from services.customer_ai.search.index_schedule import run_tenant_index_job
+    from services.brain.search.index_schedule import run_tenant_index_job
 
     revision = str(job.payload.get("revision") or "")
     reason = str(job.payload.get("reason") or "queued")

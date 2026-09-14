@@ -9,7 +9,7 @@ from collections import deque
 from typing import Any, cast
 
 import config
-from services.live_chat_contracts import (
+from services.live_chat.contracts import (
     parse_timestamp_utc,
     utc_now,
 )

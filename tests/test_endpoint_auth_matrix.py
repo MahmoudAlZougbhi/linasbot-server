@@ -28,8 +28,8 @@ _ROUTE_MODULES = (
     "modules.mobile_auth_api",
     "modules.apple_auth_api",
     "modules.google_auth_api",
-    "modules.owner_ai_api",
-    "modules.owner_ai_v2_api",
+    "modules.owner_copilot_api",
+    "modules.owner_copilot_stream_api",
     "modules.owner_notifications_api",
     "modules.guest_ai_api",
     "modules.web_chat_api",
@@ -384,7 +384,7 @@ class TestSocialLiveChatMutations:
             return True
 
         monkeypatch.setattr(
-            "services.live_chat_service.live_chat_service.thread_visible_to_tenant",
+            "services.live_chat.service.live_chat_service.thread_visible_to_tenant",
             _visible,
         )
         _clear_client_auth(client)

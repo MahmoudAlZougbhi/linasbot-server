@@ -6,6 +6,7 @@ import pytest
 
 import services.interaction_flow_logger as flow_logger
 import services.owner_portal_service as portal
+from services.billing.plan_economics import PLAN_PRICES_USD
 
 
 def test_recent_flows_excludes_other_tenants_and_untagged_rows(monkeypatch):
@@ -49,12 +50,12 @@ def test_list_subscribers_groups_users_and_batches_billing(monkeypatch):
     assert rows[0]["roles"] == ["owner", "viewer"]
     assert rows[0]["credits_used"] == 45
     assert rows[0]["credits_remaining"] == 75
-    assert rows[0]["intended_included_messages"] == 3000
+    assert rows[0]["intended_included_messages"] is None
     assert rows[0]["intended_price_usd"] == 59.0
 
 
 def test_daily_edit_zero_limit_blocks_reserve() -> None:
-    from services.membership.daily_edits import (
+    from services.billing.membership.daily_edits import (
         DailyEditLimitError,
         reserve_edit,
         reset_daily_edits_for_tests,
@@ -91,27 +92,27 @@ def test_analytics_keeps_legacy_credits_and_adds_catalog_mrr(monkeypatch):
     )
     data = portal.analytics("last_7_days")
     assert data["credits_total"] == 7000
-    assert data["intended_message_mrr_usd"] == 10.0
-    assert data["live_checkout_mrr_usd"] != data["intended_message_mrr_usd"]
+    assert data["intended_message_mrr_usd"] == PLAN_PRICES_USD["lite"]
+    assert data["live_checkout_mrr_usd"] == data["intended_message_mrr_usd"]
 
 
 @pytest.mark.asyncio
 async def test_owner_copilot_publish_consumes_daily_edit(monkeypatch):
-    from services.membership.daily_edits import reset_daily_edits_for_tests, set_platform_baseline, status
-    from services.owner_ai_tools_write import tool_publish_cm
+    from services.billing.membership.daily_edits import reset_daily_edits_for_tests, set_platform_baseline, status
+    from services.owner_copilot.tools_write import tool_publish_cm
 
     reset_daily_edits_for_tests()
     try:
         set_platform_baseline(1)
         monkeypatch.setattr(
-            "services.owner_ai_tools_write.resolve_permissions",
+            "services.owner_copilot.tools_write.resolve_permissions",
             lambda *_a, **_k: {"contentPublish": True},
         )
 
         async def _publish_ok(**_kwargs):
             return {"content_version_id": "v1"}
 
-        monkeypatch.setattr("services.cm.publish.publish_draft", _publish_ok)
+        monkeypatch.setattr("services.ai_setup.publish.publish_draft", _publish_ok)
         first = await tool_publish_cm(tenant_id="pub-shop", role="owner", confirmed=True)
         assert first.ok is True
         assert status("pub-shop").used == 1

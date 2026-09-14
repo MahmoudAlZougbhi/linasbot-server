@@ -8,7 +8,7 @@ from fastapi import Body, HTTPException, Query, Request
 
 from modules.api_security import require_permission
 from modules.core import app
-from services.cm.faq_integration import (
+from services.ai_setup.faq_integration import (
     FaqIntegrationError,
     archive_cm_faq_group,
     create_faq_pair,
@@ -45,7 +45,7 @@ async def cm_list_faq(
 ) -> Any:
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
-    from services.faq_entitlements import get_faq_entitlement
+    from services.faq.faq_entitlements import get_faq_entitlement
 
     items = list_cm_faq(
         tenant_id=tenant_id,
@@ -56,7 +56,7 @@ async def cm_list_faq(
         include_archived=include_archived,
     )
     entitlement = get_faq_entitlement(tenant_id)
-    from services.cm.smart_answer_languages import smart_answer_languages_public
+    from services.ai_setup.smart_answer_languages import smart_answer_languages_public
 
     langs = smart_answer_languages_public(tenant_id=tenant_id)
     return {
@@ -82,9 +82,9 @@ async def cm_create_faq(request: Request, body: dict[str, Any] = Body(default={}
     if not question or not answer:
         raise HTTPException(status_code=400, detail="question and answer are required")
 
-    from services.faq_entitlements import FaqEntitlementError, assert_can_create_faq
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
+    from services.faq.faq_entitlements import FaqEntitlementError, assert_can_create_faq
 
     try:
         assert_can_create_faq(tenant_id)
@@ -112,7 +112,7 @@ async def cm_create_faq(request: Request, body: dict[str, Any] = Body(default={}
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    from services.faq_entitlements import get_faq_entitlement
+    from services.faq.faq_entitlements import get_faq_entitlement
 
     return {
         "success": True,
@@ -136,7 +136,7 @@ async def cm_faq_from_livechat(request: Request, body: dict[str, Any] = Body(def
     if not question or not answer:
         raise HTTPException(status_code=400, detail="question and answer are required")
 
-    from services.faq_entitlements import FaqEntitlementError, assert_can_create_faq
+    from services.faq.faq_entitlements import FaqEntitlementError, assert_can_create_faq
 
     try:
         assert_can_create_faq(tenant_id)
@@ -144,8 +144,8 @@ async def cm_faq_from_livechat(request: Request, body: dict[str, Any] = Body(def
         status = 403 if exc.code == "FAQ_DISABLED" else 402
         raise HTTPException(status_code=status, detail={"code": exc.code, **exc.payload}) from exc
 
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(
@@ -187,8 +187,8 @@ async def cm_patch_faq_variant(
 ) -> Any:
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(
@@ -221,8 +221,8 @@ async def cm_put_faq_attachments(
     raw = body.get("attachments")
     if not isinstance(raw, list):
         raise HTTPException(status_code=400, detail="attachments array is required")
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(tenant_id=tenant_id, kind="faq:attachments", payload={"id": qa_group_id, "attachments": raw}):
@@ -248,8 +248,8 @@ async def cm_regenerate_faq(
     tenant_id = _session_tenant(session)
     raw_langs = body.get("languages")
     languages = [str(lang) for lang in raw_langs] if isinstance(raw_langs, list) else None
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(
@@ -273,7 +273,7 @@ async def cm_regenerate_faq(
 async def cm_get_smart_answer_languages(request: Request) -> Any:
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
-    from services.cm.smart_answer_languages import smart_answer_languages_public
+    from services.ai_setup.smart_answer_languages import smart_answer_languages_public
 
     return {"success": True, **smart_answer_languages_public(tenant_id=tenant_id)}
 
@@ -286,10 +286,10 @@ async def cm_put_smart_answer_languages(request: Request, body: dict[str, Any] =
     if not isinstance(raw, list):
         raise HTTPException(status_code=400, detail="smart_answer_languages array is required")
     translate_existing = bool(body.get("translate_existing"))
-    from services.cm.faq_integration import FaqIntegrationError, translate_existing_faq_groups_to_language
-    from services.cm.smart_answer_languages import save_smart_answer_languages
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.ai_setup.faq_integration import FaqIntegrationError, translate_existing_faq_groups_to_language
+    from services.ai_setup.smart_answer_languages import save_smart_answer_languages
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(
@@ -302,7 +302,7 @@ async def cm_put_smart_answer_languages(request: Request, body: dict[str, Any] =
                 languages=[str(x) for x in raw],
                 updated_by=_actor(session),
             )
-            from services.cm.faq_integration import purge_smart_answer_language_data
+            from services.ai_setup.faq_integration import purge_smart_answer_language_data
 
             for lang in list(saved.get("removed") or []):
                 purge_smart_answer_language_data(
@@ -336,9 +336,9 @@ async def cm_delete_smart_answer_language(request: Request, language: str) -> An
     """Remove a Smart Q&A language and permanently delete all saved Q&A for that language."""
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
-    from services.cm.faq_integration import FaqIntegrationError, purge_smart_answer_language_data
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.ai_setup.faq_integration import FaqIntegrationError, purge_smart_answer_language_data
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(tenant_id=tenant_id, kind="faq:language-delete", payload={"language": language}):
@@ -361,11 +361,11 @@ async def cm_translate_existing_smart_answers(request: Request, body: dict[str, 
     language = str(body.get("language") or "").strip()
     if not language:
         raise HTTPException(status_code=400, detail="language is required")
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
-        from services.cm.faq_integration import FaqIntegrationError, translate_existing_faq_groups_to_language
+        from services.ai_setup.faq_integration import FaqIntegrationError, translate_existing_faq_groups_to_language
 
         with guarded_edit(tenant_id=tenant_id, kind="faq:translate", payload={"language": language}):
             result = await translate_existing_faq_groups_to_language(
@@ -384,8 +384,8 @@ async def cm_translate_existing_smart_answers(request: Request, body: dict[str, 
 async def cm_archive_faq(request: Request, qa_group_id: str) -> Any:
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(tenant_id=tenant_id, kind="faq:archive", payload={"id": qa_group_id}, safety=True):

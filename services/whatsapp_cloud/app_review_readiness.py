@@ -44,9 +44,11 @@ def _redirect_host() -> str:
     return urlparse(flags.oauth_redirect_uri).netloc or ""
 
 
-def build_app_review_readiness(*, tenant_id: str = "linas") -> dict[str, Any]:
+def build_app_review_readiness(*, tenant_id: str) -> dict[str, Any]:
     flags = get_whatsapp_cloud_flags()
-    tid = str(tenant_id or "").strip().lower() or "linas"
+    tid = str(tenant_id or "").strip().lower()
+    if not tid:
+        raise ValueError("tenant_id required")
     with whatsapp_session() as session:
         repo = WhatsAppCloudRepository(session)
         pilot = repo.get_active_pilot(tid)

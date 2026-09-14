@@ -64,7 +64,7 @@ async def test_handle_voice_message_firestore_get_uses_asyncio_to_thread(
     monkeypatch.setattr("utils.utils.get_firestore_db", lambda: _mock_firestore_db(doc_snap))
     monkeypatch.setattr(asyncio, "to_thread", tracking_to_thread)
     monkeypatch.setattr(
-        "services.cm.capability_gates.voice_processing_enabled",
+        "services.ai_setup.capability_gates.voice_processing_enabled",
         lambda _tenant: True,
     )
 

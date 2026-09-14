@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from services.cm.request_rules import (
+from services.ai_setup.request_rules import (
     format_request_rules_for_ai,
     migrate_legacy_to_rules,
     normalize_request_rule_item,
     request_rule_has_content,
     sanitize_requests_appointments_payload,
 )
-from services.cm.schemas import LocalizedLabels, RequestsAppointmentsSection
-from services.cm.schemas_requests import RequestRule
+from services.ai_setup.schemas import LocalizedLabels, RequestsAppointmentsSection
+from services.ai_setup.schemas_requests import RequestRule
 
 
 def test_normalize_request_rule_defaults_type() -> None:

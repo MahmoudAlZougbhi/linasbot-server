@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from services.cm.prod_migration import run_production_content_migration
-from services.cm.redistribution import redistribute_knowledge_draft, section_counts_snapshot
-from services.cm.schemas import KnowledgeSection, ServicesSection
-from services.cm.section_classifier import classify_article, detect_service_availability_conflicts
-from services.cm.storage import get_draft
+from services.ai_setup.prod_migration import run_production_content_migration
+from services.ai_setup.redistribution import redistribute_knowledge_draft, section_counts_snapshot
+from services.ai_setup.schemas import KnowledgeSection, PricesSection
+from services.ai_setup.section_classifier import classify_article, detect_service_availability_conflicts
+from services.ai_setup.storage import get_draft
 
 
 def test_classifier_routes_known_misplaced_titles() -> None:
@@ -225,12 +225,13 @@ def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monke
     assert "## Greeting Rule" in archived_titles
     assert "Beard Area Pricing and Rule" in archived_titles
 
-    services = ServicesSection.model_validate(get_draft("services", tenant_id=tenant).payload)
-    service_ids = {s.id for s in services.items}
-    assert "laser_hair_removal" in service_ids
-    assert "tattoo_removal" in service_ids
-    tattoo = next(s for s in services.items if s.id == "tattoo_removal")
-    assert tattoo.available is True
+    prices = PricesSection.model_validate(get_draft("prices", tenant_id=tenant).payload)
+    from services.ai_setup.pricing.section import section_catalog_items
+
+    catalog = {item.id: item for item in section_catalog_items(prices)}
+    assert "laser_hair_removal" in catalog
+    assert "tattoo_removal" in catalog
+    assert catalog["tattoo_removal"].active is True
 
     handoff = get_draft("handoff", tenant_id=tenant).payload
     assert "Appointment booking rules" in str(handoff.get("policy_text") or "")
@@ -241,7 +242,7 @@ def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monke
     prices = get_draft("prices", tenant_id=tenant).payload
     assert "Beard area pricing" in str(prices.get("policy_text") or "")
 
-    from services.cm.schemas import CareSection
+    from services.ai_setup.schemas import CareSection
 
     care = CareSection.model_validate(get_draft("care", tenant_id=tenant).payload)
     checksums = {i.source_checksum for i in knowledge.items if i.source_checksum}
@@ -262,7 +263,7 @@ def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monke
 
 
 def test_policy_text_is_chunked_for_embeddings() -> None:
-    from services.cm.semantic_index import _MAX_EMBED_CHARS, _chunk_policy_text, _section_notes_entries
+    from services.ai_setup.semantic_index import _MAX_EMBED_CHARS, _chunk_policy_text, _section_notes_entries
 
     prefix = "--- redistributed from "
     policy = f"{prefix}id=a title=one ---\n" + ("alpha " * 200) + f"\n\n{prefix}id=b title=two ---\n" + ("beta " * 200)

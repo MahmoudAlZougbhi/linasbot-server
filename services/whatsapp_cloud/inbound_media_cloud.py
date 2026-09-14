@@ -82,8 +82,8 @@ async def _ingest_video(snapshot: dict[str, Any], content: bytes) -> None:
 
 
 async def _transcribe_audio(snapshot: dict[str, Any], content: bytes) -> None:
+    from services.billing.membership.provider_expense import record_pending_provider
     from services.customer_reply_v2.inbound_stt import transcribe_inbound_audio
-    from services.membership.provider_expense import record_pending_provider
 
     spoken = await transcribe_inbound_audio(data=content, filename="voice.ogg")
     tenant_id = str(snapshot.get("tenant_id") or "")

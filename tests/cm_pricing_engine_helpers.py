@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from services.cm.pricing.migration import seed_example_discount_rule_subtotal
-from services.cm.pricing.schemas import (
+from services.ai_setup.pricing.migration import seed_example_discount_rule_subtotal
+from services.ai_setup.pricing.schemas import (
     CatalogCategory,
     CatalogItem,
     DiscountRule,
@@ -13,7 +13,7 @@ from services.cm.pricing.schemas import (
     RuleCondition,
     RuleConditionGroup,
 )
-from services.cm.schemas import LocalizedLabels
+from services.ai_setup.schemas import LocalizedLabels
 
 
 def _labels(en: str, **extra: str) -> LocalizedLabels:

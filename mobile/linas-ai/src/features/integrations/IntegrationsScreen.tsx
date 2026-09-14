@@ -46,12 +46,10 @@ const PLATFORM_LABEL: Record<string, StringKey> = {
   instagram: 'platformInstagram',
   facebook: 'platformFacebook',
   tiktok: 'platformTikTok',
-  snapchat: 'platformSnapchat',
 };
 
 function isComingSoon(row: Row): boolean {
-  if (row.coming_soon === true) return true;
-  return row.platform === 'snapchat';
+  return row.coming_soon === true;
 }
 
 export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props) {

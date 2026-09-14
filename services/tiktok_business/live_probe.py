@@ -13,7 +13,7 @@ from services.tiktok_business.repository_enhanced import TikTokEnhancedRepositor
 from services.tiktok_business.status import tiktok_integration_row
 
 
-async def probe_linas_enhanced_readonly(*, tenant_id: str = "linas") -> dict[str, Any]:
+async def probe_linas_enhanced_readonly(*, tenant_id: str) -> dict[str, Any]:
     row = tiktok_integration_row(tenant_id)
     enhanced = dict(row.get("enhanced_video_context") or {})
     connection = None

@@ -132,7 +132,7 @@ async def process_web_chat_message(
     tid = widget.tenant_id
     eligible, reason = evaluate_web_ai_eligibility(tid, widget)
     if not eligible:
-        from services.membership.message_flags import message_billing_enabled
+        from services.billing.membership.message_flags import message_billing_enabled
 
         credit_paused = (
             "AI replies are paused until leftover credits are available."
@@ -157,14 +157,14 @@ async def process_web_chat_message(
     inbound_media: dict[str, Any] | None = None
     attachment_types: list[str] | None = None
     if attachments:
-        from services.customer_reply_v2.inbound_media import ingest_inbound_attachments, luna_inbound_view
+        from services.customer_reply_v2.inbound_media import inbound_media_view, ingest_inbound_attachments
 
         inbound = await ingest_inbound_attachments(
             tenant_id=tid,
             attachments=attachments,
             caption=text,
         )
-        inbound_media = luna_inbound_view(inbound)
+        inbound_media = inbound_media_view(inbound)
         if inbound.safety_image_urls:
             inbound_media["safety_image_urls"] = list(inbound.safety_image_urls)
         attachment_types = list(inbound.attachment_types)
@@ -328,7 +328,7 @@ async def process_web_chat_message(
     except PermissionError as exc:
         if runtime.record and (runtime.record.reservation_id or credit.reservation_id):
             fenced_failure_release(runtime, credit, conversation_id=conversation_id, user_text=text)
-        from services.membership.message_flags import message_billing_enabled
+        from services.billing.membership.message_flags import message_billing_enabled
 
         raise WebChatError(
             "insufficient_credits",

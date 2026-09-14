@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from services.entitlements_service import entitlements_store, is_subscription_exempt_tenant
-from services.membership.feature_entitlements import tiktok_allowed_for_plan
+from services.billing.entitlements_service import entitlements_store, is_subscription_exempt_tenant
+from services.billing.membership.feature_entitlements import tiktok_allowed_for_plan
 from services.tiktok_business.errors import TikTokPlanDeniedError
 
 

@@ -207,7 +207,7 @@ async def _activate_validated_facebook_pages_locked(
                     registry=registry,
                     client=client,
                 )
-            from services.channel_capability_toggles import (
+            from services.integrations.channel_capability_toggles import (
                 ChannelToggleError,
                 enable_channel_defaults_after_connect,
             )

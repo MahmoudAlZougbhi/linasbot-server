@@ -24,7 +24,7 @@ _LEGACY_FAQ_WRITE_BLOCKED = {
 
 def _legacy_faq_writes_blocked() -> dict[str, Any] | None:
     """Block dashboard Bot Training writes when CM FAQ is the sole authoring entry."""
-    from services.cm.constants import cm_faq_canonical
+    from services.ai_setup.constants import cm_faq_canonical
 
     if cm_faq_canonical():
         return dict(_LEGACY_FAQ_WRITE_BLOCKED)

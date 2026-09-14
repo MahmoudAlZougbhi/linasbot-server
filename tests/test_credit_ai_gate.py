@@ -6,20 +6,20 @@ from pathlib import Path
 
 import pytest
 
+from services.billing.entitlements_service import EntitlementsStore
+from services.billing.membership.plan_catalog import is_highest_catalog_plan
 from services.credit_ai_gate import (
     ai_generation_blocked,
     remaining_credits,
     upgrade_plan_allowed,
 )
 from services.credit_ledger_service import CreditLedgerService
-from services.entitlements_service import EntitlementsStore
-from services.membership.plan_catalog import is_highest_catalog_plan
 
 
 @pytest.fixture()
 def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CreditLedgerService:
     store = EntitlementsStore(root=tmp_path / "ents")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
     store.set_plan(tenant_id="clinic", plan_id="starter", status="active", source="admin")
@@ -68,13 +68,13 @@ def test_upgrade_hidden_only_on_max() -> None:
 
 
 def test_clinic_tenants_are_not_linas_exempt(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.entitlements_service import is_subscription_exempt_tenant
-    from services.token_wallet_service import is_unlimited_tenant
+    from services.billing.entitlements_service import is_subscription_exempt_tenant
+    from services.billing.token_wallet_service import is_unlimited_tenant
 
     monkeypatch.delenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", raising=False)
     monkeypatch.delenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", raising=False)
-    assert is_subscription_exempt_tenant("linas") is True
-    assert is_unlimited_tenant("linas") is True
+    assert is_subscription_exempt_tenant("linas") is False
+    assert is_unlimited_tenant("linas") is False
     for tid in ("ok-clinic", "clinic", "linas-clinic", "linas_clinic"):
         assert is_subscription_exempt_tenant(tid) is False
         assert is_unlimited_tenant(tid) is False
@@ -161,7 +161,7 @@ def test_copilot_pause_stays_leftover_when_message_billing_on(
     paused = owner_credits_paused_payload("clinic")
     assert "leftover credits" in paused["message"]
     assert "messages" not in paused["message"]
-    assert paused["actions"]["buy_credits"] is False
+    assert paused["actions"]["buy_credits"] is True
 
 
 def test_inflight_reserved_does_not_fund_new_owner_turn(ledger_env: CreditLedgerService) -> None:
@@ -231,7 +231,7 @@ def test_owner_turn_credit_begin_capture_debits_ledger(ledger_env: CreditLedgerS
 async def test_max_plan_owner_copilot_emits_credits_paused_at_zero(
     ledger_env: CreditLedgerService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from services.owner_copilot_v2.brain import iter_owner_turn_v2_events
+    from services.owner_copilot.brain import iter_owner_turn_v2_events
 
     _drain(ledger_env, "t_max", "drain-max-copilot")
     monkeypatch.setenv("OWNER_COPILOT_V2", "1")
@@ -239,7 +239,7 @@ async def test_max_plan_owner_copilot_emits_credits_paused_at_zero(
     async def _must_not_run(**_kwargs):  # noqa: ANN001
         raise AssertionError("model must not run at 0 credits")
 
-    monkeypatch.setattr("services.owner_copilot_v2.brain.iter_sol_tool_round", _must_not_run)
+    monkeypatch.setattr("services.owner_copilot.brain.iter_sol_tool_round", _must_not_run)
 
     events: list[str] = []
     async for ev in iter_owner_turn_v2_events(

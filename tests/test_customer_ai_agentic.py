@@ -6,16 +6,16 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from services.customer_ai.agent.multi_retrieve import multi_round_retrieve
-from services.customer_ai.agent.normalize_query import normalize_query
-from services.customer_ai.agent.rewrite import rewrite_queries
-from services.customer_ai.agent.task_coverage import evaluate_task_coverage, missing_tasks
-from services.customer_ai.budgets import DEFAULT_BUDGETS, TurnBudgets
-from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
-from services.customer_ai.contracts.turn import CustomerTurn, HistorySnapshot
-from services.customer_ai.tools.registry import execute_tool
-from services.customer_ai.verify.critic import verify_answer
+from services.brain.agent.multi_retrieve import multi_round_retrieve
+from services.brain.agent.normalize_query import normalize_query
+from services.brain.agent.rewrite import rewrite_queries
+from services.brain.agent.task_coverage import evaluate_task_coverage, missing_tasks
+from services.brain.budgets import DEFAULT_BUDGETS, TurnBudgets
+from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
+from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+from services.brain.contracts.turn import CustomerTurn, HistorySnapshot
+from services.brain.tools.registry import execute_tool
+from services.brain.verify.critic import verify_answer
 
 
 def _plan(*tasks: PlannerTask) -> PlannerPlan:
@@ -58,7 +58,7 @@ async def test_multi_round_stops_early_when_covered() -> None:
         calls["n"] += 1
         return found
 
-    with patch("services.customer_ai.agent.multi_retrieve.retrieve_published", new=AsyncMock(side_effect=_retrieve)):
+    with patch("services.brain.agent.multi_retrieve.retrieve_published", new=AsyncMock(side_effect=_retrieve)):
         bundle, trace, _facts = await multi_round_retrieve(turn, plan, "laser price?", max_rounds=3)
     assert bundle.outcome == "found"
     assert any(row.get("reason") == "early_stop_covered" for row in trace)
@@ -117,7 +117,7 @@ async def test_budget_exhaustion() -> None:
     turn = _turn()
     empty = EvidenceBundle(items=[], outcome="not_found")
     with patch(
-        "services.customer_ai.agent.multi_retrieve.retrieve_published",
+        "services.brain.agent.multi_retrieve.retrieve_published",
         new=AsyncMock(return_value=empty),
     ):
         bundle, trace, _facts = await multi_round_retrieve(turn, plan, "laser hours beirut?", max_rounds=2)
@@ -199,7 +199,7 @@ async def test_multi_round_covers_two_tasks_in_one_round() -> None:
             return found_h
         return found_k
 
-    with patch("services.customer_ai.agent.multi_retrieve.retrieve_published", new=AsyncMock(side_effect=_retrieve)):
+    with patch("services.brain.agent.multi_retrieve.retrieve_published", new=AsyncMock(side_effect=_retrieve)):
         bundle, trace, _facts = await multi_round_retrieve(turn, plan, "laser hours antelias?", max_rounds=3)
     assert bundle.outcome == "found"
     assert calls["n"] == 2

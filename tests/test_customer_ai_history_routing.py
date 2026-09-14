@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_ai.history_store import load_history_snapshot
+from services.brain.history_store import load_history_snapshot
 
 
 @pytest.mark.asyncio
@@ -19,7 +19,7 @@ async def test_history_store_whatsapp_channel_only(monkeypatch: pytest.MonkeyPat
         return [{"id": "wa1", "role": "user", "text": f"from-{cid}", "visible_to_customer": True}]
 
     monkeypatch.setattr("utils.utils_context.get_conversation_history_from_firestore", empty_firestore)
-    monkeypatch.setattr("services.customer_ai.history_whatsapp.load_whatsapp_history_rows", mark_wa)
+    monkeypatch.setattr("services.brain.history_whatsapp.load_whatsapp_history_rows", mark_wa)
     ig = await load_history_snapshot(
         user_id="u1",
         conversation_id="wamid_lookalike_12345678",
@@ -37,8 +37,8 @@ async def test_history_store_whatsapp_channel_only(monkeypatch: pytest.MonkeyPat
 
 @pytest.mark.asyncio
 async def test_history_store_meta_uses_conversation_store(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.conversation_history import append_visible_history
-    from services.customer_ai.conversation_store import reset_conversation_store_for_tests
+    from services.brain.conversation_history import append_visible_history
+    from services.brain.conversation_store import reset_conversation_store_for_tests
 
     reset_conversation_store_for_tests()
     append_visible_history("ig-shop", "ig-thread-meta-1", [{"id": "old", "role": "user", "text": "earlier ig"}])
@@ -49,15 +49,15 @@ async def test_history_store_meta_uses_conversation_store(monkeypatch: pytest.Mo
 
     monkeypatch.setattr("utils.utils_context.get_conversation_history_from_firestore", empty_firestore)
     monkeypatch.setattr(
-        "services.customer_ai.history_whatsapp.load_whatsapp_history_rows",
+        "services.brain.history_whatsapp.load_whatsapp_history_rows",
         lambda _cid: called.__setitem__("wa", called["wa"] + 1) or [],
     )
     monkeypatch.setattr(
-        "services.customer_ai.history_web.load_web_history_rows",
+        "services.brain.history_web.load_web_history_rows",
         lambda _cid: called.__setitem__("web", called["web"] + 1) or [],
     )
     monkeypatch.setattr(
-        "services.customer_ai.history_tiktok.load_tiktok_history_rows",
+        "services.brain.history_tiktok.load_tiktok_history_rows",
         lambda _cid: called.__setitem__("tt", called["tt"] + 1) or [],
     )
     snap = await load_history_snapshot(
@@ -73,9 +73,9 @@ async def test_history_store_meta_uses_conversation_store(monkeypatch: pytest.Mo
 
 
 def test_media_only_turn_persists_history() -> None:
-    from services.customer_ai.contracts.turn import CustomerTurn, MediaView
-    from services.customer_ai.conversation_history import load_stored_history_rows, record_turn_history
-    from services.customer_ai.conversation_store import reset_conversation_store_for_tests
+    from services.brain.contracts.turn import CustomerTurn, MediaView
+    from services.brain.conversation_history import load_stored_history_rows, record_turn_history
+    from services.brain.conversation_store import reset_conversation_store_for_tests
 
     reset_conversation_store_for_tests()
     turn = CustomerTurn(

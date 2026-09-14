@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from services.cm.prod_migration import (
+from services.ai_setup.prod_migration import (
     run_production_content_migration,
     stage_live_data_for_migration,
 )
-from services.cm.schemas import ArticleRecord, FaqRecord, FaqVariant, KnowledgeSection
-from services.cm.scrub_restore import restore_keyword_scrubbed_content
-from services.cm.storage import get_draft, put_draft
+from services.ai_setup.schemas import ArticleRecord, FaqRecord, FaqVariant, KnowledgeSection
+from services.ai_setup.scrub_restore import restore_keyword_scrubbed_content
+from services.ai_setup.storage import get_draft, put_draft
 
 
 def test_stage_and_migrate_keeps_topic_content_active(tmp_path: Path) -> None:

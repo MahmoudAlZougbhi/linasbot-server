@@ -73,8 +73,8 @@ def is_within_business_hours(*, tenant_id: str, now: datetime | None = None) -> 
         now_utc = now_utc.replace(tzinfo=UTC)
 
     try:
-        from services.cm.schemas import OpeningHoursSection
-        from services.cm.version_store import load_published_content
+        from services.ai_setup.schemas import OpeningHoursSection
+        from services.ai_setup.version_store import load_published_content
 
         _pointer, sections = load_published_content(tenant_id)
     except Exception:

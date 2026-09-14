@@ -33,7 +33,7 @@ updates = {
     # Customer Reply V2 is unconditional in code; keep semantic retrieval + media on
     "CUSTOMER_SEMANTIC_RETRIEVAL_ENABLED": "true",
     "CUSTOMER_MEDIA_CONTEXT_ENABLED": "true",
-    "LINAS_CUSTOMER_RETRIEVAL_MODEL": "gpt-5.6-luna",
+    "LINAS_CUSTOMER_RETRIEVAL_MODEL": "voyage-4-large",
     "LINAS_CUSTOMER_ANSWER_MODEL": "gpt-5.6-terra",
     "LINAS_CUSTOMER_MODEL": "gpt-5.6-terra",
     # Preserve required production constraints

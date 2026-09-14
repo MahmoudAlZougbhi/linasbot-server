@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.live_chat_operator_text_delivery import operator_media_not_supported
-from services.live_chat_operator_web_delivery import (
+from services.live_chat.operator_text_delivery import operator_media_not_supported
+from services.live_chat.operator_web_delivery import (
     deliver_web_operator_text,
     parse_web_visitor_session_id,
     web_operator_media_not_supported,
 )
-from services.live_chat_service import live_chat_service
+from services.live_chat.service import live_chat_service
 
 
 def test_parse_web_visitor_session_id() -> None:
@@ -94,11 +94,11 @@ def _send_patches(*extra: object):
     pause_result = MagicMock(activated=True, already_active=False, control_epoch=3)
     return (
         patch(
-            "services.live_chat_service_operator._try_acquire_operator_send_idempotency",
+            "services.live_chat.service_operator._try_acquire_operator_send_idempotency",
             new_callable=AsyncMock,
             return_value=(True, None),
         ),
-        patch("services.live_chat_service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
+        patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("web:visitor-1", None)),
         patch("utils.utils.get_firestore_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
@@ -180,11 +180,11 @@ async def test_unknown_channel_text_does_not_call_whatsapp() -> None:
     adapter.send_text_message = AsyncMock()
     with (
         patch(
-            "services.live_chat_service_operator._try_acquire_operator_send_idempotency",
+            "services.live_chat.service_operator._try_acquire_operator_send_idempotency",
             new_callable=AsyncMock,
             return_value=(True, None),
         ),
-        patch("services.live_chat_service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
+        patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("unlabeled", None)),
         patch("utils.utils.get_firestore_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
@@ -218,11 +218,11 @@ async def test_tiktok_media_rejected_before_pause() -> None:
     activate = AsyncMock()
     with (
         patch(
-            "services.live_chat_service_operator._try_acquire_operator_send_idempotency",
+            "services.live_chat.service_operator._try_acquire_operator_send_idempotency",
             new_callable=AsyncMock,
             return_value=(True, None),
         ),
-        patch("services.live_chat_service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
+        patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("services.requests.manual_mode.activate_manual_mode", activate),
     ):
         result = await live_chat_service.send_operator_message(

@@ -9,7 +9,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, cast
 
-from services.api_integrations import send_appointment_reminders
+from services.saas_no_boc import send_appointment_reminders
 
 
 def _extract_appointments(result: dict) -> list[dict]:

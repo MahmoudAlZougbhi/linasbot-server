@@ -6,8 +6,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from services.membership.lot_window import current_period_id
-from services.membership.message_ledger import (
+from services.billing.membership.lot_window import current_period_id
+from services.billing.membership.message_ledger import (
     InsufficientMessages,
     grant_lot,
     remaining_messages,

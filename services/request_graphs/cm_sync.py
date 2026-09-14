@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.cm.storage import put_draft
+from services.ai_setup.storage import put_draft
 from services.request_graphs.service import delete_graph, publish_graph
 
 SECTION = "requests_appointments"

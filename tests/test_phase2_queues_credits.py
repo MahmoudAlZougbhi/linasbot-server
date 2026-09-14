@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
+from services.billing.entitlements_service import EntitlementsStore
 from services.credit_ledger_service import CreditLedgerService
-from services.entitlements_service import EntitlementsStore
 from services.queues.models import QueueJob
 
 
 def _ledger(tmp_path, monkeypatch, tenant: str = "t1", plan: str = "pro"):
-    from services import entitlements_service as es
+    from services.billing import entitlements_service as es
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)
@@ -236,10 +236,7 @@ def test_meta_capability_matrix_truthful() -> None:
         assert comment["live_verified"] is False
         publish = row["capabilities"]["content_publish"]
         assert publish["live_verified"] is False
-    snap = next(r for r in rows if r["platform"] == "snapchat")
-    assert snap["coming_soon"] is True
-    assert snap["connectable"] is False
-    assert snap["connected"] is False
+    assert all(r["platform"] != "snapchat" for r in rows)
     tt = next(r for r in rows if r["platform"] == "tiktok")
     assert tt["coming_soon"] is False
     assert tt["connected"] is False

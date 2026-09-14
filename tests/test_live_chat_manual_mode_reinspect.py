@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from services.dashboard_session_service import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME, session_service
-from services.live_chat_service import live_chat_service
+from services.live_chat.service import live_chat_service
 
 _ROUTE_MODULES = ("modules.live_chat_api",)
 
@@ -65,11 +65,11 @@ async def test_image_send_reports_failure_when_adapter_fails() -> None:
 
     with (
         patch(
-            "services.live_chat_service_operator._try_acquire_operator_send_idempotency",
+            "services.live_chat.service_operator._try_acquire_operator_send_idempotency",
             new_callable=AsyncMock,
             return_value=(True, None),
         ),
-        patch("services.live_chat_service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
+        patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("+96170123456", "+96170123456")),
         patch("utils.utils.get_firestore_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),

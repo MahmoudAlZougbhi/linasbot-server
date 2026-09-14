@@ -99,7 +99,7 @@ async def list_meta_connections(request: Request) -> Any:
             channel=binding.channel,
             asset_id=binding.asset_id,
         )
-        from services.cm.actions import comments_enforcement_decision
+        from services.ai_setup.actions import comments_enforcement_decision
 
         comment_decision = comments_enforcement_decision(
             tenant_id=binding.tenant_id,

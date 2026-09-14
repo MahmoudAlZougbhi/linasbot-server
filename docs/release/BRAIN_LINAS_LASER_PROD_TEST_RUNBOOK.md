@@ -19,7 +19,7 @@ With this branch deployed, `Customer Brain permanent (no enable flag)` returns `
 | `false` | `true` | `emergency_legacy_unavailable`, no reply | No |
 | `true` | any | Brain runtime (subject to tenant + index gates) | No |
 
-Helper: `services.customer_ai.flags.assert_safe_brain_cutover()` →
+Helper: `services.brain.flags.assert_safe_brain_cutover()` →
 `brain_on/off`, `emergency_legacy` (always false by default), `rollback_required_when_brain_off=true`.
 
 ## 0) Before deploy

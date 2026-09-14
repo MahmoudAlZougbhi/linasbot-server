@@ -11,15 +11,15 @@ from datetime import date, datetime
 from typing import Any
 
 import config
-from services.api_integrations import get_customer_appointments, get_customer_by_phone
 from services.customer_appointment_helpers import (
     extract_customer_appointments_list as _extract_customer_appointments_list,
 )
-from services.live_chat_service import live_chat_service
+from services.live_chat.service import live_chat_service
 from services.message_logs_service import message_logs_service
+from services.saas_no_boc import get_customer_appointments, get_customer_by_phone
 from services.service_template_mapping_service import service_template_mapping_service
 from services.smart_messaging import smart_messaging
-from services.user_persistence_service import user_persistence
+from services.team.user_persistence_service import user_persistence
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 from utils.phone_utils import normalize_phone
 

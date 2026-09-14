@@ -16,7 +16,7 @@ if str(ROOT) not in sys.path:
 
 async def _main() -> int:
     parser = argparse.ArgumentParser(description="Read-only TikTok enhanced post-context probe")
-    parser.add_argument("--tenant-id", default="linas")
+    parser.add_argument("--tenant-id", required=True)
     args = parser.parse_args()
     from services.tiktok_business.live_probe import probe_linas_enhanced_readonly
 

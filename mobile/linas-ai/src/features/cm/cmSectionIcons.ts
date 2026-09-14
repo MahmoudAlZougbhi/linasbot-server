@@ -7,7 +7,6 @@ export const CM_SECTION_ICONS: Record<CmSectionId, AppIconName> = {
   languages: feather('globe'),
   style: ion('color-palette-outline'),
   dynamic_messages: feather('message-square'),
-  services: feather('shopping-bag'),
   branches: feather('map-pin'),
   opening_hours: feather('clock'),
   prices: feather('tag'),

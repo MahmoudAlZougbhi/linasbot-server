@@ -26,8 +26,8 @@ from services.apple_sign_in_service import AppleSignInError, is_private_relay_em
 from services.dashboard_session_service import session_service
 from services.mobile_refresh_token_service import mobile_refresh_token_service
 from services.social_account_sign_in import is_social_only_account
+from services.team.user_service import user_service
 from services.tenant_registration_service import allocate_tenant_id
-from services.user_service import user_service
 
 logger = logging.getLogger(__name__)
 
@@ -291,7 +291,7 @@ async def mobile_account_delete(request: Request) -> Any:
             authorization_code = (str(raw.get("authorization_code") or "")).strip() or None
     except Exception:
         authorization_code = None
-    from services.membership.edit_http import guarded_edit
+    from services.billing.membership.edit_http import guarded_edit
 
     with guarded_edit(
         tenant_id=str(getattr(session, "tenant_id", "") or ""),

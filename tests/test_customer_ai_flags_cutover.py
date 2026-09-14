@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_ai.flags import assert_safe_brain_cutover, emergency_legacy_reply_enabled
-from services.customer_ai.tenant_gate import evaluate_brain_tenant_gate
+from services.brain.flags import assert_safe_brain_cutover, emergency_legacy_reply_enabled
+from services.brain.tenant_gate import evaluate_brain_tenant_gate
 from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 
 

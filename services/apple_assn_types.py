@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from services.entitlements_service import EntitlementStatus
+from services.billing.entitlements_service import EntitlementStatus
 
 AssnAction = Literal[
     "apply_txn",

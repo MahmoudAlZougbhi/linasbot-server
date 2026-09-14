@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from services.live_chat_meta_operator_media import decode_operator_media_payload
-from services.live_chat_operator_social_delivery import (
+from services.live_chat.meta_operator_media import decode_operator_media_payload
+from services.live_chat.operator_social_delivery import (
     infer_live_chat_source_channel,
     is_social_live_chat_user,
     live_chat_needs_whatsapp_session,
 )
-from services.live_chat_tiktok_operator import (
+from services.live_chat.tiktok_operator import (
     parse_tiktok_live_chat_user_id,
     tiktok_operator_media_not_supported,
 )

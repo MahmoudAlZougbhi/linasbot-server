@@ -40,7 +40,7 @@ from pathlib import Path
 os.environ.setdefault("LINASBOT_DATA_ROOT", "/opt/linasbot_data")
 os.environ.setdefault("ENVIRONMENT", "production")
 
-from services.cm.durable_flags import (
+from services.ai_setup.durable_flags import (
     CM_DISABLE_LINAS_LEGACY_BRIDGE,
     default_production_env_paths,
     parse_env_bool,
@@ -49,7 +49,7 @@ from services.cm.durable_flags import (
     readiness_requires_disable_bridge,
 )
 from scripts.ha.production_env_cas import atomic_update_canonical_env
-from services.cm.constants import tenant_has_published_cm
+from services.ai_setup.constants import tenant_has_published_cm
 
 app_dir = os.environ.get("CM_PRESERVE_APP_DIR") or "/opt/linasbot"
 paths = default_production_env_paths(app_dir=app_dir)

@@ -27,7 +27,7 @@ from typing import Any
 from google.cloud import firestore
 
 import config
-from services.live_chat_service import live_chat_service
+from services.live_chat.service import live_chat_service
 from utils.utils import get_firestore_db
 
 

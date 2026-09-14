@@ -49,7 +49,7 @@ async def process_meta_social_event(
     resolved_tenant_id = str(tenant_id or settings.tenant_id or "").strip()
     if not resolved_tenant_id:
         raise ValueError("tenant_id required for social messaging")
-    from services.channel_capability_runtime import meta_dm_replies_enabled
+    from services.integrations.channel_capability_runtime import meta_dm_replies_enabled
 
     if not meta_dm_replies_enabled(tenant_id=resolved_tenant_id, platform=channel):
         print(
@@ -340,7 +340,7 @@ async def process_meta_social_event(
                     event["attachments"] = kept
                     attachments = kept
         if isinstance(attachments, list) and attachments:
-            from services.customer_reply_v2.inbound_media import ingest_inbound_attachments, luna_inbound_view
+            from services.customer_reply_v2.inbound_media import inbound_media_view, ingest_inbound_attachments
 
             inbound = await ingest_inbound_attachments(
                 tenant_id=resolved_tenant_id,
@@ -348,7 +348,7 @@ async def process_meta_social_event(
                 caption=text,
             )
             user_data["inbound_attachment_types"] = list(inbound.attachment_types)
-            user_data["inbound_media_for_luna"] = luna_inbound_view(inbound)
+            user_data["inbound_media_for_brain"] = inbound_media_view(inbound)
             user_data["inbound_image_media_id"] = inbound.image_media_id or ""
             if inbound.safety_image_urls:
                 user_data["inbound_safety_image_urls"] = list(inbound.safety_image_urls)

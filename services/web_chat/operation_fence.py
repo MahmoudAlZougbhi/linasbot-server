@@ -24,8 +24,8 @@ def release_web_chat_message_hold(
     extra_ids: tuple[str, ...] | list[str] = (),
 ) -> None:
     """Release a never-submitted Website Chat message hold. Do not invent conversation or text."""
-    from services.customer_ai.billing import settle_after_send
-    from services.customer_ai.history_ids import web_inbound_message_id
+    from services.brain.billing import settle_after_send
+    from services.brain.history_ids import web_inbound_message_id
 
     cid = str(conversation_id or "").strip()
     text = str(user_text or "").strip()

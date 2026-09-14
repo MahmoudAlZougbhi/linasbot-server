@@ -52,7 +52,7 @@ def serialize_draft(row: Any) -> dict[str, Any]:
     }
 
 
-def luna_draft_summary(row: Any) -> dict[str, Any]:
+def draft_summary(row: Any) -> dict[str, Any]:
     payload = serialize_draft(row)
     payload.pop("values", None)
     return payload

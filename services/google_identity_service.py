@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from db.models.apple_billing import AuthExternalIdentityRow
 from db.session import whatsapp_session
-from services.user_service import user_service
+from services.team.user_service import user_service
 
 logger = logging.getLogger(__name__)
 

@@ -109,7 +109,7 @@ async def handle_comment_webhook(
         session.commit()
 
     if created:
-        from services.live_chat_comment_sse import schedule_comment_inbox_sse
+        from services.live_chat.comment_sse import schedule_comment_inbox_sse
 
         schedule_comment_inbox_sse(
             tenant_id=tenant_id,

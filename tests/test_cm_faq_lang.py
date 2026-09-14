@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from services.cm.constants import FAQ_EXACT_THRESHOLD
-from services.cm.faq_integration import (
+from services.ai_setup.constants import FAQ_EXACT_THRESHOLD
+from services.ai_setup.faq_integration import (
     FaqIntegrationError,
     _answer_in_arabic_script,
     create_faq_pair,
@@ -43,7 +43,7 @@ async def _fake_translate_training_pair(
 @pytest.fixture(autouse=True)
 def _mock_translation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.cm.faq_integration.language_detection_service.translate_training_pair",
+        "services.ai_setup.faq_integration.language_detection_service.translate_training_pair",
         _fake_translate_training_pair,
     )
 

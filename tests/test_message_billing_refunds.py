@@ -6,14 +6,18 @@ from datetime import UTC
 
 import pytest
 
-from services.membership.iap_message_grant import (
+from services.billing.membership.iap_message_grant import (
     apply_verified_stripe_message_checkout,
-    grant_from_mapped_pack,
     maybe_revoke_purchased_from_verified_txn,
     stripe_checkout_kind,
 )
-from services.membership.message_flags import activation_flags_report
-from services.membership.message_ledger import remaining_messages, reserve, reset_ledger_for_tests
+from services.billing.membership.message_flags import activation_flags_report
+from services.billing.membership.message_ledger import (
+    grant_purchased,
+    remaining_messages,
+    reserve,
+    reset_ledger_for_tests,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -25,12 +29,12 @@ def _clean(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _grant(tenant_id: str = "pack-shop", txn: str = "txn-pack-1") -> None:
-    result = grant_from_mapped_pack(
+    grant_purchased(
         tenant_id=tenant_id,
-        transaction_id=txn,
-        pack={"pack_id": "messages_100", "quantity": 100, "price_usd": 4, "sale_ready": True},
+        lot_id=f"{tenant_id}:messages_100:{txn}",
+        amount=100,
+        source_transaction_id=txn,
     )
-    assert result["granted"] is True
 
 
 def test_revoke_purchased_zeros_unused_and_is_idempotent() -> None:
@@ -93,7 +97,7 @@ def test_stripe_token_pack_never_grants_messages() -> None:
         product_id="linas_token_pack",
         transaction_id="cs_token",
     )
-    assert grant == {"granted": False, "reason": "cutover_off"}
+    assert grant == {"granted": False, "reason": "credits_meter_only"}
     assert remaining_messages("stripe-shop") == 0
 
 
@@ -105,16 +109,16 @@ def test_stripe_message_pack_stays_blocked_without_sale_ready(monkeypatch: pytes
         product_id="com.linasai.messages.100",
         transaction_id="cs_msg",
     )
-    assert grant == {"granted": False, "reason": "unmapped_or_unpriced_pack"}
+    assert grant == {"granted": False, "reason": "credits_meter_only"}
     assert remaining_messages("stripe-msg") == 0
 
 
 def test_refunded_plan_expires_included_lot(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     entitlements_store.set_plan(tenant_id="refund-grant", plan_id="lite", status="active", source="admin")
-    assert remaining_messages("refund-grant") == 550
+    assert remaining_messages("refund-grant") == 0
     entitlements_store.set_plan(tenant_id="refund-grant", plan_id="lite", status="refunded", source="apple")
     assert remaining_messages("refund-grant") == 0
 
@@ -150,27 +154,27 @@ def test_activation_flags_report_requires_all_off() -> None:
         }
     )
     assert lab_on["ok"] is True
-    blocked = activation_flags_report({"MESSAGE_BILLING_ENABLED": "true"})
-    assert blocked["ok"] is False
-    assert "MESSAGE_BILLING_ENABLED" in blocked["enabled"]
+    still_off = activation_flags_report({"MESSAGE_BILLING_ENABLED": "true"})
+    assert still_off["ok"] is True
+    assert still_off["enabled"] == []
 
 
 def test_stale_reservation_gc_marks_unresolved_without_refund() -> None:
     from datetime import datetime, timedelta
 
-    from services.membership.message_ledger import (
+    from services.billing.membership.message_ledger import (
         grant_lot,
         list_reservations,
         remaining_messages,
         reserve,
         reset_ledger_for_tests,
     )
-    from services.membership.pending_settlement import list_pending, reset_pending_settlements_for_tests
-    from services.membership.reservation_gc import release_stale_reservations, run_reservation_gc
+    from services.billing.membership.pending_settlement import list_pending, reset_pending_settlements_for_tests
+    from services.billing.membership.reservation_gc import release_stale_reservations, run_reservation_gc
 
     reset_ledger_for_tests()
     reset_pending_settlements_for_tests()
-    from services.membership.lot_window import current_period_id
+    from services.billing.membership.lot_window import current_period_id
 
     grant_lot(tenant_id="gc-shop", lot_id="inc", kind="included", period_id=current_period_id(), amount=5)
     reserve(tenant_id="gc-shop", operation_id="stuck", response_class="generated_ai")

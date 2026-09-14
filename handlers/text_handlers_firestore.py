@@ -12,13 +12,9 @@ from collections import deque
 from typing import Any
 
 import config
-from handlers.training_handlers import exit_training_mode as original_exit_training_mode
-from handlers.training_handlers import handle_training_input
-from handlers.training_handlers import start_training_mode as original_start_training_mode
-from services.api_integrations import check_customer_gender, create_customer, get_customer_by_phone, log_report_event
 from services.gender_recognition_service import get_gender_from_gpt
 from services.sentiment_escalation_service import sentiment_service
-from services.user_persistence_service import user_persistence
+from services.team.user_persistence_service import user_persistence
 from utils.utils import (
     detect_language,
     get_canonical_user_id_and_phone,
@@ -53,14 +49,7 @@ __all__ = [
     "get_last_bot_message_from_conversation",
     "get_canonical_user_id_and_phone",
     "get_gender_from_gpt",
-    "log_report_event",
-    "check_customer_gender",
-    "get_customer_by_phone",
-    "create_customer",
     "sentiment_service",
     "user_persistence",
-    "handle_training_input",
-    "original_start_training_mode",
-    "original_exit_training_mode",
     "_delayed_processing_tasks",
 ]

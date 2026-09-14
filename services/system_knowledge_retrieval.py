@@ -73,7 +73,7 @@ def help_payload_for_query(query: str) -> dict[str, Any]:
 
 def detect_message_language(text: str, *, fallback: str = "en") -> str:
     """Lightweight reply-language hint from the user message (not gender/name inference)."""
-    from services.owner_ai_profile import detect_owner_message_language, normalize_language
+    from services.owner_copilot.profile import detect_owner_message_language, normalize_language
 
     detected = detect_owner_message_language(text)
     if detected:

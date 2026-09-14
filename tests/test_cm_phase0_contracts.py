@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.cm.constants import (
+from services.ai_setup.constants import (
     CM_SECTIONS,
     INITIAL_RESTRICTED_LABELS,
     INITIAL_RESTRICTED_TOPIC_IDS,
@@ -11,8 +11,8 @@ from services.cm.constants import (
     SUPPORTED_LANGUAGES,
     cm_publish_enabled,
 )
-from services.cm.publish_gate import PublishDisabledError, ensure_publish_enabled
-from services.cm.schemas import initial_restricted_policy, initial_restricted_topics
+from services.ai_setup.publish_gate import PublishDisabledError, ensure_publish_enabled
+from services.ai_setup.schemas import initial_restricted_policy, initial_restricted_topics
 
 
 def test_supported_languages_contract() -> None:

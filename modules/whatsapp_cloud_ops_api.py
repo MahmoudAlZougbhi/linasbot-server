@@ -72,8 +72,8 @@ def _set_whatsapp_ai_default(session: Any, connection_id: str, *, enabled: bool)
 @app.post("/api/whatsapp/cloud/connections/{connection_id}/ai/enable")
 async def whatsapp_enable_ai(connection_id: str, request: Request) -> Any:
     session = _require_wa_manager(request)
-    from services.membership.daily_edits import DailyEditLimitError
-    from services.membership.edit_http import guarded_edit, limit_response
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
         with guarded_edit(
@@ -89,7 +89,7 @@ async def whatsapp_enable_ai(connection_id: str, request: Request) -> Any:
 @app.post("/api/whatsapp/cloud/connections/{connection_id}/ai/disable")
 async def whatsapp_disable_ai(connection_id: str, request: Request) -> Any:
     session = _require_wa_manager(request)
-    from services.membership.edit_http import guarded_edit
+    from services.billing.membership.edit_http import guarded_edit
 
     with guarded_edit(
         tenant_id=session.tenant_id,
@@ -180,7 +180,7 @@ async def whatsapp_disconnect(connection_id: str, request: Request, body: dict[s
         conn = repo.get_tenant_connection(tenant_id=session.tenant_id, connection_id=connection_id)
         if conn is None:
             raise HTTPException(status_code=404, detail="connection_not_found")
-        from services.membership.edit_http import guarded_edit
+        from services.billing.membership.edit_http import guarded_edit
 
         with guarded_edit(
             tenant_id=session.tenant_id,
@@ -359,8 +359,11 @@ async def whatsapp_app_review_readiness(request: Request) -> Any:
         raise HTTPException(status_code=403, detail="platform_owner_required")
     from services.whatsapp_cloud.app_review_readiness import build_app_review_readiness
 
+    tenant_id = str(request.query_params.get("tenant_id") or getattr(session, "tenant_id", "") or "").strip()
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="tenant_id_required")
     try:
-        return build_app_review_readiness(tenant_id="linas")
+        return build_app_review_readiness(tenant_id=tenant_id)
     except WhatsAppDatabaseUnavailable:
         return JSONResponse(status_code=503, content={"success": False, "error": "WHATSAPP_DB_UNAVAILABLE"})
 

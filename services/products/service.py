@@ -49,7 +49,7 @@ class ProductsService:
                 http_status=400,
             )
         self._validate_images(tenant_id=tenant_id, images=body.images)
-        from services.membership.free_slots import SlotLimitError, assert_can_add_product
+        from services.billing.membership.free_slots import SlotLimitError, assert_can_add_product
 
         try:
             assert_can_add_product(tenant_id, self.repo.count_products(tenant_id=tenant_id))
@@ -167,8 +167,8 @@ class ProductsService:
         return self._run_import(lambda: import_xlsx_rows(self, tenant_id=tenant_id, content=content))
 
     def _run_import(self, fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
-        from services.membership.daily_edits import DailyEditLimitError
-        from services.membership.processing_budgets import ProcessingBudgetError
+        from services.billing.membership.daily_edits import DailyEditLimitError
+        from services.billing.membership.processing_budgets import ProcessingBudgetError
         from services.products.import_service import ProductsImportError
 
         try:
@@ -255,7 +255,7 @@ class ProductsService:
             )
 
     def _begin_daily_edit(self, tenant_id: str, kind: str, payload: object) -> str:
-        from services.membership.daily_edits import (
+        from services.billing.membership.daily_edits import (
             DailyEditLimitError,
             operation_id,
             payload_hash,
@@ -272,7 +272,7 @@ class ProductsService:
     def _finish_daily_edit(self, tenant_id: str, operation_id: str, *, commit: bool) -> None:
         if not operation_id:
             return
-        from services.membership.daily_edits import commit_edit, release_edit
+        from services.billing.membership.daily_edits import commit_edit, release_edit
 
         if commit:
             commit_edit(tenant_id=tenant_id, operation_id=operation_id)
@@ -281,7 +281,7 @@ class ProductsService:
 
     def _invalidate_customer_ai_products(self, tenant_id: str) -> None:
         try:
-            from services.customer_ai.search.invalidate import notify_product_change
+            from services.brain.search.invalidate import notify_product_change
 
             notify_product_change(self.session, tenant_id)
         except Exception:

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
-from services.membership.plan_catalog import (
+from services.billing.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
+from services.billing.membership.plan_catalog import (
     CATALOG_VERSION,
     PUBLIC_PLAN_IDS,
     plan_features,
     public_plan_matrix,
 )
-from services.plan_economics import PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
+from services.billing.plan_economics import PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
 
 
 def test_public_matrix_is_five_plans_lite_to_max() -> None:
@@ -33,16 +33,19 @@ def test_catalog_features_gate_comments_and_creative() -> None:
     assert plan_features("starter")["whatsapp"] is True
     assert plan_features("growth")["tiktok"] is True
     assert plan_features("pro")["tiktok"] is True
-    assert PLAN_FEATURES["pro"]["image_generation"] is True
-    assert PLAN_FEATURES["growth"]["image_generation"] is False
+    assert "image_generation" not in PLAN_FEATURES["pro"]
+    assert "video_generation" not in PLAN_FEATURES["pro"]
+    assert "creative_studio" not in PLAN_FEATURES["pro"]
     assert recommend_allowance("lite").included_credits == 7000
     assert recommend_allowance("starter").included_credits == 17500
+    assert recommend_allowance("pro").included_images == 0
+    assert recommend_allowance("pro").included_videos == 0
 
 
 def test_comment_gate_allows_exempt_blocks_lite(monkeypatch, tmp_path) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
-    from services.membership import comment_gate as cg
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
+    from services.billing.membership import comment_gate as cg
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)

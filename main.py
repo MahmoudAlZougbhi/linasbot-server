@@ -1,9 +1,12 @@
 """
-Main entry point for Lina's Laser AI Bot
+Main entry point for Linas AI (SaaS). Route modules grouped by product domain.
 Loads all modular components and starts the FastAPI server.
 """
 
 from __future__ import annotations
+
+# Domain-grouped mounts are intentional; do not alphabetize this block.
+# ruff: noqa: I001
 
 import os
 
@@ -35,62 +38,44 @@ if os.path.exists(DASHBOARD_BUILD_PATH):
     # Mount static files (js, css, etc.)
     app.mount("/static", StaticFiles(directory=os.path.join(DASHBOARD_BUILD_PATH, "static")), name="static")
 
-# Import all modules to register routes and events (must run before SPA catch-all).
-import modules.apple_auth_api  # noqa: E402, F401
-import modules.apple_iap_client_api  # noqa: E402, F401
-import modules.apple_store_webhook_api  # noqa: E402, F401
-import modules.auth_api  # noqa: E402, F401
-import modules.auth_email_change_api  # noqa: E402, F401
-import modules.auth_users_roles_api  # noqa: E402, F401
+# Import route modules grouped by product domain (must run before SPA catch-all).
+# AI Setup
 import modules.cm_api  # noqa: E402, F401
 import modules.cm_faq_api  # noqa: E402, F401
 import modules.cm_media_api  # noqa: E402, F401
 import modules.cm_request_graphs_api  # noqa: E402, F401
 import modules.cm_setup_api  # noqa: E402, F401
-import modules.comments_inbox_api  # noqa: E402, F401
 import modules.content_files_api  # noqa: E402, F401
-import modules.dashboard_api  # noqa: E402, F401
-import modules.entitlements_api  # noqa: E402, F401
-import modules.event_handlers  # noqa: E402, F401
-import modules.flow_api  # noqa: E402, F401
-import modules.google_auth_api  # noqa: E402, F401
-import modules.guest_ai_api  # noqa: E402, F401
 import modules.instructions_api  # noqa: E402, F401
-import modules.live_chat_api  # noqa: E402, F401
 import modules.local_qa_api  # noqa: E402, F401
-import modules.media_api  # noqa: E402, F401
+
+# Dashboard
+import modules.dashboard_api  # noqa: E402, F401
+import modules.mobile_dashboard_api  # noqa: E402, F401
+import modules.public_landing_stats_api  # noqa: E402, F401
+
+# Follow-up
+import modules.whatsapp_smart_followup_api  # noqa: E402, F401
+
+# Live Chat + Comments
+import modules.comments_inbox_api  # noqa: E402, F401
+import modules.live_chat_api  # noqa: E402, F401
+
+# Requests
+import modules.requests_api  # noqa: E402, F401
+
+# Integrations
 import modules.meta_compliance  # noqa: E402, F401
 import modules.meta_connections_api  # noqa: E402, F401
 import modules.meta_instagram_login_webhook  # noqa: E402, F401
 import modules.meta_messaging_webhook  # noqa: E402, F401
-import modules.mobile_app_version_api  # noqa: E402, F401
-import modules.mobile_auth_api  # noqa: E402, F401
-import modules.mobile_dashboard_api  # noqa: E402, F401
 import modules.mobile_integrations_api  # noqa: E402, F401
-import modules.mobile_products_api  # noqa: E402, F401
-import modules.mobile_services_api  # noqa: E402, F401
-import modules.mobile_stt_api  # noqa: E402, F401
 import modules.omnichannel_api  # noqa: E402, F401
-import modules.owner_ai_api  # noqa: E402, F401
-import modules.owner_ai_v2_api  # noqa: E402, F401
-import modules.owner_notifications_api  # noqa: E402, F401
-import modules.plans_api  # noqa: E402, F401
-import modules.platform_api  # noqa: E402, F401
-import modules.platform_message_api  # noqa: E402, F401
-import modules.platform_search_api  # noqa: E402, F401
-import modules.products_media_api  # noqa: E402, F401
-import modules.public_landing_stats_api  # noqa: E402, F401
-import modules.queue_api  # noqa: E402, F401
-import modules.requests_api  # noqa: E402, F401
-import modules.resend_webhook_api  # noqa: E402, F401
-import modules.scale_api  # noqa: E402, F401
-import modules.store_iap_api  # noqa: E402, F401
 import modules.tiktok_ads_oauth  # noqa: E402, F401
 import modules.tiktok_business_api  # noqa: E402, F401
 import modules.tiktok_business_oauth  # noqa: E402, F401
 import modules.tiktok_business_webhook  # noqa: E402, F401
 import modules.tiktok_enhanced_api  # noqa: E402, F401
-import modules.wallet_api  # noqa: E402, F401
 import modules.web_chat_api  # noqa: E402, F401
 import modules.webhook_handlers  # noqa: E402, F401
 import modules.whatsapp_adapters  # noqa: E402, F401
@@ -98,7 +83,42 @@ import modules.whatsapp_cloud_api  # noqa: E402, F401
 import modules.whatsapp_cloud_calls_api  # noqa: E402, F401
 import modules.whatsapp_cloud_ops_api  # noqa: E402, F401
 import modules.whatsapp_cloud_webhook  # noqa: E402, F401
-import modules.whatsapp_smart_followup_api  # noqa: E402, F401
+
+# Team
+import modules.auth_api  # noqa: E402, F401
+import modules.auth_email_change_api  # noqa: E402, F401
+import modules.auth_users_roles_api  # noqa: E402, F401
+import modules.google_auth_api  # noqa: E402, F401
+import modules.mobile_auth_api  # noqa: E402, F401
+
+# Subscription
+import modules.apple_auth_api  # noqa: E402, F401
+import modules.apple_iap_client_api  # noqa: E402, F401
+import modules.apple_store_webhook_api  # noqa: E402, F401
+import modules.entitlements_api  # noqa: E402, F401
+import modules.plans_api  # noqa: E402, F401
+import modules.store_iap_api  # noqa: E402, F401
+import modules.wallet_api  # noqa: E402, F401
+
+# Owner Copilot
+import modules.guest_ai_api  # noqa: E402, F401
+import modules.owner_copilot_api  # noqa: E402, F401
+import modules.owner_notifications_api  # noqa: E402, F401
+
+# Products / media / ops
+import modules.event_handlers  # noqa: E402, F401
+import modules.flow_api  # noqa: E402, F401
+import modules.media_api  # noqa: E402, F401
+import modules.mobile_app_version_api  # noqa: E402, F401
+import modules.mobile_products_api  # noqa: E402, F401
+import modules.mobile_stt_api  # noqa: E402, F401
+import modules.platform_api  # noqa: E402, F401
+import modules.platform_message_api  # noqa: E402, F401
+import modules.platform_search_api  # noqa: E402, F401
+import modules.products_media_api  # noqa: E402, F401
+import modules.queue_api  # noqa: E402, F401
+import modules.resend_webhook_api  # noqa: E402, F401
+import modules.scale_api  # noqa: E402, F401
 
 
 @app.get("/downloads/live-chat-android.apk")

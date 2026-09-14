@@ -11,9 +11,8 @@ import httpx
 import config
 from config import WHATSAPP_API_TOKEN
 from handlers.text_handlers import _process_and_respond
-from handlers.training_handlers import handle_training_input
 from modules.core import whatsapp_api_client
-from services.api_integrations import log_report_event
+from services.saas_no_boc import log_report_event
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 from utils.utils import save_conversation_message_to_firestore
 
@@ -87,35 +86,6 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
 
         user_data = config.user_data_whatsapp[user_id]
         base64_image, image_format = await _extract_image_base64_and_format(image_url, headers=download_headers)
-
-        if config.user_in_training_mode.get(user_id, False):
-            image_url_for_training = f"data:image/{image_format};base64,{base64_image}"
-
-            async def adapter_send_message(
-                to_number: str,
-                message_text: str | None = None,
-                image_url: str | None = None,
-                audio_url: str | None = None,
-            ) -> Any:
-                if message_text:
-                    return await adapter.send_text_message(to_number, message_text)
-                elif image_url:
-                    return await adapter.send_image_message(to_number, image_url)
-                elif audio_url:
-                    return await adapter.send_audio_message(to_number, audio_url)
-                return False
-
-            from modules.whatsapp_adapters import send_whatsapp_typing_indicator
-
-            await handle_training_input(
-                user_id=user_id,
-                user_name=user_name,
-                image_url=image_url_for_training,
-                user_data=user_data,
-                send_message_func=adapter_send_message,
-                send_action_func=send_whatsapp_typing_indicator,
-            )
-            return
 
         source_message_id = user_data.pop("_source_message_id", None)
         image_metadata = {"type": "image"}

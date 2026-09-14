@@ -371,9 +371,11 @@ def main() -> None:
 
     if tenant_runtime_config_postgres_required():
         from scripts.ha.migrate_tenant_runtime_config_to_postgres import migrate_tenant
-        from services.cm.constants import DEFAULT_TENANT_ID
+        from services.ai_setup.constants import DEFAULT_TENANT_ID
 
-        tenant_id = (env_snapshot.mapping.get("DEFAULT_TENANT_ID") or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+        tenant_id = (env_snapshot.mapping.get("DEFAULT_TENANT_ID") or DEFAULT_TENANT_ID).strip()
+        if not tenant_id:
+            raise RuntimeError("DEFAULT_TENANT_ID required for tenant runtime config migrate")
         migrate_tenant(tenant_id=tenant_id, dry_run=False)
 
     from services.web_chat.flags import get_web_chat_ha_readiness

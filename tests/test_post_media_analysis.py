@@ -5,16 +5,16 @@ from __future__ import annotations
 import fakeredis
 import pytest
 
-from services.customer_ai.contracts.turn import CustomerTurn, MediaView
-from services.customer_ai.media_analysis.analyze import analyze_post_media, is_video_media_type
-from services.customer_ai.media_analysis.cache import (
+from services.brain.contracts.turn import CustomerTurn, MediaView
+from services.brain.media.analyze import analyze_post_media, is_video_media_type
+from services.brain.media.cache import (
     analysis_key,
     get_analysis,
     put_analysis,
     set_post_media_redis_for_tests,
 )
-from services.customer_ai.media_analysis.comment_attach import analysis_fields_for_comment
-from services.customer_ai.turn_pipeline import inbound_task_text
+from services.brain.media.comment_attach import analysis_fields_for_comment
+from services.brain.turn_pipeline import inbound_task_text
 
 
 def setup_function() -> None:
@@ -65,7 +65,7 @@ async def test_second_comment_reuses_cached_analysis(monkeypatch: pytest.MonkeyP
             "kind": "video",
         }
 
-    monkeypatch.setattr("services.customer_ai.media_analysis.analyze._run", _run)
+    monkeypatch.setattr("services.brain.media.analyze._run", _run)
     first = await analyze_post_media(
         tenant_id="linas",
         post_id="reel-9",
@@ -95,9 +95,9 @@ async def test_lock_wait_does_not_steal_or_reanalyze(monkeypatch: pytest.MonkeyP
     async def _sleep(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr("services.customer_ai.media_analysis.analyze._run", _run)
-    monkeypatch.setattr("services.customer_ai.media_analysis.analyze.acquire_lock", lambda **_k: False)
-    monkeypatch.setattr("services.customer_ai.media_analysis.analyze.asyncio.sleep", _sleep)
+    monkeypatch.setattr("services.brain.media.analyze._run", _run)
+    monkeypatch.setattr("services.brain.media.analyze.acquire_lock", lambda **_k: False)
+    monkeypatch.setattr("services.brain.media.analyze.asyncio.sleep", _sleep)
     row = await analyze_post_media(tenant_id="linas", post_id="busy-1", media_type="VIDEO")
     assert row["status"] == "lock_wait"
     assert calls["n"] == 0
@@ -116,7 +116,7 @@ async def test_comment_fields_include_caption_ready_analysis(monkeypatch: pytest
             "cache_hit": True,
         }
 
-    monkeypatch.setattr("services.customer_ai.media_analysis.comment_attach.analyze_post_media", _analyze)
+    monkeypatch.setattr("services.brain.media.comment_attach.analyze_post_media", _analyze)
     fields = await analysis_fields_for_comment(
         tenant_id="linas",
         post_id="img-2",
@@ -150,7 +150,7 @@ def test_inbound_task_text_sends_saved_analysis_with_comment() -> None:
 
 
 def test_analyzed_inbound_image_does_not_use_visual_disabled_gate() -> None:
-    from services.customer_ai.turn_pipeline import inbound_task_text as _task
+    from services.brain.turn_pipeline import inbound_task_text as _task
 
     turn = CustomerTurn(
         tenant_id="lab",

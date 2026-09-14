@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from services.owner_copilot_v2.models import OwnerV2TurnResult
-from services.owner_copilot_v2.turn_results import owner_result_from_done_payload, record_owner_v2_usage
+from services.owner_copilot.models import OwnerV2TurnResult
+from services.owner_copilot.turn_results import owner_result_from_done_payload, record_owner_v2_usage
 
 
 def test_owner_result_from_done_payload_preserves_public_fields() -> None:
@@ -48,7 +48,7 @@ def test_record_owner_v2_usage_preserves_usage_shape(monkeypatch: pytest.MonkeyP
     def capture_usage(**kwargs: Any) -> None:
         recorded.update(kwargs)
 
-    monkeypatch.setattr("services.owner_ai_model_router.owner_chat_usage_tracker.record", capture_usage)
+    monkeypatch.setattr("services.owner_copilot.model_router.owner_chat_usage_tracker.record", capture_usage)
 
     record_owner_v2_usage(
         {"tenant_id": "tenant-1", "user_id": "owner-1", "conversation_id": "conversation-1"},

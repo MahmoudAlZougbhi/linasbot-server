@@ -90,7 +90,7 @@ def tiktok_integration_row(tenant_id: str) -> dict[str, Any]:
             comments_ok = comments_manage_ready(scopes)
             comments_read = comments_read_ready(scopes)
             dm_ok = messaging_send_ready(scopes)
-            from services.cm.actions import ACTION_TIKTOK_DM, comments_action_enabled, published_action_enabled
+            from services.ai_setup.actions import ACTION_TIKTOK_DM, comments_action_enabled, published_action_enabled
 
             comments_requested = comments_action_enabled(tenant_id, "tiktok")
             dm_requested = published_action_enabled(tenant_id, ACTION_TIKTOK_DM)

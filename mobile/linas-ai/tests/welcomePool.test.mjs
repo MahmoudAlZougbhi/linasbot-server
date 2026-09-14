@@ -24,7 +24,7 @@ test('new owner chat seeds greeting from server picker, not a local LLM', () => 
 });
 
 test('owner greeting module uses hardcoded pool, not stage-status copy', () => {
-  const greeting = readFileSync(join(repoRoot, 'services/owner_ai_greeting.py'), 'utf8');
+  const greeting = readFileSync(join(repoRoot, 'services/owner_copilot/greeting.py'), 'utf8');
   assert.match(greeting, /pick_welcome/);
   assert.doesNotMatch(greeting, /core looks configured/i);
   assert.doesNotMatch(greeting, /AI Setup tweaks/);

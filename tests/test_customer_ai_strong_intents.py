@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from services.customer_ai.evals.qa_tenants import linas_like_qa_sections, shop_b_qa_sections
-from services.customer_ai.planner.heuristic import overlay_plan, plan_message
-from services.customer_ai.retrieve.cards import cards_from_sections
-from services.customer_ai.retrieve.expand import expand_hits
-from services.customer_ai.retrieve.lexical import LexicalHit, search_cards
+from services.brain.evals.qa_tenants import linas_like_qa_sections, shop_b_qa_sections
+from services.brain.planner.heuristic import overlay_plan, plan_message
+from services.brain.retrieve.cards import cards_from_sections
+from services.brain.retrieve.expand import expand_hits
+from services.brain.retrieve.lexical import LexicalHit, search_cards
 
 
 def test_multi_intent_keeps_hours_price_booking_and_photo() -> None:
@@ -24,7 +24,7 @@ def test_handoff_and_price_and_hours_stay_separate() -> None:
 
 
 def test_overlay_keeps_actions_when_llm_drops_them() -> None:
-    from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+    from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 
     llm = PlannerPlan(
         tasks=[

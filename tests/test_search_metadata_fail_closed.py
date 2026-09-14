@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-from services.cm.save_live import put_draft_and_go_live
-from services.cm.storage import get_draft
-from services.cm.version_store import load_published_content, read_published_pointer
+from services.ai_setup.save_live import put_draft_and_go_live
+from services.ai_setup.storage import get_draft
+from services.ai_setup.version_store import load_published_content, read_published_pointer
 from services.search_metadata.errors import METADATA_PREPARATION_MESSAGE, MetadataPreparationError
 from services.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
 
@@ -16,7 +16,7 @@ pytest_plugins = ("tests.customer_reply_ai_v2_fixtures",)
 
 SECTION_CASES: list[tuple[str, dict[str, Any]]] = [
     ("knowledge", {"items": [{"id": "k1", "title": "12b", "body": "أسعار الجلسات", "status": "active"}]}),
-    ("services", {"items": [{"id": "s1", "labels": {"fr": "Soin"}, "notes": "Épilation laser", "available": True}]}),
+    ("prices", {"catalog": [{"id": "s1", "labels": {"fr": "Soin"}, "notes": "Épilation laser", "active": True}]}),
     (
         "branches",
         {
@@ -99,7 +99,7 @@ async def _save(section: str, payload: dict[str, Any], tenant_id: str, etag: str
 
 
 def _list_key(payload: dict[str, Any]) -> str:
-    return "items" if "items" in payload else "rules"
+    return next(k for k in ("items", "rules", "catalog") if k in payload)
 
 
 def setup_function() -> None:

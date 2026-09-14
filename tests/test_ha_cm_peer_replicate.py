@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from services.cm.schemas import PublishedPointer
+from services.ai_setup.schemas import PublishedPointer
 from services.ha_cm_peer_replicate import (
     HaCmPeerReplicateError,
     _remote_pointer_checksum,

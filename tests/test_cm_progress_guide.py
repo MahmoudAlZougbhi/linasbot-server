@@ -4,21 +4,21 @@ from __future__ import annotations
 
 import pytest
 
-from services.cm.constants import CM_SECTIONS
-from services.cm.fill_plan import (
+from services.ai_setup.constants import CM_SECTIONS
+from services.ai_setup.fill_plan import (
     advance_fill_plan,
     cancel_fill_plan,
     get_fill_plan_status,
     skip_fill_plan_section,
     start_fill_plan,
 )
-from services.cm.progress import progress_summary
-from services.cm.progress_quality import assess_section_fill
-from services.cm.schemas import default_section_payload
-from services.cm.section_guide import guide_for_section, list_section_guides
-from services.cm.storage import put_draft
-from services.owner_ai_tools_cm_guide import tool_cm_fill_plan, tool_inspect_cm_guide
-from services.owner_copilot_v2.tool_schemas import tool_names
+from services.ai_setup.progress import progress_summary
+from services.ai_setup.progress_quality import assess_section_fill
+from services.ai_setup.schemas import default_section_payload
+from services.ai_setup.section_guide import guide_for_section, list_section_guides
+from services.ai_setup.storage import put_draft
+from services.owner_copilot.tool_schemas import tool_names
+from services.owner_copilot.tools_cm_guide import tool_cm_fill_plan, tool_inspect_cm_guide
 
 
 @pytest.fixture()
@@ -90,9 +90,9 @@ def test_progress_summary_and_fill_plan(tenant: str) -> None:
         tenant_id=tenant,
     )
     put_draft(
-        "services",
+        "prices",
         payload={
-            "items": [{"id": "laser", "labels": {"en": "Laser", "ar": "ليزر", "fr": "", "franco": ""}}],
+            "catalog": [{"id": "laser", "labels": {"en": "Laser", "ar": "ليزر", "fr": "", "franco": ""}}],
             "notes": None,
         },
         if_match=None,
@@ -102,13 +102,13 @@ def test_progress_summary_and_fill_plan(tenant: str) -> None:
 
     summary2 = progress_summary(tenant, create_missing=False)
     assert "ai_basics" in summary2["done_sections"]
-    assert "services" in summary2["done_sections"]
+    assert "prices" in summary2["done_sections"]
     assert "ai_basics" not in summary2["remaining_sections"]
 
     plan = start_fill_plan(tenant_id=tenant, user_id="owner1")
     assert "ai_basics" in plan["done"]
-    assert "services" in plan["done"]
-    assert plan["current_section"] not in {"ai_basics", "services"}
+    assert "prices" in plan["done"]
+    assert plan["current_section"] not in {"ai_basics", "prices"}
     assert plan["focus"]["section"] == plan["current_section"]
     assert plan["status"] == "active"
 
@@ -130,7 +130,7 @@ def test_progress_summary_and_fill_plan(tenant: str) -> None:
 @pytest.mark.asyncio
 async def test_tools_and_schemas(tenant: str, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.owner_ai_tools_cm_guide.resolve_permissions",
+        "services.owner_copilot.tools_cm_guide.resolve_permissions",
         lambda role, _extra: {"contentManagers": True},
     )
     names = tool_names()
@@ -161,10 +161,10 @@ async def test_tools_and_schemas(tenant: str, monkeypatch: pytest.MonkeyPatch) -
 
 @pytest.mark.asyncio
 async def test_propose_blocks_done_unless_force(tenant: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.owner_ai_tools_write import tool_propose_cm_patch
+    from services.owner_copilot.tools_write import tool_propose_cm_patch
 
     monkeypatch.setattr(
-        "services.owner_ai_tools_write.resolve_permissions",
+        "services.owner_copilot.tools_write.resolve_permissions",
         lambda role, _extra: {"contentManagers": True},
     )
     put_draft(

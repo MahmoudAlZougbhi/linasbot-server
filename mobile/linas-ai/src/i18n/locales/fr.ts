@@ -190,7 +190,6 @@ export const fr = {
   platformWhatsApp: 'WhatsApp',
   platformTikTok: 'TikTok',
   platformWeb: 'Chat sur le site web',
-  platformSnapchat: 'Snapchat',
   retry: 'Impossible de charger le chat. Appuyez pour réessayer.',
   messageFailed: 'Échec du message. Vous pouvez réessayer.',
   groupOperate: 'Produit',

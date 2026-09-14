@@ -1,4 +1,4 @@
-"""Full single-item content Luna reads at Save (never the rest of the tenant)."""
+"""Full single-item content used at Save (never the rest of the tenant)."""
 
 from __future__ import annotations
 

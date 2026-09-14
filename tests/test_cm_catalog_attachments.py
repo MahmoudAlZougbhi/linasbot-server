@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from services.cm.pricing.schemas import CatalogAttachment, CatalogItem
-from services.cm.pricing.section import normalize_prices_section
-from services.cm.schemas import LocalizedLabels
+from services.ai_setup.pricing.schemas import CatalogAttachment, CatalogItem
+from services.ai_setup.pricing.section import normalize_prices_section
+from services.ai_setup.schemas import LocalizedLabels
 
 
 def test_catalog_item_keeps_image_video_link_attachments() -> None:
@@ -80,7 +80,7 @@ def test_normalize_prices_section_preserves_catalog_attachments() -> None:
 
 
 def test_price_catalog_index_includes_note_and_media_caption() -> None:
-    from services.cm.semantic_index import _price_catalog_entries
+    from services.ai_setup.semantic_index import _price_catalog_entries
 
     rows = _price_catalog_entries(
         {

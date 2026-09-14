@@ -15,7 +15,7 @@ def load_published_requests_config(tenant_id: str | None) -> dict[str, Any] | No
     if not tenant_id or not str(tenant_id).strip():
         return None
     try:
-        from services.cm.version_store import PublishedVersionError, load_published_content
+        from services.ai_setup.version_store import PublishedVersionError, load_published_content
     except Exception:
         return None
     try:
@@ -45,7 +45,7 @@ def requests_capture_active(tenant_id: str | None) -> bool:
 
 def published_configuration_version(tenant_id: str | None) -> str | None:
     try:
-        from services.cm.version_store import read_published_pointer
+        from services.ai_setup.version_store import read_published_pointer
     except Exception:
         return None
     pointer = read_published_pointer(tenant_id)

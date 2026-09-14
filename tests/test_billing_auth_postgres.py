@@ -18,9 +18,9 @@ from services.admin_credit_idempotency import (  # noqa: E402
     store_admin_credit_idempotent,
 )
 from services.auth_email_tokens import AuthEmailTokenService  # noqa: E402
+from services.billing.token_wallet_service import InsufficientTokenBalance, TokenWalletService  # noqa: E402
 from services.mobile_refresh_token_service import MobileRefreshTokenService  # noqa: E402
 from services.stripe_checkout_service import StripeCheckoutService  # noqa: E402
-from services.token_wallet_service import InsufficientTokenBalance, TokenWalletService  # noqa: E402
 
 
 @pytest.fixture()

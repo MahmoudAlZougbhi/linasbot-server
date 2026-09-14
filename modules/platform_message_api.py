@@ -9,10 +9,10 @@ from pydantic import BaseModel, Field
 
 from modules.api_security import require_platform_owner
 from modules.core import app
-from services.membership.catalog_admin import CatalogPublishBlocked, current_catalog, publish, update_draft
-from services.membership.conversion_dry_run import dry_run_credit_inventory
-from services.membership.cost_dashboard import global_dashboard, period_bounds, tenant_dashboard
-from services.membership.daily_edits import decision_payload, set_platform_baseline, set_tenant_override, status
+from services.billing.membership.catalog_admin import CatalogPublishBlocked, current_catalog, publish, update_draft
+from services.billing.membership.conversion_dry_run import dry_run_credit_inventory
+from services.billing.membership.cost_dashboard import global_dashboard, period_bounds, tenant_dashboard
+from services.billing.membership.daily_edits import decision_payload, set_platform_baseline, set_tenant_override, status
 
 
 class CatalogDraftBody(BaseModel):
@@ -163,7 +163,7 @@ async def platform_credit_conversion_dry_run(request: Request) -> Any:
 @app.get("/api/platform/activation-readiness")
 async def platform_activation_readiness(request: Request) -> Any:
     require_platform_owner(request)
-    from services.membership.activation_readiness import activation_readiness
+    from services.billing.membership.activation_readiness import activation_readiness
 
     return {"success": True, "readiness": activation_readiness()}
 
@@ -171,8 +171,8 @@ async def platform_activation_readiness(request: Request) -> Any:
 @app.get("/api/platform/message-ledger/{tenant_id}")
 async def platform_message_ledger(tenant_id: str, request: Request) -> Any:
     require_platform_owner(request)
-    from services.membership.message_ledger import snapshot_dict
-    from services.membership.reconcile import ledger_health
+    from services.billing.membership.message_ledger import snapshot_dict
+    from services.billing.membership.reconcile import ledger_health
 
     tid = tenant_id.strip()
     if not tid:
@@ -187,7 +187,7 @@ async def platform_message_flows(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> Any:
     require_platform_owner(request)
-    from services.customer_ai.turn_inspector import list_message_flows
+    from services.brain.turn_inspector import list_message_flows
 
     return {
         "success": True,
@@ -198,7 +198,7 @@ async def platform_message_flows(
 @app.get("/api/platform/message-flows/{tenant_id}/{operation_id}")
 async def platform_message_flow_detail(tenant_id: str, operation_id: str, request: Request) -> Any:
     require_platform_owner(request)
-    from services.customer_ai.turn_inspector import get_message_flow
+    from services.brain.turn_inspector import get_message_flow
 
     detail = get_message_flow(tenant_id=tenant_id, operation_id=operation_id)
     if detail is None:

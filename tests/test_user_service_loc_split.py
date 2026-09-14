@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from services.user_service import (
+from services.team.user_service import (
     AuthBackendUnavailableError,
     TenantIdRequiredError,
     UserService,
     user_service,
 )
-from services.user_service_auth import UserServiceAuthMixin
+from services.team.user_service_auth import UserServiceAuthMixin
 
 
 def _line_count(rel: str) -> int:
@@ -20,8 +20,8 @@ def _line_count(rel: str) -> int:
 
 
 def test_user_service_modules_under_500_lines() -> None:
-    assert _line_count("services/user_service.py") < 500
-    assert _line_count("services/user_service_auth.py") < 500
+    assert _line_count("services/team/user_service.py") < 500
+    assert _line_count("services/team/user_service_auth.py") < 500
 
 
 def test_user_service_preserves_public_api_via_mixin() -> None:

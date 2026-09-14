@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from services.admin_provisioning_service import validate_provision_password
-from services.user_service import user_service
+from services.team.user_service import user_service
 
 _RESERVED_TENANTS = frozenset(
     {

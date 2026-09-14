@@ -23,10 +23,10 @@ DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
         "label": "Router Greeting",
         "when_used": "Sent when user message is greeting-only and there is no pending state.",
         "messages": {
-            "ar": "مرحباً! 😊 أنا مروى المساعدة الذكية من مركز ليناز ليزر 🌷 كيف فيني أساعدك اليوم؟",
-            "en": "Hello! 😊 I'm Marwa, the smart assistant from Lina's Laser Center 🌷 How can I help you today?",
-            "fr": "Bonjour ! 😊 Je suis Marwa, l'assistante intelligente de Lina's Laser Center 🌷 Comment puis-je vous aider aujourd'hui ?",
-            "franco": "مرحباً! 😊 أنا مروى المساعدة الذكية من مركز ليناز ليزر 🌷 كيف فيني أساعدك اليوم؟",
+            "ar": "مرحباً! كيف يمكنني مساعدتك؟",
+            "en": "Hello! How can I help you today?",
+            "fr": "Bonjour ! Comment puis-je vous aider ?",
+            "franco": "مرحباً! كيف يمكنني مساعدتك؟",
         },
     },
     "router_fallback": {
@@ -126,7 +126,7 @@ DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
         "when_used": (
             "Sent when the CM runtime pipeline's deterministic validator rejects a generated "
             "answer twice (once, plus one constrained regeneration) — polite clarify/contact "
-            "handoff with no invented facts. See services/cm/runtime_pipeline.py."
+            "handoff with no invented facts. See services/ai_setup/runtime_pipeline.py."
         ),
         "messages": {
             "ar": "آسف، ما قدرت أتأكد من هالمعلومة هلق.",

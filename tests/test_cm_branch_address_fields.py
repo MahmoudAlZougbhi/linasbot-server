@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from services.cm.schemas import BranchesSection, BranchRecord, LocalizedLabels
-from services.cm.structured_resolver import resolve_branch_facts
+from services.ai_setup.schemas import BranchesSection, BranchRecord, LocalizedLabels
+from services.ai_setup.structured_resolver import resolve_branch_facts
 
 
 def test_branch_record_accepts_address_breakdown() -> None:

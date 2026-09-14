@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from services.cm.language_policy import (
+from services.ai_setup.language_policy import (
     detect_and_resolve_customer_languages,
     ensure_customer_languages,
     frozen_language_policy,
     language_policy_public_summary,
     resolve_customer_response_language,
 )
-from services.cm.schemas import LanguagePolicy
+from services.ai_setup.schemas import LanguagePolicy
 
 
 def test_frozen_policy_defaults() -> None:

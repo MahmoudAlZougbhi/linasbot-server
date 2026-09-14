@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from handlers.training_handlers import handle_training_input
 from services.analytics_events import analytics  # noqa: F401 — kept for training path imports
 from utils.utils import notify_human_on_whatsapp  # noqa: F401
 
@@ -12,7 +11,6 @@ async def handle_photo_message(
 ) -> Any:
     """
     Photo inbound → Customer Brain permanent path (no legacy vision reply engine).
-    Training mode still uses the training handler.
     """
     import config
 
@@ -20,17 +18,6 @@ async def handle_photo_message(
     tenant_id = str(user_data.get("tenant_id") or "").strip()
     if not tenant_id:
         print("ERROR: photo handler refused — tenant_id required")
-        return
-
-    if config.user_in_training_mode.get(user_id, False):
-        await handle_training_input(
-            user_id=user_id,
-            user_name=user_name,
-            image_url=image_url,
-            user_data=user_data,
-            send_message_func=send_message_func,
-            send_action_func=send_action_func,
-        )
         return
 
     from handlers.text_handlers_respond import _process_and_respond

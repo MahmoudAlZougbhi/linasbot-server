@@ -21,8 +21,8 @@ from services.apple_iap_processor import (  # noqa: E402
     process_notification_v2,
     process_signed_transaction,
 )
+from services.billing.entitlements_service import EntitlementsStore  # noqa: E402
 from services.credit_ledger_service import CreditLedgerService  # noqa: E402
-from services.entitlements_service import EntitlementsStore  # noqa: E402
 
 
 @pytest.fixture()
@@ -52,13 +52,13 @@ def apple_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     ledger_root = tmp_path / "credit_ledger"
     store = EntitlementsStore(root=ent_root)
     ledger = CreditLedgerService(root=ledger_root)
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
     monkeypatch.setattr("services.apple_iap_effects.entitlements_store", store)
     monkeypatch.setattr("services.apple_credit_grant_ops.credit_ledger_service", ledger)
     monkeypatch.setattr(
-        "services.entitlements_service._DATA_ROOT",
+        "services.billing.entitlements_service._DATA_ROOT",
         tmp_path,
     )
     yield tmp_path
@@ -133,7 +133,7 @@ def test_idempotent_subscription_apply(apple_env: Path, monkeypatch: pytest.Monk
     assert first["ok"] is True
     assert first.get("duplicate") is False
     assert second.get("duplicate") is True
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     ent = entitlements_store.get("tenant_a")
     assert ent.plan_id == "lite"
@@ -162,8 +162,8 @@ def test_idempotent_credit_grant(apple_env: Path) -> None:
     assert first["ok"] is True
     assert first["effect"]["credits"] == 2500
     assert second.get("duplicate") is True
+    from services.billing.entitlements_service import entitlements_store
     from services.credit_ledger_service import credit_ledger_service
-    from services.entitlements_service import entitlements_store
 
     assert credit_ledger_service.get_balance("tenant_c") >= 2500
     assert entitlements_store.get("tenant_c").extra_credits == 2500
@@ -180,8 +180,8 @@ def test_refund_reverse_once(apple_env: Path) -> None:
         skip_jws_verify=True,
     )
     from services.apple_iap_effects import reverse_consumable_credits
+    from services.billing.entitlements_service import entitlements_store
     from services.credit_ledger_service import credit_ledger_service
-    from services.entitlements_service import entitlements_store
 
     first = reverse_consumable_credits(
         tenant_id="tenant_r", transaction_id="txn_cred_ref", product_id=payload["productId"]
@@ -215,7 +215,7 @@ def test_notification_replay(apple_env: Path, monkeypatch: pytest.MonkeyPatch) -
     second = process_notification_v2({"signedPayload": "signed.outer.payload"})
     assert first.get("duplicate") is False
     assert second.get("duplicate") is True
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     assert entitlements_store.get("tenant_n").plan_id == "lite"
 
@@ -241,7 +241,7 @@ def test_cross_tenant_app_account_token_denied(apple_env: Path) -> None:
         skip_jws_verify=True,
     )
     assert ok["tenant_id"] == "tenant_a"
-    from services.entitlements_service import entitlements_store
+    from services.billing.entitlements_service import entitlements_store
 
     assert entitlements_store.get("tenant_b").extra_credits == 0
     assert entitlements_store.get("tenant_a").extra_credits == 2500

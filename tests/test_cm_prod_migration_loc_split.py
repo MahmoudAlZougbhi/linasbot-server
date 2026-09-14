@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.cm import prod_migration as prod_mod
-from services.cm.prod_migration_stage import resolve_live_data_root, stage_live_data_for_migration
+from services.ai_setup import prod_migration as prod_mod
+from services.ai_setup.prod_migration_stage import resolve_live_data_root, stage_live_data_for_migration
 
 
 def _line_count(rel: str) -> int:
@@ -13,8 +13,8 @@ def _line_count(rel: str) -> int:
 
 
 def test_cm_prod_migration_modules_under_500_lines() -> None:
-    assert _line_count("services/cm/prod_migration.py") < 500
-    assert _line_count("services/cm/prod_migration_stage.py") < 500
+    assert _line_count("services/ai_setup/prod_migration.py") < 500
+    assert _line_count("services/ai_setup/prod_migration_stage.py") < 500
 
 
 def test_cm_prod_migration_preserves_public_api() -> None:

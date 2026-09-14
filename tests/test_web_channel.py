@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from services.live_chat_channel import resolve_live_chat_channel
-from services.membership.plan_catalog import PLAN_CATALOG, plan_features
-from services.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
-from services.plan_economics import PLAN_FEATURES
+from services.billing.membership.plan_catalog import PLAN_CATALOG, plan_features
+from services.billing.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
+from services.billing.plan_economics import PLAN_FEATURES
+from services.live_chat.channel import resolve_live_chat_channel
 from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT, SOURCE_CHANNELS
 from services.smart_followup.channels import normalize_followup_channel
 from services.web_chat.store import WebChatStore
@@ -23,9 +23,9 @@ def test_web_plan_matrix_matches_whatsapp_tier() -> None:
 
 
 def test_web_gate_blocks_lite_allows_starter(monkeypatch, tmp_path) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
-    from services.membership import web_gate as wg
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
+    from services.billing.membership import web_gate as wg
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)
@@ -43,9 +43,9 @@ def test_web_gate_blocks_lite_allows_starter(monkeypatch, tmp_path) -> None:
 
 
 def test_web_gate_allows_max_plan(monkeypatch, tmp_path) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
-    from services.membership import web_gate as wg
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
+    from services.billing.membership import web_gate as wg
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)
@@ -57,9 +57,9 @@ def test_web_gate_allows_max_plan(monkeypatch, tmp_path) -> None:
 
 
 def test_web_gate_ignores_stale_features_blob(monkeypatch, tmp_path) -> None:
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore, TenantEntitlement
-    from services.membership import web_gate as wg
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore, TenantEntitlement
+    from services.billing.membership import web_gate as wg
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)
@@ -74,9 +74,9 @@ def test_web_gate_ignores_stale_features_blob(monkeypatch, tmp_path) -> None:
 
 def test_mobile_membership_allows_true_for_max_despite_stale_features(monkeypatch, tmp_path) -> None:
     from modules.web_chat_helpers import mobile_web_chat_payload
-    from services import entitlements_service as es
-    from services.entitlements_service import EntitlementsStore, TenantEntitlement
-    from services.membership import web_gate as wg
+    from services.billing import entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore, TenantEntitlement
+    from services.billing.membership import web_gate as wg
     from services.web_chat.store import WebChatStore
 
     store = EntitlementsStore(root=tmp_path / "ent")
@@ -94,10 +94,14 @@ def test_mobile_membership_allows_true_for_max_despite_stale_features(monkeypatc
 
 
 def test_entitlements_public_includes_web_for_max(tmp_path, monkeypatch) -> None:
-    from services.entitlements_service import EntitlementsStore, TenantEntitlement, get_tenant_entitlement_public
+    from services.billing.entitlements_service import (
+        EntitlementsStore,
+        TenantEntitlement,
+        get_tenant_entitlement_public,
+    )
 
     store = EntitlementsStore(root=tmp_path / "ent")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "")
 
     ent = store.set_plan(tenant_id="clinic", plan_id="max", status="active", source="admin")
@@ -110,9 +114,9 @@ def test_entitlements_public_includes_web_for_max(tmp_path, monkeypatch) -> None
 
 
 def test_entitlements_public_web_true_for_exempt_tenant(tmp_path, monkeypatch) -> None:
-    from services.entitlements_service import get_tenant_entitlement_public
+    from services.billing.entitlements_service import get_tenant_entitlement_public
 
-    monkeypatch.delenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", raising=False)
+    monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
     pub = get_tenant_entitlement_public("linas")
     assert pub["subscription_exempt"] is True
     assert pub["web"] is True

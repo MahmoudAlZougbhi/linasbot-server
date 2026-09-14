@@ -16,8 +16,8 @@ async def generate_whatsapp_reply(
     payload: dict[str, Any],
     conversation_key: str = "",
 ) -> tuple[str, str | None, str | None]:
-    from services.customer_ai.history_ids import conversation_id_for_brain, message_id_for_brain
-    from services.customer_ai.leftover_reserve import reserve_leftover_reply
+    from services.brain.history_ids import conversation_id_for_brain, message_id_for_brain
+    from services.brain.leftover_reserve import reserve_leftover_reply
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
     from services.omnichannel.message_hold import release_unsent_omni_hold
 

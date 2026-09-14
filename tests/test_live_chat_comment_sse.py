@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from modules.live_chat_api_helpers import session_allows_live_chat_sse_event
-from services.live_chat_channel import normalize_comment_inbox_channel
-from services.live_chat_comment_sse import COMMENT_SSE_EVENT, comment_inbox_sse_payload, schedule_comment_inbox_sse
-from services.live_chat_sse_broadcaster import live_chat_sse_broadcaster
+from services.live_chat.channel import normalize_comment_inbox_channel
+from services.live_chat.comment_sse import COMMENT_SSE_EVENT, comment_inbox_sse_payload, schedule_comment_inbox_sse
+from services.live_chat.sse_broadcaster import live_chat_sse_broadcaster
 
 
 def test_normalize_comment_inbox_channel() -> None:

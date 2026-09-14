@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from services.tenant_mobile_dashboard.activity import build_activity_summary
-from services.tenant_mobile_dashboard.periods import parse_period, parse_timezone, resolve_period_window
+from services.dashboard.activity import build_activity_summary
+from services.dashboard.periods import parse_period, parse_timezone, resolve_period_window
 
 
 def _reply(ts: datetime, *, tenant_id: str = "acme") -> dict:

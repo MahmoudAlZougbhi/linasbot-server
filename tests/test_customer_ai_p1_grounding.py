@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_ai.budgets import DEFAULT_BUDGETS
-from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask
-from services.customer_ai.contracts.turn import CustomerTurn, MediaView
-from services.customer_ai.coverage import coverage_ok
-from services.customer_ai.evals.golden_pack_linas import run_golden_pack_linas
-from services.customer_ai.grounding.facts import evidence_supports_text, ungrounded_amounts, ungrounded_claims
-from services.customer_ai.providers.spaces import spaces_snapshot
-from services.customer_ai.retrieve.cards import cards_from_sections
-from services.customer_ai.retrieve.lexical import bm25_scores, search_cards, tokenize
-from services.customer_ai.templates import brain_template
-from services.customer_ai.test_lab import run_lab_verification_exercises
-from services.customer_ai.visual import visual_retrieval_decision
+from services.brain.budgets import DEFAULT_BUDGETS
+from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
+from services.brain.contracts.plan import PlannerPlan, PlannerTask
+from services.brain.contracts.turn import CustomerTurn, MediaView
+from services.brain.coverage import coverage_ok
+from services.brain.evals.golden_pack_linas import run_golden_pack_linas
+from services.brain.grounding.facts import evidence_supports_text, ungrounded_amounts, ungrounded_claims
+from services.brain.providers.spaces import spaces_snapshot
+from services.brain.retrieve.cards import cards_from_sections
+from services.brain.retrieve.lexical import bm25_scores, search_cards, tokenize
+from services.brain.templates import brain_template
+from services.brain.test_lab import run_lab_verification_exercises
+from services.brain.visual import visual_retrieval_decision
 
 
 def _bundle(*texts: str) -> EvidenceBundle:
@@ -72,7 +72,7 @@ def test_coverage_rejects_answered_without_quality_reply() -> None:
 @pytest.mark.asyncio
 async def test_generate_repair_then_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     assert DEFAULT_BUDGETS.repair_attempts == 1
-    from services.customer_ai.generate import reply as reply_mod
+    from services.brain.generate import reply as reply_mod
 
     calls: list[int] = []
 
@@ -101,7 +101,7 @@ async def test_generate_repair_then_fail_closed(monkeypatch: pytest.MonkeyPatch)
 
 @pytest.mark.asyncio
 async def test_generate_empty_evidence_no_model_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai.generate import reply as reply_mod
+    from services.brain.generate import reply as reply_mod
 
     async def boom(*, turn, prompt, attempt):
         raise AssertionError("model must not run without evidence")
@@ -149,7 +149,7 @@ def test_spaces_snapshot_includes_active_knowledge_document() -> None:
 
 @pytest.mark.asyncio
 async def test_visual_disabled_image_returns_localized_clarify(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai import turn_pipeline as pipeline
+    from services.brain import turn_pipeline as pipeline
 
     async def _no_confirm(*_args, **_kwargs):
         return None
@@ -172,8 +172,8 @@ async def test_visual_disabled_image_returns_localized_clarify(monkeypatch: pyte
 
 @pytest.mark.asyncio
 async def test_visual_disabled_skipped_when_image_already_described(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_ai import turn_pipeline as pipeline
-    from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+    from services.brain import turn_pipeline as pipeline
+    from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 
     async def _no_confirm(*_args, **_kwargs):
         return None
@@ -191,8 +191,8 @@ async def test_visual_disabled_skipped_when_image_already_described(monkeypatch:
         )
 
     monkeypatch.setattr(pipeline, "try_confirm_pending", _no_confirm)
-    monkeypatch.setattr("services.customer_ai.agent.greeting_turn.identity_greeting_result", _no_greet)
-    monkeypatch.setattr("services.customer_ai.agent.loop.run_agentic_dm_path", _agent)
+    monkeypatch.setattr("services.brain.agent.greeting_turn.identity_greeting_result", _no_greet)
+    monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", _agent)
     monkeypatch.setattr(pipeline, "_exact_faq_result", lambda *_a, **_k: None)
     monkeypatch.setattr(pipeline, "_semantic_faq_result", _no_greet)
     turn = CustomerTurn(
@@ -208,8 +208,8 @@ async def test_visual_disabled_skipped_when_image_already_described(monkeypatch:
 
 
 def test_identity_prompt_includes_ai_setup_greeting_behavior() -> None:
-    from services.customer_ai.compose.blocks import compose_evidence_context
-    from services.customer_ai.identity import IdentityBundle
+    from services.brain.compose.blocks import compose_evidence_context
+    from services.brain.identity import IdentityBundle
 
     identity = IdentityBundle(
         assistant_name="Nour",

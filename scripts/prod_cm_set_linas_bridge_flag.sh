@@ -30,7 +30,7 @@ fi
 import os
 from pathlib import Path
 
-from services.cm.durable_flags import CM_DISABLE_LINAS_LEGACY_BRIDGE
+from services.ai_setup.durable_flags import CM_DISABLE_LINAS_LEGACY_BRIDGE
 from scripts.ha.production_env_cas import atomic_update_canonical_env
 
 desired = os.environ["CM_DISABLE_LINAS_LEGACY_BRIDGE_VALUE"]

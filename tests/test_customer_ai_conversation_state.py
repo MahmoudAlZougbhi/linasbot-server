@@ -6,34 +6,34 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.customer_ai.actions.confirm import confirmation_valid
-from services.customer_ai.actions.pending import attach_confirmation, try_confirm_pending
-from services.customer_ai.contracts.actions import ActionProposal, ActionProposalSet
-from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
-from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
-from services.customer_ai.contracts.turn import ConversationState, CustomerTurn
-from services.customer_ai.conversation_history import (
+from services.brain.actions.confirm import confirmation_valid
+from services.brain.actions.pending import attach_confirmation, try_confirm_pending
+from services.brain.contracts.actions import ActionProposal, ActionProposalSet
+from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.turn import ConversationState, CustomerTurn
+from services.brain.conversation_history import (
     append_visible_history,
     load_stored_history_rows,
     record_turn_history,
 )
-from services.customer_ai.conversation_store import (
+from services.brain.conversation_store import (
     hydrate_turn_state,
     load_conversation,
     remember_turn,
     reset_conversation_store_for_tests,
     save_conversation,
 )
-from services.customer_ai.history_ids import (
+from services.brain.history_ids import (
     conversation_id_for_brain,
     conversation_id_from_user_data,
     message_id_for_brain,
     web_inbound_message_id,
 )
-from services.customer_ai.history_store import load_history_snapshot
-from services.customer_ai.history_tiktok import provider_conversation_id, rows_from_tt_messages
-from services.customer_ai.history_web import rows_from_web_messages, session_id_from_conversation
-from services.customer_ai.turn_pipeline import run_dm_after_gates
+from services.brain.history_store import load_history_snapshot
+from services.brain.history_tiktok import provider_conversation_id, rows_from_tt_messages
+from services.brain.history_web import rows_from_web_messages, session_id_from_conversation
+from services.brain.turn_pipeline import run_dm_after_gates
 
 
 @pytest.fixture(autouse=True)
@@ -112,8 +112,8 @@ async def test_history_store_uses_conversation_store_when_channels_miss(monkeypa
         return []
 
     monkeypatch.setattr("utils.utils_context.get_conversation_history_from_firestore", empty_firestore)
-    monkeypatch.setattr("services.customer_ai.history_whatsapp.load_whatsapp_history_rows", lambda _cid: [])
-    monkeypatch.setattr("services.customer_ai.history_tiktok.load_tiktok_history_rows", lambda _cid: [])
+    monkeypatch.setattr("services.brain.history_whatsapp.load_whatsapp_history_rows", lambda _cid: [])
+    monkeypatch.setattr("services.brain.history_tiktok.load_tiktok_history_rows", lambda _cid: [])
     snap = await load_history_snapshot(
         user_id="u1",
         conversation_id="ig-thread-abcdef12",
@@ -165,7 +165,7 @@ async def test_try_confirm_yes_clears_pending(monkeypatch: pytest.MonkeyPatch) -
         _ = turn
         return [{"action_type": "start_request", "state": "success", "backend_id": "req1"}]
 
-    monkeypatch.setattr("services.customer_ai.actions.pending._execute", fake_execute)
+    monkeypatch.setattr("services.brain.actions.pending._execute", fake_execute)
     turn = CustomerTurn(tenant_id="t1", conversation_id="c1", event_ids=["m1"])
     attach_confirmation(
         turn,
@@ -182,12 +182,12 @@ async def test_try_confirm_yes_clears_pending(monkeypatch: pytest.MonkeyPatch) -
 
 @pytest.mark.asyncio
 async def test_request_confirm_survives_next_turn(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.customer_ai.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
 
     async def no_semantic(*_a, **_k):
         return None
 
-    monkeypatch.setattr("services.customer_ai.turn_pipeline._semantic_faq_result", no_semantic)
+    monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", no_semantic)
 
     async def plan(text, _hist, tenant_id="", **_kwargs):
         _ = tenant_id
@@ -196,7 +196,7 @@ async def test_request_confirm_survives_next_turn(monkeypatch: pytest.MonkeyPatc
             tasks=[PlannerTask(id="book", type="service_request", span=TaskSpan(text=text))],
         )
 
-    monkeypatch.setattr("services.customer_ai.agent.loop.plan_turn", plan)
+    monkeypatch.setattr("services.brain.agent.loop.plan_turn", plan)
 
     first = CustomerTurn(tenant_id="t1", conversation_id="c-book", event_ids=["m1"])
     staged = await run_dm_after_gates(first, message="book laser", channel="instagram_dm")
@@ -212,7 +212,7 @@ async def test_request_confirm_survives_next_turn(monkeypatch: pytest.MonkeyPatc
         )
         return [{"action_type": "start_request", "state": "success"}]
 
-    monkeypatch.setattr("services.customer_ai.actions.pending._execute", fake_execute)
+    monkeypatch.setattr("services.brain.actions.pending._execute", fake_execute)
     second = hydrate_turn_state(CustomerTurn(tenant_id="t1", conversation_id="c-book", event_ids=["m2"]))
     confirmed = await run_dm_after_gates(second, message="yes", channel="instagram_dm")
     assert confirmed.extra["phase"] == "request_confirm"
@@ -248,9 +248,9 @@ async def test_history_store_web_fallback(monkeypatch: pytest.MonkeyPatch) -> No
         return []
 
     monkeypatch.setattr("utils.utils_context.get_conversation_history_from_firestore", empty_firestore)
-    monkeypatch.setattr("services.customer_ai.history_whatsapp.load_whatsapp_history_rows", lambda _cid: [])
+    monkeypatch.setattr("services.brain.history_whatsapp.load_whatsapp_history_rows", lambda _cid: [])
     monkeypatch.setattr(
-        "services.customer_ai.history_web.load_web_history_rows",
+        "services.brain.history_web.load_web_history_rows",
         lambda cid: [{"id": "w1", "role": "user", "text": f"from-{cid}", "visible_to_customer": True}],
     )
     snap = await load_history_snapshot(user_id="u1", conversation_id="web:t:session12")
@@ -371,9 +371,9 @@ async def test_history_store_skips_web_for_instagram(monkeypatch: pytest.MonkeyP
         called["wa"] = True
         return [{"id": "wa1", "role": "user", "text": "from-wa", "visible_to_customer": True}]
 
-    monkeypatch.setattr("services.customer_ai.history_whatsapp.load_whatsapp_history_rows", mark_wa)
-    monkeypatch.setattr("services.customer_ai.history_web.load_web_history_rows", mark_web)
-    monkeypatch.setattr("services.customer_ai.history_tiktok.load_tiktok_history_rows", lambda _cid: [])
+    monkeypatch.setattr("services.brain.history_whatsapp.load_whatsapp_history_rows", mark_wa)
+    monkeypatch.setattr("services.brain.history_web.load_web_history_rows", mark_web)
+    monkeypatch.setattr("services.brain.history_tiktok.load_tiktok_history_rows", lambda _cid: [])
     snap = await load_history_snapshot(
         user_id="u1",
         conversation_id="ig-thread-12345678",
@@ -403,9 +403,9 @@ async def test_history_store_tiktok_fallback(monkeypatch: pytest.MonkeyPatch) ->
         return []
 
     monkeypatch.setattr("utils.utils_context.get_conversation_history_from_firestore", empty_firestore)
-    monkeypatch.setattr("services.customer_ai.history_whatsapp.load_whatsapp_history_rows", lambda _cid: [])
+    monkeypatch.setattr("services.brain.history_whatsapp.load_whatsapp_history_rows", lambda _cid: [])
     monkeypatch.setattr(
-        "services.customer_ai.history_tiktok.load_tiktok_history_rows",
+        "services.brain.history_tiktok.load_tiktok_history_rows",
         lambda cid: [{"id": "t1", "role": "user", "text": f"from-{cid}", "visible_to_customer": True}],
     )
     snap = await load_history_snapshot(user_id="u1", conversation_id="ttconv_12345678", channel="tiktok")
@@ -459,7 +459,7 @@ async def test_omni_generate_passes_conversation_id(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr("services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm", fake_dm)
     monkeypatch.setattr(
-        "services.customer_ai.leftover_reserve.reserve_leftover_reply",
+        "services.brain.leftover_reserve.reserve_leftover_reply",
         lambda **_k: "res-test",
     )
     text, _res, err = await _generate_canonical(

@@ -47,7 +47,7 @@ from services.dashboard_session_service import (
     session_service,
 )
 from services.platform_portal_hosts import cookie_login_error
-from services.user_service import AuthBackendUnavailableError, user_service
+from services.team.user_service import AuthBackendUnavailableError, user_service
 
 
 @app.on_event("startup")

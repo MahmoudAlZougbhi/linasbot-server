@@ -21,7 +21,7 @@ from services.guest_chat_limits import (
     words_ok,
 )
 from services.guest_chat_store import guest_chat_store
-from services.owner_ai_profile import resolve_owner_reply_language
+from services.owner_copilot.profile import resolve_owner_reply_language
 from services.rate_limit_service import rate_limit_service
 
 _INPUT_TOO_LARGE_MESSAGE = {

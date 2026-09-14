@@ -6,7 +6,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from services.live_chat_sse_broadcaster import live_chat_sse_broadcaster
+from services.live_chat.sse_broadcaster import live_chat_sse_broadcaster
 
 _log = logging.getLogger("modules.live_chat_api")
 
@@ -24,17 +24,17 @@ async def broadcast_sse_event(event_type: str, data: dict) -> None:
     """Fan out to this node and Redis. Never skip Redis because this process has no local clients."""
     import uuid
 
-    from services.live_chat_contracts import utc_now
+    from services.live_chat.contracts import utc_now
 
     payload = dict(data or {})
     payload.setdefault("event_id", str(uuid.uuid4()))
     payload.setdefault("event_ts", utc_now().isoformat())
     if not str(payload.get("tenant_id") or "").strip() and payload.get("user_id"):
-        from services.live_chat_channel import live_chat_event_tenant_id
+        from services.live_chat.channel import live_chat_event_tenant_id
 
         payload["tenant_id"] = live_chat_event_tenant_id(payload.get("user_id"), payload)
     if not payload.get("channel") and payload.get("user_id"):
-        from services.live_chat_channel import resolve_live_chat_channel
+        from services.live_chat.channel import resolve_live_chat_channel
 
         payload["channel"] = resolve_live_chat_channel(payload.get("user_id"), payload)
     client_count = await live_chat_sse_broadcaster.active_clients_count()
@@ -63,14 +63,14 @@ def session_allows_live_chat_sse_event(session: Any, event: dict[str, Any] | Non
         if event_type == "conversations":
             return True
         from services.access_channels import session_can_use_channel
-        from services.live_chat_channel import normalize_comment_inbox_channel
+        from services.live_chat.channel import normalize_comment_inbox_channel
 
         channel = normalize_comment_inbox_channel(data.get("channel") or data.get("platform"))
         if event_type != "comment_update" or channel is None:
             return False
         return session_can_use_channel(session, channel)
     from services.access_channels import session_can_use_channel
-    from services.live_chat_channel import resolve_live_chat_channel
+    from services.live_chat.channel import resolve_live_chat_channel
 
     return session_can_use_channel(session, resolve_live_chat_channel(user_id, data))
 
@@ -80,7 +80,7 @@ def require_chat_channel(http_request: Any, user_id: str, conversation_id: str |
 
     from modules.api_security import require_session
     from services.access_channels import require_session_channel
-    from services.live_chat_tenant import require_workspace_tenant, resolve_live_chat_tenant_id
+    from services.live_chat.tenant import require_workspace_tenant, resolve_live_chat_tenant_id
 
     session = require_session(http_request)
     require_session_channel(session, user_id)
@@ -94,7 +94,7 @@ def require_chat_channel(http_request: Any, user_id: str, conversation_id: str |
 async def require_live_chat_thread(http_request: Any, user_id: str, conversation_id: str) -> Any:
     from fastapi import HTTPException
 
-    from services.live_chat_service import live_chat_service
+    from services.live_chat.service import live_chat_service
 
     session = require_chat_channel(http_request, user_id, conversation_id)
     visible = await live_chat_service.thread_visible_to_tenant(
@@ -112,7 +112,7 @@ def resolve_takeover_assignee(session: Any, requested_operator_id: str | None) -
     from fastapi import HTTPException
 
     from services.takeover_customer_notice import public_staff_label
-    from services.user_service import user_service
+    from services.team.user_service import user_service
 
     session_id = str(getattr(session, "user_id", "") or "").strip()
     requested = str(requested_operator_id or "").strip()

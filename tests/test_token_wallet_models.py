@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from services.token_wallet_models import (
+from services.billing.token_wallet_models import (
     is_unlimited_tenant,
     normalize_wallet_tenant_id,
     unlimited_tenant_ids,
 )
 
 
-def test_unlimited_tenant_ids_env_default_is_linas(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unlimited_tenant_ids_env_default_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", raising=False)
-    assert unlimited_tenant_ids() == frozenset({"linas"})
+    assert unlimited_tenant_ids() == frozenset()
 
 
 @pytest.mark.parametrize("tenant_id", [None, "", "   ", "\t"])

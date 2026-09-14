@@ -1,10 +1,10 @@
-"""Save-time Luna English metadata: full content of the changed item only."""
+"""Save-time English metadata: full content of the changed item only."""
 
 from __future__ import annotations
 
 import pytest
 
-from services.cm.storage import put_draft
+from services.ai_setup.storage import put_draft
 from services.search_metadata.cm_apply import enrich_section_payload, last_cm_apply_stats
 from services.search_metadata.english import contains_non_english_script, english_only_or_empty
 from services.search_metadata.generate import (
@@ -13,7 +13,7 @@ from services.search_metadata.generate import (
     reset_metadata_generator,
     set_metadata_generator,
 )
-from services.search_metadata.luna_titles import luna_title_fields
+from services.search_metadata.title_fields import retrieval_title_fields
 
 
 def _recording_generator(calls: list[dict]) -> None:
@@ -131,20 +131,20 @@ def test_service_french_english_metadata() -> None:
     calls: list[dict] = []
     _recording_generator(calls)
     out = enrich_section_payload(
-        "services",
+        "prices",
         {
-            "items": [
+            "catalog": [
                 {
                     "id": "s1",
                     "labels": {"fr": "Épilation laser", "en": "", "ar": ""},
                     "notes": "Soin d'épilation laser pour le corps.",
-                    "available": True,
+                    "active": True,
                 }
             ]
         },
         {},
     )
-    item = out["items"][0]
+    item = out["catalog"][0]
     assert item["labels"]["fr"] == "Épilation laser"
     assert item["ai_search_title"] == "Laser Hair Removal Service"
     assert not contains_non_english_script(item["ai_search_description"])
@@ -294,7 +294,7 @@ def test_deleted_item_leaves_no_orphan_metadata() -> None:
 
 
 def test_legacy_missing_metadata_does_not_fail_luna_view() -> None:
-    fields = luna_title_fields({"id": "legacy", "title": "12b", "body": "hello"})
+    fields = retrieval_title_fields({"id": "legacy", "title": "12b", "body": "hello"})
     assert fields["original_title"] == "12b"
     assert fields["ai_search_title"] == ""
     assert fields["title"] == "12b"

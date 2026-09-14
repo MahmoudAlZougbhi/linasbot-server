@@ -167,7 +167,7 @@ def update_settings(
     payload: dict[str, Any],
     expected_version: int | None = None,
 ) -> dict[str, Any]:
-    from services.membership.feature_entitlements import FeatureDenied, assert_followup_allowed
+    from services.billing.membership.feature_entitlements import FeatureDenied, assert_followup_allowed
 
     enabling = bool(payload.get("enabled", True))
     if enabling or payload.get("steps") or payload.get("channels_enabled"):

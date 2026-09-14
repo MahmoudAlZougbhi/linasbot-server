@@ -7,10 +7,10 @@ import logging
 import uuid
 from typing import Any
 
-from services.live_chat_contracts import (
+from services.live_chat.contracts import (
     normalize_message as contract_normalize_message,
 )
-from services.live_chat_contracts import utc_now
+from services.live_chat.contracts import utc_now
 from utils.utils_livechat_hooks import _extract_source_message_id, _message_to_dashboard_format
 from utils.utils_misc import detect_language
 
@@ -67,7 +67,7 @@ def _sse_new_message_payload(
     unread_count: int | None = None,
 ) -> dict[str, Any]:
     """Operator inbox fields for WhatsApp-style list updates (name, preview, unread)."""
-    from services.live_chat_service_common import _live_chat_display_name
+    from services.live_chat.service_common import _live_chat_display_name
 
     info = customer_info or {}
     dash_msg = _message_to_dashboard_format(message_data)
@@ -88,7 +88,7 @@ def _sse_new_message_payload(
         "user_name": name or None,
         "message": dash_msg,
     }
-    from services.live_chat_tenant import resolve_live_chat_tenant_id
+    from services.live_chat.tenant import resolve_live_chat_tenant_id
 
     tenant = resolve_live_chat_tenant_id(
         user_id=canonical_user_id,

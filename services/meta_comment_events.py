@@ -228,7 +228,7 @@ def comment_binding_skip_reason(
 ) -> str | None:
     """Return why a binding cannot handle comments, or None when ready."""
 
-    from services.channel_capability_state import (
+    from services.integrations.channel_capability_state import (
         binding_advanced_access_approved,
         comments_policy_allows,
     )

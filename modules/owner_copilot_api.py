@@ -1,0 +1,251 @@
+"""Owner Linas AI System Copilot API (conversations + messages + profile + CM approve)."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import HTTPException, Query, Request
+from pydantic import BaseModel, Field
+
+import modules.owner_copilot_stream_api  # noqa: F401 — stream + attachments (Sol only)
+from modules.api_security import require_session
+from modules.core import app
+from services.owner_copilot.chat_store import owner_chat_store
+from services.owner_copilot.orchestrator import run_owner_turn
+
+# Mobile opens at latest; older messages load via before= cursor.
+DEFAULT_MESSAGE_PAGE = 25
+MAX_MESSAGE_PAGE = 100
+
+
+class CreateConversationBody(BaseModel):
+    title: str | None = None
+    # App UI locale for seeded greeting + welcome chips (ar|en|fr).
+    language: str | None = Field(default=None, max_length=16)
+
+
+class SendMessageBody(BaseModel):
+    content: str = Field(min_length=0, max_length=16000)
+    confirm_tool: str | None = None
+    tool_args: dict[str, Any] | None = None
+    choice_id: str | None = None
+    choice_set_id: str | None = None
+    attachment_ids: list[str] | None = None
+
+
+class RenameBody(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    archived: bool | None = None
+
+
+class ProfileUpdateBody(BaseModel):
+    gender: str | None = None
+    display_name: str | None = None
+    preferred_language: str | None = None
+    form_of_address: str | None = None
+    address_prompt_asked: bool | None = None
+
+
+@app.get("/api/owner-ai/conversations")
+async def list_owner_conversations(request: Request) -> Any:
+    session = require_session(request)
+    items = owner_chat_store.list_conversations(tenant_id=session.tenant_id, user_id=session.user_id)
+    return {"success": True, "conversations": items}
+
+
+@app.post("/api/owner-ai/conversations")
+async def create_owner_conversation(body: CreateConversationBody, request: Request) -> Any:
+    session = require_session(request)
+    from services.owner_copilot.greeting import build_greeting
+    from services.owner_copilot.profile import coerce_language, language_from_accept_header, update_owner_profile
+
+    lang = coerce_language(body.language) or language_from_accept_header(request.headers.get("accept-language"))
+    if lang:
+        try:
+            update_owner_profile(session.user_id, {"preferred_language": lang})
+        except Exception:
+            pass
+    greeting = build_greeting(
+        tenant_id=session.tenant_id,
+        user_id=session.user_id,
+        language=lang,
+    )
+    # Optional one-time address prompt: mark asked after first greeting that includes it.
+    if greeting.get("address_prompt_included"):
+        try:
+            update_owner_profile(session.user_id, {"address_prompt_asked": True})
+        except Exception:
+            pass
+    conv = owner_chat_store.create_conversation(
+        tenant_id=session.tenant_id,
+        user_id=session.user_id,
+        title=(body.title or "New chat"),
+        greeting_text=str(greeting["text"]),
+    )
+    return {
+        "success": True,
+        "conversation": {
+            "id": conv.id,
+            "title": conv.title,
+            "created_at": conv.created_at,
+            "updated_at": conv.updated_at,
+            "messages": [m.__dict__ for m in (conv.messages or [])],
+            "setup_stage": greeting.get("setup_stage"),
+            "greeting_language": greeting.get("language"),
+            "welcome_chips": greeting.get("chips") or [],
+        },
+    }
+
+
+@app.get("/api/owner-ai/conversations/{conversation_id}")
+async def get_owner_conversation(
+    conversation_id: str,
+    request: Request,
+    limit: int = Query(default=DEFAULT_MESSAGE_PAGE, ge=1, le=MAX_MESSAGE_PAGE),
+    before: str | None = Query(default=None, min_length=1, max_length=64),
+) -> Any:
+    session = require_session(request)
+    conv = owner_chat_store.get_conversation(
+        tenant_id=session.tenant_id,
+        user_id=session.user_id,
+        conversation_id=conversation_id,
+    )
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    page, has_more, total = owner_chat_store.slice_messages(
+        conv.messages,
+        limit=limit,
+        before_id=before,
+    )
+    return {
+        "success": True,
+        "conversation": {
+            "id": conv.id,
+            "title": conv.title,
+            "created_at": conv.created_at,
+            "updated_at": conv.updated_at,
+            "messages": [m.__dict__ for m in page],
+            "has_more": has_more,
+            "total_messages": total,
+        },
+    }
+
+
+@app.post("/api/owner-ai/conversations/{conversation_id}/messages")
+async def send_owner_message(conversation_id: str, body: SendMessageBody, request: Request) -> Any:
+    session = require_session(request)
+    conv = owner_chat_store.get_conversation(
+        tenant_id=session.tenant_id,
+        user_id=session.user_id,
+        conversation_id=conversation_id,
+    )
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    content = (body.content or "").strip()
+    if not content and not body.confirm_tool and not body.choice_id and not (body.attachment_ids or []):
+        raise HTTPException(status_code=400, detail="content, confirm_tool, choice, or attachment required")
+    if content or body.choice_id:
+        owner_chat_store.append_message(
+            tenant_id=session.tenant_id,
+            user_id=session.user_id,
+            conversation_id=conversation_id,
+            role="user",
+            content=content or (body.choice_id or ""),
+        )
+        conv = owner_chat_store.get_conversation(
+            tenant_id=session.tenant_id,
+            user_id=session.user_id,
+            conversation_id=conversation_id,
+        )
+    history = [{"role": m.role, "content": m.content} for m in ((conv.messages if conv else None) or [])]
+    result = await run_owner_turn(
+        tenant_id=session.tenant_id,
+        user_id=session.user_id,
+        role=session.role,
+        conversation_id=conversation_id,
+        user_text=content,
+        confirm_tool=body.confirm_tool,
+        messages=history,
+        tool_args=body.tool_args,
+        choice_id=body.choice_id,
+        choice_set_id=body.choice_set_id,
+        attachment_ids=body.attachment_ids,
+    )
+    assistant = owner_chat_store.append_message(
+        tenant_id=session.tenant_id,
+        user_id=session.user_id,
+        conversation_id=conversation_id,
+        role="assistant",
+        content=result.reply_text,
+        tool_calls=result.tool_calls,
+    )
+    return {
+        "success": True,
+        "message": assistant.__dict__ if assistant else None,
+        "pending_confirmation": result.pending_confirmation,
+        "proposed_patch": result.proposed_patch,
+        "creative_draft": None,
+        "route": result.route,
+        "context_tokens": result.context_tokens,
+        "setup_stage": result.setup_stage,
+        "quick_actions": result.quick_actions,
+        "cards": getattr(result, "cards", []),
+        "choices": getattr(result, "choices", []),
+        "model": getattr(result, "model", None),
+    }
+
+
+@app.patch("/api/owner-ai/conversations/{conversation_id}")
+async def rename_owner_conversation(conversation_id: str, body: RenameBody, request: Request) -> Any:
+    session = require_session(request)
+    if body.title is None and body.archived is None:
+        raise HTTPException(status_code=400, detail="Provide title and/or archived")
+    ok = True
+    if body.title is not None:
+        ok = owner_chat_store.rename(
+            tenant_id=session.tenant_id,
+            user_id=session.user_id,
+            conversation_id=conversation_id,
+            title=body.title,
+        )
+    if ok and body.archived is not None:
+        ok = owner_chat_store.set_archived(
+            tenant_id=session.tenant_id,
+            user_id=session.user_id,
+            conversation_id=conversation_id,
+            archived=body.archived,
+        )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"success": True}
+
+
+@app.delete("/api/owner-ai/conversations/{conversation_id}")
+async def delete_owner_conversation(conversation_id: str, request: Request) -> Any:
+    session = require_session(request)
+    ok = owner_chat_store.soft_delete(
+        tenant_id=session.tenant_id,
+        user_id=session.user_id,
+        conversation_id=conversation_id,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"success": True}
+
+
+@app.get("/api/owner-ai/profile")
+async def get_owner_ai_profile(request: Request) -> Any:
+    session = require_session(request)
+    from services.owner_copilot.profile import read_owner_profile
+
+    return {"success": True, "profile": read_owner_profile(session.user_id)}
+
+
+@app.patch("/api/owner-ai/profile")
+async def patch_owner_ai_profile(body: ProfileUpdateBody, request: Request) -> Any:
+    session = require_session(request)
+    from services.owner_copilot.profile import update_owner_profile
+
+    updates = body.model_dump(exclude_none=True)
+    profile = update_owner_profile(session.user_id, updates)
+    return {"success": True, "profile": profile}

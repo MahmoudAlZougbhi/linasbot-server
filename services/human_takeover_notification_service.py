@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any, cast
 
-from services.api_integrations import log_report_event
+from services.saas_no_boc import log_report_event
 from services.whatsapp_cloud_template_service import whatsapp_cloud_template_service
 
 

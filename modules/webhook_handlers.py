@@ -14,9 +14,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 import config
-from config import TRAINER_WHATSAPP_NUMBER
 from handlers.text_handlers import handle_message
-from handlers.training_handlers import exit_training_mode, start_training_mode
 from modules.core import app
 from modules.webhook_handlers_dedupe import (  # noqa: F401
     _PROCESS_PARSED_MID_TTL_SECONDS,
@@ -56,7 +54,6 @@ from modules.webhook_handlers_process import (  # noqa: F401
     start_command_whatsapp,
 )
 from modules.webhook_handlers_voice import handle_voice_message_whatsapp_with_adapter  # noqa: F401
-from services.api_integrations import generate_daily_report_command
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
 # Debug: last webhook received/parsed (for /api/debug/webhook-status)
@@ -251,100 +248,11 @@ async def handle_message_whatsapp_with_adapter(
     await await_whatsapp_delayed_processing(user_id)
 
 
-async def start_training_mode_whatsapp(user_whatsapp_id: str) -> Any:
-    """Adapts start_training_mode for WhatsApp."""
-    current_provider = WhatsAppFactory.get_current_provider()
-    adapter = WhatsAppFactory.get_adapter(current_provider)
-
-    async def _adapter_send(to: str, msg: str | None = None, img: str | None = None, aud: str | None = None) -> Any:
-        if msg:
-            return await adapter.send_text_message(to, msg)
-        elif img:
-            return await adapter.send_image_message(to, img)
-        elif aud:
-            return await adapter.send_audio_message(to, aud)
-        return False
-
-    if user_whatsapp_id == TRAINER_WHATSAPP_NUMBER:
-        if user_whatsapp_id not in config.user_data_whatsapp:
-            config.user_data_whatsapp[user_whatsapp_id] = {
-                "user_preferred_lang": "ar",
-                "initial_user_query_to_process": None,
-                "awaiting_human_handover_confirmation": False,
-                "current_conversation_id": None,
-            }
-
-        from modules.whatsapp_adapters import send_whatsapp_typing_indicator
-
-        await start_training_mode(
-            user_id=user_whatsapp_id,
-            user_data=config.user_data_whatsapp[user_whatsapp_id],
-            send_message_func=_adapter_send,
-            send_action_func=send_whatsapp_typing_indicator,
-        )
-    else:
-        await adapter.send_text_message(user_whatsapp_id, "ليس لديك صلاحية لتفعيل وضع التدريب.")
-
-
-async def exit_training_mode_whatsapp(user_whatsapp_id: str) -> Any:
-    """Adapts exit_training_mode for WhatsApp."""
-    current_provider = WhatsAppFactory.get_current_provider()
-    adapter = WhatsAppFactory.get_adapter(current_provider)
-
-    async def _adapter_send(to: str, msg: str | None = None, img: str | None = None, aud: str | None = None) -> Any:
-        if msg:
-            return await adapter.send_text_message(to, msg)
-        elif img:
-            return await adapter.send_image_message(to, img)
-        elif aud:
-            return await adapter.send_audio_message(to, aud)
-        return False
-
-    if user_whatsapp_id == TRAINER_WHATSAPP_NUMBER:
-        if user_whatsapp_id not in config.user_data_whatsapp:
-            config.user_data_whatsapp[user_whatsapp_id] = {
-                "user_preferred_lang": "ar",
-                "initial_user_query_to_process": None,
-                "awaiting_human_handover_confirmation": False,
-                "current_conversation_id": None,
-            }
-
-        from modules.whatsapp_adapters import send_whatsapp_typing_indicator
-
-        await exit_training_mode(
-            user_id=user_whatsapp_id,
-            user_data=config.user_data_whatsapp[user_whatsapp_id],
-            send_message_func=_adapter_send,
-            send_action_func=send_whatsapp_typing_indicator,
-        )
-    else:
-        await adapter.send_text_message(user_whatsapp_id, "ليس لديك صلاحية لإلغاء تفعيل وضع التدريب.")
-
-
 async def generate_daily_report_command_whatsapp(user_whatsapp_id: str) -> Any:
-    """Adapts generate_daily_report_command for WhatsApp."""
+    """BOC clinic reports are not in SaaS."""
     current_provider = WhatsAppFactory.get_current_provider()
     adapter = WhatsAppFactory.get_adapter(current_provider)
-
-    async def _adapter_send(to: str, msg: str | None = None, img: str | None = None, aud: str | None = None) -> Any:
-        if msg:
-            return await adapter.send_text_message(to, msg)
-        elif img:
-            return await adapter.send_image_message(to, img)
-        elif aud:
-            return await adapter.send_audio_message(to, aud)
-        return False
-
-    if user_whatsapp_id == TRAINER_WHATSAPP_NUMBER:
-        await adapter.send_text_message(user_whatsapp_id, "جارٍ توليد التقرير اليومي... 📊")
-
-        try:
-            await generate_daily_report_command(user_id=user_whatsapp_id, send_message_func=_adapter_send)
-        except Exception as e:
-            print(f"ERROR generating daily report for {user_whatsapp_id}: {e}")
-            await adapter.send_text_message(user_whatsapp_id, f"حدث خطأ أثناء توليد التقرير: {str(e)}")
-    else:
-        await adapter.send_text_message(user_whatsapp_id, "ليس لديك صلاحية لطلب التقرير اليومي.")
+    await adapter.send_text_message(user_whatsapp_id, "BOC is not in SaaS.")
 
 
 async def send_whatsapp_typing_indicator(user_whatsapp_id: str) -> None:

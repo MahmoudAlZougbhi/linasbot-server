@@ -123,11 +123,11 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
 
     # Credits stay the live gate until message billing replaces them.
     reservation_id: str | None = None
-    from services.membership.message_flags import message_billing_enabled
+    from services.billing.membership.message_flags import message_billing_enabled
 
     if not message_billing_enabled():
         try:
-            from services.customer_ai.leftover_reserve import reserve_leftover_reply
+            from services.brain.leftover_reserve import reserve_leftover_reply
 
             reservation_id = reserve_leftover_reply(
                 tenant_id=tenant_id,
@@ -142,7 +142,7 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             emit_wa_event("credit_reserve_failed", error=type(exc).__name__)
             return
 
-    from services.customer_ai.history_ids import message_id_for_brain
+    from services.brain.history_ids import message_id_for_brain
 
     brain_mid = message_id_for_brain(snapshot) or provider_mid
 
@@ -157,7 +157,7 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
 
     reply_text = ""
     try:
-        from services.cm.language_policy import detect_and_resolve_customer_languages
+        from services.ai_setup.language_policy import detect_and_resolve_customer_languages
         from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 
         _lang = detect_and_resolve_customer_languages(
@@ -352,8 +352,8 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
 
 def _hold_after_ambiguous_send(tenant_id: str, reservation_id: str | None, operation_id: str) -> None:
     """Keep leftover/message holds. Do not mark sent — the provider outcome is unknown."""
-    from services.membership.hold_policy import hold_billing_policy
-    from services.membership.pending_settlement import upsert
+    from services.billing.membership.hold_policy import hold_billing_policy
+    from services.billing.membership.pending_settlement import upsert
 
     if not tenant_id or not (reservation_id or operation_id):
         return

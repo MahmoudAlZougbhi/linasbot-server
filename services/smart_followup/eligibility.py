@@ -14,7 +14,7 @@ from services.smart_followup.types import FollowUpConversationView
 
 def _tenant_suspend_reason(tenant_id: str) -> str | None:
     try:
-        from services.entitlements_service import get_tenant_entitlement_public
+        from services.billing.entitlements_service import get_tenant_entitlement_public
 
         public = get_tenant_entitlement_public(tenant_id)
         status = str(public.get("status") or public.get("lifecycle_status") or "").lower()

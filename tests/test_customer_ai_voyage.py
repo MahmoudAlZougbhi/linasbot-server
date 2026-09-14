@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_ai.providers.spaces import ENTITY_DOCUMENT
-from services.customer_ai.providers.voyage_client import (
+from services.brain.providers.spaces import ENTITY_DOCUMENT
+from services.brain.providers.voyage_client import (
     QUERY_ATTEMPTS,
     QUERY_TIMEOUT_SECONDS,
     VoyageNotConfiguredError,

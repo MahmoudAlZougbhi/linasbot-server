@@ -5,9 +5,9 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from services.entitlements_service import entitlements_store
-from services.membership.plan_catalog import PUBLIC_PLAN_IDS, require_plan
-from services.plan_economics import PLAN_PRICES_USD
+from services.billing.entitlements_service import entitlements_store
+from services.billing.membership.plan_catalog import PUBLIC_PLAN_IDS, require_plan
+from services.billing.plan_economics import PLAN_PRICES_USD
 
 PLAN_RANK: dict[str, int] = {plan_id: idx for idx, plan_id in enumerate(PUBLIC_PLAN_IDS)}
 

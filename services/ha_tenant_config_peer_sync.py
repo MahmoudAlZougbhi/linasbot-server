@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from services.cm.constants import DEFAULT_TENANT_ID
-from services.cm.version_store import read_published_pointer
+from services.ai_setup.constants import require_tenant_id
+from services.ai_setup.version_store import read_published_pointer
 from services.ha_cm_peer_replicate import ha_cm_peer_replicate_enabled, replicate_published_cm_to_peer
 from services.tenant_runtime_config_backend import tenant_runtime_config_postgres_required
 from services.tenant_runtime_config_cache import rebuild_tenant_cache
@@ -21,7 +21,7 @@ def ha_tenant_config_cache_sync_enabled() -> bool:
 def run_tenant_config_cache_rebuild(*, tenant_id: str | None = None) -> dict[str, Any]:
     """Rebuild local caches from Postgres. Optionally warm immutable CM version dirs to peer."""
 
-    tid = (tenant_id or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+    tid = require_tenant_id(tenant_id)
     if not tenant_runtime_config_postgres_required():
         return {"skipped": True, "reason": "file_backend"}
     summary = rebuild_tenant_cache(tid)

@@ -188,10 +188,6 @@ export function AppScreenTree({
               setScreen({ name: 'cm_section', section: 'ai_basics', backTo: 'cm' });
               return;
             }
-            if (section === 'services') {
-              setScreen({ name: 'services', backTo: 'cm' });
-              return;
-            }
             setScreen({ name: 'cm_section', section, backTo: 'cm' });
           }}
           onOpenProducts={() => setScreen({ name: 'products', backTo: 'cm' })}

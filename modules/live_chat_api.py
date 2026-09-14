@@ -28,8 +28,8 @@ from modules.models import (
     SendOperatorMessageRequest,
     TakeoverRequest,
 )
-from services.live_chat_service import live_chat_service
-from services.live_chat_sse_broadcaster import live_chat_sse_broadcaster
+from services.live_chat.service import live_chat_service
+from services.live_chat.sse_broadcaster import live_chat_sse_broadcaster
 from services.takeover_customer_notice import public_staff_label
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
@@ -78,7 +78,7 @@ async def get_unified_chats(
         from services.access_channels import effective_inbox_channel, filter_chats_for_session
 
         session = require_session(http_request)
-        from services.live_chat_tenant import require_workspace_tenant
+        from services.live_chat.tenant import require_workspace_tenant
 
         workspace = require_workspace_tenant(session)
         inbox_channel = effective_inbox_channel(session, channel)
@@ -108,7 +108,7 @@ async def takeover_conversation(request: TakeoverRequest, http_request: Request)
     async def _handler() -> Any:
         session = await require_live_chat_thread(http_request, request.user_id, request.conversation_id)
         operator_id, operator_name = resolve_takeover_assignee(session, request.operator_id)
-        from services.membership.edit_http import guarded_edit
+        from services.billing.membership.edit_http import guarded_edit
 
         with guarded_edit(
             tenant_id=str(getattr(session, "tenant_id", "") or ""),
@@ -140,7 +140,7 @@ async def release_conversation(request: ReleaseRequest, http_request: Request) -
     async def _handler() -> Any:
         session = await require_live_chat_thread(http_request, request.user_id, request.conversation_id)
         # Same server-authoritative clear as /resume-ai so WA Cloud epoch cannot stay HUMAN_PAUSED.
-        from services.membership.edit_http import guarded_edit
+        from services.billing.membership.edit_http import guarded_edit
 
         with guarded_edit(
             tenant_id=str(getattr(session, "tenant_id", "") or ""),
@@ -286,7 +286,7 @@ async def end_conversation(request: dict, http_request: Request) -> Any:
 
     async def _handler() -> Any:
         # Clear server pause (Firestore + WA Cloud epoch) before resolving so AI is not stuck paused.
-        from services.membership.edit_http import guarded_edit
+        from services.billing.membership.edit_http import guarded_edit
 
         with guarded_edit(
             tenant_id=str(getattr(session, "tenant_id", "") or ""),

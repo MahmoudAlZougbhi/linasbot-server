@@ -36,13 +36,13 @@ os.environ.setdefault("LINASBOT_DATA_ROOT", "/opt/linasbot_data")
 os.environ.setdefault("ENVIRONMENT", "production")
 
 from handlers.text_handlers_respond import _handle_published_cm_runtime
-from services.cm.constants import (
+from services.ai_setup.constants import (
     cm_disable_linas_legacy_bridge,
     tenant_allows_legacy_bridge,
     tenant_has_published_cm,
     tenant_uses_cm_runtime,
 )
-from services.cm.version_store import load_published_content, read_published_pointer
+from services.ai_setup.version_store import load_published_content, read_published_pointer
 
 tenant_id = "linas"
 _ = read_published_pointer(tenant_id)
@@ -81,7 +81,7 @@ if "linas" not in an and "lina" not in an:
 # Prefer an authoritative catalog label for the price probe when structured prices exist.
 price_probe = "How much is underarm laser?"
 try:
-    from services.cm.pricing.section import normalize_prices_section, section_catalog_items
+    from services.ai_setup.pricing.section import normalize_prices_section, section_catalog_items
 
     _prices = normalize_prices_section(sections.get("prices") or {})
     _catalog = section_catalog_items(_prices)

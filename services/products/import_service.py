@@ -49,8 +49,8 @@ def preview_csv_rows(csv_text: str) -> dict[str, Any]:
 
 def import_csv_rows(svc: Any, *, tenant_id: str, csv_text: str) -> dict[str, Any]:
     preview = preview_csv_rows(csv_text)
-    from services.membership.edit_http import guarded_edit
-    from services.membership.processing_budgets import reject_oversized_import
+    from services.billing.membership.edit_http import guarded_edit
+    from services.billing.membership.processing_budgets import reject_oversized_import
 
     valid_rows = [row for row in preview.get("preview") or [] if row.get("valid")]
     reject_oversized_import(len(valid_rows))
@@ -93,8 +93,8 @@ def preview_xlsx_rows(content: bytes) -> dict[str, Any]:
 
 def import_xlsx_rows(svc: Any, *, tenant_id: str, content: bytes) -> dict[str, Any]:
     preview = preview_xlsx_rows(content)
-    from services.membership.edit_http import guarded_edit
-    from services.membership.processing_budgets import reject_oversized_import
+    from services.billing.membership.edit_http import guarded_edit
+    from services.billing.membership.processing_budgets import reject_oversized_import
 
     valid_rows = [row for row in preview.get("preview") or [] if row.get("valid")]
     reject_oversized_import(len(valid_rows))

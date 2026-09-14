@@ -26,15 +26,15 @@ async def generate_social_caption(
         f"Topic or brief: {(topic or 'general business update').strip()}\n"
     )
 
-    from services.cm.constants import tenant_uses_cm_runtime
+    from services.ai_setup.constants import tenant_uses_cm_runtime
 
     if tenant_uses_cm_runtime(tenant_id):
-        from services.cm.answer_generation import (
+        from services.ai_setup.answer_generation import (
             UsageAccumulator,
             generate_answer_with_usage,
             make_regenerate_fn_with_usage,
         )
-        from services.cm.runtime_pipeline import finalize_response, prepare_response
+        from services.ai_setup.runtime_pipeline import finalize_response, prepare_response
 
         seed = (topic or "social post caption").strip()
         outcome = await prepare_response(

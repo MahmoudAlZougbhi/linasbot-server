@@ -7,10 +7,10 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from services.owner_ai_model_router import OwnerChatUsageTracker, RouteDecision
-from services.owner_chat_store import OwnerChatStore
-from services.tenant_mobile_dashboard.activity import build_activity_summary
-from services.tenant_mobile_dashboard.copilot import _safe_ts, build_owner_copilot_summary
+from services.dashboard.activity import build_activity_summary
+from services.dashboard.copilot import _safe_ts, build_owner_copilot_summary
+from services.owner_copilot.chat_store import OwnerChatStore
+from services.owner_copilot.model_router import OwnerChatUsageTracker, RouteDecision
 
 
 def _route() -> RouteDecision:
@@ -37,7 +37,7 @@ def _seed_chat(store: OwnerChatStore, *, tenant_id: str, user_id: str, ts: float
 def test_copilot_counts_one_message_per_turn(tmp_path: Path, monkeypatch) -> None:
     store = OwnerChatStore(root=tmp_path / "owner_chat")
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.copilot.owner_chat_usage_tracker",
+        "services.dashboard.copilot.owner_chat_usage_tracker",
         OwnerChatUsageTracker(root=tmp_path / "usage"),
     )
     now = time.time()
@@ -63,7 +63,7 @@ def test_safe_ts_ignores_corrupt_conversation_timestamps() -> None:
 def test_copilot_survives_corrupt_conversation_meta(tmp_path: Path, monkeypatch) -> None:
     store = OwnerChatStore(root=tmp_path / "owner_chat")
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.copilot.owner_chat_usage_tracker",
+        "services.dashboard.copilot.owner_chat_usage_tracker",
         OwnerChatUsageTracker(root=tmp_path / "usage"),
     )
     conv = store.create_conversation(tenant_id="acme", user_id="u1", greeting_text="Hi")
@@ -97,7 +97,7 @@ def test_copilot_survives_corrupt_conversation_meta(tmp_path: Path, monkeypatch)
 def test_copilot_ignores_epoch_timestamps_in_all_time_window(tmp_path: Path, monkeypatch) -> None:
     store = OwnerChatStore(root=tmp_path / "owner_chat")
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.copilot.owner_chat_usage_tracker",
+        "services.dashboard.copilot.owner_chat_usage_tracker",
         OwnerChatUsageTracker(root=tmp_path / "usage"),
     )
     conv = store.create_conversation(tenant_id="acme", user_id="u1", greeting_text="Hi")
@@ -133,7 +133,7 @@ def test_copilot_ignores_epoch_timestamps_in_all_time_window(tmp_path: Path, mon
 def test_copilot_chat_counts_match_across_recent_ranges(tmp_path: Path, monkeypatch) -> None:
     store = OwnerChatStore(root=tmp_path / "owner_chat")
     tracker = OwnerChatUsageTracker(root=tmp_path / "owner_ai_usage")
-    monkeypatch.setattr("services.tenant_mobile_dashboard.copilot.owner_chat_usage_tracker", tracker)
+    monkeypatch.setattr("services.dashboard.copilot.owner_chat_usage_tracker", tracker)
     now = time.time()
     cid = _seed_chat(store, tenant_id="acme", user_id="u1", ts=now - 3600)
     tracker.record(
@@ -162,9 +162,9 @@ def test_copilot_chat_counts_match_across_recent_ranges(tmp_path: Path, monkeypa
 def test_copilot_per_user_rows_sum_to_footer(tmp_path: Path, monkeypatch) -> None:
     store = OwnerChatStore(root=tmp_path / "owner_chat")
     tracker = OwnerChatUsageTracker(root=tmp_path / "owner_ai_usage")
-    monkeypatch.setattr("services.tenant_mobile_dashboard.copilot.owner_chat_usage_tracker", tracker)
+    monkeypatch.setattr("services.dashboard.copilot.owner_chat_usage_tracker", tracker)
     monkeypatch.setattr(
-        "services.user_service.user_service.get_user_by_id",
+        "services.team.user_service.user_service.get_user_by_id",
         lambda uid: {"id": uid, "name": f"User {uid}", "displayName": f"User {uid}"},
     )
 

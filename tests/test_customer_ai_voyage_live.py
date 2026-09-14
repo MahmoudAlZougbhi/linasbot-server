@@ -4,22 +4,22 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_ai.flags import voyage_api_key
-from services.customer_ai.providers.spaces import (
+from services.brain.flags import voyage_api_key
+from services.brain.providers.spaces import (
     ENTITY_DOCUMENT,
     ENTITY_QUERY,
     KNOWLEDGE_DOCUMENT,
     RERANK_MODEL,
     compatible,
 )
-from services.customer_ai.providers.voyage_client import (
+from services.brain.providers.voyage_client import (
     VoyageContractError,
     embed_contextual_groups,
     embed_texts,
     rerank_texts,
 )
-from services.customer_ai.retrieve.cards import cards_from_sections
-from services.customer_ai.retrieve.hybrid import search_hybrid
+from services.brain.retrieve.cards import cards_from_sections
+from services.brain.retrieve.hybrid import search_hybrid
 
 
 def _require_key() -> None:

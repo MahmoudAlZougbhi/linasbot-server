@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from services.customer_ai.agent.task_coverage import evaluate_task_coverage
-from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.customer_ai.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
-from services.customer_ai.planner.heuristic import overlay_plan, plan_message
-from services.customer_ai.retrieve.cards import cards_from_sections
-from services.customer_ai.retrieve.expand import expand_hits
-from services.customer_ai.retrieve.lexical import LexicalHit
+from services.brain.agent.task_coverage import evaluate_task_coverage
+from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
+from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+from services.brain.planner.heuristic import overlay_plan, plan_message
+from services.brain.retrieve.cards import cards_from_sections
+from services.brain.retrieve.expand import expand_hits
+from services.brain.retrieve.lexical import LexicalHit
 
 
 def _week(open_t: str, close_t: str, *, sunday_off: bool = True) -> dict:
@@ -161,7 +161,7 @@ def test_opening_hours_do_not_hide_branch_clocks() -> None:
     assert "hours:antelias" in hours_ids
     antelias = next(card for card in cards if card.item_id == "hours:antelias")
     assert "11 00" in antelias.search_text
-    from services.customer_ai.retrieve.lexical import search_cards
+    from services.brain.retrieve.lexical import search_cards
 
     hits = search_cards(cards, "شو ساعات أنطلياس؟", families={"hours", "branches"})
     assert hits

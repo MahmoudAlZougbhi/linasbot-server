@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from services.cm.resource_attachment import resource_summary
+from services.ai_setup.resource_attachment import resource_summary
 from services.customer_reply_v2.models import ItemIndexEntry
-from services.search_metadata.limits import LUNA_FULL_TITLE_SECTIONS
+from services.search_metadata.limits import FULL_TITLE_SECTIONS
 from services.search_metadata.title_fields import retrieval_title_fields
 
 MAX_ITEMS_PER_SECTION = 80
@@ -16,7 +16,7 @@ MAX_EVIDENCE_CHARS = 12000
 
 
 def _rows_for_index(section_id: str, rows: list[Any]) -> list[Any]:
-    if section_id in LUNA_FULL_TITLE_SECTIONS:
+    if section_id in FULL_TITLE_SECTIONS:
         return rows
     return rows[:MAX_ITEMS_PER_SECTION]
 
@@ -170,8 +170,8 @@ def record_content(section_id: str, raw: dict[str, Any]) -> str:
             ensure_ascii=False,
         )
     if section_id == "branches":
-        from services.cm.branch_schedule import normalize_weekly_schedule
-        from services.cm.resource_attachment import customer_resource_descriptors
+        from services.ai_setup.branch_schedule import normalize_weekly_schedule
+        from services.ai_setup.resource_attachment import customer_resource_descriptors
 
         branch_id = str(raw.get("id") or "").strip()
         attachments = customer_resource_descriptors(

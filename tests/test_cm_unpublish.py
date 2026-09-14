@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from services.cm.schemas import PublishedPointer
-from services.cm.version_store import (
+from services.ai_setup.schemas import PublishedPointer
+from services.ai_setup.version_store import (
     clear_published_pointer,
     read_published_pointer,
     write_published_pointer,

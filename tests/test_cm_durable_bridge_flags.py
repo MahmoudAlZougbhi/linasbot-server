@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.cm.durable_flags import (
+from services.ai_setup.durable_flags import (
     CM_DISABLE_LINAS_LEGACY_BRIDGE,
     parse_env_bool,
     preserve_disable_linas_legacy_bridge,

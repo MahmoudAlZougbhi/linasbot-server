@@ -239,7 +239,7 @@ async def _handle_published_cm_runtime(
     Never falls back to Classic ``generate_answer_with_usage``. On model/config
     failure, returns a safe closed failure reply with an explicit blocker.
     """
-    from services.cm.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
+    from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
     from services.customer_reply_v2.models import ENGINE_REMOVED
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
     from services.dynamic_messages_service import get_dynamic_message

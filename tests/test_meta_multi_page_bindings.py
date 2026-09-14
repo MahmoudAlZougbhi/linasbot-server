@@ -219,7 +219,7 @@ def test_compose_user_id_scopes_by_asset_only_when_multiple_pages(
             asset_id=page_a,
             sender_id="999",
         )
-        == "facebook:999"
+        == "linas:facebook:111222333444:999"
     )
     registry.authorize_oauth_asset(
         tenant_id="linas",
@@ -239,7 +239,7 @@ def test_compose_user_id_scopes_by_asset_only_when_multiple_pages(
             asset_id=page_a,
             sender_id="999",
         )
-        == "facebook:111222333444:999"
+        == "linas:facebook:111222333444:999"
     )
 
 

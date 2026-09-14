@@ -18,7 +18,7 @@ os.environ.setdefault("DASHBOARD_AUTH_SECRET", "pytest-dashboard-secret")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-a-real-key")
 os.environ.setdefault("ENVIRONMENT", "test")
 # Unit tests use file SoT unless a postgres fixture explicitly overrides.
-# Production code defaults remain postgres (see services/billing_backend.py).
+# Production code defaults remain postgres (see services/billing/billing_backend.py).
 os.environ.setdefault("LINAS_BILLING_BACKEND", "file")
 os.environ.setdefault("LINAS_AUTH_TOKEN_BACKEND", "file")
 os.environ.setdefault("META_REGISTRY_BACKEND", "file")
@@ -26,6 +26,9 @@ os.environ.setdefault("META_REGISTRY_BACKEND", "file")
 # outside ENVIRONMENT=test). Published-mode tests override to openai + a mocked transport.
 os.environ.setdefault("CM_EMBEDDING_PROVIDER", "hash")
 os.environ.setdefault("DISABLE_API_DOCS", "true")
+# Tests still use founder tenant id `linas` without a paid plan. Production env
+# must list exempt tenants explicitly — never invent linas.
+os.environ.setdefault("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
 os.environ.pop("ALLOW_DEBUG_SIMULATE_WEBHOOK", None)
 
 
@@ -86,8 +89,8 @@ def _default_search_metadata_generator():
 @pytest.fixture
 def enable_faq_plan(tmp_path, monkeypatch: pytest.MonkeyPatch):
     """Active starter plan so CM FAQ write tests pass plan entitlements."""
-    import services.entitlements_service as es
-    from services.entitlements_service import EntitlementsStore
+    import services.billing.entitlements_service as es
+    from services.billing.entitlements_service import EntitlementsStore
 
     store = EntitlementsStore(root=tmp_path / "entitlements")
     real_get = store.get

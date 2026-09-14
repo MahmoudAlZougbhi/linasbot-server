@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from services.cm.setup_chat import apply_section_patch, interpret_and_patch, start_setup
-from services.cm.storage import get_draft, put_draft
+from services.ai_setup.setup_chat import apply_section_patch, interpret_and_patch, start_setup
+from services.ai_setup.storage import get_draft, put_draft
 
 
 @pytest.fixture()
@@ -52,7 +52,7 @@ def test_setup_chat_rejects_forbidden_fields(tenant_root: Path) -> None:
 
 
 def test_setup_chat_patch_counts_daily_edit(tenant_root: Path) -> None:
-    from services.membership.daily_edits import (
+    from services.billing.membership.daily_edits import (
         DailyEditLimitError,
         reset_daily_edits_for_tests,
         set_platform_baseline,

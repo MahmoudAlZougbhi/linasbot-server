@@ -6,15 +6,15 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from services.customer_ai.compiler.chunks import chunk_document, contextual_groups
-from services.customer_ai.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.customer_ai.ingest.multimodal import classify_media, process_knowledge_media
-from services.customer_ai.memory.store import recall_facts, remember_fact, reset_memory_for_tests
-from services.customer_ai.providers.spaces import KNOWLEDGE_DOCUMENT, KNOWLEDGE_MODEL, spaces_snapshot
-from services.customer_ai.relations.graph import load_relations
-from services.customer_ai.retrieve.conflict import apply_authority
-from services.customer_ai.search.store import activate_pointer, query_similar, write_documents
-from services.customer_ai.tools.registry import list_tools
+from services.brain.compiler.chunks import chunk_document, contextual_groups
+from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
+from services.brain.ingest.multimodal import classify_media, process_knowledge_media
+from services.brain.memory.store import recall_facts, remember_fact, reset_memory_for_tests
+from services.brain.providers.spaces import KNOWLEDGE_DOCUMENT, KNOWLEDGE_MODEL, spaces_snapshot
+from services.brain.relations.graph import load_relations
+from services.brain.retrieve.conflict import apply_authority
+from services.brain.search.store import activate_pointer, query_similar, write_documents
+from services.brain.tools.registry import list_tools
 
 
 def test_contextual_chunks_keep_raw_and_context() -> None:
@@ -136,7 +136,7 @@ def test_tool_registry_includes_contact_and_request_state() -> None:
 async def test_multimodal_pdf_fail_visible_without_library() -> None:
     assert classify_media("x.pdf", "application/pdf") == "pdf"
     with patch(
-        "services.customer_ai.ingest.multimodal.extract_pdf_text",
+        "services.brain.ingest.multimodal.extract_pdf_text",
         new=AsyncMock(
             return_value={
                 "ok": False,
@@ -160,7 +160,7 @@ def test_relations_loader_handles_unpublished() -> None:
 
 
 def test_probe_pgvector_uses_sqlalchemy_text() -> None:
-    from services.customer_ai.search.readiness import probe_pgvector
+    from services.brain.search.readiness import probe_pgvector
 
     class _Session:
         def execute(self, statement, *args, **kwargs):  # noqa: ANN001
@@ -177,8 +177,8 @@ def test_probe_pgvector_uses_sqlalchemy_text() -> None:
 
 
 def test_cards_include_all_label_languages() -> None:
-    from services.customer_ai.retrieve.cards import cards_from_sections
-    from services.customer_ai.retrieve.lexical import search_cards
+    from services.brain.retrieve.cards import cards_from_sections
+    from services.brain.retrieve.lexical import search_cards
 
     sections = {
         "prices": {
@@ -200,11 +200,11 @@ def test_cards_include_all_label_languages() -> None:
 
 @pytest.mark.asyncio
 async def test_get_price_is_branch_scoped() -> None:
-    from services.cm.paths import ensure_cm_dirs
-    from services.cm.schemas import PublishedPointer, utc_now
-    from services.cm.version_store import write_published_pointer, write_version_content
-    from services.customer_ai.contracts.turn import CustomerTurn
-    from services.customer_ai.tools.registry import execute_tool
+    from services.ai_setup.paths import ensure_cm_dirs
+    from services.ai_setup.schemas import PublishedPointer, utc_now
+    from services.ai_setup.version_store import write_published_pointer, write_version_content
+    from services.brain.contracts.turn import CustomerTurn
+    from services.brain.tools.registry import execute_tool
 
     tid = "lab-price-branch"
     ensure_cm_dirs(tid)

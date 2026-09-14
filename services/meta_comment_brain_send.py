@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from services.customer_ai.comments.destinations import CommentDestinations
+from services.brain.comments.destinations import CommentDestinations
 
 if TYPE_CHECKING:
     from services.meta_comment_replies import CommentReplyResult
@@ -178,7 +178,7 @@ def _settle_comment_send(
     reply_id: str,
     accepted: bool,
 ) -> None:
-    from services.customer_ai.billing import settle_after_send
+    from services.brain.billing import settle_after_send
 
     tenant_id = str(getattr(binding, "tenant_id", "") or "")
     extras = [

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from services.cm.actions import ACTION_TIKTOK_COMMENTS, ACTION_TIKTOK_DM
-from services.cm.publish import PublishBlockedError, publish_draft_sections
-from services.cm.publish_gate import PublishDisabledError, ensure_publish_enabled
-from services.cm.schemas import ActionCapability, ActionsSection, SectionDraftEnvelope
-from services.cm.storage import ConflictError, draft_section_path, get_draft, put_draft
-from services.cm.version_store import read_published_pointer
+from services.ai_setup.actions import ACTION_TIKTOK_COMMENTS, ACTION_TIKTOK_DM
+from services.ai_setup.publish import PublishBlockedError, publish_draft_sections
+from services.ai_setup.publish_gate import PublishDisabledError, ensure_publish_enabled
+from services.ai_setup.schemas import ActionCapability, ActionsSection, SectionDraftEnvelope
+from services.ai_setup.storage import ConflictError, draft_section_path, get_draft, put_draft
+from services.ai_setup.version_store import read_published_pointer
 from services.tiktok_business.status import tiktok_integration_row
 
 ToggleKey = Literal["dm", "comments"]
@@ -48,7 +48,7 @@ def _action_id(toggle: ToggleKey) -> str:
 
 
 def _draft_envelope(*, tenant_id: str, actor: str) -> SectionDraftEnvelope:
-    from services.cm.actions import load_actions_section
+    from services.ai_setup.actions import load_actions_section
 
     if draft_section_path(tenant_id, "actions").exists():
         return get_draft("actions", tenant_id=tenant_id, create_default=False)
@@ -117,7 +117,7 @@ async def set_tiktok_toggle(
             "Connect TikTok before enabling this capability.", status_code=409, code="CONNECT_REQUIRED"
         )
     if toggle == "comments" and enabled:
-        from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
+        from services.billing.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
 
         try:
             assert_comment_automation_allowed(tenant_id)

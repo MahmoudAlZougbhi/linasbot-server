@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.customer_ai.media_analysis.describe import describe_stills
+from services.brain.media.describe import describe_stills
 from services.customer_reply_v2.inbound_stt_chunks import transcribe_full_wav
 
 
@@ -52,7 +52,7 @@ async def enrich_inbound_video(
             result.transcript = str(spoken["text"]).strip()
             text_parts.append(result.transcript)
             if tenant_id:
-                from services.membership.provider_expense import record_pending_provider
+                from services.billing.membership.provider_expense import record_pending_provider
 
                 record_pending_provider(
                     event_id=f"stt:{tenant_id}:video_audio.wav",

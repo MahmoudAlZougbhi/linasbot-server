@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.cm.constants import (
+from services.ai_setup.constants import (
     cm_emergency_force_legacy,
     cm_publish_enabled,
     cm_runtime_mode,
@@ -26,8 +26,8 @@ def test_tenant_uses_cm_when_published(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("CM_EMERGENCY_FORCE_LEGACY", raising=False)
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
 
-    from services.cm.schemas import PublishedPointer
-    from services.cm.version_store import write_published_pointer
+    from services.ai_setup.schemas import PublishedPointer
+    from services.ai_setup.version_store import write_published_pointer
 
     write_published_pointer(
         "acme-gym",
@@ -62,8 +62,8 @@ def test_linas_without_publish_has_no_legacy_bridge(monkeypatch, tmp_path) -> No
 def test_emergency_force_legacy_no_longer_switches_engine(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("CM_EMERGENCY_FORCE_LEGACY", "true")
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
-    from services.cm.schemas import PublishedPointer
-    from services.cm.version_store import write_published_pointer
+    from services.ai_setup.schemas import PublishedPointer
+    from services.ai_setup.version_store import write_published_pointer
 
     write_published_pointer(
         "acme-gym",

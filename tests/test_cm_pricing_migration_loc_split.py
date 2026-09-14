@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.cm.pricing import migration as migration_mod
-from services.cm.pricing.migration_extract import (
+from services.ai_setup.pricing import migration as migration_mod
+from services.ai_setup.pricing.migration_extract import (
     extract_price_rows_from_json_obj,
     extract_price_rows_from_json_obj_with_ambiguous,
     extract_price_rows_from_text,
@@ -17,8 +17,8 @@ def _line_count(rel: str) -> int:
 
 
 def test_cm_pricing_migration_modules_under_500_lines() -> None:
-    assert _line_count("services/cm/pricing/migration.py") < 500
-    assert _line_count("services/cm/pricing/migration_extract.py") < 500
+    assert _line_count("services/ai_setup/pricing/migration.py") < 500
+    assert _line_count("services/ai_setup/pricing/migration_extract.py") < 500
 
 
 def test_cm_pricing_migration_preserves_public_api() -> None:

@@ -9,8 +9,8 @@ import pytest
 
 from services.customer_reply_v2.inbound_extract import extract_inbound_file
 from services.customer_reply_v2.inbound_media import (
+    inbound_media_view,
     ingest_inbound_attachments,
-    luna_inbound_view,
 )
 from services.customer_reply_v2.inbound_video import extract_bounded_video
 from services.ssrf_guard import SSRFValidationError, validate_fetch_url
@@ -27,7 +27,7 @@ def inbound_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     async def _no_desc(*_args: object, **_kwargs: object) -> str:
         return ""
 
-    monkeypatch.setattr("services.customer_ai.media_analysis.describe.describe_stills", _no_desc)
+    monkeypatch.setattr("services.brain.media.describe.describe_stills", _no_desc)
     monkeypatch.setattr("services.customer_reply_v2.inbound_media_enrich.describe_stills", _no_desc)
     return tmp_path
 
@@ -47,7 +47,7 @@ async def test_image_is_stored_and_not_generic_arabic(inbound_env: Path) -> None
     assert "image" in result.attachment_types
     assert result.image_media_id and result.image_media_id.startswith("prdim_")
     assert "اكتبلي شو حابب تعرف" not in result.pipeline_text
-    view = luna_inbound_view(result)
+    view = inbound_media_view(result)
     assert view["image_media_id"] == result.image_media_id
     assert "bytes" not in view
     assert "storage_key" not in view
@@ -72,8 +72,8 @@ async def test_audio_uses_real_stt_path(inbound_env: Path) -> None:
     )
     assert result.transcript == "بدي كريم after care"
     assert result.pipeline_text == "بدي كريم after care"
-    assert luna_inbound_view(result)["transcript"] == "بدي كريم after care"
-    from services.membership.expense_journal import list_events
+    assert inbound_media_view(result)["transcript"] == "بدي كريم after care"
+    from services.billing.membership.expense_journal import list_events
 
     events = list_events(tenant_id="t-in", category="stt")
     assert events
@@ -118,7 +118,7 @@ async def test_video_frames_and_audio_not_unimplemented(inbound_env: Path, monke
     assert result.video_frame_count == 1
     assert result.image_media_id
     assert result.transcript == "laser hair removal"
-    assert "NOT IMPLEMENTED" not in json.dumps(luna_inbound_view(result))
+    assert "NOT IMPLEMENTED" not in json.dumps(inbound_media_view(result))
 
 
 def test_video_honest_when_ffmpeg_missing(monkeypatch: pytest.MonkeyPatch) -> None:

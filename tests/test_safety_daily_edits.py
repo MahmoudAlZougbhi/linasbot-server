@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from services.membership.daily_edits import (
+from services.billing.membership.daily_edits import (
     DailyEditLimitError,
     commit_edit,
     reserve_edit,
     reset_daily_edits_for_tests,
     set_platform_baseline,
 )
-from services.membership.edit_http import guarded_edit, is_safety_edit
+from services.billing.membership.edit_http import guarded_edit, is_safety_edit
 
 
 @pytest.fixture(autouse=True)
@@ -20,7 +20,7 @@ def _clean() -> None:
 
 
 def test_ai_limits_section_consumes_daily_edit() -> None:
-    from services.membership.daily_edits import COUNTED_CM_SECTIONS
+    from services.billing.membership.daily_edits import COUNTED_CM_SECTIONS
 
     assert "ai_limits" in COUNTED_CM_SECTIONS
 
@@ -154,9 +154,9 @@ def test_missing_daily_edit_tables_fall_back_to_memory(monkeypatch: pytest.Monke
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.daily_edits_pg.table_ready", lambda _s: False)
-    monkeypatch.setattr("services.membership.daily_edits_policy_pg.table_ready", lambda _s: False)
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.daily_edits_pg.table_ready", lambda _s: False)
+    monkeypatch.setattr("services.billing.membership.daily_edits_policy_pg.table_ready", lambda _s: False)
     set_platform_baseline(1)
     reserve_edit(tenant_id="fallback-shop", operation_id="op-1")
     commit_edit(tenant_id="fallback-shop", operation_id="op-1")
@@ -167,7 +167,7 @@ def test_missing_daily_edit_tables_fall_back_to_memory(monkeypatch: pytest.Monke
 def test_daily_edit_status_unions_memory_when_sql_ready(monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership.daily_edits import status
+    from services.billing.membership.daily_edits import status
 
     monkeypatch.setenv("LINAS_MESSAGE_STORE", "memory")
     set_platform_baseline(1)
@@ -178,10 +178,10 @@ def test_daily_edit_status_unions_memory_when_sql_ready(monkeypatch: pytest.Monk
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.daily_edits_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.membership.daily_edits_pg.pg_counts", lambda *_a, **_k: (0, 0))
-    monkeypatch.setattr("services.membership.daily_edits_pg.pg_operation_ids", lambda *_a, **_k: {})
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.daily_edits_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.daily_edits_pg.pg_counts", lambda *_a, **_k: (0, 0))
+    monkeypatch.setattr("services.billing.membership.daily_edits_pg.pg_operation_ids", lambda *_a, **_k: {})
     state = status("mix-shop")
     assert state.reserved == 1
     assert state.remaining == 0
@@ -192,7 +192,7 @@ def test_daily_edit_status_unions_memory_when_sql_ready(monkeypatch: pytest.Monk
 def test_known_processing_tenants_union_memory_and_sql(monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership.processing_budgets import (
+    from services.billing.membership.processing_budgets import (
         begin_job,
         known_processing_tenant_ids,
         reset_processing_budgets_for_tests,
@@ -206,10 +206,10 @@ def test_known_processing_tenants_union_memory_and_sql(monkeypatch: pytest.Monke
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.processing_budgets_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.processing_budgets_pg.table_ready", lambda _s: True)
     monkeypatch.setattr(
-        "services.membership.processing_budgets_pg.pg_tenant_ids",
+        "services.billing.membership.processing_budgets_pg.pg_tenant_ids",
         lambda _s: ["sql-budget"],
     )
     assert known_processing_tenant_ids() == ["mem-budget", "sql-budget"]
@@ -218,7 +218,7 @@ def test_known_processing_tenants_union_memory_and_sql(monkeypatch: pytest.Monke
 def test_processing_status_unions_memory_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership.processing_budgets import (
+    from services.billing.membership.processing_budgets import (
         ProcessingBudgetError,
         begin_job,
         reset_processing_budgets_for_tests,
@@ -234,11 +234,11 @@ def test_processing_status_unions_memory_jobs(monkeypatch: pytest.MonkeyPatch) -
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.processing_budgets_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.membership.processing_budgets_pg.pg_job_count", lambda *_a, **_k: 1)
-    monkeypatch.setattr("services.membership.processing_budgets_pg.pg_attempt_used", lambda *_a, **_k: 2)
-    monkeypatch.setattr("services.membership.processing_budgets_pg.pg_tenants_with_jobs", lambda *_a, **_k: 1)
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.processing_budgets_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.processing_budgets_pg.pg_job_count", lambda *_a, **_k: 1)
+    monkeypatch.setattr("services.billing.membership.processing_budgets_pg.pg_attempt_used", lambda *_a, **_k: 2)
+    monkeypatch.setattr("services.billing.membership.processing_budgets_pg.pg_tenants_with_jobs", lambda *_a, **_k: 1)
     state = status("mem-stat")
     assert state["concurrent"] == 2
     assert state["daily_attempts"] == 2
@@ -249,7 +249,7 @@ def test_processing_status_unions_memory_jobs(monkeypatch: pytest.MonkeyPatch) -
 def test_expense_list_unions_memory_when_sql_misses(monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership.expense_journal import list_events, record_expense, reset_expenses_for_tests
+    from services.billing.membership.expense_journal import list_events, record_expense, reset_expenses_for_tests
 
     reset_expenses_for_tests()
     record_expense(
@@ -267,9 +267,9 @@ def test_expense_list_unions_memory_when_sql_misses(monkeypatch: pytest.MonkeyPa
     def _session():
         yield object()
 
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.expense_journal_pg.table_ready", lambda _s: True)
-    monkeypatch.setattr("services.membership.expense_journal_pg.pg_list", lambda *_a, **_k: [])
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.expense_journal_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.expense_journal_pg.pg_list", lambda *_a, **_k: [])
     events = list_events(tenant_id="mem-exp-shop")
     assert any(item.event_id == "mem-exp" for item in events)
 
@@ -277,7 +277,7 @@ def test_expense_list_unions_memory_when_sql_misses(monkeypatch: pytest.MonkeyPa
 def test_end_job_without_local_id_does_not_close_sql_job(monkeypatch: pytest.MonkeyPatch) -> None:
     from contextlib import contextmanager
 
-    from services.membership.processing_budgets import end_job, reset_processing_budgets_for_tests
+    from services.billing.membership.processing_budgets import end_job, reset_processing_budgets_for_tests
 
     reset_processing_budgets_for_tests()
     closed: list[tuple[str, str]] = []
@@ -287,15 +287,15 @@ def test_end_job_without_local_id_does_not_close_sql_job(monkeypatch: pytest.Mon
         yield object()
 
     monkeypatch.delenv("LINAS_MESSAGE_STORE", raising=False)
-    monkeypatch.setattr("services.membership.pg_store.memory_forced", lambda: False)
-    monkeypatch.setattr("services.membership.pg_store.optional_message_session", _session)
-    monkeypatch.setattr("services.membership.processing_budgets_pg.table_ready", lambda _s: True)
+    monkeypatch.setattr("services.billing.membership.pg_store.memory_forced", lambda: False)
+    monkeypatch.setattr("services.billing.membership.pg_store.optional_message_session", _session)
+    monkeypatch.setattr("services.billing.membership.processing_budgets_pg.table_ready", lambda _s: True)
     monkeypatch.setattr(
-        "services.membership.processing_budgets_pg.pg_end_job",
+        "services.billing.membership.processing_budgets_pg.pg_end_job",
         lambda _s, jid: closed.append(("job", jid)),
     )
     monkeypatch.setattr(
-        "services.membership.processing_budgets_pg.pg_end_latest_job",
+        "services.billing.membership.processing_budgets_pg.pg_end_latest_job",
         lambda _s, tid: closed.append(("latest", tid)),
     )
     end_job("other-worker")

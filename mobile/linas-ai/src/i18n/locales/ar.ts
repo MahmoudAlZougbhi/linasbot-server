@@ -186,7 +186,6 @@ export const ar = {
   platformWhatsApp: 'WhatsApp',
   platformTikTok: 'تيك توك',
   platformWeb: 'دردشة الموقع',
-  platformSnapchat: 'سناب شات',
   retry: 'تعذر تحميل المحادثة. اضغط لإعادة المحاولة.',
   messageFailed: 'فشل إرسال الرسالة. يمكنك إعادة المحاولة.',
   groupOperate: 'المنتج',

@@ -5,16 +5,16 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from services.cm.comment_rules import evaluate_comment_rules
-from services.cm.schemas import CommentRule, CommentsSection
-from services.customer_ai.comment_normalize import normalize_comment_mode
-from services.customer_ai.contracts.reply import FinalReplyEnvelope, OutboundMessage
-from services.customer_ai.contracts.turn import CustomerTurn
-from services.customer_ai.flags import flags_snapshot
-from services.customer_ai.history import build_history_snapshot
-from services.customer_ai.precedence import wins
-from services.customer_ai.providers.spaces import ENTITY_DOCUMENT, ENTITY_QUERY, KNOWLEDGE_DOCUMENT, compatible
-from services.customer_ai.search.readiness import search_readiness
+from services.ai_setup.comment_rules import evaluate_comment_rules
+from services.ai_setup.schemas import CommentRule, CommentsSection
+from services.brain.comment_normalize import normalize_comment_mode
+from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
+from services.brain.contracts.turn import CustomerTurn
+from services.brain.flags import flags_snapshot
+from services.brain.history import build_history_snapshot
+from services.brain.precedence import wins
+from services.brain.providers.spaces import ENTITY_DOCUMENT, ENTITY_QUERY, KNOWLEDGE_DOCUMENT, compatible
+from services.brain.search.readiness import search_readiness
 from services.customer_reply_v2.models import ENGINE_REMOVED
 from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 
@@ -175,7 +175,7 @@ async def test_facade_always_brain_engine(monkeypatch: pytest.MonkeyPatch) -> No
 async def test_lab_turn_echoes_ids_and_receipts(monkeypatch: pytest.MonkeyPatch) -> None:
     from types import SimpleNamespace
 
-    from services.customer_ai.test_lab import run_lab_turn
+    from services.brain.test_lab import run_lab_turn
 
     monkeypatch.setenv("LINAS_CUSTOMER_AI_LAB", "true")
 
@@ -193,7 +193,7 @@ async def test_lab_turn_echoes_ids_and_receipts(monkeypatch: pytest.MonkeyPatch)
             },
         )
 
-    monkeypatch.setattr("services.customer_ai.runtime.run_customer_ai_dm", fake_dm)
+    monkeypatch.setattr("services.brain.runtime.run_customer_ai_dm", fake_dm)
     out = await run_lab_turn(
         tenant_id="lab",
         message="hi",

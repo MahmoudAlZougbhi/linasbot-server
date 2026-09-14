@@ -131,7 +131,7 @@ def list_open_leftover_reservations(session: Session, tenant_id: str) -> list[di
     from datetime import datetime
 
     rows = session.scalars(select(CreditLedgerEntryRow).where(CreditLedgerEntryRow.tenant_id == tenant_id)).all()
-    from services.membership.credit_reservation_scan import leftover_closed, leftover_op
+    from services.billing.membership.credit_reservation_scan import leftover_closed, leftover_op
 
     reserved: dict[str, CreditLedgerEntryRow] = {}
     closed: set[str] = set()

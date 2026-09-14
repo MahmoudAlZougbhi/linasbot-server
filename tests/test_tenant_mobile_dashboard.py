@@ -11,18 +11,18 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from services.billing.entitlements_service import EntitlementsStore
 from services.credit_ledger_service import CreditLedgerService
-from services.entitlements_service import EntitlementsStore
-from services.tenant_mobile_dashboard.compose import build_tenant_mobile_dashboard
-from services.tenant_mobile_dashboard.periods import (
+from services.dashboard.compose import build_tenant_mobile_dashboard
+from services.dashboard.periods import (
     PeriodValidationError,
     TimezoneValidationError,
     parse_period,
     parse_timezone,
     resolve_period_window,
 )
-from services.tenant_mobile_dashboard.status import derive_workspace_status
-from services.tenant_mobile_dashboard.usage import aggregate_tenant_usage
+from services.dashboard.status import derive_workspace_status
+from services.dashboard.usage import aggregate_tenant_usage
 
 
 def _write_flow(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -33,12 +33,12 @@ def _write_flow(path: Path, rows: list[dict[str, Any]]) -> None:
 @pytest.fixture()
 def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> EntitlementsStore:
     store = EntitlementsStore(root=tmp_path / "ent")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     ledger = CreditLedgerService(root=tmp_path / "ledger")
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.compose.credit_ledger_service",
+        "services.dashboard.compose.credit_ledger_service",
         ledger,
     )
     return store
@@ -94,7 +94,7 @@ def test_today_is_full_local_calendar_day() -> None:
 
 
 def test_today_activity_includes_local_noon_replies() -> None:
-    from services.tenant_mobile_dashboard.activity import build_activity_summary
+    from services.dashboard.activity import build_activity_summary
 
     tz = parse_timezone("Asia/Beirut")
     now = datetime(2026, 8, 15, 12, 35, tzinfo=tz)
@@ -125,7 +125,7 @@ def test_last_month_dashboard_survives_corrupt_owner_chat_meta(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from services.credit_ledger_service import credit_ledger_service
-    from services.owner_chat_store import OwnerChatStore
+    from services.owner_copilot.chat_store import OwnerChatStore
 
     tenant_id = "t_last_month_corrupt"
     ledger_env.set_plan(tenant_id=tenant_id, plan_id="starter", status="active", source="admin")
@@ -146,15 +146,15 @@ def test_last_month_dashboard_survives_corrupt_owner_chat_meta(
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.copilot.OwnerChatStore",
+        "services.dashboard.copilot.OwnerChatStore",
         lambda *args, **kwargs: store,
     )
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.compose.platform_owner_service.is_suspended",
+        "services.dashboard.compose.platform_owner_service.is_suspended",
         lambda _tid: False,
     )
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.compose.compute_cm_progress",
+        "services.dashboard.compose.compute_cm_progress",
         lambda _tid: {
             "sections_total": 10,
             "sections_present": 8,
@@ -171,12 +171,12 @@ def test_last_month_dashboard_survives_corrupt_owner_chat_meta(
         lambda _tid: [{"platform": "instagram", "connected": True}],
     )
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.compose.aggregate_tenant_usage",
+        "services.dashboard.compose.aggregate_tenant_usage",
         lambda *_a, **_k: {"status": "empty", "total_interactions": 0, "distribution": []},
     )
-    monkeypatch.setattr("services.user_service.user_service.get_user_by_id", lambda _uid: {"name": "Owner"})
+    monkeypatch.setattr("services.team.user_service.user_service.get_user_by_id", lambda _uid: {"name": "Owner"})
     monkeypatch.setattr(
-        "services.user_service.user_service.get_all_users",
+        "services.team.user_service.user_service.get_all_users",
         lambda: [{"id": "u1", "tenantId": tenant_id, "role": "owner", "email": "o@x.com", "status": "active"}],
     )
 
@@ -201,11 +201,11 @@ def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monk
     path.write_text(json.dumps({"available": 0, "reserved": 0, "updated_at": time.time()}), encoding="utf-8")
 
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.compose.platform_owner_service.is_suspended",
+        "services.dashboard.compose.platform_owner_service.is_suspended",
         lambda _tid: False,
     )
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.compose.compute_cm_progress",
+        "services.dashboard.compose.compute_cm_progress",
         lambda _tid: {
             "sections_total": 10,
             "sections_present": 8,
@@ -218,11 +218,11 @@ def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monk
         },
     )
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.channels.list_tenant_integration_status",
+        "services.dashboard.channels.list_tenant_integration_status",
         lambda _tid: [{"platform": "instagram", "connected": True}],
     )
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.channels.capability_state",
+        "services.dashboard.channels.capability_state",
         lambda *_a, **_k: {
             "requested_enabled": True,
             "permission_present": True,
@@ -236,15 +236,15 @@ def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monk
         },
     )
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.compose.aggregate_tenant_usage",
+        "services.dashboard.compose.aggregate_tenant_usage",
         lambda *_a, **_k: {"status": "empty", "total_interactions": 0, "distribution": []},
     )
     monkeypatch.setattr(
-        "services.user_service.user_service.get_user_by_id",
+        "services.team.user_service.user_service.get_user_by_id",
         lambda _uid: {"businessName": "Zero Clinic", "name": "Owner"},
     )
     monkeypatch.setattr(
-        "services.user_service.user_service.get_all_users",
+        "services.team.user_service.user_service.get_all_users",
         lambda: [{"id": "u1", "tenantId": "t_zero", "role": "owner", "email": "o@x.com", "status": "active"}],
     )
 
@@ -267,7 +267,7 @@ def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monk
 def test_max_plan_hides_upgrade_action(ledger_env: EntitlementsStore) -> None:
     ledger_env.set_plan(tenant_id="t_max", plan_id="max", status="active", source="admin")
     from services.credit_ledger_service import credit_ledger_service
-    from services.tenant_mobile_dashboard.compose import _plan_and_credits
+    from services.dashboard.compose import _plan_and_credits
 
     credit_ledger_service.ensure_period_grant("t_max")
     section = _plan_and_credits("t_max")
@@ -281,11 +281,11 @@ def test_max_plan_hides_upgrade_action(ledger_env: EntitlementsStore) -> None:
 
 def test_no_subscription_status(ledger_env: EntitlementsStore, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.compose.platform_owner_service.is_suspended",
+        "services.dashboard.compose.platform_owner_service.is_suspended",
         lambda _tid: False,
     )
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.compose.compute_cm_progress",
+        "services.dashboard.compose.compute_cm_progress",
         lambda _tid: {
             "sections_total": 10,
             "sections_present": 0,
@@ -298,7 +298,7 @@ def test_no_subscription_status(ledger_env: EntitlementsStore, monkeypatch: pyte
         },
     )
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.channels.build_channel_breakdown",
+        "services.dashboard.channels.build_channel_breakdown",
         lambda *_a, **_k: {
             "any_connected": False,
             "connection_issue": False,
@@ -308,11 +308,11 @@ def test_no_subscription_status(ledger_env: EntitlementsStore, monkeypatch: pyte
         },
     )
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.compose.aggregate_tenant_usage",
+        "services.dashboard.compose.aggregate_tenant_usage",
         lambda *_a, **_k: {"status": "empty", "total_interactions": 0, "distribution": []},
     )
-    monkeypatch.setattr("services.user_service.user_service.get_user_by_id", lambda _uid: {"name": "New"})
-    monkeypatch.setattr("services.user_service.user_service.get_all_users", lambda: [])
+    monkeypatch.setattr("services.team.user_service.user_service.get_user_by_id", lambda _uid: {"name": "New"})
+    monkeypatch.setattr("services.team.user_service.user_service.get_all_users", lambda: [])
 
     payload = build_tenant_mobile_dashboard(tenant_id="t_none", user_id="u1")
     assert payload["workspace_status"]["state"] == "subscription_issue"
@@ -366,10 +366,10 @@ def test_usage_buckets_and_empty(tmp_path: Path) -> None:
 
 
 def test_comments_plan_gate_and_dm_ok_comments_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.tenant_mobile_dashboard.channels import build_channel_breakdown
+    from services.dashboard.channels import build_channel_breakdown
 
     monkeypatch.setattr(
-        "services.tenant_mobile_dashboard.channels.list_tenant_integration_status",
+        "services.dashboard.channels.list_tenant_integration_status",
         lambda _tid: [
             {"platform": "instagram", "connected": True},
             {"platform": "facebook", "connected": False},
@@ -413,7 +413,7 @@ def test_comments_plan_gate_and_dm_ok_comments_blocked(monkeypatch: pytest.Monke
             "status": "disabled",
         }
 
-    monkeypatch.setattr("services.tenant_mobile_dashboard.channels.capability_state", _cap)
+    monkeypatch.setattr("services.dashboard.channels.capability_state", _cap)
 
     lite = build_channel_breakdown(
         "t1",
@@ -538,7 +538,7 @@ def test_mobile_dashboard_api_auth_and_tenant_scope(monkeypatch: pytest.MonkeyPa
     token = session_service.cookie_value_for(session)
 
     def _fake_dashboard(**kwargs):
-        from services.tenant_mobile_dashboard.periods import parse_period, parse_timezone
+        from services.dashboard.periods import parse_period, parse_timezone
 
         parse_period(kwargs.get("period_raw"))
         parse_timezone(kwargs.get("timezone_raw"))

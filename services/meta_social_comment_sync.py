@@ -42,7 +42,7 @@ def _binding_by_id(registry: Any, binding_id: str) -> MetaAssetBinding | None:
 
 
 def _comment_reply_enabled(binding: MetaAssetBinding) -> bool:
-    from services.cm.actions import comments_enforcement_decision
+    from services.ai_setup.actions import comments_enforcement_decision
 
     registry = get_meta_app_registry()
     fresh = _binding_by_id(registry, binding.binding_id) or binding

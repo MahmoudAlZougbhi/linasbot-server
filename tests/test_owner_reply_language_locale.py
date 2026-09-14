@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from services.owner_ai_context import pack_owner_turn_context
-from services.owner_ai_onboarding import welcome_chips
-from services.owner_ai_profile import (
+from services.owner_copilot.context import pack_owner_turn_context
+from services.owner_copilot.onboarding import welcome_chips
+from services.owner_copilot.profile import (
     coerce_language,
     detect_owner_message_language,
     language_from_accept_header,
@@ -73,7 +73,7 @@ def test_welcome_chips_localized_labels() -> None:
 
 def test_pack_owner_turn_follows_user_message(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.owner_ai_context.build_account_summary",
+        "services.owner_copilot.context.build_account_summary",
         lambda **_kwargs: {
             "setup_stage": "new",
             "cm": {},
@@ -88,7 +88,7 @@ def test_pack_owner_turn_follows_user_message(monkeypatch) -> None:
             },
         },
     )
-    monkeypatch.setattr("services.owner_ai_context.retrieve_capabilities", lambda *_a, **_k: [])
+    monkeypatch.setattr("services.owner_copilot.context.retrieve_capabilities", lambda *_a, **_k: [])
     # Free Arabic typing with English app locale → Arabic
     ctx = pack_owner_turn_context(
         tenant_id="t1",
@@ -111,7 +111,7 @@ def test_pack_owner_turn_follows_user_message(monkeypatch) -> None:
 
 def test_pack_owner_turn_welcome_chip_uses_app_locale(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.owner_ai_context.build_account_summary",
+        "services.owner_copilot.context.build_account_summary",
         lambda **_kwargs: {
             "setup_stage": "new",
             "cm": {},
@@ -126,7 +126,7 @@ def test_pack_owner_turn_welcome_chip_uses_app_locale(monkeypatch) -> None:
             },
         },
     )
-    monkeypatch.setattr("services.owner_ai_context.retrieve_capabilities", lambda *_a, **_k: [])
+    monkeypatch.setattr("services.owner_copilot.context.retrieve_capabilities", lambda *_a, **_k: [])
     chip = next(c for c in welcome_chips(setup_stage="new", language="ar") if c["id"] == "learn_app")
     ctx = pack_owner_turn_context(
         tenant_id="t1",

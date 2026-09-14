@@ -8,8 +8,8 @@ from fastapi import HTTPException, Query, Request
 
 from modules.api_security import require_permission
 from modules.core import app
-from services.tenant_mobile_dashboard.compose import build_tenant_mobile_dashboard
-from services.tenant_mobile_dashboard.periods import PeriodValidationError, TimezoneValidationError
+from services.dashboard.compose import build_tenant_mobile_dashboard
+from services.dashboard.periods import PeriodValidationError, TimezoneValidationError
 
 
 @app.get("/api/mobile/dashboard")

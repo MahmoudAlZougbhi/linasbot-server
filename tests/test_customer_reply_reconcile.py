@@ -11,6 +11,7 @@ import pytest
 from services.ai_reply_credit_gate import capture_after_reply_persisted, reserve_before_ai
 from services.ai_reply_delivery import classify_send_result, record_delivery_outcome
 from services.ai_reply_lifecycle import begin_turn, get_turn, put_turn
+from services.billing.entitlements_service import EntitlementsStore
 from services.credit_ledger_service import CreditLedgerService
 from services.customer_reply_reconcile_classify import (
     classify_event_turn,
@@ -19,7 +20,6 @@ from services.customer_reply_reconcile_classify import (
 )
 from services.customer_reply_reconcile_worker import reconcile_customer_replies, reset_reconcile_metrics
 from services.durable_event_claim import _file_claim_path
-from services.entitlements_service import EntitlementsStore
 from services.scale.inbound_event_store import (
     InboundEventRecord,
     get_inbound_event,
@@ -31,7 +31,7 @@ from services.scale.inbound_event_store import (
 @pytest.fixture()
 def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CreditLedgerService:
     store = EntitlementsStore(root=tmp_path / "ents")
-    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
     store.set_plan(tenant_id="t1", plan_id="starter", status="active", source="admin")

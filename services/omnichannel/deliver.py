@@ -24,7 +24,7 @@ def _message_settle_ops(*, inbound: Any, inbound_id: str, reservation: str = "")
         payload.setdefault("provider_event_id", provider)
         payload.setdefault("provider_message_id", provider)
         payload.setdefault("message_id", provider)
-    from services.customer_ai.history_ids import message_id_for_brain
+    from services.brain.history_ids import message_id_for_brain
 
     brain_mid = message_id_for_brain(payload)
     primary = brain_mid or provider or inbound_id
@@ -230,10 +230,10 @@ def _finish_success(outbox_id: str, result: dict[str, Any]) -> None:
         )
         session.commit()
     if reservation:
-        from services.membership.message_flags import message_billing_enabled
+        from services.billing.membership.message_flags import message_billing_enabled
 
         if not message_billing_enabled():
-            from services.customer_ai.leftover_reserve import capture_leftover_reply
+            from services.brain.leftover_reserve import capture_leftover_reply
 
             capture_leftover_reply(
                 tenant_id,
@@ -241,7 +241,7 @@ def _finish_success(outbox_id: str, result: dict[str, Any]) -> None:
                 model_provider=channel,
                 provider_message_id=str(result.get("message_id") or ""),
             )
-    from services.customer_ai.billing import settle_after_send
+    from services.brain.billing import settle_after_send
 
     settle_after_send(
         tenant_id=tenant_id,
@@ -259,10 +259,10 @@ def _release_credits_if_never_submitted(snapshot: dict[str, Any], *, submitted: 
     tenant_id = str(snapshot.get("tenant_id") or "")
     if submitted or not tenant_id:
         return
-    from services.membership.message_flags import message_billing_enabled
+    from services.billing.membership.message_flags import message_billing_enabled
 
     if message_billing_enabled():
-        from services.customer_ai.billing import settle_after_send
+        from services.brain.billing import settle_after_send
 
         settle_after_send(
             tenant_id=tenant_id,
@@ -274,7 +274,7 @@ def _release_credits_if_never_submitted(snapshot: dict[str, Any], *, submitted: 
         return
     if not reservation:
         return
-    from services.customer_ai.leftover_reserve import release_leftover_reply
+    from services.brain.leftover_reserve import release_leftover_reply
 
     release_leftover_reply(tenant_id, str(reservation))
 
@@ -294,7 +294,7 @@ async def _notify_live_chat(
         status = "failed"
     else:
         return
-    from services.live_chat_operator_delivery_status import notify_live_chat_operator_job
+    from services.live_chat.operator_delivery_status import notify_live_chat_operator_job
 
     await notify_live_chat_operator_job(
         payload,

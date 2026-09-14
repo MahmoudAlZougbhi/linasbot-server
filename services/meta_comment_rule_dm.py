@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from services.cm.comment_rules import CommentRuleDecision
+from services.ai_setup.comment_rules import CommentRuleDecision
 from services.meta_app_registry import MetaAssetBinding
 
 if TYPE_CHECKING:

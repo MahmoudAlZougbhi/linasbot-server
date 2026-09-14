@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from services.cm.quality_audit import run_cm_quality_audit
-from services.cm.storage import put_draft
+from services.ai_setup.quality_audit import run_cm_quality_audit
+from services.ai_setup.storage import put_draft
 
 
 @pytest.fixture()
@@ -72,9 +72,9 @@ def test_quality_audit_finds_duplicates_and_suspicious(tenant: str) -> None:
 
 def test_quality_audit_improve_services_without_prices(tenant: str) -> None:
     put_draft(
-        "services",
+        "prices",
         payload={
-            "items": [{"id": "laser", "labels": {"en": "Laser", "ar": "ليزر", "fr": "", "franco": ""}}],
+            "catalog": [{"id": "laser", "labels": {"en": "Laser", "ar": "ليزر", "fr": "", "franco": ""}}],
             "notes": None,
         },
         if_match=None,
@@ -88,7 +88,7 @@ def test_quality_audit_improve_services_without_prices(tenant: str) -> None:
 
 
 def test_guide_includes_quality_checklist() -> None:
-    from services.cm.section_guide import guide_for_section
+    from services.ai_setup.section_guide import guide_for_section
 
     g = guide_for_section("faq")
     assert g is not None

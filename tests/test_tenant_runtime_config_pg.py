@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.cm.schemas import ActionsSection
+from services.ai_setup.schemas import ActionsSection
 from services.tenant_runtime_config_backend import tenant_runtime_config_backend
 from services.tenant_runtime_config_pg_store import RevisionConflictError, upsert_draft_row
 
@@ -67,7 +67,7 @@ def test_load_actions_section_reads_postgres_first(monkeypatch: pytest.MonkeyPat
         expected_published_revision=None,
         published_meta={"content_version_id": "v_test", "index_version_id": "idx_test"},
     )
-    from services.cm.actions import load_actions_section
+    from services.ai_setup.actions import load_actions_section
 
     loaded = load_actions_section("linas")
     assert loaded is not None
