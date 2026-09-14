@@ -19,7 +19,7 @@ def test_migration_imports_faq_knowledge_and_handoff() -> None:
     assert report["tenant_id"] == tenant_id
     assert report["faq_groups_imported"] == 3  # 3 rows in fixture qa_pairs.jsonl, no shared group ids
     assert report["knowledge_articles_imported"] >= 2  # legacy knowledge_base.txt + price_list.txt
-    assert report["handoff_contacts_imported"] == 4  # laser branch/gender contacts only (no tattoo)
+    assert report["handoff_contacts_imported"] == 0  # no Laser WhatsApp matrix; owners publish handoff
 
     faq_env = get_draft("faq", tenant_id=tenant_id)
     faq_section = FaqSection.model_validate(faq_env.payload)
@@ -64,15 +64,25 @@ def test_migration_does_not_auto_flag_tattoo_content_as_restricted() -> None:
 
 
 def test_owner_restricted_policy_flags_tattoo_conflict() -> None:
-    from services.ai_setup.schemas import initial_restricted_policy
+    from services.ai_setup.schemas import LocalizedLabels, RestrictedPolicy, RestrictedTopic
     from services.ai_setup.storage import put_draft
 
     tenant_id = "cm_migration_test_owner_restricted"
     migrate_legacy_fixture(source_root=FIXTURE_ROOT, tenant_id=tenant_id)
     env = get_draft("restricted", tenant_id=tenant_id, create_default=True)
+    owner_policy = RestrictedPolicy(
+        topics=[
+            RestrictedTopic(
+                id="tattoo_removal",
+                labels=LocalizedLabels(en="tattoo removal", ar="إزالة الوشم"),
+                keywords=["tattoo", "وشم", "تاتو"],
+                active=True,
+            )
+        ]
+    )
     put_draft(
         "restricted",
-        payload=initial_restricted_policy(active=True).model_dump(mode="json"),
+        payload=owner_policy.model_dump(mode="json"),
         if_match=env.etag,
         tenant_id=tenant_id,
         updated_by="test",
@@ -102,7 +112,7 @@ def test_migration_is_idempotent() -> None:
     handoff_env = get_draft("handoff", tenant_id=tenant_id)
     handoff_policy = HandoffPolicy.model_validate(handoff_env.payload)
     assert len(handoff_policy.contacts) == len({c.id for c in handoff_policy.contacts})
-    assert len(handoff_policy.contacts) == 4
+    assert len(handoff_policy.contacts) == 0
 
 
 def test_migration_archives_legacy_files_under_tenant_cm_archive() -> None:

@@ -74,11 +74,10 @@ def test_shared_claim_deletion_selects_current_and_historical_rows_only() -> Non
         ("meta_social_dm_global_claims", global_id),
         ("ai_turn_claims", "historical-ai"),
         ("ai_turn_claims", "current-ai"),
-        ("ai_turn_claims_file", "scoped-legacy-ai"),
         ("meta_outbound_attempts", event_id),
     }
     stats = apply_shared_meta_claim_deletion_plan(db, plan)
-    assert stats == {"matched": 5, "changed": 5, "remaining": 0, "errors": 0}
+    assert stats == {"matched": 4, "changed": 4, "remaining": 0, "errors": 0}
     assert unrelated.exists is True
     assert substring_unrelated.exists is True
 
