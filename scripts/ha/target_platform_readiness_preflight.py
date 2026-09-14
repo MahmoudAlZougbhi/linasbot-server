@@ -61,6 +61,7 @@ GIT_ISOLATED_ENV = {
     "GIT_CONFIG_GLOBAL": "/dev/null",
 }
 LIVE_READY_URL = "http://127.0.0.1:8003/api/ready"
+META_REGISTRY_REL = Path("services") / "integrations" / "meta" / "meta_app_registry.py"
 
 
 def function_source(module_text: str, name: str) -> str:
@@ -72,7 +73,7 @@ def function_source(module_text: str, name: str) -> str:
 
 
 def assert_platform_readiness_contract(source_root: Path) -> None:
-    registry = (source_root / "services" / "meta_app_registry.py").read_text(encoding="utf-8")
+    registry = (source_root / META_REGISTRY_REL).read_text(encoding="utf-8")
     health = (source_root / "modules" / "dashboard_api_health.py").read_text(encoding="utf-8")
     if "META_PLATFORM_READINESS_KEYS" not in registry:
         raise RuntimeError("target registry is missing platform readiness keys")
@@ -232,7 +233,7 @@ def materialize_target_archive(repo: Path, target_sha: str, destination: Path) -
     )
     if not (destination / "modules" / "dashboard_api_health.py").is_file():
         raise RuntimeError("target platform-readiness archive is missing dashboard health")
-    if not (destination / "services" / "meta_app_registry.py").is_file():
+    if not (destination / META_REGISTRY_REL).is_file():
         raise RuntimeError("target platform-readiness archive is missing Meta registry")
 
 

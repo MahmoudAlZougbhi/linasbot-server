@@ -268,6 +268,7 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - `services/apple_*.py` → `services/billing/apple/` including Sign-In (`apple_sign_in_service`) because it shares Apple secrets with IAP. HTTP stays `modules/apple_*`.
 - WhatsApp Cloud template helper → `services/integrations/whatsapp/cloud_template_service.py` + `cloud_template_payload.py` (not the Cloud API coexistence package).
 - `social_contact_routing*` moved to `services/integrations/social/` (still live: published CM WhatsApp handoff, SFU `is_social_channel`). Not deleted.
+- HA preflight/admission and prod apply scripts read the packaged Meta registry / secret-separation modules. A SHA that still only has the old flat path stays tenant-gated (fail-closed).
 - Tests: `tests/test_wave_x7_structure.py`.
 
 

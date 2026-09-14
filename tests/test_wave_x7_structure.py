@@ -56,3 +56,30 @@ def test_wave_x7_live_imports_use_packages() -> None:
     from services.integrations.social.social_contact_routing_detect import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
 
     assert DEFAULT_SOCIAL_WHATSAPP_CONTACTS == {}
+
+
+def test_wave_x7_ha_and_prod_scripts_use_packaged_paths() -> None:
+    packaged = "services/integrations/meta/meta_app_registry.py"
+    preflight = (ROOT / "scripts/ha/target_platform_readiness_preflight.py").read_text(encoding="utf-8")
+    admission = (ROOT / "scripts/ha/live_ready_admission.py").read_text(encoding="utf-8")
+    helper = (ROOT / "scripts/ha/deploy_meta_release_ha.sh").read_text(encoding="utf-8")
+    assert 'Path("services") / "integrations" / "meta" / "meta_app_registry.py"' in preflight
+    assert "REGISTRY_PATH = META_REGISTRY_REL.as_posix()" in admission
+    assert f'git_show("{packaged}")' in helper
+    hits: list[str] = []
+    needles = (
+        "from services.meta_",
+        "from services.apple_",
+        "from services.social_contact_routing import",
+        'git_show("services/meta_app_registry.py")',
+        '"services" / "meta_app_registry.py"',
+        '"services" / "meta_surface_secret_separation.py"',
+    )
+    for path in (ROOT / "scripts").rglob("*"):
+        if not path.is_file() or path.suffix not in {".py", ".sh"}:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for needle in needles:
+            if needle in text:
+                hits.append(f"{path.relative_to(ROOT)}:{needle}")
+    assert hits == [], hits

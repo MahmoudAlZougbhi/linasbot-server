@@ -18,13 +18,14 @@ from typing import Any
 from scripts.ha.target_platform_readiness_preflight import (
     GIT_ISOLATED_ENV,
     LIVE_READY_URL,
+    META_REGISTRY_REL,
     TENANT_READY_KEYS,
     fetch_live_ready,
     function_source,
     live_ready_is_platform_admissible,
 )
 
-REGISTRY_PATH = "services/integrations/meta/meta_app_registry.py"
+REGISTRY_PATH = META_REGISTRY_REL.as_posix()
 HEALTH_PATH = "modules/dashboard_api_health.py"
 
 

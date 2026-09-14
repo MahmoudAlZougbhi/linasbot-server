@@ -23,7 +23,7 @@ from services.integrations.meta.meta_surface_secret_separation import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPER = ROOT / "services" / "meta_surface_secret_separation.py"
+HELPER = ROOT / "services" / "integrations" / "meta" / "meta_surface_secret_separation.py"
 
 FB_CANON_SIGN = "fb-canon-sign-secret-001"
 FB_LEGACY_SIGN = "fb-legacy-sign-secret-01"

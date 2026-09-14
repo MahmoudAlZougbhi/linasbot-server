@@ -88,11 +88,11 @@ async def test_target_http_ready_stays_200_when_instagram_is_inactive(
 
 def test_platform_contract_rejects_registry_that_lists_bindings(tmp_path: Path) -> None:
     modules = tmp_path / "modules"
-    services = tmp_path / "services"
+    registry_dir = tmp_path / "services" / "integrations" / "meta"
     modules.mkdir()
-    services.mkdir()
+    registry_dir.mkdir(parents=True)
     (modules / "dashboard_api_health.py").write_text("# platform health\n", encoding="utf-8")
-    (services / "meta_app_registry.py").write_text(
+    (registry_dir / "meta_app_registry.py").write_text(
         "META_PLATFORM_READINESS_KEYS = ('encryption_key_configured',)\n"
         "def get_meta_registry_readiness(registry=None):\n"
         "    bindings = registry.list_bindings(include_inactive=False)\n"
@@ -241,7 +241,7 @@ def test_compact_archive_stays_off_tmpfs_and_contains_platform_modules(tmp_path:
     destination.mkdir()
     materialize_target_archive(ROOT, sha, destination)
     assert (destination / "modules" / "dashboard_api_health.py").is_file()
-    assert (destination / "services" / "meta_app_registry.py").is_file()
+    assert (destination / "services" / "integrations" / "meta" / "meta_app_registry.py").is_file()
     assert (destination / "tests").exists() is False
 
 
@@ -255,9 +255,10 @@ def test_workflow_reclaims_target_ready_tmpfs_before_helper_copy() -> None:
 
 def _commit_ready_tree(tmp_path: Path, registry: str, health: str = "# health\n") -> tuple[Path, str]:
     repo = tmp_path / "repo"
-    (repo / "services").mkdir(parents=True)
+    registry_path = repo / "services" / "integrations" / "meta" / "meta_app_registry.py"
+    registry_path.parent.mkdir(parents=True)
     (repo / "modules").mkdir()
-    (repo / "services" / "meta_app_registry.py").write_text(registry, encoding="utf-8")
+    registry_path.write_text(registry, encoding="utf-8")
     (repo / "modules" / "dashboard_api_health.py").write_text(health, encoding="utf-8")
     git = [
         "/usr/bin/git",
