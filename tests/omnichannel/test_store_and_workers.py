@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from db.models.base import Base
 from db.models.omnichannel import OmnichannelInboundEvent, OmnichannelOutboundOutbox
-from services.omnichannel.contract import NormalizedInbound
-from services.omnichannel.store import persist_inbound, persist_outbound
+from services.integrations.omnichannel.contract import NormalizedInbound
+from services.integrations.omnichannel.store import persist_inbound, persist_outbound
 
 
 @pytest.fixture()
@@ -75,7 +75,7 @@ async def test_worker_pool_runs_configured_slots(monkeypatch):
     monkeypatch.setenv("LINAS_QUEUE_CONCURRENCY_BACKGROUND", "3")
     from importlib import reload
 
-    import services.omnichannel.worker_pool as pool
+    import services.integrations.omnichannel.worker_pool as pool
     import services.queues.config as config
 
     reload(config)
@@ -154,7 +154,7 @@ def test_same_provider_event_id_is_tenant_isolated(db_session: Session):
 
 
 def test_conversation_order_blocks_newer_event(db_session: Session):
-    from services.omnichannel.store import conversation_has_earlier_unfinished
+    from services.integrations.omnichannel.store import conversation_has_earlier_unfinished
 
     older, _ = persist_inbound(
         db_session, _inbound(provider_event_id="old", provider_timestamp=1.0, payload_hash="old")
@@ -178,7 +178,7 @@ def test_conversation_order_blocks_newer_event(db_session: Session):
 
 
 def test_mirror_only_inbound_is_not_requeued(db_session: Session):
-    from services.omnichannel.store import list_unfinished_inbound
+    from services.integrations.omnichannel.store import list_unfinished_inbound
 
     persist_inbound(
         db_session,
@@ -191,7 +191,7 @@ def test_mirror_only_inbound_is_not_requeued(db_session: Session):
 
 
 def test_ambiguous_outbound_is_not_auto_retried(db_session: Session):
-    from services.omnichannel.store import list_retryable_outbound
+    from services.integrations.omnichannel.store import list_retryable_outbound
 
     row, _ = persist_outbound(
         db_session,

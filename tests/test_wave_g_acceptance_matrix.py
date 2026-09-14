@@ -107,7 +107,7 @@ def test_wave_g_live_mounts_have_no_forbidden_imports() -> None:
 
 def test_wave_g_no_live_test_lab_or_monty_or_linas_fallback() -> None:
     from services.product_features import is_disabled_api_path
-    from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+    from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
 
     assert is_disabled_api_path("/api/test") is True
     assert is_disabled_api_path("/api/test-message") is True
@@ -157,7 +157,7 @@ def test_wave_g_luna_engine_and_dual_index_gone() -> None:
         ROOT / "services/ai_setup",
         ROOT / "services/products",
         ROOT / "services/search_metadata",
-        ROOT / "services/customer_reply_v2",
+        ROOT / "services/brain/reply",
         ROOT / "services/model_policy.py",
     )
     offenders: list[str] = []

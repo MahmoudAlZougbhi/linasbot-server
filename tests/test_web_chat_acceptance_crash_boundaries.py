@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from services.web_chat.operation import try_advance_operation
-from services.web_chat.operation_fsm import OperationState, stable_operation_key
-from services.web_chat.processor import WebChatError, process_web_chat_message
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.operation import try_advance_operation
+from services.integrations.web_chat.operation_fsm import OperationState, stable_operation_key
+from services.integrations.web_chat.processor import WebChatError, process_web_chat_message
+from services.integrations.web_chat.store_pg import WebChatPgStore
 from tests.test_web_chat_acceptance_fsm import _widget_and_visitor
 from tests.test_web_chat_operation_lease_fence import _expire_operation_lease
 from tests.web_chat_acceptance_billing import assert_acceptance_ledger_equation, fetch_pg_ledger_snapshot
@@ -60,16 +60,16 @@ async def test_captured_before_complete_restart_no_second_ai(tmp_path, monkeypat
         return MagicMock(reply="Acceptance AI reply")
 
     monkeypatch.setattr(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         AsyncMock(side_effect=counted_ai),
     )
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
             side_effect=lambda **_kwargs: __import__(
-                "services.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
             ).PersistResult(
-                outcome=__import__("services.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
                 conversation_id=f"web:{widget.tenant_id}:{bundle.session_id}",
             )
         ),
@@ -86,8 +86,8 @@ async def test_captured_before_complete_restart_no_second_ai(tmp_path, monkeypat
                 raise RuntimeError("kill after captured before complete")
         return original_advance(runtime, from_state, target, **kwargs)
 
-    monkeypatch.setattr("services.web_chat.processor_turn_finalize.try_advance_operation", kill_before_complete)
-    monkeypatch.setattr("services.web_chat.processor_completion.try_advance_operation", kill_before_complete)
+    monkeypatch.setattr("services.integrations.web_chat.processor_turn_finalize.try_advance_operation", kill_before_complete)
+    monkeypatch.setattr("services.integrations.web_chat.processor_completion.try_advance_operation", kill_before_complete)
 
     with pytest.raises(RuntimeError, match="kill after captured before complete"):
         await process_web_chat_message(
@@ -146,12 +146,12 @@ async def test_complete_replay_repairs_missing_turn(tmp_path, monkeypatch, accep
 
     patch_ai_reply(monkeypatch, reply=canonical_reply)
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
             side_effect=lambda **_kwargs: __import__(
-                "services.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
             ).PersistResult(
-                outcome=__import__("services.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
                 conversation_id=f"web:{widget.tenant_id}:{bundle.session_id}",
             )
         ),
@@ -201,12 +201,12 @@ async def test_append_before_complete_crash_retries_to_one_turn(tmp_path, monkey
     patch_ai_reply(monkeypatch)
 
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
             side_effect=lambda **_kwargs: __import__(
-                "services.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
             ).PersistResult(
-                outcome=__import__("services.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
                 conversation_id=f"web:{widget.tenant_id}:{bundle.session_id}",
             )
         ),
@@ -223,8 +223,8 @@ async def test_append_before_complete_crash_retries_to_one_turn(tmp_path, monkey
                 raise RuntimeError("kill after append before complete commit")
         return original_advance(runtime, from_state, target, **kwargs)
 
-    monkeypatch.setattr("services.web_chat.processor_turn_finalize.try_advance_operation", kill_on_first_complete)
-    monkeypatch.setattr("services.web_chat.processor_completion.try_advance_operation", kill_on_first_complete)
+    monkeypatch.setattr("services.integrations.web_chat.processor_turn_finalize.try_advance_operation", kill_on_first_complete)
+    monkeypatch.setattr("services.integrations.web_chat.processor_completion.try_advance_operation", kill_on_first_complete)
 
     with pytest.raises(RuntimeError, match="kill after append before complete commit"):
         await process_web_chat_message(
@@ -279,16 +279,16 @@ async def test_captured_active_lease_blocks_retry_until_expiry_then_resumes(
         return MagicMock(reply="Acceptance AI reply")
 
     monkeypatch.setattr(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         AsyncMock(side_effect=counted_ai),
     )
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
             side_effect=lambda **_kwargs: __import__(
-                "services.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
             ).PersistResult(
-                outcome=__import__("services.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
                 conversation_id=f"web:{widget.tenant_id}:{bundle.session_id}",
             )
         ),
@@ -305,11 +305,11 @@ async def test_captured_active_lease_blocks_retry_until_expiry_then_resumes(
                 raise RuntimeError("hard crash before complete commit")
         return original_advance(runtime, from_state, target, **kwargs)
 
-    monkeypatch.setattr("services.web_chat.processor_turn_finalize.try_advance_operation", kill_before_complete)
-    monkeypatch.setattr("services.web_chat.processor_completion.try_advance_operation", kill_before_complete)
+    monkeypatch.setattr("services.integrations.web_chat.processor_turn_finalize.try_advance_operation", kill_before_complete)
+    monkeypatch.setattr("services.integrations.web_chat.processor_completion.try_advance_operation", kill_before_complete)
 
     original_abandon = __import__(
-        "services.web_chat.processor_turn_finalize", fromlist=["abandon_operation_lease"]
+        "services.integrations.web_chat.processor_turn_finalize", fromlist=["abandon_operation_lease"]
     ).abandon_operation_lease
     abandon_calls = 0
 
@@ -320,7 +320,7 @@ async def test_captured_active_lease_blocks_retry_until_expiry_then_resumes(
             return
         original_abandon(runtime)
 
-    monkeypatch.setattr("services.web_chat.processor_turn_finalize.abandon_operation_lease", skip_first_abandon)
+    monkeypatch.setattr("services.integrations.web_chat.processor_turn_finalize.abandon_operation_lease", skip_first_abandon)
 
     with pytest.raises(RuntimeError, match="hard crash before complete commit"):
         await process_web_chat_message(

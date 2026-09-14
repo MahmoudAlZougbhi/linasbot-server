@@ -19,7 +19,7 @@ import sys
 
 sys.path.insert(0, "/opt/linasbot")
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
 tenant_id = "linas"
 reason = "Internal WhatsApp coexistence pilot after Phase 1 flags"

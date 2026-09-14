@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from services.brain.contracts.turn import HistorySnapshot, VisibleMessage
-from services.customer_reply_v2.models import ENGINE_REMOVED
+from services.brain.reply.models import ENGINE_REMOVED
 
 
 @pytest.mark.asyncio
@@ -224,8 +224,8 @@ async def test_followup_gate_ignores_enforcement_env(monkeypatch: pytest.MonkeyP
 
 @pytest.mark.asyncio
 async def test_omni_comment_does_not_pass_post_scoped_conversation_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_reply_v2.models import CustomerReplyOutcome
-    from services.omnichannel.generate import _generate_canonical
+    from services.brain.reply.models import CustomerReplyOutcome
+    from services.integrations.omnichannel.generate import _generate_canonical
 
     captured: dict = {}
 
@@ -233,7 +233,7 @@ async def test_omni_comment_does_not_pass_post_scoped_conversation_id(monkeypatc
         captured.update(kwargs)
         return CustomerReplyOutcome(stop=False, reply="ok", reason="")
 
-    monkeypatch.setattr("services.customer_reply_v2.comment_runtime.run_customer_reply_v2_comment", fake_comment)
+    monkeypatch.setattr("services.brain.reply.comment_runtime.run_customer_reply_v2_comment", fake_comment)
     text, _res, err = await _generate_canonical(
         channel="instagram",
         surface="comment",
@@ -258,7 +258,7 @@ async def test_omni_comment_does_not_pass_post_scoped_conversation_id(monkeypatc
 
 @pytest.mark.asyncio
 async def test_meta_generate_passes_comment_ids(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_reply_v2.models import CustomerReplyOutcome
+    from services.brain.reply.models import CustomerReplyOutcome
     from services.meta_comment_reply_generate import generate_comment_reply_text
 
     captured: dict = {}
@@ -273,7 +273,7 @@ async def test_meta_generate_passes_comment_ids(monkeypatch: pytest.MonkeyPatch)
         )
 
     monkeypatch.setattr("services.ai_setup.constants.tenant_uses_cm_runtime", lambda _tid: True)
-    monkeypatch.setattr("services.customer_reply_v2.comment_runtime.run_customer_reply_v2_comment", fake_comment)
+    monkeypatch.setattr("services.brain.reply.comment_runtime.run_customer_reply_v2_comment", fake_comment)
     monkeypatch.setattr(
         "services.brain.comments.destinations.destinations_from_outcome",
         lambda _out: type("P", (), {"has_any": True})(),
@@ -351,7 +351,7 @@ def test_static_and_ai_comments_use_per_author_thread() -> None:
 def test_comment_runtime_does_not_bind_post_or_comment_id() -> None:
     from inspect import getsource
 
-    from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
+    from services.brain.reply.comment_runtime import run_customer_reply_v2_comment
 
     src = getsource(run_customer_reply_v2_comment)
     assert "conversation_id_for_brain" not in src

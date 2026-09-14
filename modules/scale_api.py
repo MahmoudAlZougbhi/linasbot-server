@@ -16,7 +16,7 @@ async def scale_metrics() -> Any:
     payload = scale_metrics_mod.snapshot()
     payload["drain"] = shutdown_coordinator.snapshot()
     try:
-        from services.omnichannel import metrics as omni_metrics
+        from services.integrations.omnichannel import metrics as omni_metrics
 
         payload["omnichannel"] = omni_metrics.snapshot()
     except Exception as exc:

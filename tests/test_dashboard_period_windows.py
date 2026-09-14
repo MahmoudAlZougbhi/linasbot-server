@@ -223,7 +223,7 @@ def test_web_channel_counts_handler_only_logs() -> None:
             {
                 "timestamp": now.astimezone(UTC).isoformat().replace("+00:00", "Z"),
                 "tenant_id": "acme",
-                "handler_path": "services/web_chat/processor.py",
+                "handler_path": "services/integrations/web_chat/processor.py",
                 "source": "web_chat",
                 "bot_to_user": True,
             }

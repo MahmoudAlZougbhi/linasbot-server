@@ -45,7 +45,7 @@ def _pause_whatsapp_cloud(
     actor_user_id: str,
 ) -> tuple[bool, int | None]:
     """Pause WA Cloud AI. Returns (changed, control_epoch)."""
-    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+    from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
     repo = WhatsAppCloudRepository(session)
     conv = repo.get_tenant_conversation(tenant_id=tenant_id, conversation_id=conversation_id)
@@ -68,7 +68,7 @@ def _resume_whatsapp_cloud(
     conversation_id: str,
     actor_user_id: str,
 ) -> tuple[bool, int | None]:
-    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+    from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
     repo = WhatsAppCloudRepository(session)
     conv = repo.get_tenant_conversation(tenant_id=tenant_id, conversation_id=conversation_id)

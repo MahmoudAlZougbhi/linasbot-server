@@ -27,7 +27,7 @@ os.environ["DASHBOARD_AUTH_SECRET"] = "pytest-dashboard-secret"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository  # noqa: E402
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
 
 TEST_WABA = "900100200300"
 TEST_PHONE = "900100200301"
@@ -53,8 +53,8 @@ def wa_db(tmp_path, monkeypatch):
         yield session
         session.commit()
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.whatsapp_session", _sess)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_readiness.whatsapp_session", _sess)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind.whatsapp_session", _sess)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_readiness.whatsapp_session", _sess)
     yield session
     session.close()
     reset_engine_for_tests()
@@ -74,17 +74,17 @@ def _mock_meta_ok(monkeypatch) -> None:
     async def _sub(**kwargs: Any) -> dict[str, Any]:
         return {"success": True}
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _debug)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.fetch_waba_phone_numbers", _phones)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.subscribe_waba_webhooks", _sub)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.debug_token", _debug)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.fetch_waba_phone_numbers", _phones)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind.subscribe_waba_webhooks", _sub)
 
 
 @pytest.mark.asyncio
 async def test_outbound_delivery_finalizes_ai_reply_once(wa_db, monkeypatch):
     from db.models.whatsapp_cloud import WhatsAppMessage, WhatsAppOutboundIntent
-    from services.whatsapp_cloud import delivery_retry as dr
-    from services.whatsapp_cloud import outbound_finalization as finalization
-    from services.whatsapp_cloud.smart_followup import hooks as followup_hooks
+    from services.integrations.whatsapp import delivery_retry as dr
+    from services.integrations.whatsapp import outbound_finalization as finalization
+    from services.integrations.whatsapp.smart_followup import hooks as followup_hooks
 
     repo = WhatsAppCloudRepository(wa_db)
     conn = repo.create_connection_with_credential(
@@ -200,7 +200,7 @@ async def test_post_provider_success_finalization_failure_requires_reconciliatio
     failure_point,
 ):
     from db.models.whatsapp_cloud import WhatsAppMessage, WhatsAppOutboundIntent
-    from services.whatsapp_cloud import delivery_retry as dr
+    from services.integrations.whatsapp import delivery_retry as dr
 
     repo = WhatsAppCloudRepository(wa_db)
     conn = repo.create_connection_with_credential(
@@ -299,7 +299,7 @@ async def test_post_provider_success_finalization_failure_requires_reconciliatio
 @pytest.mark.asyncio
 async def test_minute_retry_job_reconciles_only_stale_sending_without_provider_resend(wa_db, monkeypatch):
     from db.models.whatsapp_cloud import WhatsAppOutboundIntent
-    from services.whatsapp_cloud import delivery_retry as dr
+    from services.integrations.whatsapp import delivery_retry as dr
 
     repo = WhatsAppCloudRepository(wa_db)
     conn = repo.create_connection_with_credential(

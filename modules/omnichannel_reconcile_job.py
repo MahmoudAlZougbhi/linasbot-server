@@ -11,7 +11,7 @@ def _run_omnichannel_reconcile_job_sync() -> None:
     if not try_acquire_job_lock("omnichannel_reconcile", ttl_seconds=55):
         return
     try:
-        from services.omnichannel.reconcile import reconcile_omnichannel
+        from services.integrations.omnichannel.reconcile import reconcile_omnichannel
 
         result = reconcile_omnichannel(older_than_seconds=45.0)
         examined = int(result.get("examined") or 0)

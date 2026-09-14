@@ -419,7 +419,7 @@ class SocialCanonicalAiPathTests(unittest.TestCase):
         from pathlib import Path
 
         features = Path("services/product_features.py").read_text(encoding="utf-8")
-        orchestrator = Path("services/customer_reply_v2/orchestrator.py").read_text(encoding="utf-8")
+        orchestrator = Path("services/brain/reply/orchestrator.py").read_text(encoding="utf-8")
         for blocked_tool in (
             "submit_booking_intent",
             "create_appointment",
@@ -430,7 +430,7 @@ class SocialCanonicalAiPathTests(unittest.TestCase):
             self.assertIn(blocked_tool, features)
             self.assertNotIn(blocked_tool, orchestrator)
         self.assertIn("LEGACY_BOOKING_TOOL_NAMES", features)
-        self.assertFalse(Path("services/customer_reply_v2/policy.py").exists())
+        self.assertFalse(Path("services/brain/reply/policy.py").exists())
         self.assertIn("run_customer_ai_dm", orchestrator)
         self.assertIn("Brain only", orchestrator)
 

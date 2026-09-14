@@ -15,26 +15,26 @@ os.environ.setdefault("WEB_CHAT_ALLOW_FILE_STORE", "true")
 
 from db.models.base import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.web_chat.config_models import WebChatWidgetConfig  # noqa: E402
-from services.web_chat.delivery_outbox import ack_pending_messages, poll_pending_messages  # noqa: E402
-from services.web_chat.ha_repository import WebChatHaRepository  # noqa: E402
-from services.web_chat.public_handlers import bootstrap_visitor_session, send_visitor_message  # noqa: E402
-from services.web_chat.session_authority import (  # noqa: E402
+from services.integrations.web_chat.config_models import WebChatWidgetConfig  # noqa: E402
+from services.integrations.web_chat.delivery_outbox import ack_pending_messages, poll_pending_messages  # noqa: E402
+from services.integrations.web_chat.ha_repository import WebChatHaRepository  # noqa: E402
+from services.integrations.web_chat.public_handlers import bootstrap_visitor_session, send_visitor_message  # noqa: E402
+from services.integrations.web_chat.session_authority import (  # noqa: E402
     SessionAuthorityError,
     hash_session_authority,
     issue_session_authority,
     verify_session_binding,
 )
-from services.web_chat.store import WebChatStore  # noqa: E402
+from services.integrations.web_chat.store import WebChatStore  # noqa: E402
 from tests.web_chat_acceptance_support import seed_widget_config  # noqa: E402
 
 
 @pytest.fixture()
 def web_store(tmp_path, monkeypatch):
     store = WebChatStore(root=tmp_path / "web_chat")
-    monkeypatch.setattr("services.web_chat.store.web_chat_store", store)
-    monkeypatch.setattr("services.web_chat.public_handlers.web_chat_store", store)
-    monkeypatch.setattr("services.web_chat.delivery_outbox.web_chat_store", store)
+    monkeypatch.setattr("services.integrations.web_chat.store.web_chat_store", store)
+    monkeypatch.setattr("services.integrations.web_chat.public_handlers.web_chat_store", store)
+    monkeypatch.setattr("services.integrations.web_chat.delivery_outbox.web_chat_store", store)
     return store
 
 
@@ -111,7 +111,7 @@ def test_filename_collision_sanitization_does_not_merge_sessions(web_store) -> N
 async def test_bootstrap_returns_server_authority(web_store, monkeypatch) -> None:
     monkeypatch.setenv("WEB_CHAT_PUBLIC_AVAILABILITY", "true")
     monkeypatch.setattr(
-        "services.web_chat.public_handlers.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.public_handlers.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
     widget = _widget()
@@ -230,7 +230,7 @@ def test_legacy_session_rejected_when_ha_required(web_store, ha_db, monkeypatch)
 def test_disabled_widget_rejected() -> None:
     widget = _widget()
     widget.enabled = False
-    from services.web_chat.flags import assert_widget_operational
+    from services.integrations.web_chat.flags import assert_widget_operational
 
     with pytest.raises(ValueError):
         assert_widget_operational(widget)
@@ -256,11 +256,11 @@ async def test_capture_failure_does_not_append_turn(web_chat_pg_store, monkeypat
         authority_hash=bundle.authority_hash,
     )
     from services.credit_ledger_service import credit_ledger_service
-    from services.web_chat.persistence import PersistOutcome, PersistResult
-    from services.web_chat.processor import WebChatError, process_web_chat_message
+    from services.integrations.web_chat.persistence import PersistOutcome, PersistResult
+    from services.integrations.web_chat.processor import WebChatError, process_web_chat_message
 
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id="conv")),
     )
     monkeypatch.setattr(
@@ -286,13 +286,13 @@ async def test_capture_failure_does_not_append_turn(web_chat_pg_store, monkeypat
 @pytest.mark.asyncio
 async def test_queue_failure_after_persist_recovers(web_chat_pg_store, monkeypatch) -> None:
     monkeypatch.setenv("WEB_CHAT_PUBLIC_AVAILABILITY", "true")
-    from services.web_chat.followup_delivery import deliver_web_followup_message
-    from services.web_chat.processor import compose_web_user_id
+    from services.integrations.web_chat.followup_delivery import deliver_web_followup_message
+    from services.integrations.web_chat.processor import compose_web_user_id
     from tests.test_web_followup_web_delivery import _reserve_followup_credit
 
     store = web_chat_pg_store
     widget = seed_widget_config(store, _widget())
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     store.get_or_create_visitor(
@@ -302,7 +302,7 @@ async def test_queue_failure_after_persist_recovers(web_chat_pg_store, monkeypat
         authority_hash=bundle.authority_hash,
     )
     save_mock = AsyncMock(return_value=MagicMock(outcome="created", conversation_id="conv"))
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", save_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", save_mock)
 
     attempts = 0
     original_queue = store.queue_assistant_message
@@ -413,7 +413,7 @@ async def test_crash_boundary_persist_without_queue_leaves_no_pending(web_chat_p
 
     store = web_chat_pg_store
     widget = seed_widget_config(store, _widget())
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     store.get_or_create_visitor(
@@ -423,12 +423,12 @@ async def test_crash_boundary_persist_without_queue_leaves_no_pending(web_chat_p
         authority_hash=bundle.authority_hash,
     )
     save_mock = AsyncMock(
-        return_value=__import__("services.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
+        return_value=__import__("services.integrations.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
             outcome="created",
             conversation_id=f"web:{widget.tenant_id}:visitor-crash",
         )
     )
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", save_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", save_mock)
     monkeypatch.setattr(
         store,
         "queue_assistant_message",

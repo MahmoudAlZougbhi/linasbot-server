@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from services.tiktok_business.config import REQUESTED_SCOPES
-from services.tiktok_business.live_probe import probe_linas_enhanced_readonly
+from services.integrations.tiktok.config import REQUESTED_SCOPES
+from services.integrations.tiktok.live_probe import probe_linas_enhanced_readonly
 from tests.tiktok_business.conftest import seed_connection
 
 
@@ -32,7 +32,7 @@ async def test_live_probe_classifies_without_identity_http(tt_db, monkeypatch) -
         called["n"] += 1
         return {}
 
-    monkeypatch.setattr("services.tiktok_business.identity_api.tiktok_request", _req)
+    monkeypatch.setattr("services.integrations.tiktok.identity_api.tiktok_request", _req)
     out = await probe_linas_enhanced_readonly(tenant_id="linas")
     assert out["account_token_identity_guard"] == "token_type_mismatch"
     assert called["n"] == 0

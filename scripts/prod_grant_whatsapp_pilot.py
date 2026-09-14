@@ -22,7 +22,7 @@ def main() -> int:
         return 2
 
     from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
-    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+    from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
     try:
         with whatsapp_session(require=True) as session:

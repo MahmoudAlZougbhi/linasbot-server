@@ -340,7 +340,7 @@ async def process_meta_social_event(
                     event["attachments"] = kept
                     attachments = kept
         if isinstance(attachments, list) and attachments:
-            from services.customer_reply_v2.inbound_media import inbound_media_view, ingest_inbound_attachments
+            from services.brain.reply.inbound_media import inbound_media_view, ingest_inbound_attachments
 
             inbound = await ingest_inbound_attachments(
                 tenant_id=resolved_tenant_id,

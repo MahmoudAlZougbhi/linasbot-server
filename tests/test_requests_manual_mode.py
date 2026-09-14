@@ -18,7 +18,7 @@ from db.session import reset_engine_for_tests  # noqa: E402
 from services.requests.manual_mode import activate_manual_mode, resume_manual_mode  # noqa: E402
 from services.requests.schemas import RequestCreateBody  # noqa: E402
 from services.requests.service import CustomerRequestsError, CustomerRequestsService  # noqa: E402
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository  # noqa: E402
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
 
 
 @pytest.fixture()

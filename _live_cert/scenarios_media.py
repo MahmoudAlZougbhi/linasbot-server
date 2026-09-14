@@ -12,9 +12,9 @@ from _live_cert.calls import dm, record, trace
 async def run_media_scenarios(*, product: dict[str, Any], assets: Path, api_key: str) -> None:
     from openai import AsyncOpenAI
 
-    from services.customer_reply_v2.inbound_extract import extract_inbound_file
-    from services.customer_reply_v2.inbound_stt import transcribe_inbound_audio
-    from services.customer_reply_v2.inbound_video import extract_bounded_video, ffmpeg_available
+    from services.brain.reply.inbound_extract import extract_inbound_file
+    from services.brain.reply.inbound_stt import transcribe_inbound_audio
+    from services.brain.reply.inbound_video import extract_bounded_video, ffmpeg_available
     from services.ssrf_guard import SSRFValidationError, validate_fetch_url
 
     _ = TENANT_ID, product
@@ -71,7 +71,7 @@ async def run_media_scenarios(*, product: dict[str, Any], assets: Path, api_key:
             "BLOCKED",
             ok=False,
             blocker="ffmpeg_unavailable",
-            first_failing_layer="services/customer_reply_v2/inbound_video.py extract_bounded_video",
+            first_failing_layer="services/brain/reply/inbound_video.py extract_bounded_video",
         )
     else:
         record(

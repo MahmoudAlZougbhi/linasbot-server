@@ -18,7 +18,7 @@ async def _main() -> int:
     parser = argparse.ArgumentParser(description="Read-only TikTok enhanced post-context probe")
     parser.add_argument("--tenant-id", required=True)
     args = parser.parse_args()
-    from services.tiktok_business.live_probe import probe_linas_enhanced_readonly
+    from services.integrations.tiktok.live_probe import probe_linas_enhanced_readonly
 
     result = await probe_linas_enhanced_readonly(tenant_id=args.tenant_id)
     print(json.dumps(result, indent=2, default=str))

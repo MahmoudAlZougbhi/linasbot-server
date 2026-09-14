@@ -97,8 +97,8 @@ async def deliver_whatsapp_cloud(
     text: str,
     session: Any,
 ) -> DeliveryResult:
-    from services.whatsapp_cloud.graph_client import WhatsAppGraphError, send_text_message
-    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+    from services.integrations.whatsapp.graph_client import WhatsAppGraphError, send_text_message
+    from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
     if not text.strip():
         return DeliveryResult(

@@ -11,15 +11,15 @@ from fastapi.responses import JSONResponse
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 from modules.api_security import is_platform_owner, require_permission, require_session, user_has_permission
 from modules.core import app
-from services.whatsapp_cloud.config import get_whatsapp_cloud_flags, whatsapp_config_key_presence
-from services.whatsapp_cloud.entitlement import connection_status_payload
-from services.whatsapp_cloud.graph_client import (
+from services.integrations.whatsapp.config import get_whatsapp_cloud_flags, whatsapp_config_key_presence
+from services.integrations.whatsapp.entitlement import connection_status_payload
+from services.integrations.whatsapp.graph_client import (
     WhatsAppGraphError,
     create_message_template,
     list_message_templates,
     send_text_message,
 )
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository, conversation_public_view
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository, conversation_public_view
 
 _SAFE_RECIPIENT_FORMAT_RE = re.compile(r"^[+\d\s()-]+$")
 _INTERNATIONAL_RECIPIENT_RE = re.compile(r"^[1-9]\d{7,14}$")
@@ -63,7 +63,7 @@ def _set_whatsapp_ai_default(session: Any, connection_id: str, *, enabled: bool)
             detail={},
         )
         if not enabled:
-            from services.whatsapp_cloud.smart_followup.hooks import cancel_tenant_followups
+            from services.integrations.whatsapp.smart_followup.hooks import cancel_tenant_followups
 
             cancel_tenant_followups(db, tenant_id=session.tenant_id, reason="ai_disabled")
         return {"success": True, "connection": connection_status_payload(db, conn)}
@@ -196,7 +196,7 @@ async def whatsapp_disconnect(connection_id: str, request: Request, body: dict[s
             event_type="connection_revoked",
             detail={"reason": "owner_disconnect"},
         )
-        from services.whatsapp_cloud.smart_followup.hooks import cancel_tenant_followups
+        from services.integrations.whatsapp.smart_followup.hooks import cancel_tenant_followups
 
         cancel_tenant_followups(db, tenant_id=session.tenant_id, reason="whatsapp_disconnected")
         return {"success": True, "lifecycle_status": "revoked"}
@@ -357,7 +357,7 @@ async def whatsapp_app_review_readiness(request: Request) -> Any:
     session = require_session(request)
     if not is_platform_owner(session):
         raise HTTPException(status_code=403, detail="platform_owner_required")
-    from services.whatsapp_cloud.app_review_readiness import build_app_review_readiness
+    from services.integrations.whatsapp.app_review_readiness import build_app_review_readiness
 
     tenant_id = str(request.query_params.get("tenant_id") or getattr(session, "tenant_id", "") or "").strip()
     if not tenant_id:
@@ -373,7 +373,7 @@ async def whatsapp_app_review_status(request: Request) -> Any:
     session = require_session(request)
     if not is_platform_owner(session):
         raise HTTPException(status_code=403, detail="platform_owner_required")
-    from services.whatsapp_cloud.app_review_bind import AppReviewBindError, status_app_review_bind
+    from services.integrations.whatsapp.app_review_bind import AppReviewBindError, status_app_review_bind
 
     try:
         return status_app_review_bind()
@@ -388,7 +388,7 @@ async def whatsapp_app_review_bind(request: Request, body: dict[str, Any] = Body
     session = require_session(request)
     if not is_platform_owner(session):
         raise HTTPException(status_code=403, detail="platform_owner_required")
-    from services.whatsapp_cloud.app_review_bind import AppReviewBindError, bind_app_review_test_number
+    from services.integrations.whatsapp.app_review_bind import AppReviewBindError, bind_app_review_test_number
 
     tenant_id = str(body.get("tenant_id") or "").strip().lower()
     if not tenant_id:
@@ -420,7 +420,7 @@ async def whatsapp_app_review_unbind(request: Request, body: dict[str, Any] = Bo
     session = require_session(request)
     if not is_platform_owner(session):
         raise HTTPException(status_code=403, detail="platform_owner_required")
-    from services.whatsapp_cloud.app_review_bind import AppReviewBindError, unbind_app_review_test_number
+    from services.integrations.whatsapp.app_review_bind import AppReviewBindError, unbind_app_review_test_number
 
     tenant_id = str(body.get("tenant_id") or "").strip().lower()
     if not tenant_id:

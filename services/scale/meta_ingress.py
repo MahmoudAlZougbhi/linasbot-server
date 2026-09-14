@@ -36,7 +36,7 @@ def _mirror_unless_soak(record: InboundEventRecord) -> None:
 
     if _payload_is_soak(getattr(record, "payload", None)):
         return
-    from services.omnichannel.dual_write import mirror_meta_inbound
+    from services.integrations.omnichannel.dual_write import mirror_meta_inbound
 
     mirror_meta_inbound(record)
 
@@ -103,7 +103,7 @@ def _try_enqueue(
             or not redis_required()
         ):
             return None
-        from services.omnichannel.queues import logical_for_channel, physical_queue_for
+        from services.integrations.omnichannel.queues import logical_for_channel, physical_queue_for
 
         surface = "comment" if kind == "meta_comment" else "dm"
         logical = logical_for_channel(channel="meta", surface=surface)

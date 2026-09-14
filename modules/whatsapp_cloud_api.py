@@ -10,14 +10,14 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 from modules.api_security import is_platform_owner, require_permission, require_session, user_has_permission
 from modules.core import app
-from services.whatsapp_cloud.config import get_whatsapp_cloud_flags, whatsapp_config_key_presence
-from services.whatsapp_cloud.embedded_signup import WhatsAppSignupError, complete_embedded_signup, start_embedded_signup
-from services.whatsapp_cloud.entitlement import (
+from services.integrations.whatsapp.config import get_whatsapp_cloud_flags, whatsapp_config_key_presence
+from services.integrations.whatsapp.embedded_signup import WhatsAppSignupError, complete_embedded_signup, start_embedded_signup
+from services.integrations.whatsapp.entitlement import (
     WhatsAppEntitlementError,
     assert_whatsapp_connection_allowed,
     tenant_connection_status_payload,
 )
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
 
 def _actor_id(session: Any) -> str:
@@ -204,7 +204,7 @@ async def whatsapp_cloud_connect_complete(request: Request, body: dict[str, Any]
 async def whatsapp_embedded_signup_bridge(request: Request) -> HTMLResponse:
     """Purpose-built noindex bridge for Meta Embedded Signup v4 coexistence."""
 
-    from services.whatsapp_cloud.embedded_signup_bridge import render_embedded_signup_bridge_html
+    from services.integrations.whatsapp.embedded_signup_bridge import render_embedded_signup_bridge_html
 
     flags = get_whatsapp_cloud_flags()
     html = render_embedded_signup_bridge_html(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.customer_reply_v2.retrieval_item_index import record_content
+from services.brain.reply.retrieval_item_index import record_content
 from services.search_metadata.cm_apply import enrich_section_payload, last_cm_apply_stats
 from services.search_metadata.english import contains_non_english_script, looks_like_english
 from services.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator

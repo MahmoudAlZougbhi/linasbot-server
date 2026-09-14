@@ -6,7 +6,7 @@ import pytest
 
 from services.brain.flags import assert_safe_brain_cutover, emergency_legacy_reply_enabled
 from services.brain.tenant_gate import evaluate_brain_tenant_gate
-from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
+from services.brain.reply.orchestrator import run_customer_reply_v2_dm
 
 
 def test_cutover_brain_permanent(monkeypatch: pytest.MonkeyPatch) -> None:

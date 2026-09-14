@@ -31,7 +31,7 @@ from modules.models import (
 from services.live_chat.service import live_chat_service
 from services.live_chat.sse_broadcaster import live_chat_sse_broadcaster
 from services.takeover_customer_notice import public_staff_label
-from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
 
 _log = logging.getLogger(__name__)
 

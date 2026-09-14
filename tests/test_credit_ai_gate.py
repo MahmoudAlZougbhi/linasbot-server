@@ -84,7 +84,7 @@ def test_clinic_tenants_are_not_linas_exempt(monkeypatch: pytest.MonkeyPatch) ->
 async def test_channel_orchestrator_does_not_generate_at_zero(
     ledger_env: CreditLedgerService,
 ) -> None:
-    from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
+    from services.brain.reply.orchestrator import run_customer_reply_v2_dm
 
     _drain(ledger_env, "clinic", "drain-orch")
 
@@ -108,7 +108,7 @@ async def test_channel_orchestrator_does_not_generate_at_zero(
 
 @pytest.mark.asyncio
 async def test_comment_orchestrator_does_not_generate_at_zero(ledger_env: CreditLedgerService) -> None:
-    from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
+    from services.brain.reply.comment_runtime import run_customer_reply_v2_comment
 
     _drain(ledger_env, "clinic", "drain-cmt")
     out = await run_customer_reply_v2_comment(

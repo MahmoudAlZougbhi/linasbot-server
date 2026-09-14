@@ -18,10 +18,10 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from services.omnichannel.classify import classify_http_delivery  # noqa: E402
-from services.omnichannel.contract import NormalizedInbound  # noqa: E402
-from services.omnichannel.queues import logical_for_channel, physical_queue_for  # noqa: E402
-from services.omnichannel.store import persist_inbound, persist_outbound  # noqa: E402
+from services.integrations.omnichannel.classify import classify_http_delivery  # noqa: E402
+from services.integrations.omnichannel.contract import NormalizedInbound  # noqa: E402
+from services.integrations.omnichannel.queues import logical_for_channel, physical_queue_for  # noqa: E402
+from services.integrations.omnichannel.store import persist_inbound, persist_outbound  # noqa: E402
 
 MIX = (
     ("instagram", "comment", 200),

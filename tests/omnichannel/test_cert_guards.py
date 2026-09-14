@@ -9,9 +9,9 @@ import pytest
 
 from scripts.loadtest.omnichannel_cert_guards import CertGuardError, assert_staging_cert_allowed, sanitize_text
 from scripts.loadtest.omnichannel_stub_http import start_stub_server
-from services.omnichannel.classify import classify_http_delivery
-from services.tiktok_business.comment_sync import persist_comment_page_cursor
-from services.tiktok_business.config import MAX_COMMENT_PAGES_PER_VIDEO
+from services.integrations.omnichannel.classify import classify_http_delivery
+from services.integrations.tiktok.comment_sync import persist_comment_page_cursor
+from services.integrations.tiktok.config import MAX_COMMENT_PAGES_PER_VIDEO
 
 
 def test_guards_reject_production_and_require_flag(monkeypatch):

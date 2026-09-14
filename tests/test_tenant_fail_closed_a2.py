@@ -204,6 +204,6 @@ def test_capability_gates_reject_missing_tenant(tenant_id: str | None) -> None:
 
 
 def test_customer_v2_orchestrator_does_not_collapse_missing_tenant_to_linas() -> None:
-    src = Path("services/customer_reply_v2/orchestrator.py").read_text(encoding="utf-8")
+    src = Path("services/brain/reply/orchestrator.py").read_text(encoding="utf-8")
     assert 'or "linas"' not in src
     assert "tenant_id: str" in src

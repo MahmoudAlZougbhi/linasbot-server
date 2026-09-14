@@ -15,7 +15,7 @@ QUEUE_NAME: QueueName = "expensive"
 
 
 def uses_index_worker() -> bool:
-    from services.omnichannel.enqueue import queue_is_durable, should_defer_to_worker
+    from services.integrations.omnichannel.enqueue import queue_is_durable, should_defer_to_worker
 
     return bool(queue_is_durable() and should_defer_to_worker())
 
@@ -77,7 +77,7 @@ async def schedule_tenant_index(
     result = await run_tenant_index_job(tid, revision=rev, reason=reason)
     if result.get("ready"):
         return result
-    from services.omnichannel.enqueue import queue_is_durable
+    from services.integrations.omnichannel.enqueue import queue_is_durable
 
     if queue_is_durable():
         queued = enqueue_tenant_index(tid, revision=rev, reason=f"retry:{reason}")

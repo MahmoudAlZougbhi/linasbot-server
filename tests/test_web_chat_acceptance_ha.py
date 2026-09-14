@@ -9,11 +9,11 @@ import pytest
 from sqlalchemy import select
 
 from db.session import reset_engine_for_tests
-from services.web_chat.delivery_outbox import ack_pending_messages, poll_pending_messages
-from services.web_chat.ha_repository import WebChatHaRepository
-from services.web_chat.processor import process_web_chat_message
-from services.web_chat.session_authority import issue_session_authority
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.delivery_outbox import ack_pending_messages, poll_pending_messages
+from services.integrations.web_chat.ha_repository import WebChatHaRepository
+from services.integrations.web_chat.processor import process_web_chat_message
+from services.integrations.web_chat.session_authority import issue_session_authority
+from services.integrations.web_chat.store_pg import WebChatPgStore
 from tests.web_chat_acceptance_billing import (
     assert_acceptance_ledger_equation,
     fetch_pg_ledger_snapshot,
@@ -203,13 +203,13 @@ def test_restart_simulation_new_process_reads_ha_pending(monkeypatch, acceptance
     )
 
     monkeypatch.setattr(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         AsyncMock(return_value=MagicMock(reply="Captured before restart")),
     )
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
-            return_value=__import__("services.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
+            return_value=__import__("services.integrations.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
                 outcome="created",
                 conversation_id=f"web:{tenant_id}:{bundle.session_id}",
             )
@@ -347,7 +347,7 @@ def test_in_process_store_poll_ack_still_valid(monkeypatch, acceptance_pg_ha_env
 
 
 def test_ha_idempotency_row_visible_after_queue(web_chat_ha_db) -> None:
-    from services.web_chat.pg_models import WebChatDeliveryIdempotencyRow
+    from services.integrations.web_chat.pg_models import WebChatDeliveryIdempotencyRow
 
     repo = WebChatHaRepository()
     with web_chat_ha_db() as db:
@@ -377,7 +377,7 @@ def test_ha_idempotency_row_visible_after_queue(web_chat_ha_db) -> None:
 
 
 def test_schema_absence_raises_when_db_unconfigured(monkeypatch) -> None:
-    from services.web_chat.ha_repository import WebChatHaUnavailable, with_ha_session
+    from services.integrations.web_chat.ha_repository import WebChatHaUnavailable, with_ha_session
 
     monkeypatch.delenv("LINAS_WHATSAPP_DATABASE_URL", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)

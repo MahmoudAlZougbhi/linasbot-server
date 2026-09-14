@@ -10,7 +10,7 @@ from services.billing.plan_economics import PLAN_FEATURES
 from services.live_chat.channel import resolve_live_chat_channel
 from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT, SOURCE_CHANNELS
 from services.smart_followup.channels import normalize_followup_channel
-from services.web_chat.store import WebChatStore
+from services.integrations.web_chat.store import WebChatStore
 
 
 def test_web_plan_matrix_matches_whatsapp_tier() -> None:
@@ -77,7 +77,7 @@ def test_mobile_membership_allows_true_for_max_despite_stale_features(monkeypatc
     from services.billing import entitlements_service as es
     from services.billing.entitlements_service import EntitlementsStore, TenantEntitlement
     from services.billing.membership import web_gate as wg
-    from services.web_chat.store import WebChatStore
+    from services.integrations.web_chat.store import WebChatStore
 
     store = EntitlementsStore(root=tmp_path / "ent")
     web_store = WebChatStore(root=tmp_path / "web_chat")

@@ -27,7 +27,7 @@ def record_channel_blockers() -> None:
         blocker="No Meta test webhook delivery into this isolated process",
         first_failing_layer="Meta signed webhook → tenant resolve → AI start → delivery",
     )
-    from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
+    from services.integrations.whatsapp.config import get_whatsapp_cloud_flags
 
     flags = get_whatsapp_cloud_flags()
     record(

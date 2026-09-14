@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from handlers.text_handlers_respond import _handle_published_cm_runtime
-from services.customer_reply_v2.models import CustomerReplyOutcome
+from services.brain.reply.models import CustomerReplyOutcome
 from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
 
@@ -36,7 +36,7 @@ async def test_empty_brain_stop_is_brain_no_reply_not_validation_failed() -> Non
         metadata={"ai_called": False, "cost_status": "none"},
     )
     with patch(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         new=AsyncMock(return_value=outcome),
     ):
         reply, metadata = await _handle_published_cm_runtime(
@@ -64,7 +64,7 @@ async def test_generated_reply_marks_ai_generated() -> None:
         metadata={"ai_called": True, "cost_status": "tracked"},
     )
     with patch(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         new=AsyncMock(return_value=outcome),
     ):
         reply, metadata = await _handle_published_cm_runtime(
@@ -91,7 +91,7 @@ async def test_reply_without_ai_called_metadata_stays_false() -> None:
         metadata={"ai_called": False},
     )
     with patch(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         new=AsyncMock(return_value=outcome),
     ):
         reply, metadata = await _handle_published_cm_runtime(

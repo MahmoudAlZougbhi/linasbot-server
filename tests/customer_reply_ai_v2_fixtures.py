@@ -19,7 +19,7 @@ def v2_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CUSTOMER_DM_CONTEXT_WINDOW_HOURS", "1.5")
     monkeypatch.setenv("CUSTOMER_AI_V10_RUNTIME", "true")
     install_mocked_openai_embeddings(monkeypatch)
-    from services.customer_reply_v2.manifest import clear_manifest_cache
+    from services.brain.reply.manifest import clear_manifest_cache
 
     clear_manifest_cache()
     monkeypatch.setattr(

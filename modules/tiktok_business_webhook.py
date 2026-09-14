@@ -9,10 +9,10 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from modules.core import app
-from services.tiktok_business.config import get_tiktok_settings
-from services.tiktok_business.errors import TikTokBusinessError
-from services.tiktok_business.webhook_process import process_tiktok_webhook_payload
-from services.tiktok_business.webhook_verify import verify_tiktok_signature
+from services.integrations.tiktok.config import get_tiktok_settings
+from services.integrations.tiktok.errors import TikTokBusinessError
+from services.integrations.tiktok.webhook_process import process_tiktok_webhook_payload
+from services.integrations.tiktok.webhook_verify import verify_tiktok_signature
 
 
 async def _receive(request: Request) -> Any:

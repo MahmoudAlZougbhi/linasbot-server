@@ -310,7 +310,7 @@ async def send_request_manual_chat(request_id: str, body: RequestManualSendBody,
             )
 
     from services.live_chat.service import live_chat_service
-    from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+    from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
 
     adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
     return await live_chat_service.send_operator_message(

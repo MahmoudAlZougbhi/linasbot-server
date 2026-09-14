@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from services.tiktok_business.errors import TikTokOAuthStateError
-from services.tiktok_business.oauth_state import create_signed_state, parse_signed_state
-from services.tiktok_business.repository import TikTokRepository
+from services.integrations.tiktok.errors import TikTokOAuthStateError
+from services.integrations.tiktok.oauth_state import create_signed_state, parse_signed_state
+from services.integrations.tiktok.repository import TikTokRepository
 
 
 def test_signed_state_roundtrip(tt_db, monkeypatch) -> None:
@@ -38,7 +38,7 @@ def test_state_expiry_rejected(monkeypatch) -> None:
     signed = create_signed_state(tenant_id="linas", actor_user_id="u1", return_surface="mobile")
     body, sig = signed.state.rsplit(".", 1)
     nonce, tenant, actor, surface, _exp = body.split("|")
-    from services.tiktok_business.oauth_state import _sign
+    from services.integrations.tiktok.oauth_state import _sign
 
     expired_body = f"{nonce}|{tenant}|{actor}|{surface}|{int(time.time()) - 10}"
     expired_state = f"{expired_body}.{_sign(expired_body)}"
@@ -74,7 +74,7 @@ def test_oauth_callback_module_never_reads_query_tenant() -> None:
 
 
 def test_oauth_complete_does_not_enqueue_comment_poll() -> None:
-    source = Path("services/tiktok_business/oauth.py").read_text(encoding="utf-8")
+    source = Path("services/integrations/tiktok/oauth.py").read_text(encoding="utf-8")
     assert "tiktok_comment_sync" not in source
     assert "tiktok_sync:" not in source
 

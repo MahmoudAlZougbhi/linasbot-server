@@ -16,15 +16,15 @@ from modules.web_chat_helpers import (
     reject_if_web_chat_contained,
     resolve_widget_or_404,
 )
-from services.web_chat.public_config import build_public_widget_config
-from services.web_chat.public_handlers import (
+from services.integrations.web_chat.public_config import build_public_widget_config
+from services.integrations.web_chat.public_handlers import (
     ack_messages,
     bootstrap_visitor_session,
     poll_messages,
     send_visitor_message,
 )
-from services.web_chat.session_authority import SessionAuthorityError
-from services.web_chat.store import web_chat_store
+from services.integrations.web_chat.session_authority import SessionAuthorityError
+from services.integrations.web_chat.store import web_chat_store
 
 _WIDGET_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "public", "web-chat")
 _WIDGET_PATH = os.path.join(_WIDGET_DIR, "widget.js")
@@ -229,7 +229,7 @@ async def web_chat_ack_messages(
 
 @app.get("/web-chat/resources/{token}")
 async def web_chat_signed_resource(token: str) -> Response:
-    from services.customer_reply_v2.resource_signed_urls import load_verified_resource_bytes
+    from services.brain.reply.resource_signed_urls import load_verified_resource_bytes
 
     hit = load_verified_resource_bytes(token)
     if not hit.get("ok"):

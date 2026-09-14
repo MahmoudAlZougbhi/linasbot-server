@@ -74,7 +74,7 @@ def _soak_job() -> QueueJob:
 def _runtime(monkeypatch: pytest.MonkeyPatch, backend: _RecordingBackend):
     monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:9/0")
     monkeypatch.setattr("services.queues.worker_runtime.RedisQueueBackend", lambda: backend)
-    monkeypatch.setattr("services.omnichannel.limiter.DistributedProviderLimiter", _DenyLimiter)
+    monkeypatch.setattr("services.integrations.omnichannel.limiter.DistributedProviderLimiter", _DenyLimiter)
     monkeypatch.setattr("services.scale.job_progress_watchdog.scan_queue", lambda *_a, **_k: {})
     from services.queues.worker_runtime import WorkerRuntime
 

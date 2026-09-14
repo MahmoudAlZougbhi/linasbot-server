@@ -10,8 +10,8 @@ from fastapi.responses import JSONResponse
 from db.session import WhatsAppDatabaseUnavailable
 from modules.core import app
 from modules.tiktok_business_api import _actor, _error, _require_manager
-from services.tiktok_business.ads_oauth import start_tiktok_ads_oauth
-from services.tiktok_business.errors import TikTokBusinessError
+from services.integrations.tiktok.ads_oauth import start_tiktok_ads_oauth
+from services.integrations.tiktok.errors import TikTokBusinessError
 
 
 @app.post("/api/tiktok/enhanced/connect/start")

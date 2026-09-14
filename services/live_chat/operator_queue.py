@@ -13,7 +13,7 @@ from services.live_chat.channel import resolve_live_chat_channel
 
 def live_chat_durable_mode() -> str:
     """enqueue | sync | unavailable."""
-    from services.omnichannel.enqueue import queue_is_durable
+    from services.integrations.omnichannel.enqueue import queue_is_durable
     from services.queues.config import redis_required
 
     if not redis_required():
@@ -46,7 +46,7 @@ def enqueue_live_chat_operator_text(
     idempotency_key: str | None = None,
     control_epoch: int = 0,
 ) -> dict[str, Any]:
-    from services.omnichannel.operator_enqueue import enqueue_operator_reply
+    from services.integrations.omnichannel.operator_enqueue import enqueue_operator_reply
 
     result = enqueue_operator_reply(
         tenant_id=tenant_id,
@@ -133,7 +133,7 @@ def _whatsapp_customer_wa_id(user_id: str, canonical_user_id: str) -> str:
 
 def _active_whatsapp_connection_id(tenant_id: str) -> str | None:
     from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
-    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+    from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
     try:
         with whatsapp_session(require=True) as session:

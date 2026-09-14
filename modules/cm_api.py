@@ -360,7 +360,7 @@ async def cm_unpublish(request: Request) -> Any:
             cleared = clear_published_pointer(tenant_id)
     except DailyEditLimitError as exc:
         return limit_response(exc)
-    from services.customer_reply_v2.manifest import clear_manifest_cache
+    from services.brain.reply.manifest import clear_manifest_cache
 
     clear_manifest_cache(tenant_id)
     return {

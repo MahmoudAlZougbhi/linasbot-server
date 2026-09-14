@@ -271,7 +271,7 @@ def test_greeting_not_repeated_after_history_hit(monkeypatch: pytest.MonkeyPatch
 async def test_flag_on_exact_faq_is_deterministic(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.brain.faq_exact import FaqExactHit
     from services.brain.gates import GateDecision
-    from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
+    from services.brain.reply.orchestrator import run_customer_reply_v2_dm
 
     monkeypatch.setattr(
         "services.brain.runtime.evaluate_gates",

@@ -5,7 +5,7 @@ from __future__ import annotations
 from services.billing.membership.credit_reservation_index import open_counts, reset_credit_reservation_index_for_tests
 from services.billing.membership.pending_settlement import reset_pending_settlements_for_tests
 from services.brain.leftover_reserve import leftover_policy_for, reset_leftover_pins_for_tests
-from services.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
+from services.integrations.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
 
 
 class _Ledger:
@@ -38,7 +38,7 @@ def test_web_chat_reserve_capture_indexes_leftover(monkeypatch) -> None:
     reset_pending_settlements_for_tests()
     ledger = _Ledger()
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
-    monkeypatch.setattr("services.web_chat.credit_fsm.followup_uses_message_ledger", lambda: False)
+    monkeypatch.setattr("services.integrations.web_chat.credit_fsm.followup_uses_message_ledger", lambda: False)
     handle = WebChatCreditHandle(
         tenant_id="shop",
         reservation_id=None,
@@ -63,7 +63,7 @@ def test_web_chat_release_closes_index(monkeypatch) -> None:
     reset_pending_settlements_for_tests()
     ledger = _Ledger()
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
-    monkeypatch.setattr("services.web_chat.credit_fsm.followup_uses_message_ledger", lambda: False)
+    monkeypatch.setattr("services.integrations.web_chat.credit_fsm.followup_uses_message_ledger", lambda: False)
     handle = WebChatCreditHandle(tenant_id="shop", reservation_id=None, request_id="web:idx:2")
     handle.reserve()
     assert leftover_policy_for("shop", "web:idx:2") == "legacy_credits"

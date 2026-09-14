@@ -441,15 +441,15 @@ def test_omni_conversation_id_prefers_payload() -> None:
     assert message_id_for_brain({"provider_message_id": "wamid.abc", "message_id": "local-1"}) == "wamid.abc"
     assert message_id_for_brain({"provider_event_id": "evt-row-1"}) == "evt-row-1"
     assert web_inbound_message_id("web:t:v", "hi").startswith("user:web:t:v:")
-    from services.web_chat.processor_v2_reply import generate_web_chat_reply_text
+    from services.integrations.web_chat.processor_v2_reply import generate_web_chat_reply_text
 
     assert "web_inbound_message_id(conversation_id, text)" in getsource(generate_web_chat_reply_text)
 
 
 @pytest.mark.asyncio
 async def test_omni_generate_passes_conversation_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.customer_reply_v2.models import CustomerReplyOutcome
-    from services.omnichannel.generate import _generate_canonical
+    from services.brain.reply.models import CustomerReplyOutcome
+    from services.integrations.omnichannel.generate import _generate_canonical
 
     captured: dict = {}
 
@@ -457,7 +457,7 @@ async def test_omni_generate_passes_conversation_id(monkeypatch: pytest.MonkeyPa
         captured.update(kwargs)
         return CustomerReplyOutcome(stop=False, reply="ok", reason="")
 
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm", fake_dm)
+    monkeypatch.setattr("services.brain.reply.orchestrator.run_customer_reply_v2_dm", fake_dm)
     monkeypatch.setattr(
         "services.brain.leftover_reserve.reserve_leftover_reply",
         lambda **_k: "res-test",

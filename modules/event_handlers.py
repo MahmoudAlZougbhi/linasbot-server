@@ -7,7 +7,7 @@ from __future__ import annotations
 
 # Preserve extracted job modules as part of the event-handlers package surface.
 from modules.core import app
-from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
 
 
 def repair_meta_registry_before_readiness() -> None:

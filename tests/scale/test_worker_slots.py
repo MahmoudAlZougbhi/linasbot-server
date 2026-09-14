@@ -10,7 +10,7 @@ def test_slots_stay_at_base_when_apply_off(monkeypatch) -> None:
     monkeypatch.setenv("LINAS_QUEUE_CONCURRENCY_HIGH", "8")
     from importlib import reload
 
-    import services.omnichannel.worker_pool as pool
+    import services.integrations.omnichannel.worker_pool as pool
     import services.queues.config as config
     import services.scale.worker_slots as slots
 
@@ -31,7 +31,7 @@ def test_slots_split_desired_across_nodes(monkeypatch) -> None:
     fake.set("linas:scale:desired:workers", "8")
     from importlib import reload
 
-    import services.omnichannel.worker_pool as pool
+    import services.integrations.omnichannel.worker_pool as pool
     import services.queues.config as config
     import services.scale.worker_slots as slots
 
@@ -52,7 +52,7 @@ def test_empty_desired_keeps_live_node_cap(monkeypatch) -> None:
     monkeypatch.setenv("LINAS_QUEUE_CONCURRENCY_HIGH", "8")
     from importlib import reload
 
-    import services.omnichannel.worker_pool as pool
+    import services.integrations.omnichannel.worker_pool as pool
     import services.queues.config as config
     import services.scale.worker_slots as slots
 

@@ -26,7 +26,7 @@ def durable_flush_jobs_enabled() -> bool:
     if not distributed_combine_enabled():
         return False
     try:
-        from services.omnichannel.enqueue import queue_is_durable
+        from services.integrations.omnichannel.enqueue import queue_is_durable
 
         return queue_is_durable()
     except Exception:

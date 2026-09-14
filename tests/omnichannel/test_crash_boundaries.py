@@ -7,18 +7,18 @@ from sqlalchemy import func, select
 
 from db.models.omnichannel import OmnichannelInboundEvent, OmnichannelOutboundOutbox
 from db.session import whatsapp_session
-from services.omnichannel.accept import InboundAcceptError, accept_and_enqueue
-from services.omnichannel.deliver import handle_omnichannel_deliver
-from services.omnichannel.dlq import replay_delivery_only
-from services.omnichannel.generate import handle_omnichannel_generate
-from services.omnichannel.reconcile import reconcile_omnichannel
-from services.omnichannel.store import persist_inbound, persist_outbound
+from services.integrations.omnichannel.accept import InboundAcceptError, accept_and_enqueue
+from services.integrations.omnichannel.deliver import handle_omnichannel_deliver
+from services.integrations.omnichannel.dlq import replay_delivery_only
+from services.integrations.omnichannel.generate import handle_omnichannel_generate
+from services.integrations.omnichannel.reconcile import reconcile_omnichannel
+from services.integrations.omnichannel.store import persist_inbound, persist_outbound
 from tests.omnichannel.conftest import make_inbound, make_job
 
 
 def test_crash_after_persist_before_enqueue_rolls_back(omni_db, monkeypatch):
     monkeypatch.setattr(
-        "services.omnichannel.accept.enqueue_generate_job",
+        "services.integrations.omnichannel.accept.enqueue_generate_job",
         lambda **_k: (_ for _ in ()).throw(RuntimeError("redis_down")),
     )
     with pytest.raises(InboundAcceptError):
@@ -46,7 +46,7 @@ async def test_crash_after_claim_before_ai_retries_without_outbox(omni_db, durab
     async def boom(**_k):
         raise RuntimeError("killed_before_ai")
 
-    monkeypatch.setattr("services.omnichannel.generate._generate_canonical", boom)
+    monkeypatch.setattr("services.integrations.omnichannel.generate._generate_canonical", boom)
     with pytest.raises(RuntimeError, match="killed_before_ai"):
         await handle_omnichannel_generate(
             make_job(
@@ -64,7 +64,7 @@ async def test_crash_after_claim_before_ai_retries_without_outbox(omni_db, durab
     async def ok(**_k):
         return "saved", None, None
 
-    monkeypatch.setattr("services.omnichannel.generate._generate_canonical", ok)
+    monkeypatch.setattr("services.integrations.omnichannel.generate._generate_canonical", ok)
     recovered = await handle_omnichannel_generate(
         make_job(
             job_type="omni_generate",
@@ -84,9 +84,9 @@ async def test_crash_after_ai_before_outbox_does_not_leave_canonical(omni_db, du
     async def ok(**_k):
         return "canonical", None, None
 
-    monkeypatch.setattr("services.omnichannel.generate._generate_canonical", ok)
+    monkeypatch.setattr("services.integrations.omnichannel.generate._generate_canonical", ok)
     monkeypatch.setattr(
-        "services.omnichannel.generate.persist_outbound",
+        "services.integrations.omnichannel.generate.persist_outbound",
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("killed_before_outbox")),
     )
     with pytest.raises(RuntimeError, match="killed_before_outbox"):
@@ -108,7 +108,7 @@ async def test_generate_does_not_capture_credits(omni_db, durable_jobs, credits,
     async def ok(**_k):
         return "canonical", "res-1", None
 
-    monkeypatch.setattr("services.omnichannel.generate._generate_canonical", ok)
+    monkeypatch.setattr("services.integrations.omnichannel.generate._generate_canonical", ok)
     await handle_omnichannel_generate(
         make_job(
             job_type="omni_generate",
@@ -148,7 +148,7 @@ async def test_crash_after_credit_before_send_retries_without_second_capture(
         )
         raise RuntimeError("killed_after_credit")
 
-    monkeypatch.setattr("services.omnichannel.deliver._send", boom)
+    monkeypatch.setattr("services.integrations.omnichannel.deliver._send", boom)
     with pytest.raises(RuntimeError, match="killed_after_credit"):
         await handle_omnichannel_deliver(
             make_job(job_type="omni_deliver", tenant_id="tenant-a", payload={"outbox_id": outbox_id})
@@ -158,7 +158,7 @@ async def test_crash_after_credit_before_send_retries_without_second_capture(
         sends["n"] += 1
         return {"http_status": 200, "submitted": True, "message_id": "mid-ok"}
 
-    monkeypatch.setattr("services.omnichannel.deliver._send", ok)
+    monkeypatch.setattr("services.integrations.omnichannel.deliver._send", ok)
     result = await handle_omnichannel_deliver(
         make_job(job_type="omni_deliver", tenant_id="tenant-a", payload={"outbox_id": outbox_id})
     )
@@ -193,9 +193,9 @@ async def test_provider_accept_then_local_commit_failure_is_ambiguous(omni_db, f
         sends["n"] += 1
         return {"http_status": 200, "submitted": True, "message_id": "mid-amb"}
 
-    monkeypatch.setattr("services.omnichannel.deliver._send", accepted)
+    monkeypatch.setattr("services.integrations.omnichannel.deliver._send", accepted)
     monkeypatch.setattr(
-        "services.omnichannel.deliver._finish_success",
+        "services.integrations.omnichannel.deliver._finish_success",
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("local_commit_failed")),
     )
     result = await handle_omnichannel_deliver(
@@ -250,7 +250,7 @@ def test_worker_drain_leaves_queued_inbound_searchable(omni_db, durable_jobs):
 def test_generate_binds_inbound_id_and_reserves_leftover() -> None:
     from inspect import getsource
 
-    from services.omnichannel import generate
+    from services.integrations.omnichannel import generate
 
     src = getsource(generate)
     assert 'payload.setdefault("provider_message_id", event_id)' in src

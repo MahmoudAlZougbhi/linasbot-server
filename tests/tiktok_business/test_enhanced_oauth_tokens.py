@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from services.tiktok_business.capabilities import TOKEN_KIND_ACCOUNT, TOKEN_KIND_ADVERTISER
-from services.tiktok_business.errors import TikTokBusinessError, TikTokOAuthStateError
-from services.tiktok_business.identity_api import identity_get
-from services.tiktok_business.oauth_state import create_signed_state, parse_signed_state
-from services.tiktok_business.repository import TikTokRepository
-from services.tiktok_business.repository_enhanced import TikTokEnhancedRepository
-from services.tiktok_business.token_guard import assert_advertiser_token
+from services.integrations.tiktok.capabilities import TOKEN_KIND_ACCOUNT, TOKEN_KIND_ADVERTISER
+from services.integrations.tiktok.errors import TikTokBusinessError, TikTokOAuthStateError
+from services.integrations.tiktok.identity_api import identity_get
+from services.integrations.tiktok.oauth_state import create_signed_state, parse_signed_state
+from services.integrations.tiktok.repository import TikTokRepository
+from services.integrations.tiktok.repository_enhanced import TikTokEnhancedRepository
+from services.integrations.tiktok.token_guard import assert_advertiser_token
 from tests.tiktok_business.conftest import seed_connection, seed_enhanced_binding
 
 
@@ -51,7 +51,7 @@ async def test_identity_get_never_calls_http_with_account_token(monkeypatch) -> 
         called["n"] += 1
         return {}
 
-    monkeypatch.setattr("services.tiktok_business.identity_api.tiktok_request", _req)
+    monkeypatch.setattr("services.integrations.tiktok.identity_api.tiktok_request", _req)
     with pytest.raises(TikTokBusinessError) as exc:
         await identity_get(access_token="account-token", token_kind=TOKEN_KIND_ACCOUNT, advertiser_id="1")
     assert exc.value.code == "token_type_mismatch"
@@ -90,7 +90,7 @@ def test_ads_callback_module_never_reads_query_tenant() -> None:
 async def test_account_oauth_rejects_advertiser_flow(monkeypatch) -> None:
     monkeypatch.setenv("TIKTOK_CLIENT_SECRET", "tt-client-secret-value")
     signed = create_signed_state(tenant_id="linas", actor_user_id="u1", return_surface="web", flow="advertiser")
-    from services.tiktok_business.oauth import complete_tiktok_oauth
+    from services.integrations.tiktok.oauth import complete_tiktok_oauth
 
     with pytest.raises(TikTokOAuthStateError, match="ads callback"):
         await complete_tiktok_oauth(state=signed.state, code="x", error=None, error_description=None)
@@ -117,7 +117,7 @@ def test_store_advertiser_keeps_separate_token_kind(tt_db) -> None:
 
 
 def test_ads_oauth_start_builds_marketing_url(tt_db) -> None:
-    from services.tiktok_business.ads_oauth import start_tiktok_ads_oauth
+    from services.integrations.tiktok.ads_oauth import start_tiktok_ads_oauth
 
     seed_connection(tt_db)
     started = start_tiktok_ads_oauth(tenant_id="linas", actor_user_id="u1", return_surface="mobile")
@@ -133,7 +133,7 @@ def test_ads_oauth_start_builds_marketing_url(tt_db) -> None:
 
 
 def test_ads_oauth_start_requires_connected_account(tt_db) -> None:
-    from services.tiktok_business.ads_oauth import start_tiktok_ads_oauth
+    from services.integrations.tiktok.ads_oauth import start_tiktok_ads_oauth
 
     with pytest.raises(TikTokBusinessError) as exc:
         start_tiktok_ads_oauth(tenant_id="linas", actor_user_id="u1", return_surface="mobile")
@@ -141,7 +141,7 @@ def test_ads_oauth_start_requires_connected_account(tt_db) -> None:
 
 
 def test_dump_safe_redacts_marketing_secret() -> None:
-    from services.tiktok_business.http_client import dump_safe
+    from services.integrations.tiktok.http_client import dump_safe
 
     dumped = dump_safe({"app_id": "1", "secret": "super-secret", "auth_code": "abc"})
     assert "super-secret" not in dumped

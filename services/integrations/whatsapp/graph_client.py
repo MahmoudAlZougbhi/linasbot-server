@@ -1,0 +1,341 @@
+"""Per-tenant WhatsApp Cloud Graph API client (never uses singleton WHATSAPP_* env tokens)."""
+
+from __future__ import annotations
+
+from typing import Any
+from urllib.parse import urlparse
+
+import httpx
+
+from services.integrations.whatsapp.config import GRAPH_API_HOST, get_whatsapp_cloud_flags
+
+ALLOWED_GRAPH_HOSTS = frozenset({GRAPH_API_HOST, f"www.{GRAPH_API_HOST}"})
+
+
+class WhatsAppGraphError(RuntimeError):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        http_status: int | None = None,
+        retryable: bool = False,
+        retry_after_seconds: float | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.http_status = http_status
+        self.retryable = retryable
+        self.retry_after_seconds = retry_after_seconds
+
+
+def _graph_base() -> str:
+    flags = get_whatsapp_cloud_flags()
+    return f"https://{GRAPH_API_HOST}/{flags.graph_api_version}"
+
+
+def assert_graph_url_safe(url: str) -> None:
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or host not in ALLOWED_GRAPH_HOSTS:
+        raise WhatsAppGraphError("ssrf_blocked", "Refusing non-Graph host for WhatsApp media/API fetch")
+
+
+async def exchange_embedded_signup_code(
+    *, code: str, redirect_uri: str, app_id: str, app_secret: str
+) -> dict[str, Any]:
+    if not code.strip():
+        raise WhatsAppGraphError("missing_code", "authorization code missing")
+    url = f"{_graph_base()}/oauth/access_token"
+    params = {
+        "client_id": app_id,
+        "client_secret": app_secret,
+        "code": code.strip(),
+        "redirect_uri": redirect_uri,
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(url, params=params)
+    data = resp.json() if resp.content else {}
+    if resp.status_code >= 400 or "access_token" not in data:
+        raise WhatsAppGraphError(
+            "token_exchange_failed",
+            "Meta rejected WhatsApp Embedded Signup code exchange",
+            http_status=resp.status_code,
+            retryable=resp.status_code >= 500,
+        )
+    return data
+
+
+async def debug_token(*, input_token: str, app_id: str, app_secret: str) -> dict[str, Any]:
+    url = f"{_graph_base()}/debug_token"
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(
+            url,
+            params={"input_token": input_token, "access_token": f"{app_id}|{app_secret}"},
+        )
+    data = resp.json() if resp.content else {}
+    if resp.status_code >= 400:
+        raise WhatsAppGraphError("debug_token_failed", "debug_token failed", http_status=resp.status_code)
+    nested = data.get("data") if isinstance(data, dict) else None
+    if isinstance(nested, dict):
+        return dict(nested)
+    return data if isinstance(data, dict) else {}
+
+
+async def discover_shared_whatsapp_assets(*, access_token: str) -> list[dict[str, Any]]:
+    """Return WABA + phone number assets actually shared with the app."""
+
+    url = f"{_graph_base()}/me/businesses"
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        # Primary: debug shared WABAs via WhatsApp Business Accounts edge when present.
+        waba_url = f"{_graph_base()}/debug_token"
+        # Prefer explicit shared WABA listing used by Embedded Signup completion:
+        shared = await client.get(
+            f"{_graph_base()}/me",
+            params={
+                "fields": "id",
+                "access_token": access_token,
+            },
+        )
+        if shared.status_code >= 400:
+            raise WhatsAppGraphError("asset_discovery_failed", "unable to resolve Meta user for asset discovery")
+
+        # Embedded Signup typically returns WABA via client message; server verifies via:
+        # GET /{waba-id}?fields=id,name,phone_numbers
+        # Caller supplies candidate IDs; this helper lists phone numbers for a WABA.
+        _ = waba_url
+        _ = url
+    return []
+
+
+async def fetch_waba_phone_numbers(*, access_token: str, waba_id: str) -> list[dict[str, Any]]:
+    waba = str(waba_id or "").strip()
+    if not waba.isdigit():
+        raise WhatsAppGraphError("invalid_waba", "WABA id must be numeric")
+    url = f"{_graph_base()}/{waba}/phone_numbers"
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        resp = await client.get(
+            url,
+            params={
+                "fields": "id,display_phone_number,verified_name,quality_rating,is_on_biz_app,platform_type",
+                "access_token": access_token,
+            },
+        )
+    data = resp.json() if resp.content else {}
+    if resp.status_code >= 400:
+        raise WhatsAppGraphError(
+            "waba_phones_failed",
+            "unable to list WABA phone numbers",
+            http_status=resp.status_code,
+            retryable=resp.status_code >= 500,
+        )
+    rows = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if isinstance(row, dict) and str(row.get("id") or "").isdigit():
+            out.append(row)
+    return out
+
+
+_PHONE_COEXISTENCE_FIELDS = "id,display_phone_number,verified_name,quality_rating,is_on_biz_app,platform_type"
+
+
+async def fetch_business_phone_number(*, access_token: str, phone_number_id: str) -> dict[str, Any]:
+    """Typed Graph read of one business phone number's coexistence fields."""
+
+    pnid = str(phone_number_id or "").strip()
+    if not pnid.isdigit():
+        raise WhatsAppGraphError("invalid_phone_number_id", "phone_number_id must be numeric")
+    url = f"{_graph_base()}/{pnid}"
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        resp = await client.get(
+            url,
+            params={"fields": _PHONE_COEXISTENCE_FIELDS, "access_token": access_token},
+        )
+    data = resp.json() if resp.content else {}
+    if resp.status_code >= 400 or not isinstance(data, dict) or str(data.get("id") or "") != pnid:
+        raise WhatsAppGraphError(
+            "phone_lookup_failed",
+            "unable to read business phone coexistence fields",
+            http_status=resp.status_code,
+            retryable=resp.status_code >= 500,
+        )
+    return data
+
+
+async def fetch_phone_coexistence_fields(*, access_token: str, phone_number_id: str) -> dict[str, Any]:
+    return await fetch_business_phone_number(access_token=access_token, phone_number_id=phone_number_id)
+
+
+async def subscribe_waba_webhooks(*, access_token: str, waba_id: str) -> dict[str, Any]:
+    waba = str(waba_id or "").strip()
+    if not waba.isdigit():
+        raise WhatsAppGraphError("invalid_waba", "WABA id must be numeric")
+    url = f"{_graph_base()}/{waba}/subscribed_apps"
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        resp = await client.post(url, params={"access_token": access_token})
+    data = resp.json() if resp.content else {}
+    if resp.status_code >= 400 or data.get("success") is False:
+        raise WhatsAppGraphError(
+            "waba_subscribe_failed",
+            "WABA webhook subscription failed",
+            http_status=resp.status_code,
+            retryable=resp.status_code >= 500,
+        )
+    return data if isinstance(data, dict) else {"success": True}
+
+
+async def initiate_smb_app_data_sync(
+    *,
+    access_token: str,
+    phone_number_id: str,
+    sync_type: str,
+) -> dict[str, Any]:
+    """Official coexistence contacts/history sync. Never deregisters the number."""
+
+    pnid = str(phone_number_id or "").strip()
+    if not pnid.isdigit():
+        raise WhatsAppGraphError("invalid_phone_number_id", "phone_number_id must be numeric")
+    kind = str(sync_type or "").strip()
+    if kind not in {"smb_app_state_sync", "history"}:
+        raise WhatsAppGraphError("invalid_sync_type", "sync_type must be smb_app_state_sync or history")
+    url = f"{_graph_base()}/{pnid}/smb_app_data"
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        resp = await client.post(
+            url,
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            json={"messaging_product": "whatsapp", "sync_type": kind},
+        )
+    data = resp.json() if resp.content else {}
+    if resp.status_code >= 400:
+        raise WhatsAppGraphError(
+            "smb_app_data_failed",
+            "WhatsApp Business app data sync failed",
+            http_status=resp.status_code,
+            retryable=resp.status_code >= 500,
+        )
+    return data if isinstance(data, dict) else {}
+
+
+async def send_text_message(
+    *,
+    access_token: str,
+    phone_number_id: str,
+    to_wa_id: str,
+    text: str,
+) -> dict[str, Any]:
+    pnid = str(phone_number_id or "").strip()
+    if not pnid.isdigit():
+        raise WhatsAppGraphError("invalid_phone_number_id", "phone_number_id must be numeric")
+    body = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_wa_id,
+        "type": "text",
+        "text": {"preview_url": False, "body": text},
+    }
+    url = f"{_graph_base()}/{pnid}/messages"
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        resp = await client.post(
+            url,
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            json=body,
+        )
+    data = resp.json() if resp.content else {}
+    if resp.status_code >= 400:
+        err = data.get("error") if isinstance(data, dict) else None
+        code = str((err or {}).get("code") or "send_failed")
+        retryable = (
+            resp.status_code >= 500 or resp.status_code in {408, 429} or code in {"1", "2", "4", "17", "613", "80007"}
+        )
+        from services.integrations.omnichannel.headers import parse_retry_after_seconds
+
+        raise WhatsAppGraphError(
+            f"meta_{code}",
+            "WhatsApp Cloud send rejected",
+            http_status=resp.status_code,
+            retryable=retryable,
+            retry_after_seconds=parse_retry_after_seconds(resp.headers),
+        )
+    return data if isinstance(data, dict) else {}
+
+
+async def create_message_template(
+    *,
+    access_token: str,
+    waba_id: str,
+    name: str,
+    language: str,
+    category: str,
+    body_text: str,
+) -> dict[str, Any]:
+    waba = str(waba_id or "").strip()
+    if not waba.isdigit():
+        raise WhatsAppGraphError("invalid_waba", "WABA id must be numeric")
+    payload = {
+        "name": name,
+        "language": language,
+        "category": category,
+        "components": [{"type": "BODY", "text": body_text}],
+    }
+    url = f"{_graph_base()}/{waba}/message_templates"
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        resp = await client.post(
+            url,
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            json=payload,
+        )
+    data = resp.json() if resp.content else {}
+    if resp.status_code >= 400:
+        raise WhatsAppGraphError(
+            "template_create_failed",
+            "Meta rejected template creation",
+            http_status=resp.status_code,
+            retryable=False,
+        )
+    return data if isinstance(data, dict) else {}
+
+
+async def list_message_templates(*, access_token: str, waba_id: str) -> list[dict[str, Any]]:
+    waba = str(waba_id or "").strip()
+    if not waba.isdigit():
+        raise WhatsAppGraphError("invalid_waba", "WABA id must be numeric")
+    url = f"{_graph_base()}/{waba}/message_templates"
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        resp = await client.get(
+            url,
+            params={"access_token": access_token, "limit": 100},
+        )
+    data = resp.json() if resp.content else {}
+    if resp.status_code >= 400:
+        raise WhatsAppGraphError("template_list_failed", "unable to list templates", http_status=resp.status_code)
+    rows = data.get("data") if isinstance(data, dict) else None
+    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+
+
+async def download_media_bytes(*, access_token: str, media_id: str, max_bytes: int = 8_000_000) -> tuple[bytes, str]:
+    mid = str(media_id or "").strip()
+    if not mid.isdigit():
+        raise WhatsAppGraphError("invalid_media_id", "media id must be numeric")
+    meta_url = f"{_graph_base()}/{mid}"
+    async with httpx.AsyncClient(timeout=45.0, follow_redirects=False) as client:
+        meta_resp = await client.get(meta_url, params={"access_token": access_token})
+        meta = meta_resp.json() if meta_resp.content else {}
+        if meta_resp.status_code >= 400 or not isinstance(meta, dict):
+            raise WhatsAppGraphError("media_meta_failed", "unable to resolve media metadata")
+        download_url = str(meta.get("url") or "").strip()
+        mime = str(meta.get("mime_type") or "application/octet-stream")
+        assert_graph_url_safe(download_url)
+        file_resp = await client.get(
+            download_url,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if file_resp.status_code >= 400:
+            raise WhatsAppGraphError("media_download_failed", "media download failed")
+        content = file_resp.content
+        if len(content) > max_bytes:
+            raise WhatsAppGraphError("media_too_large", "media exceeds retention size limit")
+        return content, mime

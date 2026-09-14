@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from db.session import whatsapp_session
-from services.omnichannel.deliver import handle_omnichannel_deliver
-from services.omnichannel.store import persist_outbound
+from services.integrations.omnichannel.deliver import handle_omnichannel_deliver
+from services.integrations.omnichannel.store import persist_outbound
 from services.queues.models import QueueJob
 from tests.omnichannel.conftest import make_job
 
@@ -20,7 +20,7 @@ async def test_deliver_calls_try_enter_and_exits_inflight(omni_db, fake_limiter,
         assert int(fake_limiter.get("linas:prov:inflight:meta") or 0) == 1
         return {"http_status": 200, "submitted": True, "message_id": "mid-1"}
 
-    monkeypatch.setattr("services.omnichannel.deliver._send", _send)
+    monkeypatch.setattr("services.integrations.omnichannel.deliver._send", _send)
     with whatsapp_session(require=True) as db:
         row, _ = persist_outbound(
             db,
@@ -45,7 +45,7 @@ async def test_deliver_calls_try_enter_and_exits_inflight(omni_db, fake_limiter,
 
 @pytest.mark.asyncio
 async def test_deliver_defers_when_limiter_rejects(omni_db, fake_limiter, monkeypatch):
-    from services.omnichannel.limiter import DistributedProviderLimiter
+    from services.integrations.omnichannel.limiter import DistributedProviderLimiter
     from services.scale.provider_limiter import ProviderLimiter
 
     limiter = DistributedProviderLimiter(fake_limiter, inner=ProviderLimiter(fake_limiter))
@@ -56,7 +56,7 @@ async def test_deliver_defers_when_limiter_rejects(omni_db, fake_limiter, monkey
         sends["n"] += 1
         return {"http_status": 200, "submitted": True, "message_id": "mid-x"}
 
-    monkeypatch.setattr("services.omnichannel.deliver._send", _send)
+    monkeypatch.setattr("services.integrations.omnichannel.deliver._send", _send)
     with whatsapp_session(require=True) as db:
         row, _ = persist_outbound(
             db,
@@ -97,7 +97,7 @@ def test_worker_provider_gate_is_fail_closed(monkeypatch):
         def try_enter(self, **_kwargs):
             raise RuntimeError("redis_down")
 
-    monkeypatch.setattr("services.omnichannel.limiter.DistributedProviderLimiter", BoomLimiter)
+    monkeypatch.setattr("services.integrations.omnichannel.limiter.DistributedProviderLimiter", BoomLimiter)
     from services.queues.worker_runtime import WorkerRuntime
 
     runtime = WorkerRuntime("high_priority")

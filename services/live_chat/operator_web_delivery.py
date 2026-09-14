@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from services.live_chat.channel import is_web_live_chat_user
-from services.web_chat.constants import USER_ID_PREFIX
+from services.integrations.web_chat.constants import USER_ID_PREFIX
 
 
 def parse_web_visitor_session_id(user_id: str, conversation_id: str | None = None) -> str:
@@ -57,7 +57,7 @@ def deliver_web_operator_text(
     except ValueError as exc:
         return {"success": False, "delivered": False, "error": str(exc), "channel": "web"}
 
-    from services.web_chat.store import web_chat_store
+    from services.integrations.web_chat.store import web_chat_store
 
     key = str(idempotency_key or "").strip() or None
     try:

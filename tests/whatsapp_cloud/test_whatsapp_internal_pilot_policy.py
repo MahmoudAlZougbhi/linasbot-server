@@ -49,7 +49,7 @@ def test_require_pilot_defaults_true_while_public_availability_is_off(monkeypatc
 
     monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "false")
     monkeypatch.delenv("WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT", raising=False)
-    from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
+    from services.integrations.whatsapp.config import get_whatsapp_cloud_flags
 
     flags = get_whatsapp_cloud_flags()
     assert flags.public_availability is False

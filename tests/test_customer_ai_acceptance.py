@@ -132,7 +132,7 @@ async def test_followup_does_not_fake_customer_text(monkeypatch: pytest.MonkeyPa
         captured.update(kwargs)
         return type("Out", (), {"reply": "", "answer": None, "text": None})()
 
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm", fake_dm)
+    monkeypatch.setattr("services.brain.reply.orchestrator.run_customer_reply_v2_dm", fake_dm)
     from services.smart_followup.generation import generate_followup_text
 
     text = await generate_followup_text(

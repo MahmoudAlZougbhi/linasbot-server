@@ -227,7 +227,7 @@ async def publish_draft_sections(
 
     warm_published_cm_peer_cache(tenant_id=tid, pointer=pointer_out)
 
-    from services.customer_reply_v2.manifest import clear_manifest_cache
+    from services.brain.reply.manifest import clear_manifest_cache
 
     clear_manifest_cache(tid)
 
@@ -342,7 +342,7 @@ def rollback_to_version(
 
     warm_published_cm_peer_cache(tenant_id=tid, pointer=pointer)
 
-    from services.customer_reply_v2.manifest import clear_manifest_cache
+    from services.brain.reply.manifest import clear_manifest_cache
 
     clear_manifest_cache(tid)
     return PublishResult(

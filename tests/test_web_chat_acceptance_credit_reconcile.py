@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from services.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
-from services.web_chat.operation import (
+from services.integrations.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
+from services.integrations.web_chat.operation import (
     OperationRuntime,
     advance_operation,
     begin_operation,
@@ -16,9 +16,9 @@ from services.web_chat.operation import (
     ensure_operation_credit_reserved,
     reconcile_billing_pending,
 )
-from services.web_chat.operation_fsm import OperationState, VerifiedSessionSnapshot
-from services.web_chat.processor import WebChatError, process_web_chat_message
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.operation_fsm import OperationState, VerifiedSessionSnapshot
+from services.integrations.web_chat.processor import WebChatError, process_web_chat_message
+from services.integrations.web_chat.store_pg import WebChatPgStore
 from tests.web_chat_acceptance_billing import (
     assert_acceptance_ledger_equation,
     assert_pg_reservation_terminal,
@@ -37,8 +37,8 @@ def _expire_operation_lease(tenant_id: str, operation_key: str) -> None:
 
     from sqlalchemy import select
 
-    from services.web_chat.operation import operation_session
-    from services.web_chat.pg_models import WebChatOperationRow
+    from services.integrations.web_chat.operation import operation_session
+    from services.integrations.web_chat.pg_models import WebChatOperationRow
 
     with operation_session() as db:
         row = db.scalars(
@@ -229,7 +229,7 @@ def test_reserve_retry_converges_after_fault_before_operation_commit(
             raise RuntimeError("crash before operation RESERVED commit")
         return original_advance(runtime_obj, target, **kwargs)
 
-    monkeypatch.setattr("services.web_chat.operation_billing.advance_operation", fault_once)
+    monkeypatch.setattr("services.integrations.web_chat.operation_billing.advance_operation", fault_once)
     with pytest.raises(RuntimeError, match="crash before operation RESERVED"):
         ensure_operation_credit_reserved(runtime, credit)
 
@@ -268,7 +268,7 @@ async def test_capture_failure_replay_reconciles_without_release(tmp_path, monke
     widget_key, tenant_id = seed_acceptance_widget(store)
     widget = store.get_widget_by_key(widget_key)
     assert widget is not None
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     visitor = store.get_or_create_visitor(
@@ -283,10 +283,10 @@ async def test_capture_failure_replay_reconciles_without_release(tmp_path, monke
     from services.credit_ledger_service import credit_ledger_service
 
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
-            return_value=__import__("services.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
-                outcome=__import__("services.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+            return_value=__import__("services.integrations.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
+                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
                 conversation_id="conv",
             )
         ),

@@ -29,15 +29,15 @@ from services.smart_followup.adapters.web import WebFollowUpAdapter  # noqa: E40
 from services.smart_followup.hooks import schedule_after_ai_reply  # noqa: E402
 from services.smart_followup.settings_service import update_settings  # noqa: E402
 from services.smart_followup.types import FollowUpConversationView  # noqa: E402
-from services.web_chat.flags import PUBLIC_AVAILABILITY_ENV, flags_snapshot  # noqa: E402
-from services.web_chat.store import WebChatStore  # noqa: E402
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository  # noqa: E402
+from services.integrations.web_chat.flags import PUBLIC_AVAILABILITY_ENV, flags_snapshot  # noqa: E402
+from services.integrations.web_chat.store import WebChatStore  # noqa: E402
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
 
 
 @pytest.fixture()
 def web_store(tmp_path, monkeypatch):
     store = WebChatStore(root=tmp_path / "web_chat")
-    monkeypatch.setattr("services.web_chat.store.web_chat_store", store)
+    monkeypatch.setattr("services.integrations.web_chat.store.web_chat_store", store)
     monkeypatch.setattr("modules.web_chat_helpers.web_chat_store", store)
     monkeypatch.setattr("modules.web_chat_public_routes.web_chat_store", store)
     return store
@@ -166,7 +166,7 @@ def test_cross_tenant_session_id_rejected_when_gate_on(monkeypatch, web_chat_pg_
     )
     widget_a = store.get_widget_by_key(key_a)
     assert widget_a is not None
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget_a)
     store.get_or_create_visitor(

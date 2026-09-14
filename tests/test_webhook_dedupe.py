@@ -73,7 +73,7 @@ def test_webhook_memory_concurrent_only_one_claim():
 def test_outbound_duplicate_suppressed_after_successful_send():
     import asyncio
 
-    from services.whatsapp_adapters import outbound_text_dedupe as od
+    from services.integrations.whatsapp.adapters import outbound_text_dedupe as od
 
     async def _run():
         od._cache.clear()
@@ -88,7 +88,7 @@ def test_outbound_duplicate_suppressed_after_successful_send():
 def test_outbound_same_user_different_phone_formats_share_dedupe():
     import asyncio
 
-    from services.whatsapp_adapters import outbound_text_dedupe as od
+    from services.integrations.whatsapp.adapters import outbound_text_dedupe as od
 
     async def _run():
         od._cache.clear()

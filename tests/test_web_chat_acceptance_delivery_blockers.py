@@ -9,12 +9,12 @@ import pytest
 from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob
 from services.smart_followup.adapters.web import WebFollowUpAdapter
 from services.smart_followup.types import FollowUpConversationView
-from services.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
-from services.web_chat.followup_delivery import deliver_web_followup_message
-from services.web_chat.operation_fsm import OperationFsmError
-from services.web_chat.persistence import PersistFailure, PersistOutcome, PersistResult
-from services.web_chat.processor import compose_web_user_id
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
+from services.integrations.web_chat.followup_delivery import deliver_web_followup_message
+from services.integrations.web_chat.operation_fsm import OperationFsmError
+from services.integrations.web_chat.persistence import PersistFailure, PersistOutcome, PersistResult
+from services.integrations.web_chat.processor import compose_web_user_id
+from services.integrations.web_chat.store_pg import WebChatPgStore
 from tests.test_web_followup_web_delivery import _reserve_followup_credit
 from tests.web_chat_acceptance_billing import (
     fetch_pg_ledger_snapshot,
@@ -36,7 +36,7 @@ async def test_cross_tenant_followup_job_has_zero_side_effects(tmp_path, monkeyp
     widget_key, tenant_id = seed_acceptance_widget(store)
     widget = store.get_widget_by_key(widget_key)
     assert widget is not None
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     visitor_id = "visitor-cross-tenant"
@@ -49,7 +49,7 @@ async def test_cross_tenant_followup_job_has_zero_side_effects(tmp_path, monkeyp
     persist_mock = AsyncMock(
         return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id=f"web:{tenant_id}:{visitor_id}")
     )
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
 
     job = WhatsAppSmartFollowUpJob(
         tenant_id="evil-tenant",
@@ -103,7 +103,7 @@ async def test_followup_same_key_queue_recovery_one_visible_message(
     widget_key, tenant_id = seed_acceptance_widget(store)
     widget = store.get_widget_by_key(widget_key)
     assert widget is not None
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     visitor_id = "visitor-same-key"
@@ -117,7 +117,7 @@ async def test_followup_same_key_queue_recovery_one_visible_message(
     persist_mock = AsyncMock(
         return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id=f"web:{tenant_id}:{visitor_id}")
     )
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
 
     attempts = 0
     original_queue = store.queue_assistant_message
@@ -178,7 +178,7 @@ async def test_followup_crash_after_reply_ready_before_persist_recovers(
     widget_key, tenant_id = seed_acceptance_widget(store)
     widget = store.get_widget_by_key(widget_key)
     assert widget is not None
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     visitor_id = "visitor-reply-ready-crash"
@@ -199,7 +199,7 @@ async def test_followup_crash_after_reply_ready_before_persist_recovers(
         return PersistResult(outcome=PersistOutcome.CREATED, conversation_id=f"web:{tenant_id}:{visitor_id}")
 
     persist_mock = AsyncMock(side_effect=fail_once_persist)
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
 
     reservation_id = _reserve_followup_credit(tenant_id=tenant_id, idem=idem)
 
@@ -283,7 +283,7 @@ async def test_followup_missing_reservation_fails_closed(tmp_path, monkeypatch, 
     widget_key, tenant_id = seed_acceptance_widget(store)
     widget = store.get_widget_by_key(widget_key)
     assert widget is not None
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     visitor_id = "visitor-no-reservation"
@@ -296,7 +296,7 @@ async def test_followup_missing_reservation_fails_closed(tmp_path, monkeypatch, 
     persist_mock = AsyncMock(
         return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id=f"web:{tenant_id}:{visitor_id}")
     )
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
 
     with pytest.raises(OperationFsmError) as exc_info:
         await deliver_web_followup_message(
@@ -332,7 +332,7 @@ async def test_followup_outbox_before_durable_visible_failpoint_converges_billin
     widget_key, tenant_id = seed_acceptance_widget(store)
     widget = store.get_widget_by_key(widget_key)
     assert widget is not None
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     visitor_id = "visitor-outbox-failpoint"
@@ -346,7 +346,7 @@ async def test_followup_outbox_before_durable_visible_failpoint_converges_billin
     persist_mock = AsyncMock(
         return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id=f"web:{tenant_id}:{visitor_id}")
     )
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
     reservation_id = _reserve_followup_credit(tenant_id=tenant_id, idem=idem)
 
     monkeypatch.setenv("WEB_CHAT_FOLLOWUP_FAILPOINT", "after_outbox_before_durable_visible")

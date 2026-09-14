@@ -9,7 +9,6 @@ import pytest
 
 import config
 from services import social_messaging_processor
-from services.customer_appointment_helpers import _is_placeholder_booking_customer_name
 from services.meta_messaging import (
     SOCIAL_DISPLAY_NAME_FALLBACK,
     MetaMessagingAdapter,
@@ -57,9 +56,9 @@ class TestMetaDisplayNameHelpers:
         assert scrub_legacy_meta_channel_placeholder("Sara") == "Sara"
 
     def test_ai_placeholder_list_rejects_channel_labels(self):
-        assert _is_placeholder_booking_customer_name("Instagram Customer")
-        assert _is_placeholder_booking_customer_name("Facebook Customer")
-        assert not _is_placeholder_booking_customer_name("Nour")
+        assert is_unresolved_social_display_name("Instagram Customer")
+        assert is_unresolved_social_display_name("Facebook Customer")
+        assert not is_unresolved_social_display_name("Nour")
 
 
 class TestMetaParseSenderLabels:
@@ -274,7 +273,6 @@ async def test_honest_fallback_when_graph_unavailable(monkeypatch: pytest.Monkey
 @pytest.mark.asyncio
 async def test_ai_name_is_known_false_for_legacy_placeholder(monkeypatch: pytest.MonkeyPatch):
     """Ensure AI context does not treat 'Instagram Customer' as a real greeting name."""
-    from services.customer_appointment_helpers import is_placeholder_booking_customer_name
 
     user_id = "instagram:IGSID_AI"
     config.user_names[user_id] = "Instagram Customer"
@@ -303,13 +301,13 @@ async def test_ai_name_is_known_false_for_legacy_placeholder(monkeypatch: pytest
     )
     try:
         assert name_is_known is False
-        assert _is_placeholder_booking_customer_name(user_name)
+        assert is_unresolved_social_display_name(user_name)
         # After Graph resolution, a real name becomes known.
         config.user_names[user_id] = "Maya Haddad"
         user_name = config.user_names[user_id]
         name_is_known = user_name.strip().lower() not in placeholders
         assert name_is_known is True
-        assert is_placeholder_booking_customer_name(user_name) is False
+        assert is_unresolved_social_display_name(user_name) is False
     finally:
         config.user_names.pop(user_id, None)
         config.user_data_whatsapp.pop(user_id, None)

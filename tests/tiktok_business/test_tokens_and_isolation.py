@@ -7,10 +7,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from services.meta_app_registry import MetaCredentialError
-from services.tiktok_business.crypto import open_tiktok_tokens, seal_tiktok_tokens
-from services.tiktok_business.repository import TikTokRepository
-from services.tiktok_business.scopes import comments_manage_ready, messaging_send_ready
-from services.tiktok_business.status import tiktok_integration_row
+from services.integrations.tiktok.crypto import open_tiktok_tokens, seal_tiktok_tokens
+from services.integrations.tiktok.repository import TikTokRepository
+from services.integrations.tiktok.scopes import comments_manage_ready, messaging_send_ready
+from services.integrations.tiktok.status import tiktok_integration_row
 from tests.tiktok_business.conftest import seed_connection
 
 
@@ -106,7 +106,7 @@ def test_disconnect_revokes_only_tiktok(tt_db, monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_token_refresh_replaces_ciphertext(tt_db, monkeypatch) -> None:
     from db.models.tiktok_business import TikTokCredential
-    from services.tiktok_business.oauth import ensure_fresh_token
+    from services.integrations.tiktok.oauth import ensure_fresh_token
 
     connection = seed_connection(tt_db, access_token="old-access", refresh_token="old-refresh")
     cred = tt_db.get(TikTokCredential, connection.credential_id)
@@ -123,7 +123,7 @@ async def test_token_refresh_replaces_ciphertext(tt_db, monkeypatch) -> None:
             "scope": "user.info.basic,video.list,comment.list,comment.list.manage,biz.spark.auth",
         }
 
-    monkeypatch.setattr("services.tiktok_business.oauth.refresh_access_token", _refresh)
+    monkeypatch.setattr("services.integrations.tiktok.oauth.refresh_access_token", _refresh)
     repo = TikTokRepository(tt_db)
     token = await ensure_fresh_token(repo, connection)
     assert token == "new-access"
@@ -136,8 +136,8 @@ async def test_token_refresh_replaces_ciphertext(tt_db, monkeypatch) -> None:
 
 
 def test_http_client_refuses_unsafe_paths() -> None:
-    from services.tiktok_business.errors import TikTokApiError
-    from services.tiktok_business.http_client import _safe_url
+    from services.integrations.tiktok.errors import TikTokApiError
+    from services.integrations.tiktok.http_client import _safe_url
 
     with pytest.raises(TikTokApiError, match="unsafe"):
         _safe_url("https://evil.example/open_api/v1.3/business/get/")

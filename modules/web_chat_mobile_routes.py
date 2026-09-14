@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from modules.api_security import require_permission, require_session
 from modules.core import app
 from modules.web_chat_helpers import mobile_web_chat_payload
-from services.web_chat.store import web_chat_store
+from services.integrations.web_chat.store import web_chat_store
 
 
 class WebChatSettingsBody(BaseModel):

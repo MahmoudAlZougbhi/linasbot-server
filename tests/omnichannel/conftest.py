@@ -7,8 +7,8 @@ import pytest
 
 from db.models.omnichannel import OmnichannelInboundEvent, OmnichannelOutboundOutbox
 from db.session import get_engine, reset_engine_for_tests
-from services.omnichannel.contract import NormalizedInbound
-from services.omnichannel.limiter import DistributedProviderLimiter
+from services.integrations.omnichannel.contract import NormalizedInbound
+from services.integrations.omnichannel.limiter import DistributedProviderLimiter
 from services.queues.models import QueueJob
 from services.scale.provider_limiter import ProviderLimiter
 
@@ -77,7 +77,7 @@ def fake_limiter(monkeypatch):
     def factory(*_args, **_kwargs):
         return DistributedProviderLimiter(redis_client, inner=ProviderLimiter(redis_client))
 
-    monkeypatch.setattr("services.omnichannel.deliver.DistributedProviderLimiter", factory)
+    monkeypatch.setattr("services.integrations.omnichannel.deliver.DistributedProviderLimiter", factory)
     return redis_client
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.customer_reply_v2.orchestrator import run_customer_reply_v2_comment, run_customer_reply_v2_dm
+from services.brain.reply.orchestrator import run_customer_reply_v2_comment, run_customer_reply_v2_dm
 
 
 @pytest.mark.asyncio

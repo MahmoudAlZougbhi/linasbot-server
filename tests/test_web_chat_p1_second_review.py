@@ -13,11 +13,11 @@ from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob
 from services.smart_followup.constants import CLAIM_STALE_SECONDS
 from services.smart_followup.types import FollowUpConversationView, FollowUpSendResult
 from services.smart_followup.worker_job import process_one_followup_job
-from services.web_chat.delivery_outbox import ack_pending_messages
-from services.web_chat.followup_delivery import deliver_web_followup_message, reconcile_followup_credit
-from services.web_chat.operation_fsm import OperationState, stable_operation_key
-from services.web_chat.processor import WebChatError, process_web_chat_message
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.delivery_outbox import ack_pending_messages
+from services.integrations.web_chat.followup_delivery import deliver_web_followup_message, reconcile_followup_credit
+from services.integrations.web_chat.operation_fsm import OperationState, stable_operation_key
+from services.integrations.web_chat.processor import WebChatError, process_web_chat_message
+from services.integrations.web_chat.store_pg import WebChatPgStore
 from tests.test_web_chat_acceptance_fsm import _widget_and_visitor
 from tests.test_web_followup_web_delivery import _reserve_followup_credit
 from tests.web_chat_acceptance_billing import assert_acceptance_ledger_equation, fetch_pg_ledger_snapshot
@@ -44,11 +44,11 @@ async def test_sfu_delivery_binds_reservation_and_captures_once(
 ) -> None:
     monkeypatch.setenv("WEB_CHAT_PUBLIC_AVAILABILITY", "true")
     store = web_chat_pg_store
-    monkeypatch.setattr("services.web_chat.followup_delivery.web_chat_store", store)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.web_chat_store", store)
     widget_key, tenant_id = seed_acceptance_widget(store)
     widget = store.get_widget_by_key(widget_key)
     assert widget is not None
-    from services.web_chat.session_authority import issue_session_authority
+    from services.integrations.web_chat.session_authority import issue_session_authority
 
     bundle = issue_session_authority(widget=widget)
     visitor_id = "visitor-sfu-bind"
@@ -60,10 +60,10 @@ async def test_sfu_delivery_binds_reservation_and_captures_once(
     )
     idem = "sfu:bind:1"
     reservation_id = _reserve_followup_credit(tenant_id=tenant_id, idem=idem)
-    from services.web_chat.persistence import PersistOutcome, PersistResult
+    from services.integrations.web_chat.persistence import PersistOutcome, PersistResult
 
     monkeypatch.setattr(
-        "services.web_chat.followup_delivery.persist_web_chat_message",
+        "services.integrations.web_chat.followup_delivery.persist_web_chat_message",
         AsyncMock(return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id="conv")),
     )
     result = await deliver_web_followup_message(
@@ -97,10 +97,10 @@ async def test_ack_before_capture_does_not_complete_billing(tmp_path, monkeypatc
     visitor_id = visitor.id
     idem = "sfu:ack-race:1"
     reservation_id = _reserve_followup_credit(tenant_id=tenant_id, idem=idem)
-    from services.web_chat.persistence import PersistOutcome, PersistResult
+    from services.integrations.web_chat.persistence import PersistOutcome, PersistResult
 
     monkeypatch.setattr(
-        "services.web_chat.followup_delivery.persist_web_chat_message",
+        "services.integrations.web_chat.followup_delivery.persist_web_chat_message",
         AsyncMock(return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id="conv")),
     )
 
@@ -169,8 +169,8 @@ def test_slow_ai_heartbeat_prevents_second_provider_call(tmp_path, monkeypatch, 
     patch_web_chat_store(monkeypatch, store)
     widget, visitor, bundle = _widget_and_visitor(store)
 
-    monkeypatch.setattr("services.web_chat.operation_lease.LEASE_TTL_SECONDS", 3)
-    monkeypatch.setattr("services.web_chat.operation_heartbeat.HEARTBEAT_INTERVAL_SECONDS", 1)
+    monkeypatch.setattr("services.integrations.web_chat.operation_lease.LEASE_TTL_SECONDS", 3)
+    monkeypatch.setattr("services.integrations.web_chat.operation_heartbeat.HEARTBEAT_INTERVAL_SECONDS", 1)
 
     ai_lock = threading.Lock()
     ai_calls = 0
@@ -185,16 +185,16 @@ def test_slow_ai_heartbeat_prevents_second_provider_call(tmp_path, monkeypatch, 
         return MagicMock(reply="Slow reply")
 
     monkeypatch.setattr(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         AsyncMock(side_effect=slow_ai),
     )
     monkeypatch.setattr(
-        "services.web_chat.processor.persist_web_chat_message",
+        "services.integrations.web_chat.processor.persist_web_chat_message",
         AsyncMock(
             side_effect=lambda **_kwargs: __import__(
-                "services.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
+                "services.integrations.web_chat.persistence", fromlist=["PersistResult", "PersistOutcome"]
             ).PersistResult(
-                outcome=__import__("services.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+                outcome=__import__("services.integrations.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
                 conversation_id=f"web:{widget.tenant_id}:{bundle.session_id}",
             )
         ),

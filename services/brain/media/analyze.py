@@ -7,9 +7,9 @@ from typing import Any
 
 from services.brain.media.cache import acquire_lock, get_analysis, put_analysis, release_lock
 from services.brain.media.describe import describe_stills
-from services.customer_reply_v2.inbound_fetch import VIDEO_FETCH_TIMEOUT_S, fetch_inbound_url, max_bytes_for_kind
-from services.customer_reply_v2.inbound_stt_chunks import transcribe_full_wav
-from services.customer_reply_v2.inbound_video import extract_bounded_video
+from services.brain.reply.inbound_fetch import VIDEO_FETCH_TIMEOUT_S, fetch_inbound_url, max_bytes_for_kind
+from services.brain.reply.inbound_stt_chunks import transcribe_full_wav
+from services.brain.reply.inbound_video import extract_bounded_video
 
 _LOCK_WAIT_ATTEMPTS = 150
 _LOCK_WAIT_SLEEP_S = 0.4

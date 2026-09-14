@@ -13,7 +13,7 @@ from services.smart_followup.generation import generate_followup_text
 from services.smart_followup.idempotency import canonical_sfu_credit_request_id, canonical_sfu_key
 from services.smart_followup.job_fence import JobClaimFenceError, assert_job_claim_fence, claim_generation_of
 from services.smart_followup.repository import SmartFollowUpRepository
-from services.whatsapp_cloud.observability import emit_wa_event
+from services.integrations.whatsapp.observability import emit_wa_event
 
 
 def _utcnow() -> datetime:

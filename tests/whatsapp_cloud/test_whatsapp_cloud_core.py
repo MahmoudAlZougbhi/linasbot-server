@@ -31,9 +31,9 @@ from datetime import UTC
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
 from services.meta_messaging import verify_meta_signature  # noqa: E402
-from services.whatsapp_cloud.entitlement import tenant_connection_status_payload  # noqa: E402
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository, connection_public_view  # noqa: E402
-from services.whatsapp_cloud.webhook_parser import parse_whatsapp_cloud_payload  # noqa: E402
+from services.integrations.whatsapp.entitlement import tenant_connection_status_payload  # noqa: E402
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository, connection_public_view  # noqa: E402
+from services.integrations.whatsapp.webhook_parser import parse_whatsapp_cloud_payload  # noqa: E402
 
 
 @pytest.fixture()
@@ -208,7 +208,7 @@ def test_parse_inbound_echo_history_status():
 
 @pytest.mark.asyncio
 async def test_echo_pauses_and_inbound_ai_once(wa_db, monkeypatch):
-    from services.whatsapp_cloud import webhook_processor as wp
+    from services.integrations.whatsapp import webhook_processor as wp
 
     repo = WhatsAppCloudRepository(wa_db)
     repo.grant_pilot(tenant_id="tenant_a", granted_by_user_id="po", reason="test pilot")
@@ -264,7 +264,7 @@ async def test_echo_pauses_and_inbound_ai_once(wa_db, monkeypatch):
         wa_db.commit()
 
     monkeypatch.setattr(wp, "whatsapp_session", _sess)
-    monkeypatch.setattr("services.whatsapp_cloud.ai_bridge.whatsapp_session", _sess)
+    monkeypatch.setattr("services.integrations.whatsapp.ai_bridge.whatsapp_session", _sess)
 
     r1 = await wp.process_whatsapp_cloud_webhook(raw_body=json.dumps(echo_payload).encode(), payload=echo_payload)
     assert r1["accepted"] >= 1
@@ -392,7 +392,7 @@ def test_attempt_state_replay_and_expiry(wa_db):
 def test_history_events_never_create_outbound_intent(wa_db, monkeypatch):
     from contextlib import contextmanager
 
-    from services.whatsapp_cloud import webhook_processor as wp
+    from services.integrations.whatsapp import webhook_processor as wp
 
     repo = WhatsAppCloudRepository(wa_db)
     conn = repo.create_connection_with_credential(
@@ -447,7 +447,7 @@ def test_mobile_deep_link_never_operator_login():
 
 
 def test_config_key_presence_has_no_values():
-    from services.whatsapp_cloud.config import whatsapp_config_key_presence
+    from services.integrations.whatsapp.config import whatsapp_config_key_presence
 
     presence = whatsapp_config_key_presence()
     assert isinstance(presence, dict)
@@ -470,8 +470,8 @@ def _grant_whatsapp_plan(monkeypatch, tmp_path, tenant_id: str, plan_id: str = "
 def test_public_availability_skips_pilot(monkeypatch, wa_db, tmp_path):
     monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "true")
     monkeypatch.setenv("WHATSAPP_CLOUD_CONNECTION_UI_ENABLED", "false")
-    from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
-    from services.whatsapp_cloud.entitlement import assert_whatsapp_connection_allowed
+    from services.integrations.whatsapp.config import get_whatsapp_cloud_flags
+    from services.integrations.whatsapp.entitlement import assert_whatsapp_connection_allowed
 
     _grant_whatsapp_plan(monkeypatch, tmp_path, "any_tenant")
     flags = get_whatsapp_cloud_flags()
@@ -485,7 +485,7 @@ def test_pilot_required_when_public_off(monkeypatch, wa_db, tmp_path):
     monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "false")
     monkeypatch.setenv("WHATSAPP_CLOUD_CONNECTION_UI_ENABLED", "true")
     monkeypatch.setenv("WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT", "true")
-    from services.whatsapp_cloud.entitlement import WhatsAppEntitlementError, assert_whatsapp_connection_allowed
+    from services.integrations.whatsapp.entitlement import WhatsAppEntitlementError, assert_whatsapp_connection_allowed
 
     _grant_whatsapp_plan(monkeypatch, tmp_path, "no_pilot_tenant")
     try:
@@ -498,8 +498,8 @@ def test_pilot_required_when_public_off(monkeypatch, wa_db, tmp_path):
 def test_grant_pilot_enables_connect(monkeypatch, wa_db, tmp_path):
     monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "false")
     monkeypatch.setenv("WHATSAPP_CLOUD_CONNECTION_UI_ENABLED", "true")
-    from services.whatsapp_cloud.entitlement import assert_whatsapp_connection_allowed
-    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+    from services.integrations.whatsapp.entitlement import assert_whatsapp_connection_allowed
+    from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
     _grant_whatsapp_plan(monkeypatch, tmp_path, "pilot_t")
     repo = WhatsAppCloudRepository(wa_db)
@@ -515,9 +515,9 @@ def test_linas_pilot_connect_public_off_without_paid_plan(monkeypatch, wa_db, tm
     monkeypatch.setenv("WHATSAPP_CLOUD_CONNECTION_UI_ENABLED", "true")
     monkeypatch.setenv("WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT", "true")
     monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
-    from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
-    from services.whatsapp_cloud.entitlement import assert_whatsapp_connection_allowed
-    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+    from services.integrations.whatsapp.config import get_whatsapp_cloud_flags
+    from services.integrations.whatsapp.entitlement import assert_whatsapp_connection_allowed
+    from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
     repo = WhatsAppCloudRepository(wa_db)
     repo.grant_pilot(tenant_id="linas", granted_by_user_id="owner", reason="internal pilot")

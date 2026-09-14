@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
 
 
 @pytest.fixture(autouse=True)

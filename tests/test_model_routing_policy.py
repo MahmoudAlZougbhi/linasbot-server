@@ -345,7 +345,7 @@ def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.Mo
         monkeypatch.delenv(key, raising=False)
 
     from services.ai_setup.answer_generation import DEFAULT_CM_ANSWER_MODEL, cm_answer_model
-    from services.customer_reply_v2.flags import customer_answer_model_name, customer_retrieval_model_name
+    from services.brain.reply.flags import customer_answer_model_name, customer_retrieval_model_name
     from services.owner_copilot.model_router import router_config
     from services.providers.base import provider_config
 
@@ -365,7 +365,7 @@ def test_no_active_social_getter_returns_forbidden_models(monkeypatch: pytest.Mo
     monkeypatch.setenv("LINAS_CUSTOMER_MODEL", "gpt-5.6-luna")
     monkeypatch.setenv("LINAS_CM_ANSWER_MODEL", "gpt-5.6-sol")
     from services.ai_setup.answer_generation import cm_answer_model
-    from services.customer_reply_v2.flags import customer_answer_model_name, customer_retrieval_model_name
+    from services.brain.reply.flags import customer_answer_model_name, customer_retrieval_model_name
 
     # Deprecated stubs stay on Brain names; CM answer stays Terra (not luna/sol env).
     assert customer_answer_model_name() == "customer_brain_answer"

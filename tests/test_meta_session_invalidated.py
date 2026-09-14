@@ -17,7 +17,7 @@ from services.meta_session_invalidated import (
     probe_binding_session,
 )
 from services.mobile_integrations_display import enrich_mobile_integration_row
-from services.omnichannel.meta_errors import MetaProviderError
+from services.integrations.omnichannel.meta_errors import MetaProviderError
 from tests.meta_app_registry_helpers import _credential
 
 INSTAGRAM_ID = "17840000999900011"

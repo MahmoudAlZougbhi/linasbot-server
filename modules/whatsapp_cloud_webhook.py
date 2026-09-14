@@ -11,9 +11,9 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from modules.core import app
 from services.meta_app_registry import APP_A_KEY, get_meta_app_configs, verify_any_meta_challenge_token
 from services.meta_messaging import verify_meta_signature
-from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
-from services.whatsapp_cloud.observability import emit_wa_event
-from services.whatsapp_cloud.webhook_processor import process_whatsapp_cloud_webhook
+from services.integrations.whatsapp.config import get_whatsapp_cloud_flags
+from services.integrations.whatsapp.observability import emit_wa_event
+from services.integrations.whatsapp.webhook_processor import process_whatsapp_cloud_webhook
 
 
 @app.get("/webhook/whatsapp-cloud")

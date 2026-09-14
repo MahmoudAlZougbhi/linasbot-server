@@ -231,7 +231,7 @@ def test_combine_processing_job_enqueues_follow_up(monkeypatch: pytest.MonkeyPat
         SimpleNamespace(_redis=_Backend()),
         raising=False,
     )
-    monkeypatch.setattr("services.omnichannel.queues.physical_queue_for", lambda _logical: "high_priority")
+    monkeypatch.setattr("services.integrations.omnichannel.queues.physical_queue_for", lambda _logical: "high_priority")
     job_id = schedule_combine_flush(
         user_key="user-1",
         tenant_id="linas",

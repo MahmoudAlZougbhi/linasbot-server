@@ -18,7 +18,7 @@ from typing import Any, TypeVar
 
 from sqlalchemy import create_engine, func, select, text
 
-from services.web_chat.pg_models import WebChatMessageRow, WebChatOperationRow
+from services.integrations.web_chat.pg_models import WebChatMessageRow, WebChatOperationRow
 from tests.web_chat_acceptance_support import ROOT, _alembic_python, _free_port, _probe_live_http
 
 T = TypeVar("T")

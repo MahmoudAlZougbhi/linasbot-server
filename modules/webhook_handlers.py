@@ -54,7 +54,7 @@ from modules.webhook_handlers_process import (  # noqa: F401
     start_command_whatsapp,
 )
 from modules.webhook_handlers_voice import handle_voice_message_whatsapp_with_adapter  # noqa: F401
-from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
 
 # Debug: last webhook received/parsed (for /api/debug/webhook-status)
 _last_webhook_received_at = None
@@ -196,7 +196,7 @@ async def handle_message_whatsapp_with_adapter(
         to_number: str, message_text: str | None = None, image_url: str | None = None, audio_url: str | None = None
     ) -> Any:
         if message_text:
-            from services.whatsapp_adapters.outbound_text_dedupe import outbound_fingerprint
+            from services.integrations.whatsapp.adapters.outbound_text_dedupe import outbound_fingerprint
 
             fp = outbound_fingerprint(
                 to_number,

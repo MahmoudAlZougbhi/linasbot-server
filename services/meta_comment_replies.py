@@ -19,7 +19,7 @@ from services.meta_comment_reply_inspect import (
 )
 from services.meta_comment_reply_settings import get_comment_reply_setting
 from services.meta_graph_routing import graph_api_url
-from services.omnichannel.comment_limit import comment_send_allowed
+from services.integrations.omnichannel.comment_limit import comment_send_allowed
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 

@@ -8,10 +8,10 @@ from sqlalchemy.orm import sessionmaker
 
 from db.models.base import Base
 from db.models.omnichannel import OmnichannelInboundEvent, OmnichannelOutboundOutbox
-from services.omnichannel.contract import NormalizedInbound
-from services.omnichannel.dlq import replay_delivery_only
-from services.omnichannel.enqueue import AMBIGUOUS_ENQUEUE, enqueue_job
-from services.omnichannel.store import backlog_snapshot, persist_inbound, persist_outbound
+from services.integrations.omnichannel.contract import NormalizedInbound
+from services.integrations.omnichannel.dlq import replay_delivery_only
+from services.integrations.omnichannel.enqueue import AMBIGUOUS_ENQUEUE, enqueue_job
+from services.integrations.omnichannel.store import backlog_snapshot, persist_inbound, persist_outbound
 
 
 @pytest.fixture()
@@ -46,7 +46,7 @@ def test_backlog_snapshot_does_not_enqueue(db_session, monkeypatch):
         called["n"] += 1
         raise AssertionError("backlog must not enqueue")
 
-    monkeypatch.setattr("services.omnichannel.accept.enqueue_generate_job", boom)
+    monkeypatch.setattr("services.integrations.omnichannel.accept.enqueue_generate_job", boom)
     snap = backlog_snapshot(db_session)
     assert snap["inbound"]["accepted"] == 1
     assert called["n"] == 0

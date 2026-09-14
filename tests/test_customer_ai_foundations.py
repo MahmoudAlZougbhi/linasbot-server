@@ -15,8 +15,8 @@ from services.brain.history import build_history_snapshot
 from services.brain.precedence import wins
 from services.brain.providers.spaces import ENTITY_DOCUMENT, ENTITY_QUERY, KNOWLEDGE_DOCUMENT, compatible
 from services.brain.search.readiness import search_readiness
-from services.customer_reply_v2.models import ENGINE_REMOVED
-from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
+from services.brain.reply.models import ENGINE_REMOVED
+from services.brain.reply.orchestrator import run_customer_reply_v2_dm
 
 
 def test_brain_flag_defaults_off(monkeypatch: pytest.MonkeyPatch) -> None:

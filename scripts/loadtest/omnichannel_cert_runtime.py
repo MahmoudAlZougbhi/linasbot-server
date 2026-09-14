@@ -10,7 +10,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from services.omnichannel.contract import NormalizedInbound
+from services.integrations.omnichannel.contract import NormalizedInbound
 
 MIX = (
     ("instagram", "comment", 200),

@@ -224,7 +224,7 @@ async def ready() -> Any:
         overall_ok = False
 
     try:
-        from services.web_chat.flags import get_web_chat_ha_readiness
+        from services.integrations.web_chat.flags import get_web_chat_ha_readiness
 
         wc_ok, wc_checks = get_web_chat_ha_readiness()
         checks["web_chat_ha"] = wc_checks
@@ -272,7 +272,7 @@ async def ready() -> Any:
                 "note": "Redis optional; connection error ignored for readiness",
             }
 
-    from services.tiktok_business.health import tiktok_business_readiness
+    from services.integrations.tiktok.health import tiktok_business_readiness
 
     checks["tiktok_business"] = tiktok_business_readiness()
 

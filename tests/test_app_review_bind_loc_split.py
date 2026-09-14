@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.whatsapp_cloud import app_review_bind
-from services.whatsapp_cloud.app_review_bind_helpers import AppReviewBindError as HelperError
+from services.integrations.whatsapp import app_review_bind
+from services.integrations.whatsapp.app_review_bind_helpers import AppReviewBindError as HelperError
 
 
 def _line_count(rel: str) -> int:
@@ -13,8 +13,8 @@ def _line_count(rel: str) -> int:
 
 
 def test_app_review_bind_modules_under_500_lines() -> None:
-    assert _line_count("services/whatsapp_cloud/app_review_bind.py") < 500
-    assert _line_count("services/whatsapp_cloud/app_review_bind_helpers.py") < 500
+    assert _line_count("services/integrations/whatsapp/app_review_bind.py") < 500
+    assert _line_count("services/integrations/whatsapp/app_review_bind_helpers.py") < 500
 
 
 def test_app_review_bind_preserves_public_api() -> None:

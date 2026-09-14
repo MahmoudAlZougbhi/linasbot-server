@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from services.web_chat.store import WebChatStore
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.store import WebChatStore
+from services.integrations.web_chat.store_pg import WebChatPgStore
 
 
 async def _fake_process(**_kwargs) -> str:
@@ -16,11 +16,11 @@ async def _fake_process(**_kwargs) -> str:
 @pytest.fixture()
 def web_store(tmp_path, monkeypatch):
     store = WebChatStore(root=tmp_path / "web_chat")
-    monkeypatch.setattr("services.web_chat.store.web_chat_store", store)
+    monkeypatch.setattr("services.integrations.web_chat.store.web_chat_store", store)
     monkeypatch.setattr("modules.web_chat_helpers.web_chat_store", store)
     monkeypatch.setattr("modules.web_chat_public_routes.web_chat_store", store)
-    monkeypatch.setattr("services.web_chat.public_handlers.web_chat_store", store)
-    monkeypatch.setattr("services.web_chat.delivery_outbox.web_chat_store", store)
+    monkeypatch.setattr("services.integrations.web_chat.public_handlers.web_chat_store", store)
+    monkeypatch.setattr("services.integrations.web_chat.delivery_outbox.web_chat_store", store)
     monkeypatch.setattr("modules.web_chat_mobile_routes.web_chat_store", store)
     return store
 
@@ -86,7 +86,7 @@ def _bootstrap(client: TestClient, key: str) -> dict:
 def test_public_config_and_heartbeat(client, web_store, monkeypatch) -> None:
     key, _tid = _seed_widget(web_store)
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
 
@@ -114,7 +114,7 @@ def test_public_config_and_heartbeat(client, web_store, monkeypatch) -> None:
 def test_origin_reject_and_server_issued_session(client, web_store, monkeypatch) -> None:
     key, _tid = _seed_widget(web_store)
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
     bad = client.post(
@@ -132,11 +132,11 @@ def test_custom_chat_mode_still_reports_web_channel(client, web_store, monkeypat
     key, _tid = _seed_widget(web_store)
     web_store.update_widget("biz", integration_mode="custom_chat")
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
     monkeypatch.setattr(
-        "services.web_chat.public_handlers.process_web_chat_message",
+        "services.integrations.web_chat.public_handlers.process_web_chat_message",
         _fake_process,
     )
 
@@ -161,7 +161,7 @@ def test_poll_and_ack_endpoints(pg_client, web_chat_pg_store, monkeypatch) -> No
     store = web_chat_pg_store
     key, _tid = _seed_widget_pg(store)
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
     session = _bootstrap(pg_client, key)
@@ -195,7 +195,7 @@ def test_mobile_payload_includes_mode_and_installation(client, web_store, monkey
         origin="https://shop.example.com",
     )
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
 

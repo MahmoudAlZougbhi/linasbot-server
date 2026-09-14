@@ -10,10 +10,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from services.tiktok_business.errors import TikTokApiError, TikTokBusinessError
-from services.tiktok_business.http_client import is_retryable
-from services.tiktok_business.repository_content import TikTokContentRepository
-from services.tiktok_business.webhook_verify import verify_tiktok_signature
+from services.integrations.tiktok.errors import TikTokApiError, TikTokBusinessError
+from services.integrations.tiktok.http_client import is_retryable
+from services.integrations.tiktok.repository_content import TikTokContentRepository
+from services.integrations.tiktok.webhook_verify import verify_tiktok_signature
 from tests.tiktok_business.conftest import seed_connection
 
 
@@ -36,7 +36,7 @@ def test_webhook_signature_valid_and_invalid(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_duplicate_webhook_and_gated_messaging(tt_db, monkeypatch) -> None:
-    from services.tiktok_business.webhook_process import process_tiktok_webhook_payload
+    from services.integrations.tiktok.webhook_process import process_tiktok_webhook_payload
 
     seed_connection(tt_db, open_id="biz-1")
     payload = {
@@ -137,9 +137,9 @@ async def test_comment_ai_credits_and_success(tt_db, monkeypatch) -> None:
         payload={"comment_id": "c-credits", "text": "hi"},
     )
     tt_db.commit()
-    monkeypatch.setattr("services.tiktok_business.comment_ai.comments_action_enabled", lambda *_a, **_k: True)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.ai_generation_blocked", lambda *_a, **_k: True)
-    from services.tiktok_business.comment_ai import process_tiktok_comment_ai
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.comments_action_enabled", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.ai_generation_blocked", lambda *_a, **_k: True)
+    from services.integrations.tiktok.comment_ai import process_tiktok_comment_ai
 
     blocked = await process_tiktok_comment_ai(
         tenant_id="linas", connection_id=connection.id, comment_id="c-credits", item_id="v1"
@@ -153,7 +153,7 @@ async def test_comment_ai_credits_and_success(tt_db, monkeypatch) -> None:
         payload={"comment_id": "c-ok", "text": "hi"},
     )
     tt_db.commit()
-    monkeypatch.setattr("services.tiktok_business.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
 
     async def _reply(**_k):
         return SimpleNamespace(
@@ -174,13 +174,13 @@ async def test_comment_ai_credits_and_success(tt_db, monkeypatch) -> None:
 
     settled: list[dict] = []
     monkeypatch.setattr(
-        "services.tiktok_business.comment_ai._settle_comment_send",
+        "services.integrations.tiktok.comment_ai._settle_comment_send",
         lambda **k: settled.append(k),
     )
-    monkeypatch.setattr("services.tiktok_business.comment_ai.run_customer_reply_v2_comment", _reply)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.create_comment_reply", _publish)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.ensure_fresh_token", _token)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.resolve_tiktok_post_context", _resolve)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.run_customer_reply_v2_comment", _reply)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.create_comment_reply", _publish)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.ensure_fresh_token", _token)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.resolve_tiktok_post_context", _resolve)
     ok = await process_tiktok_comment_ai(
         tenant_id="linas", connection_id=connection.id, comment_id="c-ok", item_id="v1"
     )
@@ -211,8 +211,8 @@ async def test_comment_ai_publish_failure(tt_db, monkeypatch) -> None:
         payload={"comment_id": "c-fail", "text": "hi"},
     )
     tt_db.commit()
-    monkeypatch.setattr("services.tiktok_business.comment_ai.comments_action_enabled", lambda *_a, **_k: True)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.comments_action_enabled", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
 
     async def _reply(**_k):
         return SimpleNamespace(stop=True, reply="thanks", reason="v2_comment_generated", metadata={})
@@ -228,14 +228,14 @@ async def test_comment_ai_publish_failure(tt_db, monkeypatch) -> None:
 
     settled: list[dict] = []
     monkeypatch.setattr(
-        "services.tiktok_business.comment_ai._settle_comment_send",
+        "services.integrations.tiktok.comment_ai._settle_comment_send",
         lambda **k: settled.append(k),
     )
-    monkeypatch.setattr("services.tiktok_business.comment_ai.run_customer_reply_v2_comment", _reply)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.create_comment_reply", _publish)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.ensure_fresh_token", _token)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.resolve_tiktok_post_context", _resolve)
-    from services.tiktok_business.comment_ai import process_tiktok_comment_ai
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.run_customer_reply_v2_comment", _reply)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.create_comment_reply", _publish)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.ensure_fresh_token", _token)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.resolve_tiktok_post_context", _resolve)
+    from services.integrations.tiktok.comment_ai import process_tiktok_comment_ai
 
     result = await process_tiktok_comment_ai(
         tenant_id="linas", connection_id=connection.id, comment_id="c-fail", item_id="v2"
@@ -266,8 +266,8 @@ async def test_comment_ai_skips_when_v2_has_no_reply(tt_db, monkeypatch) -> None
         payload={"comment_id": "c-empty", "text": "hi"},
     )
     tt_db.commit()
-    monkeypatch.setattr("services.tiktok_business.comment_ai.comments_action_enabled", lambda *_a, **_k: True)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.comments_action_enabled", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
     published = {"called": False}
 
     async def _reply(**_k):
@@ -285,14 +285,14 @@ async def test_comment_ai_skips_when_v2_has_no_reply(tt_db, monkeypatch) -> None
 
     settled: list[dict] = []
     monkeypatch.setattr(
-        "services.tiktok_business.comment_ai._settle_comment_send",
+        "services.integrations.tiktok.comment_ai._settle_comment_send",
         lambda **k: settled.append(k),
     )
-    monkeypatch.setattr("services.tiktok_business.comment_ai.run_customer_reply_v2_comment", _reply)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.create_comment_reply", _publish)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.ensure_fresh_token", _token)
-    monkeypatch.setattr("services.tiktok_business.comment_ai.resolve_tiktok_post_context", _resolve)
-    from services.tiktok_business.comment_ai import process_tiktok_comment_ai
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.run_customer_reply_v2_comment", _reply)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.create_comment_reply", _publish)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.ensure_fresh_token", _token)
+    monkeypatch.setattr("services.integrations.tiktok.comment_ai.resolve_tiktok_post_context", _resolve)
+    from services.integrations.tiktok.comment_ai import process_tiktok_comment_ai
 
     result = await process_tiktok_comment_ai(
         tenant_id="linas", connection_id=connection.id, comment_id="c-empty", item_id="v3"

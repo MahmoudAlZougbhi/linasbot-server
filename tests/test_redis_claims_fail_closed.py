@@ -47,11 +47,11 @@ async def test_webhook_bodyfp_fail_closed_rejects_when_redis_unavailable(monkeyp
 @pytest.mark.asyncio
 async def test_outbound_fail_closed_skips_when_redis_unavailable(monkeypatch):
     monkeypatch.setenv("LINAS_FAIL_CLOSED_REDIS_CLAIMS", "true")
-    from services.whatsapp_adapters import outbound_text_dedupe as od
+    from services.integrations.whatsapp.adapters import outbound_text_dedupe as od
 
     od._cache.clear()
     od._inflight.clear()
-    with patch("services.whatsapp_adapters.outbound_text_dedupe._redis_claim_outbound", return_value=None):
+    with patch("services.integrations.whatsapp.adapters.outbound_text_dedupe._redis_claim_outbound", return_value=None):
         assert await od.should_skip_outbound_text("+96171110099", "fail-closed text") is True
 
 

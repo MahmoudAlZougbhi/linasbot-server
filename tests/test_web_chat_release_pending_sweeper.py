@@ -6,13 +6,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from services.web_chat.operation_fsm import OperationState
-from services.web_chat.operation_release_pending_sweeper import (
+from services.integrations.web_chat.operation_fsm import OperationState
+from services.integrations.web_chat.operation_release_pending_sweeper import (
     reconcile_release_pending_operation,
     sweep_release_pending_operations,
 )
-from services.web_chat.processor import WebChatError, process_web_chat_message
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.processor import WebChatError, process_web_chat_message
+from services.integrations.web_chat.store_pg import WebChatPgStore
 from tests.test_web_chat_acceptance_fsm import _widget_and_visitor
 from tests.test_web_chat_operation_lease_fence import _expire_operation_lease, _operation_snapshot
 from tests.web_chat_acceptance_billing import fetch_pg_ledger_snapshot
@@ -43,12 +43,12 @@ async def test_reply_ready_persist_failure_commit_throw_stays_pending_without_vi
 
     monkeypatch.setattr(credit_ledger_service, "release", commit_then_throw_release)
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
     patch_ai_reply(monkeypatch, reply="Ready but not durable")
     monkeypatch.setattr(
-        "services.web_chat.processor_completion._persist_web_turn",
+        "services.integrations.web_chat.processor_completion._persist_web_turn",
         AsyncMock(side_effect=WebChatError("persist_failed", "Could not persist.", status_code=503)),
     )
 
@@ -86,7 +86,7 @@ async def test_claimed_without_reservation_returns_402_not_fsm_error(
     widget, visitor, _bundle = _widget_and_visitor(store)
 
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
     from services.credit_ledger_service import credit_ledger_service
@@ -129,12 +129,12 @@ async def test_sweeper_converges_committed_ack_loss_without_customer_retry(
 
     monkeypatch.setattr(credit_ledger_service, "release", commit_then_throw_release)
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
     patch_ai_reply(monkeypatch, reply="Sweeper target")
     monkeypatch.setattr(
-        "services.web_chat.processor_completion._persist_web_turn",
+        "services.integrations.web_chat.processor_completion._persist_web_turn",
         AsyncMock(side_effect=WebChatError("persist_failed", "Could not persist.", status_code=503)),
     )
 
@@ -159,7 +159,7 @@ async def test_sweeper_converges_committed_ack_loss_without_customer_retry(
 
 
 def test_reconcile_skips_when_foreign_lease_is_active(monkeypatch) -> None:
-    from services.web_chat.operation_fsm import OperationRecord, OperationState, VerifiedSessionSnapshot
+    from services.integrations.web_chat.operation_fsm import OperationRecord, OperationState, VerifiedSessionSnapshot
 
     record = OperationRecord(
         tenant_id="biz",
@@ -175,7 +175,7 @@ def test_reconcile_skips_when_foreign_lease_is_active(monkeypatch) -> None:
         released=False,
     )
     monkeypatch.setattr(
-        "services.web_chat.operation_release_pending_sweeper._claim_release_pending_row",
+        "services.integrations.web_chat.operation_release_pending_sweeper._claim_release_pending_row",
         lambda **_kwargs: None,
     )
     assert reconcile_release_pending_operation(record, lease_owner="sweeper-owner") == "skipped_active_lease"

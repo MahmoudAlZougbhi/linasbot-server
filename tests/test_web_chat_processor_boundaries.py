@@ -10,11 +10,11 @@ import pytest
 from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob
 from services.smart_followup.adapters.web import WebFollowUpAdapter
 from services.smart_followup.types import FollowUpConversationView, FollowUpSendResult
-from services.web_chat.config_models import WebChatWidgetConfig
-from services.web_chat.credit_fsm import tenant_scoped_user_data
-from services.web_chat.processor import _persist_web_turn
-from services.web_chat.session_authority import issue_session_authority
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.config_models import WebChatWidgetConfig
+from services.integrations.web_chat.credit_fsm import tenant_scoped_user_data
+from services.integrations.web_chat.processor import _persist_web_turn
+from services.integrations.web_chat.session_authority import issue_session_authority
+from services.integrations.web_chat.store_pg import WebChatPgStore
 from tests.web_chat_acceptance_support import patch_web_chat_store, seed_acceptance_widget
 
 
@@ -41,7 +41,7 @@ def _followup_visitor_setup(
 async def test_persist_web_turn_passes_tenant_scoped_user_data_to_log_interaction(tmp_path, monkeypatch) -> None:
     save_mock = AsyncMock(return_value=("web:tenant-z:visitor-tenant", None))
     log_mock = MagicMock()
-    monkeypatch.setattr("services.web_chat.persistence.save_conversation_message_to_firestore", save_mock)
+    monkeypatch.setattr("services.integrations.web_chat.persistence.save_conversation_message_to_firestore", save_mock)
     monkeypatch.setattr("services.interaction_flow_logger.is_flow_logging_enabled", lambda: True)
     monkeypatch.setattr("services.interaction_flow_logger.log_interaction", log_mock)
 
@@ -80,10 +80,10 @@ async def test_web_followup_adapter_persistence_failure_leaves_no_pending_messag
     monkeypatch.setattr("services.smart_followup.adapters.web.web_chat_store", store)
     _followup_visitor_setup(store, visitor_id="visitor-3")
 
-    from services.web_chat.persistence import PersistFailure
+    from services.integrations.web_chat.persistence import PersistFailure
 
     persist_mock = AsyncMock(side_effect=PersistFailure("firestore_error", "firestore down"))
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
 
     job = WhatsAppSmartFollowUpJob(
         tenant_id="tenant-b",
@@ -128,7 +128,7 @@ async def test_web_followup_adapter_persistence_failure_leaves_no_pending_messag
 @pytest.mark.asyncio
 async def test_persist_web_turn_uses_firestore_save_signature(tmp_path, monkeypatch) -> None:
     save_mock = AsyncMock(return_value=("web:tenant-a:visitor-1", None))
-    monkeypatch.setattr("services.web_chat.persistence.save_conversation_message_to_firestore", save_mock)
+    monkeypatch.setattr("services.integrations.web_chat.persistence.save_conversation_message_to_firestore", save_mock)
 
     widget = WebChatWidgetConfig(
         tenant_id="tenant-a",
@@ -165,12 +165,12 @@ async def test_web_followup_adapter_send_followup_result_shape(tmp_path, monkeyp
     monkeypatch.setattr("services.smart_followup.adapters.web.web_chat_store", store)
     widget = _followup_visitor_setup(store, visitor_id="visitor-2")
 
-    from services.web_chat.persistence import PersistOutcome, PersistResult
+    from services.integrations.web_chat.persistence import PersistOutcome, PersistResult
 
     persist_mock = AsyncMock(
         return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id="web:tenant-b:visitor-2")
     )
-    monkeypatch.setattr("services.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
+    monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
 
     from tests.test_web_followup_web_delivery import _reserve_followup_credit
 

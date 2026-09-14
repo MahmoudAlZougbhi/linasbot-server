@@ -24,16 +24,16 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from db.session import reset_engine_for_tests
-from services.web_chat.config_models import WebChatWidgetConfig
-from services.web_chat.pg_models import (
+from services.integrations.web_chat.config_models import WebChatWidgetConfig
+from services.integrations.web_chat.pg_models import (
     WebChatDeliveryIdempotencyRow,
     WebChatMessageRow,
     WebChatOperationRow,
     WebChatVisitorSessionRow,
     WebChatWidgetRow,
 )
-from services.web_chat.store_file import WebChatFileStore
-from services.web_chat.store_pg import WebChatPgStore
+from services.integrations.web_chat.store_file import WebChatFileStore
+from services.integrations.web_chat.store_pg import WebChatPgStore
 from tests.docker_test_containers import docker_available, start_disposable_postgres
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,13 +42,13 @@ DEFAULT_ALEMBIC_PYTHON = Path("/private/tmp/linas-wa-venv/bin/python")
 DEFAULT_ALEMBIC_PYTHON_FALLBACK = Path("/tmp/linas-alembic-114/bin/python")
 
 WEB_CHAT_STORE_PATCHES: tuple[str, ...] = (
-    "services.web_chat.store.web_chat_store",
+    "services.integrations.web_chat.store.web_chat_store",
     "modules.web_chat_helpers.web_chat_store",
     "modules.web_chat_public_routes.web_chat_store",
-    "services.web_chat.public_handlers.web_chat_store",
-    "services.web_chat.delivery_outbox.web_chat_store",
+    "services.integrations.web_chat.public_handlers.web_chat_store",
+    "services.integrations.web_chat.delivery_outbox.web_chat_store",
     "modules.web_chat_mobile_routes.web_chat_store",
-    "services.web_chat.followup_delivery.web_chat_store",
+    "services.integrations.web_chat.followup_delivery.web_chat_store",
 )
 
 WEB_CHAT_HA_MODELS = (
@@ -76,8 +76,8 @@ def seed_acceptance_widget(store: WebChatPgStore | WebChatFileStore, *, tenant_i
 
 
 def seed_widget_config(store: WebChatPgStore, config: WebChatWidgetConfig) -> WebChatWidgetConfig:
-    from services.web_chat.ha_repository import with_ha_session
-    from services.web_chat.store_pg import _save_widget_row
+    from services.integrations.web_chat.ha_repository import with_ha_session
+    from services.integrations.web_chat.store_pg import _save_widget_row
 
     with with_ha_session() as db:
         _save_widget_row(db, config)
@@ -90,9 +90,9 @@ def seed_prefix_widget_pair(
     prefix: str = "wk1234567890",
 ) -> tuple[str, str]:
     """Register two widgets sharing the same 12-char localStorage prefix."""
-    from services.web_chat.config_models import WebChatWidgetConfig
-    from services.web_chat.ha_repository import with_ha_session
-    from services.web_chat.store_pg import _save_widget_row
+    from services.integrations.web_chat.config_models import WebChatWidgetConfig
+    from services.integrations.web_chat.ha_repository import with_ha_session
+    from services.integrations.web_chat.store_pg import _save_widget_row
 
     key_a = prefix + "aaaaaaaaaaaa"
     key_b = prefix + "bbbbbbbbbbbb"
@@ -141,18 +141,18 @@ def patch_entitlements(
 
 def patch_ai_eligible(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.web_chat.processor.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
     monkeypatch.setattr(
-        "services.web_chat.public_handlers.evaluate_web_ai_eligibility",
+        "services.integrations.web_chat.public_handlers.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
 
 
 def patch_whatsapp_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stable Meta adapter env for acceptance servers under full-suite pollution."""
-    from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+    from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
 
     monkeypatch.setenv("WHATSAPP_API_TOKEN", "acceptance-test-token")
     monkeypatch.setenv("WHATSAPP_PHONE_NUMBER_ID", "acceptance-phone-id")
@@ -172,15 +172,15 @@ def patch_acceptance_eligibility(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 def patch_ai_reply(monkeypatch: pytest.MonkeyPatch, reply: str = "Acceptance AI reply") -> None:
     from unittest.mock import MagicMock
 
-    from services.web_chat.persistence import PersistOutcome, PersistResult
+    from services.integrations.web_chat.persistence import PersistOutcome, PersistResult
 
     persist_mock = AsyncMock(return_value=PersistResult(outcome=PersistOutcome.CREATED, conversation_id="conv-accept"))
     monkeypatch.setattr(
-        "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
         AsyncMock(return_value=MagicMock(reply=reply)),
     )
-    monkeypatch.setattr("services.web_chat.persistence.persist_web_chat_message", persist_mock)
-    monkeypatch.setattr("services.web_chat.processor.persist_web_chat_message", persist_mock)
+    monkeypatch.setattr("services.integrations.web_chat.persistence.persist_web_chat_message", persist_mock)
+    monkeypatch.setattr("services.integrations.web_chat.processor.persist_web_chat_message", persist_mock)
 
 
 def bootstrap_http(client: TestClient, widget_key: str) -> dict[str, Any]:
@@ -474,7 +474,7 @@ def acceptance_ha_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterat
     """SQLite HA tables (supplementary only; not used for mandatory PG acceptance)."""
     from datetime import datetime
 
-    from services.web_chat import operation as web_chat_operation
+    from services.integrations.web_chat import operation as web_chat_operation
 
     def _sqlite_now() -> datetime:
         return datetime.utcnow()

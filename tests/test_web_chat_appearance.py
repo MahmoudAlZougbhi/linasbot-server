@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from services.web_chat.appearance import (
+from services.integrations.web_chat.appearance import (
     DEFAULT_APPEARANCE,
     contrast_ratio,
     contrast_warnings,
     normalize_appearance,
     normalize_integration_mode,
 )
-from services.web_chat.domain import normalize_site_url, origin_allowed_for_site
+from services.integrations.web_chat.domain import normalize_site_url, origin_allowed_for_site
 
 
 def test_normalize_site_url_accepts_bare_domain() -> None:

@@ -203,7 +203,7 @@ def _returned_rejection_is_definitive(result: Any) -> bool:
     proves the provider rejected the request.
     """
 
-    from services.omnichannel.classify import returned_rejection_is_definitive
+    from services.integrations.omnichannel.classify import returned_rejection_is_definitive
 
     return returned_rejection_is_definitive(result)
 
@@ -249,7 +249,7 @@ async def execute_guarded_meta_send(
     except BaseException as exc:
         if decision.kind == "send":
             from services.meta_session_invalidated import mark_if_session_invalidated
-            from services.omnichannel.meta_errors import finish_status_for_send_exception
+            from services.integrations.omnichannel.meta_errors import finish_status_for_send_exception
 
             mark_if_session_invalidated(
                 exc,

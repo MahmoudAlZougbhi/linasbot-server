@@ -17,7 +17,7 @@ def test_live_chat_service_modules_under_500_lines() -> None:
     extra = [
         Path("services/live_chat/operator_text_delivery.py"),
         Path("services/live_chat/operator_web_delivery.py"),
-        Path("services/web_chat/takeover_gate.py"),
+        Path("services/integrations/web_chat/takeover_gate.py"),
         Path("services/live_chat/channel.py"),
         Path("services/live_chat/operator_idle.py"),
         Path("services/live_chat/tenant.py"),

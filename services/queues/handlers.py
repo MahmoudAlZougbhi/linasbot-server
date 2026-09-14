@@ -62,13 +62,13 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
 
 
 async def handle_tiktok_comment_sync(job: QueueJob) -> dict[str, Any]:
-    from services.tiktok_business.jobs import handle_tiktok_comment_sync as _impl
+    from services.integrations.tiktok.jobs import handle_tiktok_comment_sync as _impl
 
     return await _impl(job)
 
 
 async def handle_tiktok_comment_ai(job: QueueJob) -> dict[str, Any]:
-    from services.tiktok_business.jobs import handle_tiktok_comment_ai as _impl
+    from services.integrations.tiktok.jobs import handle_tiktok_comment_ai as _impl
 
     return await _impl(job)
 
@@ -80,49 +80,49 @@ async def handle_meta_social_comment_sync(job: QueueJob) -> dict[str, Any]:
 
 
 async def handle_omni_generate(job: QueueJob) -> dict[str, Any]:
-    from services.omnichannel.jobs import handle_omni_generate as _impl
+    from services.integrations.omnichannel.jobs import handle_omni_generate as _impl
 
     return await _impl(job)
 
 
 async def handle_omni_deliver(job: QueueJob) -> dict[str, Any]:
-    from services.omnichannel.jobs import handle_omni_deliver as _impl
+    from services.integrations.omnichannel.jobs import handle_omni_deliver as _impl
 
     return await _impl(job)
 
 
 async def handle_whatsapp_generate(job: QueueJob) -> dict[str, Any]:
-    from services.omnichannel.jobs import handle_whatsapp_generate as _impl
+    from services.integrations.omnichannel.jobs import handle_whatsapp_generate as _impl
 
     return await _impl(job)
 
 
 async def handle_whatsapp_deliver_retry(job: QueueJob) -> dict[str, Any]:
-    from services.omnichannel.jobs import handle_whatsapp_deliver_retry as _impl
+    from services.integrations.omnichannel.jobs import handle_whatsapp_deliver_retry as _impl
 
     return await _impl(job)
 
 
 async def handle_whatsapp_intent_deliver(job: QueueJob) -> dict[str, Any]:
-    from services.omnichannel.jobs import handle_whatsapp_intent_deliver as _impl
+    from services.integrations.omnichannel.jobs import handle_whatsapp_intent_deliver as _impl
 
     return await _impl(job)
 
 
 async def handle_web_chat_generate(job: QueueJob) -> dict[str, Any]:
-    from services.omnichannel.jobs import handle_web_chat_generate as _impl
+    from services.integrations.omnichannel.jobs import handle_web_chat_generate as _impl
 
     return await _impl(job)
 
 
 async def handle_tiktok_webhook_event(job: QueueJob) -> dict[str, Any]:
-    from services.omnichannel.jobs import handle_tiktok_webhook_event as _impl
+    from services.integrations.omnichannel.jobs import handle_tiktok_webhook_event as _impl
 
     return await _impl(job)
 
 
 async def handle_operator_deliver(job: QueueJob) -> dict[str, Any]:
-    from services.omnichannel.jobs import handle_operator_deliver as _impl
+    from services.integrations.omnichannel.jobs import handle_operator_deliver as _impl
 
     return await _impl(job)
 

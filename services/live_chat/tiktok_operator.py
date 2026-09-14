@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.tiktok_business.errors import TikTokCapabilityGatedError
-from services.tiktok_business.messaging import send_business_message
-from services.tiktok_business.oauth import ensure_fresh_token
-from services.tiktok_business.repository import TikTokRepository
-from services.tiktok_business.scopes import messaging_send_ready
+from services.integrations.tiktok.errors import TikTokCapabilityGatedError
+from services.integrations.tiktok.messaging import send_business_message
+from services.integrations.tiktok.oauth import ensure_fresh_token
+from services.integrations.tiktok.repository import TikTokRepository
+from services.integrations.tiktok.scopes import messaging_send_ready
 
 
 def is_tiktok_live_chat_user(user_id: str | None) -> bool:

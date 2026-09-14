@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from services.omnichannel.worker_pool import concurrency_for
+from services.integrations.omnichannel.worker_pool import concurrency_for
 
 
 def cluster_node_count() -> int:

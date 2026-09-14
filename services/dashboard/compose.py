@@ -390,7 +390,7 @@ def build_tenant_mobile_dashboard(
     smart_followup_section: dict[str, Any]
     try:
         from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
-        from services.whatsapp_cloud.smart_followup.analytics import build_smart_followup_analytics
+        from services.integrations.whatsapp.smart_followup.analytics import build_smart_followup_analytics
 
         start_dt = datetime.fromtimestamp(float(window["start_ts"]), tz=UTC)
         end_dt = datetime.fromtimestamp(float(window["end_ts"]), tz=UTC)

@@ -29,13 +29,13 @@ os.environ["DASHBOARD_AUTH_SECRET"] = "pytest-dashboard-secret"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.whatsapp_cloud.app_review_bind import bind_app_review_test_number  # noqa: E402
-from services.whatsapp_cloud.app_review_readiness import (  # noqa: E402
+from services.integrations.whatsapp.app_review_bind import bind_app_review_test_number  # noqa: E402
+from services.integrations.whatsapp.app_review_readiness import (  # noqa: E402
     build_app_review_readiness,
     whatsapp_rollout_fingerprint,
 )
-from services.whatsapp_cloud.redaction import redact_whatsapp_text  # noqa: E402
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository  # noqa: E402
+from services.integrations.whatsapp.redaction import redact_whatsapp_text  # noqa: E402
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
 
 TEST_WABA = "900100200300"
 TEST_PHONE = "900100200301"
@@ -61,8 +61,8 @@ def wa_db(tmp_path, monkeypatch):
         yield session
         session.commit()
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.whatsapp_session", _sess)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_readiness.whatsapp_session", _sess)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind.whatsapp_session", _sess)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_readiness.whatsapp_session", _sess)
     yield session
     session.close()
     reset_engine_for_tests()
@@ -82,9 +82,9 @@ def _mock_meta_ok(monkeypatch) -> None:
     async def _sub(**kwargs: Any) -> dict[str, Any]:
         return {"success": True}
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _debug)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.fetch_waba_phone_numbers", _phones)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.subscribe_waba_webhooks", _sub)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.debug_token", _debug)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind_helpers.fetch_waba_phone_numbers", _phones)
+    monkeypatch.setattr("services.integrations.whatsapp.app_review_bind.subscribe_waba_webhooks", _sub)
 
 
 def test_readiness_redacted_and_public_false(wa_db, monkeypatch):
@@ -189,8 +189,8 @@ def test_readiness_and_webhook_http_auth(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_outbound_retry_after_failure(wa_db, monkeypatch):
-    from services.whatsapp_cloud import delivery_retry as dr
-    from services.whatsapp_cloud.graph_client import WhatsAppGraphError
+    from services.integrations.whatsapp import delivery_retry as dr
+    from services.integrations.whatsapp.graph_client import WhatsAppGraphError
 
     repo = WhatsAppCloudRepository(wa_db)
     conn = repo.create_connection_with_credential(
@@ -257,7 +257,7 @@ async def test_outbound_delivery_suppresses_stale_control_before_provider_send(
     epoch_delta,
     error_detail,
 ):
-    from services.whatsapp_cloud import delivery_retry as dr
+    from services.integrations.whatsapp import delivery_retry as dr
 
     repo = WhatsAppCloudRepository(wa_db)
     conn = repo.create_connection_with_credential(

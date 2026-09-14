@@ -21,11 +21,11 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.whatsapp_cloud.embedded_signup import (  # noqa: E402
+from services.integrations.whatsapp.embedded_signup import (  # noqa: E402
     WhatsAppSignupError,
     start_embedded_signup,
 )
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository  # noqa: E402
+from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
 
 
 @pytest.fixture()
