@@ -236,6 +236,14 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - HTTP mounts stay in `modules/*`. Meta `services/meta_*.py` and Apple IAP/Sign-In stay as sibling modules this wave (Apple stays billing/auth; Meta fold is a follow-up).
 - Web stays marketing `pages/public/*` + owner portal `pages/owner/*` (no leftover operator SPA pages).
 
+## WAVE X4 — freeze + KEEP enabled
+
+- KEEP drawer APIs (`/api/cm`, Live Chat, comments, Requests, WhatsApp, Copilot, web-chat, billing, …) stay off `product_features` disabled prefixes and on the tenant allowlist.
+- `/api/comments` covers operator comments media + inbox (not only `/api/comments/inbox`).
+- Museum prefixes (`/api/smart-messaging`, `/api/test*`, clinic settings) stay 403.
+- Marketing `/` `/about` `/contact` `/pricing` `/features` and `/owner/*` portal routes remain in `App.jsx`.
+
+
 
 
 

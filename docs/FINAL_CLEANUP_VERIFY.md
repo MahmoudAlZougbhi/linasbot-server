@@ -9,7 +9,10 @@ Date: 2026-09-14.
 
 **Wave X2:** museum `smart_messaging_*`, appointment scheduler, daily dispatcher, training handlers, clinic holidays, `qa_database_service`, and 410 content-files/instructions HTTP are **deleted**. `normalize_template_id` moved to `services/live_chat/template_ids.py`. SFU worker stays on the runtime scheduler. Laser `prod_migration` seed still writes `laser_hair_removal`.
 
-**Wave X3 (this branch):** `customer_reply_v2` → `services/brain/reply/`; `comments_inbox` → `services/live_chat/comments_inbox/`; WA Cloud / adapters / TikTok / web_chat / omnichannel → `services/integrations/{whatsapp,tiktok,web_chat,omnichannel}`. Meta `services/meta_*.py` still flat (follow-up). Web already marketing+portal.
+**Wave X3:** `customer_reply_v2` → `services/brain/reply/`; comments inbox → `services/live_chat/comments_inbox/`; WA/TikTok/web_chat/omnichannel → `services/integrations/`. Meta `services/meta_*.py` still flat.
+
+**Wave X4:** KEEP APIs stay enabled (comments media included on the tenant allowlist); museum prefixes stay disabled. Marketing + owner portal routes frozen.
+
 
 
 ## Method
