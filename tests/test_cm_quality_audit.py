@@ -72,9 +72,9 @@ def test_quality_audit_finds_duplicates_and_suspicious(tenant: str) -> None:
 
 def test_quality_audit_improve_services_without_prices(tenant: str) -> None:
     put_draft(
-        "services",
+        "prices",
         payload={
-            "items": [{"id": "laser", "labels": {"en": "Laser", "ar": "ليزر", "fr": "", "franco": ""}}],
+            "catalog": [{"id": "laser", "labels": {"en": "Laser", "ar": "ليزر", "fr": "", "franco": ""}}],
             "notes": None,
         },
         if_match=None,

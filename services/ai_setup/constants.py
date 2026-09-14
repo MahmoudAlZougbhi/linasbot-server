@@ -125,7 +125,6 @@ CM_SECTIONS: Final[tuple[str, ...]] = (
     "languages",
     "style",
     "dynamic_messages",
-    "services",
     "branches",
     "opening_hours",
     "prices",

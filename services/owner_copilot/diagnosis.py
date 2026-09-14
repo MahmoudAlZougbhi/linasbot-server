@@ -117,12 +117,12 @@ def diagnose_interaction(*, tenant_id: str, trace_id: str) -> dict[str, Any]:
     if scenario == "session_count":
         root = "session_count_mismatch"
         explanation = (
-            "Customer asked about session count; the reply likely used a stale FAQ or CM services "
+            "Customer asked about session count; the reply likely used a stale FAQ or CM prices "
             "value (e.g. '7 sessions' while current truth is a range like '7–10')."
         )
         correction = {
             "type": "cm_patch",
-            "section": "services",
+            "section": "prices",
             "patch_hint": {"sessions_note": "Update session range to current truth (e.g. 7-10)."},
             "also_invalidate_faq": True,
         }
@@ -146,7 +146,7 @@ def diagnose_interaction(*, tenant_id: str, trace_id: str) -> dict[str, Any]:
         )
         correction = {
             "type": "cm_patch",
-            "section": "services",
+            "section": "prices",
             "patch_hint": {"service_name": "Align service catalog entry with owner correction."},
             "also_invalidate_faq": True,
         }
@@ -287,7 +287,7 @@ async def approve_diagnosis_fix(
         from services.faq.faq_cm_invalidation import invalidate_faq_for_cm_patch
         from services.owner_copilot.cm_approval import activate_cm_after_save
 
-        section = str(corr.get("section") or "services")
+        section = str(corr.get("section") or "prices")
         patch = dict(corr.get("patch") or corr.get("patch_hint") or {})
         if not patch:
             raise ValueError("CM correction requires a concrete patch from the owner")

@@ -190,5 +190,12 @@ Keep #677 media analysis.
 - Duplicate `TenantEntitlementRow.pending_plan_*` columns removed.
 - Feature flags on plans come from `plan_catalog`, not the draft message catalog.
 
+## WAVE E — hub tiles only; one services SoT
+
+- AI Setup hub tiles are Knowledge, AI Basics, Locations/hours, Services (`prices`), Comments, Requests + Products. FAQ stays as a drawer screen.
+- Brain and runtime read **CM `prices.catalog` only**. CM `services` is not a live section (`CM_SECTIONS`).
+- Postgres `/api/mobile/services` and `services/service_catalog` are deleted. No dual PG/CM writes.
+- Knowledge redistribution upserts derived service rows into `prices.catalog`.
+
 
 

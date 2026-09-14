@@ -39,8 +39,8 @@ def test_each_section_save_reads_only_that_item() -> None:
             {"items": [{"id": "k1", "title": "12b", "body": "أسعار الجلسات وتعليمات الحلاقة", "status": "active"}]},
         ),
         (
-            "services",
-            {"items": [{"id": "s1", "labels": {"fr": "Soin"}, "notes": "Épilation laser", "available": True}]},
+            "prices",
+            {"catalog": [{"id": "s1", "labels": {"fr": "Soin"}, "notes": "Épilation laser", "active": True}]},
         ),
         (
             "branches",
@@ -102,7 +102,7 @@ def test_each_section_save_reads_only_that_item() -> None:
     ]
     for section, payload in cases:
         # second unchanged sibling when list exists
-        key = "items" if "items" in payload else "rules"
+        key = next(k for k in ("items", "rules", "catalog") if k in payload)
         if len(payload[key]) == 1:
             sibling = dict(payload[key][0])
             sibling["id"] = "other"

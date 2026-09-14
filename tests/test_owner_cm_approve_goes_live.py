@@ -22,7 +22,7 @@ def proposal_store(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> CmPatchPro
     return store
 
 
-def _stub_approve_deps(monkeypatch: pytest.MonkeyPatch, *, section: str = "services") -> None:
+def _stub_approve_deps(monkeypatch: pytest.MonkeyPatch, *, section: str = "prices") -> None:
     monkeypatch.setattr(
         "services.owner_copilot.cm_approval.build_patch_preview",
         lambda **_: {
@@ -69,7 +69,7 @@ async def test_activate_first_live_uses_full_publish_draft(
     monkeypatch.setattr("services.ai_setup.publish.publish_draft", publish_draft)
     monkeypatch.setattr("services.ai_setup.publish.publish_draft_sections", publish_sections)
 
-    result = await activate_cm_after_save(tenant_id="t1", section="services", actor_id="u1")
+    result = await activate_cm_after_save(tenant_id="t1", section="prices", actor_id="u1")
 
     assert result["activated"] is True
     assert result["live"] is True
@@ -77,7 +77,7 @@ async def test_activate_first_live_uses_full_publish_draft(
     assert result["content_version_id"] == "v_first"
     publish_draft.assert_awaited_once()
     publish_sections.assert_not_awaited()
-    assert "owner_ai_auto_activate_first_live:services" in str(publish_draft.await_args.kwargs.get("notes"))
+    assert "owner_ai_auto_activate_first_live:prices" in str(publish_draft.await_args.kwargs.get("notes"))
 
 
 @pytest.mark.asyncio
@@ -99,14 +99,14 @@ async def test_activate_with_published_base_uses_section_overlay(
     monkeypatch.setattr("services.ai_setup.publish.publish_draft", publish_draft)
     monkeypatch.setattr("services.ai_setup.publish.publish_draft_sections", publish_sections)
 
-    result = await activate_cm_after_save(tenant_id="t1", section="services", actor_id="u1")
+    result = await activate_cm_after_save(tenant_id="t1", section="prices", actor_id="u1")
 
     assert result["activated"] is True
     assert result["live"] is True
     assert result["mode"] == "section_overlay"
     publish_sections.assert_awaited_once()
     publish_draft.assert_not_awaited()
-    assert publish_sections.await_args.kwargs["section_names"] == ["services"]
+    assert publish_sections.await_args.kwargs["section_names"] == ["prices"]
 
 
 @pytest.mark.asyncio
@@ -125,7 +125,7 @@ async def test_activate_returns_publish_blocked_without_raising(
 
     monkeypatch.setattr("services.ai_setup.publish.publish_draft", _blocked)
 
-    result = await activate_cm_after_save(tenant_id="t1", section="services", actor_id="u1")
+    result = await activate_cm_after_save(tenant_id="t1", section="prices", actor_id="u1")
     assert result["activated"] is False
     assert result["live"] is False
     assert result["reason"] == "publish_blocked"
@@ -145,7 +145,7 @@ async def test_approve_cm_patch_and_activate_sets_live(
                 "activated": True,
                 "live": True,
                 "mode": "first_live_full_publish",
-                "section": "services",
+                "section": "prices",
                 "content_version_id": "v1",
                 "index_version_id": "i1",
             }
@@ -155,7 +155,7 @@ async def test_approve_cm_patch_and_activate_sets_live(
     proposed = propose_cm_patch(
         tenant_id="t1",
         user_id="u1",
-        section="services",
+        section="prices",
         patch={"sessions_note": "7-10 sessions"},
     )
     result = await approve_cm_patch_and_activate(
@@ -185,7 +185,7 @@ async def test_tool_approve_cm_patch_returns_live_activation(
                 "activated": True,
                 "live": True,
                 "mode": "section_overlay",
-                "section": "services",
+                "section": "prices",
                 "content_version_id": "v2",
                 "index_version_id": "i2",
             }
@@ -194,7 +194,7 @@ async def test_tool_approve_cm_patch_returns_live_activation(
     proposed = propose_cm_patch(
         tenant_id="t1",
         user_id="u1",
-        section="services",
+        section="prices",
         patch={"sessions_note": "7-10 sessions"},
     )
     from services.owner_copilot.tools_write import tool_approve_cm_patch
@@ -242,7 +242,7 @@ async def test_tool_approve_cm_patch_maps_daily_edit_limit(
     proposed = propose_cm_patch(
         tenant_id="t1",
         user_id="u1",
-        section="services",
+        section="prices",
         patch={"sessions_note": "7-10 sessions"},
     )
     result = await tool_approve_cm_patch(

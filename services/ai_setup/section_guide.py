@@ -55,14 +55,6 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "useful": "notes sync to en for runtime; legacy single items migrate to one always rule.",
         "app_path": "AI Setup → AI Basics → Greetings",
     },
-    "services": {
-        "title": "Services (legacy catalog)",
-        "purpose": "Internal legacy service names. The owner Services tile writes the prices catalog.",
-        "why": "Kept for published snapshots that still have old service rows.",
-        "what_to_fill": [],
-        "useful": "Owners add services under AI Setup → Services (prices section).",
-        "app_path": "Not a hub tile. Use AI Setup → Services (prices).",
-    },
     "branches": {
         "title": "Locations & hours",
         "purpose": "Branches with address, map link, and per-day opening hours / off days.",

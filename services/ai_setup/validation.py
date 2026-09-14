@@ -76,7 +76,6 @@ def validate_cm(
 
     run_restricted = section is None or section.strip().replace("-", "_") in {
         "restricted",
-        "services",
         "prices",
         "faq",
         "knowledge",
@@ -85,7 +84,6 @@ def validate_cm(
     if run_restricted:
         conflict_failures = validate_restricted_conflicts(
             restricted=drafts.get("restricted") or {},
-            services=drafts.get("services"),
             prices=drafts.get("prices"),
             faq=drafts.get("faq"),
             knowledge=drafts.get("knowledge"),

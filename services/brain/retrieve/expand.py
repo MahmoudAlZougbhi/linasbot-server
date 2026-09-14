@@ -27,10 +27,6 @@ def _rows(sections: dict[str, Any], family: str) -> list[dict[str, Any]]:
         catalog = payload.get("catalog") if isinstance(payload, dict) else None
         if isinstance(catalog, list) and catalog:
             return [r for r in catalog if isinstance(r, dict)]
-        if family == "services":
-            legacy = sections.get("services")
-            rows = legacy.get("items") if isinstance(legacy, dict) else None
-            return [r for r in rows or [] if isinstance(r, dict)]
         return []
     payload = sections.get(family)
     rows = payload.get("items") if isinstance(payload, dict) else None

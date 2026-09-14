@@ -31,7 +31,6 @@ from services.ai_setup.schemas import (
     AnswerPacket,
     HandoffPolicy,
     RestrictedPolicy,
-    ServicesSection,
 )
 from services.ai_setup.structured_resolver import (
     active_restricted_ids,
@@ -146,7 +145,7 @@ async def prepare_response(
 
     restricted_policy = RestrictedPolicy.model_validate(sections.get("restricted") or {})
     handoff_policy = HandoffPolicy.model_validate(sections.get("handoff") or {})
-    services_section = ServicesSection.model_validate(sections.get("services") or {})
+    prices_section = sections.get("prices") or {}
     restricted_ids = active_restricted_ids(restricted_policy)
 
     # Step 5 — Restricted. Never proceeds to handoff/booking (plan §12.1 / T23).
@@ -243,13 +242,13 @@ async def prepare_response(
             )
 
     # Step 10 — Query Interpreter runs ONLY now, on FAQ miss (T21/T31).
-    interpreted = await interpret_query(message, services=services_section, restricted=restricted_policy)
+    interpreted = await interpret_query(message, prices=prices_section, restricted=restricted_policy)
 
     # Step 11 — Structured facts from the published version.
     from services.ai_setup.off_days import resolve_off_day_facts
 
     facts: list[AnswerFact] = []
-    facts.extend(resolve_service_catalog_facts(services_section))
+    facts.extend(resolve_service_catalog_facts(prices_section))
     branches_raw = sections.get("branches") or {}
     from services.ai_setup.branch_schedule import (
         branches_section_has_unified_schedule,
@@ -266,8 +265,8 @@ async def prepare_response(
         facts.extend(resolve_off_day_facts(sections.get("off_days") or {}))
         facts.extend(resolve_opening_hours_facts(sections.get("opening_hours") or {}))
     if interpreted.service_id:
-        facts.extend(resolve_service_facts(services_section, interpreted.service_id))
-        facts.extend(resolve_price_facts(sections.get("prices") or {}, interpreted.service_id))
+        facts.extend(resolve_service_facts(prices_section, interpreted.service_id))
+        facts.extend(resolve_price_facts(prices_section, interpreted.service_id))
     if interpreted.branch_id:
         facts.extend(resolve_branch_facts(sections.get("branches") or {}, interpreted.branch_id))
 

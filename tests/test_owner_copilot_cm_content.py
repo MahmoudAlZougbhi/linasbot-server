@@ -280,34 +280,31 @@ async def test_read_cm_large_section_returns_full_item_bodies_not_summary(
     """Full-read path must not collapse items to count-only stubs."""
     del tenant_root
     ensure_defaults(tenant_id="t1")
-    env = get_draft("services", tenant_id="t1")
+    env = get_draft("prices", tenant_id="t1")
     items = []
     for i in range(40):
         items.append(
             {
                 "id": f"svc_{i}",
                 "labels": {"en": f"Service {i}", "ar": f"خدمة {i}", "fr": f"Service {i}"},
-                "available": True,
-                "category": "laser",
-                "aliases": [],
-                "audience": "general",
+                "active": True,
                 "notes": ("Detailed service body " * 50) + f" END{i}",
             }
         )
     put_draft(
-        "services",
-        payload={"items": items, "notes": "catalog"},
+        "prices",
+        payload={"catalog": items, "notes": "catalog"},
         if_match=env.etag,
         tenant_id="t1",
         updated_by="tester",
     )
 
-    first = await tool_read_cm(tenant_id="t1", role="admin", section="services")
+    first = await tool_read_cm(tenant_id="t1", role="admin", section="prices")
     assert first.ok is True
     draft = first.data["draft"]
     assert "payload_preview" not in draft
     assert isinstance(draft.get("payload"), dict)
-    page = draft["payload"]["items"]
+    page = draft["payload"]["catalog"]
     assert isinstance(page, list) and len(page) >= 1
     assert "notes" in page[0]
     assert "END0" in str(page[0].get("notes") or "")
@@ -317,13 +314,13 @@ async def test_read_cm_large_section_returns_full_item_bodies_not_summary(
         rest = await tool_read_cm(
             tenant_id="t1",
             role="admin",
-            section="services",
+            section="prices",
             items_offset=int(draft["items_next_offset"]),
         )
         assert rest.ok is True
         rest_draft = rest.data["draft"]
         assert isinstance(rest_draft.get("payload"), dict)
-        rest_items = rest_draft["payload"]["items"]
+        rest_items = rest_draft["payload"]["catalog"]
         assert isinstance(rest_items, list) and len(rest_items) >= 1
         assert "notes" in rest_items[0]
 
@@ -388,20 +385,20 @@ def test_compact_read_never_returns_item_count_only_stub() -> None:
     from services.owner_copilot.tools_cm_content import compact_read_cm_draft
 
     payload = {
-        "items": [
+        "catalog": [
             {
                 "id": f"x{i}",
                 "labels": {"en": f"N{i}"},
-                "available": True,
+                "active": True,
                 "notes": "BODY" * 500,
             }
             for i in range(30)
         ],
         "notes": None,
     }
-    out = compact_read_cm_draft(payload, section="services")
+    out = compact_read_cm_draft(payload, section="prices")
     assert "payload_preview" not in out
     assert isinstance(out.get("payload"), dict)
-    items = out["payload"]["items"]
+    items = out["payload"]["catalog"]
     assert isinstance(items, list)
     assert all(isinstance(row, dict) and "notes" in row for row in items)

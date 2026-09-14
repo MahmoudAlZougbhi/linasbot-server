@@ -20,22 +20,26 @@ def _rich_sections() -> dict[str, dict[str, Any]]:
             "do_list": ["Be clear"],
             "dont_list": ["Invent prices"],
         },
-        "services": {
-            "items": [
+        "prices": {
+            "catalog": [
                 {
                     "id": "svc_full",
                     "labels": {"en": "Full body laser", "ar": "ليزر كامل", "fr": "Laser complet"},
-                    "available": True,
+                    "active": True,
                     "audience": "women",
                     "aliases": ["full", "full body"],
                 },
                 {
                     "id": "svc_face",
                     "labels": {"en": "Face laser", "ar": "ليزر وجه", "fr": "Laser visage"},
-                    "available": True,
+                    "active": True,
                     "audience": "general",
                 },
-            ]
+            ],
+            "items": [
+                {"id": "price_full_w", "service_id": "svc_full", "amount": 299.0, "currency": "USD"},
+                {"id": "price_face", "service_id": "svc_face", "amount": 99.0, "currency": "USD"},
+            ],
         },
         "branches": {
             "items": [
@@ -52,12 +56,6 @@ def _rich_sections() -> dict[str, dict[str, Any]]:
                     "address": "Jounieh",
                     "available": True,
                 },
-            ]
-        },
-        "prices": {
-            "items": [
-                {"id": "price_full_w", "service_id": "svc_full", "amount": 299.0, "currency": "USD"},
-                {"id": "price_face", "service_id": "svc_face", "amount": 99.0, "currency": "USD"},
             ]
         },
         "care": {

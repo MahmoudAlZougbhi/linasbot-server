@@ -6,7 +6,6 @@ const TITLE_KEYS: Record<CmSectionId, StringKey> = {
   languages: 'aiSetupSec_languages',
   style: 'aiSetupSec_style',
   dynamic_messages: 'aiSetupSec_dynamic_messages',
-  services: 'aiSetupSec_services',
   branches: 'aiSetupSec_branches',
   opening_hours: 'aiSetupSec_opening_hours',
   prices: 'aiSetupSec_prices',

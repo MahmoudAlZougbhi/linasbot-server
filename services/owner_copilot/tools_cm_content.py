@@ -139,8 +139,12 @@ def compact_read_cm_draft(
         }
 
     raw_items = payload.get("items")
+    list_key = "items"
+    if not isinstance(raw_items, list) and section == "prices":
+        raw_items = payload.get("catalog")
+        list_key = "catalog"
     items: list[Any] = list(raw_items) if isinstance(raw_items, list) else []
-    base_fields = {k: v for k, v in payload.items() if k != "items"}
+    base_fields = {k: v for k, v in payload.items() if k != list_key}
 
     if items:
         lim = min(MAX_ITEMS_PAGE, max(1, int(items_limit or DEFAULT_ITEMS_PAGE)))
@@ -148,7 +152,7 @@ def compact_read_cm_draft(
         lim = max(1, len(page))
         next_off = off + len(page)
         complete = next_off >= len(items)
-        out_payload = {**base_fields, "items": page}
+        out_payload = {**base_fields, list_key: page}
         hint = (
             "Paginated full section items. Continue read_cm with the same section and "
             "items_offset=items_next_offset until payload_complete is true."

@@ -150,7 +150,7 @@ async def test_cm_approve_no_publish_prompt(tmp_path: Any, monkeypatch: pytest.M
     monkeypatch.setattr(
         "services.owner_copilot.cm_approval.build_patch_preview",
         lambda **_: {
-            "section": "services",
+            "section": "prices",
             "changed_keys": ["sessions_note"],
             "current_sample": {"sessions_note": "7 sessions"},
             "proposed_sample": {"sessions_note": "7-10 sessions"},
@@ -160,7 +160,7 @@ async def test_cm_approve_no_publish_prompt(tmp_path: Any, monkeypatch: pytest.M
     )
     monkeypatch.setattr(
         "services.ai_setup.setup_chat.apply_section_patch",
-        lambda **_: {"section": "services", "revision": 2, "etag": "e2"},
+        lambda **_: {"section": "prices", "revision": 2, "etag": "e2"},
     )
     monkeypatch.setattr(
         "services.ai_setup.validation.validate_cm",
@@ -174,7 +174,7 @@ async def test_cm_approve_no_publish_prompt(tmp_path: Any, monkeypatch: pytest.M
     proposed = propose_cm_patch(
         tenant_id="t1",
         user_id="u1",
-        section="services",
+        section="prices",
         patch={"sessions_note": "7-10 sessions"},
     )
     result = approve_cm_patch(tenant_id="t1", user_id="u1", proposal_id=proposed["proposal_id"])

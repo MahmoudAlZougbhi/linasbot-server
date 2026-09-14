@@ -178,11 +178,6 @@ def cards_from_sections(
                     body=service_card.body,
                 )
             cards.append(service_card)
-    else:
-        legacy = sections.get("services")
-        rows = legacy.get("items") if isinstance(legacy, dict) else None
-        if isinstance(rows, list):
-            cards.extend(_from_items("services", rows, revision, tenant_id=tenant_id))
     off_payload = sections.get("off_days")
     if isinstance(off_payload, dict):
         from services.brain.retrieve.schedule_text import off_days_search_blob

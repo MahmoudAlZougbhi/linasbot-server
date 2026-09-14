@@ -111,7 +111,6 @@ import modules.flow_api  # noqa: E402, F401
 import modules.media_api  # noqa: E402, F401
 import modules.mobile_app_version_api  # noqa: E402, F401
 import modules.mobile_products_api  # noqa: E402, F401
-import modules.mobile_services_api  # noqa: E402, F401
 import modules.mobile_stt_api  # noqa: E402, F401
 import modules.platform_api  # noqa: E402, F401
 import modules.platform_message_api  # noqa: E402, F401

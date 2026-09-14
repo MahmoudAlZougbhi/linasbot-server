@@ -181,7 +181,6 @@ def lab_published_sections() -> dict[str, Any]:
                 },
             ],
         },
-        "services": {"items": []},
     }
 
 

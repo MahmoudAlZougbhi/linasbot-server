@@ -223,14 +223,14 @@ async def test_greeting_and_service_save_go_live(v2_env) -> None:
         tid,
     )
     await _save(
-        "services",
-        {"items": [{"id": "s1", "labels": {"fr": "Soin"}, "notes": "Épilation laser", "available": True}]},
+        "prices",
+        {"catalog": [{"id": "s1", "labels": {"fr": "Soin"}, "notes": "Épilation laser", "active": True}]},
         tid,
     )
     sections = _published(tid)
     assert sections["dynamic_messages"]["items"][0]["ar"] == "مرحبا"
     assert sections["dynamic_messages"]["items"][0]["ai_search_title"] == "English Search Title"
-    assert sections["services"]["items"][0]["id"] == "s1"
+    assert sections["prices"]["catalog"][0]["id"] == "s1"
 
 
 @pytest.mark.asyncio

@@ -95,6 +95,10 @@ class CatalogItem(CmBaseModel):
     revision: int = 1
     notes: str | None = None
     attachments: list[CatalogAttachment] = Field(default_factory=list)
+    ai_search_title: str = ""
+    ai_search_description: str = ""
+    ai_search_keywords: list[str] = Field(default_factory=list)
+    ai_search_title_normalized: str = ""
 
     @field_validator("base_price")
     @classmethod

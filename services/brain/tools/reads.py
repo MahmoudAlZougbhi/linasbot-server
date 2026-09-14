@@ -122,7 +122,7 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
     ).strip()
 
     if name == "get_service":
-        prices = _items(sections, "prices") or _items(sections, "services")
+        prices = _items(sections, "prices")
         row = _match_id(prices, item_id) or _first_search_row(prices, query)
         if not row:
             hits = _card_search(tenant_id, item_id or query, {"services", "prices"}, limit=1)
@@ -155,7 +155,7 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
     if name == "get_price":
         prices_raw = sections.get("prices")
         prices_section = prices_raw if isinstance(prices_raw, dict) else {}
-        catalog = _items(sections, "prices") or _items(sections, "services")
+        catalog = _items(sections, "prices")
         entries = [
             row
             for row in list(prices_section.get("price_entries") or [])

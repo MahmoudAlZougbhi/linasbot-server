@@ -16,7 +16,7 @@ pytest_plugins = ("tests.customer_reply_ai_v2_fixtures",)
 
 SECTION_CASES: list[tuple[str, dict[str, Any]]] = [
     ("knowledge", {"items": [{"id": "k1", "title": "12b", "body": "أسعار الجلسات", "status": "active"}]}),
-    ("services", {"items": [{"id": "s1", "labels": {"fr": "Soin"}, "notes": "Épilation laser", "available": True}]}),
+    ("prices", {"catalog": [{"id": "s1", "labels": {"fr": "Soin"}, "notes": "Épilation laser", "active": True}]}),
     (
         "branches",
         {
@@ -99,7 +99,7 @@ async def _save(section: str, payload: dict[str, Any], tenant_id: str, etag: str
 
 
 def _list_key(payload: dict[str, Any]) -> str:
-    return "items" if "items" in payload else "rules"
+    return next(k for k in ("items", "rules", "catalog") if k in payload)
 
 
 def setup_function() -> None:

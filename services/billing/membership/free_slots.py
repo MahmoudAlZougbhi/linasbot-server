@@ -67,16 +67,20 @@ def assert_cm_section_slots(
     if not slots_apply(tenant_id):
         return
     name = (section or "").strip().lower()
-    if name not in {"services", "branches"}:
+    if name == "prices":
+        proposed = len(payload.get("catalog") or []) if isinstance(payload, dict) else 0
+        current = len(current_payload.get("catalog") or []) if isinstance(current_payload, dict) else 0
+        if proposed <= current:
+            return
+        assert_can_add_service(tenant_id, current)
+        if proposed > int(require_message_plan("free").services_cap or 0):
+            raise SlotLimitError("FREE_SLOT_LIMIT", "Free plans may keep 5 services.")
+        return
+    if name != "branches":
         return
     proposed = _item_count(payload)
     current = _item_count(current_payload)
     if proposed <= current:
-        return
-    if name == "services":
-        assert_can_add_service(tenant_id, current)
-        if proposed > int(require_message_plan("free").services_cap or 0):
-            raise SlotLimitError("FREE_SLOT_LIMIT", "Free plans may keep 5 services.")
         return
     assert_can_add_branch(tenant_id, current)
     if proposed > int(require_message_plan("free").branches_cap or 0):

@@ -35,9 +35,9 @@ from services.ai_setup.schemas import (
     HandoffPolicy,
     LanguagePolicy,
     LocalizedLabels,
+    PricesSection,
     RestrictedPolicy,
     ServiceRecord,
-    ServicesSection,
     StylePolicy,
 )
 from services.ai_setup.scrub_restore import restore_keyword_scrubbed_content
@@ -206,25 +206,6 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
         updated_by=updated_by,
     )
 
-    services = ServicesSection(
-        items=[
-            ServiceRecord(
-                id="laser_hair_removal",
-                labels=LocalizedLabels(
-                    en="Laser hair removal",
-                    ar="إزالة الشعر بالليزر",
-                    fr="Épilation laser",
-                ),
-                available=True,
-                category="laser",
-                aliases=["laser", "ليزر", "épilation", "hair removal"],
-                audience="general",
-            )
-        ]
-    )
-    _put_section("services", services.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
-    seeded["services"] = ["laser_hair_removal"]
-
     branches = BranchesSection(
         items=[
             BranchRecord(
@@ -328,6 +309,27 @@ def seed_owner_confirmed_structured_truth(*, tenant_id: str, updated_by: str, st
         "Structured catalog/price_entries imported only from proven numeric sources; no invented thresholds or amounts."
     )
 
+    from services.ai_setup.prices_catalog_merge import merge_service_records_into_prices
+
+    prices_env = get_draft("prices", tenant_id=tenant_id, create_default=True)
+    prices = merge_service_records_into_prices(
+        PricesSection.model_validate(prices_env.payload),
+        {
+            "laser_hair_removal": ServiceRecord(
+                id="laser_hair_removal",
+                labels=LocalizedLabels(
+                    en="Laser hair removal",
+                    ar="إزالة الشعر بالليزر",
+                    fr="Épilation laser",
+                ),
+                available=True,
+                aliases=["laser", "ليزر", "épilation", "hair removal"],
+            )
+        },
+    )
+    _put_section("prices", prices.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
+    seeded["services"] = ["laser_hair_removal"]
+
     return seeded
 
 
@@ -386,13 +388,12 @@ def run_production_content_migration(
                 qa_stats["usable_rows"] += 1
     drafts = {
         name: dict(get_draft(name, tenant_id=tid, create_default=True).payload)
-        for name in ("restricted", "services", "prices", "faq", "knowledge", "handoff")
+        for name in ("restricted", "prices", "faq", "knowledge", "handoff")
     }
     conflicts = [
         f.model_dump(mode="json")
         for f in validate_restricted_conflicts(
             restricted=drafts["restricted"],
-            services=drafts["services"],
             prices=drafts["prices"],
             faq=drafts["faq"],
             knowledge=drafts["knowledge"],

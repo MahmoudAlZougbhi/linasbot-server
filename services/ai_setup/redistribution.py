@@ -23,7 +23,6 @@ from services.ai_setup.schemas import (
     KnowledgeSection,
     PricesSection,
     ServiceRecord,
-    ServicesSection,
     StylePolicy,
 )
 from services.ai_setup.section_classifier import (
@@ -121,8 +120,6 @@ def redistribute_knowledge_draft(
     knowledge = KnowledgeSection.model_validate(knowledge_env.payload)
     care_env = get_draft("care", tenant_id=tenant_id, create_default=True)
     care = CareSection.model_validate(care_env.payload)
-    services_env = get_draft("services", tenant_id=tenant_id, create_default=True)
-    services = ServicesSection.model_validate(services_env.payload)
     branches_env = get_draft("branches", tenant_id=tenant_id, create_default=True)
     branches = BranchesSection.model_validate(branches_env.payload)
     handoff_env = get_draft("handoff", tenant_id=tenant_id, create_default=True)
@@ -136,7 +133,7 @@ def redistribute_knowledge_draft(
     dyn_env = get_draft("dynamic_messages", tenant_id=tenant_id, create_default=True)
     dyn = DynamicMessagesSection.model_validate(dyn_env.payload)
 
-    services_by_id = {item.id: item for item in services.items}
+    services_by_id: dict[str, ServiceRecord] = {}
     # Drop prior redistributed Care rows so remigrate can re-home (e.g. Marwa → handoff).
     care_by_id = {item.id: item for item in care.items if _REDISTRIBUTED_TAG not in (item.tags or [])}
     dyn_by_id = {item.id: item for item in dyn.items if not str(item.id).startswith("redistributed_")}
@@ -384,6 +381,9 @@ def redistribute_knowledge_draft(
 
     availability_conflicts = detect_service_availability_conflicts(classifications)
 
+    from services.ai_setup.prices_catalog_merge import merge_service_records_into_prices
+
+    prices = merge_service_records_into_prices(prices, services_by_id)
     _put(
         "knowledge",
         KnowledgeSection(items=next_knowledge, notes=knowledge.notes).model_dump(mode="json"),
@@ -393,12 +393,6 @@ def redistribute_knowledge_draft(
     _put(
         "care",
         CareSection(items=list(care_by_id.values()), notes=care.notes).model_dump(mode="json"),
-        tenant_id=tenant_id,
-        updated_by=updated_by,
-    )
-    _put(
-        "services",
-        ServicesSection(items=list(services_by_id.values()), notes=services.notes).model_dump(mode="json"),
         tenant_id=tenant_id,
         updated_by=updated_by,
     )
@@ -446,7 +440,6 @@ def section_counts_snapshot(*, tenant_id: str) -> dict[str, Any]:
         get_draft("knowledge", tenant_id=tenant_id, create_default=True).payload
     )
     care = CareSection.model_validate(get_draft("care", tenant_id=tenant_id, create_default=True).payload)
-    services = ServicesSection.model_validate(get_draft("services", tenant_id=tenant_id, create_default=True).payload)
     branches = BranchesSection.model_validate(get_draft("branches", tenant_id=tenant_id, create_default=True).payload)
     handoff = HandoffPolicy.model_validate(get_draft("handoff", tenant_id=tenant_id, create_default=True).payload)
     prices = PricesSection.model_validate(get_draft("prices", tenant_id=tenant_id, create_default=True).payload)
@@ -457,8 +450,11 @@ def section_counts_snapshot(*, tenant_id: str) -> dict[str, Any]:
     counts["knowledge_archived"] = sum(1 for i in knowledge.items if i.status == "archived")
     counts["knowledge_total"] = len(knowledge.items)
     counts["care"] = len(care.items)
-    counts["services"] = len(services.items)
-    counts["services_available"] = sum(1 for i in services.items if i.available)
+    from services.ai_setup.pricing.section import section_catalog_items
+
+    catalog_items = section_catalog_items(prices)
+    counts["services"] = len(catalog_items)
+    counts["services_available"] = sum(1 for i in catalog_items if i.active)
     counts["branches"] = len(branches.items)
     counts["handoff_contacts"] = len(handoff.contacts)
     counts["handoff_policy_chars"] = len(handoff.policy_text or "")

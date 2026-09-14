@@ -11,18 +11,20 @@ from services.brain.retrieve.lexical import BM25_K1, bm25_scores, search_cards, 
 
 def test_lexical_finds_hair_removal_only() -> None:
     sections = {
-        "services": {
-            "items": [
+        "prices": {
+            "catalog": [
                 {
                     "id": "hair",
                     "labels": {"en": "Hair Removal", "ar": "إزالة الشعر"},
                     "aliases": ["lazer", "laser"],
                     "ai_search_title": "Laser hair removal",
+                    "active": True,
                 },
                 {
                     "id": "bots",
                     "labels": {"en": "Botox"},
                     "ai_search_title": "Botox injection",
+                    "active": True,
                 },
             ]
         },

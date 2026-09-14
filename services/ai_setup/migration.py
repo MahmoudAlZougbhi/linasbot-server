@@ -321,10 +321,9 @@ def _detect_conflicts(*, tenant_id: str) -> list[dict[str, Any]]:
     for section in CM_SECTIONS:
         env = get_draft(section, tenant_id=tenant_id, create_default=True)
         drafts[section] = dict(env.payload)
-    failures = validate_restricted_conflicts(
-        restricted=drafts.get("restricted") or {},
-        services=drafts.get("services"),
-        prices=drafts.get("prices"),
+        failures = validate_restricted_conflicts(
+            restricted=drafts.get("restricted") or {},
+            prices=drafts.get("prices"),
         faq=drafts.get("faq"),
         knowledge=drafts.get("knowledge"),
         handoff=drafts.get("handoff"),

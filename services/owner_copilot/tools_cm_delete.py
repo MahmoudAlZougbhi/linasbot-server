@@ -16,7 +16,6 @@ ITEMS_SECTIONS = frozenset(
         "faq",
         "knowledge",
         "care",
-        "services",
         "branches",
         "prices",
         "opening_hours",
@@ -27,7 +26,7 @@ ITEMS_SECTIONS = frozenset(
 # Soft-archive via ``status`` when present.
 STATUS_ARCHIVE_SECTIONS = frozenset({"faq", "knowledge", "care"})
 # Soft-hide via ``available=False``.
-AVAILABLE_SECTIONS = frozenset({"services", "branches"})
+AVAILABLE_SECTIONS = frozenset({"branches"})
 
 # Field-shaped sections: "delete" clears non-empty string/list fields (with confirm bar).
 FIELD_SECTIONS = frozenset(

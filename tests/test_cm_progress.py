@@ -50,7 +50,7 @@ def test_progress_marks_filled_complete(tenant_root: Path) -> None:
     rows = list_section_fill_status("progress-tenant", create_missing=False)
     by_sec = {r["section"]: r["status"] for r in rows}
     assert by_sec["ai_basics"] == "complete"
-    assert by_sec["services"] == "incomplete"
+    assert by_sec["prices"] == "incomplete"
     summary = progress_summary("progress-tenant", create_missing=False)
     assert summary["complete"] >= 1
     assert "ai_basics" in summary["complete_sections"]

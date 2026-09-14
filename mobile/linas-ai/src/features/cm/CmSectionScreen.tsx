@@ -16,7 +16,6 @@ import { OffDaysEditor } from './editors/OffDaysEditor';
 import { AiLimitsEditor } from './editors/AiLimitsEditor';
 import { RestrictedEditor } from './editors/PolicyEditors';
 import { PricesEditor } from './editors/PricesEditor';
-import { ServicesEditor } from './editors/ServicesEditor';
 import { useCmDraft } from './useCmDraft';
 import { useState } from 'react';
 import { ScrollView } from 'react-native';
@@ -50,8 +49,6 @@ function SectionBody({
   canSave?: boolean;
 }) {
   switch (section) {
-    case 'services':
-      return <ServicesEditor payload={payload} onChange={onChange} />;
     case 'prices':
       return <PricesEditor payload={payload} onChange={onChange} />;
     case 'care':

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from services.ai_setup.prod_migration import run_production_content_migration
 from services.ai_setup.redistribution import redistribute_knowledge_draft, section_counts_snapshot
-from services.ai_setup.schemas import KnowledgeSection, ServicesSection
+from services.ai_setup.schemas import KnowledgeSection, PricesSection
 from services.ai_setup.section_classifier import classify_article, detect_service_availability_conflicts
 from services.ai_setup.storage import get_draft
 
@@ -225,12 +225,13 @@ def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monke
     assert "## Greeting Rule" in archived_titles
     assert "Beard Area Pricing and Rule" in archived_titles
 
-    services = ServicesSection.model_validate(get_draft("services", tenant_id=tenant).payload)
-    service_ids = {s.id for s in services.items}
-    assert "laser_hair_removal" in service_ids
-    assert "tattoo_removal" in service_ids
-    tattoo = next(s for s in services.items if s.id == "tattoo_removal")
-    assert tattoo.available is True
+    prices = PricesSection.model_validate(get_draft("prices", tenant_id=tenant).payload)
+    from services.ai_setup.pricing.section import section_catalog_items
+
+    catalog = {item.id: item for item in section_catalog_items(prices)}
+    assert "laser_hair_removal" in catalog
+    assert "tattoo_removal" in catalog
+    assert catalog["tattoo_removal"].active is True
 
     handoff = get_draft("handoff", tenant_id=tenant).payload
     assert "Appointment booking rules" in str(handoff.get("policy_text") or "")

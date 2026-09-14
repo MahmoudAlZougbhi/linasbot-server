@@ -33,7 +33,6 @@ from services.ai_setup.schemas import (
     PricesSection,
     RequestsAppointmentsSection,
     RestrictedPolicy,
-    ServicesSection,
     StylePolicy,
     default_section_payload,
 )
@@ -44,7 +43,6 @@ SECTION_MODELS: dict[str, type[CmBaseModel]] = {
     "languages": LanguagePolicy,
     "style": StylePolicy,
     "dynamic_messages": DynamicMessagesSection,
-    "services": ServicesSection,
     "branches": BranchesSection,
     "opening_hours": OpeningHoursSection,
     "prices": PricesSection,
@@ -83,7 +81,6 @@ SECTION_PROMPTS: dict[str, str] = {
     ),
     "style": "كيف تريد أسلوب الرد: رسمي أم ودي؟ قصير أم مفصّل؟ هل تستخدم إيموجي؟",
     "dynamic_messages": "هل تريد رسالة ترحيب خاصة؟ اكتب نص الترحيب إن وجد، أو قل تخطي.",
-    "services": "ما الخدمات أو المنتجات التي تقدّمها؟ اذكرها سطراً بسطر إن أمكن.",
     "branches": "هل لديك فروع أو مواقع؟ إن نعم، اذكر الاسم والعنوان/المدينة. إن لا، قل لا يوجد.",
     "opening_hours": ("ما ساعات العمل؟ يمكنك إنشاء جداول باسم (رجال/نساء/فرع). لكل يوم: من–إلى أو عطلة. أو قل لاحقاً."),
     "prices": "هل تريد إضافة أسعار الآن؟ اذكر الخدمة والسعر والعملة، أو قل لاحقاً.",
@@ -249,7 +246,6 @@ def _heuristic_patch(section: str, message: str) -> dict[str, Any] | None:
                 item["enabled"] = True
         return {"items": items}
     if section in {
-        "services",
         "branches",
         "knowledge",
         "care",

@@ -251,9 +251,11 @@ def _scan_section_content(tenant_id: str) -> list[dict[str, Any]]:
             texts.append((str(item.get("id") or item.get("title") or "?"), str(item.get("body") or "")))
         out.extend(_scan_text_quality(section, texts))
 
-    services = _payload(tenant_id, "services")
-    if services:
-        out.extend(_scan_title_duplicates("services", services))
+    prices = _payload(tenant_id, "prices")
+    if prices:
+        out.extend(
+            _scan_title_duplicates("prices", {"items": list(prices.get("catalog") or prices.get("items") or [])})
+        )
 
     style = _payload(tenant_id, "style")
     if style:
@@ -274,24 +276,21 @@ def _scan_section_content(tenant_id: str) -> list[dict[str, Any]]:
 def _scan_improve_opportunities(tenant_id: str, summary: dict[str, Any]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     done = set(summary.get("done_sections") or [])
-    services = _payload(tenant_id, "services")
     prices = _payload(tenant_id, "prices")
-    if "services" in done and services:
-        svc_n = len([it for it in (services.get("items") or []) if isinstance(it, dict)])
-        has_prices = False
-        if isinstance(prices, dict):
-            has_prices = any(
-                isinstance(prices.get(k), list) and prices.get(k) for k in ("catalog", "price_entries", "items")
-            ) or bool(str(prices.get("policy_text") or "").strip())
-        if svc_n and not has_prices and "prices" not in done:
+    if isinstance(prices, dict):
+        catalog = [it for it in (prices.get("catalog") or []) if isinstance(it, dict)]
+        has_quotes = any(isinstance(prices.get(k), list) and prices.get(k) for k in ("price_entries", "items")) or bool(
+            str(prices.get("policy_text") or "").strip()
+        )
+        if catalog and not has_quotes:
             out.append(
                 _finding(
                     category="improve",
                     severity="medium",
                     section="prices",
                     title="Services without prices",
-                    detail=f"{svc_n} service(s) filled but prices still empty — AI cannot quote numbers safely.",
-                    hint="Add catalog entries or a clear price policy.",
+                    detail=f"{len(catalog)} service(s) in the catalog but no price entries — AI cannot quote numbers safely.",
+                    hint="Add price entries or a clear price policy.",
                 )
             )
 

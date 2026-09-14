@@ -31,7 +31,7 @@ def load_relations(tenant_id: str) -> dict[str, Any]:
     except PublishedVersionError:
         return {"ok": False, "relations": {}}
     sections = sections if isinstance(sections, dict) else {}
-    services = _items(sections, "prices") or _items(sections, "services")
+    services = _items(sections, "prices")
     products = _items(sections, "products")
     branches = _items(sections, "branches")
     faqs = _items(sections, "faq")

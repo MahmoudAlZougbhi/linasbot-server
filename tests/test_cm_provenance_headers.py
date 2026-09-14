@@ -44,4 +44,4 @@ def test_sanitize_style_payload() -> None:
 def test_sanitize_section_payload_routes_by_section() -> None:
     payload = {"short_introduction": "--- redistributed from id=a ---\nHi"}
     assert sanitize_section_payload("ai_basics", payload)["short_introduction"] == "Hi"
-    assert sanitize_section_payload("services", payload) == payload
+    assert sanitize_section_payload("prices", payload) == payload

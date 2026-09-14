@@ -131,20 +131,20 @@ def test_service_french_english_metadata() -> None:
     calls: list[dict] = []
     _recording_generator(calls)
     out = enrich_section_payload(
-        "services",
+        "prices",
         {
-            "items": [
+            "catalog": [
                 {
                     "id": "s1",
                     "labels": {"fr": "Épilation laser", "en": "", "ar": ""},
                     "notes": "Soin d'épilation laser pour le corps.",
-                    "available": True,
+                    "active": True,
                 }
             ]
         },
         {},
     )
-    item = out["items"][0]
+    item = out["catalog"][0]
     assert item["labels"]["fr"] == "Épilation laser"
     assert item["ai_search_title"] == "Laser Hair Removal Service"
     assert not contains_non_english_script(item["ai_search_description"])

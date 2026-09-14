@@ -90,9 +90,9 @@ def test_progress_summary_and_fill_plan(tenant: str) -> None:
         tenant_id=tenant,
     )
     put_draft(
-        "services",
+        "prices",
         payload={
-            "items": [{"id": "laser", "labels": {"en": "Laser", "ar": "ليزر", "fr": "", "franco": ""}}],
+            "catalog": [{"id": "laser", "labels": {"en": "Laser", "ar": "ليزر", "fr": "", "franco": ""}}],
             "notes": None,
         },
         if_match=None,
@@ -102,13 +102,13 @@ def test_progress_summary_and_fill_plan(tenant: str) -> None:
 
     summary2 = progress_summary(tenant, create_missing=False)
     assert "ai_basics" in summary2["done_sections"]
-    assert "services" in summary2["done_sections"]
+    assert "prices" in summary2["done_sections"]
     assert "ai_basics" not in summary2["remaining_sections"]
 
     plan = start_fill_plan(tenant_id=tenant, user_id="owner1")
     assert "ai_basics" in plan["done"]
-    assert "services" in plan["done"]
-    assert plan["current_section"] not in {"ai_basics", "services"}
+    assert "prices" in plan["done"]
+    assert plan["current_section"] not in {"ai_basics", "prices"}
     assert plan["focus"]["section"] == plan["current_section"]
     assert plan["status"] == "active"
 

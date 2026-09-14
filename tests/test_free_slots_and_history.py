@@ -22,6 +22,10 @@ def test_free_branch_and_service_caps(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.billing.entitlements_service import entitlements_store
 
     monkeypatch.setenv("FREE_PLAN_ENFORCEMENT_ENABLED", "true")
+    monkeypatch.setattr(
+        "services.billing.membership.free_slots.free_enforcement_enabled",
+        lambda: True,
+    )
     entitlements_store.set_plan(tenant_id="free-slots", plan_id="free", status="active", source="admin")
     assert_cm_section_slots(
         "free-slots",
@@ -46,9 +50,9 @@ def test_free_branch_and_service_caps(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(SlotLimitError):
         assert_cm_section_slots(
             "free-slots",
-            "services",
-            {"items": [{"id": str(i)} for i in range(6)]},
-            current_payload={"items": [{"id": str(i)} for i in range(5)]},
+            "prices",
+            {"catalog": [{"id": str(i)} for i in range(6)]},
+            current_payload={"catalog": [{"id": str(i)} for i in range(5)]},
         )
 
 

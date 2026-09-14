@@ -36,6 +36,8 @@ GONE_PATHS = (
     "services/entitlements_service.py",
     "services/search_metadata/luna_titles.py",
     "services/products/luna_title_resolver.py",
+    "modules/mobile_services_api.py",
+    "services/service_catalog",
 )
 
 KEEP_PATHS = (
@@ -72,6 +74,8 @@ GONE_IMPORT_FRAGMENTS = (
     "services.tenant_mobile_dashboard.",
     "services.products.luna_title_resolver",
     "services.search_metadata.luna_titles",
+    "modules.mobile_services_api",
+    "services.service_catalog",
 )
 
 PY_ROOTS = ("services", "modules", "handlers", "scripts")
@@ -306,3 +310,36 @@ def test_wave_d_one_credit_meter() -> None:
     assert debit_ai_usage(tenant_id="wave-d", prompt_tokens=10, completion_tokens=10) is None
     assert "lite" in subscription_product_map().values()
     assert credit_product_map()["com.linasai.credits.5000"] == 5000
+
+
+def test_wave_e_hub_tiles_and_prices_sot() -> None:
+    from services.ai_setup.constants import CM_SECTIONS
+
+    hub = (ROOT / "mobile/linas-ai/src/features/cm/cmSections.ts").read_text(encoding="utf-8")
+    cards = (ROOT / "services/brain/retrieve/cards.py").read_text(encoding="utf-8")
+    graph = (ROOT / "services/brain/relations/graph.py").read_text(encoding="utf-8")
+    pipeline = (ROOT / "services/ai_setup/runtime_pipeline.py").read_text(encoding="utf-8")
+    main = (ROOT / "main.py").read_text(encoding="utf-8")
+    assert "id: 'services'" not in hub
+    for tile in (
+        "knowledge",
+        "ai_basics",
+        "branches",
+        "prices",
+        "comments",
+        "requests_appointments",
+    ):
+        assert tile in hub
+    assert "services" not in CM_SECTIONS
+    assert "prices" in CM_SECTIONS
+    assert "faq" in CM_SECTIONS
+    assert 'legacy = sections.get("services")' not in cards
+    assert '_items(sections, "services")' not in graph
+    assert 'sections.get("services")' not in pipeline
+    assert "mobile_services_api" not in main
+    assert not (ROOT / "modules/mobile_services_api.py").exists()
+    assert not (ROOT / "services/service_catalog").exists()
+    assert not (ROOT / "mobile/linas-ai/src/features/cm/editors/ServicesEditor.tsx").exists()
+    keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
+    assert "WAVE E" in keep
+    assert "prices.catalog" in keep

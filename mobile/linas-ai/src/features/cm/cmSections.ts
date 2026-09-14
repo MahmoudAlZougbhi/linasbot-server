@@ -5,7 +5,6 @@ export type CmSectionId =
   | 'languages'
   | 'style'
   | 'dynamic_messages'
-  | 'services'
   | 'branches'
   | 'opening_hours'
   | 'prices'
@@ -61,13 +60,6 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     id: 'dynamic_messages',
     title: 'Greetings',
     description: 'Greeting rules with title and custom note (edited inside AI Basics).',
-    mobileSupported: true,
-    showInCmHub: false,
-  },
-  {
-    id: 'services',
-    title: 'Services',
-    description: 'Legacy service catalog (name, note, available).',
     mobileSupported: true,
     showInCmHub: false,
   },
@@ -163,7 +155,6 @@ export const CM_HUB_PROGRESS_EXCLUDED: CmSectionId[] = [
   'languages',
   'style',
   'dynamic_messages',
-  'services',
   'opening_hours',
   'off_days',
   'care',

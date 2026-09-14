@@ -13,7 +13,7 @@ METADATA_SECTIONS = frozenset(
         "knowledge",
         "care",
         "faq",
-        "services",
+        "prices",
         "branches",
         "opening_hours",
         "dynamic_messages",

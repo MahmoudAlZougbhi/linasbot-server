@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from services.ai_setup.schemas import BranchesSection, RestrictedPolicy, ServicesSection
+from services.ai_setup.schemas import BranchesSection, PricesSection, RestrictedPolicy
 
 #: Deterministic-only regexes. Safe to reuse (e.g. runtime_pipeline step 6) WITHOUT invoking
 #: the async Query Interpreter, which per plan §12 must run only after FAQ miss (step 10).
@@ -75,12 +75,13 @@ def _as_restricted(value: RestrictedPolicy | dict[str, Any] | None) -> Restricte
     return RestrictedPolicy.model_validate(value)
 
 
-def _as_services(value: ServicesSection | dict[str, Any] | None) -> ServicesSection:
+def _catalog_items(value: PricesSection | dict[str, Any] | None) -> list[Any]:
     if value is None:
-        return ServicesSection()
-    if isinstance(value, ServicesSection):
-        return value
-    return ServicesSection.model_validate(value)
+        return []
+    from services.ai_setup.pricing.section import normalize_prices_section, section_catalog_items
+
+    section = value if isinstance(value, PricesSection) else normalize_prices_section(value)
+    return list(section_catalog_items(section))
 
 
 def _as_branches(value: BranchesSection | dict[str, Any] | None) -> BranchesSection:
@@ -94,7 +95,7 @@ def _as_branches(value: BranchesSection | dict[str, Any] | None) -> BranchesSect
 def interpret_query_deterministic(
     message: str,
     *,
-    services: ServicesSection | dict[str, Any] | None = None,
+    prices: PricesSection | dict[str, Any] | None = None,
     branches: BranchesSection | dict[str, Any] | None = None,
     restricted: RestrictedPolicy | dict[str, Any] | None = None,
 ) -> InterpretedQuery:
@@ -113,11 +114,12 @@ def interpret_query_deterministic(
             result.restricted_topic_id = topic.id
             break
 
-    services_section = _as_services(services)
-    for service in services_section.items:
-        markers = [service.id, service.labels.en, service.labels.ar, service.labels.fr, *service.aliases]
+    for item in _catalog_items(prices):
+        if item.active is False:
+            continue
+        markers = [item.id, item.labels.en, item.labels.ar, item.labels.fr, *item.aliases]
         if _text_mentions_any(text, [m for m in markers if m]):
-            result.service_id = service.id
+            result.service_id = item.id
             break
 
     branches_section = _as_branches(branches)
@@ -133,13 +135,13 @@ def interpret_query_deterministic(
 async def interpret_query(
     message: str,
     *,
-    services: ServicesSection | dict[str, Any] | None = None,
+    prices: PricesSection | dict[str, Any] | None = None,
     branches: BranchesSection | dict[str, Any] | None = None,
     restricted: RestrictedPolicy | dict[str, Any] | None = None,
     use_llm: bool | None = None,
 ) -> InterpretedQuery:
     """Deterministic extraction, optionally enriched by a small, best-effort LLM call."""
-    result = interpret_query_deterministic(message, services=services, branches=branches, restricted=restricted)
+    result = interpret_query_deterministic(message, prices=prices, branches=branches, restricted=restricted)
     should_use_llm = interpreter_llm_enabled() if use_llm is None else use_llm
     if not should_use_llm:
         return result

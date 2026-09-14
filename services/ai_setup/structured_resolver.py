@@ -18,7 +18,6 @@ from services.ai_setup.schemas import (
     PricesSection,
     RestrictedPolicy,
     RestrictedTopic,
-    ServicesSection,
 )
 
 
@@ -119,15 +118,17 @@ def resolve_handoff(
     return HandoffResolution(dtype, value, matched.label or matched.id, best.id)
 
 
-def resolve_service_facts(services: ServicesSection | dict[str, Any], service_id: str) -> list[AnswerFact]:
-    section = services if isinstance(services, ServicesSection) else ServicesSection.model_validate(services)
-    for service in section.items:
-        if service.id == service_id:
+def resolve_service_facts(prices: PricesSection | dict[str, Any], service_id: str) -> list[AnswerFact]:
+    from services.ai_setup.pricing.section import normalize_prices_section, section_catalog_items
+
+    section = normalize_prices_section(prices if isinstance(prices, dict) else prices)
+    for item in section_catalog_items(section):
+        if item.id == service_id:
             return [
                 AnswerFact(
                     kind="service_available",
-                    value="true" if service.available else "false",
-                    source_id=f"service:{service.id}",
+                    value="true" if item.active else "false",
+                    source_id=f"service:{item.id}",
                 )
             ]
     return []
@@ -260,21 +261,25 @@ def resolve_opening_hours_facts(opening_hours: OpeningHoursSection | dict[str, A
     return facts
 
 
-def resolve_service_catalog_facts(services: ServicesSection | dict[str, Any]) -> list[AnswerFact]:
-    """Expose available services as grounded facts (no invented services)."""
-    section = services if isinstance(services, ServicesSection) else ServicesSection.model_validate(services)
+def resolve_service_catalog_facts(prices: PricesSection | dict[str, Any]) -> list[AnswerFact]:
+    """Expose the published prices.catalog as grounded service facts (no invented services)."""
+    from services.ai_setup.pricing.section import normalize_prices_section, section_catalog_items
+
+    section = normalize_prices_section(prices if isinstance(prices, dict) else prices)
     facts: list[AnswerFact] = []
-    for service in section.items:
-        label = service.labels.en or service.labels.ar or service.id
+    for item in section_catalog_items(section):
+        if item.active is False:
+            continue
+        label = item.labels.en or item.labels.ar or item.id
         facts.append(
             AnswerFact(
                 kind="service_catalog",
-                value=f"{label} available={service.available}",
-                source_id=f"service:{service.id}",
+                value=f"{label} available=True",
+                source_id=f"service:{item.id}",
             )
         )
-        if service.notes:
-            facts.append(AnswerFact(kind="service_notes", value=service.notes, source_id=f"service:{service.id}:notes"))
+        if item.notes:
+            facts.append(AnswerFact(kind="service_notes", value=item.notes, source_id=f"service:{item.id}:notes"))
     return facts
 
 
