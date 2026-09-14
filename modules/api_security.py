@@ -288,7 +288,7 @@ _KEEP_TENANT_API_PREFIXES: tuple[str, ...] = (
     "/api/owner-copilot",
     "/api/mobile",
     "/api/tiktok",
-    "/api/comments/inbox",
+    "/api/comments",
     "/api/entitlements",
     "/api/schedule",
     "/api/platform",
