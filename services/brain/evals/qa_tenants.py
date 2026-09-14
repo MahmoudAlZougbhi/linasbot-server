@@ -1,4 +1,4 @@
-"""Isolated QA corpora. Not production Linas Laser business data."""
+"""Isolated QA corpora. Not production business data."""
 
 from __future__ import annotations
 
@@ -13,12 +13,12 @@ def _week(open_t: str, close_t: str, *, sunday_off: bool = False) -> dict[str, A
     return week
 
 
-def linas_like_qa_sections() -> dict[str, Any]:
-    """Two-branch clinic shaped like Linas Laser, with distinct clocks and a QA product."""
+def shop_a_qa_sections() -> dict[str, Any]:
+    """Two-branch Shop A QA corpus with distinct clocks and a sample catalog."""
     return {
         "ai_basics": {
-            "assistant_name": "Lina QA",
-            "clinic_name": "Linas Laser QA",
+            "assistant_name": "Shop A QA",
+            "clinic_name": "Shop A QA",
             "identity_summary": "QA clone. Never invent hours or prices.",
         },
         "style": {"tone": "friendly", "style_body": "Short replies. Quote published clocks exactly."},
@@ -75,49 +75,49 @@ def linas_like_qa_sections() -> dict[str, Any]:
         "prices": {
             "catalog": [
                 {
-                    "id": "laser",
-                    "labels": {"en": "Laser hair removal", "ar": "ليزر"},
-                    "aliases": ["laser", "ليزر"],
+                    "id": "consultation",
+                    "labels": {"en": "Consultation", "ar": "استشارة"},
+                    "aliases": ["consultation", "استشارة"],
                     "active": True,
                     "attachments": [
                         {
-                            "id": "att_laser_women",
+                            "id": "att_consult_photo",
                             "kind": "image",
-                            "title": "Laser women photo",
-                            "caption": "Send this photo when the customer asks for laser pictures.",
-                            "url": "https://qa.linas.example/laser-women.png",
+                            "title": "Consultation photo",
+                            "caption": "Send this photo when the customer asks for consultation pictures.",
+                            "url": "https://qa.shop-a.example/consult-photo.png",
                             "status": "active",
                         },
                         {
-                            "id": "att_laser_video",
+                            "id": "att_consult_video",
                             "kind": "video",
-                            "title": "Laser session video",
-                            "caption": "Send this video when the customer asks how a laser session looks.",
-                            "url": "https://qa.linas.example/videos/laser-session.mp4",
+                            "title": "Consultation session video",
+                            "caption": "Send this video when the customer asks how a consultation looks.",
+                            "url": "https://qa.shop-a.example/videos/consult-session.mp4",
                             "status": "active",
                         },
                         {
-                            "id": "att_laser_booking_link",
+                            "id": "att_consult_booking_link",
                             "kind": "link",
-                            "title": "Laser booking link",
+                            "title": "Consultation booking link",
                             "caption": "Send this link when the customer asks for the booking page.",
-                            "url": "https://qa.linas.example/book/laser",
+                            "url": "https://qa.shop-a.example/book/consult",
                             "status": "active",
                         },
                     ],
                 },
                 {
-                    "id": "face_laser",
-                    "labels": {"en": "Face laser", "ar": "ليزر الوجه"},
-                    "aliases": ["face laser", "ليزر الوجه"],
+                    "id": "membership",
+                    "labels": {"en": "Membership", "ar": "عضوية"},
+                    "aliases": ["membership", "عضوية"],
                     "active": True,
                     "attachments": [
                         {
-                            "id": "att_face_photo",
+                            "id": "att_member_photo",
                             "kind": "image",
-                            "title": "Face laser photo",
-                            "caption": "Send this photo for face laser examples.",
-                            "url": "https://qa.linas.example/face-laser.png",
+                            "title": "Membership photo",
+                            "caption": "Send this photo for membership examples.",
+                            "url": "https://qa.shop-a.example/member-photo.png",
                             "status": "active",
                         }
                     ],
@@ -125,32 +125,32 @@ def linas_like_qa_sections() -> dict[str, Any]:
             ],
             "price_entries": [
                 {
-                    "id": "laser_beirut",
-                    "catalog_item_id": "laser",
+                    "id": "consult_beirut",
+                    "catalog_item_id": "consultation",
                     "branch_id": "beirut",
                     "amount": 80,
                     "currency": "USD",
                     "active": True,
                 },
                 {
-                    "id": "laser_antelias",
-                    "catalog_item_id": "laser",
+                    "id": "consult_antelias",
+                    "catalog_item_id": "consultation",
                     "branch_id": "antelias",
                     "amount": 70,
                     "currency": "USD",
                     "active": True,
                 },
                 {
-                    "id": "face_beirut",
-                    "catalog_item_id": "face_laser",
+                    "id": "member_beirut",
+                    "catalog_item_id": "membership",
                     "branch_id": "beirut",
                     "amount": 50,
                     "currency": "USD",
                     "active": True,
                 },
                 {
-                    "id": "face_antelias",
-                    "catalog_item_id": "face_laser",
+                    "id": "member_antelias",
+                    "catalog_item_id": "membership",
                     "branch_id": "antelias",
                     "amount": 45,
                     "currency": "USD",
@@ -175,7 +175,7 @@ def linas_like_qa_sections() -> dict[str, Any]:
                 {
                     "id": "req_appt",
                     "type": "APPOINTMENT",
-                    "name": "موعد ليزر",
+                    "name": "موعد استشارة",
                     "notes": "Collect name, branch, preferred day. Confirm before submit.",
                     "enabled": True,
                 },
@@ -205,7 +205,7 @@ def shop_b_qa_sections() -> dict[str, Any]:
         "ai_basics": {
             "assistant_name": "Nora QA",
             "clinic_name": "North Spa QA",
-            "identity_summary": "QA tenant B. Never use Linas facts.",
+            "identity_summary": "QA tenant B. Never use Shop A facts.",
         },
         "style": {"tone": "formal", "style_body": "Formal. Quote this tenant only."},
         "branches": {
@@ -255,27 +255,27 @@ def shop_b_qa_sections() -> dict[str, Any]:
     }
 
 
-def linas_like_products() -> list[dict[str, Any]]:
+def shop_a_products() -> list[dict[str, Any]]:
     return [
         {
             "id": "alpha",
             "title": "Product Alpha",
-            "description": "Linas QA Product Alpha. Price 10 USD.",
+            "description": "Shop A QA Product Alpha. Price 10 USD.",
             "price": "10",
             "currency": "USD",
-            "image_url": "https://qa.linas.example/alpha.png",
-            "product_url": "https://qa.linas.example/products/alpha",
+            "image_url": "https://qa.shop-a.example/alpha.png",
+            "product_url": "https://qa.shop-a.example/products/alpha",
             "status": "active",
         },
         {
             "id": "aftercare_cream",
             "title": "After Care Cream",
-            "description": "Post-laser cream. Price 25 USD.",
+            "description": "Care kit. Price 25 USD.",
             "price": "25",
             "currency": "USD",
-            "image_url": "https://qa.linas.example/aftercare.png",
-            "product_url": "https://qa.linas.example/products/aftercare",
-            "video_url": "https://qa.linas.example/videos/aftercare.mp4",
+            "image_url": "https://qa.shop-a.example/aftercare.png",
+            "product_url": "https://qa.shop-a.example/products/aftercare",
+            "video_url": "https://qa.shop-a.example/videos/aftercare.mp4",
             "status": "active",
         },
     ]
@@ -302,7 +302,7 @@ def clinic_c_qa_sections() -> dict[str, Any]:
         "ai_basics": {
             "assistant_name": "Cora QA",
             "clinic_name": "Clinic C QA",
-            "identity_summary": "QA tenant C. Never use Linas or Shop B facts.",
+            "identity_summary": "QA tenant C. Never use Shop A or Shop B facts.",
         },
         "style": {"tone": "direct", "style_body": "Direct. Quote this tenant only."},
         "knowledge": {

@@ -9,7 +9,7 @@ from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.contracts.plan import PlannerPlan, PlannerTask
 from services.brain.contracts.turn import CustomerTurn, MediaView
 from services.brain.coverage import coverage_ok
-from services.brain.evals.golden_pack_linas import run_golden_pack_linas
+from services.brain.evals.golden_pack import run_golden_pack
 from services.brain.grounding.facts import evidence_supports_text, ungrounded_amounts, ungrounded_claims
 from services.brain.providers.spaces import spaces_snapshot
 from services.brain.retrieve.cards import cards_from_sections
@@ -232,7 +232,7 @@ def test_identity_prompt_includes_ai_setup_greeting_behavior() -> None:
 
 
 def test_golden_pack_and_lab_exercises() -> None:
-    golden = run_golden_pack_linas()
+    golden = run_golden_pack()
     assert golden["ok"] is True
     assert golden["live_spend"] is False
     report = run_lab_verification_exercises(tenant_id="lab")

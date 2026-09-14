@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.brain.evals.qa_tenants import linas_like_qa_sections, shop_b_qa_sections
+from services.brain.evals.qa_tenants import shop_a_qa_sections, shop_b_qa_sections
 from services.brain.planner.heuristic import overlay_plan, plan_message
 from services.brain.retrieve.cards import cards_from_sections
 from services.brain.retrieve.expand import expand_hits
@@ -43,18 +43,18 @@ def test_overlay_keeps_actions_when_llm_drops_them() -> None:
     assert "human_request" in types
 
 
-def test_linas_qa_laser_photo_stays_on_linas() -> None:
-    linas = cards_from_sections(linas_like_qa_sections(), tenant_id="qa-linas")
+def test_shop_a_qa_photo_stays_on_shop_a() -> None:
+    linas = cards_from_sections(shop_a_qa_sections(), tenant_id="qa-shop-a")
     other = cards_from_sections(shop_b_qa_sections(), tenant_id="qa-shop-b")
     linas_blob = " ".join(card.search_text for card in linas)
     other_blob = " ".join(card.search_text for card in other)
-    assert "qa.linas.example/laser-women.png" in linas_blob or "laser women" in linas_blob
-    assert "qa.linas.example" not in other_blob
+    assert "consultation pictures" in linas_blob
+    assert "qa.shop-a.example" not in other_blob
     assert "antelias" not in other_blob
 
 
-def test_linas_qa_has_no_closed_sunday() -> None:
-    cards = cards_from_sections(linas_like_qa_sections(), tenant_id="qa-linas")
+def test_shop_a_qa_has_no_closed_sunday() -> None:
+    cards = cards_from_sections(shop_a_qa_sections(), tenant_id="qa-shop-a")
     antelias = next(card for card in cards if "antelias" in card.item_id and card.source_family == "hours")
     assert "closed" not in antelias.search_text
     hamra = [
@@ -67,11 +67,11 @@ def test_linas_qa_has_no_closed_sunday() -> None:
 
 
 def test_hours_query_does_not_rank_greeting_first() -> None:
-    cards = cards_from_sections(linas_like_qa_sections(), tenant_id="qa-linas")
+    cards = cards_from_sections(shop_a_qa_sections(), tenant_id="qa-shop-a")
     hits = search_cards(cards, "امتى بيفتح فرع أنطلياس؟", families={"hours", "branches"})
     assert hits
     assert hits[0].card.source_family in {"hours", "branches"}
-    bundle = expand_hits([LexicalHit(card=hits[0].card, score=1.0)], linas_like_qa_sections(), tenant_id="qa-linas")
+    bundle = expand_hits([LexicalHit(card=hits[0].card, score=1.0)], shop_a_qa_sections(), tenant_id="qa-shop-a")
     text = bundle.items[0].text
     assert "11:00" in text
     assert "greeting" not in text.lower()

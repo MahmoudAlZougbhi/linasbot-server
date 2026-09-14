@@ -9,7 +9,7 @@ from services.brain.evals.fixtures import (
     product_retailer_corpus,
     service_appointment_corpus,
 )
-from services.brain.evals.golden_pack_linas import run_golden_pack_linas
+from services.brain.evals.golden_pack import run_golden_pack
 from services.brain.evals.latency_bench import run_latency_benchmark
 from services.brain.evals.runner import run_fixture_corpus
 from services.brain.evals.suite_runner import run_offline_suite
@@ -20,7 +20,7 @@ __all__ = [
     "product_retailer_corpus",
     "service_appointment_corpus",
     "run_fixture_corpus",
-    "run_golden_pack_linas",
+    "run_golden_pack",
     "run_offline_suite",
     "case_bank_snapshot",
     "run_latency_benchmark",

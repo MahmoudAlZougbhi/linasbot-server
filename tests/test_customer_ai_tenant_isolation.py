@@ -5,8 +5,8 @@ from __future__ import annotations
 from services.brain.evals.qa_tenants import (
     clinic_c_products,
     clinic_c_qa_sections,
-    linas_like_products,
-    linas_like_qa_sections,
+    shop_a_products,
+    shop_a_qa_sections,
     shop_b_products,
     shop_b_qa_sections,
 )
@@ -17,7 +17,7 @@ from services.brain.search.store import query_similar, reset_memory_store, write
 
 
 def test_same_product_name_keeps_tenant_prices() -> None:
-    linas = cards_from_products(linas_like_products())
+    linas = cards_from_products(shop_a_products())
     other = cards_from_products(shop_b_products())
     linas_alpha = next(card for card in linas if "alpha" in card.item_id.lower() or "alpha" in card.title.lower())
     other_alpha = next(card for card in other if "alpha" in card.item_id.lower() or "alpha" in card.title.lower())
@@ -28,7 +28,7 @@ def test_same_product_name_keeps_tenant_prices() -> None:
 
 
 def test_hours_lexical_does_not_prefer_greeting_policy() -> None:
-    cards = cards_from_sections(linas_like_qa_sections(), tenant_id="qa-linas")
+    cards = cards_from_sections(shop_a_qa_sections(), tenant_id="qa-shop-a")
     hits = search_cards(cards, "شو ساعات أنطلياس؟", families={"hours", "branches"})
     assert hits
     assert hits[0].card.source_family in {"hours", "branches"}
@@ -43,7 +43,7 @@ def test_memory_store_same_doc_id_does_not_cross_tenants() -> None:
     vec_b = [0.0, 1.0, 0.0]
     row_a = {
         "id": "products:alpha",
-        "tenant_id": "qa-linas",
+        "tenant_id": "qa-shop-a",
         "space_id": "entity",
         "source_family": "products",
         "source_id": "alpha",
@@ -64,7 +64,7 @@ def test_memory_store_same_doc_id_does_not_cross_tenants() -> None:
     }
     assert write_documents(None, [row_a], [vec_a])["ok"] is True
     assert write_documents(None, [row_b], [vec_b])["ok"] is True
-    hit_a = query_similar(None, tenant_id="qa-linas", space_id="entity", vector=vec_a, families={"products"}, limit=5)
+    hit_a = query_similar(None, tenant_id="qa-shop-a", space_id="entity", vector=vec_a, families={"products"}, limit=5)
     hit_b = query_similar(None, tenant_id="qa-shop-b", space_id="entity", vector=vec_b, families={"products"}, limit=5)
     texts_a = " ".join(item.search_text for item in hit_a.items)
     texts_b = " ".join(item.search_text for item in hit_b.items)
@@ -72,19 +72,17 @@ def test_memory_store_same_doc_id_does_not_cross_tenants() -> None:
     assert "99 USD" not in texts_a
     assert "99 USD" in texts_b
     assert "10 USD" not in texts_b
-    assert all(item.tenant_id == "qa-linas" for item in hit_a.items)
+    assert all(item.tenant_id == "qa-shop-a" for item in hit_a.items)
     assert all(item.tenant_id == "qa-shop-b" for item in hit_b.items)
 
 
 def test_product_media_urls_stay_on_own_tenant() -> None:
     from services.brain.retrieve.products import evidence_from_product
 
-    linas = cards_from_products(linas_like_products())
+    linas = cards_from_products(shop_a_products())
     other = cards_from_products(shop_b_products())
     third = cards_from_products(clinic_c_products())
-    linas_ev = " ".join(
-        str(evidence_from_product(row).text) for row in linas_like_products() if evidence_from_product(row)
-    )
+    linas_ev = " ".join(str(evidence_from_product(row).text) for row in shop_a_products() if evidence_from_product(row))
     other_ev = " ".join(str(evidence_from_product(row).text) for row in shop_b_products() if evidence_from_product(row))
     third_ev = " ".join(
         str(evidence_from_product(row).text) for row in clinic_c_products() if evidence_from_product(row)
@@ -92,14 +90,14 @@ def test_product_media_urls_stay_on_own_tenant() -> None:
     assert linas
     assert other
     assert third
-    assert "qa.linas.example/aftercare.png" in linas_ev
-    assert "qa.linas.example" not in other_ev
-    assert "qa.linas.example" not in third_ev
+    assert "qa.shop-a.example/aftercare.png" in linas_ev
+    assert "qa.shop-a.example" not in other_ev
+    assert "qa.shop-a.example" not in third_ev
     assert "qa.shopb.example/alpha.png" in other_ev
     assert "qa.shopb.example" not in linas_ev
     assert "qa.clinicc.example/alpha.png" in third_ev
     assert "5 USD" in third_ev or "5" in third[0].search_text
-    linas_ids = {card.item_id for card in cards_from_sections(linas_like_qa_sections(), tenant_id="qa-linas")}
+    linas_ids = {card.item_id for card in cards_from_sections(shop_a_qa_sections(), tenant_id="qa-shop-a")}
     other_ids = {card.item_id for card in cards_from_sections(shop_b_qa_sections(), tenant_id="qa-shop-b")}
     clinic_ids = {card.item_id for card in cards_from_sections(clinic_c_qa_sections(), tenant_id="qa-clinic-c")}
     assert any("antelias" in item_id for item_id in linas_ids)

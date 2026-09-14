@@ -9,11 +9,13 @@ Date: 2026-09-14.
 
 **Wave X2:** museum `smart_messaging_*`, appointment scheduler, daily dispatcher, training handlers, clinic holidays, `qa_database_service`, and 410 content-files/instructions HTTP are **deleted**. `normalize_template_id` moved to `services/live_chat/template_ids.py`. SFU worker stays on the runtime scheduler.
 
-**Wave X5:** prod workflows write/assert `LINAS_CUSTOMER_AI_LAB=false`; live-lab workflow retired; `prod_migration` no longer seeds `laser_hair_removal`; classifier `_SERVICE_SPECS` are generic SaaS fixtures; `LINASLASER_API_*` is a deprecated `EXTERNAL_API_*` alias.
-
 **Wave X3:** `customer_reply_v2` → `services/brain/reply/`; comments inbox → `services/live_chat/comments_inbox/`; WA/TikTok/web_chat/omnichannel → `services/integrations/`. Meta `services/meta_*.py` still flat.
 
 **Wave X4:** KEEP APIs stay enabled (comments media included on the tenant allowlist); museum prefixes stay disabled. Marketing + owner portal routes frozen.
+
+**Wave X5:** prod workflows write/assert `LINAS_CUSTOMER_AI_LAB=false`; live-lab workflow retired; `prod_migration` no longer seeds `laser_hair_removal`; classifier `_SERVICE_SPECS` are generic SaaS fixtures; `LINASLASER_API_*` is a deprecated `EXTERNAL_API_*` alias.
+
+**Wave X6:** preview queue deleted after WA header URL retarget; git phone map empty; app_settings museum keys dropped; gender GPT helper gone; evals renamed off Laser/prod lab overlay. Token wallet + message catalog kept for Owner Catalog / Copilot.
 
 
 

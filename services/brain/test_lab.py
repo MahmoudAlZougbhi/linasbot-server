@@ -144,7 +144,7 @@ def run_lab_verification_exercises(*, tenant_id: str = "lab") -> dict[str, Any]:
             "ok": bool(evals.get("ok")),
             "detail": {
                 "case_count": evals.get("case_count"),
-                "golden_ok": (evals.get("golden_pack_linas") or {}).get("ok"),
+                "golden_ok": (evals.get("golden_pack") or {}).get("ok"),
                 "metrics": evals.get("metrics"),
             },
         },

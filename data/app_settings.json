@@ -4,8 +4,7 @@
     "defaultLanguage": "ar",
     "responseTimeout": 5,
     "enableVoice": true,
-    "enableImages": true,
-    "enableTraining": true
+    "enableImages": true
   },
   "notifications": {
     "notificationsEnabled": true,
@@ -14,70 +13,5 @@
   },
   "security": {
     "sessionTimeout": 24
-  },
-  "smartMessaging": {
-    "enabled": true,
-    "previewBeforeSend": false,
-    "autoApproveAfterMinutes": 0,
-    "maxQueueSize": 1000,
-    "validationRules": {
-      "minPhoneLength": 8,
-      "maxPhoneLength": 15,
-      "maxMessageLength": 1600,
-      "requiredVariables": [
-        "customer_name"
-      ]
-    },
-    "templateSchedules": {
-      "reminder_24h": {
-        "enabled": true,
-        "sendTime": "15:00",
-        "timezone": "Asia/Beirut"
-      },
-      "thank_you_message_sent_after_session": {
-        "enabled": true,
-        "sendTime": "20:00",
-        "timezone": "Asia/Beirut"
-      },
-      "missed_yesterday": {
-        "enabled": true,
-        "sendTime": "10:00",
-        "timezone": "Asia/Beirut"
-      },
-      "session_feedback": {
-        "enabled": true,
-        "sendTime": "21:00",
-        "timezone": "Asia/Beirut"
-      },
-      "sent_17_days_after_last_session_new": {
-        "enabled": true,
-        "sendTime": "14:00",
-        "timezone": "Asia/Beirut"
-      }
-    }
-  },
-  "booking": {
-    "areaToBodyPartIds": {
-      "full_body": [],
-      "full": []
-    }
-  },
-  "pricingSync": {
-    "enabled": true,
-    "sourceOfTruth": "api_get_pricing_details",
-    "requireBodyPartServiceIds": [
-      1,
-      2,
-      4,
-      5,
-      11,
-      12,
-      13,
-      14
-    ],
-    "discountRules": {
-      "preferSystemDiscountValues": true,
-      "deriveFinalPriceWhenMissing": true
-    }
   }
 }

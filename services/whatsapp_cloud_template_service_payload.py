@@ -61,15 +61,14 @@ class WhatsAppCloudTemplatePayloadMixin:
         dc = (self.api_config or {}).get("default_header_component") or {}
         if not image_link and isinstance(dc, dict):
             image_link = str(dc.get("image_link") or dc.get("link") or "").strip()
-        # When false: do not pull from env / dashboard / sidecar — only template, lookup, and
-        # default_header_component above. When true: also message_preview_service chain.
+        # When false: do not pull from env / sidecar / settings / Cloud JSON.
+        # When true: also integrations.whatsapp.template_header_image chain.
         allow_global = bool((self.api_config or {}).get("allow_global_template_header_image_url", True))
         if not image_link and allow_global:
             try:
-                from services.message_preview_service import message_preview_service
+                from services.integrations.whatsapp.template_header_image import get_template_header_image_url
 
-                # Includes env WHATSAPP_*, sidecar, dashboard JSON, default_header_component file
-                image_link = message_preview_service.get_template_header_image_url()
+                image_link = get_template_header_image_url()
             except Exception as ex:
                 print(f"❌ Cloud template header: could not read header image URL settings: {ex}")
                 raise
