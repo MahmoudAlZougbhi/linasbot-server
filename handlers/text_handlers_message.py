@@ -19,7 +19,7 @@ from handlers.text_handlers_message_takeover import (
     maybe_send_takeover_autoreply,
     resolve_conversation_doc_ref,
 )
-from services.meta_outbound_attempts import meta_outbound_send_purpose
+from services.integrations.meta.meta_outbound_attempts import meta_outbound_send_purpose
 from services.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
 from services.sentiment_escalation_service import sentiment_service
 from utils.utils import (
@@ -156,7 +156,7 @@ async def handle_message(
     current_conversation_id = user_data.get("current_conversation_id")
 
     if not skip_firestore_save and current_conversation_id:
-        from services.social_contact_routing_detect import is_social_channel
+        from services.integrations.social.social_contact_routing_detect import is_social_channel
 
         if is_social_channel(user_data.get("channel")):
             tenant_id = str(user_data.get("tenant_id") or "").strip()

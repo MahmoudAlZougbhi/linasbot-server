@@ -8,15 +8,15 @@ from pathlib import Path
 import httpx
 import pytest
 
-from services.integrations.omnichannel.meta_errors import MetaProviderError
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
-from services.meta_app_registry_session import PASSWORD_CHANGED_RECONNECT
-from services.meta_session_invalidated import (
+from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
+from services.integrations.meta.meta_app_registry_session import PASSWORD_CHANGED_RECONNECT
+from services.integrations.meta.meta_session_invalidated import (
     is_meta_session_invalidated,
     latest_password_changed_binding,
     mark_if_session_invalidated,
     probe_binding_session,
 )
+from services.integrations.omnichannel.meta_errors import MetaProviderError
 from services.mobile_integrations_display import enrich_mobile_integration_row
 from tests.meta_app_registry_helpers import _credential
 

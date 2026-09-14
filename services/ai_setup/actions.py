@@ -6,14 +6,14 @@ from typing import Any
 
 from services.ai_setup.schemas import ActionsSection
 from services.ai_setup.version_store import PublishedVersionError, load_published_content, read_published_pointer
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     META_COMMENT_SCOPES,
     MetaAppRegistry,
     MetaAssetBinding,
     MetaBindingCredential,
     MetaChannel,
 )
-from services.meta_graph_routing import required_comment_scopes_for_binding
+from services.integrations.meta.meta_graph_routing import required_comment_scopes_for_binding
 
 ACTION_FACEBOOK_COMMENTS = "respond_facebook_comments"
 ACTION_INSTAGRAM_COMMENTS = "respond_instagram_comments"
@@ -104,7 +104,7 @@ def evaluate_comments_meta_readiness(
     permission_source = ""
     permission_verified_at = 0.0
     if binding is not None and credential is not None:
-        from services.meta_comment_permission_verification import (
+        from services.integrations.meta.meta_comment_permission_verification import (
             comment_permission_public_snapshot,
             effective_comment_permission_status,
         )
@@ -152,8 +152,8 @@ def comments_enforcement_decision(
 ) -> dict[str, Any]:
     """Decide whether comment AI may run; always returns a structured reason."""
     from services.ai_setup.constants import tenant_allows_legacy_bridge, tenant_uses_cm_runtime
-    from services.meta_app_registry import get_meta_app_registry
-    from services.meta_comment_permission_verification import (
+    from services.integrations.meta.meta_app_registry import get_meta_app_registry
+    from services.integrations.meta.meta_comment_permission_verification import (
         comment_permission_public_snapshot,
         effective_comment_permission_status,
         maybe_reconcile_binding_comment_permission,

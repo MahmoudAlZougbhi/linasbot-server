@@ -9,24 +9,32 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential, get_meta_graph_api_version
-from services.meta_cross_flow_dedup import global_dm_claim_key
-from services.meta_graph_routing import (
+from services.integrations.meta.meta_app_registry import (
+    APP_A_KEY,
+    MetaAppRegistry,
+    MetaBindingCredential,
+    get_meta_graph_api_version,
+)
+from services.integrations.meta.meta_cross_flow_dedup import global_dm_claim_key
+from services.integrations.meta.meta_graph_routing import (
     graph_api_url,
     graph_base_url_for_binding,
     required_comment_scopes_for_binding,
     required_publish_scopes_for_binding,
 )
-from services.meta_instagram_login_capabilities import (
+from services.integrations.meta.meta_instagram_login_capabilities import (
     binding_ready_for_dm,
     select_instagram_binding_for_capability,
 )
-from services.meta_instagram_login_subscription_recovery import (
+from services.integrations.meta.meta_instagram_login_subscription_recovery import (
     reconcile_pending_instagram_login_subscriptions,
     retry_instagram_login_webhook_subscription,
 )
-from services.meta_multi_app_router import registry_auth_flow_for_webhook_object, resolve_registry_events
-from services.meta_social_publish import publish_instagram_post
+from services.integrations.meta.meta_multi_app_router import (
+    registry_auth_flow_for_webhook_object,
+    resolve_registry_events,
+)
+from services.integrations.meta.meta_social_publish import publish_instagram_post
 from tests.meta_instagram_login_lifecycle_helpers import force_legacy_binding_active
 
 INSTAGRAM_ID = "17840000999900021"
@@ -99,7 +107,7 @@ def _instagram_binding(
 
 
 def test_instagram_login_oauth_scopes_are_limited_to_dm_and_comments() -> None:
-    from services.meta_instagram_login_config import META_INSTAGRAM_LOGIN_REQUEST_SCOPES
+    from services.integrations.meta.meta_instagram_login_config import META_INSTAGRAM_LOGIN_REQUEST_SCOPES
 
     assert "instagram_business_manage_insights" not in META_INSTAGRAM_LOGIN_REQUEST_SCOPES
     assert "instagram_business_content_publish" not in META_INSTAGRAM_LOGIN_REQUEST_SCOPES
@@ -132,7 +140,7 @@ def test_select_instagram_binding_prefers_direct_login_for_dm(registry: MetaAppR
 
 @pytest.mark.asyncio
 async def test_resolve_registry_events_prefers_instagram_login_binding(registry: MetaAppRegistry) -> None:
-    from services.meta_app_registry import get_meta_app_configs
+    from services.integrations.meta.meta_app_registry import get_meta_app_configs
 
     _instagram_binding(registry, auth_flow="facebook_login")
     _instagram_binding(registry, auth_flow="instagram_login", legacy_duplicate=True)
@@ -185,7 +193,9 @@ async def test_publish_instagram_post_uses_graph_instagram_host(registry: MetaAp
     client = httpx.AsyncClient(
         transport=httpx.MockTransport(handler), base_url=f"https://graph.instagram.com/{version}"
     )
-    with patch("services.meta_social_publish.public_media_url", return_value="https://example.com/media.jpg"):
+    with patch(
+        "services.integrations.meta.meta_social_publish.public_media_url", return_value="https://example.com/media.jpg"
+    ):
         result = await publish_instagram_post(
             binding,
             tenant_id="tenant-a",
@@ -220,8 +230,8 @@ async def test_reconcile_pending_subscription_recovers_failed_binding(registry: 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="https://graph.instagram.com")
     state = await retry_instagram_login_webhook_subscription(binding.binding_id, registry=registry, client=client)
     assert state.ready_for_dm is True
-    with patch("services.meta_instagram_login_lifecycle.try_acquire_job_lock", return_value=True):
-        with patch("services.meta_instagram_login_lifecycle.release_job_lock"):
+    with patch("services.integrations.meta.meta_instagram_login_lifecycle.try_acquire_job_lock", return_value=True):
+        with patch("services.integrations.meta.meta_instagram_login_lifecycle.release_job_lock"):
             recovered = await reconcile_pending_instagram_login_subscriptions(registry=registry, limit=5)
     assert recovered == 0
     refreshed = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
@@ -266,7 +276,7 @@ def _instagram_dm_payload(account_id: str, *, mid: str = "mid-1") -> dict:
 
 @pytest.mark.asyncio
 async def test_main_callback_filter_accepts_instagram_login_binding(registry: MetaAppRegistry) -> None:
-    from services.meta_app_registry import get_meta_app_configs
+    from services.integrations.meta.meta_app_registry import get_meta_app_configs
 
     _instagram_binding(registry, auth_flow="instagram_login")
     routed = await resolve_registry_events(
@@ -281,7 +291,7 @@ async def test_main_callback_filter_accepts_instagram_login_binding(registry: Me
 
 @pytest.mark.asyncio
 async def test_main_callback_filter_rejects_facebook_login_legacy_instagram(registry: MetaAppRegistry) -> None:
-    from services.meta_app_registry import get_meta_app_configs
+    from services.integrations.meta.meta_app_registry import get_meta_app_configs
 
     _instagram_binding(registry, auth_flow="facebook_login")
     routed = await resolve_registry_events(
@@ -295,7 +305,7 @@ async def test_main_callback_filter_rejects_facebook_login_legacy_instagram(regi
 
 @pytest.mark.asyncio
 async def test_resolve_unrestricted_rejects_wrong_instagram_account(registry: MetaAppRegistry) -> None:
-    from services.meta_app_registry import get_meta_app_configs
+    from services.integrations.meta.meta_app_registry import get_meta_app_configs
 
     _instagram_binding(registry, auth_flow="instagram_login")
     routed = await resolve_registry_events(
@@ -309,7 +319,7 @@ async def test_resolve_unrestricted_rejects_wrong_instagram_account(registry: Me
 
 @pytest.mark.asyncio
 async def test_facebook_login_filter_drops_instagram_login_only_binding(registry: MetaAppRegistry) -> None:
-    from services.meta_app_registry import get_meta_app_configs
+    from services.integrations.meta.meta_app_registry import get_meta_app_configs
 
     _instagram_binding(registry, auth_flow="instagram_login")
     routed = await resolve_registry_events(

@@ -15,16 +15,21 @@ import pytest
 from starlette.requests import Request
 
 from modules import meta_instagram_login_webhook
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential, get_meta_app_configs
-from services.meta_instagram_login_config import (
+from services.integrations.meta.meta_app_registry import (
+    APP_A_KEY,
+    MetaAppRegistry,
+    MetaBindingCredential,
+    get_meta_app_configs,
+)
+from services.integrations.meta.meta_instagram_login_config import (
     META_INSTAGRAM_LOGIN_REQUEST_SCOPES,
     instagram_login_config_status,
     instagram_login_webhook_verify_token,
     verify_instagram_login_challenge_token,
     verify_instagram_login_webhook_signature,
 )
-from services.meta_messaging import InMemoryMessageDeduper
-from services.meta_multi_app_router import resolve_registry_events
+from services.integrations.meta.meta_messaging import InMemoryMessageDeduper
+from services.integrations.meta.meta_multi_app_router import resolve_registry_events
 
 INSTAGRAM_SCOPES = tuple(sorted(META_INSTAGRAM_LOGIN_REQUEST_SCOPES))
 
@@ -340,8 +345,8 @@ async def test_dedicated_instagram_webhook_tracks_real_dm_delivery_outcome(
 ) -> None:
     instagram_id = "17840000999900044"
     _authorize_instagram_login_binding(registry, tenant_id="tenant-a", instagram_id=instagram_id)
-    monkeypatch.setattr("services.meta_multi_app_router.get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr("services.meta_comment_events.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_multi_app_router.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_comment_events.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(
         meta_instagram_login_webhook,
         "get_meta_messaging_settings",
@@ -433,7 +438,7 @@ async def test_dedicated_instagram_webhook_accepts_official_direct_comment_shape
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.meta_comment_replies import CommentReplyResult
+    from services.integrations.meta.meta_comment_replies import CommentReplyResult
 
     instagram_id = "17840000999900055"
     _authorize_instagram_login_binding(
@@ -442,8 +447,8 @@ async def test_dedicated_instagram_webhook_accepts_official_direct_comment_shape
         instagram_id=instagram_id,
         comments=True,
     )
-    monkeypatch.setattr("services.meta_multi_app_router.get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr("services.meta_comment_events.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_multi_app_router.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_comment_events.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(
         meta_instagram_login_webhook,
         "get_meta_messaging_settings",

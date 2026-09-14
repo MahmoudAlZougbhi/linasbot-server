@@ -169,9 +169,9 @@ async def deliver_meta_dm(
     external_customer_id: str | None,
     text: str,
 ) -> DeliveryResult:
-    from services.meta_app_registry import get_meta_app_configs, get_meta_app_registry
-    from services.meta_graph_routing import build_messaging_settings_for_binding
-    from services.meta_messaging import MetaMessagingAdapter, resolve_meta_send_account_id
+    from services.integrations.meta.meta_app_registry import get_meta_app_configs, get_meta_app_registry
+    from services.integrations.meta.meta_graph_routing import build_messaging_settings_for_binding
+    from services.integrations.meta.meta_messaging import MetaMessagingAdapter, resolve_meta_send_account_id
 
     if not text.strip():
         return DeliveryResult(status="failed", error_redacted="empty_message", channel_used=source_channel)
@@ -202,7 +202,7 @@ async def deliver_meta_dm(
             error_redacted="binding_not_found",
             channel_used=source_channel,
         )
-    from services.meta_dm_binding_select import select_binding_for_meta_dm
+    from services.integrations.meta.meta_dm_binding_select import select_binding_for_meta_dm
 
     binding = select_binding_for_meta_dm(
         candidates,
@@ -247,7 +247,7 @@ async def deliver_meta_dm(
                 mid = str((data[0] or {}).get("message_id") or (data[0] or {}).get("id") or "") or None
         return DeliveryResult(status="sent", provider_message_id=mid, channel_used=source_channel)
     except Exception as exc:
-        from services.meta_session_invalidated import mark_if_session_invalidated
+        from services.integrations.meta.meta_session_invalidated import mark_if_session_invalidated
 
         mark_if_session_invalidated(
             exc,

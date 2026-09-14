@@ -14,12 +14,12 @@ import pytest
 from starlette.requests import Request
 
 from modules import meta_messaging_webhook
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaBindingCredential,
 )
-from services.meta_messaging import InMemoryMessageDeduper, MetaMessagingSettings
+from services.integrations.meta.meta_messaging import InMemoryMessageDeduper, MetaMessagingSettings
 from tests.meta_compliance_helpers import _FakeFirestore
 from tests.meta_instagram_login_lifecycle_helpers import force_legacy_binding_active
 
@@ -108,8 +108,8 @@ def configured_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Meta
         ),
         actor_id="owner",
     )
-    monkeypatch.setattr("services.meta_multi_app_router.get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr("services.meta_comment_events.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_multi_app_router.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_comment_events.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(
         meta_messaging_webhook,
         "get_meta_messaging_settings",
@@ -367,9 +367,9 @@ async def test_instagram_comment_on_app_a_callback_uses_instagram_login_binding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """After App A HMAC, object=instagram comments use Instagram Login only."""
-    from services.meta_app_registry import MetaBindingCredential
-    from services.meta_comment_replies import CommentReplyResult
-    from services.meta_instagram_login_subscription import COMMENTS_SUBSCRIPTION_FIELD
+    from services.integrations.meta.meta_app_registry import MetaBindingCredential
+    from services.integrations.meta.meta_comment_replies import CommentReplyResult
+    from services.integrations.meta.meta_instagram_login_subscription import COMMENTS_SUBSCRIPTION_FIELD
 
     ig_id = "17841413184256533"
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_ID", "1035856539045307")

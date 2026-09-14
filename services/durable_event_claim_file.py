@@ -152,7 +152,7 @@ def _file_try_claim(
     path.parent.mkdir(parents=True, exist_ok=True)
     with local_event_claim_store_lock():
         if meta_binding_id:
-            from services.meta_inbound_deletion_fence import local_binding_deletion_is_fenced
+            from services.integrations.meta.meta_inbound_deletion_fence import local_binding_deletion_is_fenced
 
             if local_binding_deletion_is_fenced(meta_binding_id):
                 return 0

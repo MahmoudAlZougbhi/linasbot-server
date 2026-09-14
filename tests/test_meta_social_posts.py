@@ -8,11 +8,15 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from services.meta_app_registry import APP_A_KEY, MetaAssetBinding, MetaBindingCredential
-from services.meta_instagram_login_capabilities import binding_ready_for_publish
-from services.meta_social_media_store import save_uploaded_media
-from services.meta_social_post_confirm import SocialPostConfirmError, build_preview, verify_preview_token
-from services.meta_social_publish import required_publish_scopes
+from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaAssetBinding, MetaBindingCredential
+from services.integrations.meta.meta_instagram_login_capabilities import binding_ready_for_publish
+from services.integrations.meta.meta_social_media_store import save_uploaded_media
+from services.integrations.meta.meta_social_post_confirm import (
+    SocialPostConfirmError,
+    build_preview,
+    verify_preview_token,
+)
+from services.integrations.meta.meta_social_publish import required_publish_scopes
 
 
 def _binding(
@@ -112,14 +116,14 @@ class MetaSocialMediaStoreTests(unittest.TestCase):
     def test_save_and_resolve_media(self) -> None:
         os.environ["META_APP_A_SECRET"] = "unit-test-secret-for-social-posts"
         with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch("services.meta_social_media_store._MEDIA_ROOT", Path(tmp) / "media"):
+            with mock.patch("services.integrations.meta.meta_social_media_store._MEDIA_ROOT", Path(tmp) / "media"):
                 media_id = save_uploaded_media(
                     tenant_id="tenant-a",
                     filename="photo.jpg",
                     content=b"fake-image",
                     content_type="image/jpeg",
                 )
-                from services.meta_social_media_store import resolve_media_path
+                from services.integrations.meta.meta_social_media_store import resolve_media_path
 
                 path = resolve_media_path(tenant_id="tenant-a", media_id=media_id)
                 self.assertIsNotNone(path)

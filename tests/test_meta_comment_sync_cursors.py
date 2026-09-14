@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from services.meta_comment_sync_cursors import (
+from services.integrations.meta.meta_comment_sync_cursors import (
     LEGACY_POSTS_CURSOR_KEY,
     POSTS_BACKFILL_CURSOR_KEY,
     extract_next_cursor,
@@ -21,8 +21,8 @@ def test_extract_next_cursor_returns_url_or_none() -> None:
     assert extract_next_cursor({}) is None
 
 
-@patch("services.meta_comment_sync_cursors.postgres_enabled", return_value=True)
-@patch("services.meta_comment_sync_cursors.load_sync_cursor")
+@patch("services.integrations.meta.meta_comment_sync_cursors.postgres_enabled", return_value=True)
+@patch("services.integrations.meta.meta_comment_sync_cursors.load_sync_cursor")
 def test_load_posts_backfill_cursor_prefers_backfill_key(load_sync: MagicMock, _pg: MagicMock) -> None:
     load_sync.side_effect = lambda *, binding_id, cursor_key: {
         POSTS_BACKFILL_CURSOR_KEY: "https://graph.facebook.com/backfill",
@@ -33,8 +33,8 @@ def test_load_posts_backfill_cursor_prefers_backfill_key(load_sync: MagicMock, _
     assert load_sync.call_count == 1
 
 
-@patch("services.meta_comment_sync_cursors.postgres_enabled", return_value=True)
-@patch("services.meta_comment_sync_cursors.load_sync_cursor")
+@patch("services.integrations.meta.meta_comment_sync_cursors.postgres_enabled", return_value=True)
+@patch("services.integrations.meta.meta_comment_sync_cursors.load_sync_cursor")
 def test_load_posts_backfill_cursor_falls_back_to_legacy_posts(load_sync: MagicMock, _pg: MagicMock) -> None:
     load_sync.side_effect = lambda *, binding_id, cursor_key: {
         LEGACY_POSTS_CURSOR_KEY: "https://graph.facebook.com/legacy",
@@ -47,9 +47,12 @@ def test_load_posts_backfill_cursor_falls_back_to_legacy_posts(load_sync: MagicM
     ]
 
 
-@patch("services.meta_comment_sync_cursors.postgres_enabled", return_value=True)
-@patch("services.meta_comment_sync_cursors.save_sync_cursor")
-@patch("services.meta_comment_sync_cursors.load_sync_cursor", return_value="https://graph.facebook.com/legacy")
+@patch("services.integrations.meta.meta_comment_sync_cursors.postgres_enabled", return_value=True)
+@patch("services.integrations.meta.meta_comment_sync_cursors.save_sync_cursor")
+@patch(
+    "services.integrations.meta.meta_comment_sync_cursors.load_sync_cursor",
+    return_value="https://graph.facebook.com/legacy",
+)
 def test_save_posts_backfill_cursor_resets_empty_and_clears_legacy(
     load_sync: MagicMock,
     save_sync: MagicMock,
@@ -71,9 +74,9 @@ def test_save_posts_backfill_cursor_resets_empty_and_clears_legacy(
     }
 
 
-@patch("services.meta_comment_sync_cursors.postgres_enabled", return_value=True)
-@patch("services.meta_comment_sync_cursors.save_sync_cursor")
-@patch("services.meta_comment_sync_cursors.load_sync_cursor", return_value=None)
+@patch("services.integrations.meta.meta_comment_sync_cursors.postgres_enabled", return_value=True)
+@patch("services.integrations.meta.meta_comment_sync_cursors.save_sync_cursor")
+@patch("services.integrations.meta.meta_comment_sync_cursors.load_sync_cursor", return_value=None)
 def test_save_posts_backfill_cursor_persists_next_page(
     _load_sync: MagicMock,
     save_sync: MagicMock,

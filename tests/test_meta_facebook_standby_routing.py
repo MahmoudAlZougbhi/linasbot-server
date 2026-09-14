@@ -6,15 +6,15 @@ import logging
 
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     LINAS_INSTAGRAM_ACCOUNT_ID,
     LINAS_PAGE_ID,
     META_COMMENT_SCOPES,
     get_meta_app_configs,
 )
-from services.meta_multi_app_router import resolve_registry_events
-from services.meta_page_webhook_subscription import desired_binding_webhook_subscription
+from services.integrations.meta.meta_multi_app_router import resolve_registry_events
+from services.integrations.meta.meta_page_webhook_subscription import desired_binding_webhook_subscription
 from tests.meta_app_registry_helpers import ALL_MESSAGING_SCOPES, _credential, _page_payload
 
 pytest_plugins = ("tests.meta_app_registry_fixtures",)
@@ -79,7 +79,7 @@ async def test_facebook_page_id_is_not_used_as_instagram_account_id(registry) ->
 
 @pytest.mark.asyncio
 async def test_empty_standby_resolve_logs_inbound_buckets(registry, caplog) -> None:
-    caplog.set_level(logging.INFO, logger="services.meta_multi_app_router")
+    caplog.set_level(logging.INFO, logger="services.integrations.meta.meta_multi_app_router")
     routed = await resolve_registry_events(
         _standby_payload(page_id=LINAS_PAGE_ID),
         app_config=get_meta_app_configs()[APP_A_KEY],

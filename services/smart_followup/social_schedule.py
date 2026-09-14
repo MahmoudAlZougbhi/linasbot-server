@@ -5,10 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from services.integrations.social.social_contact_routing_detect import is_social_channel
 from services.requests.constants import SOURCE_CHANNEL_FACEBOOK_MESSENGER, SOURCE_CHANNEL_INSTAGRAM_DM
 from services.smart_followup.constants import QUALIFYING_SOCIAL_ACTIONS
 from services.smart_followup.hooks import schedule_after_ai_reply
-from services.social_contact_routing_detect import is_social_channel
 
 
 def _social_followup_channel(raw_channel: str | None) -> str | None:

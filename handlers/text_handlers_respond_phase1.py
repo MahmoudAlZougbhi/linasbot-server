@@ -117,7 +117,7 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
     from services.ai_setup.constants import (
         tenant_uses_cm_runtime as _tenant_uses_cm_runtime,
     )
-    from services.social_contact_routing import (
+    from services.integrations.social.social_contact_routing import (
         clear_social_booking_preference,
         is_social_channel,
         route_social_contact_request,

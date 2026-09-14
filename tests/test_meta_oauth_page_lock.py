@@ -9,11 +9,11 @@ from typing import Any
 import httpx
 import pytest
 
-from services import meta_oauth_activation, meta_oauth_page_lock
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
-from services.meta_comment_webhooks import ensure_page_comment_webhook_subscription
-from services.meta_oauth_activation import ValidatedFacebookPage, activate_validated_facebook_pages
-from services.meta_oauth_graph import subscribe_binding_webhook
+from services.integrations.meta import meta_oauth_activation, meta_oauth_page_lock
+from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
+from services.integrations.meta.meta_comment_webhooks import ensure_page_comment_webhook_subscription
+from services.integrations.meta.meta_oauth_activation import ValidatedFacebookPage, activate_validated_facebook_pages
+from services.integrations.meta.meta_oauth_graph import subscribe_binding_webhook
 from tests.meta_compliance_helpers import _FakeFirestore
 
 
@@ -215,7 +215,7 @@ def _registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistr
         return None
 
     monkeypatch.setattr(
-        "services.meta_app_webhook_subscription.ensure_app_page_webhook_subscription",
+        "services.integrations.meta.meta_app_webhook_subscription.ensure_app_page_webhook_subscription",
         _noop_app_subscription,
     )
     return MetaAppRegistry(

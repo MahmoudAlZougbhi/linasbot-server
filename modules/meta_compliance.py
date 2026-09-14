@@ -19,7 +19,7 @@ from services.compliance_page_content import (
     privacy_policy_body,
     terms_of_service_body,
 )
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_EXPECTED_ID,
     APP_A_KEY,
     AuthFlow,
@@ -28,7 +28,7 @@ from services.meta_app_registry import (
     get_meta_app_configs,
     get_meta_app_registry,
 )
-from services.meta_data_deletion import (
+from services.integrations.meta.meta_data_deletion import (
     MetaDeletionStateError,
     MetaDeletionStoreUnavailableError,
     MetaSignedRequestError,
@@ -36,17 +36,17 @@ from services.meta_data_deletion import (
     read_deletion_status,
     verify_meta_deletion_signed_request,
 )
-from services.meta_instagram_login_config import (
+from services.integrations.meta.meta_instagram_login_config import (
     DEFAULT_INSTAGRAM_LOGIN_APP_ID,
     instagram_login_app_id,
     instagram_login_app_secret,
 )
-from services.meta_subject_deletion_guard import (
+from services.integrations.meta.meta_subject_deletion_guard import (
     MetaSubjectDeletionGuardError,
     acquire_meta_deauthorization_subject_guard,
     meta_deletion_subject_hmac,
 )
-from services.meta_surface_secret_separation import (
+from services.integrations.meta.meta_surface_secret_separation import (
     environ_secret_values,
     evaluate_meta_surface_signing_separation,
 )

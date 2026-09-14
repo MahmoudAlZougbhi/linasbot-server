@@ -6,7 +6,7 @@ from services.integrations.channel_capability_state import (
     canonical_channel_bindings,
     comment_capability_state,
 )
-from services.meta_app_registry import APP_B_KEY
+from services.integrations.meta.meta_app_registry import APP_B_KEY
 from tests.meta_comments_capability_helpers import _Cred, _fb_binding, _ig_binding, _MapRegistry
 
 

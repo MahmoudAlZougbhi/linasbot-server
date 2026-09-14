@@ -10,10 +10,10 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     MetaAppRegistry,
 )
-from services.meta_oauth import (
+from services.integrations.meta.meta_oauth import (
     begin_meta_business_login,
 )
 from tests.meta_compliance_helpers import _FakeFirestore

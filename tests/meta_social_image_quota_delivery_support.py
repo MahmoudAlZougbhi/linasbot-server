@@ -9,7 +9,7 @@ import pytest
 
 import config
 from services import social_messaging_processor as processor
-from services.meta_messaging import MetaMessagingSettings
+from services.integrations.meta.meta_messaging import MetaMessagingSettings
 from tests.meta_compliance_helpers import _FakeFirestore
 
 
@@ -159,7 +159,7 @@ def processor_meta_document(
     event_id: str,
     purpose: str,
 ) -> dict[str, Any]:
-    from services.meta_outbound_attempts import _attempt_document_id
+    from services.integrations.meta.meta_outbound_attempts import _attempt_document_id
 
     return (
         db.collection("artifacts")

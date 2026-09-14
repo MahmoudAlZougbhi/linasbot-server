@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.whatsapp_cloud_template_service import (
+from services.integrations.whatsapp.cloud_template_payload import WhatsAppCloudTemplatePayloadMixin
+from services.integrations.whatsapp.cloud_template_service import (
     WhatsAppCloudTemplateService,
     whatsapp_cloud_template_service,
 )
-from services.whatsapp_cloud_template_service_payload import WhatsAppCloudTemplatePayloadMixin
 
 
 def _line_count(rel: str) -> int:
@@ -16,8 +16,8 @@ def _line_count(rel: str) -> int:
 
 
 def test_whatsapp_cloud_template_service_modules_under_500_lines() -> None:
-    assert _line_count("services/whatsapp_cloud_template_service.py") < 500
-    assert _line_count("services/whatsapp_cloud_template_service_payload.py") < 500
+    assert _line_count("services/integrations/whatsapp/cloud_template_service.py") < 500
+    assert _line_count("services/integrations/whatsapp/cloud_template_payload.py") < 500
 
 
 def test_whatsapp_cloud_template_service_preserves_public_api() -> None:

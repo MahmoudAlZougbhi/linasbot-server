@@ -5,9 +5,9 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from services.meta_comment_events import parse_meta_comment_events
-from services.meta_comment_post_context import enrich_comment_event_post
-from services.meta_comment_post_ids import (
+from services.integrations.meta.meta_comment_events import parse_meta_comment_events
+from services.integrations.meta.meta_comment_post_context import enrich_comment_event_post
+from services.integrations.meta.meta_comment_post_ids import (
     comment_post_ids_match,
     facebook_post_id_from_compound,
     facebook_post_id_from_feed_value,
@@ -151,8 +151,8 @@ async def test_enrich_loads_facebook_post_not_parent_comment() -> None:
 async def test_processor_sends_nested_facebook_post_id_to_brain(monkeypatch) -> None:
     from unittest import mock
 
-    from services.meta_comment_events import ResolvedMetaCommentEvent
-    from services.meta_comment_replies import process_meta_comment_event
+    from services.integrations.meta.meta_comment_events import ResolvedMetaCommentEvent
+    from services.integrations.meta.meta_comment_replies import process_meta_comment_event
     from tests.test_meta_comment_replies import _settings
     from tests.test_meta_comment_replies_more import MetaCommentProcessorTests
 
@@ -160,7 +160,7 @@ async def test_processor_sends_nested_facebook_post_id_to_brain(monkeypatch) -> 
     helper.setUp()
     try:
         binding = helper._verified_binding()
-        from services.meta_comment_reply_settings import set_comment_reply_setting
+        from services.integrations.meta.meta_comment_reply_settings import set_comment_reply_setting
 
         set_comment_reply_setting(
             tenant_id=binding.tenant_id,
@@ -175,9 +175,9 @@ async def test_processor_sends_nested_facebook_post_id_to_brain(monkeypatch) -> 
         value["parent_id"] = "111_222_333"
         event = parse_meta_comment_events(payload, channel="facebook", page_id="111")[0]
         generate = mock.AsyncMock(return_value="ok")
-        monkeypatch.setattr("services.meta_comment_replies._generate_comment_reply_text", generate)
+        monkeypatch.setattr("services.integrations.meta.meta_comment_replies._generate_comment_reply_text", generate)
         monkeypatch.setattr(
-            "services.meta_comment_replies._comment_has_page_reply",
+            "services.integrations.meta.meta_comment_replies._comment_has_page_reply",
             mock.AsyncMock(return_value=False),
         )
         result = await process_meta_comment_event(

@@ -17,10 +17,10 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 from db.models import Base  # noqa: E402
 from db.models.apple_billing import AppleNotificationEventRow  # noqa: E402
 from db.session import reset_engine_for_tests, whatsapp_session  # noqa: E402
-from services.apple_assn_types import classify_assn_action, status_for_notification_type  # noqa: E402
-from services.apple_iap_effects import get_or_create_app_account_token  # noqa: E402
-from services.apple_iap_processor import process_notification_v2  # noqa: E402
-from services.apple_notification_claim import claim_notification, finalize_notification  # noqa: E402
+from services.billing.apple.apple_assn_types import classify_assn_action, status_for_notification_type  # noqa: E402
+from services.billing.apple.apple_iap_effects import get_or_create_app_account_token  # noqa: E402
+from services.billing.apple.apple_iap_processor import process_notification_v2  # noqa: E402
+from services.billing.apple.apple_notification_claim import claim_notification, finalize_notification  # noqa: E402
 from services.billing.entitlements_service import EntitlementsStore  # noqa: E402
 from services.credit_ledger_service import CreditLedgerService  # noqa: E402
 from services.store_iap_service import normalize_apple_status  # noqa: E402
@@ -55,9 +55,9 @@ def apple_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
-    monkeypatch.setattr("services.apple_iap_effects.entitlements_store", store)
-    monkeypatch.setattr("services.apple_credit_grant_ops.credit_ledger_service", ledger)
-    monkeypatch.setattr("services.apple_renewal_info.entitlements_store", store)
+    monkeypatch.setattr("services.billing.apple.apple_iap_effects.entitlements_store", store)
+    monkeypatch.setattr("services.billing.apple.apple_credit_grant_ops.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.apple.apple_renewal_info.entitlements_store", store)
     monkeypatch.setattr("services.billing.entitlements_service._DATA_ROOT", tmp_path)
     yield tmp_path
     reset_engine_for_tests()
@@ -124,8 +124,8 @@ def _patch_decode(
             return txn
         raise AssertionError(f"unexpected jws token {token!r}")
 
-    monkeypatch.setattr("services.apple_iap_processor.decode_jws_payload", _decode)
-    monkeypatch.setattr("services.apple_renewal_info.decode_jws_payload", _decode)
+    monkeypatch.setattr("services.billing.apple.apple_iap_processor.decode_jws_payload", _decode)
+    monkeypatch.setattr("services.billing.apple.apple_renewal_info.decode_jws_payload", _decode)
 
 
 # --- A) typed mapping unit tests ---

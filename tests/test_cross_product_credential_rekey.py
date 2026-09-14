@@ -15,7 +15,7 @@ from db.models import Base
 from db.models.meta_registry import MetaAssetBindingRow, MetaBindingCredentialRow
 from db.models.whatsapp_cloud import WhatsAppConnection, WhatsAppCredential
 from scripts.ha import rekey_meta_whatsapp_credentials as rekey
-from services.meta_app_registry_common import MetaCredentialCipher, MetaCredentialError
+from services.integrations.meta.meta_app_registry_common import MetaCredentialCipher, MetaCredentialError
 
 OLD_KEY = "old-meta-whatsapp-master-key-for-tests-123456789"
 NEW_KEY = "new-meta-whatsapp-master-key-for-tests-987654321"

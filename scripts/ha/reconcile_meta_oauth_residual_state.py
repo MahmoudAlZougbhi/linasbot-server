@@ -22,11 +22,13 @@ from services.integrations.channel_capability_toggles import (  # noqa: E402
     canonical_channel_bindings,
     supported_platforms,
 )
-from services.meta_app_registry import get_meta_app_registry  # noqa: E402
-from services.meta_connection_disconnect import disconnect_meta_binding_set  # noqa: E402
-from services.meta_instagram_login_lifecycle import get_instagram_login_lifecycle  # noqa: E402
-from services.meta_instagram_login_subscription import INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS  # noqa: E402
-from services.meta_instagram_login_subscription_recovery import (  # noqa: E402
+from services.integrations.meta.meta_app_registry import get_meta_app_registry  # noqa: E402
+from services.integrations.meta.meta_connection_disconnect import disconnect_meta_binding_set  # noqa: E402
+from services.integrations.meta.meta_instagram_login_lifecycle import get_instagram_login_lifecycle  # noqa: E402
+from services.integrations.meta.meta_instagram_login_subscription import (  # noqa: E402
+    INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
+)
+from services.integrations.meta.meta_instagram_login_subscription_recovery import (  # noqa: E402
     instagram_login_orphan_cleanup_eligible,
     retry_instagram_login_cleanup,
     retry_instagram_login_orphan_cleanup,

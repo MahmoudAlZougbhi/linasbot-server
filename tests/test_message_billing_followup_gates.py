@@ -65,7 +65,7 @@ def test_gc_parses_datetime_created_at() -> None:
 def test_meta_comment_forwards_caption_when_present() -> None:
     from inspect import getsource
 
-    from services import meta_comment_replies
+    from services.integrations.meta import meta_comment_replies
 
     src = getsource(meta_comment_replies)
     assert 'event.get("caption")' in src

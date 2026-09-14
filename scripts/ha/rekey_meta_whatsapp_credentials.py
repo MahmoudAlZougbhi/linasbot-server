@@ -49,7 +49,7 @@ if str(ROOT) not in sys.path:
 
 from db.models.meta_registry import MetaAssetBindingRow, MetaBindingCredentialRow  # noqa: E402
 from db.models.whatsapp_cloud import WhatsAppConnection, WhatsAppCredential  # noqa: E402
-from services.meta_app_registry_common import MetaCredentialCipher, MetaCredentialError  # noqa: E402
+from services.integrations.meta.meta_app_registry_common import MetaCredentialCipher, MetaCredentialError  # noqa: E402
 
 FORMAT = "linas-meta-whatsapp-credential-preimage-v1"
 FORMAT_AAD = b"linas-meta-whatsapp-credential-preimage-v1\x00all-credentials"
@@ -901,7 +901,7 @@ def _acquire_database_locks(session: Session, *, apply: bool) -> None:
     )
     if not acquired:
         raise RuntimeError("another cross-product credential operation is active")
-    from services.meta_app_registry_pg_store import acquire_registry_advisory_lock
+    from services.integrations.meta.meta_app_registry_pg_store import acquire_registry_advisory_lock
 
     acquire_registry_advisory_lock(session)
     table_lock_mode = "ACCESS EXCLUSIVE" if apply else "SHARE"

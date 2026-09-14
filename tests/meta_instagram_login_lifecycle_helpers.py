@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import time
 
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaAssetBinding, MetaBindingCredential
+from services.integrations.meta.meta_app_registry import (
+    APP_A_KEY,
+    MetaAppRegistry,
+    MetaAssetBinding,
+    MetaBindingCredential,
+)
 
 INSTAGRAM_ID = "17840000999900021"
 DM_SCOPES = (

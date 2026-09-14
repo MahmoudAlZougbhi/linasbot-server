@@ -12,9 +12,9 @@ from services.integrations.channel_capability_toggles import (
     ChannelToggleError,
     enable_channel_defaults_after_connect,
 )
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
-from services.meta_oauth import MetaOAuthError
-from services.meta_oauth_activation import ValidatedFacebookPage, activate_validated_facebook_pages
+from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
+from services.integrations.meta.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_oauth_activation import ValidatedFacebookPage, activate_validated_facebook_pages
 from tests.meta_compliance_helpers import _FakeFirestore
 
 
@@ -106,7 +106,7 @@ async def test_facebook_activation_enables_dm_before_subscribe(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services import meta_oauth_activation
+    from services.integrations.meta import meta_oauth_activation
 
     registry = _registry(tmp_path, monkeypatch)
     order: list[str] = []
@@ -130,7 +130,7 @@ async def test_facebook_activation_enables_dm_before_subscribe(
     )
     monkeypatch.setattr(meta_oauth_activation, "subscribe_binding_webhook", subscribe)
     monkeypatch.setattr(
-        "services.meta_app_webhook_subscription.ensure_app_page_webhook_subscription",
+        "services.integrations.meta.meta_app_webhook_subscription.ensure_app_page_webhook_subscription",
         app_subscribe,
     )
 
@@ -150,7 +150,7 @@ async def test_facebook_activation_does_not_subscribe_when_dm_enable_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services import meta_oauth_activation
+    from services.integrations.meta import meta_oauth_activation
 
     registry = _registry(tmp_path, monkeypatch)
     subscribed = False

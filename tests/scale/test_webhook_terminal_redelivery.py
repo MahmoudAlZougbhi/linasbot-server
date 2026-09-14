@@ -15,7 +15,7 @@ import pytest
 from starlette.requests import Request
 
 from modules import meta_messaging_webhook
-from services.meta_inbound_deletion_fence import (
+from services.integrations.meta.meta_inbound_deletion_fence import (
     InboundBindingDeletionFencedError,
     InboundDeletionFenceStoreError,
 )

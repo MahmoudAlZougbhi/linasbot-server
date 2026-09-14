@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.meta_cross_flow_dedup import global_comment_claim_key
-from services.meta_social_comment_sync import _enqueue_comment_ai, sync_facebook_binding_comments
+from services.integrations.meta.meta_cross_flow_dedup import global_comment_claim_key
+from services.integrations.meta.meta_social_comment_sync import _enqueue_comment_ai, sync_facebook_binding_comments
 
 
 def _facebook_binding() -> object:
@@ -51,7 +51,7 @@ async def test_enqueue_comment_ai_skips_when_global_claim_already_held(
         "services.scale.meta_ingress.persist_meta_comment_accepted",
         lambda resolved, global_key: ("ibe_test", True),
     )
-    monkeypatch.setattr("services.meta_comment_replies.process_meta_comment_event", process)
+    monkeypatch.setattr("services.integrations.meta.meta_comment_replies.process_meta_comment_event", process)
 
     claimed = await _enqueue_comment_ai(binding=binding, settings=settings, event=event)
 
@@ -68,27 +68,29 @@ async def test_sync_facebook_binding_comments_pagination_seeds_backfill_from_rec
     credential = type("C", (), {"access_token": "token", "scopes": frozenset()})()
     saved: list[str | None] = []
 
-    monkeypatch.setattr("services.meta_social_comment_sync._binding_by_id", lambda _r, _id: binding)
-    monkeypatch.setattr("services.meta_social_comment_sync._comment_reply_enabled", lambda _b: True)
+    monkeypatch.setattr("services.integrations.meta.meta_social_comment_sync._binding_by_id", lambda _r, _id: binding)
+    monkeypatch.setattr("services.integrations.meta.meta_social_comment_sync._comment_reply_enabled", lambda _b: True)
     monkeypatch.setattr(
-        "services.meta_social_comment_sync.get_meta_app_configs",
+        "services.integrations.meta.meta_social_comment_sync.get_meta_app_configs",
         lambda: {"linas_first_party": type("A", (), {"graph_api_version": "v24.0"})()},
     )
     monkeypatch.setattr(
-        "services.meta_social_comment_sync.get_meta_app_registry",
+        "services.integrations.meta.meta_social_comment_sync.get_meta_app_registry",
         lambda: type(
             "R",
             (),
             {"get_credential": lambda _self, _b: credential, "list_bindings": lambda *a, **k: []},
         )(),
     )
-    monkeypatch.setattr("services.meta_social_comment_sync.load_posts_backfill_cursor", lambda _id: None)
     monkeypatch.setattr(
-        "services.meta_social_comment_sync.save_posts_backfill_cursor",
+        "services.integrations.meta.meta_social_comment_sync.load_posts_backfill_cursor", lambda _id: None
+    )
+    monkeypatch.setattr(
+        "services.integrations.meta.meta_social_comment_sync.save_posts_backfill_cursor",
         lambda _id, cursor: saved.append(cursor),
     )
     monkeypatch.setattr(
-        "services.meta_social_comment_sync.build_messaging_settings_for_binding",
+        "services.integrations.meta.meta_social_comment_sync.build_messaging_settings_for_binding",
         lambda *a, **k: type("S", (), {"graph_api_version": "v24.0", "page_access_token": "token"})(),
     )
 
@@ -98,8 +100,12 @@ async def test_sync_facebook_binding_comments_pagination_seeds_backfill_from_rec
             "paging": {"next": "https://graph.facebook.com/page-2"},
         }
 
-    with patch("services.meta_social_comment_sync._graph_get_json", new=AsyncMock(side_effect=fake_graph)) as graph:
-        with patch("services.meta_social_comment_sync._enqueue_comment_ai", new=AsyncMock(return_value=False)):
+    with patch(
+        "services.integrations.meta.meta_social_comment_sync._graph_get_json", new=AsyncMock(side_effect=fake_graph)
+    ) as graph:
+        with patch(
+            "services.integrations.meta.meta_social_comment_sync._enqueue_comment_ai", new=AsyncMock(return_value=False)
+        ):
             await sync_facebook_binding_comments("bind_1")
 
     assert graph.await_count == 1
@@ -123,22 +129,26 @@ async def test_poll_and_webhook_overlap_only_first_path_processes(
         claim_calls += 1
         return MagicMock() if claim_calls == 1 else None
 
-    monkeypatch.setattr("services.meta_social_comment_sync._binding_by_id", lambda _r, _id: binding)
-    monkeypatch.setattr("services.meta_social_comment_sync._comment_reply_enabled", lambda _b: True)
+    monkeypatch.setattr("services.integrations.meta.meta_social_comment_sync._binding_by_id", lambda _r, _id: binding)
+    monkeypatch.setattr("services.integrations.meta.meta_social_comment_sync._comment_reply_enabled", lambda _b: True)
     monkeypatch.setattr(
-        "services.meta_social_comment_sync.get_meta_app_configs",
+        "services.integrations.meta.meta_social_comment_sync.get_meta_app_configs",
         lambda: {"linas_first_party": type("A", (), {"graph_api_version": "v24.0"})()},
     )
     monkeypatch.setattr(
-        "services.meta_social_comment_sync.get_meta_app_registry",
+        "services.integrations.meta.meta_social_comment_sync.get_meta_app_registry",
         lambda: type(
             "R",
             (),
             {"get_credential": lambda _self, _b: credential, "list_bindings": lambda *a, **k: []},
         )(),
     )
-    monkeypatch.setattr("services.meta_social_comment_sync.load_posts_backfill_cursor", lambda _id: None)
-    monkeypatch.setattr("services.meta_social_comment_sync.save_posts_backfill_cursor", lambda *_a: None)
+    monkeypatch.setattr(
+        "services.integrations.meta.meta_social_comment_sync.load_posts_backfill_cursor", lambda _id: None
+    )
+    monkeypatch.setattr(
+        "services.integrations.meta.meta_social_comment_sync.save_posts_backfill_cursor", lambda *_a: None
+    )
     monkeypatch.setattr(
         "services.durable_event_claim.try_claim_event_handle",
         AsyncMock(side_effect=claim_side_effect),
@@ -149,9 +159,9 @@ async def test_poll_and_webhook_overlap_only_first_path_processes(
         lambda resolved, global_key: ("ibe_test", True),
     )
     monkeypatch.setattr("services.scale.meta_ingress.enqueue_meta_inbound_event", lambda *_a, **_k: "inline")
-    monkeypatch.setattr("services.meta_comment_replies.process_meta_comment_event", process)
+    monkeypatch.setattr("services.integrations.meta.meta_comment_replies.process_meta_comment_event", process)
     monkeypatch.setattr(
-        "services.meta_social_comment_sync.build_messaging_settings_for_binding",
+        "services.integrations.meta.meta_social_comment_sync.build_messaging_settings_for_binding",
         lambda *a, **k: type("S", (), {"graph_api_version": "v24.0", "page_access_token": "token"})(),
     )
 
@@ -170,7 +180,9 @@ async def test_poll_and_webhook_overlap_only_first_path_processes(
             ]
         }
 
-    with patch("services.meta_social_comment_sync._graph_get_json", new=AsyncMock(side_effect=fake_graph)):
+    with patch(
+        "services.integrations.meta.meta_social_comment_sync._graph_get_json", new=AsyncMock(side_effect=fake_graph)
+    ):
         result = await sync_facebook_binding_comments("bind_1")
 
     assert result["discovered"] == 1

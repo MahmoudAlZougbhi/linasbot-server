@@ -13,7 +13,7 @@ from services.billing.billing_backend import (
     resolve_auth_token_backend,
     resolve_billing_backend,
 )
-from services.meta_app_registry_bindings import resolve_meta_registry_backend
+from services.integrations.meta.meta_app_registry_bindings import resolve_meta_registry_backend
 
 
 @pytest.fixture()

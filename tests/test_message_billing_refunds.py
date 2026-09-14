@@ -56,7 +56,7 @@ def test_revoke_missing_lot_is_honest() -> None:
 
 
 def test_apple_refund_revokes_message_lot_without_subscription() -> None:
-    from services.apple_assn_handlers import handle_refund_or_revoke
+    from services.billing.apple.apple_assn_handlers import handle_refund_or_revoke
 
     _grant()
     out = handle_refund_or_revoke(

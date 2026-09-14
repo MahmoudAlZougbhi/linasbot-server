@@ -78,7 +78,7 @@ async def send_pending_setup_resources(
         return {"ok": False, "error": "adapter_unavailable", "sent": [], "ai_charged": False, "claimed_sent": False}
 
     async def _send_all() -> dict[str, Any]:
-        from services.meta_attachment_send import send_stored_meta_attachment
+        from services.integrations.meta.meta_attachment_send import send_stored_meta_attachment
 
         last: dict[str, Any] = {"success": False, "error": "no_items"}
         for item in items:
@@ -122,8 +122,8 @@ async def send_pending_setup_resources(
     platform, surface, _is_public = parse_channel(channel)
     kind = "meta_comment" if surface == "comment" or recipient_field == "comment_id" else "meta_dm"
     if inbound_event_id:
-        from services.meta_controlled_evidence import meta_evidence_surface
-        from services.meta_outbound_attempts import execute_guarded_meta_send
+        from services.integrations.meta.meta_controlled_evidence import meta_evidence_surface
+        from services.integrations.meta.meta_outbound_attempts import execute_guarded_meta_send
 
         result = await execute_guarded_meta_send(
             event_id=inbound_event_id,

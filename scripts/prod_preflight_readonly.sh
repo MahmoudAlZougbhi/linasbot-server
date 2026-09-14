@@ -252,10 +252,10 @@ print("[preflight] required_config_ok=true")
 
 repo_roots = [Path("/opt/linasbot"), Path.cwd()]
 for root in repo_roots:
-    if (root / "services" / "meta_surface_secret_separation.py").is_file():
+    if (root / "services" / "integrations" / "meta" / "meta_surface_secret_separation.py").is_file():
         sys.path.insert(0, str(root))
         break
-from services.meta_surface_secret_separation import evaluate_meta_surface_secret_separation
+from services.integrations.meta.meta_surface_secret_separation import evaluate_meta_surface_secret_separation
 from services.billing.membership.message_flags import activation_flags_report
 
 flag_report = activation_flags_report(values)

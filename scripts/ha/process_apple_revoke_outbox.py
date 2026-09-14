@@ -24,8 +24,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, default=25)
     args = parser.parse_args(argv)
 
-    from services.apple_revoke_outbox import process_pending_revokes
-    from services.apple_secrets import apple_sign_in_key_id, apple_sign_in_key_path
+    from services.billing.apple.apple_revoke_outbox import process_pending_revokes
+    from services.billing.apple.apple_secrets import apple_sign_in_key_id, apple_sign_in_key_path
 
     # Paths + key id only — never PEM.
     print(

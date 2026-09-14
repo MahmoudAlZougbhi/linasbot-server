@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from services.meta_app_registry import MetaBindingCredential
+from services.integrations.meta.meta_app_registry import MetaBindingCredential
 
 ALL_MESSAGING_SCOPES = (
     "pages_show_list",

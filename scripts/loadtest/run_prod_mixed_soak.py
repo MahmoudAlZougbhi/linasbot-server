@@ -24,7 +24,7 @@ CONFIRM = "I_ACCEPT_PRODUCTION_OPENAI_COST"
 
 
 def _pick_bindings() -> tuple[Any, Any]:
-    from services.meta_app_registry import APP_A_KEY, get_meta_app_registry
+    from services.integrations.meta.meta_app_registry import APP_A_KEY, get_meta_app_registry
 
     registry = get_meta_app_registry()
     active = [
@@ -40,8 +40,8 @@ def _pick_bindings() -> tuple[Any, Any]:
 
 
 def _settings(binding: Any) -> Any:
-    from services.meta_app_registry import get_meta_app_registry
-    from services.meta_graph_routing import build_messaging_settings_for_binding
+    from services.integrations.meta.meta_app_registry import get_meta_app_registry
+    from services.integrations.meta.meta_graph_routing import build_messaging_settings_for_binding
 
     registry = get_meta_app_registry()
     credential = registry.get_credential(binding)
@@ -49,7 +49,7 @@ def _settings(binding: Any) -> Any:
 
 
 def _enqueue_dm(binding: Any, settings: Any, text: str) -> str:
-    from services.meta_multi_app_router import ResolvedMetaEvent
+    from services.integrations.meta.meta_multi_app_router import ResolvedMetaEvent
     from services.scale.meta_ingress import enqueue_meta_inbound_event, persist_meta_dm_accepted
 
     sender = f"soak_{uuid.uuid4().hex}"
@@ -71,7 +71,7 @@ def _enqueue_dm(binding: Any, settings: Any, text: str) -> str:
 
 
 def _enqueue_comment(binding: Any, settings: Any, text: str) -> str:
-    from services.meta_comment_events import ResolvedMetaCommentEvent
+    from services.integrations.meta.meta_comment_events import ResolvedMetaCommentEvent
     from services.scale.meta_ingress import enqueue_meta_inbound_event, persist_meta_comment_accepted
 
     comment_id = f"soak_c_{uuid.uuid4().hex}"

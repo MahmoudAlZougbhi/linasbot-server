@@ -10,29 +10,29 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaAssetBinding,
     get_meta_graph_api_version,
 )
-from services.meta_comment_events import resolve_registry_comment_events
-from services.meta_cross_flow_dedup import global_comment_claim_key
-from services.meta_graph_routing import graph_api_url
-from services.meta_instagram_login_capabilities import (
+from services.integrations.meta.meta_comment_events import resolve_registry_comment_events
+from services.integrations.meta.meta_cross_flow_dedup import global_comment_claim_key
+from services.integrations.meta.meta_graph_routing import graph_api_url
+from services.integrations.meta.meta_instagram_login_capabilities import (
     binding_ready_for_comments,
     binding_ready_for_publish,
     facebook_login_binding_superseded_for_capability,
     instagram_login_subscription_retry_eligible,
     select_instagram_binding_for_capability,
 )
-from services.meta_instagram_login_lifecycle import InstagramLoginLifecycle
-from services.meta_instagram_login_subscription import (
+from services.integrations.meta.meta_instagram_login_lifecycle import InstagramLoginLifecycle
+from services.integrations.meta.meta_instagram_login_subscription import (
     COMMENTS_SUBSCRIPTION_FIELD,
     InstagramLoginSubscriptionState,
     subscribed_fields_for_granted_scopes,
 )
-from services.meta_multi_app_router import resolve_registry_events
+from services.integrations.meta.meta_multi_app_router import resolve_registry_events
 from tests.meta_instagram_login_lifecycle_helpers import (
     DM_SCOPES,
     FULL_SCOPES,
@@ -100,7 +100,9 @@ async def test_startup_recovers_failed_subscription_without_webhook(registry: Me
     )
 
     async def _retry(binding_id: str, **kwargs: object) -> object:
-        from services.meta_instagram_login_subscription_recovery import retry_instagram_login_webhook_subscription
+        from services.integrations.meta.meta_instagram_login_subscription_recovery import (
+            retry_instagram_login_webhook_subscription,
+        )
 
         return await retry_instagram_login_webhook_subscription(
             binding_id,
@@ -108,13 +110,17 @@ async def test_startup_recovers_failed_subscription_without_webhook(registry: Me
             client=mock_client,
         )
 
-    with patch("services.meta_instagram_login_lifecycle.get_meta_app_registry", return_value=registry):
-        with patch("services.meta_instagram_login_lifecycle.instagram_login_config_status") as status:
+    with patch(
+        "services.integrations.meta.meta_instagram_login_lifecycle.get_meta_app_registry", return_value=registry
+    ):
+        with patch("services.integrations.meta.meta_instagram_login_lifecycle.instagram_login_config_status") as status:
             status.return_value = SimpleNamespace(configured=True)
-            with patch("services.meta_instagram_login_lifecycle.try_acquire_job_lock", return_value=True):
-                with patch("services.meta_instagram_login_lifecycle.release_job_lock"):
+            with patch(
+                "services.integrations.meta.meta_instagram_login_lifecycle.try_acquire_job_lock", return_value=True
+            ):
+                with patch("services.integrations.meta.meta_instagram_login_lifecycle.release_job_lock"):
                     with patch(
-                        "services.meta_instagram_login_lifecycle.retry_instagram_login_webhook_subscription",
+                        "services.integrations.meta.meta_instagram_login_lifecycle.retry_instagram_login_webhook_subscription",
                         side_effect=_retry,
                     ):
                         await lifecycle.run_once(actor_id="instagram-login-startup")
@@ -129,9 +135,15 @@ async def test_startup_recovers_failed_subscription_without_webhook(registry: Me
 async def test_lifecycle_tick_skipped_when_worker_lock_held(registry: MetaAppRegistry) -> None:
     _binding(registry, auth_flow="instagram_login", webhook_status="failed", webhook_fields=())
     lifecycle = InstagramLoginLifecycle()
-    with patch("services.meta_instagram_login_lifecycle.get_meta_app_registry", return_value=registry):
-        with patch("services.meta_instagram_login_lifecycle.try_acquire_job_lock", return_value=False):
-            with patch("services.meta_instagram_login_lifecycle.instagram_login_config_status") as status:
+    with patch(
+        "services.integrations.meta.meta_instagram_login_lifecycle.get_meta_app_registry", return_value=registry
+    ):
+        with patch(
+            "services.integrations.meta.meta_instagram_login_lifecycle.try_acquire_job_lock", return_value=False
+        ):
+            with patch(
+                "services.integrations.meta.meta_instagram_login_lifecycle.instagram_login_config_status"
+            ) as status:
                 status.return_value = SimpleNamespace(configured=True)
                 result = await lifecycle.run_once()
     assert result.get("skipped") == 1
@@ -140,10 +152,10 @@ async def test_lifecycle_tick_skipped_when_worker_lock_held(registry: MetaAppReg
 @pytest.mark.asyncio
 async def test_lifecycle_stops_cleanly_without_orphan_task(registry: MetaAppRegistry) -> None:
     lifecycle = InstagramLoginLifecycle()
-    with patch("services.meta_instagram_login_lifecycle.instagram_login_config_status") as status:
+    with patch("services.integrations.meta.meta_instagram_login_lifecycle.instagram_login_config_status") as status:
         status.return_value = SimpleNamespace(configured=True)
-        with patch("services.meta_instagram_login_lifecycle.try_acquire_job_lock", return_value=True):
-            with patch("services.meta_instagram_login_lifecycle.release_job_lock"):
+        with patch("services.integrations.meta.meta_instagram_login_lifecycle.try_acquire_job_lock", return_value=True):
+            with patch("services.integrations.meta.meta_instagram_login_lifecycle.release_job_lock"):
                 await lifecycle.start()
     assert lifecycle.running is True
     await lifecycle.stop()
@@ -161,14 +173,21 @@ async def test_lifecycle_schedules_token_refresh(registry: MetaAppRegistry) -> N
         webhook_fields=("messages", "messaging_postbacks"),
     )
     lifecycle = InstagramLoginLifecycle()
-    with patch("services.meta_instagram_login_lifecycle.get_meta_app_registry", return_value=registry):
-        with patch("services.meta_instagram_login_lifecycle.instagram_login_config_status") as status:
+    with patch(
+        "services.integrations.meta.meta_instagram_login_lifecycle.get_meta_app_registry", return_value=registry
+    ):
+        with patch("services.integrations.meta.meta_instagram_login_lifecycle.instagram_login_config_status") as status:
             status.return_value = SimpleNamespace(configured=True)
-            with patch("services.meta_instagram_login_lifecycle.try_acquire_job_lock", return_value=True):
-                with patch("services.meta_instagram_login_lifecycle.release_job_lock"):
-                    with patch("services.meta_instagram_login_lifecycle.credential_needs_refresh", return_value=True):
+            with patch(
+                "services.integrations.meta.meta_instagram_login_lifecycle.try_acquire_job_lock", return_value=True
+            ):
+                with patch("services.integrations.meta.meta_instagram_login_lifecycle.release_job_lock"):
+                    with patch(
+                        "services.integrations.meta.meta_instagram_login_lifecycle.credential_needs_refresh",
+                        return_value=True,
+                    ):
                         with patch(
-                            "services.meta_instagram_login_lifecycle.refresh_binding_instagram_login_token",
+                            "services.integrations.meta.meta_instagram_login_lifecycle.refresh_binding_instagram_login_token",
                             return_value=registry.list_bindings()[0],
                         ) as refresh:
                             result = await lifecycle.run_once()
@@ -178,7 +197,7 @@ async def test_lifecycle_schedules_token_refresh(registry: MetaAppRegistry) -> N
 
 @pytest.mark.asyncio
 async def test_dm_ready_direct_comments_fallback_to_page_linked(registry: MetaAppRegistry) -> None:
-    from services.meta_app_registry import get_meta_app_configs
+    from services.integrations.meta.meta_app_registry import get_meta_app_configs
 
     _binding(
         registry,
@@ -199,7 +218,7 @@ async def test_dm_ready_direct_comments_fallback_to_page_linked(registry: MetaAp
 
 @pytest.mark.asyncio
 async def test_direct_comments_ready_dedupes_duplicate_delivery(registry: MetaAppRegistry) -> None:
-    from services.meta_app_registry import get_meta_app_configs
+    from services.integrations.meta.meta_app_registry import get_meta_app_configs
 
     _binding(
         registry,
@@ -324,7 +343,7 @@ def test_subscription_retry_respects_bounded_backoff(registry: MetaAppRegistry) 
 
 
 def test_graph_version_applied_to_both_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.meta_app_registry import APP_A_KEY
+    from services.integrations.meta.meta_app_registry import APP_A_KEY
 
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v25.0")
     version = get_meta_graph_api_version()
@@ -369,7 +388,7 @@ def test_graph_version_applied_to_both_hosts(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.asyncio
 async def test_resolve_dm_prefers_direct_when_ready(registry: MetaAppRegistry) -> None:
-    from services.meta_app_registry import get_meta_app_configs
+    from services.integrations.meta.meta_app_registry import get_meta_app_configs
 
     _binding(registry, auth_flow="facebook_login", scopes=PAGE_SCOPES)
     _binding(

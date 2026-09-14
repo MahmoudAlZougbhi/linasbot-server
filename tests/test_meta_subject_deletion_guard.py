@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from services.meta_subject_deletion_guard import (
+from services.integrations.meta.meta_subject_deletion_guard import (
     MetaSubjectDeletionBlockedError,
     MetaSubjectDeletionChangedError,
     MetaSubjectDeletionLeaseBusyError,
@@ -363,7 +363,7 @@ def test_guard_fails_closed_without_firestore(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_acquire_recovers_same_owner_after_commit_ack_loss(monkeypatch: pytest.MonkeyPatch) -> None:
-    import services.meta_subject_deletion_guard as guard
+    import services.integrations.meta.meta_subject_deletion_guard as guard
 
     db = _FakeFirestore()
     _patch_db(monkeypatch, db)
@@ -398,7 +398,7 @@ def test_exhausted_commit_ack_loss_keeps_new_owner_busy_until_expiry(
 ) -> None:
     """Follow-up blocker: a later Connect still waits ~300s. Busy is not fully fixed."""
 
-    import services.meta_subject_deletion_guard as guard
+    import services.integrations.meta.meta_subject_deletion_guard as guard
 
     db = _FakeFirestore()
     _patch_db(monkeypatch, db)

@@ -7,22 +7,22 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAssetBinding,
 )
-from services.meta_comment_events import (
+from services.integrations.meta.meta_comment_events import (
     count_raw_comment_changes,
     parse_meta_comment_events,
 )
-from services.meta_comment_replies import (
+from services.integrations.meta.meta_comment_replies import (
     _is_self_comment,
 )
-from services.meta_comment_reply_settings import (
+from services.integrations.meta.meta_comment_reply_settings import (
     get_comment_reply_setting,
     set_comment_reply_setting,
 )
-from services.meta_messaging import MetaMessagingSettings, parse_meta_messaging_events
+from services.integrations.meta.meta_messaging import MetaMessagingSettings, parse_meta_messaging_events
 
 
 def _facebook_comment_payload(*, page_id: str = "111", comment_id: str = "c1", author_id: str = "user-9") -> dict:
@@ -227,7 +227,7 @@ class MetaCommentSettingsTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.settings_root = Path(self.tmp.name)
         self._settings_patch = mock.patch(
-            "services.meta_comment_reply_settings._SETTINGS_ROOT",
+            "services.integrations.meta.meta_comment_reply_settings._SETTINGS_ROOT",
             self.settings_root,
         )
         self._settings_patch.start()

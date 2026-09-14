@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from db.session import whatsapp_session
+from services.integrations.meta.meta_app_registry import APP_A_KEY, get_meta_app_configs
 from services.integrations.whatsapp.app_review_bind_helpers import (
     APP_REVIEW_SOURCE,
     APP_REVIEW_TENANT_ID,
@@ -34,7 +35,6 @@ from services.integrations.whatsapp.repository import (
     WhatsAppCloudRepository,
     connection_public_view,
 )
-from services.meta_app_registry import APP_A_KEY, get_meta_app_configs
 
 APP_REVIEW_REASON = "meta_app_review_test"
 

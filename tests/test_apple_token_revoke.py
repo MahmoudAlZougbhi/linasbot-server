@@ -19,16 +19,16 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 from db.models import Base  # noqa: E402
 from db.models.apple_billing import AuthExternalIdentityRow  # noqa: E402
 from db.session import reset_engine_for_tests, whatsapp_session  # noqa: E402
-from services import apple_token_revoke as revoke_mod  # noqa: E402
-from services.apple_identity_service import link_apple_identity  # noqa: E402
-from services.apple_revoke_outbox import (  # noqa: E402
+from services.billing.apple import apple_token_revoke as revoke_mod  # noqa: E402
+from services.billing.apple.apple_identity_service import link_apple_identity  # noqa: E402
+from services.billing.apple.apple_revoke_outbox import (  # noqa: E402
     META_PENDING,
     META_REFRESH,
     enqueue_revoke,
     process_pending_revokes,
     revoke_on_account_delete,
 )
-from services.apple_token_revoke import (  # noqa: E402
+from services.billing.apple.apple_token_revoke import (  # noqa: E402
     AppleTokenRevokeError,
     build_client_secret,
     exchange_authorization_code,
@@ -164,8 +164,8 @@ def test_revoke_on_delete_enqueues_when_http_fails(
     def _boom(*_a: Any, **_k: Any) -> dict[str, Any]:
         raise AppleTokenRevokeError("Apple HTTP 500")
 
-    monkeypatch.setattr("services.apple_revoke_outbox.exchange_authorization_code", _boom)
-    monkeypatch.setattr("services.apple_revoke_outbox.revoke_apple_token", _boom)
+    monkeypatch.setattr("services.billing.apple.apple_revoke_outbox.exchange_authorization_code", _boom)
+    monkeypatch.setattr("services.billing.apple.apple_revoke_outbox.revoke_apple_token", _boom)
 
     # Store refresh then delete-path revoke
     enqueue_revoke("u-del", "refresh-stored", "refresh_token")
@@ -193,7 +193,7 @@ def test_process_pending_revokes_success(
     enqueue_revoke("u2", "refresh-pending", "refresh_token")
 
     monkeypatch.setattr(
-        "services.apple_revoke_outbox.revoke_apple_token",
+        "services.billing.apple.apple_revoke_outbox.revoke_apple_token",
         lambda token, hint="refresh_token": {"ok": True},
     )
     out = process_pending_revokes(limit=10)

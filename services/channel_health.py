@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     MetaAppRegistry,
     diagnose_active_meta_binding,
     get_meta_app_registry,
     meta_multi_app_registry_enabled,
 )
-from services.meta_messaging import get_meta_messaging_settings
+from services.integrations.meta.meta_messaging import get_meta_messaging_settings
 
 _META_CHANNELS = ("facebook", "instagram")
 

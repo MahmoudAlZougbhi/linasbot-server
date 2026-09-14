@@ -24,18 +24,18 @@ from services.integrations.channel_capability_state import (
     dm_capability_state,
     supported_platforms,
 )
-from services.meta_app_registry import APP_A_KEY, get_meta_app_configs, get_meta_app_registry
-from services.meta_app_webhook_subscription import ensure_app_page_webhook_subscription
-from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
-from services.meta_comment_webhooks import (
+from services.integrations.meta.meta_app_registry import APP_A_KEY, get_meta_app_configs, get_meta_app_registry
+from services.integrations.meta.meta_app_webhook_subscription import ensure_app_page_webhook_subscription
+from services.integrations.meta.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
+from services.integrations.meta.meta_comment_webhooks import (
     ensure_instagram_comment_app_webhook,
     ensure_page_comment_webhook_subscription,
 )
-from services.meta_instagram_login_subscription import (
+from services.integrations.meta.meta_instagram_login_subscription import (
     COMMENTS_SUBSCRIPTION_FIELD,
     ensure_instagram_login_webhook_subscription,
 )
-from services.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_oauth import MetaOAuthError
 
 ChannelPlatform = Literal["instagram", "facebook"]
 ToggleKey = Literal["dm", "comments"]

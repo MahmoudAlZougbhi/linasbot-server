@@ -12,12 +12,12 @@ import pytest
 
 import services.durable_event_claim as durable_claims
 import services.scale.inbound_event_store as event_store
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaBindingCredential,
 )
-from services.meta_data_deletion import delete_meta_social_user_data, read_deletion_status
+from services.integrations.meta.meta_data_deletion import delete_meta_social_user_data, read_deletion_status
 from tests.meta_compliance_helpers import (
     APP_A_ENV,
     APP_SECRET,
@@ -161,7 +161,7 @@ def _patch_deletion_stores(
     tmp_path: Path,
     db: _FakeFirestore | None,
 ) -> Path:
-    import services.meta_data_deletion as deletion_service
+    import services.integrations.meta.meta_data_deletion as deletion_service
     import utils.utils
 
     ledger_root = tmp_path / "inbound_events"

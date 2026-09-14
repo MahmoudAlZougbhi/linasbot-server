@@ -11,14 +11,14 @@ import httpx
 import pytest
 
 from modules import meta_connections_api_lifecycle as lifecycle
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     APP_B_KEY,
     MetaAppRegistry,
     MetaBindingCredential,
     MetaRegistryError,
 )
-from services.meta_oauth_graph import MetaOAuthError
+from services.integrations.meta.meta_oauth_graph import MetaOAuthError
 
 PAGE_ID = "112233445566"
 APP_A_ID = "2963733803971681"
@@ -139,7 +139,7 @@ async def test_manual_activate_and_rollback_preserve_third_shared_bindings(
 
     monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
+        "services.integrations.meta.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
         inspect,
     )
     monkeypatch.setattr(lifecycle, "desired_binding_webhook_subscription", lambda *_args, **_kwargs: DESIRED)
@@ -165,7 +165,7 @@ async def test_public_unsubscribe_refuses_to_delete_a_shared_app_page(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     _staged, binding = _staged_b_then_active_a(registry)
     registry.activate_binding(
@@ -192,7 +192,7 @@ async def test_disconnect_cancellation_after_delete_settles_local_disconnect(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     _staged, binding = _staged_b_then_active_a(registry)
 
@@ -225,7 +225,7 @@ async def test_disconnect_local_cas_failure_does_not_mutate_provider(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     _staged, binding = _staged_b_then_active_a(registry)
     events: list[str] = []
@@ -263,7 +263,7 @@ async def test_page_disconnect_keeps_credential_until_delete_absence_is_verified
     registry: MetaAppRegistry,
     delete_success: bool,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     _staged, binding = _staged_b_then_active_a(registry)
     calls: list[str] = []
@@ -306,7 +306,7 @@ async def test_page_disconnect_keeps_credential_until_delete_absence_is_verified
 async def test_page_disconnect_accepts_lost_delete_ack_only_after_absence_readback(
     registry: MetaAppRegistry,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     _staged, binding = _staged_b_then_active_a(registry)
     present = True
@@ -344,7 +344,7 @@ async def test_page_disconnect_reconciles_local_commit_ack_loss_in_same_call(
     monkeypatch: pytest.MonkeyPatch,
     commit_method: str,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     _staged, binding = _staged_b_then_active_a(registry)
     original = getattr(registry, commit_method)

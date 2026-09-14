@@ -30,7 +30,7 @@ GONE = (
 KEEP = (
     "services/smart_followup/__init__.py",
     "services/live_chat/template_ids.py",
-    "services/whatsapp_cloud_template_service.py",
+    "services/integrations/whatsapp/cloud_template_service.py",
     "modules/whatsapp_smart_followup_api.py",
 )
 

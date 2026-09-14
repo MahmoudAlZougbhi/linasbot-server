@@ -11,7 +11,7 @@ async def run_meta_data_deletion_reconcile_job() -> None:
     """
 
     try:
-        from services.meta_data_deletion import process_pending_meta_deletion_requests
+        from services.integrations.meta.meta_data_deletion import process_pending_meta_deletion_requests
 
         result = process_pending_meta_deletion_requests()
         examined = int(result.get("examined") or 0)

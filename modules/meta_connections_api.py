@@ -16,7 +16,7 @@ from modules.meta_connections_api_helpers import (  # noqa: F401
     _subscription_identity,
     _tenant_binding,
 )
-from services.meta_app_registry import (  # noqa: F401 — re-exports for lifecycle/tests
+from services.integrations.meta.meta_app_registry import (  # noqa: F401 — re-exports for lifecycle/tests
     APP_A_KEY,
     APP_B_KEY,
     MetaAssetBinding,
@@ -26,20 +26,23 @@ from services.meta_app_registry import (  # noqa: F401 — re-exports for lifecy
     get_meta_app_registry,
     meta_multi_app_registry_enabled,
 )
-from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting  # noqa: F401
-from services.meta_comment_webhooks import (  # noqa: F401 — re-exports for lifecycle/tests
+from services.integrations.meta.meta_comment_reply_settings import (  # noqa: F401
+    get_comment_reply_setting,
+    set_comment_reply_setting,
+)
+from services.integrations.meta.meta_comment_webhooks import (  # noqa: F401 — re-exports for lifecycle/tests
     credential_has_comment_scopes,
     ensure_instagram_comment_app_webhook,
     ensure_page_comment_webhook_subscription,
     required_comment_scopes,
 )
-from services.meta_graph_routing import required_comment_scopes_for_binding
-from services.meta_instagram_login_config import instagram_login_config_status
-from services.meta_instagram_login_oauth import begin_instagram_login, complete_instagram_login
-from services.meta_instagram_login_subscription_recovery import (  # noqa: F401
+from services.integrations.meta.meta_graph_routing import required_comment_scopes_for_binding
+from services.integrations.meta.meta_instagram_login_config import instagram_login_config_status
+from services.integrations.meta.meta_instagram_login_oauth import begin_instagram_login, complete_instagram_login
+from services.integrations.meta.meta_instagram_login_subscription_recovery import (  # noqa: F401
     retry_instagram_login_webhook_subscription,
 )
-from services.meta_oauth import (  # noqa: F401 — re-exports patched by tests / used by lifecycle
+from services.integrations.meta.meta_oauth import (  # noqa: F401 — re-exports patched by tests / used by lifecycle
     MetaOAuthError,
     begin_meta_business_login,
     complete_meta_business_login,
@@ -48,7 +51,7 @@ from services.meta_oauth import (  # noqa: F401 — re-exports patched by tests 
     subscribe_binding_webhook,
     unsubscribe_binding_webhook,
 )
-from services.meta_oauth_return import (
+from services.integrations.meta.meta_oauth_return import (
     consume_return_surface_from_state,
     mobile_oauth_failure_reason,
     normalize_return_surface,
@@ -83,7 +86,7 @@ async def list_meta_connections(request: Request) -> Any:
             public["granted_permissions"] = sorted(credential.scopes)
             public["declined_permissions"] = sorted(credential.declined_scopes)
             if not public.get("authorized_meta_user_id_hash"):
-                from services.meta_app_registry import authorized_meta_user_id_hash
+                from services.integrations.meta.meta_app_registry import authorized_meta_user_id_hash
 
                 public["authorized_meta_user_id_hash"] = authorized_meta_user_id_hash(
                     credential.authorized_meta_user_id
@@ -218,8 +221,8 @@ async def instagram_login_oauth_callback(
 ) -> Any:
     import logging
 
-    from services.meta_app_registry import MetaOAuthStateError
-    from services.meta_oauth_return import mobile_oauth_failure_reason, resolve_error_return_surface
+    from services.integrations.meta.meta_app_registry import MetaOAuthStateError
+    from services.integrations.meta.meta_oauth_return import mobile_oauth_failure_reason, resolve_error_return_surface
 
     logger = logging.getLogger("meta_oauth.callback")
     state_text = _query_text(state)
@@ -285,8 +288,8 @@ async def meta_oauth_callback(
 
     import logging
 
-    from services.meta_app_registry import MetaOAuthStateError
-    from services.meta_oauth_return import mobile_oauth_failure_reason, resolve_error_return_surface
+    from services.integrations.meta.meta_app_registry import MetaOAuthStateError
+    from services.integrations.meta.meta_oauth_return import mobile_oauth_failure_reason, resolve_error_return_surface
 
     logger = logging.getLogger("meta_oauth.callback")
     state_text = _query_text(state)

@@ -9,12 +9,12 @@ from typing import Any
 import httpx
 import pytest
 
-from services.meta_app_registry import APP_A_KEY, MetaAssetBinding
-from services.meta_comment_webhooks import (
+from services.integrations.meta.meta_app_registry import APP_A_KEY, MetaAssetBinding
+from services.integrations.meta.meta_comment_webhooks import (
     ensure_instagram_comment_app_webhook,
     ensure_page_comment_webhook_subscription,
 )
-from services.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_oauth import MetaOAuthError
 
 
 def _facebook_binding() -> MetaAssetBinding:
@@ -42,7 +42,9 @@ def _patch_app(monkeypatch: pytest.MonkeyPatch) -> Any:
         verify_token="verify-token",
         graph_api_version="v24.0",
     )
-    monkeypatch.setattr("services.meta_comment_webhooks.get_meta_app_configs", lambda: {APP_A_KEY: app})
+    monkeypatch.setattr(
+        "services.integrations.meta.meta_comment_webhooks.get_meta_app_configs", lambda: {APP_A_KEY: app}
+    )
     return app
 
 

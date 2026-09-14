@@ -54,7 +54,7 @@ async def send_pending_product_media(
         return {"ok": False, "error": "adapter_unavailable", "sent": [], "ai_charged": False}
 
     async def _send_all() -> dict[str, Any]:
-        from services.meta_attachment_send import send_stored_product_media
+        from services.integrations.meta.meta_attachment_send import send_stored_product_media
 
         last: dict[str, Any] = {"success": False, "error": "no_items"}
         for item in items:
@@ -81,8 +81,8 @@ async def send_pending_product_media(
         return last
 
     if inbound_event_id:
-        from services.meta_controlled_evidence import meta_evidence_surface
-        from services.meta_outbound_attempts import execute_guarded_meta_send
+        from services.integrations.meta.meta_controlled_evidence import meta_evidence_surface
+        from services.integrations.meta.meta_outbound_attempts import execute_guarded_meta_send
 
         result = await execute_guarded_meta_send(
             event_id=inbound_event_id,

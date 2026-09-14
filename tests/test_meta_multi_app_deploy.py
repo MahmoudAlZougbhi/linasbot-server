@@ -10,8 +10,8 @@ import pytest
 
 from scripts import seed_meta_app_a_registry
 from scripts.validate_meta_social_token import EXPECTED_INSTAGRAM_ID, EXPECTED_PAGE_ID, REQUIRED_SCOPES
-from services.meta_app_registry import APP_A_EXPECTED_ID, APP_A_KEY, MetaBindingCredential
-from services.meta_facebook_scope_policy import FACEBOOK_PAGE_BINDING_SCOPES
+from services.integrations.meta.meta_app_registry import APP_A_EXPECTED_ID, APP_A_KEY, MetaBindingCredential
+from services.integrations.meta.meta_facebook_scope_policy import FACEBOOK_PAGE_BINDING_SCOPES
 
 ROOT = Path(__file__).resolve().parents[1]
 

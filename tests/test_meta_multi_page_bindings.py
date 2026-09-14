@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaBindingConflictError,

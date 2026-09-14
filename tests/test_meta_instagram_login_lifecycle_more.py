@@ -10,7 +10,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaAssetBinding,
@@ -18,10 +18,13 @@ from services.meta_app_registry import (
     MetaRegistryError,
     get_meta_graph_api_version,
 )
-from services.meta_comment_events import resolve_registry_comment_events
-from services.meta_cross_flow_dedup import global_comment_claim_key
-from services.meta_instagram_login_lifecycle import InstagramLoginLifecycle, get_instagram_login_lifecycle
-from services.meta_instagram_login_subscription import (
+from services.integrations.meta.meta_comment_events import resolve_registry_comment_events
+from services.integrations.meta.meta_cross_flow_dedup import global_comment_claim_key
+from services.integrations.meta.meta_instagram_login_lifecycle import (
+    InstagramLoginLifecycle,
+    get_instagram_login_lifecycle,
+)
+from services.integrations.meta.meta_instagram_login_subscription import (
     COMMENTS_SUBSCRIPTION_FIELD,
     INSTAGRAM_LOGIN_CLEANUP_DELETE_ERROR,
     INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
@@ -62,7 +65,7 @@ def registry(tmp_path: Path, instagram_env: None) -> MetaAppRegistry:
 
 @pytest.mark.asyncio
 async def test_permission_upgrade_adds_comments_without_removing_dm_subscription(registry: MetaAppRegistry) -> None:
-    from services.meta_instagram_login_subscription import ensure_instagram_login_webhook_subscription
+    from services.integrations.meta.meta_instagram_login_subscription import ensure_instagram_login_webhook_subscription
 
     binding = _binding(
         registry,
@@ -126,8 +129,8 @@ async def test_permission_upgrade_adds_comments_without_removing_dm_subscription
 
 
 def test_ineligible_direct_login_does_not_poison_global_comment_dedup(registry: MetaAppRegistry) -> None:
-    from services.meta_app_registry import get_meta_app_configs
-    from services.meta_messaging import InMemoryMessageDeduper
+    from services.integrations.meta.meta_app_registry import get_meta_app_configs
+    from services.integrations.meta.meta_messaging import InMemoryMessageDeduper
 
     _binding(
         registry,
@@ -219,15 +222,23 @@ async def test_cleanup_queue_rotates_poison_rows_and_preserves_active_recovery_b
         return binding
 
     lifecycle = InstagramLoginLifecycle()
-    with patch("services.meta_instagram_login_lifecycle.get_meta_app_registry", return_value=registry):
-        with patch("services.meta_instagram_login_lifecycle.retry_instagram_login_cleanup", side_effect=poison):
+    with patch(
+        "services.integrations.meta.meta_instagram_login_lifecycle.get_meta_app_registry", return_value=registry
+    ):
+        with patch(
+            "services.integrations.meta.meta_instagram_login_lifecycle.retry_instagram_login_cleanup",
+            side_effect=poison,
+        ):
             with patch(
-                "services.meta_instagram_login_lifecycle.instagram_login_subscription_retry_eligible",
+                "services.integrations.meta.meta_instagram_login_lifecycle.instagram_login_subscription_retry_eligible",
                 return_value=False,
             ):
-                with patch("services.meta_instagram_login_lifecycle.credential_needs_refresh", return_value=True):
+                with patch(
+                    "services.integrations.meta.meta_instagram_login_lifecycle.credential_needs_refresh",
+                    return_value=True,
+                ):
                     with patch(
-                        "services.meta_instagram_login_lifecycle.refresh_binding_instagram_login_token",
+                        "services.integrations.meta.meta_instagram_login_lifecycle.refresh_binding_instagram_login_token",
                         side_effect=refresh,
                     ):
                         first = await lifecycle._run_cycle(actor_id="test", instagram_configured=True)
@@ -299,9 +310,11 @@ async def test_orphan_cleanup_queue_durably_rotates_twenty_poison_rows(
         raise MetaRegistryError("simulated orphan provider outage")
 
     lifecycle = InstagramLoginLifecycle()
-    with patch("services.meta_instagram_login_lifecycle.get_meta_app_registry", return_value=registry):
+    with patch(
+        "services.integrations.meta.meta_instagram_login_lifecycle.get_meta_app_registry", return_value=registry
+    ):
         with patch(
-            "services.meta_instagram_login_lifecycle.retry_instagram_login_orphan_cleanup",
+            "services.integrations.meta.meta_instagram_login_lifecycle.retry_instagram_login_orphan_cleanup",
             side_effect=poison,
         ):
             first = await lifecycle._run_cycle(actor_id="test", instagram_configured=False)
@@ -361,7 +374,9 @@ async def test_expired_poison_binding_does_not_abort_later_active_work(
 
     monkeypatch.setattr(registry, "set_binding_status", fail_first)
     lifecycle = InstagramLoginLifecycle()
-    with patch("services.meta_instagram_login_lifecycle.get_meta_app_registry", return_value=registry):
+    with patch(
+        "services.integrations.meta.meta_instagram_login_lifecycle.get_meta_app_registry", return_value=registry
+    ):
         await lifecycle._run_cycle(actor_id="test", instagram_configured=True)
 
     assert settled == [second.binding_id]

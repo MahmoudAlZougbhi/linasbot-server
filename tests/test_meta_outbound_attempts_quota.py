@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-import services.meta_outbound_attempts as attempts
+import services.integrations.meta.meta_outbound_attempts as attempts
 from tests.meta_compliance_helpers import (
     _FakeFirestore,
 )
@@ -23,7 +23,7 @@ pytest_plugins = ("tests.meta_outbound_attempts_support",)
 async def test_quota_phases_remain_deletion_active_until_provider_terminal(
     outbound_store: _FakeFirestore,
 ) -> None:
-    from services.meta_claim_data_deletion import _claim_is_active
+    from services.integrations.meta.meta_claim_data_deletion import _claim_is_active
 
     event_id = "ibe_" + "1" * 40
     reservation = await attempts.reserve_image_quota_notice(
@@ -156,7 +156,7 @@ async def test_provider_phase_crash_blocks_every_automatic_notice_retry(
     document = _document(outbound_store, event_id, "image_quota_notice")
     assert document["status"] == "sending"
     assert document["image_quota_phase"] == "provider"
-    from services.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
+    from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
 
     firestore_binding_deletion_fence_ref(outbound_store, binding_id).set({"status": "fenced"})
 
@@ -179,8 +179,8 @@ async def test_provider_phase_crash_blocks_every_automatic_notice_retry(
 async def test_fence_after_consumed_marker_settles_attempt_for_real_deletion_plan(
     outbound_store: _FakeFirestore,
 ) -> None:
-    from services.meta_claim_data_deletion import build_shared_meta_claim_deletion_plan
-    from services.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
+    from services.integrations.meta.meta_claim_data_deletion import build_shared_meta_claim_deletion_plan
+    from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
 
     event_id = "ibe_" + "8" * 40
     binding_id = "binding-consumed-before-fence"
@@ -208,8 +208,8 @@ async def test_fence_after_consumed_marker_settles_attempt_for_real_deletion_pla
 async def test_fence_reconciles_reserved_quota_for_real_deletion_plan(
     outbound_store: _FakeFirestore,
 ) -> None:
-    from services.meta_claim_data_deletion import build_shared_meta_claim_deletion_plan
-    from services.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
+    from services.integrations.meta.meta_claim_data_deletion import build_shared_meta_claim_deletion_plan
+    from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
 
     event_id = "ibe_" + "9" * 40
     binding_id = "binding-reserved-before-fence"
@@ -244,7 +244,7 @@ async def test_fence_reconciles_reserved_quota_for_real_deletion_plan(
 async def test_fence_after_quota_consume_records_truth_and_blocks_provider(
     outbound_store: _FakeFirestore,
 ) -> None:
-    from services.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
+    from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
 
     event_id = "ibe_" + "3" * 40
     binding_id = "binding-fenced-after-consume"

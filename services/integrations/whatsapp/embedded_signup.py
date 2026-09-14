@@ -8,6 +8,8 @@ from typing import Any
 from urllib.parse import urlencode
 
 from db.session import whatsapp_session
+from services.integrations.meta.meta_app_registry import APP_A_EXPECTED_ID, APP_A_KEY, get_meta_app_configs
+from services.integrations.meta.meta_oauth_return import oauth_completion_redirect_url
 from services.integrations.whatsapp.config import (
     WHATSAPP_COEXISTENCE_FEATURE,
     WHATSAPP_OPTIONAL_SCOPES,
@@ -32,8 +34,6 @@ from services.integrations.whatsapp.graph_client import (
 )
 from services.integrations.whatsapp.observability import emit_wa_event
 from services.integrations.whatsapp.repository import WhatsAppCloudRepository, connection_public_view
-from services.meta_app_registry import APP_A_EXPECTED_ID, APP_A_KEY, get_meta_app_configs
-from services.meta_oauth_return import oauth_completion_redirect_url
 
 _CANCEL_ERRORS = frozenset({"access_denied", "user_cancelled", "cancelled", "canceled"})
 _FRIENDLY_FAIL_ERRORS = frozenset(

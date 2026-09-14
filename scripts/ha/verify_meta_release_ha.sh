@@ -247,7 +247,7 @@ from pathlib import Path
 from dotenv import dotenv_values
 
 sys.path.insert(0, sys.argv[1])
-from services.meta_surface_secret_separation import (
+from services.integrations.meta.meta_surface_secret_separation import (
     COLLISION_EXIT,
     operator_gate_allows_separation,
 )

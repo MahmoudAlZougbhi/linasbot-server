@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from scripts.apple_notification_reconcile import _process_history_pages
-from services.apple_app_store_client import AppleAppStoreClient
+from services.billing.apple.apple_app_store_client import AppleAppStoreClient
 
 
 def test_iter_notification_history_two_pages() -> None:
@@ -82,7 +82,7 @@ def test_process_history_pages_aggregates_multi_page(monkeypatch: pytest.MonkeyP
             yield page
 
     monkeypatch.setattr(
-        "services.apple_app_store_client.apple_app_store_client.iter_notification_history",
+        "services.billing.apple.apple_app_store_client.apple_app_store_client.iter_notification_history",
         _iter,
     )
 
@@ -96,7 +96,7 @@ def test_process_history_pages_aggregates_multi_page(monkeypatch: pytest.MonkeyP
         return outcomes.pop(0)
 
     monkeypatch.setattr(
-        "services.apple_iap_processor.process_notification_v2",
+        "services.billing.apple.apple_iap_processor.process_notification_v2",
         _process,
     )
     summary = _process_history_pages(start_ms=1, end_ms=2, notification_type="")
@@ -119,11 +119,11 @@ def test_process_history_pages_respects_max_pages(monkeypatch: pytest.MonkeyPatc
             }
 
     monkeypatch.setattr(
-        "services.apple_app_store_client.apple_app_store_client.iter_notification_history",
+        "services.billing.apple.apple_app_store_client.apple_app_store_client.iter_notification_history",
         _iter,
     )
     monkeypatch.setattr(
-        "services.apple_iap_processor.process_notification_v2",
+        "services.billing.apple.apple_iap_processor.process_notification_v2",
         lambda _body: {"ok": True, "duplicate": False},
     )
     summary = _process_history_pages(start_ms=1, end_ms=2, notification_type="", max_pages=3)

@@ -12,8 +12,8 @@ from modules.meta_social_comment_sync_job import (
     run_meta_social_comment_sync_job,
 )
 from modules.tiktok_sync_job import run_tiktok_comment_sync_job
+from services.integrations.meta.meta_social_comment_sync_jobs import handle_meta_social_comment_sync
 from services.integrations.tiktok.jobs import handle_tiktok_comment_sync
-from services.meta_social_comment_sync_jobs import handle_meta_social_comment_sync
 from services.queues.models import QueueJob
 
 

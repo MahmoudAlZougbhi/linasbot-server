@@ -33,7 +33,7 @@ def test_meta_registry_startup_repair_is_local_and_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from modules import event_handlers
-    from services import meta_app_registry
+    from services.integrations.meta import meta_app_registry
 
     registry = Mock()
     monkeypatch.setattr(meta_app_registry, "meta_multi_app_registry_enabled", lambda: True)

@@ -259,7 +259,7 @@ async def test_omni_comment_does_not_pass_post_scoped_conversation_id(monkeypatc
 @pytest.mark.asyncio
 async def test_meta_generate_passes_comment_ids(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.brain.reply.models import CustomerReplyOutcome
-    from services.meta_comment_reply_generate import generate_comment_reply_text
+    from services.integrations.meta.meta_comment_reply_generate import generate_comment_reply_text
 
     captured: dict = {}
 

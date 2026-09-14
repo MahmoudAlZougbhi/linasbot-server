@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
-from services.meta_app_registry import MetaAssetBinding
-from services.meta_comment_replies import CommentReplyResult
-from services.meta_messaging import MetaMessagingSettings
+from services.integrations.meta.meta_app_registry import MetaAssetBinding
+from services.integrations.meta.meta_comment_replies import CommentReplyResult
+from services.integrations.meta.meta_messaging import MetaMessagingSettings
 from services.queues.meta_inbound_handler import handle_meta_inbound_process
 from services.queues.models import QueueJob
 
@@ -126,7 +126,7 @@ def test_legacy_rehydration_ignores_plaintext_secrets_in_old_ledger_rows(
     import services.queues.meta_inbound_handler as handler
 
     live = _settings()
-    monkeypatch.setattr("services.meta_messaging.get_meta_messaging_settings", lambda: live)
+    monkeypatch.setattr("services.integrations.meta.meta_messaging.get_meta_messaging_settings", lambda: live)
     resolved = handler._settings_from_snapshot(
         {
             "binding_id": "legacy-single-app",
@@ -176,7 +176,7 @@ def test_queued_event_follows_strict_reauth_replacement_chain(monkeypatch: pytes
     registry = SimpleNamespace(
         list_bindings=lambda **_kwargs: [old, middle, active],
     )
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
 
     resolved = handler._resolve_active_registry_binding(
         {"binding_id": "old"},
@@ -199,7 +199,7 @@ def test_queued_event_follows_strict_chain_back_after_rollback(monkeypatch: pyte
     rolled_back = _registry_binding("old", status="active")
     rejected_new = _registry_binding("new", status="inactive", previous_binding_id="old")
     registry = SimpleNamespace(list_bindings=lambda **_kwargs: [rolled_back, rejected_new])
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
 
     resolved = handler._resolve_active_registry_binding(
         {"binding_id": "new"},
@@ -228,7 +228,7 @@ def test_queued_event_rejects_replacement_crossing_tenant_or_asset(monkeypatch: 
         asset_id="other-ig",
     )
     registry = SimpleNamespace(list_bindings=lambda **_kwargs: [old, wrong])
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
 
     with pytest.raises(Exception, match="no unique active replacement"):
         handler._resolve_active_registry_binding(
@@ -250,8 +250,8 @@ async def test_queue_uses_snapshot_a_for_outbound_authority_with_replacement_b_c
 ) -> None:
     import services.queues.meta_inbound_handler as handler
     import utils.utils
-    from services import meta_outbound_attempts as attempts
-    from services.meta_claim_data_deletion import build_shared_meta_claim_deletion_plan
+    from services.integrations.meta import meta_outbound_attempts as attempts
+    from services.integrations.meta.meta_claim_data_deletion import build_shared_meta_claim_deletion_plan
     from tests.meta_compliance_helpers import _FakeFirestore
 
     db = _FakeFirestore()
@@ -392,7 +392,7 @@ async def test_retryable_comment_result_releases_claim_and_raises(monkeypatch: p
     monkeypatch.setattr(
         handler, "mark_inbound_state", lambda event_id, **kwargs: states.append({"event_id": event_id, **kwargs})
     )
-    monkeypatch.setattr("services.meta_comment_replies.process_meta_comment_event", process)
+    monkeypatch.setattr("services.integrations.meta.meta_comment_replies.process_meta_comment_event", process)
     monkeypatch.setattr("services.durable_event_claim.complete_event_claim", complete)
     monkeypatch.setattr("services.durable_event_claim.release_event_claim", release)
 
@@ -550,7 +550,7 @@ async def test_sent_comment_result_completes_claim_once(monkeypatch: pytest.Monk
     monkeypatch.setattr(
         handler, "mark_inbound_state", lambda event_id, **kwargs: states.append({"event_id": event_id, **kwargs})
     )
-    monkeypatch.setattr("services.meta_comment_replies.process_meta_comment_event", process)
+    monkeypatch.setattr("services.integrations.meta.meta_comment_replies.process_meta_comment_event", process)
     monkeypatch.setattr("services.durable_event_claim.complete_event_claim", complete)
 
     job = QueueJob.new(

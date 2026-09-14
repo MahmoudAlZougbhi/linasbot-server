@@ -219,7 +219,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
         "BLOCKED",
         ok=False,
         blocker="Meta already_replied layer not exercised; no safe test IG/FB account",
-        first_failing_layer="services/meta_comment_replies.py already_replied requires live Meta comment id",
+        first_failing_layer="services/integrations/meta/meta_comment_replies.py already_replied requires live Meta comment id",
         local_second_call_still_returns_static=bool(out2.reply),
         trace=tr2,
     )

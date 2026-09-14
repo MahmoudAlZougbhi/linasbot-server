@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-import services.meta_outbound_attempts as attempts
+import services.integrations.meta.meta_outbound_attempts as attempts
 from tests.meta_compliance_helpers import (
     _FakeFirestore,
 )

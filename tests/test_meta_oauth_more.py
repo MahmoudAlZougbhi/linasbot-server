@@ -7,11 +7,11 @@ import asyncio
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
 )
-from services.meta_oauth import (
+from services.integrations.meta.meta_oauth import (
     MetaOAuthError,
     complete_meta_business_login,
 )

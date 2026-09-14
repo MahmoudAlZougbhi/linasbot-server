@@ -69,7 +69,7 @@ from pathlib import Path
 
 sys.path.insert(0, "/opt/linasbot")
 from scripts.ha.meta_env_file import atomic_update_env
-from services.meta_surface_secret_separation import (
+from services.integrations.meta.meta_surface_secret_separation import (
     require_converged_meta_surface_secrets_for_update,
 )
 

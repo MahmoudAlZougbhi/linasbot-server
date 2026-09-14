@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from services.meta_messaging import MetaMessagingAdapter
+from services.integrations.meta.meta_messaging import MetaMessagingAdapter
 
 SendFunc = Callable[..., Awaitable[Any]]
 
@@ -49,8 +49,8 @@ async def deliver_image_quota_notice(
     if adapter is None:
         return None
     if inbound_event_id:
-        from services.meta_controlled_evidence import meta_evidence_surface
-        from services.meta_outbound_attempts import execute_guarded_meta_send
+        from services.integrations.meta.meta_controlled_evidence import meta_evidence_surface
+        from services.integrations.meta.meta_outbound_attempts import execute_guarded_meta_send
 
         result = await execute_guarded_meta_send(
             event_id=inbound_event_id,

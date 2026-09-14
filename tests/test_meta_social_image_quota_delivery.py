@@ -268,7 +268,7 @@ async def test_crash_after_quota_consume_before_marker_never_reconsumes_or_sends
     runtime: _FakeFirestore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services import meta_outbound_attempts as attempts
+    from services.integrations.meta import meta_outbound_attempts as attempts
 
     adapter = _Adapter([])
     _install_adapter(monkeypatch, adapter)

@@ -178,8 +178,8 @@ def _legacy_voice_journals_stt() -> bool:
 
 
 def _meta_ai_both_skips_public_after_reply() -> bool:
-    from services.meta_comment_brain_send import send_comment_destinations
-    from services.meta_comment_replies import process_meta_comment_event
+    from services.integrations.meta.meta_comment_brain_send import send_comment_destinations
+    from services.integrations.meta.meta_comment_replies import process_meta_comment_event
 
     return "skip_public" in getsource(send_comment_destinations) and "skip_public=already_replied" in getsource(
         process_meta_comment_event
@@ -187,8 +187,8 @@ def _meta_ai_both_skips_public_after_reply() -> bool:
 
 
 def _meta_public_comment_settles() -> bool:
-    from services.meta_comment_brain_send import send_comment_destinations
-    from services.meta_comment_replies import process_meta_comment_event
+    from services.integrations.meta.meta_comment_brain_send import send_comment_destinations
+    from services.integrations.meta.meta_comment_replies import process_meta_comment_event
 
     dest = getsource(send_comment_destinations)
     public = getsource(process_meta_comment_event)
@@ -220,7 +220,7 @@ def _web_chat_indexes_leftover() -> bool:
 
 
 def _meta_ai_dm_reaches_brain() -> bool:
-    from services.meta_comment_replies import process_meta_comment_event
+    from services.integrations.meta.meta_comment_replies import process_meta_comment_event
 
     src = getsource(process_meta_comment_event)
     return (

@@ -10,9 +10,9 @@ import time
 from contextvars import ContextVar
 from typing import Any
 
-from services.meta_comment_events import ResolvedMetaCommentEvent
-from services.meta_messaging import MetaMessagingSettings
-from services.meta_multi_app_router import ResolvedMetaEvent
+from services.integrations.meta.meta_comment_events import ResolvedMetaCommentEvent
+from services.integrations.meta.meta_messaging import MetaMessagingSettings
+from services.integrations.meta.meta_multi_app_router import ResolvedMetaEvent
 from services.queues.config import redis_required
 from services.scale.inbound_event_store import (
     InboundEventRecord,

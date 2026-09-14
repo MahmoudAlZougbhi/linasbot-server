@@ -5,27 +5,27 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaCredentialError,
 )
-from services.meta_instagram_login_config import (
+from services.integrations.meta.meta_instagram_login_config import (
     INSTAGRAM_LOGIN_GRAPH_API_VERSION,
     META_INSTAGRAM_LOGIN_REQUIRED_SCOPES,
     instagram_login_config_status,
     instagram_login_webhook_callback_url,
 )
-from services.meta_instagram_login_oauth import (
+from services.integrations.meta.meta_instagram_login_oauth import (
     complete_instagram_login,
 )
-from services.meta_instagram_login_subscription import (
+from services.integrations.meta.meta_instagram_login_subscription import (
     INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
     subscribed_fields_for_granted_scopes,
 )
-from services.meta_oauth import MetaOAuthError
-from services.meta_oauth_return import mobile_oauth_failure_reason
-from services.meta_subject_deletion_guard import (
+from services.integrations.meta.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_oauth_return import mobile_oauth_failure_reason
+from services.integrations.meta.meta_subject_deletion_guard import (
     MetaSubjectDeletionLease,
     MetaSubjectDeletionLeaseBusyError,
     MetaSubjectDeletionStoreUnavailableError,
@@ -226,7 +226,9 @@ async def test_subject_guard_failures_are_not_reported_as_data_deletion(
                 raise failure from cause
         raise failure
 
-    monkeypatch.setattr("services.meta_instagram_login_oauth_complete.acquire_meta_oauth_subject_guard", fail_guard)
+    monkeypatch.setattr(
+        "services.integrations.meta.meta_instagram_login_oauth_complete.acquire_meta_oauth_subject_guard", fail_guard
+    )
     state = _start_state(registry)
     with pytest.raises(MetaOAuthError) as captured:
         await complete_instagram_login(
@@ -255,7 +257,7 @@ async def test_complete_instagram_login_rejects_fields_from_another_app(
     async def no_sleep(_delay: float) -> None:
         return None
 
-    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    monkeypatch.setattr("services.integrations.meta.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
     state = _start_state(registry)
     provider_methods: list[str] = []
 
@@ -326,7 +328,7 @@ async def test_complete_instagram_login_fails_when_granted_comments_are_not_veri
     async def no_sleep(_delay: float) -> None:
         return None
 
-    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    monkeypatch.setattr("services.integrations.meta.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
     state = _start_state(registry)
     provider_methods: list[str] = []
     transport = _transport(comments_verified=False)

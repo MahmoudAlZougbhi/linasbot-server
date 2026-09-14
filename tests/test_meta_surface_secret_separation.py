@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from services.meta_instagram_login_config import instagram_login_config_status
-from services.meta_messaging import get_meta_messaging_settings
-from services.meta_surface_secret_separation import (
+from services.integrations.meta.meta_instagram_login_config import instagram_login_config_status
+from services.integrations.meta.meta_messaging import get_meta_messaging_settings
+from services.integrations.meta.meta_surface_secret_separation import (
     COLLISION_EXIT,
     CONFIG_COLLISION_KEY,
     FACEBOOK_SIGNING_ALIAS_MISMATCH,
@@ -23,7 +23,7 @@ from services.meta_surface_secret_separation import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPER = ROOT / "services" / "meta_surface_secret_separation.py"
+HELPER = ROOT / "services" / "integrations" / "meta" / "meta_surface_secret_separation.py"
 
 FB_CANON_SIGN = "fb-canon-sign-secret-001"
 FB_LEGACY_SIGN = "fb-legacy-sign-secret-01"

@@ -175,7 +175,7 @@ async def _meta_send_pair(
     context: dict[str, Any],
     channel: str,
 ) -> tuple[Any, Any]:
-    from services.meta_messaging import MetaMessagingAdapter, resolve_meta_send_account_id
+    from services.integrations.meta.meta_messaging import MetaMessagingAdapter, resolve_meta_send_account_id
     from services.queues.meta_inbound_handler import _settings_from_snapshot
     from services.scale.inbound_event_store import get_inbound_event
 
@@ -211,7 +211,7 @@ async def _meta_send_pair(
         image_url: str | None = None,
         audio_url: str | None = None,
     ) -> Any:
-        from services.meta_social_text_send import send_meta_social_outbound
+        from services.integrations.meta.meta_social_text_send import send_meta_social_outbound
 
         return await send_meta_social_outbound(
             namespaced_id=_namespaced_id,

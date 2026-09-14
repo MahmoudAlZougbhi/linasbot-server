@@ -8,9 +8,9 @@ import pytest
 
 from services.ai_setup.comment_rules import CommentRuleDecision
 from services.brain.comments.destinations import CommentDestinations
-from services.meta_comment_events import ResolvedMetaCommentEvent, parse_meta_comment_events
-from services.meta_comment_reply_settings import set_comment_reply_setting
-from services.meta_comment_rule_modes import (
+from services.integrations.meta.meta_comment_events import ResolvedMetaCommentEvent, parse_meta_comment_events
+from services.integrations.meta.meta_comment_reply_settings import set_comment_reply_setting
+from services.integrations.meta.meta_comment_rule_modes import (
     allows_private_after_public_reply,
     is_static_both_comment,
     is_static_comment_dm,
@@ -47,7 +47,7 @@ def test_comment_rule_mode_gates() -> None:
 
 @pytest.mark.asyncio
 async def test_ai_dm_calls_generate(tmp_path, monkeypatch) -> None:
-    from services.meta_comment_replies import process_meta_comment_event
+    from services.integrations.meta.meta_comment_replies import process_meta_comment_event
 
     helper = MetaCommentProcessorTests()
     helper.setUp()
@@ -71,9 +71,9 @@ async def test_ai_dm_calls_generate(tmp_path, monkeypatch) -> None:
             ),
         )
         generate = mock.AsyncMock(return_value=CommentDestinations(private_text="Hours are 9-5", comment_mode="ai_dm"))
-        monkeypatch.setattr("services.meta_comment_replies._generate_comment_reply_text", generate)
+        monkeypatch.setattr("services.integrations.meta.meta_comment_replies._generate_comment_reply_text", generate)
         monkeypatch.setattr(
-            "services.meta_comment_replies._comment_has_page_reply",
+            "services.integrations.meta.meta_comment_replies._comment_has_page_reply",
             mock.AsyncMock(return_value=True),
         )
         event = parse_meta_comment_events(_facebook_comment_payload(), channel="facebook", page_id="111")[0]
@@ -93,7 +93,7 @@ async def test_ai_dm_calls_generate(tmp_path, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_static_dm_uses_template_not_brain(monkeypatch) -> None:
-    from services.meta_comment_replies import process_meta_comment_event
+    from services.integrations.meta.meta_comment_replies import process_meta_comment_event
 
     helper = MetaCommentProcessorTests()
     helper.setUp()
@@ -118,9 +118,9 @@ async def test_static_dm_uses_template_not_brain(monkeypatch) -> None:
             ),
         )
         generate = mock.AsyncMock(return_value="should-not-run")
-        monkeypatch.setattr("services.meta_comment_replies._generate_comment_reply_text", generate)
+        monkeypatch.setattr("services.integrations.meta.meta_comment_replies._generate_comment_reply_text", generate)
         monkeypatch.setattr(
-            "services.meta_comment_replies._comment_has_page_reply",
+            "services.integrations.meta.meta_comment_replies._comment_has_page_reply",
             mock.AsyncMock(return_value=False),
         )
         event = parse_meta_comment_events(_facebook_comment_payload(), channel="facebook", page_id="111")[0]
@@ -140,7 +140,7 @@ async def test_static_dm_uses_template_not_brain(monkeypatch) -> None:
 def test_meta_ingress_source_routes_ai_dm() -> None:
     from inspect import getsource
 
-    from services.meta_comment_replies import process_meta_comment_event
+    from services.integrations.meta.meta_comment_replies import process_meta_comment_event
 
     src = getsource(process_meta_comment_event)
     assert "is_static_comment_dm" in src

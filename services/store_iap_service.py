@@ -33,7 +33,7 @@ def _product_map() -> dict[str, str]:
 
 
 def iap_config_status() -> dict[str, Any]:
-    from services.apple_app_store_client import iap_credentials_configured
+    from services.billing.apple.apple_app_store_client import iap_credentials_configured
 
     apple_key = iap_credentials_configured() or bool(
         (
@@ -95,7 +95,7 @@ def normalize_apple_status(notification_type: str) -> EntitlementStatus:
     Unknown / metadata-only types never fall through to ``active``.
     Raises ``ValueError`` when the type does not map to a status change.
     """
-    from services.apple_assn_types import status_for_notification_type
+    from services.billing.apple.apple_assn_types import status_for_notification_type
 
     status = status_for_notification_type(notification_type)
     if status is None:
@@ -144,7 +144,7 @@ def verify_apple_notification_payload(body: dict[str, Any]) -> dict[str, Any]:
     Prefer calling ``process_notification_v2`` directly from webhook routes.
     JWS x5c verify does not require App Store API .p8 credentials.
     """
-    from services.apple_iap_processor import process_notification_v2
+    from services.billing.apple.apple_iap_processor import process_notification_v2
 
     result = process_notification_v2(body)
     effect_raw = result.get("effect")

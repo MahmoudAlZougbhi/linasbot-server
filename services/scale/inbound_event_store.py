@@ -117,7 +117,7 @@ def put_inbound_event(
         record.binding_snapshot.get("binding_id") or record.settings_snapshot.get("binding_id") or ""
     ).strip()
     if (enforce_binding_deletion_fence or require_shared_existing) and not binding_id:
-        from services.meta_inbound_deletion_fence import InboundDeletionFenceStoreError
+        from services.integrations.meta.meta_inbound_deletion_fence import InboundDeletionFenceStoreError
 
         raise InboundDeletionFenceStoreError("Inbound binding identity is unavailable")
 
@@ -165,7 +165,7 @@ def create_inbound_event(
         record.binding_snapshot.get("binding_id") or record.settings_snapshot.get("binding_id") or ""
     ).strip()
     if enforce_binding_deletion_fence and not binding_id:
-        from services.meta_inbound_deletion_fence import InboundDeletionFenceStoreError
+        from services.integrations.meta.meta_inbound_deletion_fence import InboundDeletionFenceStoreError
 
         raise InboundDeletionFenceStoreError("Inbound binding identity is unavailable")
     if not binding_id:
@@ -298,7 +298,7 @@ def mark_inbound_state(
     bump_attempts: bool = False,
 ) -> InboundEventRecord:
     from config import is_production_runtime
-    from services.meta_inbound_deletion_fence import InboundDeletionFenceStoreError
+    from services.integrations.meta.meta_inbound_deletion_fence import InboundDeletionFenceStoreError
 
     require_shared_authority = bool(is_production_runtime())
     for _attempt in range(8):

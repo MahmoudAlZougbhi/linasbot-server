@@ -34,7 +34,7 @@ for env_path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2
 import config
 from openai import AsyncOpenAI
 from services.brain.reply.flags import customer_answer_model_name, customer_retrieval_model_name
-from services.social_contact_routing import route_social_contact_request
+from services.integrations.social.social_contact_routing import route_social_contact_request
 
 ORCHESTRATION_MODEL = customer_retrieval_model_name()
 FINAL_RESPONSE_MODEL = customer_answer_model_name()

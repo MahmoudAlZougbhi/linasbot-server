@@ -13,13 +13,13 @@ from starlette.requests import Request
 
 from modules import meta_connections_api
 from services.dashboard_session_service import SessionRecord
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaBindingCredential,
     MetaCredentialError,
 )
-from services.meta_oauth import begin_meta_business_login, complete_meta_business_login
+from services.integrations.meta.meta_oauth import begin_meta_business_login, complete_meta_business_login
 from tests.meta_compliance_helpers import _FakeFirestore
 
 SCOPES = (
@@ -114,7 +114,7 @@ async def test_disconnect_archives_credential_and_clears_webhooks(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.meta_oauth_graph as graph
+    import services.integrations.meta.meta_oauth_graph as graph
 
     binding = _active_facebook_binding(registry)
     unsubscribed = False

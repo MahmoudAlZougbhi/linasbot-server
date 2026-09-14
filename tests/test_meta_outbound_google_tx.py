@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-import services.meta_outbound_attempts as attempts
+import services.integrations.meta.meta_outbound_attempts as attempts
 from tests.meta_compliance_helpers import (
     _GoogleLikeFirestore,
     _install_google_transactional_fake,
@@ -16,7 +16,7 @@ async def test_google_transactional_quota_reserve_and_fence_reconcile(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import utils.utils
-    from services.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
+    from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
 
     db = _GoogleLikeFirestore()
     _install_google_transactional_fake(monkeypatch)

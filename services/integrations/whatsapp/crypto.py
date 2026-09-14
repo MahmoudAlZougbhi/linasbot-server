@@ -5,7 +5,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from services.meta_app_registry import MetaCredentialCipher, MetaCredentialError, MetaRegistryNotConfiguredError
+from services.integrations.meta.meta_app_registry import (
+    MetaCredentialCipher,
+    MetaCredentialError,
+    MetaRegistryNotConfiguredError,
+)
 
 
 def whatsapp_credential_cipher() -> MetaCredentialCipher:

@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 
-from services.apple_jws import (
+from services.billing.apple.apple_jws import (
     AppleJwsError,
     _assert_cert_validity,
     _load_apple_root,

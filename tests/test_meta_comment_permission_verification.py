@@ -10,12 +10,12 @@ import httpx
 import pytest
 
 from services.ai_setup.actions import comments_enforcement_decision, evaluate_comments_meta_readiness
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaBindingCredential,
 )
-from services.meta_comment_permission_verification import (
+from services.integrations.meta.meta_comment_permission_verification import (
     comment_permission_token_fingerprint,
     effective_comment_permission_status,
     maybe_reconcile_binding_comment_permission,
@@ -23,7 +23,7 @@ from services.meta_comment_permission_verification import (
     reconcile_binding_comment_permission,
     verification_matches_current_credential,
 )
-from services.meta_comment_reply_settings import set_comment_reply_setting
+from services.integrations.meta.meta_comment_reply_settings import set_comment_reply_setting
 from tests.meta_instagram_login_lifecycle_helpers import FULL_SCOPES, INSTAGRAM_ID, PAGE_SCOPES, _binding
 
 
@@ -179,7 +179,7 @@ def test_unknown_without_stored_scopes_and_no_verification_blocks(
         actor_id="test",
     )
     with patch(
-        "services.meta_comment_permission_verification.persist_comment_permission_from_credential",
+        "services.integrations.meta.meta_comment_permission_verification.persist_comment_permission_from_credential",
         side_effect=RuntimeError("no stored scopes path"),
     ):
         decision = comments_enforcement_decision(
@@ -212,7 +212,7 @@ async def test_transient_meta_failure_keeps_last_known_good(registry: MetaAppReg
         actor_id="test",
     )
     with patch(
-        "services.meta_comment_permission_verification._debug_token",
+        "services.integrations.meta.meta_comment_permission_verification._debug_token",
         new=AsyncMock(side_effect=httpx.HTTPError("network")),
     ):
         updated = await reconcile_binding_comment_permission(binding, registry=registry)
@@ -301,7 +301,7 @@ def test_facebook_login_instagram_readiness_uses_manage_comments(registry: MetaA
 def test_webhook_and_polling_share_enforcement_decision(
     registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from services.meta_social_comment_sync import _comment_reply_enabled
+    from services.integrations.meta.meta_social_comment_sync import _comment_reply_enabled
 
     _enable_cm_comments(monkeypatch)
     binding = _binding(
@@ -334,8 +334,8 @@ def test_webhook_and_polling_share_enforcement_decision(
         credential=credential,
         registry=registry,
     )
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr("services.meta_social_comment_sync.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_social_comment_sync.get_meta_app_registry", lambda: registry)
     polling_enabled = _comment_reply_enabled(binding)
     assert webhook_decision["allow"] is True
     assert polling_enabled is True
@@ -343,7 +343,7 @@ def test_webhook_and_polling_share_enforcement_decision(
 
 def test_toggle_stays_on_with_blocker_when_unknown(registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch) -> None:
     from services.integrations.channel_capability_state import comment_capability_state
-    from services.meta_comment_reply_settings import set_comment_reply_setting
+    from services.integrations.meta.meta_comment_reply_settings import set_comment_reply_setting
 
     binding = _binding(
         registry,

@@ -94,8 +94,8 @@ def _file_put(record: InboundEventRecord) -> None:
             record.binding_snapshot.get("binding_id") or record.settings_snapshot.get("binding_id") or ""
         ).strip()
         if binding_id:
-            from services.meta_inbound_deletion_fence import local_binding_deletion_is_fenced
-            from services.meta_inbound_retention import redacted_inbound_event_tombstone
+            from services.integrations.meta.meta_inbound_deletion_fence import local_binding_deletion_is_fenced
+            from services.integrations.meta.meta_inbound_retention import redacted_inbound_event_tombstone
 
             if local_binding_deletion_is_fenced(binding_id):
                 document = redacted_inbound_event_tombstone(
@@ -135,8 +135,8 @@ def replace_local_inbound_event_document(path: Path, data: dict[str, Any]) -> No
         settings = settings_snapshot if isinstance(settings_snapshot, dict) else {}
         binding_id = str(binding.get("binding_id") or settings.get("binding_id") or "").strip()
         if binding_id:
-            from services.meta_inbound_deletion_fence import local_binding_deletion_is_fenced
-            from services.meta_inbound_retention import redacted_inbound_event_tombstone
+            from services.integrations.meta.meta_inbound_deletion_fence import local_binding_deletion_is_fenced
+            from services.integrations.meta.meta_inbound_retention import redacted_inbound_event_tombstone
 
             if local_binding_deletion_is_fenced(binding_id):
                 document = redacted_inbound_event_tombstone(

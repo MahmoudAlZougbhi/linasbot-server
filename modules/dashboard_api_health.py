@@ -122,7 +122,7 @@ async def ready() -> Any:
         "readiness_dependency": False,
     }
 
-    from services.meta_surface_secret_separation import runtime_meta_surface_secret_separation
+    from services.integrations.meta.meta_surface_secret_separation import runtime_meta_surface_secret_separation
 
     separation = runtime_meta_surface_secret_separation()
     checks["meta_surface_secret_separation"] = {
@@ -132,12 +132,12 @@ async def ready() -> Any:
     if not separation.ok:
         overall_ok = False
 
-    from services.meta_app_registry import (
+    from services.integrations.meta.meta_app_registry import (
         META_PLATFORM_READINESS_KEYS,
         get_meta_registry_readiness,
         meta_multi_app_registry_enabled,
     )
-    from services.meta_messaging import (
+    from services.integrations.meta.meta_messaging import (
         META_MESSAGING_PLATFORM_KEYS,
         get_meta_messaging_readiness,
         get_meta_messaging_settings,

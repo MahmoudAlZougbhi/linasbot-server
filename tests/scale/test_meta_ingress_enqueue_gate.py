@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.meta_messaging import MetaMessagingSettings
+from services.integrations.meta.meta_messaging import MetaMessagingSettings
 from services.scale.inbound_event_reconcile import _enqueue_or_mark
 from services.scale.meta_ingress import (
     _settings_snapshot,

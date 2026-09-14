@@ -36,7 +36,7 @@ def _summary(
 
 
 def _patch_runtime(monkeypatch: pytest.MonkeyPatch, result: dict[str, int | bool]) -> None:
-    import services.meta_inbound_retention as retention
+    import services.integrations.meta.meta_inbound_retention as retention
 
     monkeypatch.setattr(retention_cli, "_load_runtime_environment", lambda _path: None)
     monkeypatch.setattr(

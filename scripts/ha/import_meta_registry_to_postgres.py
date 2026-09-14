@@ -203,7 +203,7 @@ def _verify_prior_backup(
     expected_target_tables_sha256: str,
 ) -> None:
     from scripts.ha.meta_registry_pg_snapshot import read_encrypted_snapshot
-    from services.meta_app_registry_pg_store import registry_tables_fingerprint
+    from services.integrations.meta.meta_app_registry_pg_store import registry_tables_fingerprint
 
     _validate_secure_regular_file(path, label="prior backup")
     snapshot = read_encrypted_snapshot(path, recovery_secret=recovery_secret)
@@ -280,7 +280,7 @@ def main(argv: list[str] | None = None) -> int:
             raise PermissionError("--apply requires --env-file with canonical DB and key settings")
 
         from db.session import whatsapp_session
-        from services.meta_app_registry_pg_store import (
+        from services.integrations.meta.meta_app_registry_pg_store import (
             acquire_registry_advisory_lock,
             load_registry_tables_snapshot,
             load_state,

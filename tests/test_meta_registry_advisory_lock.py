@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
 from scripts.ha.rekey_meta_whatsapp_credentials import REKEY_ADVISORY_LOCK_KEY
-from services.meta_app_registry_pg_store import (
+from services.integrations.meta.meta_app_registry_pg_store import (
     acquire_registry_advisory_lock,
     release_registry_advisory_lock,
 )

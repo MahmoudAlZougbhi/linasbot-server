@@ -12,7 +12,7 @@ from starlette.requests import Request
 
 from modules import meta_connections_api, meta_connections_api_lifecycle
 from services.dashboard_session_service import SessionRecord
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     APP_B_KEY,
     MetaAppRegistry,
@@ -21,7 +21,7 @@ from services.meta_app_registry import (
     MetaCredentialError,
     MetaRegistryError,
 )
-from services.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_oauth import MetaOAuthError
 
 SCOPES = (
     "pages_show_list",
@@ -343,7 +343,7 @@ async def test_reconnect_atomically_replaces_provider_then_removes_old_subscript
         unsubscribe,
     )
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
+        "services.integrations.meta.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
         inspect,
     )
     monkeypatch.setattr(
@@ -436,12 +436,12 @@ async def test_manual_activation_conflict_restores_shared_page_subscription_with
 
     monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
+        "services.integrations.meta.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
         inspect,
     )
     monkeypatch.setattr(meta_connections_api_lifecycle, "subscribe_binding_webhook", subscribe)
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
+        "services.integrations.meta.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
         restore,
     )
     monkeypatch.setattr(meta_connections_api_lifecycle, "_unsubscribe_binding_webhook_locked_raw", unsubscribe)
@@ -539,8 +539,8 @@ async def test_facebook_disconnect_succeeds_when_meta_unsubscribe_fails(
 ) -> None:
     """Owner disconnect must succeed even if Meta Page unsubscribe fails (FB bug)."""
 
-    import services.meta_oauth_graph as graph
-    from services.meta_oauth import MetaOAuthError
+    import services.integrations.meta.meta_oauth_graph as graph
+    from services.integrations.meta.meta_oauth import MetaOAuthError
 
     page_id = "378696005334409"
     binding = registry.activate_binding(

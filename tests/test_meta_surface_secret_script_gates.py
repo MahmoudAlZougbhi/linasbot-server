@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from services.meta_surface_secret_separation import (
+from services.integrations.meta.meta_surface_secret_separation import (
     COLLISION_EXIT,
     env_file_values,
     evaluate_meta_surface_secret_separation,

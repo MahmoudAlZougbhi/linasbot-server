@@ -10,14 +10,14 @@ from typing import Any
 import pytest
 
 from modules import meta_connections_api_lifecycle as lifecycle
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     APP_B_KEY,
     MetaAppRegistry,
     MetaBindingCredential,
     MetaRegistryError,
 )
-from services.meta_oauth_graph import MetaOAuthError
+from services.integrations.meta.meta_oauth_graph import MetaOAuthError
 
 PAGE_ID = "112233445566"
 APP_A_ID = "2963733803971681"
@@ -148,11 +148,11 @@ async def test_manual_activation_cancellation_after_post_restores_exact_preimage
 
     monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
+        "services.integrations.meta.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
         inspect,
     )
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
+        "services.integrations.meta.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
         restore,
     )
     monkeypatch.setattr(lifecycle, "desired_binding_webhook_subscription", lambda *_args, **_kwargs: DESIRED)
@@ -190,11 +190,11 @@ async def test_distinct_identity_activation_cas_failure_restores_both_preimages(
 
     monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
+        "services.integrations.meta.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
         inspect,
     )
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
+        "services.integrations.meta.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
         restore,
     )
     monkeypatch.setattr(lifecycle, "desired_binding_webhook_subscription", lambda *_args, **_kwargs: DESIRED)
@@ -245,11 +245,11 @@ async def test_manual_activation_commit_ack_loss_retains_committed_provider_stat
 
     monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
+        "services.integrations.meta.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
         inspect,
     )
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
+        "services.integrations.meta.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
         restore,
     )
     monkeypatch.setattr(lifecycle, "desired_binding_webhook_subscription", lambda *_args, **_kwargs: DESIRED)
@@ -306,11 +306,11 @@ async def test_manual_rollback_failure_restores_both_exact_preimages(
         restored.append((binding.app_key, snapshot, expected_current))
 
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
+        "services.integrations.meta.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
         inspect,
     )
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
+        "services.integrations.meta.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
         restore,
     )
     monkeypatch.setattr(lifecycle, "desired_binding_webhook_subscription", lambda *_args, **_kwargs: DESIRED)
@@ -377,11 +377,11 @@ async def test_manual_rollback_commit_ack_loss_retains_committed_provider_state(
         raise ConnectionError("simulated rollback commit acknowledgement loss")
 
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
+        "services.integrations.meta.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
         inspect,
     )
     monkeypatch.setattr(
-        "services.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
+        "services.integrations.meta.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
         restore,
     )
     monkeypatch.setattr(lifecycle, "desired_binding_webhook_subscription", lambda *_args, **_kwargs: DESIRED)

@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 import services.scale.inbound_event_store as event_store
-from services.meta_inbound_retention import (
+from services.integrations.meta.meta_inbound_retention import (
     inbound_redaction_has_blockers,
     redact_expired_terminal_inbound_events,
     redact_inbound_events_for_bindings,

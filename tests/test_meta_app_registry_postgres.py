@@ -13,7 +13,7 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests, whatsapp_session  # noqa: E402
-from services.meta_app_registry import (  # noqa: E402
+from services.integrations.meta.meta_app_registry import (  # noqa: E402
     APP_A_KEY,
     APP_B_KEY,
     MetaAppRegistry,
@@ -23,8 +23,8 @@ from services.meta_app_registry import (  # noqa: E402
     get_meta_app_configs,
     get_meta_registry_readiness,
 )
-from services.meta_app_registry_pg_store import load_state, state_fingerprint  # noqa: E402
-from services.meta_connection_disconnect import disconnect_meta_binding_set  # noqa: E402
+from services.integrations.meta.meta_app_registry_pg_store import load_state, state_fingerprint  # noqa: E402
+from services.integrations.meta.meta_connection_disconnect import disconnect_meta_binding_set  # noqa: E402
 from services.mobile_integrations_display import bindings_for_disconnect  # noqa: E402
 from tests.meta_app_registry_helpers import _credential  # noqa: E402
 
@@ -186,7 +186,7 @@ async def test_postgres_cross_flow_transition_and_disconnect_settle_every_ig_cre
         )
 
     monkeypatch.setattr(
-        "services.meta_connection_disconnect.disconnect_binding_webhook",
+        "services.integrations.meta.meta_connection_disconnect.disconnect_binding_webhook",
         settle_without_provider,
     )
 
@@ -197,7 +197,7 @@ async def test_postgres_cross_flow_transition_and_disconnect_settle_every_ig_cre
         yield
 
     monkeypatch.setattr(
-        "services.meta_connection_disconnect.lock_facebook_page_oauth_operation",
+        "services.integrations.meta.meta_connection_disconnect.lock_facebook_page_oauth_operation",
         sqlite_transaction_fixture_lock,
     )
     targets = bindings_for_disconnect(
@@ -243,7 +243,7 @@ def test_postgres_backend_fails_closed_without_engine(
 
 def test_meta_registry_code_default_is_postgres(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("META_REGISTRY_BACKEND", raising=False)
-    from services.meta_app_registry_bindings import resolve_meta_registry_backend
+    from services.integrations.meta.meta_app_registry_bindings import resolve_meta_registry_backend
 
     assert resolve_meta_registry_backend() == "postgres"
 

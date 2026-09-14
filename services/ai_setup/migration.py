@@ -34,8 +34,8 @@ from services.ai_setup.schemas import (
     LangCode,
 )
 from services.ai_setup.storage import ConflictError, get_draft, put_draft
+from services.integrations.social.social_contact_routing import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
 from services.language_detection_service import language_detection_service
-from services.social_contact_routing import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
 
 _MAX_RETRIES = 5
 

@@ -11,10 +11,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from modules import dashboard_api_health
-from services.meta_data_deletion import MetaDeletionResult
-from services.meta_instagram_login_oauth import complete_instagram_login
-from services.meta_oauth import MetaOAuthError
-from services.meta_surface_secret_separation import (
+from services.integrations.meta.meta_data_deletion import MetaDeletionResult
+from services.integrations.meta.meta_instagram_login_oauth import complete_instagram_login
+from services.integrations.meta.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_surface_secret_separation import (
     CONFIG_COLLISION_KEY,
     SIGNING_COLLISION,
     VERIFY_COLLISION,

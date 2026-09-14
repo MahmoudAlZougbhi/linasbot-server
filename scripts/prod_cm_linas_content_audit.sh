@@ -51,7 +51,7 @@ from services.ai_setup.constants import (
 from services.ai_setup.storage import get_draft
 from services.ai_setup.validation import validate_cm
 from services.ai_setup.version_store import load_published_content, read_published_pointer
-from services.social_contact_routing import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
+from services.integrations.social.social_contact_routing import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
 
 EXPECTED_PHONES = {re.sub(r"\D", "", v) for v in DEFAULT_SOCIAL_WHATSAPP_CONTACTS.values()}
 

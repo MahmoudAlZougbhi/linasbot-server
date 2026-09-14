@@ -10,27 +10,27 @@ import time
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaBindingCredential,
     MetaCredentialError,
     MetaOAuthStateError,
 )
-from services.meta_instagram_login_config import (
+from services.integrations.meta.meta_instagram_login_config import (
     verify_instagram_login_webhook_signature,
 )
-from services.meta_instagram_login_oauth import (
+from services.integrations.meta.meta_instagram_login_oauth import (
     complete_instagram_login,
 )
-from services.meta_instagram_login_subscription import (
+from services.integrations.meta.meta_instagram_login_subscription import (
     INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
     InstagramLoginSubscriptionState,
 )
-from services.meta_multi_app_router import resolve_registry_events
-from services.meta_oauth import MetaOAuthError
-from services.meta_oauth_return import mobile_oauth_failure_reason
-from services.meta_subject_deletion_guard import (
+from services.integrations.meta.meta_multi_app_router import resolve_registry_events
+from services.integrations.meta.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_oauth_return import mobile_oauth_failure_reason
+from services.integrations.meta.meta_subject_deletion_guard import (
     MetaSubjectDeletionChangedError,
     MetaSubjectDeletionLease,
 )
@@ -51,7 +51,7 @@ async def test_uncertain_post_acknowledgement_stays_durable_until_lifecycle(
     async def no_sleep(_delay: float) -> None:
         return None
 
-    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    monkeypatch.setattr("services.integrations.meta.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
     state = _start_state(registry)
     provider_methods: list[str] = []
     base_transport = _transport()
@@ -92,7 +92,7 @@ async def test_unexpected_subscription_exception_discards_staged_credential(
         raise RuntimeError("registry persistence unavailable")
 
     monkeypatch.setattr(
-        "services.meta_instagram_login_oauth_complete.ensure_instagram_login_webhook_subscription",
+        "services.integrations.meta.meta_instagram_login_oauth_complete.ensure_instagram_login_webhook_subscription",
         fail_subscription,
     )
     state = _start_state(registry)
@@ -273,7 +273,7 @@ async def test_instagram_login_supersedes_linked_ig_but_preserves_facebook_page(
 
 @pytest.mark.asyncio
 async def test_resolve_registry_events_requires_ready_subscription(registry: MetaAppRegistry) -> None:
-    from services.meta_app_registry import get_meta_app_configs
+    from services.integrations.meta.meta_app_registry import get_meta_app_configs
 
     instagram_id = "17840000999900001"
     registry.authorize_oauth_asset(

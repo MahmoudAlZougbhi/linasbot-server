@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from modules import dashboard_api_health
 from scripts.ha.integration_capability_preflight import evaluate_deploy_preflight
 from services.channel_health import evaluate_channel_health
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     LINAS_INSTAGRAM_ACCOUNT_ID,
     LINAS_PAGE_ID,
@@ -65,7 +65,7 @@ def _stub_platform_dependencies(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
 
 
 async def _ready_payload(monkeypatch: pytest.MonkeyPatch, registry: MetaAppRegistry) -> tuple[int, dict]:
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
     response = await dashboard_api_health.ready()
     assert isinstance(response, JSONResponse)
     return response.status_code, json.loads(response.body)
@@ -188,7 +188,7 @@ async def test_channel_health_http_is_never_an_lb_gate(
 ) -> None:
     from modules import channel_health_api
 
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
     monkeypatch.setenv("META_MULTI_APP_REGISTRY_ENABLED", "true")
     response = await channel_health_api.channel_health()
     payload = json.loads(response.body)
@@ -258,7 +258,7 @@ def test_ha_lb_deploy_rollback_never_use_channel_health() -> None:
 def test_new_readiness_modules_stay_under_500_lines() -> None:
     for rel in (
         "services/channel_health.py",
-        "services/meta_app_registry.py",
+        "services/integrations/meta/meta_app_registry.py",
         "modules/dashboard_api_health.py",
         "scripts/ha/integration_capability_preflight.py",
         "scripts/ha/target_platform_readiness_preflight.py",

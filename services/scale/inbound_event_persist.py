@@ -8,7 +8,7 @@ from typing import Any
 def reject_if_locally_fenced(binding_id: str, *, enforce: bool) -> bool:
     """Return local fence state. Raises when a create must not proceed."""
 
-    from services.meta_inbound_deletion_fence import (
+    from services.integrations.meta.meta_inbound_deletion_fence import (
         InboundBindingDeletionFencedError,
         local_binding_deletion_is_fenced,
     )
@@ -34,8 +34,8 @@ def cache_local_inbound_document(
     tombstone locally. Firestore remains the scan authority for deletion.
     """
 
-    from services.meta_inbound_deletion_fence import local_binding_deletion_is_fenced
-    from services.meta_inbound_retention import redacted_inbound_event_tombstone
+    from services.integrations.meta.meta_inbound_deletion_fence import local_binding_deletion_is_fenced
+    from services.integrations.meta.meta_inbound_retention import redacted_inbound_event_tombstone
     from services.scale.inbound_event_store import (
         _atomic_json_put,
         _path_for,
@@ -63,12 +63,12 @@ def persist_updated_inbound(
 ) -> dict[str, Any]:
     """Commit an inbound update to Firestore, then refresh the local cache."""
 
-    from services.meta_inbound_deletion_fence import (
+    from services.integrations.meta.meta_inbound_deletion_fence import (
         InboundDeletionFenceStoreError,
         persist_firestore_event_respecting_fence,
         persist_firestore_event_unless_fenced,
     )
-    from services.meta_inbound_retention import redacted_inbound_event_tombstone
+    from services.integrations.meta.meta_inbound_retention import redacted_inbound_event_tombstone
 
     local_fenced = reject_if_locally_fenced(
         binding_id,
@@ -121,7 +121,7 @@ def _create_soak_firestore_event(record: Any) -> tuple[dict[str, Any], bool]:
 
     from google.api_core.exceptions import AlreadyExists
 
-    from services.meta_inbound_deletion_fence import (
+    from services.integrations.meta.meta_inbound_deletion_fence import (
         InboundDeletionFenceStoreError,
         _firestore_event_ref,
     )
@@ -152,7 +152,7 @@ def persist_created_inbound(
 ) -> tuple[dict[str, Any], bool]:
     """Create the shared inbound row, then refresh the local cache."""
 
-    from services.meta_inbound_deletion_fence import create_firestore_event_unless_fenced
+    from services.integrations.meta.meta_inbound_deletion_fence import create_firestore_event_unless_fenced
 
     payload = getattr(record, "payload", None)
     soak = isinstance(payload, dict) and bool(payload.get("_linas_soak_simulation"))

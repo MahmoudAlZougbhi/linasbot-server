@@ -15,28 +15,28 @@ from modules.meta_connections_api_helpers import (
     _tenant_binding,
 )
 from services.integrations.channel_capability_toggles import ensure_comment_webhook_for_binding
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     APP_B_KEY,
     MetaAssetBinding,
     MetaRegistryError,
     get_meta_app_registry,
 )
-from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
-from services.meta_comment_webhooks import credential_has_comment_scopes
-from services.meta_connection_disconnect import disconnect_meta_binding_set
-from services.meta_graph_routing import required_comment_scopes_for_binding
-from services.meta_oauth import (
+from services.integrations.meta.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
+from services.integrations.meta.meta_comment_webhooks import credential_has_comment_scopes
+from services.integrations.meta.meta_connection_disconnect import disconnect_meta_binding_set
+from services.integrations.meta.meta_graph_routing import required_comment_scopes_for_binding
+from services.integrations.meta.meta_oauth import (
     MetaOAuthError,
     subscribe_binding_webhook,
 )
-from services.meta_oauth_graph import (
+from services.integrations.meta.meta_oauth_graph import (
     _other_active_binding_shares_page,
     _unsubscribe_binding_webhook_locked_raw,
     desired_binding_webhook_subscription,
 )
-from services.meta_oauth_page_lock import lock_facebook_page_oauth_operation
-from services.meta_page_subscription_transaction import (
+from services.integrations.meta.meta_oauth_page_lock import lock_facebook_page_oauth_operation
+from services.integrations.meta.meta_page_subscription_transaction import (
     PageSubscriptionMutation,
     capture_page_subscription_snapshots,
     compensate_page_subscription_failure,

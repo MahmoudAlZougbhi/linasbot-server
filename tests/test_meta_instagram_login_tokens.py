@@ -10,17 +10,17 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
     MetaBindingConflictError,
     MetaBindingCredential,
     MetaCredentialError,
 )
-from services.meta_instagram_login_config import instagram_login_refresh_lead_seconds
-from services.meta_instagram_login_oauth import credential_needs_refresh
-from services.meta_instagram_login_tokens import refresh_binding_instagram_login_token
-from services.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_instagram_login_config import instagram_login_refresh_lead_seconds
+from services.integrations.meta.meta_instagram_login_oauth import credential_needs_refresh
+from services.integrations.meta.meta_instagram_login_tokens import refresh_binding_instagram_login_token
+from services.integrations.meta.meta_oauth import MetaOAuthError
 
 INSTAGRAM_ID = "17840000999900011"
 
@@ -77,7 +77,7 @@ async def test_refresh_binding_returns_existing_credential_when_lock_not_acquire
     registry: MetaAppRegistry,
     binding: object,
 ) -> None:
-    with patch("services.meta_instagram_login_tokens.try_acquire_job_lock", return_value=False):
+    with patch("services.integrations.meta.meta_instagram_login_tokens.try_acquire_job_lock", return_value=False):
         credential = await refresh_binding_instagram_login_token(binding, registry=registry)
     assert credential.access_token == "expiring-token"
 
@@ -91,7 +91,7 @@ async def test_refresh_binding_replaces_token_atomically(registry: MetaAppRegist
         )
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="https://graph.instagram.com")
-    with patch("services.meta_instagram_login_tokens.try_acquire_job_lock", return_value=True):
+    with patch("services.integrations.meta.meta_instagram_login_tokens.try_acquire_job_lock", return_value=True):
         credential = await refresh_binding_instagram_login_token(binding, registry=registry, client=client)
     assert credential.access_token == "refreshed-token"
     stored = registry.get_credential(binding)
@@ -118,7 +118,7 @@ async def test_refresh_paused_across_exact_revocation_cannot_restore_credential(
         )
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="https://graph.instagram.com")
-    with patch("services.meta_instagram_login_tokens.try_acquire_job_lock", return_value=True):
+    with patch("services.integrations.meta.meta_instagram_login_tokens.try_acquire_job_lock", return_value=True):
         with pytest.raises(MetaOAuthError, match="reconnect required"):
             await refresh_binding_instagram_login_token(binding, registry=registry, client=client)
 
@@ -175,7 +175,7 @@ async def test_refresh_disconnects_when_token_expired(registry: MetaAppRegistry,
         auth_flow="instagram_login",
         webhook_subscription_status="ready",
     )
-    with patch("services.meta_instagram_login_tokens.try_acquire_job_lock", return_value=True):
+    with patch("services.integrations.meta.meta_instagram_login_tokens.try_acquire_job_lock", return_value=True):
         with pytest.raises(MetaOAuthError, match="reconnect"):
             await refresh_binding_instagram_login_token(binding, registry=registry)
     refreshed = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)

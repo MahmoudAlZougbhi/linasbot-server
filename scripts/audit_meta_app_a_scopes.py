@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from dotenv import load_dotenv
 
 if TYPE_CHECKING:
-    from services.meta_app_registry_common import MetaAssetBinding
+    from services.integrations.meta.meta_app_registry_common import MetaAssetBinding
 
 FACEBOOK_PAGE_REVIEW_SCOPES = frozenset(
     {
@@ -109,14 +109,14 @@ def main() -> None:
     _load_runtime_environment()
     # Import runtime services only after dotenv is loaded; several storage/config
     # modules resolve their paths and backends during import.
-    from services.meta_app_registry import APP_A_KEY, get_meta_app_registry
-    from services.meta_comment_reply_settings import get_comment_reply_setting
-    from services.meta_facebook_scope_policy import normalize_facebook_page_token_scopes
-    from services.meta_graph_routing import (
+    from services.integrations.meta.meta_app_registry import APP_A_KEY, get_meta_app_registry
+    from services.integrations.meta.meta_comment_reply_settings import get_comment_reply_setting
+    from services.integrations.meta.meta_facebook_scope_policy import normalize_facebook_page_token_scopes
+    from services.integrations.meta.meta_graph_routing import (
         required_comment_scopes_for_binding,
         required_publish_scopes_for_binding,
     )
-    from services.meta_instagram_login_config import required_scopes_for_binding
+    from services.integrations.meta.meta_instagram_login_config import required_scopes_for_binding
 
     app_id = (os.getenv("META_APP_ID") or os.getenv("META_APP_A_ID") or "").strip()
     if app_id != "2963733803971681":

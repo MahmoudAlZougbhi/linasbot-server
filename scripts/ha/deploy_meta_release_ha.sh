@@ -4961,7 +4961,7 @@ def function_source(module_text, name):
             return ast.get_source_segment(module_text, node) or ""
     return ""
 
-registry = git_show("services/meta_app_registry.py")
+registry = git_show("services/integrations/meta/meta_app_registry.py")
 health = git_show("modules/dashboard_api_health.py")
 ready_fn = function_source(registry, "get_meta_registry_readiness")
 tenant = (not ready_fn) or any(key in ready_fn or key in health for key in tenant_keys)

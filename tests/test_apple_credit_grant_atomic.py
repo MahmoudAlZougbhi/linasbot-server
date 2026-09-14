@@ -14,7 +14,7 @@ from db.models import Base  # noqa: E402
 from db.models.apple_billing import AppleCreditGrantRow  # noqa: E402
 from db.models.credit_entitlements import CreditLedgerEntryRow  # noqa: E402
 from db.session import reset_engine_for_tests, whatsapp_session  # noqa: E402
-from services.apple_credit_grant_ops import grant_consumable_credits  # noqa: E402
+from services.billing.apple.apple_credit_grant_ops import grant_consumable_credits  # noqa: E402
 from services.billing.entitlements_service import EntitlementsStore  # noqa: E402
 
 

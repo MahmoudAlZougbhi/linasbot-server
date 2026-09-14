@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from services.meta_app_registry import (
+from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     APP_B_KEY,
     LINAS_INSTAGRAM_ACCOUNT_ID,
@@ -18,8 +18,8 @@ from services.meta_app_registry import (
     get_meta_app_configs,
     get_meta_registry_readiness,
 )
-from services.meta_multi_app_router import resolve_registry_events
-from services.social_contact_routing import resolve_social_whatsapp_number
+from services.integrations.meta.meta_multi_app_router import resolve_registry_events
+from services.integrations.social.social_contact_routing import resolve_social_whatsapp_number
 from tests.meta_app_registry_helpers import ALL_MESSAGING_SCOPES, _credential, _page_payload
 
 pytest_plugins = ("tests.meta_app_registry_fixtures",)
@@ -219,7 +219,7 @@ def test_rollback_reverses_archived_canonical_lineage_and_hides_rejected_binding
 
     import services.queues.meta_inbound_handler as handler
 
-    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
     resolved = handler._resolve_active_registry_binding(
         {"binding_id": rejected.binding_id},
         rejected.public_dict(),

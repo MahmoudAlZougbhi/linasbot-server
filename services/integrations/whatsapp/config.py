@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from services.meta_app_registry import APP_A_EXPECTED_ID, APP_A_KEY
+from services.integrations.meta.meta_app_registry import APP_A_EXPECTED_ID, APP_A_KEY
 
 WHATSAPP_COEXISTENCE_FEATURE = "whatsapp_business_app_onboarding"
 WHATSAPP_REQUIRED_SCOPES = frozenset(
@@ -55,7 +55,7 @@ class WhatsAppCloudFlags:
 
 
 def get_whatsapp_cloud_flags() -> WhatsAppCloudFlags:
-    from services.meta_app_registry import get_meta_graph_api_version
+    from services.integrations.meta.meta_app_registry import get_meta_graph_api_version
 
     app_id = (os.getenv("META_APP_A_ID") or os.getenv("META_APP_ID") or "").strip()
     config_id = (os.getenv("META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID") or "").strip()

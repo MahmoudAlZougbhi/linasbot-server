@@ -9,8 +9,10 @@ from fastapi import HTTPException, Request
 from modules.api_security import require_permission
 from modules.core import app
 from modules.meta_connections_api_helpers import _tenant_binding
-from services.meta_instagram_login_subscription_recovery import retry_instagram_login_webhook_subscription
-from services.meta_oauth import MetaOAuthError
+from services.integrations.meta.meta_instagram_login_subscription_recovery import (
+    retry_instagram_login_webhook_subscription,
+)
+from services.integrations.meta.meta_oauth import MetaOAuthError
 
 
 @app.post("/api/meta/connections/{binding_id}/instagram-login/retry-webhook")

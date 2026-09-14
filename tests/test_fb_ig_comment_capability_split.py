@@ -5,8 +5,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from services.integrations.channel_capability_state import comment_capability_state
-from services.meta_app_registry import APP_A_KEY
-from services.meta_oauth import _business_login_request_scopes, normalize_oauth_flow_channel
+from services.integrations.meta.meta_app_registry import APP_A_KEY
+from services.integrations.meta.meta_oauth import _business_login_request_scopes, normalize_oauth_flow_channel
 
 
 class _Cred:

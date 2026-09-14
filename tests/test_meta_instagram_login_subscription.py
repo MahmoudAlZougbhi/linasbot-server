@@ -9,15 +9,18 @@ from typing import Any
 import httpx
 import pytest
 
-from services.meta_app_registry import MetaAppRegistry
-from services.meta_instagram_login_capabilities import binding_ready_for_comments, binding_ready_for_dm
-from services.meta_instagram_login_config import INSTAGRAM_LOGIN_GRAPH_API_VERSION
-from services.meta_instagram_login_subscription import (
+from services.integrations.meta.meta_app_registry import MetaAppRegistry
+from services.integrations.meta.meta_instagram_login_capabilities import (
+    binding_ready_for_comments,
+    binding_ready_for_dm,
+)
+from services.integrations.meta.meta_instagram_login_config import INSTAGRAM_LOGIN_GRAPH_API_VERSION
+from services.integrations.meta.meta_instagram_login_subscription import (
     INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR,
     _subscribe_once,
     ensure_instagram_login_webhook_subscription,
 )
-from services.meta_oauth_graph_http import MetaOAuthError
+from services.integrations.meta.meta_oauth_graph_http import MetaOAuthError
 from tests.meta_instagram_login_lifecycle_helpers import FULL_SCOPES, INSTAGRAM_ID, _binding
 
 INSTAGRAM_APP_ID = "1035856539045307"
@@ -214,7 +217,7 @@ async def test_verify_failure_telemetry_omits_secrets(
     async def no_sleep(_delay: float) -> None:
         return None
 
-    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    monkeypatch.setattr("services.integrations.meta.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
     binding = _binding(
         registry,
         auth_flow="instagram_login",
@@ -279,7 +282,7 @@ async def test_verify_rate_limit_stops_after_one_post_and_one_get(
     async def record_sleep(delay: float) -> None:
         sleeps.append(delay)
 
-    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", record_sleep)
+    monkeypatch.setattr("services.integrations.meta.meta_instagram_login_subscription.asyncio.sleep", record_sleep)
     binding = _binding(
         registry,
         auth_flow="instagram_login",
@@ -328,7 +331,7 @@ async def test_verify_eventual_consistency_retries_reads_without_second_post(
     async def record_sleep(delay: float) -> None:
         sleeps.append(delay)
 
-    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", record_sleep)
+    monkeypatch.setattr("services.integrations.meta.meta_instagram_login_subscription.asyncio.sleep", record_sleep)
     binding = _binding(registry, auth_flow="instagram_login", scopes=FULL_SCOPES)
     credential = registry.get_credential(binding)
     methods: list[str] = []
