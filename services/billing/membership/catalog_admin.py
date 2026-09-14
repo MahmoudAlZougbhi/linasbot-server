@@ -10,7 +10,6 @@ from services.billing.membership.message_catalog import (
     PAID_PLANS,
     UNCONFIGURED_FREE_FIELDS,
     message_catalog_snapshot,
-    offer_fields_for_plan,
 )
 from services.billing.membership.units import MICRO_USD_PER_USD
 
@@ -267,11 +266,22 @@ def published_offer_overlay(plan_id: str) -> dict[str, Any]:
 
 
 def effective_offer_fields(plan_id: str) -> dict[str, Any]:
-    fields = offer_fields_for_plan(plan_id)
-    overlay = published_offer_overlay(plan_id)
-    if overlay:
-        fields.update(overlay)
-    return fields
+    """Live offer fields come from the credit plan catalog, not the draft message catalog."""
+    from services.billing.membership.plan_catalog import PLAN_CATALOG, plan_price_usd
+
+    pid = (plan_id or "").strip().lower()
+    plan = PLAN_CATALOG.get(pid)
+    if plan is None:
+        return {"included_credits": None, "included_messages": None, "faq_capacity": None}
+    return {
+        "included_credits": int(plan.included_credits),
+        "included_messages": None,
+        "faq_capacity": int(plan.faq_capacity),
+        "faq_enabled": True,
+        "followup_enabled": True,
+        "intended_price_usd": plan_price_usd(pid),
+        "intended_price_micro_usd": int(plan.price_micro_usd),
+    }
 
 
 def effective_included_messages(plan_id: str) -> int | None:

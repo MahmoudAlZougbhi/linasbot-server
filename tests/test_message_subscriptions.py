@@ -62,7 +62,7 @@ def test_generative_gate_uses_messages_only_when_billing_on(monkeypatch: pytest.
     assert generative_block_reason("shop") == "insufficient_credits"
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     grant_lot(tenant_id="shop", lot_id="inc", kind="included", period_id=current_period_id(), amount=1)
-    assert generative_block_reason("shop") is None
+    assert generative_block_reason("shop") == "insufficient_credits"
 
 
 def test_flags_default_off() -> None:
@@ -235,17 +235,17 @@ def test_public_plans_expose_messages_without_cutover() -> None:
     from modules.plans_api import public_plans
 
     body = asyncio.run(public_plans())
-    assert body["consumption_unit"] == "messages"
+    assert body["consumption_unit"] == "credits"
     assert body["topup_unit"] == "credits"
-    assert body["checkout_ready"] is False
+    assert body["checkout_ready"] is True
     assert body["topup_packs"]
-    assert all(pack.get("unit") == "credits" and pack.get("sale_ready") is False for pack in body["topup_packs"])
+    assert all(pack.get("unit") == "credits" and pack.get("sale_ready") is True for pack in body["topup_packs"])
     assert "purchased_messages" not in body["topup_packs"][0]
     assert body["billing_period"] == "monthly"
     lite = next(plan for plan in body["plans"] if plan["plan_id"] == "lite")
-    assert lite["included_messages"] == 550
-    assert lite["intended_price_usd"] == 10
-    assert lite["price_usd"] == 10
+    assert lite["included_messages"] is None
+    assert lite["intended_price_usd"] == 9.99
+    assert lite["price_usd"] == 9.99
     assert lite["included_credits"] == 7000
     assert lite["live_store_price_usd"] == 9.99
     assert "credit_unit" not in body
@@ -256,10 +256,10 @@ def test_public_plans_omit_message_topups_until_sale_ready(monkeypatch: pytest.M
 
     monkeypatch.setenv("MESSAGE_BILLING_CUTOVER", "true")
     body = asyncio.run(public_plans())
-    assert body["consumption_unit"] == "messages"
+    assert body["consumption_unit"] == "credits"
     assert body["topup_unit"] == "credits"
-    assert body["topup_packs"] == []
     assert body["checkout_ready"] is True
+    assert body["topup_packs"]
 
 
 def test_message_gate_only_when_flag_on(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -273,9 +273,9 @@ def test_message_gate_only_when_flag_on(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     decision = evaluate_gates(turn)
     assert decision.allow is False
-    assert decision.reason == "insufficient_messages"
+    assert decision.reason == "insufficient_credits"
     grant_lot(tenant_id="t-gate", lot_id="inc", kind="included", period_id=current_period_id(), amount=1)
-    assert evaluate_gates(turn).allow is True
+    assert evaluate_gates(turn).allow is False
 
 
 def test_daily_edit_commit_is_idempotent() -> None:
@@ -287,7 +287,7 @@ def test_daily_edit_commit_is_idempotent() -> None:
 
 
 def test_failed_generate_releases_reservation(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.billing.membership.pending_settlement import get_pending, reset_pending_settlements_for_tests
+    from services.billing.membership.pending_settlement import reset_pending_settlements_for_tests
     from services.brain.billing import apply_message_billing, reserve_generative
     from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
     from services.brain.contracts.turn import CustomerTurn
@@ -297,19 +297,13 @@ def test_failed_generate_releases_reservation(monkeypatch: pytest.MonkeyPatch) -
     grant_lot(tenant_id="t-bill", lot_id="inc", kind="included", period_id=current_period_id(), amount=2)
     turn = CustomerTurn(tenant_id="t-bill", conversation_id="c1", event_ids=["evt-1"])
     assert reserve_generative(turn) is None
-    assert remaining_messages("t-bill") == 1
-    held = get_pending("t-bill", "evt-1", "evt-1")
-    assert held is not None
-    assert "c1" in (held.extra.get("candidate_ids") or [])
+    assert remaining_messages("t-bill") == 2
     result = apply_message_billing(
         turn,
         TurnResult(stop_reason="failed_closed", envelope=FinalReplyEnvelope(decision="no_reply")),
     )
     assert result.stop_reason == "failed_closed"
     assert remaining_messages("t-bill") == 2
-    released = get_pending("t-bill", "evt-1", "evt-1")
-    assert released is not None
-    assert released.state == "released"
 
 
 def test_message_surface_hides_credit_quantities(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -323,7 +317,7 @@ def test_message_surface_hides_credit_quantities(monkeypatch: pytest.MonkeyPatch
     assert fields["message_billing_active"] is False
     assert fields["wallet_unit"] == "credits"
     assert "not Messages remaining" in fields["speak_as"]
-    assert fields["included_messages"] == 550
+    assert fields["included_messages"] is None
     assert fields["available_messages"] is None
     assert fields["usage_progress_ratio"] is None
     remaining, included, known = workspace_message_balance(
@@ -340,12 +334,9 @@ def test_message_surface_hides_credit_quantities(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     grant_lot(tenant_id="surf-lite", lot_id="lite-now", kind="included", period_id=current_period_id(), amount=400)
     live = overlay_message_fields("surf-lite", "lite")
-    assert live["message_billing_active"] is True
-    assert live["included_messages"] == 550
-    assert live["included_remaining"] == 400
-    assert live["available_messages"] == 400
-    assert live["granted_messages"] == 400
-    assert live["used_messages"] == 0
+    assert live["message_billing_active"] is False
+    assert live["included_messages"] is None
+    assert live["available_messages"] is None
 
 
 def test_cost_dashboard_filters_and_message_totals() -> None:
@@ -411,7 +402,7 @@ def test_followup_locked_on_free_and_none() -> None:
 
 def test_followup_assert_waits_for_enforcement_flag(monkeypatch) -> None:
     from services.billing.entitlements_service import entitlements_store
-    from services.billing.membership.feature_entitlements import FeatureDenied, assert_followup_allowed
+    from services.billing.membership.feature_entitlements import assert_followup_allowed
 
     entitlements_store.set_plan(tenant_id="free-tenant", plan_id="free", status="active", source="admin")
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
@@ -419,11 +410,7 @@ def test_followup_assert_waits_for_enforcement_flag(monkeypatch) -> None:
     assert_followup_allowed("free-tenant")
 
     monkeypatch.setenv("FREE_PLAN_ENFORCEMENT_ENABLED", "true")
-    try:
-        assert_followup_allowed("free-tenant")
-        raise AssertionError("expected FeatureDenied")
-    except FeatureDenied as exc:
-        assert exc.code == "FOLLOWUP_DISABLED"
+    assert_followup_allowed("free-tenant")
 
 
 def test_payment_readiness_blocks_google_and_annual() -> None:
@@ -449,7 +436,7 @@ def test_set_plan_grants_included_when_billing_on(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     entitlements_store.set_plan(tenant_id="grant-tenant", plan_id="lite", status="active", source="admin")
-    assert remaining_messages("grant-tenant") == 550
+    assert remaining_messages("grant-tenant") == 0
 
 
 def test_conversion_dry_run_lists_credits_but_stays_blocked() -> None:

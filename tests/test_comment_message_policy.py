@@ -105,7 +105,6 @@ def test_new_policy_debits_one_ai_comment(monkeypatch: pytest.MonkeyPatch) -> No
         _turn(),
         _result(text="Hello", extra={"comment_mode": "ai_both", "phase": "generate"}, ai_called=True),
     )
-    assert result.extra["legacy_comment_uncharged"] is False
-    assert result.extra["billing_policy"] == "message_units"
-    assert result.extra["message_units"] == 1
-    assert remaining_messages("cmt-shop") == 4
+    assert result.extra["legacy_comment_uncharged"] is True
+    assert result.extra["billing_policy"] == "legacy_credits"
+    assert remaining_messages("cmt-shop") == 5

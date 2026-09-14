@@ -1,4 +1,4 @@
-"""WAVE 4: mobile Subscription billing SoT. Do not flip MESSAGE_BILLING_ENABLED."""
+"""WAVE 4/D: mobile Subscription billing SoT. Live meter is credits."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ def test_entitlements_public_exposes_subscription_keys(tmp_path, monkeypatch: py
     for key in ENTITLEMENT_KEYS:
         assert key in pub, key
     assert pub["message_billing_active"] is False
-    assert pub["included_messages"] == 550
+    assert pub["included_messages"] is None
     assert pub["available_messages"] is None
     assert pub["included_remaining"] is None
     assert pub["purchased_messages"] is None

@@ -278,3 +278,31 @@ def test_wave_c_customer_runtime_has_no_luna_engine_names() -> None:
             if "luna" in text.lower():
                 offenders.append(str(path.relative_to(ROOT)))
     assert not offenders, offenders
+
+
+def test_wave_d_one_credit_meter() -> None:
+    from services.billing.membership.message_flags import message_billing_cutover, message_billing_enabled
+    from services.dashboard.message_surface import overlay_message_fields
+    from services.iap_product_catalog import credit_product_map, subscription_product_map
+    from services.token_metering import debit_ai_usage
+
+    flags = (ROOT / "services/billing/membership/message_flags.py").read_text(encoding="utf-8")
+    metering = (ROOT / "services/token_metering.py").read_text(encoding="utf-8")
+    row = (ROOT / "db/models/credit_entitlements.py").read_text(encoding="utf-8")
+    catalog = (ROOT / "services/iap_product_catalog.py").read_text(encoding="utf-8")
+    assert "Subscription charges credits only" in flags
+    assert message_billing_enabled() is False
+    assert message_billing_cutover() is False
+    assert "token_wallet_service.ensure_ai_allowed" not in metering
+    assert "token_wallet_service.debit" not in metering
+    assert row.count("pending_plan_id") == 1
+    assert row.count("pending_plan_effective_at") == 1
+    assert "com.linasai.credits.2500" in catalog
+    fields = overlay_message_fields("wave-d", "lite")
+    assert fields["message_billing_active"] is False
+    assert fields["wallet_unit"] == "credits"
+    assert fields["included_credits"] == 7000
+    assert fields["available_messages"] is None
+    assert debit_ai_usage(tenant_id="wave-d", prompt_tokens=10, completion_tokens=10) is None
+    assert "lite" in subscription_product_map().values()
+    assert credit_product_map()["com.linasai.credits.5000"] == 5000

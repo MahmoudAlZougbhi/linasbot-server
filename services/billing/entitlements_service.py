@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from services.billing.billing_backend import billing_uses_postgres, require_billing_pg_session
-from services.billing.membership.feature_entitlements import additional_seats_for_plan, channel_flags_for_plan
+from services.billing.membership.feature_entitlements import additional_seats_for_plan
 from services.billing.plan_economics import PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
 from storage.persistent_storage import _DATA_ROOT as _DEFAULT_DATA_ROOT
 
@@ -33,10 +33,8 @@ DEFAULT_SUBSCRIPTION_EXEMPT_TENANTS = frozenset()
 
 
 def _catalog_features(plan_id: str) -> dict[str, Any]:
-    """Credit catalog features plus message-catalog channel/FAQ flags. Prices stay credit-side."""
-    features = dict(PLAN_FEATURES.get(plan_id, {}))
-    features.update(channel_flags_for_plan(plan_id))
-    return features
+    """Credit catalog features. Message-catalog overlays are not live."""
+    return dict(PLAN_FEATURES.get(plan_id, {}))
 
 
 def subscription_exempt_tenant_ids() -> frozenset[str]:

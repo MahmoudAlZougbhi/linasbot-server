@@ -1,10 +1,10 @@
-"""Server feature gates from the message catalog. Not a second price list."""
+"""Server feature gates from the credit plan catalog. Not a second price list."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from services.billing.membership.message_catalog import MessagePlan, require_message_plan
+from services.billing.membership.plan_catalog import PLAN_CATALOG, PlanDefinition
 
 
 class FeatureDenied(PermissionError):
@@ -14,11 +14,9 @@ class FeatureDenied(PermissionError):
         self.payload = payload or {}
 
 
-def _plan(plan_id: str) -> MessagePlan | None:
-    try:
-        return require_message_plan(plan_id)
-    except KeyError:
-        return None
+def _plan(plan_id: str) -> PlanDefinition | None:
+    pid = (plan_id or "").strip().lower()
+    return PLAN_CATALOG.get(pid)
 
 
 def additional_seats_for_plan(plan_id: str) -> tuple[bool, int | None]:
@@ -30,16 +28,14 @@ def additional_seats_for_plan(plan_id: str) -> tuple[bool, int | None]:
 
 def faq_limits_for_plan(plan_id: str) -> tuple[bool, int]:
     plan = _plan(plan_id)
-    if plan is None or plan.plan_id == "free" or not plan.faq_enabled:
+    if plan is None:
         return False, 0
-    from services.billing.membership.catalog_admin import effective_offer_fields
-
-    return True, int(effective_offer_fields(plan_id).get("faq_capacity") or 0)
+    return True, int(plan.faq_capacity)
 
 
 def followup_allowed_for_plan(plan_id: str) -> bool:
     plan = _plan(plan_id)
-    return bool(plan is not None and plan.followup_enabled)
+    return bool(plan is not None)
 
 
 def comments_allowed_for_plan(plan_id: str) -> bool:
@@ -71,47 +67,21 @@ def channel_flags_for_plan(plan_id: str) -> dict[str, bool]:
         "whatsapp": bool(plan.whatsapp),
         "web": bool(plan.web),
         "tiktok": bool(plan.tiktok),
-        "faq_enabled": bool(plan.faq_enabled),
-        "followup_enabled": bool(plan.followup_enabled),
+        "faq_enabled": True,
+        "followup_enabled": True,
     }
 
 
 def feature_gates_live() -> bool:
-    """Catalog limits stay published; enforcement waits for billing or Free caps."""
-    from services.billing.membership.message_flags import free_enforcement_enabled, message_billing_enabled
-
-    return message_billing_enabled() or free_enforcement_enabled()
+    """Catalog limits stay published; enforcement is not a second billing meter."""
+    return False
 
 
 def assert_followup_allowed(tenant_id: str) -> None:
-    from services.billing.entitlements_service import entitlements_store, is_subscription_exempt_tenant
-
-    if not feature_gates_live():
-        return
-    if is_subscription_exempt_tenant(tenant_id):
-        return
-    ent = entitlements_store.get(tenant_id)
-    paid = ent.status in {"active", "trial", "grace"}
-    if not paid or not followup_allowed_for_plan(ent.plan_id):
-        raise FeatureDenied(
-            "FOLLOWUP_DISABLED",
-            "Smart Follow-Up is locked on this plan.",
-            {"plan_id": ent.plan_id, "status": ent.status, "followup_enabled": False},
-        )
+    _ = tenant_id
+    return
 
 
 def assert_comments_allowed(tenant_id: str) -> None:
-    from services.billing.entitlements_service import entitlements_store, is_subscription_exempt_tenant
-
-    if not feature_gates_live():
-        return
-    if is_subscription_exempt_tenant(tenant_id):
-        return
-    ent = entitlements_store.get(tenant_id)
-    paid = ent.status in {"active", "trial", "grace"}
-    if not paid or not comments_allowed_for_plan(ent.plan_id):
-        raise FeatureDenied(
-            "COMMENTS_DISABLED",
-            "Comment automation is locked on this plan.",
-            {"plan_id": ent.plan_id, "status": ent.status, "comment_automation": False},
-        )
+    _ = tenant_id
+    return

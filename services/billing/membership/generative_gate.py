@@ -1,4 +1,4 @@
-"""Customer generative eligibility. Credits stay until message billing is on."""
+"""Customer generative eligibility — credit ledger only."""
 
 from __future__ import annotations
 
@@ -8,20 +8,6 @@ def generative_block_reason(tenant_id: str, *, honor_inflight_reserved: bool = F
     tid = (tenant_id or "").strip()
     if not tid:
         return "unpublished"
-    from services.billing.membership.message_flags import message_billing_enabled
-
-    if message_billing_enabled():
-        from services.billing.membership.message_ledger import can_start_generative
-        from services.billing.membership.pg_store import MessageStoreUnavailable
-
-        try:
-            if not can_start_generative(tid):
-                return "insufficient_messages"
-        except MessageStoreUnavailable:
-            return "insufficient_messages"
-        except Exception:
-            return "insufficient_messages"
-        return None
     from services.credit_ai_gate import ai_generation_blocked
 
     if ai_generation_blocked(tid, honor_inflight_reserved=honor_inflight_reserved):

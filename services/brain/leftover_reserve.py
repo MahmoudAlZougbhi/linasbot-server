@@ -1,4 +1,4 @@
-"""Leftover-credit reserve while message billing is off. No 1 credit = 1 message."""
+"""Credit-ledger reserve for outbound/AI holds. Not a second billing meter."""
 
 from __future__ import annotations
 
@@ -52,9 +52,7 @@ def reserve_leftover_reply(
     operation_type: str,
     pin_ids: tuple[str, ...] | list[str] = (),
 ) -> str | None:
-    from services.billing.membership.message_flags import message_billing_enabled
-
-    if message_billing_enabled() or not tenant_id or not request_id:
+    if not tenant_id or not request_id:
         return None
     from services.credit_ledger_service import credit_ledger_service
 

@@ -19,8 +19,8 @@ def test_flags_stay_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_message_billing_skips_web_credit_reservation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
-    assert followup_uses_message_ledger() is True
-    assert credit_reservation_required("") is False
+    assert followup_uses_message_ledger() is False
+    assert credit_reservation_required("") is True
 
 
 def test_web_adapter_and_delivery_honor_message_ledger() -> None:
@@ -71,20 +71,12 @@ def test_meta_comment_forwards_caption_when_present() -> None:
 
 
 def test_web_live_handle_skips_credit_ledger(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
-    from services.web_chat.followup_message_ledger import message_reservation_id
+    from services.web_chat.credit_fsm import WebChatCreditHandle
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     handle = WebChatCreditHandle(tenant_id="biz", reservation_id=None, request_id="web:live:1")
-    handle.reserve()
-    assert handle.reservation_id == message_reservation_id("web:live:1")
-    assert handle.state == CreditFsmState.RESERVED
-    handle.capture()
-    assert handle.state == CreditFsmState.CAPTURED
-    released = WebChatCreditHandle(tenant_id="biz", reservation_id=None, request_id="web:live:2")
-    released.reserve()
-    assert released.release() is True
-    assert released.state == CreditFsmState.RELEASED
+    with pytest.raises(PermissionError):
+        handle.reserve()
 
 
 def test_reserve_before_ai_skips_credits_when_billing_on(
@@ -102,9 +94,9 @@ def test_reserve_before_ai_skips_credits_when_billing_on(
 
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service.reserve", boom)
     turn = begin_turn(tenant_id="clinic", channel="instagram", external_inbound_id="mid-bill-1")
-    assert reserve_before_ai(turn) is None
-    assert called["n"] == 0
-    assert turn.state == "AI_PROCESSING"
+    with pytest.raises(PermissionError):
+        reserve_before_ai(turn)
+    assert called["n"] == 1
 
 
 def test_try_reserve_uses_messages_not_credits(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -120,9 +112,9 @@ def test_try_reserve_uses_messages_not_credits(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service.reserve", boom)
     user_data = {"tenant_id": "clinic", "_source_message_id": "mid-bill-2", "channel": "instagram"}
-    assert try_reserve_for_ai(user_data) is True
-    assert called["n"] == 0
-    assert user_data.get("_ai_credit_blocked") is not True
+    assert try_reserve_for_ai(user_data) is False
+    assert called["n"] == 1
+    assert user_data.get("_ai_credit_blocked") is True
 
 
 def test_preview_turn_does_not_hold_messages(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -185,8 +177,8 @@ def test_live_and_preview_gates_are_wired() -> None:
     from services.web_chat.processor_v2_reply import generate_web_chat_reply_text
 
     reserve_src = getsource(reserve_before_ai)
-    assert "message_billing_enabled" in reserve_src
-    assert reserve_src.index("if message_billing_enabled()") < reserve_src.index("credit_ledger_service.reserve")
+    assert "credit_ledger_service.reserve" in reserve_src
+    assert "if message_billing_enabled()" not in reserve_src
     handle_src = getsource(WebChatCreditHandle.reserve)
     assert "followup_uses_message_ledger" in handle_src
     preview_src = getsource(whatsapp_smart_followup_api.smart_followup_preview)
@@ -237,7 +229,8 @@ def test_leftover_reserve_skips_when_billing_on(monkeypatch: pytest.MonkeyPatch)
     from services.brain.leftover_reserve import reserve_leftover_reply
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
-    assert reserve_leftover_reply(tenant_id="shop", request_id="omni:1", operation_type="omni") is None
+    with pytest.raises(PermissionError):
+        reserve_leftover_reply(tenant_id="shop", request_id="omni:1", operation_type="omni")
 
 
 def test_delayed_text_settles_leftover_credits() -> None:

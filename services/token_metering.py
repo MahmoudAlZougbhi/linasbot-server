@@ -1,22 +1,12 @@
-"""AI token metering helpers: pre-flight gate + post-usage dual-bucket debit."""
+"""AI pre-flight uses the credit ledger. Token wallet is not a live meter."""
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from services.billing.token_wallet_service import (
-    InsufficientTokenBalance,
-    is_unlimited_tenant,
-    token_wallet_service,
-)
-from services.model_pricing import compute_cost_from_usage
-
-logger = logging.getLogger(__name__)
-
 RECHARGE_REQUIRED_MESSAGE = (
-    "AI replies are paused because this workspace has no prepaid input or output tokens left. "
-    "Please recharge your token wallet to continue."
+    "AI replies are paused because this workspace has no credits left. "
+    "Please add credits or upgrade the plan to continue."
 )
 
 
@@ -32,19 +22,12 @@ def resolve_tenant_id(user_data: dict[str, Any] | None = None, explicit: str | N
 
 
 def assert_tenant_can_use_ai(tenant_id: str | None) -> None:
-    """Raise when credit ledger remaining is 0, or a metered token bucket is empty.
-
-    Founder ``linas`` may skip prepaid *token* buckets. It does not skip the credit
-    ledger — remaining 0 blocks generation for every tenant.
-    """
+    """Raise when credit ledger remaining is 0. Token wallet is not a live gate."""
     tid = resolve_tenant_id(explicit=tenant_id)
     from services.billing.membership.generative_gate import generative_ai_blocked
 
     if generative_ai_blocked(tid):
         raise PermissionError("Insufficient credits")
-    if is_unlimited_tenant(tid):
-        return
-    token_wallet_service.ensure_ai_allowed(tid, require_at_least=1)
 
 
 def debit_ai_usage(
@@ -59,52 +42,16 @@ def debit_ai_usage(
     model: str | None = None,
     reference: str | None = None,
 ) -> dict[str, Any] | None:
-    """
-    Debit wallet after an AI call using prompt→input and completion→output buckets.
-    Unlimited tenants record usage without blocking. Empty metered wallets raise.
-    """
-    tid = resolve_tenant_id(explicit=tenant_id)
-    use_in = max(0, int(prompt_tokens or 0))
-    use_out = max(0, int(completion_tokens or 0))
-    if use_in <= 0 and use_out <= 0 and tokens is not None:
-        # Legacy callers that only pass total tokens.
-        total = max(0, int(tokens))
-        if total <= 0:
-            return None
-        use_in = int(round(total * 0.80))
-        use_out = max(0, total - use_in)
-    if use_in <= 0 and use_out <= 0:
-        return None
-
-    in_cost = float(input_cost_usd or 0.0)
-    out_cost = float(output_cost_usd or 0.0)
-    total_cost = float(cost_usd or 0.0)
-    if (in_cost <= 0 and out_cost <= 0) and (use_in or use_out):
-        priced = compute_cost_from_usage(model or "gpt-5.1", use_in, use_out)
-        in_cost = float(priced["input_cost_usd"])
-        out_cost = float(priced["output_cost_usd"])
-        total_cost = float(priced["cost_usd"])
-    elif total_cost <= 0:
-        total_cost = in_cost + out_cost
-
-    try:
-        snap = token_wallet_service.debit(
-            tid,
-            prompt_tokens=use_in,
-            completion_tokens=use_out,
-            cost_usd=total_cost,
-            input_cost_usd=in_cost,
-            output_cost_usd=out_cost,
-            reason="ai_usage",
-            reference=reference,
-            model=model,
-        )
-        return snap.to_public_dict()
-    except InsufficientTokenBalance:
-        logger.warning(
-            "[token_wallet] debit skipped insufficient tenant=%s input=%s output=%s",
-            tid,
-            use_in,
-            use_out,
-        )
-        raise
+    """Token-wallet debit is not a live meter. Credits are captured on the ledger."""
+    _ = (
+        tenant_id,
+        prompt_tokens,
+        completion_tokens,
+        tokens,
+        cost_usd,
+        input_cost_usd,
+        output_cost_usd,
+        model,
+        reference,
+    )
+    return None

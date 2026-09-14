@@ -161,7 +161,7 @@ def test_copilot_pause_stays_leftover_when_message_billing_on(
     paused = owner_credits_paused_payload("clinic")
     assert "leftover credits" in paused["message"]
     assert "messages" not in paused["message"]
-    assert paused["actions"]["buy_credits"] is False
+    assert paused["actions"]["buy_credits"] is True
 
 
 def test_inflight_reserved_does_not_fund_new_owner_turn(ledger_env: CreditLedgerService) -> None:

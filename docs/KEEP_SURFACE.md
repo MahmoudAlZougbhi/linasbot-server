@@ -108,6 +108,8 @@ Fields the Subscription UI reads:
 
 This wave does **not** flip `MESSAGE_BILLING_ENABLED`. Credit ledger, leftover_reserve, and token_wallet stay until Mahmoud approves cutover.
 
+WAVE D executed the cutover: live meter is **credits** (plan allowance + IAP `com.linasai.credits.*`). Message billing, token-wallet AI gate, and draft message catalog are not live.
+
 ## WAVE 5 — Web = marketing + portal
 
 - KEEP marketing routes, thin auth recovery, portal `/owner/*` (overview, users, messages, catalog, costs — not Lab).
@@ -179,5 +181,14 @@ Keep #677 media analysis.
 | Customer Brain | `services/brain/` (`brain/comments`, `brain/media`) |
 
 `main.py` imports are grouped by those domains. `modules/owner_copilot_api.py` is the Copilot HTTP mount; `modules/owner_ai_api.py` stays gone. `smart_messaging_*` remains for scheduler/templates (not a museum HTTP API). Channel capability status copy lives in `services/integrations/channel_capability_status.py` so the matrix file stays under 500 lines.
+
+## WAVE D — one billing meter = mobile Subscription credits
+
+- Live meter is credits: `plan_catalog` included credits + IAP `com.linasai.credits.*` (`services/iap_product_catalog.py`).
+- `message_billing_enabled` / `message_billing_cutover` are always false. Overlay `message_billing_active` is always false.
+- Token wallet does not gate or debit live AI (`token_metering` is a credit-ledger preflight only).
+- Duplicate `TenantEntitlementRow.pending_plan_*` columns removed.
+- Feature flags on plans come from `plan_catalog`, not the draft message catalog.
+
 
 
