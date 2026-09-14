@@ -1,4 +1,4 @@
-"""Platform connector capability matrix (Meta first; TikTok/Snap audited later)."""
+"""Platform connector capability matrix (Meta, WhatsApp, Website, TikTok)."""
 
 from __future__ import annotations
 
@@ -93,18 +93,6 @@ TIKTOK_CAPABILITIES: dict[str, dict[str, Any]] = {
     "analytics": _cap(level="available", supported_in_code=True, notes="Stored TikTok comment/DM metrics only"),
     "webhooks": _cap(level="available", supported_in_code=True, notes="Messaging webhooks when approved"),
 }
-
-SNAP_CAPABILITIES: dict[str, dict[str, Any]] = {
-    "dm_read": _cap(level="unavailable", supported_in_code=False),
-    "dm_reply": _cap(level="unavailable", supported_in_code=False),
-    "comment_read": _cap(level="coming_later", supported_in_code=False),
-    "comment_reply": _cap(level="coming_later", supported_in_code=False),
-    "content_publish": _cap(level="coming_later", supported_in_code=False),
-    "reel_publish": _cap(level="coming_later", supported_in_code=False),
-    "analytics": _cap(level="coming_later", supported_in_code=False),
-    "webhooks": _cap(level="coming_later", supported_in_code=False),
-}
-
 
 # Flat level map for load sims / legacy callers (truthful matrix is list_tenant_integration_status).
 META_CAPABILITIES: dict[str, CapabilityLevel] = {key: val["level"] for key, val in _meta_base().items()}
@@ -323,22 +311,7 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
             },
         }
 
-    rows.extend(
-        [
-            web_row,
-            tiktok_row_for_tenant(tenant_id),
-            {
-                "platform": "snapchat",
-                "label": "Snapchat",
-                "connected": False,
-                "coming_soon": True,
-                "connectable": False,
-                "binding_ids": [],
-                "capabilities": {k: dict(v) for k, v in SNAP_CAPABILITIES.items()},
-                "audit_notes": "Official API capability audit pending Meta stability.",
-            },
-        ]
-    )
+    rows.extend([web_row, tiktok_row_for_tenant(tenant_id)])
     return rows
 
 

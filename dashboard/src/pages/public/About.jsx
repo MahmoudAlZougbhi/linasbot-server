@@ -51,8 +51,8 @@ const About = () => {
 
         <p className="mt-4 leading-relaxed text-slate-700">
           Scope is messaging conversations—customer DMs and, where enabled, comments—not automatic
-          publishing of posts, Stories, Reels, or videos. Creative publishing is separate and only
-          happens when a business user explicitly confirms it.
+          publishing of posts, Stories, Reels, or videos. The product does not include Creative
+          Studio or scheduled social publishing.
         </p>
 
         <p className="mt-4 leading-relaxed text-slate-700">

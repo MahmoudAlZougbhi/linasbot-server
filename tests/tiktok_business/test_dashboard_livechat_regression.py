@@ -116,8 +116,7 @@ def test_ig_fb_integration_rows_not_coming_soon() -> None:
     assert ig["connectable"] is True
     tt = next(r for r in rows if r["platform"] == "tiktok")
     assert tt["coming_soon"] is False
-    snap = next(r for r in rows if r["platform"] == "snapchat")
-    assert snap["coming_soon"] is True
+    assert all(r["platform"] != "snapchat" for r in rows)
 
 
 def test_attach_toggles_skips_coming_soon_tiktok_stub() -> None:

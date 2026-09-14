@@ -343,3 +343,53 @@ def test_wave_e_hub_tiles_and_prices_sot() -> None:
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
     assert "WAVE E" in keep
     assert "prices.catalog" in keep
+
+
+def test_wave_f_portal_drawer_no_snapchat() -> None:
+    from services.integration_capabilities import list_tenant_integration_status
+
+    shell = (ROOT / "dashboard/src/pages/owner/OwnerPortalShell.jsx").read_text(encoding="utf-8")
+    app = (ROOT / "dashboard/src/App.jsx").read_text(encoding="utf-8")
+    nav = (ROOT / "mobile/linas-ai/src/app/navigation.ts").read_text(encoding="utf-8")
+    modules = (ROOT / "mobile/linas-ai/src/features/nav/drawerModules.ts").read_text(encoding="utf-8")
+    hub = (ROOT / "mobile/linas-ai/src/features/cm/cmSections.ts").read_text(encoding="utf-8")
+    integrations = (ROOT / "mobile/linas-ai/src/features/integrations/IntegrationsScreen.tsx").read_text(
+        encoding="utf-8"
+    )
+    about = (ROOT / "dashboard/src/pages/public/About.jsx").read_text(encoding="utf-8")
+    caps = (ROOT / "services/integration_capabilities.py").read_text(encoding="utf-8")
+    keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
+
+    assert shell.count("{ to: '/owner") == 5
+    for label in ("Overview", "Users", "Message flow", "Message catalog", "Costs"):
+        assert label in shell
+    assert "/owner/lab" not in app
+    assert "OwnerLab" not in app
+    assert "path=\"lab\"" not in app
+    assert "| { name: 'resource' }" not in nav
+    assert "name: 'chat'" in nav
+    assert "name: 'notifications'" in nav
+    for tile in (
+        "dashboard",
+        "smartFollowUp",
+        "faq",
+        "livechat",
+        "requests",
+        "integrations",
+        "users",
+        "subscription",
+    ):
+        assert f"id: '{tile}'" in modules
+    assert "id: 'cm'" in modules
+    assert "mobileSupported: false" not in hub.split("id: 'knowledge'", 1)[1].split("id: 'ai_limits'", 1)[0]
+    assert "platformSnapchat" not in integrations
+    assert "platform === 'snapchat'" not in integrations
+    assert "SNAP_CAPABILITIES" not in caps
+    assert '"platform": "snapchat"' not in caps
+    rows = list_tenant_integration_status("wave-f")
+    platforms = {r["platform"] for r in rows}
+    assert "snapchat" not in platforms
+    assert {"instagram", "facebook", "tiktok", "web"}.issubset(platforms)
+    assert "Creative publishing is separate" not in about
+    assert "WAVE F" in keep
+    assert "portal sidebar is those five items" in keep.lower() or "five items" in keep

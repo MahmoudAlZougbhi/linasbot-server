@@ -64,12 +64,10 @@ comments on:</p>
   universally live for every Tenant until that Tenant’s connection is actually
   available and authorized.</li>
   <li><strong>TikTok</strong> — only when connected through official TikTok APIs as
-  that integration becomes available. In the current product UI, TikTok may appear
-  as coming soon / not yet connectable.</li>
+  that integration becomes available.</li>
 </ul>
-<p>We do not process messaging data for accounts the Tenant has not authorized. Other
-surfaces listed as coming soon (for example Snapchat) are not active data-processing
-channels until connectable.</p>
+<p>We do not process messaging data for accounts the Tenant has not authorized.
+Channels that are not listed above are not active data-processing surfaces.</p>
 
 <h2>3. Data we collect</h2>
 <h3>3.1 Account and Tenant data</h3>

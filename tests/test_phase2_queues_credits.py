@@ -236,10 +236,7 @@ def test_meta_capability_matrix_truthful() -> None:
         assert comment["live_verified"] is False
         publish = row["capabilities"]["content_publish"]
         assert publish["live_verified"] is False
-    snap = next(r for r in rows if r["platform"] == "snapchat")
-    assert snap["coming_soon"] is True
-    assert snap["connectable"] is False
-    assert snap["connected"] is False
+    assert all(r["platform"] != "snapchat" for r in rows)
     tt = next(r for r in rows if r["platform"] == "tiktok")
     assert tt["coming_soon"] is False
     assert tt["connected"] is False
