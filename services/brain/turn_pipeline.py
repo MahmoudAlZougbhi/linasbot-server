@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from services.brain.actions.pending import try_confirm_pending
-from services.brain.contracts.enums import StopReason
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.conversation_store import remember_turn
 from services.brain.faq_turn import exact_faq_result, semantic_faq_result
-from services.brain.greeting import evaluate_greeting, is_greeting_only
+from services.brain.greeting import evaluate_greeting, inbound_greeting_language, is_greeting_only, safe_greeting_text
 from services.brain.stage_timeline import stamp
 from services.brain.templates import brain_template
 
@@ -143,19 +142,30 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
         )
     from services.brain.agent.greeting_turn import identity_greeting_result
 
-    greeted = await identity_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
+    try:
+        greeted = await identity_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
+    except Exception as exc:
+        print(f"[run_dm_after_gates] identity_greeting fail-soft {type(exc).__name__}: {str(exc)[:200]}")
+        greeted = None
     if greeted is not None:
         return greeted
     if is_greeting_only(message):
-        from services.brain.generate.reply import openai_configured
-
-        stop_reason: StopReason = "provider_not_configured" if not openai_configured() else "failed_closed"
+        lang = _response_language(turn) or inbound_greeting_language(message)
+        text = safe_greeting_text(
+            tenant_id=turn.tenant_id,
+            message=message,
+            language=lang,
+            history=turn.history,
+        )
         return TurnResult(
-            stop_reason=stop_reason,
-            envelope=FinalReplyEnvelope(decision="no_reply"),
+            stop_reason="ok",
+            envelope=FinalReplyEnvelope(
+                decision="reply",
+                messages=[OutboundMessage(destination=_destination(channel, turn), text=text)],
+            ),
             extra=_flow_extra(
-                {"phase": "identity_greeting", **flow_base},
-                ("greeting", "Greeting-only identity reply unavailable", {"reason": stop_reason}),
+                {"phase": "identity_greeting", "path": "identity_greeting_fail_soft", **flow_base},
+                ("greeting", "Greeting-only fail-soft catalog opener", {"ai_called": False}),
             ),
         )
     faq = _exact_faq_result(turn, message, channel) or await _semantic_faq_result(turn, message, channel)

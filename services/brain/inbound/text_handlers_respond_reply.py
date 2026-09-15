@@ -218,6 +218,40 @@ def _reply_offers_handover_confirmation(text: str) -> bool:
     return any(p in m for p in permission_markers) and any(h in m for h in handover_markers)
 
 
+def _v2_failed_closed_reply(
+    *,
+    tenant_id: str,
+    message: str,
+    response_language: str,
+    exc: BaseException,
+) -> tuple[str, dict[str, Any]]:
+    from services.ai_setup.constants import BRAIN_TEMPORARY_ERROR_MESSAGE_KEY
+    from services.brain.greeting import is_greeting_only, safe_greeting_text
+    from services.owner_copilot.dynamic_messages_service import get_dynamic_message
+
+    exc_name = type(exc).__name__
+    exc_msg = str(exc)[:200]
+    print(f"[_handle_published_cm_runtime] ⚠️ customer_reply_v2 failed closed: {exc_name}: {exc_msg}")
+    greeting_only = is_greeting_only(message)
+    if greeting_only:
+        safe = safe_greeting_text(tenant_id=tenant_id, message=message, language=response_language)
+    else:
+        safe = get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, response_language)
+    return safe, {
+        "reason": "v2_failed_closed",
+        "customer_reply_ai_v2": True,
+        "classic_fallback": False,
+        "exception_class": exc_name,
+        "blocker": f"{exc_name}: {exc_msg}",
+        "greeting_fail_soft": greeting_only,
+        "ai_called": False,
+        "cost_status": "none",
+        "pipeline_decisions": [
+            {"step": "customer_reply_v2", "decision": "failed_closed", "ai_called": False},
+        ],
+    }
+
+
 async def _handle_published_cm_runtime(
     *,
     tenant_id: str,
@@ -239,10 +273,8 @@ async def _handle_published_cm_runtime(
     Never falls back to Classic ``generate_answer_with_usage``. On model/config
     failure, returns a safe closed failure reply with an explicit blocker.
     """
-    from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
     from services.brain.reply.models import ENGINE_REMOVED
     from services.brain.reply.orchestrator import run_customer_reply_v2_dm
-    from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
     social_channel = "instagram_dm"
     ch = (channel or "").strip().lower()
@@ -268,19 +300,12 @@ async def _handle_published_cm_runtime(
             message_id=message_id or "",
         )
     except Exception as v2_exc:
-        print(f"[_handle_published_cm_runtime] ⚠️ customer_reply_v2 failed closed: {v2_exc}")
-        safe = get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, response_language)
-        return safe, {
-            "reason": "v2_failed_closed",
-            "customer_reply_ai_v2": True,
-            "classic_fallback": False,
-            "blocker": str(v2_exc)[:200],
-            "ai_called": False,
-            "cost_status": "none",
-            "pipeline_decisions": [
-                {"step": "customer_reply_v2", "decision": "failed_closed", "ai_called": False},
-            ],
-        }
+        return _v2_failed_closed_reply(
+            tenant_id=tenant_id,
+            message=message,
+            response_language=response_language,
+            exc=v2_exc,
+        )
 
     reply = (v2_outcome.reply or "").strip()
     meta_in = dict(v2_outcome.metadata or {})

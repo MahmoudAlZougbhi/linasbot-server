@@ -163,6 +163,8 @@ def safe_cm_diagnostics(metadata: dict[str, Any] | None) -> dict[str, Any] | Non
         "failed_rules": [str(x)[:80] for x in (metadata.get("failed_rules") or [])[:20]]
         if isinstance(metadata.get("failed_rules"), list)
         else [],
+        "blocker": (str(metadata.get("blocker") or "")[:200] or None),
+        "exception_class": (str(metadata.get("exception_class") or "")[:80] or None),
     }
     # Drop empty-only payloads
     if not any(v not in (None, [], "") for k, v in out.items() if k != "failed_rules"):

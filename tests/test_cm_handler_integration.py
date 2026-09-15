@@ -208,4 +208,44 @@ async def test_v2_exception_fails_closed_without_classic() -> None:
     mock_gen.assert_not_awaited()
     assert metadata["reason"] == "v2_failed_closed"
     assert metadata["classic_fallback"] is False
+    assert metadata["exception_class"] == "RuntimeError"
+    assert str(metadata.get("blocker") or "").startswith("RuntimeError:")
+    from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY, BRAIN_TEMPORARY_ERROR_MESSAGE_KEY
+    from services.owner_copilot.dynamic_messages_service import get_dynamic_message
+
+    expected = get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "en")
+    assert reply == expected
+    assert reply != get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "en")
+    assert "confirm that detail" not in reply.lower()
+    assert "ما قدرت أتأكد" not in reply
+
+
+@pytest.mark.asyncio
+async def test_v2_exception_on_greeting_uses_opener_not_validator_copy() -> None:
+    tenant_id = "cm_handler_test_greeting_fail"
+    await publish_test_content(tenant_id)
+
+    with (
+        patch(
+            "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
+            new=AsyncMock(side_effect=RuntimeError("openai timeout")),
+        ),
+        patch("services.ai_setup.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen,
+    ):
+        reply, metadata = await _handle_published_cm_runtime(
+            tenant_id=tenant_id,
+            message="Hi kifak",
+            detected_language="ar",
+            response_language="ar",
+        )
+    mock_gen.assert_not_awaited()
+    assert metadata["reason"] == "v2_failed_closed"
+    assert metadata["greeting_fail_soft"] is True
+    assert metadata["exception_class"] == "RuntimeError"
+    from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY, BRAIN_TEMPORARY_ERROR_MESSAGE_KEY
+    from services.owner_copilot.dynamic_messages_service import get_dynamic_message
+
+    assert "ما قدرت أتأكد" not in reply
+    assert reply != get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "ar")
+    assert reply != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "ar")
     assert reply

@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from services.ai_setup.schemas import AiBasics, StylePolicy
-from services.ai_setup.version_store import PublishedVersionError, load_published_content
+from services.ai_setup.version_store import load_published_content
 
 
 class IdentityBundle(BaseModel):
@@ -46,10 +46,10 @@ def load_identity_bundle(tenant_id: str) -> IdentityBundle | None:
         return None
     try:
         _pointer, sections = load_published_content(tid)
-    except PublishedVersionError:
+        basics = AiBasics.model_validate(_section(sections, "ai_basics", "ai_basic", "basic"))
+        style = StylePolicy.model_validate(_section(sections, "style", "style_policy"))
+    except Exception:
         return None
-    basics = AiBasics.model_validate(_section(sections, "ai_basics", "ai_basic", "basic"))
-    style = StylePolicy.model_validate(_section(sections, "style", "style_policy"))
     return IdentityBundle(
         assistant_name=basics.assistant_name,
         business_name=basics.clinic_name,

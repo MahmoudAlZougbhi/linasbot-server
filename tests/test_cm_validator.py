@@ -126,6 +126,10 @@ async def test_finalize_response_without_regenerate_fn_returns_honest_failure_im
     assert result.ok is False
     assert result.regenerated is False
     assert UNSUPPORTED_PRICE_CLAIM in result.failed_rules
+    from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
+    from services.owner_copilot.dynamic_messages_service import get_dynamic_message
+
+    assert result.text == get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "en")
 
 
 @pytest.mark.asyncio
