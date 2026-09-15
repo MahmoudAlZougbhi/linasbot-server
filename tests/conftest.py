@@ -31,6 +31,8 @@ os.environ.setdefault("DISABLE_API_DOCS", "true")
 os.environ.setdefault("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
 os.environ.pop("ALLOW_DEBUG_SIMULATE_WEBHOOK", None)
 
+collect_ignore = ["brain_evals"]
+
 
 @pytest.fixture(scope="session")
 def event_loop_policy():

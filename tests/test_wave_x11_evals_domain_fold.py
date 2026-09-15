@@ -20,6 +20,9 @@ def test_wave_x11_evals_not_runtime_package() -> None:
     readiness = (ROOT / "services/brain/readiness.py").read_text(encoding="utf-8")
     assert "latest_offline_artifact" not in readiness
     assert "evals_not_runtime" in readiness
+    pytest_ini = (ROOT / "pytest.ini").read_text(encoding="utf-8")
+    assert "norecursedirs" in pytest_ini
+    assert "brain_evals" in pytest_ini
 
 
 def test_wave_x11_domain_folds_no_shims() -> None:
@@ -43,6 +46,7 @@ def test_wave_x11_domain_folds_no_shims() -> None:
         "services/billing/membership/message_catalog.py",
         "handlers/text_handlers.py",
         "scripts/prod_preflight_readonly.sh",
+        "pytest.ini",
     )
     missing = [rel for rel in keep if not (ROOT / rel).is_file()]
     assert not missing, missing
