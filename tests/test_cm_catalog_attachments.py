@@ -80,7 +80,7 @@ def test_normalize_prices_section_preserves_catalog_attachments() -> None:
 
 
 def test_price_catalog_index_includes_note_and_media_caption() -> None:
-    from services.ai_setup.semantic_index import _price_catalog_entries
+    from tests.cm_semantic_index import _price_catalog_entries
 
     rows = _price_catalog_entries(
         {

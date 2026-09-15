@@ -267,7 +267,7 @@ def test_redistribution_idempotent_and_preserves_checksums(tmp_path: Path, monke
 
 
 def test_policy_text_is_chunked_for_embeddings() -> None:
-    from services.ai_setup.semantic_index import _MAX_EMBED_CHARS, _chunk_policy_text, _section_notes_entries
+    from tests.cm_semantic_index import _MAX_EMBED_CHARS, _chunk_policy_text, _section_notes_entries
 
     prefix = "--- redistributed from "
     policy = f"{prefix}id=a title=one ---\n" + ("alpha " * 200) + f"\n\n{prefix}id=b title=two ---\n" + ("beta " * 200)

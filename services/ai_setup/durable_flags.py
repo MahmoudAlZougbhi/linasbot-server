@@ -21,16 +21,10 @@ _FALSY = {"0", "false", "no"}
 def default_production_env_paths(*, app_dir: str | Path | None = None) -> list[Path]:
     """Paths that may hold durable flags on the production host."""
     repo_root = Path("/opt/linasbot")
-    nested = repo_root / "linaslaserbot-2.7.22"
     paths: list[Path] = []
     if app_dir is not None:
         paths.append(Path(app_dir) / ".env")
-    paths.extend(
-        [
-            repo_root / ".env",
-            nested / ".env",
-        ]
-    )
+    paths.append(repo_root / ".env")
     # Preserve order, drop duplicates, keep only parents that exist (or will be created for app_dir).
     seen: set[str] = set()
     out: list[Path] = []

@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from services.ai_setup.schemas import ArticleRecord, FaqRecord, FaqSection, FaqVariant, KnowledgeSection
-from services.ai_setup.semantic_index import _article_entries, _faq_entries
 from services.ai_setup.source_inventory import build_source_inventory
+from tests.cm_semantic_index import _article_entries, _faq_entries
 
 
 def test_restricted_and_archived_articles_excluded_from_index_entries() -> None:

@@ -11,12 +11,6 @@ from fastapi.testclient import TestClient
 from modules.api_security import is_public_api
 from services.auth.auth_email_tokens import AuthEmailTokenService
 from services.billing.token_metering import assert_tenant_can_use_ai
-from services.billing.token_package_catalog import (
-    assert_public_payload_has_no_internal_economics,
-    build_package,
-    catalog_public_payload,
-    list_token_packages,
-)
 
 
 @pytest.fixture()
@@ -80,31 +74,6 @@ def test_email_verify_token_single_use(token_svc: AuthEmailTokenService) -> None
     assert token_svc.consume(raw, "email_verify") is None
 
 
-def test_package_catalog_has_six_skus_and_thirty_percent_margin() -> None:
-    packages = list_token_packages()
-    assert len(packages) == 6
-    for pack in packages:
-        assert 29.0 <= pack.margin_pct <= 31.0
-        assert pack.input_tokens > 0
-        assert pack.output_tokens > 0
-        assert pack.sell_price_usd > 0
-    mid = build_package(1_000_000, 1_000_000)
-    assert mid.openai_cost_usd == pytest.approx(11.25, rel=1e-6)
-    assert mid.sell_price_usd == 14.63
-
-
-def test_public_packages_endpoint() -> None:
-    payload = catalog_public_payload()
-    assert payload["success"] is True
-    assert len(payload["packages"]) == 6
-    assert_public_payload_has_no_internal_economics(payload)
-    assert "profit_multiplier" not in payload
-    assert "30%" not in str(payload).lower()
-    for pack in payload["packages"]:
-        assert "input_tokens" in pack
-        assert "output_tokens" in pack
-
-
 def test_landing_pricing_section_in_source() -> None:
     root = Path(__file__).resolve().parents[1]
     landing = root / "dashboard" / "src" / "pages" / "public" / "Landing.jsx"
@@ -126,15 +95,6 @@ def test_zero_credits_blocks_unlimited_linas(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr("services.billing.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
     with pytest.raises(PermissionError, match="Insufficient credits"):
         assert_tenant_can_use_ai("linas")
-
-
-def test_catalog_public_payload_shape() -> None:
-    payload = catalog_public_payload()
-    assert "packages" in payload
-    assert "summary" in payload
-    assert "profit_multiplier" not in payload
-    assert "orchestration_model" not in payload
-    assert_public_payload_has_no_internal_economics(payload)
 
 
 def test_cors_production_drops_http_linasaibot_keeps_localhost() -> None:

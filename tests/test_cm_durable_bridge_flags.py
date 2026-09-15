@@ -32,23 +32,19 @@ def test_resolve_keeps_unset_when_unpublished() -> None:
     assert "unset" in reason
 
 
-def test_preserve_syncs_dual_env_files(tmp_path: Path) -> None:
+def test_preserve_syncs_env_file(tmp_path: Path) -> None:
     root = tmp_path / "opt" / "linasbot"
-    nested = root / "linaslaserbot-2.7.22"
     root.mkdir(parents=True)
-    nested.mkdir(parents=True)
     (root / ".env").write_text("OPENAI_API_KEY=redacted\nCM_DISABLE_LINAS_LEGACY_BRIDGE=true\n", encoding="utf-8")
-    (nested / ".env").write_text("OPENAI_API_KEY=redacted\n", encoding="utf-8")
 
     report = preserve_disable_linas_legacy_bridge(
-        [root / ".env", nested / ".env"],
+        [root / ".env"],
         linas_has_published_cm=True,
         dry_run=False,
     )
     assert report["ok"] is True
     assert report["effective"] is True
-    assert parse_env_bool(read_env_file_map(nested / ".env").get(CM_DISABLE_LINAS_LEGACY_BRIDGE)) is True
-    # Non-CM secrets remain present (not wiped).
+    assert parse_env_bool(read_env_file_map(root / ".env").get(CM_DISABLE_LINAS_LEGACY_BRIDGE)) is True
     assert "OPENAI_API_KEY" in read_env_file_map(root / ".env")
 
 

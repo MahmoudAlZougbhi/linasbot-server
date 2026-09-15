@@ -14,7 +14,7 @@ from services.ai_setup.embeddings import (
     embedding_pin,
     embedding_provider_name,
 )
-from services.ai_setup.semantic_index import build_index, search
+from tests.cm_semantic_index import build_index, search
 
 
 def test_default_provider_name_is_voyage_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:

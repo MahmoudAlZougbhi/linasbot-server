@@ -47,7 +47,7 @@ def _maintenance_entry_exists(path: Path) -> bool:
 
 @app.get("/")
 async def root() -> Any:
-    return {"message": "Lina's Laser AI Bot is running!"}
+    return {"message": "Linas AI is running."}
 
 
 @app.get("/api/health")
