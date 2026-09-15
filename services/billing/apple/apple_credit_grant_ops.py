@@ -18,8 +18,8 @@ from sqlalchemy.exc import IntegrityError
 from db.models.apple_billing import AppleCreditGrantRow
 from db.session import whatsapp_session
 from services.billing.billing_backend import billing_uses_postgres
-from services.credit_ledger_service import credit_ledger_service
-from services.iap_product_catalog import map_credit_product
+from services.billing.credit_ledger_service import credit_ledger_service
+from services.billing.iap_product_catalog import map_credit_product
 
 
 def _duplicate_granted(row: AppleCreditGrantRow, *, transaction_id: str) -> dict[str, Any]:
@@ -154,7 +154,7 @@ def grant_consumable_credits(
     ledger_request_id = f"{transaction_id}:refund_reversed_restore" if allow_regrant_after_reverse else transaction_id
 
     if billing_uses_postgres():
-        from services.credit_ledger_pg_ops import grant_pack_on_session
+        from services.billing.credit_ledger_pg_ops import grant_pack_on_session
 
         with whatsapp_session(require=True) as session:
             prior = session.get(AppleCreditGrantRow, transaction_id)
@@ -278,7 +278,7 @@ def reverse_consumable_credits(
         raise PermissionError("cross-tenant credit reverse denied")
 
     if billing_uses_postgres():
-        from services.credit_ledger_pg_ops import reverse_pack_on_session
+        from services.billing.credit_ledger_pg_ops import reverse_pack_on_session
 
         with whatsapp_session(require=True) as session:
             row = session.get(AppleCreditGrantRow, transaction_id)

@@ -56,7 +56,7 @@ def _tick_once() -> None:
         return
     if not acquire_leader("autoscale-tick", ttl_seconds=12):
         return
-    from services.job_queue import job_queue
+    from services.queues.job_queue import job_queue
     from services.scale.autoscale_clocks import extra_quiet_ready, pressure_seconds, quiet_seconds
     from services.scale.latency_histogram import snapshot as hist_snapshot
     from services.scale.replica_controller import current_replicas

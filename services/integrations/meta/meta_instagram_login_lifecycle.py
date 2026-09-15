@@ -7,7 +7,6 @@ import logging
 import time
 from typing import Any
 
-from services.durable_event_claim import release_job_lock, try_acquire_job_lock
 from services.integrations.meta.meta_app_registry import MetaRegistryError, get_meta_app_registry
 from services.integrations.meta.meta_instagram_login_capabilities import instagram_login_subscription_retry_eligible
 from services.integrations.meta.meta_instagram_login_config import instagram_login_config_status
@@ -22,6 +21,7 @@ from services.integrations.meta.meta_instagram_login_subscription_recovery impor
 from services.integrations.meta.meta_instagram_login_tokens import refresh_binding_instagram_login_token
 from services.integrations.meta.meta_oauth import MetaOAuthError
 from services.integrations.meta.meta_oauth_graph import disconnect_binding_webhook
+from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 

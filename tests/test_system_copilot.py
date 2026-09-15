@@ -10,8 +10,8 @@ from services.owner_copilot.cm_approval import CmPatchProposalStore, approve_cm_
 from services.owner_copilot.context import estimate_context_tokens, pack_owner_turn_context, summarize_conversation
 from services.owner_copilot.model_router import OwnerChatUsageTracker, classify_owner_route, route_owner_turn
 from services.owner_copilot.profile import address_line, never_infer_gender_from_identity, normalize_gender
-from services.system_knowledge_registry import registry_route_errors, valid_mobile_routes
-from services.system_knowledge_retrieval import retrieve_capabilities
+from services.owner_copilot.system_knowledge_registry import registry_route_errors, valid_mobile_routes
+from services.owner_copilot.system_knowledge_retrieval import retrieve_capabilities
 
 
 def test_help_registry_routes_match_mobile_control_areas() -> None:
@@ -152,7 +152,7 @@ async def test_owner_turn_help_and_publish_confirm(monkeypatch: pytest.MonkeyPat
     from services.owner_copilot.models import OwnerV2TurnResult
     from services.owner_copilot.orchestrator import run_owner_turn
 
-    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
+    monkeypatch.setattr("services.billing.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
 
     async def _fake_v2(**kwargs: Any) -> OwnerV2TurnResult:
         text = str(kwargs.get("user_text") or "")
@@ -211,9 +211,9 @@ def test_greeting_stages(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_owner_and_guest_prompts_share_friendly_emoji_voice() -> None:
-    from services.guest_ai_service import build_guest_greeting, build_guest_system_prompt
+    from services.guest.guest_ai_service import build_guest_greeting, build_guest_system_prompt
     from services.owner_copilot.context import SYSTEM_PROMPT
-    from services.response_formatting import RESPONSE_FORMATTING_RULES
+    from services.owner_copilot.response_formatting import RESPONSE_FORMATTING_RULES
 
     assert "tasteful emojis" in SYSTEM_PROMPT
     assert "warm, friendly" in SYSTEM_PROMPT

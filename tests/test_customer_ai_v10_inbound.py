@@ -177,7 +177,7 @@ async def test_inbound_link_ssrf_does_not_fetch(inbound_env: Path) -> None:
 
 
 def test_social_processor_no_generic_image_placeholder() -> None:
-    src = Path("services/social_messaging_processor.py").read_text(encoding="utf-8")
+    src = Path("services/integrations/social/social_messaging_processor.py").read_text(encoding="utf-8")
     assert "اكتبلي شو حابب تعرف" not in src
     assert "ingest_inbound_attachments" in src
 

@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import FFMPEG_PATH, WHATSAPP_PHONE_NUMBER_ID
 from modules.env_bootstrap import ENV_LOADED as _ENV_LOADED  # load .env before config
-from services.sensitive_request_logging import install_sensitive_query_log_filter
+from services.scale.sensitive_request_logging import install_sensitive_query_log_filter
 
 if not _ENV_LOADED:
     raise RuntimeError("env bootstrap did not run")
@@ -62,7 +62,7 @@ app = FastAPI(
 
 def cors_allow_origins(*, environment: str | None = None) -> list[str]:
     """CORS origins: localhost always; public hosts are HTTPS-only in production."""
-    from services.platform_portal_hosts import cors_public_origins
+    from services.dashboard.platform_portal_hosts import cors_public_origins
 
     env = (
         (environment if environment is not None else (os.getenv("ENVIRONMENT") or os.getenv("ENV") or ""))

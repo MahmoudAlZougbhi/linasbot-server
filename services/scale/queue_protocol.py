@@ -70,7 +70,7 @@ def enqueue_normalized_event(
     conversation_key: str | None = None,
 ) -> QueueJob:
     """Enqueue a normalized inbound/outbound event with optional conversation partition key."""
-    from services.job_queue import job_queue
+    from services.queues.job_queue import job_queue
 
     body = dict(payload)
     if conversation_key:

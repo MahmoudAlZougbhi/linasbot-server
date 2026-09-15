@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from services.ai_setup.version_store import read_published_pointer
-from services.job_queue import QueueName
+from services.queues.job_queue import QueueName
 
 log = logging.getLogger("customer_ai.index_schedule")
 
@@ -35,7 +35,7 @@ def enqueue_tenant_index(tenant_id: str, *, revision: str = "", reason: str = "p
     if not rev:
         return {"ready": False, "reason": "unpublished", "queued": False, "health": "NO_INDEX", "count": 0}
     from services.brain.search.index_lifecycle import mark_building, mark_stale_durable
-    from services.job_queue import job_queue
+    from services.queues.job_queue import job_queue
 
     mark_stale_durable(tid, revision=rev, reason=reason)
     mark_building(tid, revision=rev, reason=reason)

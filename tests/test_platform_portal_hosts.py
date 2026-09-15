@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.platform_portal_hosts import (
+from services.dashboard.platform_portal_hosts import (
     PLATFORM_OWNER_TENANT_ID,
     cors_public_origins,
     hostname_from_header,
@@ -29,7 +29,7 @@ def test_portal_login_rejects_workspace_roles() -> None:
 
 
 def test_cookie_login_rejects_marketing_host() -> None:
-    from services.platform_portal_hosts import cookie_login_error
+    from services.dashboard.platform_portal_hosts import cookie_login_error
 
     assert cookie_login_error("www.linasaibot.com", "admin")
     assert cookie_login_error("www.linasaibot.com", "platform_owner")

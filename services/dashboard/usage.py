@@ -7,8 +7,8 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
 
-from services.interaction_flow_logger import FLOW_LOG_FILE, _tail_lines
-from services.wallet_spend_analytics import _entry_matches_tenant, _parse_ts
+from services.billing.wallet_spend_analytics import _entry_matches_tenant, _parse_ts
+from services.owner_copilot.interaction_flow_logger import FLOW_LOG_FILE, _tail_lines
 from storage.persistent_storage import ACTIVITY_FLOW_FILE
 
 _USAGE_MAX_BYTES = 8 * 1024 * 1024

@@ -125,14 +125,14 @@ class WebChatCreditHandle:
     def _reservation_is_open(self) -> bool:
         if not self.reservation_id or is_message_reservation(self.reservation_id):
             return False
-        from services.credit_ledger_service import credit_ledger_service
+        from services.billing.credit_ledger_service import credit_ledger_service
 
         return credit_ledger_service.reservation_terminal(self.tenant_id, self.reservation_id) is None
 
     def reconcile_existing_reservation(self) -> str | None:
         if followup_uses_message_ledger() or is_message_reservation(self.reservation_id):
             return None
-        from services.credit_ledger_service import credit_ledger_service
+        from services.billing.credit_ledger_service import credit_ledger_service
 
         return credit_ledger_service.find_open_reservation_by_request(self.tenant_id, self.request_id)
 
@@ -156,7 +156,7 @@ class WebChatCreditHandle:
             self.state = CreditFsmState.RESERVED
             self._index_open()
             return
-        from services.credit_ledger_service import credit_ledger_service
+        from services.billing.credit_ledger_service import credit_ledger_service
 
         self.reservation_id = credit_ledger_service.reserve(
             tenant_id=self.tenant_id,
@@ -177,7 +177,7 @@ class WebChatCreditHandle:
             self.state = CreditFsmState.CAPTURED
             self.reservation_id = None
             return
-        from services.credit_ledger_service import credit_ledger_service
+        from services.billing.credit_ledger_service import credit_ledger_service
 
         reserved = self.reservation_id
         credit_ledger_service.capture(
@@ -217,7 +217,7 @@ class WebChatCreditHandle:
             self.reservation_id = None
             self._released_once = True
             return True
-        from services.credit_ledger_service import credit_ledger_service
+        from services.billing.credit_ledger_service import credit_ledger_service
 
         reserved = self.reservation_id
         terminal = credit_ledger_service.reservation_terminal(self.tenant_id, self.reservation_id)
@@ -279,7 +279,7 @@ class WebChatCreditHandle:
                 return self.state == CreditFsmState.CAPTURED
             except Exception:
                 return False
-        from services.credit_ledger_service import credit_ledger_service
+        from services.billing.credit_ledger_service import credit_ledger_service
 
         terminal = credit_ledger_service.reservation_terminal(self.tenant_id, self.reservation_id)
         reserved = self.reservation_id

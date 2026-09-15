@@ -9,9 +9,9 @@ import httpx
 
 import config
 from config import WHATSAPP_API_TOKEN
-from handlers.voice_handlers import handle_voice_message
 from modules.core import whatsapp_api_client
 from modules.webhook_handlers_dedupe import await_whatsapp_delayed_processing
+from services.brain.inbound.voice_handlers import handle_voice_message
 from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
 from services.saas_no_boc import log_report_event
 

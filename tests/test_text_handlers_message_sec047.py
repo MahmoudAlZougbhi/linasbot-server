@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import config
-from handlers.text_handlers_message import handle_message
+from services.brain.inbound.text_handlers_message import handle_message
 
 _FORBIDDEN_LOG_PATTERNS = (
     "phone_number from user_data",
@@ -20,7 +20,7 @@ _FORBIDDEN_LOG_PATTERNS = (
 
 
 def test_text_handlers_message_source_excludes_sec047_debug_patterns() -> None:
-    source = Path("handlers/text_handlers_message.py").read_text(encoding="utf-8")
+    source = Path("services/brain/inbound/text_handlers_message.py").read_text(encoding="utf-8")
     for pattern in _FORBIDDEN_LOG_PATTERNS:
         assert pattern not in source, f"forbidden log pattern still present: {pattern!r}"
 
@@ -50,14 +50,14 @@ async def test_session_greeting_send_has_task_local_semantic_purpose(
     async def noop(*_args: object, **_kwargs: object) -> None:
         return None
 
-    monkeypatch.setattr("handlers.text_handlers_message._delayed_process_messages", noop)
+    monkeypatch.setattr("services.brain.inbound.text_handlers_message._delayed_process_messages", noop)
     monkeypatch.setattr(
-        "handlers.text_handlers_message.maybe_send_takeover_autoreply",
+        "services.brain.inbound.text_handlers_message.maybe_send_takeover_autoreply",
         AsyncMock(return_value=False),
     )
-    monkeypatch.setattr("handlers.text_handlers_message.get_firestore_db", lambda: None)
+    monkeypatch.setattr("services.brain.inbound.text_handlers_message.get_firestore_db", lambda: None)
     monkeypatch.setattr(
-        "handlers.text_handlers_message.sentiment_service.analyze_sentiment",
+        "services.brain.inbound.text_handlers_message.sentiment_service.analyze_sentiment",
         lambda **_: {"sentiment": "neutral"},
     )
     monkeypatch.setattr(config, "AI_PRIMARY_ORCHESTRATION", False)
@@ -122,24 +122,24 @@ async def test_handle_message_does_not_log_phone_or_message_preview(
         return None
 
     monkeypatch.setattr(
-        "handlers.text_handlers_message.save_conversation_message_to_firestore",
+        "services.brain.inbound.text_handlers_message.save_conversation_message_to_firestore",
         noop_save,
     )
     monkeypatch.setattr(
-        "handlers.text_handlers_message._delayed_process_messages",
+        "services.brain.inbound.text_handlers_message._delayed_process_messages",
         AsyncMock(return_value=None),
     )
     monkeypatch.setattr(
-        "handlers.text_handlers_message.maybe_send_takeover_autoreply",
+        "services.brain.inbound.text_handlers_message.maybe_send_takeover_autoreply",
         AsyncMock(return_value=False),
     )
-    monkeypatch.setattr("handlers.text_handlers_message.get_firestore_db", lambda: None)
+    monkeypatch.setattr("services.brain.inbound.text_handlers_message.get_firestore_db", lambda: None)
     monkeypatch.setattr(
-        "handlers.text_handlers_message.get_canonical_user_id_and_phone",
+        "services.brain.inbound.text_handlers_message.get_canonical_user_id_and_phone",
         lambda uid, phone: (uid, phone),
     )
     monkeypatch.setattr(
-        "handlers.text_handlers_message.sentiment_service.analyze_sentiment",
+        "services.brain.inbound.text_handlers_message.sentiment_service.analyze_sentiment",
         lambda **_: {"sentiment": "neutral"},
     )
     monkeypatch.setattr(config, "AI_PRIMARY_ORCHESTRATION", True)

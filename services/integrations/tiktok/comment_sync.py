@@ -59,7 +59,7 @@ def persist_comment_page_cursor(*, page_number: int, page_limit: int, has_more: 
 
 def enqueue_tiktok_comment_ai(*, tenant_id: str, connection_id: str, comment_id: str, item_id: str) -> None:
     from services.integrations.omnichannel.queues import physical_queue_for
-    from services.job_queue import job_queue
+    from services.queues.job_queue import job_queue
 
     job_queue.enqueue(
         queue=physical_queue_for("comments"),  # type: ignore[arg-type]

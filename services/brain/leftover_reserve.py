@@ -54,7 +54,7 @@ def reserve_leftover_reply(
 ) -> str | None:
     if not tenant_id or not request_id:
         return None
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     reservation_id = credit_ledger_service.reserve(
         tenant_id=tenant_id,
@@ -145,7 +145,7 @@ def release_leftover_reply(tenant_id: str, reservation_id: str | None) -> None:
     if not tenant_id or not reservation_id:
         return
     try:
-        from services.credit_ledger_service import credit_ledger_service
+        from services.billing.credit_ledger_service import credit_ledger_service
 
         credit_ledger_service.release(tenant_id=tenant_id, reservation_id=reservation_id)
         complete_leftover_release(tenant_id, reservation_id)
@@ -210,7 +210,7 @@ def capture_leftover_reply(
         return False
     op = operation_id or reservation_id
     try:
-        from services.credit_ledger_service import credit_ledger_service
+        from services.billing.credit_ledger_service import credit_ledger_service
 
         credit_ledger_service.capture(
             tenant_id=tenant_id,

@@ -22,7 +22,7 @@ from typing import Any
 import httpx
 import jwt
 
-from services.iap_product_catalog import APPLE_BUNDLE_ID
+from services.billing.iap_product_catalog import APPLE_BUNDLE_ID
 
 PROD_BASE = "https://api.storekit.itunes.apple.com"
 SANDBOX_BASE = "https://api.storekit-sandbox.itunes.apple.com"

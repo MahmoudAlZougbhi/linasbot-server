@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
-from handlers import photo_handlers
+from services.ai_setup.ai_usage_limits import AiUsageLimitsService
 from services.ai_setup.capability_gates import human_handoff_enabled, image_analysis_enabled, voice_processing_enabled
-from services.ai_usage_limits import AiUsageLimitsService
-from services.auth_email_tokens import AuthEmailTokenRecord, AuthEmailTokenService
-from services.wallet_spend_analytics import _entry_matches_tenant, build_wallet_spend_analytics
+from services.auth.auth_email_tokens import AuthEmailTokenRecord, AuthEmailTokenService
+from services.billing.wallet_spend_analytics import _entry_matches_tenant, build_wallet_spend_analytics
+from services.brain.inbound import photo_handlers
 
 
 @pytest.mark.asyncio

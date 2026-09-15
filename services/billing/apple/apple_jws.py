@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives.asymmetric.ec import ECDSA, EllipticCurvePub
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.x509.oid import NameOID
 
-from services.iap_product_catalog import APPLE_BUNDLE_ID
+from services.billing.iap_product_catalog import APPLE_BUNDLE_ID
 
 # Apple Root CA - G3 (public root). Used to anchor App Store Server JWS x5c chains.
 _APPLE_ROOT_CA_G3_PEM = b"""-----BEGIN CERTIFICATE-----

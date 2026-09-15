@@ -10,8 +10,8 @@ from typing import Any
 
 import pytest
 
-import services.outbound_turn_idempotency as turn_claims
 import services.scale.inbound_event_store as event_store
+import services.scale.outbound_turn_idempotency as turn_claims
 from services.scale.inbound_event_reconcile import reconcile_stuck_inbound_events
 from services.scale.inbound_event_store import (
     InboundEventRecord,
@@ -135,8 +135,8 @@ def _event(event_id: str, *, state: str = "accepted", attempts: int = 0) -> Inbo
 
 @pytest.fixture()
 def ha_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, _Firestore]:
-    import services.durable_event_claim as durable_claims
-    import services.job_queue as job_queue_module
+    import services.queues.job_queue as job_queue_module
+    import services.scale.durable_event_claim as durable_claims
     import utils.utils
 
     root = tmp_path / "inbound_events"
@@ -153,7 +153,7 @@ def ha_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, _Fi
         "job_queue",
         SimpleNamespace(backend="in_process", production_ready=False),
     )
-    monkeypatch.setattr("services.ai_reply_turn_runtime.pending_delivery_for_claim", lambda _basis: None)
+    monkeypatch.setattr("services.brain.ai_reply.ai_reply_turn_runtime.pending_delivery_for_claim", lambda _basis: None)
     return root, db
 
 

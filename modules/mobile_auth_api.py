@@ -9,8 +9,8 @@ from pydantic import BaseModel, Field
 
 from modules.api_security import require_session
 from modules.core import app
-from services.dashboard_session_service import DEFAULT_SESSION_TTL_SECONDS, session_service
-from services.mobile_refresh_token_service import mobile_refresh_token_service
+from services.auth.mobile_refresh_token_service import mobile_refresh_token_service
+from services.dashboard.dashboard_session_service import DEFAULT_SESSION_TTL_SECONDS, session_service
 from services.team.user_service import user_service
 
 

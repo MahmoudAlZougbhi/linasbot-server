@@ -36,7 +36,7 @@ class _FakeResponse:
 def guest_client(tmp_path: Path):
     import modules.guest_ai_api  # noqa: F401
     from modules.core import app
-    from services.guest_chat_store import GuestChatStore
+    from services.guest.guest_chat_store import GuestChatStore
 
     store = GuestChatStore(root=tmp_path / "guest_chat")
 
@@ -79,8 +79,8 @@ def guest_client(tmp_path: Path):
     )()
 
     with patch("modules.guest_ai_api.guest_chat_store", store):
-        with patch("services.guest_chat_store.guest_chat_store", store):
-            with patch("services.llm_core_service.client", fake_client):
+        with patch("services.guest.guest_chat_store.guest_chat_store", store):
+            with patch("services.brain.llm_core_service.client", fake_client):
                 yield TestClient(app), store
 
 
@@ -169,8 +169,8 @@ def test_guest_question_limit_and_no_tools(guest_client):
 
 @pytest.mark.asyncio
 async def test_compose_guest_reply_uses_llm_not_canned_pitch():
-    from services.guest_ai_service import FORBIDDEN_GUEST_TOOLS, compose_guest_reply
-    from services.model_policy import MODEL_OWNER_SOL
+    from services.brain.model_policy import MODEL_OWNER_SOL
+    from services.guest.guest_ai_service import FORBIDDEN_GUEST_TOOLS, compose_guest_reply
 
     async def _create(**kwargs: Any) -> _FakeResponse:
         assert kwargs.get("messages")
@@ -187,7 +187,7 @@ async def test_compose_guest_reply_uses_llm_not_canned_pitch():
         (),
         {"chat": type("Ch", (), {"completions": type("Co", (), {"create": AsyncMock(side_effect=_create)})()})()},
     )()
-    with patch("services.llm_core_service.client", fake):
+    with patch("services.brain.llm_core_service.client", fake):
         result = await compose_guest_reply("Explain AI Setup", language="en")
     assert result["tools_used"] == []
     assert FORBIDDEN_GUEST_TOOLS
@@ -231,7 +231,7 @@ def test_guest_llm_failure_surfaces_error_no_canned_fallback(guest_client):
     boom = type(
         "C", (), {"chat": type("Ch", (), {"completions": type("Co", (), {"create": staticmethod(_boom)})()})()}
     )()
-    with patch("services.llm_core_service.client", boom):
+    with patch("services.brain.llm_core_service.client", boom):
         r = client.post(
             "/api/guest-ai/session/messages",
             json={"guest_session_id": sid, "content": "What is Linas?"},
@@ -250,7 +250,7 @@ def test_guest_llm_failure_surfaces_error_no_canned_fallback(guest_client):
 @pytest.mark.asyncio
 async def test_guest_llm_uses_gpt5_safe_params_not_legacy_max_tokens():
     """gpt-5-mini rejects max_tokens + non-default temperature (prod BadRequest root cause)."""
-    from services.guest_ai_service import compose_guest_reply
+    from services.guest.guest_ai_service import compose_guest_reply
 
     captured: dict[str, Any] = {}
 
@@ -263,7 +263,7 @@ async def test_guest_llm_uses_gpt5_safe_params_not_legacy_max_tokens():
         (),
         {"chat": type("Ch", (), {"completions": type("Co", (), {"create": AsyncMock(side_effect=_create)})()})()},
     )()
-    with patch("services.llm_core_service.client", fake):
+    with patch("services.brain.llm_core_service.client", fake):
         with patch.dict("os.environ", {"LINAS_GUEST_MODEL": "gpt-5-mini"}, clear=False):
             result = await compose_guest_reply("How do Instagram DMs work?", language="en")
     assert "Instagram" in result["reply_text"]
@@ -278,8 +278,8 @@ async def test_guest_llm_uses_gpt5_safe_params_not_legacy_max_tokens():
 @pytest.mark.asyncio
 async def test_compose_guest_reply_default_sol_low_reasoning():
     """Default guest path uses Sol + explicit low reasoning (text-only, no tool clamp)."""
-    from services.guest_ai_service import GUEST_REASONING_EFFORT, compose_guest_reply, guest_model_name
-    from services.model_policy import MODEL_OWNER_SOL
+    from services.brain.model_policy import MODEL_OWNER_SOL
+    from services.guest.guest_ai_service import GUEST_REASONING_EFFORT, compose_guest_reply, guest_model_name
 
     captured: dict[str, Any] = {}
 
@@ -292,7 +292,7 @@ async def test_compose_guest_reply_default_sol_low_reasoning():
         (),
         {"chat": type("Ch", (), {"completions": type("Co", (), {"create": AsyncMock(side_effect=_create)})()})()},
     )()
-    with patch("services.llm_core_service.client", fake):
+    with patch("services.brain.llm_core_service.client", fake):
         with patch.dict("os.environ", {}, clear=False):
             os.environ.pop("LINAS_GUEST_MODEL", None)
             result = await compose_guest_reply("What is Linas?", language="en")
@@ -303,7 +303,7 @@ async def test_compose_guest_reply_default_sol_low_reasoning():
 
 
 def test_build_chat_completion_kwargs_gpt5_vs_legacy():
-    from services.llm_core_service import build_chat_completion_kwargs
+    from services.brain.llm_core_service import build_chat_completion_kwargs
 
     gpt5 = build_chat_completion_kwargs(
         model="gpt-5-mini",
@@ -381,8 +381,8 @@ def test_guest_rejects_image_attachments(guest_client):
 
 
 def test_guest_system_prompt_is_product_only():
-    from services.guest_ai_service import build_guest_system_prompt
-    from services.response_formatting import RESPONSE_FORMATTING_RULES
+    from services.guest.guest_ai_service import build_guest_system_prompt
+    from services.owner_copilot.response_formatting import RESPONSE_FORMATTING_RULES
 
     prompt = build_guest_system_prompt(language="en", knowledge_block="")
     assert "ONLY Linas AI the product" in prompt or "explain ONLY Linas AI" in prompt
@@ -395,7 +395,7 @@ def test_guest_system_prompt_is_product_only():
 
 
 def test_estimate_guest_tokens_helper():
-    from services.guest_chat_limits import estimate_guest_tokens, tokens_ok
+    from services.guest.guest_chat_limits import estimate_guest_tokens, tokens_ok
 
     assert estimate_guest_tokens("") == 0
     assert estimate_guest_tokens("abcd") == 1

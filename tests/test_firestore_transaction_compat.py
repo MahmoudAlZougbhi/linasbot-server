@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.firestore_transaction_compat import run_firestore_transaction
+from services.scale.firestore_transaction_compat import run_firestore_transaction
 from tests.meta_compliance_helpers import (
     _FakeFirestore,
     _GoogleLikeFirestore,

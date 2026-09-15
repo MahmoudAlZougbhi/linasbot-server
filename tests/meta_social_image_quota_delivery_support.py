@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 
 import config
-from services import social_messaging_processor as processor
 from services.integrations.meta.meta_messaging import MetaMessagingSettings
+from services.integrations.social import social_messaging_processor as processor
 from tests.meta_compliance_helpers import _FakeFirestore
 
 
@@ -83,7 +83,7 @@ def _text_event() -> dict[str, Any]:
 
 @pytest.fixture()
 def runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[_FakeFirestore]:
-    import services.ai_limits_enforcement as limits
+    import services.ai_setup.ai_limits_enforcement as limits
     import utils.utils
 
     db = _FakeFirestore()
@@ -97,11 +97,11 @@ def runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[_FakeFirestore]:
         return None
 
     monkeypatch.setattr(processor, "get_user_state_from_firestore", restore)
-    monkeypatch.setattr("services.social_customer_name.save_user_name_to_firestore", persist_name)
+    monkeypatch.setattr("services.integrations.social.social_customer_name.save_user_name_to_firestore", persist_name)
     quota_calls: list[bool] = []
 
     def enforce(**kwargs: Any) -> Any:
-        from services.ai_usage_limits import QuotaDecision
+        from services.ai_setup.ai_usage_limits import QuotaDecision
 
         quota_calls.append(bool(kwargs["consume"]))
         if getattr(db, "quota_mode", "truncated") == "allowed":

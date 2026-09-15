@@ -10,7 +10,7 @@ from sqlalchemy import select
 from db.models.apple_billing import AppleTransactionRow
 from db.session import whatsapp_session
 from services.billing.apple.apple_jws import sha256_hex
-from services.iap_product_catalog import APPLE_BUNDLE_ID
+from services.billing.iap_product_catalog import APPLE_BUNDLE_ID
 
 
 def _ms(value: Any) -> int | None:

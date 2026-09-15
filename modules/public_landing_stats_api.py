@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from modules.core import app
-from services.public_landing_stats import collect_public_landing_stats
+from services.dashboard.public_landing_stats import collect_public_landing_stats
 
 
 @app.get("/api/public/landing-stats")

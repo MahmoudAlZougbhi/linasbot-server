@@ -103,7 +103,7 @@ def test_requeue_one_does_not_claim_when_ingress_job_live(monkeypatch: pytest.Mo
     def boom(*_args, **_kwargs):
         raise AssertionError("watchdog claimed while ingress job still live")
 
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event_handle", boom)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event_handle", boom)
 
     assert _requeue_one_stuck(rec)["action"] == "ingress_job_live"  # type: ignore[arg-type]
 

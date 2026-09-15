@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import HTTPException, Request
 
 from modules.api_security import require_permission, user_has_permission
-from services.dashboard_session_service import SessionRecord
+from services.dashboard.dashboard_session_service import SessionRecord
 from services.requests.constants import (
     PERM_REQUESTS,
     PERM_REQUESTS_MANAGE,

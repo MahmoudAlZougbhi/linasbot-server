@@ -362,7 +362,7 @@ async def _publish_actions(*, tenant_id: str, actor: str) -> None:
             code="PUBLISH_BLOCKED",
         ) from exc
     except Exception as exc:
-        from services.ha_cm_peer_replicate import HaCmPeerReplicateError
+        from services.scale.ha_cm_peer_replicate import HaCmPeerReplicateError
 
         if isinstance(exc, HaCmPeerReplicateError):
             raise ChannelToggleError(

@@ -269,7 +269,7 @@ async def interpret_and_patch(
     use_llm: bool = True,
 ) -> dict[str, Any]:
     """Apply a user turn to the current setup section (same draft SoT as manual UI)."""
-    from services.token_metering import assert_tenant_can_use_ai, debit_ai_usage
+    from services.billing.token_metering import assert_tenant_can_use_ai, debit_ai_usage
 
     assert_tenant_can_use_ai(tenant_id)
     state = load_setup_state(tenant_id, user_id)
@@ -355,15 +355,15 @@ async def interpret_and_patch(
 
 def _setup_llm_model() -> str:
     """AI Setup chat uses gpt-5.6-sol (owner policy)."""
-    from services.model_policy import owner_model_id
+    from services.brain.model_policy import owner_model_id
 
     return owner_model_id()
 
 
 async def _llm_patch(*, tenant_id: str, section: str, message: str) -> tuple[dict[str, Any], dict[str, Any]]:
     """Ask the model for a JSON patch only — validated by apply_section_patch."""
-    from services.llm_core_service import build_chat_completion_kwargs, client
-    from services.model_policy import emit_model_policy_trace, resolve_owner_policy
+    from services.brain.llm_core_service import build_chat_completion_kwargs, client
+    from services.brain.model_policy import emit_model_policy_trace, resolve_owner_policy
 
     policy = resolve_owner_policy(surface="owner_setup", mutation_hint=True, user_text=message)
     model = _setup_llm_model()

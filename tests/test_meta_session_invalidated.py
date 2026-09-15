@@ -16,8 +16,8 @@ from services.integrations.meta.meta_session_invalidated import (
     mark_if_session_invalidated,
     probe_binding_session,
 )
+from services.integrations.mobile_integrations_display import enrich_mobile_integration_row
 from services.integrations.omnichannel.meta_errors import MetaProviderError
-from services.mobile_integrations_display import enrich_mobile_integration_row
 from tests.meta_app_registry_helpers import _credential
 
 INSTAGRAM_ID = "17840000999900011"
@@ -202,10 +202,10 @@ def test_display_shows_needs_reconnect_after_password_change(
     binding = _instagram_binding(registry, tenant_id="linas")
     registry.mark_binding_session_invalidated(binding.binding_id)
     monkeypatch.setattr(
-        "services.mobile_integrations_display.canonical_channel_bindings",
+        "services.integrations.mobile_integrations_display.canonical_channel_bindings",
         lambda tenant_id, platform: [],
     )
-    monkeypatch.setattr("services.mobile_integrations_display.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.mobile_integrations_display.get_meta_app_registry", lambda: registry)
 
     enriched = enrich_mobile_integration_row(
         {

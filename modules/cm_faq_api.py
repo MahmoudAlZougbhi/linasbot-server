@@ -20,7 +20,7 @@ from services.ai_setup.faq_integration import (
     replace_cm_faq_attachments,
     update_cm_faq_variant,
 )
-from services.dashboard_session_service import SessionRecord
+from services.dashboard.dashboard_session_service import SessionRecord
 
 
 def _actor(session: Any) -> str:

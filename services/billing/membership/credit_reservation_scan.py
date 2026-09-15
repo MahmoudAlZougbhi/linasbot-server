@@ -73,7 +73,7 @@ def known_credit_tenant_ids() -> list[str]:
         pass
     try:
         from services.billing.billing_backend import billing_uses_postgres, require_billing_pg_session
-        from services.credit_ledger_pg_store import list_reserve_tenant_ids
+        from services.billing.credit_ledger_pg_store import list_reserve_tenant_ids
 
         if billing_uses_postgres():
             with require_billing_pg_session() as session:
@@ -156,7 +156,7 @@ def _open_from_pg(tenant_id: str) -> list[dict[str, str]] | None:
         if not billing_uses_postgres():
             return None
         from services.billing.billing_backend import require_billing_pg_session
-        from services.credit_ledger_pg_store import list_open_leftover_reservations
+        from services.billing.credit_ledger_pg_store import list_open_leftover_reservations
 
         with require_billing_pg_session() as session:
             return list_open_leftover_reservations(session, tenant_id)

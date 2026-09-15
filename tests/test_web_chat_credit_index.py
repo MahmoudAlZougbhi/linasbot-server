@@ -37,7 +37,7 @@ def test_web_chat_reserve_capture_indexes_leftover(monkeypatch) -> None:
     reset_leftover_pins_for_tests()
     reset_pending_settlements_for_tests()
     ledger = _Ledger()
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     monkeypatch.setattr("services.integrations.web_chat.credit_fsm.followup_uses_message_ledger", lambda: False)
     handle = WebChatCreditHandle(
         tenant_id="shop",
@@ -62,7 +62,7 @@ def test_web_chat_release_closes_index(monkeypatch) -> None:
     reset_leftover_pins_for_tests()
     reset_pending_settlements_for_tests()
     ledger = _Ledger()
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     monkeypatch.setattr("services.integrations.web_chat.credit_fsm.followup_uses_message_ledger", lambda: False)
     handle = WebChatCreditHandle(tenant_id="shop", reservation_id=None, request_id="web:idx:2")
     handle.reserve()

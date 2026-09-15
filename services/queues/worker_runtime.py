@@ -80,7 +80,7 @@ class WorkerRuntime:
         reservation_id = job.reservation_id or str((job.payload or {}).get("reservation_id") or "")
         if not reservation_id:
             return
-        from services.credit_ledger_service import credit_ledger_service
+        from services.billing.credit_ledger_service import credit_ledger_service
 
         credit_ledger_service.release(tenant_id=job.tenant_id, reservation_id=reservation_id)
 

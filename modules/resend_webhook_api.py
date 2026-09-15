@@ -8,8 +8,8 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from modules.core import app
-from services.email_delivery_store import email_delivery_store
-from services.resend_webhook_verify import WebhookSignatureError, verify_resend_webhook
+from services.email.email_delivery_store import email_delivery_store
+from services.email.resend_webhook_verify import WebhookSignatureError, verify_resend_webhook
 
 
 @app.post("/api/webhooks/resend")

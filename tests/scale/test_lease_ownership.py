@@ -150,7 +150,11 @@ def test_duplicate_reclaim_only_one_owner(monkeypatch) -> None:
 
 def test_worker_dies_after_ai_saved_reply_is_reused(monkeypatch) -> None:
     backend = _backend(monkeypatch)
-    from services.ai_reply_lifecycle import begin_turn, find_pending_delivery_turn, persist_generated_reply
+    from services.brain.ai_reply.ai_reply_lifecycle import (
+        begin_turn,
+        find_pending_delivery_turn,
+        persist_generated_reply,
+    )
     from services.scale.turn_store import set_turn_redis_for_tests
 
     set_turn_redis_for_tests(backend._r)

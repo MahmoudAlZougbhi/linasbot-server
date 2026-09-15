@@ -14,7 +14,6 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 import config
-from handlers.text_handlers import handle_message
 from modules.core import app
 from modules.webhook_handlers_dedupe import (  # noqa: F401
     _PROCESS_PARSED_MID_TTL_SECONDS,
@@ -54,6 +53,7 @@ from modules.webhook_handlers_process import (  # noqa: F401
     start_command_whatsapp,
 )
 from modules.webhook_handlers_voice import handle_voice_message_whatsapp_with_adapter  # noqa: F401
+from services.brain.inbound.text_handlers import handle_message
 from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
 
 # Debug: last webhook received/parsed (for /api/debug/webhook-status)

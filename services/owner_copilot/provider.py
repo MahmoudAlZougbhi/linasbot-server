@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from services.model_policy import ModelPolicyDecision, emit_model_policy_trace, resolve_owner_policy
+from services.brain.model_policy import ModelPolicyDecision, emit_model_policy_trace, resolve_owner_policy
 from services.owner_copilot.flags import owner_max_output_tokens, owner_model_name
 
 CancelCheck = Callable[[], bool]
@@ -41,7 +41,7 @@ async def sol_chat_completion(
     stream: bool = False,
     policy: ModelPolicyDecision | None = None,
 ) -> Any:
-    from services.llm_core_service import build_chat_completion_kwargs, client
+    from services.brain.llm_core_service import build_chat_completion_kwargs, client
     from services.owner_copilot.tool_schemas import OWNER_V2_TOOL_SCHEMAS
 
     decision = policy or resolve_owner_policy(surface="owner_copilot")

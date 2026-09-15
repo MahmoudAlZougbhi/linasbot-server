@@ -55,7 +55,7 @@ Only remaining open items are the three **USER-EXCLUDED** knowledge-architecture
 
 ### Pre-push cleanup (this commit)
 
-1. **Python typing:** Removed `# type: ignore` in `services/durable_event_claim.py` by capturing `SERVER_TIMESTAMP` / `db` in the import try-scope (no `cast(Any)`, no ignore). Replaced OpenAI `cast(Any, …)` call sites with `ChatCompletionMessageParam` / `ChatCompletionToolParam` / `ResponseFormatJSONObject`. Social processor calls `handle_message(...)` with explicit kwargs. Active scope has **zero** `# type: ignore` and **zero** `cast(Any, …)`.
+1. **Python typing:** Removed `# type: ignore` in `services/scale/durable_event_claim.py` by capturing `SERVER_TIMESTAMP` / `db` in the import try-scope (no `cast(Any)`, no ignore). Replaced OpenAI `cast(Any, …)` call sites with `ChatCompletionMessageParam` / `ChatCompletionToolParam` / `ResponseFormatJSONObject`. Social processor calls `handle_message(...)` with explicit kwargs. Active scope has **zero** `# type: ignore` and **zero** `cast(Any, …)`.
 2. **Frontend lint:** `eslint . --max-warnings 0` → 0/0 (unused imports, entities, hook deps, dead handlers cleaned without rule disables).
 3. **Frontend typecheck:** Added `dashboard/jsconfig.json` (checkJs + strict), `npm run typecheck`, domain JSDoc/`src/types/domain.d.ts`, `src/utils/apiValidate.js` validators. Wired into Quality Gates as a mandatory step. No `@ts-ignore` / `@ts-nocheck` / problem-file excludes.
 4. **Local env:** `.venv-*/` and `.venv-py311/` in `.gitignore`.

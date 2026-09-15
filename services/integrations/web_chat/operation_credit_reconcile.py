@@ -62,7 +62,7 @@ def _converge_terminal_release(runtime: OperationRuntime, credit: Any, *, record
 
 def reconcile_credit_before_side_effects(runtime: OperationRuntime, credit: Any) -> OperationRecord | None:
     """Fail closed until release-pending/terminal release is reconciled; never run AI first."""
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     refresh_operation_runtime(runtime)
     record = runtime.record

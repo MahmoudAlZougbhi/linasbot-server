@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from services.ai_setup.schemas import PublishedPointer
-from services.ha_cm_peer_replicate import (
+from services.scale.ha_cm_peer_replicate import (
     HaCmPeerReplicateError,
     _remote_pointer_checksum,
     ha_cm_peer_replicate_enabled,
@@ -67,8 +67,8 @@ def test_ha_cm_peer_replicate_rsyncs_version_index_and_pointer(
             return type("R", (), {"returncode": 0, "stdout": "a" * 64, "stderr": ""})()
         return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
-    with patch("services.ha_cm_peer_replicate.subprocess.run", side_effect=fake_run):
-        with patch("services.ha_cm_peer_replicate.compute_checksum", return_value="a" * 64):
+    with patch("services.scale.ha_cm_peer_replicate.subprocess.run", side_effect=fake_run):
+        with patch("services.scale.ha_cm_peer_replicate.compute_checksum", return_value="a" * 64):
             replicate_published_cm_to_peer(
                 tenant_id=tenant,
                 pointer=PublishedPointer(
@@ -98,7 +98,7 @@ def test_remote_pointer_checksum_uses_string_path_not_posixpath_repr(
         captured["command"] = command
         return type("R", (), {"returncode": 0, "stdout": "a" * 64, "stderr": ""})()
 
-    with patch("services.ha_cm_peer_replicate.subprocess.run", side_effect=fake_run):
+    with patch("services.scale.ha_cm_peer_replicate.subprocess.run", side_effect=fake_run):
         digest = _remote_pointer_checksum("linas")
 
     assert digest == "a" * 64
@@ -124,7 +124,7 @@ def test_warm_published_cm_peer_cache_swallows_peer_error_on_postgres_backend(
     )
 
     with patch(
-        "services.ha_cm_peer_replicate.replicate_published_cm_to_peer",
+        "services.scale.ha_cm_peer_replicate.replicate_published_cm_to_peer",
         side_effect=HaCmPeerReplicateError("HA CM peer replicate pointer verify failed"),
     ):
         warm_published_cm_peer_cache(tenant_id="linas", pointer=pointer)
@@ -146,7 +146,7 @@ def test_warm_published_cm_peer_cache_reraises_peer_error_on_file_backend(
     )
 
     with patch(
-        "services.ha_cm_peer_replicate.replicate_published_cm_to_peer",
+        "services.scale.ha_cm_peer_replicate.replicate_published_cm_to_peer",
         side_effect=HaCmPeerReplicateError("HA CM peer replicate pointer verify failed"),
     ):
         with pytest.raises(HaCmPeerReplicateError):

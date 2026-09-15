@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from services.language_detection_service import language_detection_service
+from services.brain.language_detection_service import language_detection_service
 from storage.persistent_storage import QA_PAIRS_FILE, ensure_dirs
 
 QA_FILE_PATH = str(QA_PAIRS_FILE)

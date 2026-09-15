@@ -12,7 +12,7 @@ from fastapi import Query, Request
 from fastapi.responses import FileResponse, Response
 
 from modules.core import app
-from services.media_service import (
+from services.live_chat.media_service import (
     get_media_content_type,
     resolve_media_file_path,
 )

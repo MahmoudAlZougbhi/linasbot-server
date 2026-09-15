@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.token_metering import resolve_tenant_id
+from services.billing.token_metering import resolve_tenant_id
 
 
 def test_resolve_tenant_id_explicit() -> None:

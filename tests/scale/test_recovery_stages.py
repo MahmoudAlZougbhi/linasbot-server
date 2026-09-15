@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import fakeredis
 
-from services.ai_reply_lifecycle import begin_turn, get_turn, persist_generated_reply
+from services.brain.ai_reply.ai_reply_lifecycle import begin_turn, get_turn, persist_generated_reply
 from services.queues.models import QueueJob
 from services.queues.redis_backend import RedisQueueBackend
 from services.scale.delivery_ledger import begin_send, confirm_sent, mark_unknown, set_delivery_redis_for_tests

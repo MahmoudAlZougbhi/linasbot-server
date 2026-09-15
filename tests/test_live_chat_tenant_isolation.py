@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.access_channels import filter_chats_for_session
+from services.integrations.access_channels import filter_chats_for_session
 from services.live_chat.contracts import utc_now
 from services.live_chat.service import live_chat_service
 

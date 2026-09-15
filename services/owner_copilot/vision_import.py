@@ -31,7 +31,7 @@ async def _extract_via_vision(
     content: bytes,
     notes: str,
 ) -> dict[str, Any]:
-    from services.llm_core_service import build_chat_completion_kwargs, client
+    from services.brain.llm_core_service import build_chat_completion_kwargs, client
 
     b64 = base64.b64encode(content).decode("ascii")
     data_url = f"data:{mime};base64,{b64}"

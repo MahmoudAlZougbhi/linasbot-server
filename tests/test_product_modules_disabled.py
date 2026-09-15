@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from modules.api_security import DashboardAuthMiddleware
-from services.dashboard_session_service import SessionRecord
+from services.dashboard.dashboard_session_service import SessionRecord
 from services.product_features import (
     DISABLED_PRODUCT_MESSAGE,
     is_disabled_api_path,

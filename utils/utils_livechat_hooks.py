@@ -103,7 +103,7 @@ async def _update_customer_name_from_external_after_save(
 ) -> Any:
     """Update customer name from CRM in background so user message can save+broadcast first."""
     try:
-        from services.customer_identity_service import resolve_customer_from_external
+        from services.brain.customer_identity_service import resolve_customer_from_external
 
         external = await resolve_customer_from_external(normalized_phone)
         customer_name = (external.get("name") or "") if external.get("exists") else ""

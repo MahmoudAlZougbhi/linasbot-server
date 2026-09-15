@@ -1,0 +1,333 @@
+from __future__ import annotations
+
+import asyncio
+import io
+import time
+from typing import Any
+
+# Try to import pydub, handle gracefully if it fails
+try:
+    from pydub import AudioSegment
+
+    PYDUB_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: pydub not available in voice_handlers - {e}")
+    PYDUB_AVAILABLE = False
+    AudioSegment = None
+
+import config
+
+# We'll call text_handlers.handle_message directly, but need to pass all required args
+from services.brain.inbound.text_handlers import handle_message as handle_text_message_from_voice
+from services.brain.llm_core_service import client as openai_client  # Assuming this is correct
+from services.brain.reply.inbound_media import mark_inbound_attachment
+from services.dashboard.analytics_events import analytics  # 📊 ANALYTICS
+from services.scale.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
+from utils.utils import (
+    notify_human_on_whatsapp,
+    save_conversation_message_to_firestore,
+    update_voice_message_with_transcription,
+)  # NEW: Import voice update function
+
+
+async def handle_voice_message(
+    user_id: str,
+    user_name: str,
+    audio_data_bytes: io.BytesIO,
+    user_data: dict,
+    send_message_func: Any,
+    send_action_func: Any,
+    audio_url: str | None = None,
+) -> Any:
+    """
+    Handles voice messages for WhatsApp users.
+    Transcribes audio using Whisper and then passes to the text message handler.
+
+    Args:
+        audio_url:  URL of the audio file (for saving to Firestore)
+    """
+    config.user_names[user_id] = user_name  # Ensure name is updated
+
+    tenant_id = str(user_data.get("tenant_id") or "").strip()
+    if not tenant_id:
+        print("ERROR: voice handler refused — tenant_id required")
+        return
+    try:
+        from services.ai_setup.capability_gates import voice_processing_enabled
+
+        if not voice_processing_enabled(tenant_id):
+            await send_message_func(
+                user_id,
+                "Voice messages are not enabled for this business. Please send a text message.",
+            )
+            return
+    except Exception as exc:
+        print(f"[handle_voice_message] voice gate lookup failed for {tenant_id}: {exc}")
+
+    if not PYDUB_AVAILABLE:
+        await send_message_func(user_id, "عذراً، معالجة الرسائل الصوتية غير متاحة حالياً. الرجاء إرسال رسالتك نصياً.")
+        return
+
+    # ✅ NEW: Save user's voice message to Firestore with metadata
+    current_conversation_id = user_data.get("current_conversation_id")
+    source_message_id = user_data.pop("_source_message_id", None)
+    voice_metadata = {
+        "type": "voice",
+        "audio_url": audio_url,  # Save the audio URL for dashboard playback
+    }
+    if source_message_id:
+        voice_metadata["source_message_id"] = source_message_id
+    record_inbound_mid_for_ai_turn(user_data, source_message_id)
+    await save_conversation_message_to_firestore(
+        user_id,
+        "user",
+        "[رسالة صوتية]",  # Placeholder - will be updated with transcription
+        current_conversation_id,
+        user_name,
+        user_data.get("phone_number"),
+        metadata=voice_metadata,
+    )
+    user_data["current_conversation_id"] = config.user_data_whatsapp[user_id][
+        "current_conversation_id"
+    ]  # Ensure it's updated locally
+
+    # ✅ Check if human takeover is active FIRST - before processing with AI
+    from utils.utils import get_firestore_db
+
+    db = get_firestore_db()
+
+    if db and current_conversation_id:
+        try:
+            app_id_for_firestore = "linas-ai-bot-backend"
+            conv_doc_ref = (
+                db.collection("artifacts")
+                .document(app_id_for_firestore)
+                .collection("users")
+                .document(user_id)
+                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
+                .document(current_conversation_id)
+            )
+            doc_snap = await asyncio.to_thread(conv_doc_ref.get)
+
+            if doc_snap.exists:
+                conv_data = doc_snap.to_dict()
+                human_takeover_active = conv_data.get("human_takeover_active", False)
+
+                if human_takeover_active:
+                    print(
+                        f"[handle_voice_message] INFO: User {user_id} conversation {current_conversation_id} is in human takeover mode. Voice will be stored but NOT processed by AI."
+                    )
+
+                    from services.live_chat.takeover_customer_notice import customer_human_handover_notice
+
+                    user_lang = user_data.get("user_preferred_lang", "ar")
+                    handover_msg = customer_human_handover_notice(user_lang)
+
+                    # Send handover notification ONCE (only if not already notified)
+                    if not user_data.get("handover_notified_voice"):
+                        await send_message_func(user_id, handover_msg)
+                        await save_conversation_message_to_firestore(
+                            user_id,
+                            "ai",
+                            handover_msg,
+                            current_conversation_id,
+                            user_name,
+                            user_data.get("phone_number"),
+                        )
+                        user_data["handover_notified_voice"] = True
+                        config.user_data_whatsapp[user_id]["handover_notified_voice"] = True
+
+                    # Exit early - don't process with AI
+                    return
+
+        except Exception as e:
+            print(f"❌ ERROR checking human takeover status for voice message: {e}")
+
+    # Normal AI processing continues only if human takeover is NOT active
+    await send_message_func(user_id, "عم بسمع صوتك... ثواني و بكون جاهزة للرد! 🎧")
+    await send_action_func(user_id)  # Simulate typing indicator
+
+    mp3_buffer = None
+    start_time = time.time()  # 📊 Track processing time
+
+    try:
+        # pydub expects a file-like object, audio_data_bytes is already io.BytesIO
+        audio = AudioSegment.from_file(audio_data_bytes, format="ogg")  # Assuming WhatsApp sends OGG
+        audio_duration_seconds = len(audio) / 1000.0
+        from services.ai_setup.ai_limits_enforcement import (
+            customer_voice_limit_message,
+            enforce_voice_minutes_quota,
+        )
+
+        voice_quota = enforce_voice_minutes_quota(
+            user_id=user_id,
+            user_data=user_data,
+            duration_seconds=audio_duration_seconds,
+            consume=True,
+        )
+        if not voice_quota.allowed:
+            await send_message_func(user_id, customer_voice_limit_message(voice_quota))
+            return
+        allowed_ms = int(voice_quota.allowed_amount or 0) * 60 * 1000
+        if allowed_ms > 0 and len(audio) > allowed_ms:
+            audio = audio[:allowed_ms]
+            if voice_quota.customer_message:
+                await send_message_func(user_id, voice_quota.customer_message)
+
+        mp3_buffer = io.BytesIO()
+        audio.export(mp3_buffer, format="mp3")
+        mp3_buffer.seek(0)
+        mp3_buffer.name = "voice_message.mp3"  # Name is needed for openai_client.audio.transcriptions.create
+
+        transcription_response = await openai_client.audio.transcriptions.create(
+            model="gpt-4o-transcribe",
+            file=mp3_buffer,
+            language="ar",  # Assuming primary language is Arabic for transcription
+        )
+
+        user_text_input = transcription_response.text
+        print(f"👂 voice transcription ok len={len(user_text_input or '')}")
+
+        # Activity Flow: store voice pipeline metadata for multimodal flow display
+        transcription_duration_ms = (time.time() - start_time) * 1000
+        audio_duration_seconds = len(audio) / 1000.0
+        user_data["_voice_flow_meta"] = {
+            "voice_received": True,
+            "voice_downloaded": True,
+            "transcription_model": "gpt-4o-transcribe",
+            "transcription_duration_ms": round(transcription_duration_ms, 0),
+            "transcription_length": len(user_text_input),
+            "audio_duration_seconds": round(audio_duration_seconds, 2),
+            "status": "success",
+        }
+
+        # Analytics stays unpriced. Owner Costs journals pending STT without invented USD.
+        audio_duration_seconds = len(audio) / 1000.0  # pydub duration is in milliseconds
+        from services.billing.membership.provider_expense import record_pending_provider
+
+        record_pending_provider(
+            event_id=f"stt:{tenant_id}:{source_message_id or user_id[-8:]}",
+            tenant_id=tenant_id,
+            category="stt",
+            feature="inbound_media",
+            provider="openai",
+            model="gpt-4o-transcribe",
+            operation_id=str(source_message_id or "voice"),
+        )
+
+        analytics.log_message(
+            source="user",
+            msg_type="voice",
+            user_id=user_id,
+            language=user_data.get("user_preferred_lang", "ar"),
+            tokens=0,
+            cost_usd=0.0,
+            model="gpt-4o-transcribe",
+            response_time_ms=(time.time() - start_time) * 1000,
+            message_length=len(user_text_input),
+        )
+
+        # ✅ FIXED: Update the voice message with transcribed text instead of saving a new text message
+        # This ensures the Firebase message has:
+        # - type: "voice" (not "text")
+        # - audio_url: link to original audio
+        # - text: the transcribed content
+        # - transcribed: true flag
+        print(
+            "DEBUG: voice_handlers - "
+            f"current_conversation_id: {current_conversation_id}, "
+            f"has_audio_url: {bool(audio_url)}"
+        )
+        if current_conversation_id and audio_url:
+            print("✅ Calling update_voice_message_with_transcription...")
+            await update_voice_message_with_transcription(
+                user_id=user_id,
+                conversation_id=current_conversation_id,
+                audio_url=audio_url,
+                transcribed_text=user_text_input,
+                phone_number=user_data.get("phone_number"),
+            )
+        else:
+            print("⚠️ Skipping update - missing current_conversation_id or audio_url")
+
+        mark_inbound_attachment(user_data, "audio", transcript=user_text_input)
+        # ✅ FIXED: Pass skip_firestore_save flag to prevent double-saving in text_handlers
+        # The voice message is already saved and updated above
+        await handle_text_message_from_voice(
+            user_id=user_id,
+            user_name=user_name,
+            user_input_text=user_text_input,
+            user_data=user_data,
+            send_message_func=send_message_func,
+            send_action_func=send_action_func,
+            skip_firestore_save=True,  # ✅ NEW: Don't save again, we already saved above
+        )
+
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        print(f"❌ ERROR processing voice message: {e}")
+        error_reply = "🚫 آسفة، ما قدرت أفهم رسالتك الصوتية هالمرة. ممكن تعيدها أو تكتبها؟ 🙏"
+        await send_message_func(user_id, error_reply)
+        # NEW: Save error reply to Firestore
+        await save_conversation_message_to_firestore(
+            user_id, "ai", error_reply, user_data["current_conversation_id"], user_name, user_data.get("phone_number")
+        )
+        # Activity Flow: log voice error for visibility
+        try:
+            from services.owner_copilot.interaction_flow_logger import is_flow_logging_enabled, log_interaction
+
+            if is_flow_logging_enabled():
+                log_interaction(
+                    user_id,
+                    "[رسالة صوتية]",
+                    error_reply,
+                    "gpt",
+                    user_name=user_name,
+                    user_phone=user_data.get("phone_number"),
+                    user_gender=config.user_gender.get(user_id, "unknown"),
+                    flow_steps=[
+                        {
+                            "step": 1,
+                            "title": "Voice received",
+                            "content": "User sent voice message.",
+                            "event_type": "voice_received",
+                            "status": "success",
+                        },
+                        {
+                            "step": 2,
+                            "title": "Voice downloaded",
+                            "content": "Audio prepared for transcription.",
+                            "event_type": "voice_downloaded",
+                            "status": "success",
+                        },
+                        {
+                            "step": 3,
+                            "title": "Transcription failed",
+                            "content": str(e),
+                            "event_type": "error",
+                            "status": "error",
+                        },
+                        {
+                            "step": 4,
+                            "title": "Bot → User (fallback)",
+                            "content": error_reply,
+                            "event_type": "fallback_triggered",
+                        },
+                    ],
+                    flow_error=str(e),
+                    message_type="voice",
+                )
+        except Exception as log_err:
+            print(f"⚠️ Could not log voice error to Activity Flow: {log_err}")
+        notify_human_on_whatsapp(
+            user_name,
+            config.user_gender.get(user_id, "غير محدد"),
+            f"فشل معالجة رسالة صوتية من: {user_name}. الخطأ: {e}",
+            type_of_notification="خطأ رسالة صوتية",
+        )
+    finally:
+        if mp3_buffer:
+            mp3_buffer.close()
+        print("💡 Voice message processing cleanup complete.")

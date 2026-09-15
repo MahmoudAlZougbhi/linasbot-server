@@ -31,7 +31,7 @@ def test_seed_uses_postgres_even_when_open_list_is_empty(tmp_path, monkeypatch: 
         yield object()
 
     monkeypatch.setattr("services.billing.billing_backend.require_billing_pg_session", _session)
-    monkeypatch.setattr("services.credit_ledger_pg_store.list_open_leftover_reservations", lambda *_a, **_k: [])
+    monkeypatch.setattr("services.billing.credit_ledger_pg_store.list_open_leftover_reservations", lambda *_a, **_k: [])
     rid = "e" * 32
     (ledger / "pg-sot.jsonl").write_text(
         json.dumps(

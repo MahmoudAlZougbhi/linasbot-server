@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from services.billing.plan_economics import PLAN_PRICES_USD, build_economics_report, recommend_allowance
-from services.role_assignment import RoleAssignmentError, assert_assignable_role
+from services.team.role_assignment import RoleAssignmentError, assert_assignable_role
 
 
 def test_plan_prices_fixed() -> None:

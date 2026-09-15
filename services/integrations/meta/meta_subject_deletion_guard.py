@@ -10,7 +10,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from services.firestore_transaction_compat import run_firestore_transaction
 from services.integrations.meta.meta_subject_deletion_guard_models import (
     _DEAUTHORIZATION_SAFE_FIELDS,
     _DEFAULT_DELETION_WAIT_SECONDS,
@@ -34,6 +33,7 @@ from services.integrations.meta.meta_subject_deletion_guard_store import (
     _parse_lease,
     _snapshot_dict,
 )
+from services.scale.firestore_transaction_compat import run_firestore_transaction
 
 __all__ = [
     "MetaSubjectDeletionBlockedError",

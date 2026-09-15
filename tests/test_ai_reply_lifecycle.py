@@ -6,9 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from services.ai_reply_credit_gate import capture_after_reply_persisted, release_on_ai_failure, reserve_before_ai
-from services.ai_reply_delivery import classify_send_result, record_delivery_outcome
-from services.ai_reply_lifecycle import (
+from services.billing.credit_ledger_service import CreditLedgerService
+from services.billing.entitlements_service import EntitlementsStore
+from services.brain.ai_reply.ai_reply_credit_gate import (
+    capture_after_reply_persisted,
+    release_on_ai_failure,
+    reserve_before_ai,
+)
+from services.brain.ai_reply.ai_reply_delivery import classify_send_result, record_delivery_outcome
+from services.brain.ai_reply.ai_reply_lifecycle import (
     begin_turn,
     find_pending_delivery_turn,
     get_turn,
@@ -16,19 +22,17 @@ from services.ai_reply_lifecycle import (
     persist_generated_reply,
     put_turn,
 )
-from services.billing.entitlements_service import EntitlementsStore
-from services.credit_ledger_service import CreditLedgerService
 
 
 @pytest.fixture()
 def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CreditLedgerService:
     store = EntitlementsStore(root=tmp_path / "ents")
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_pg_ops.entitlements_store", store)
     store.set_plan(tenant_id="t1", plan_id="starter", status="active", source="admin")
     ledger = CreditLedgerService(root=tmp_path / "ledger")
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     return ledger
 
 
@@ -36,7 +40,7 @@ def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CreditLedgerS
 def turn_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     turns = tmp_path / "ai_reply_turns"
     turns.mkdir(parents=True)
-    import services.ai_reply_lifecycle as lifecycle
+    import services.brain.ai_reply.ai_reply_lifecycle as lifecycle
 
     monkeypatch.setattr(lifecycle, "_store_dir", lambda: turns)
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.durable_event_claim import release_job_lock, try_acquire_job_lock
+from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
 
 
 async def run_web_chat_release_pending_reconcile_job() -> None:

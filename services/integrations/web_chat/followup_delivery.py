@@ -156,7 +156,7 @@ def _finalize_followup_billing(
     idempotency_key: str,
 ) -> tuple[bool, bool]:
     """Capture after durable visibility; returns (captured, billing_pending)."""
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
     from services.integrations.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
 
     refresh_operation_runtime(runtime)

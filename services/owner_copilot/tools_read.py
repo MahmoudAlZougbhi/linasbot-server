@@ -16,7 +16,7 @@ def _require(role: str, permission: str) -> None:
 
 async def tool_help(*, tenant_id: str, role: str, query: str = "") -> ToolResult:
     del tenant_id, role
-    from services.system_knowledge_retrieval import help_payload_for_query
+    from services.owner_copilot.system_knowledge_retrieval import help_payload_for_query
 
     return ToolResult(ok=True, name="help", data=help_payload_for_query(query))
 
@@ -131,8 +131,8 @@ async def tool_validate_cm(*, tenant_id: str, role: str) -> ToolResult:
 
 async def tool_read_usage(*, tenant_id: str, role: str) -> ToolResult:
     del role
+    from services.billing.credit_ai_gate import owner_credits_public
     from services.billing.entitlements_service import get_tenant_entitlement_public
-    from services.credit_ai_gate import owner_credits_public
     from services.dashboard.message_surface import copilot_usage_overlay
 
     plan = get_tenant_entitlement_public(tenant_id)
@@ -155,7 +155,7 @@ async def tool_read_subscription(*, tenant_id: str, role: str) -> ToolResult:
 
 async def tool_read_integrations(*, tenant_id: str, role: str) -> ToolResult:
     del role
-    from services.integration_capabilities import list_tenant_integration_status
+    from services.integrations.integration_capabilities import list_tenant_integration_status
 
     # Comments are not a product surface — do not expose comment_* caps to System Copilot.
     rows: list[dict[str, Any]] = []
@@ -171,8 +171,8 @@ async def tool_read_dashboard_metrics(*, tenant_id: str, role: str, user_id: str
     del role
     data: dict[str, Any] = {"tenant_id": tenant_id}
     try:
+        from services.billing.credit_ai_gate import owner_credits_public
         from services.billing.entitlements_service import get_tenant_entitlement_public
-        from services.credit_ai_gate import owner_credits_public
         from services.owner_copilot.account_state import compute_cm_progress, compute_integration_summary
 
         cm = compute_cm_progress(tenant_id)
@@ -212,7 +212,7 @@ async def tool_read_jobs_errors(*, tenant_id: str, role: str) -> ToolResult:
             },
         )
     try:
-        from services.job_queue import job_queue
+        from services.queues.job_queue import job_queue
 
         return ToolResult(ok=True, name="read_jobs_errors", data={"available": True, "health": job_queue.health()})
     except Exception as exc:

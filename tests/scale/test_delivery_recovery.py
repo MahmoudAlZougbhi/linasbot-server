@@ -5,8 +5,8 @@ from __future__ import annotations
 import fakeredis
 import pytest
 
-from services.ai_reply_delivery import wrap_tracked_send
-from services.ai_reply_lifecycle import (
+from services.brain.ai_reply.ai_reply_delivery import wrap_tracked_send
+from services.brain.ai_reply.ai_reply_lifecycle import (
     begin_turn,
     find_pending_delivery_turn,
     persist_generated_reply,
@@ -120,7 +120,7 @@ def test_never_sent_owner_action_is_pending_retry() -> None:
         claim_key_basis="claim-owner",
     )
     persist_generated_reply(turn.logical_reply_id, reply_text="saved facebook reply")
-    from services.ai_reply_lifecycle import get_turn, mark_state
+    from services.brain.ai_reply.ai_reply_lifecycle import get_turn, mark_state
 
     mark_state(turn.logical_reply_id, "NEEDS_OWNER_ACTION")
     stored = get_turn(turn.logical_reply_id)
@@ -139,7 +139,7 @@ def test_owner_action_with_provider_id_is_not_pending() -> None:
         claim_key_basis="claim-sent-unknown",
     )
     persist_generated_reply(turn.logical_reply_id, reply_text="already on graph")
-    from services.ai_reply_lifecycle import get_turn, mark_state
+    from services.brain.ai_reply.ai_reply_lifecycle import get_turn, mark_state
 
     mark_state(
         turn.logical_reply_id,

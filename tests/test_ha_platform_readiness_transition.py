@@ -140,7 +140,6 @@ def test_preflight_uses_target_evaluator_after_artifact_verification() -> None:
         "modules",
         "services",
         "utils",
-        "handlers",
         "storage",
         "db",
         "config.py",

@@ -91,7 +91,7 @@ def test_shutdown_drain_rejects_new_work():
 
 def test_multi_tenant_rate_limit_isolation(redis_client, monkeypatch):
     monkeypatch.setenv("RATE_LIMIT_BACKEND", "redis")
-    from services.rate_limit_service import RateLimitService
+    from services.scale.rate_limit_service import RateLimitService
 
     svc = RateLimitService(backend="redis", redis_client=redis_client)
     for _ in range(3):

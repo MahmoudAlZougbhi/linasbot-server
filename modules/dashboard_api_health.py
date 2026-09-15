@@ -17,7 +17,7 @@ def tenant_runtime_config_readiness_check() -> dict[str, Any]:
 
     tenant env for HA maintenance only — not Linas Laser product
     """
-    from services.tenant_runtime_config_backend import tenant_runtime_config_postgres_required
+    from services.tenant_runtime.tenant_runtime_config_backend import tenant_runtime_config_postgres_required
 
     if not tenant_runtime_config_postgres_required():
         return {"ok": True, "backend": "file", "required": False}
@@ -103,7 +103,7 @@ async def ready() -> Any:
 
     # Auth signing secret: required in production (and ENVIRONMENT=test); never echo value
     try:
-        from services.dashboard_session_service import get_auth_secret
+        from services.dashboard.dashboard_session_service import get_auth_secret
 
         if is_production_env() or (os.getenv("ENVIRONMENT") or "").strip().lower() == "test":
             get_auth_secret()
@@ -236,8 +236,8 @@ async def ready() -> Any:
 
     # Queue / Redis readiness — hard-fail only when LINAS_REQUIRE_REDIS (or durable queues) is on.
     try:
-        from services.job_queue import job_queue
         from services.queues.config import redis_required, redis_url
+        from services.queues.job_queue import job_queue
 
         required = redis_required()
         configured = bool(redis_url())

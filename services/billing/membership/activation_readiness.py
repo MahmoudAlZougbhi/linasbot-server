@@ -58,8 +58,8 @@ def _brain_imports() -> dict[str, bool]:
         "pending_actions": "services.brain.actions.pending",
         "followup_revalidate": "services.brain.followup.revalidate",
         "omni_hold": "services.integrations.omnichannel.message_hold",
-        "social_turn_outcome": "services.social_turn_outcome",
-        "social_customer_name": "services.social_customer_name",
+        "social_turn_outcome": "services.integrations.social.social_turn_outcome",
+        "social_customer_name": "services.integrations.social.social_customer_name",
         "hold_policy": "services.billing.membership.hold_policy",
         "durable_tables": "services.billing.membership.durable_tables",
     }

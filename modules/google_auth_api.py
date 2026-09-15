@@ -12,17 +12,17 @@ from pydantic import BaseModel, Field
 from modules.api_security import require_session
 from modules.core import app
 from modules.mobile_auth_api import issue_mobile_tokens
-from services.google_identity_service import (
+from services.auth.google_identity_service import (
     GoogleIdentityError,
     find_active_google_sub_for_user,
     find_by_google_sub,
     link_google_identity,
     unlink_google_identity,
 )
-from services.google_sign_in_service import GoogleSignInError, verify_identity_token
-from services.social_account_sign_in import is_social_only_account
+from services.auth.google_sign_in_service import GoogleSignInError, verify_identity_token
+from services.integrations.social.social_account_sign_in import is_social_only_account
+from services.team.tenant_registration_service import allocate_tenant_id
 from services.team.user_service import user_service
-from services.tenant_registration_service import allocate_tenant_id
 
 logger = logging.getLogger(__name__)
 

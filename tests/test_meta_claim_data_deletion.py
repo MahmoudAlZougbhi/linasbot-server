@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-import services.durable_event_claim as claims
+import services.scale.durable_event_claim as claims
 import services.scale.inbound_event_store as event_store
 from services.integrations.meta.meta_claim_data_deletion import (
     MetaClaimDeletionActiveError,

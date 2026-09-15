@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import time
 
-from services.conversation_router import get_gender_from_message
+from services.brain.conversation_router import get_gender_from_message
 from services.integrations.social.social_contact_routing_detect import (
     SOCIAL_BOOKING_PREFERENCE_MEMORY_PREFIX,
     SOCIAL_BOOKING_PREFERENCES_FIELD,

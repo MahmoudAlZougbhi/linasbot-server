@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from services.billing.credit_ledger_service import CreditLedgerService
 from services.billing.entitlements_service import EntitlementsStore
-from services.credit_ledger_service import CreditLedgerService
 from services.queues.models import QueueJob
 
 
@@ -14,7 +14,7 @@ def _ledger(tmp_path, monkeypatch, tenant: str = "t1", plan: str = "pro"):
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr(es, "entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", store)
     store.set_plan(tenant_id=tenant, plan_id=plan, status="active", source="admin")
     ledger = CreditLedgerService(root=tmp_path / "ledger")
     ledger.ensure_period_grant(tenant)
@@ -207,7 +207,7 @@ async def test_creative_image_handler_is_cancelled(tmp_path, monkeypatch) -> Non
 
 
 def test_iap_config_not_purchase_ready() -> None:
-    from services.store_iap_service import external_store_checklist, iap_config_status
+    from services.billing.store_iap_service import external_store_checklist, iap_config_status
 
     status = iap_config_status()
     assert status["code_ready"] is True
@@ -220,7 +220,7 @@ def test_iap_config_not_purchase_ready() -> None:
 
 
 def test_meta_capability_matrix_truthful() -> None:
-    from services.integration_capabilities import list_tenant_integration_status
+    from services.integrations.integration_capabilities import list_tenant_integration_status
 
     rows = list_tenant_integration_status("linas")
     platforms = {r["platform"] for r in rows}

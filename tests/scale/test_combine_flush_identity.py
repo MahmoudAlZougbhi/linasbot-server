@@ -35,10 +35,10 @@ def test_apply_drained_chunk_identity_uses_event_ids_when_mids_missing() -> None
 def test_ensure_turn_started_falls_back_to_inbound_event_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     turns = tmp_path / "ai_reply_turns"
     turns.mkdir()
-    import services.ai_reply_lifecycle as lifecycle
+    import services.brain.ai_reply.ai_reply_lifecycle as lifecycle
 
     monkeypatch.setattr(lifecycle, "_store_dir", lambda: turns)
-    from services.ai_reply_turn_runtime import ensure_turn_started
+    from services.brain.ai_reply.ai_reply_turn_runtime import ensure_turn_started
 
     user_data = {"tenant_id": "linas", "channel": "facebook", "_inbound_event_id": "ibe_fb_1"}
     lid = ensure_turn_started(user_data)

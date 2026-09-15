@@ -17,7 +17,7 @@ from services.queues.models import QueueJob
 
 @pytest.fixture(autouse=True)
 def _owned_claim(monkeypatch: pytest.MonkeyPatch) -> None:
-    import services.durable_event_claim as claims
+    import services.scale.durable_event_claim as claims
 
     handle = SimpleNamespace(
         owner_token="test-owner-token-" + "x" * 32,
@@ -301,8 +301,8 @@ async def test_queue_uses_snapshot_a_for_outbound_authority_with_replacement_b_c
     monkeypatch.setattr(handler, "get_inbound_event", lambda _event_id: record)
     monkeypatch.setattr(handler, "_settings_from_snapshot", lambda *_args: replacement_settings)
     monkeypatch.setattr(handler, "mark_inbound_state", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("services.social_messaging_processor.process_meta_social_event", process)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", settle)
+    monkeypatch.setattr("services.integrations.social.social_messaging_processor.process_meta_social_event", process)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", settle)
     job = QueueJob.new(
         queue="high_priority",
         job_type="meta_inbound_process",
@@ -349,8 +349,8 @@ async def test_legacy_queue_passes_record_tenant_and_synthetic_binding(
     monkeypatch.setattr(handler, "get_inbound_event", lambda _event_id: record)
     monkeypatch.setattr(handler, "_settings_from_snapshot", lambda *_args: _settings())
     monkeypatch.setattr(handler, "mark_inbound_state", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("services.social_messaging_processor.process_meta_social_event", process)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", settle)
+    monkeypatch.setattr("services.integrations.social.social_messaging_processor.process_meta_social_event", process)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", settle)
     job = QueueJob.new(
         queue="high_priority",
         job_type="meta_inbound_process",
@@ -393,8 +393,8 @@ async def test_retryable_comment_result_releases_claim_and_raises(monkeypatch: p
         handler, "mark_inbound_state", lambda event_id, **kwargs: states.append({"event_id": event_id, **kwargs})
     )
     monkeypatch.setattr("services.integrations.meta.meta_comment_replies.process_meta_comment_event", process)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", complete)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", release)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", complete)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", release)
 
     job = QueueJob.new(
         queue="high_priority",
@@ -429,8 +429,8 @@ async def test_retryable_dm_result_releases_claim_and_raises(monkeypatch: pytest
     monkeypatch.setattr(
         handler, "mark_inbound_state", lambda event_id, **kwargs: states.append({"event_id": event_id, **kwargs})
     )
-    monkeypatch.setattr("services.social_messaging_processor.process_meta_social_event", process)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", release)
+    monkeypatch.setattr("services.integrations.social.social_messaging_processor.process_meta_social_event", process)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", release)
 
     job = QueueJob.new(
         queue="high_priority",
@@ -468,8 +468,8 @@ async def test_unexpected_dm_failure_releases_claim_without_persisting_raw_error
         "mark_inbound_state",
         lambda event_id, **kwargs: states.append({"event_id": event_id, **kwargs}),
     )
-    monkeypatch.setattr("services.social_messaging_processor.process_meta_social_event", process)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", release)
+    monkeypatch.setattr("services.integrations.social.social_messaging_processor.process_meta_social_event", process)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", release)
 
     job = QueueJob.new(
         queue="high_priority",
@@ -514,9 +514,9 @@ async def test_terminal_dm_outcome_completes_without_retry(
         "mark_inbound_state",
         lambda event_id, **kwargs: states.append({"event_id": event_id, **kwargs}),
     )
-    monkeypatch.setattr("services.social_messaging_processor.process_meta_social_event", process)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", complete)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", release)
+    monkeypatch.setattr("services.integrations.social.social_messaging_processor.process_meta_social_event", process)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", complete)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", release)
 
     job = QueueJob.new(
         queue="high_priority",
@@ -551,7 +551,7 @@ async def test_sent_comment_result_completes_claim_once(monkeypatch: pytest.Monk
         handler, "mark_inbound_state", lambda event_id, **kwargs: states.append({"event_id": event_id, **kwargs})
     )
     monkeypatch.setattr("services.integrations.meta.meta_comment_replies.process_meta_comment_event", process)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", complete)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", complete)
 
     job = QueueJob.new(
         queue="high_priority",

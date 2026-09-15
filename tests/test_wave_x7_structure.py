@@ -43,7 +43,7 @@ def test_wave_x7_live_imports_use_packages() -> None:
     connections = (ROOT / "modules/meta_connections_api.py").read_text(encoding="utf-8")
     auth_api = (ROOT / "modules/apple_auth_api.py").read_text(encoding="utf-8")
     iap_api = (ROOT / "modules/apple_iap_client_api.py").read_text(encoding="utf-8")
-    notify = (ROOT / "services/human_takeover_notification_service.py").read_text(encoding="utf-8")
+    notify = (ROOT / "services/live_chat/human_takeover_notification_service.py").read_text(encoding="utf-8")
     sfu = (ROOT / "services/smart_followup/social_schedule.py").read_text(encoding="utf-8")
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
     assert "services.integrations.meta.meta_app_registry" in connections

@@ -151,10 +151,10 @@ async def test_legacy_inline_route_passes_authenticated_synthetic_tenant_and_bin
         captured.append(kwargs)
         return {"delivery": "no_text", "retryable": False, "terminal": True}
 
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event_handle", acquire)
-    monkeypatch.setattr("services.durable_event_claim.run_under_event_claim", run)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", settle)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", settle)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event_handle", acquire)
+    monkeypatch.setattr("services.scale.durable_event_claim.run_under_event_claim", run)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", settle)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", settle)
     monkeypatch.setattr(
         "services.scale.meta_ingress.persist_meta_dm_accepted",
         lambda *_args, **_kwargs: ("ibe_" + "1" * 40, True),
@@ -225,9 +225,9 @@ async def test_receiving_app_and_asset_binding_route_exactly_once(
         processed.append((settings.app_key, settings.tenant_id, str(event["message_id"])))
         return {"delivery": "delivered"}
 
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event", try_claim)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", complete)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", release)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event", try_claim)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", complete)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", release)
     monkeypatch.setattr(meta_messaging_webhook, "process_meta_social_event", process)
 
     payload = {
@@ -331,9 +331,9 @@ async def test_instagram_object_routes_only_instagram_login_binding(
         processed.append(f"{event['channel']}:{event.get('meta_auth_flow')}:{settings.page_access_token}")
         return {"delivery": "delivered"}
 
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event", claim)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", finish)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", finish)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event", claim)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", finish)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", finish)
     monkeypatch.setattr(meta_messaging_webhook, "process_meta_social_event", process)
 
     payload = {
@@ -416,9 +416,9 @@ async def test_instagram_comment_on_app_a_callback_uses_instagram_login_binding(
         processed.append(str(resolved.binding.auth_flow))
         return CommentReplyResult(status="sent", reply_id="r1")
 
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event", claim)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", finish)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", finish)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event", claim)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", finish)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", finish)
     monkeypatch.setattr(meta_messaging_webhook, "process_meta_comment_event", process_comment)
 
     payload = {
@@ -472,9 +472,9 @@ async def test_instagram_comment_dropped_when_only_facebook_login_lacks_comment_
         processed.append("ran")
         return SimpleNamespace(status="sent", reason="")
 
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event", claim)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", finish)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", finish)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event", claim)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", finish)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", finish)
     monkeypatch.setattr(meta_messaging_webhook, "process_meta_comment_event", process_comment)
 
     # configured_registry already has facebook_login IG without comment scopes.

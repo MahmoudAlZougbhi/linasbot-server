@@ -38,8 +38,8 @@ async def describe_stills(
 
 async def _describe_batch(frames: list[bytes], *, tenant_id: str, kind: str, offset: int) -> str:
     from services.billing.membership.provider_expense import record_pending_provider
+    from services.brain.llm_core_service import create_chat_completion
     from services.brain.providers.config import answer_model
-    from services.llm_core_service import create_chat_completion
 
     model = answer_model()
     record_pending_provider(

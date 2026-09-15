@@ -31,7 +31,7 @@ export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 
 export type PermissionMap = Record<PermissionKey, boolean>;
 
-/** Tenant-assignable roles (matches `services/role_assignment.py`). */
+/** Tenant-assignable roles (matches `services/team/role_assignment.py`). */
 export const ASSIGNABLE_ROLES = ['admin', 'operator', 'viewer'] as const;
 export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 

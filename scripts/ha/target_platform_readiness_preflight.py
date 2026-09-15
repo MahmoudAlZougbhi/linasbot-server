@@ -40,7 +40,6 @@ COMPACT_ARCHIVE_PATHS: tuple[str, ...] = (
     "modules",
     "services",
     "utils",
-    "handlers",
     "storage",
     "db",
     "config.py",

@@ -8,6 +8,7 @@ from fastapi import HTTPException, Query, Request
 
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 from modules.core import app
+from services.live_chat.takeover_customer_notice import public_staff_label
 from services.requests.permissions import (
     can_view_sensitive,
     require_requests_manage,
@@ -26,7 +27,6 @@ from services.requests.schemas import (
     RequestStatusBody,
 )
 from services.requests.service import CustomerRequestsError, CustomerRequestsService
-from services.takeover_customer_notice import public_staff_label
 
 
 def _tenant(session: Any) -> str:

@@ -372,9 +372,9 @@ async def test_dedicated_instagram_webhook_tracks_real_dm_delivery_outcome(
         process_kwargs.append(kwargs)
         return {"delivery": delivery, "logical_reply_id": "reply-1"}
 
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event", claim)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", complete)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", release)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event", claim)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", complete)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", release)
     monkeypatch.setattr(
         "services.scale.meta_ingress.persist_meta_dm_accepted",
         lambda *_args, **_kwargs: ("event-dedicated-1", True),
@@ -472,9 +472,9 @@ async def test_dedicated_instagram_webhook_accepts_official_direct_comment_shape
         processed.append(str(resolved.binding.auth_flow))
         return CommentReplyResult(status="sent", reply_id="reply-1")
 
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event", claim)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", complete)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", release)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event", claim)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", complete)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", release)
     monkeypatch.setattr(
         "services.scale.meta_ingress.persist_meta_comment_accepted",
         lambda *_args, **_kwargs: ("event-comment-1", True),

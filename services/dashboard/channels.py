@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from services.dashboard.status import plan_comment_entitlement
-from services.integration_capabilities import list_tenant_integration_status
 from services.integrations.channel_capability_state import capability_state, supported_platforms
+from services.integrations.integration_capabilities import list_tenant_integration_status
 
 
 def _row_for_platform(integrations: list[dict[str, Any]], platform: str) -> dict[str, Any] | None:

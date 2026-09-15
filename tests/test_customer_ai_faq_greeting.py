@@ -49,7 +49,7 @@ def test_draft_faq_is_not_served() -> None:
 
 def test_greeting_uses_existing_12h_window(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "handlers.text_handlers_message_greeting.GREETING_INACTIVITY_SECONDS",
+        "services.brain.inbound.text_handlers_message_greeting.GREETING_INACTIVITY_SECONDS",
         43200,
     )
     assert inactivity_threshold() == timedelta(hours=12)

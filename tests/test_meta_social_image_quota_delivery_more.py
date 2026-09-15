@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from services import social_messaging_processor as processor
+from services.integrations.social import social_messaging_processor as processor
 from tests.meta_compliance_helpers import _FakeFirestore
 from tests.meta_social_image_quota_delivery_support import (
     _accepted,
@@ -206,8 +206,8 @@ async def test_quota_mismatch_reservation_is_reconciled_after_deletion_fence(
     runtime: _FakeFirestore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.ai_limits_enforcement as limits
-    from services.ai_usage_limits import QuotaDecision
+    import services.ai_setup.ai_limits_enforcement as limits
+    from services.ai_setup.ai_usage_limits import QuotaDecision
     from services.integrations.meta import meta_outbound_attempts as attempts
     from services.integrations.meta.meta_claim_data_deletion import build_shared_meta_claim_deletion_plan
     from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref

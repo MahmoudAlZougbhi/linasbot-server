@@ -85,8 +85,8 @@ def test_web_live_handle_skips_credit_ledger(monkeypatch: pytest.MonkeyPatch) ->
 def test_reserve_before_ai_skips_credits_when_billing_on(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.ai_reply_credit_gate import reserve_before_ai
-    from services.ai_reply_lifecycle import begin_turn
+    from services.brain.ai_reply.ai_reply_credit_gate import reserve_before_ai
+    from services.brain.ai_reply.ai_reply_lifecycle import begin_turn
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     called = {"n": 0}
@@ -95,7 +95,7 @@ def test_reserve_before_ai_skips_credits_when_billing_on(
         called["n"] += 1
         raise AssertionError("credit reserve must not run")
 
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service.reserve", boom)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service.reserve", boom)
     turn = begin_turn(tenant_id="clinic", channel="instagram", external_inbound_id="mid-bill-1")
     with pytest.raises(PermissionError):
         reserve_before_ai(turn)
@@ -103,7 +103,7 @@ def test_reserve_before_ai_skips_credits_when_billing_on(
 
 
 def test_try_reserve_uses_messages_not_credits(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.ai_reply_turn_runtime import try_reserve_for_ai
+    from services.brain.ai_reply.ai_reply_turn_runtime import try_reserve_for_ai
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     monkeypatch.setattr("services.billing.membership.generative_gate.generative_ai_blocked", lambda _tid, **_kw: False)
@@ -113,7 +113,7 @@ def test_try_reserve_uses_messages_not_credits(monkeypatch: pytest.MonkeyPatch) 
         called["n"] += 1
         raise AssertionError("credit reserve must not run")
 
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service.reserve", boom)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service.reserve", boom)
     user_data = {"tenant_id": "clinic", "_source_message_id": "mid-bill-2", "channel": "instagram"}
     assert try_reserve_for_ai(user_data) is False
     assert called["n"] == 1
@@ -175,7 +175,7 @@ def test_live_and_preview_gates_are_wired() -> None:
     from inspect import getsource
 
     from modules import whatsapp_smart_followup_api
-    from services.ai_reply_credit_gate import reserve_before_ai
+    from services.brain.ai_reply.ai_reply_credit_gate import reserve_before_ai
     from services.integrations.web_chat.credit_fsm import WebChatCreditHandle
     from services.integrations.web_chat.processor_v2_reply import generate_web_chat_reply_text
 
@@ -191,15 +191,15 @@ def test_live_and_preview_gates_are_wired() -> None:
 
 
 def test_settle_reserved_credits_captures_or_releases(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.ai_reply_turn_runtime import settle_reserved_credits
+    from services.brain.ai_reply.ai_reply_turn_runtime import settle_reserved_credits
 
     calls: list[tuple] = []
     monkeypatch.setattr(
-        "services.ai_reply_turn_runtime.on_ai_generated",
+        "services.brain.ai_reply.ai_reply_turn_runtime.on_ai_generated",
         lambda ctx: calls.append(("gen", ctx.get("bot_reply_text"))),
     )
     monkeypatch.setattr(
-        "services.ai_reply_turn_runtime.on_ai_failed",
+        "services.brain.ai_reply.ai_reply_turn_runtime.on_ai_failed",
         lambda ctx: calls.append(("fail",)),
     )
     settle_reserved_credits({}, reply="hello")
@@ -237,7 +237,7 @@ def test_leftover_reserve_uses_credits_even_if_message_billing_env_set(
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     monkeypatch.setattr(
-        "services.credit_ledger_service.credit_ledger_service.reserve",
+        "services.billing.credit_ledger_service.credit_ledger_service.reserve",
         lambda **_kwargs: "cred-leftover-1",
     )
     monkeypatch.setattr("services.brain.leftover_reserve.remember_leftover_hold", lambda **_kwargs: None)
@@ -249,7 +249,7 @@ def test_leftover_reserve_uses_credits_even_if_message_billing_env_set(
 def test_delayed_text_settles_leftover_credits() -> None:
     from inspect import getsource
 
-    from handlers import text_handlers_delayed
+    from services.brain.inbound import text_handlers_delayed
 
     src = getsource(text_handlers_delayed._delayed_process_messages)
     assert "try_reserve_for_ai" in src
@@ -260,7 +260,7 @@ def test_delayed_text_settles_leftover_credits() -> None:
 def test_phase2_settles_cm_and_halt_paths() -> None:
     from inspect import getsource
 
-    from handlers.text_handlers_respond_phase2 import text_handlers_respond_phase2
+    from services.brain.inbound.text_handlers_respond_phase2 import text_handlers_respond_phase2
 
     src = getsource(text_handlers_respond_phase2)
     assert src.count("settle_after_outbound") >= 3

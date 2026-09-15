@@ -12,7 +12,7 @@ from services.queues.models import QueueJob
 
 @pytest.fixture(autouse=True)
 def _owned_claim(monkeypatch: pytest.MonkeyPatch) -> None:
-    import services.durable_event_claim as claims
+    import services.scale.durable_event_claim as claims
 
     handle = SimpleNamespace(
         owner_token="test-owner-token-" + "x" * 32,
@@ -72,8 +72,8 @@ async def test_combine_scheduled_keeps_event_queued(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(handler, "get_inbound_event", lambda _event_id: record)
     monkeypatch.setattr(handler, "_settings_from_snapshot", lambda *_args: SimpleNamespace())
     monkeypatch.setattr(handler, "mark_inbound_state", mark)
-    monkeypatch.setattr("services.social_messaging_processor.process_meta_social_event", process)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", settle)
+    monkeypatch.setattr("services.integrations.social.social_messaging_processor.process_meta_social_event", process)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", settle)
 
     job = QueueJob.new(
         queue="high_priority",

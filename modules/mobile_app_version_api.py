@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import Body, HTTPException
 
 from modules.core import app
-from services.mobile_app_version import InvalidAppVersionError, app_version_config, evaluate_app_version
+from services.dashboard.mobile_app_version import InvalidAppVersionError, app_version_config, evaluate_app_version
 
 
 @app.get("/api/public/app-version")

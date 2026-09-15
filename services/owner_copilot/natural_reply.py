@@ -14,7 +14,7 @@ class OwnerAIModelError(RuntimeError):
 
 def owner_help_model_name() -> str:
     """Legacy helper path — always Sol from central model policy."""
-    from services.model_policy import owner_model_id
+    from services.brain.model_policy import owner_model_id
 
     return owner_model_id()
 
@@ -62,12 +62,12 @@ async def generate_owner_conversational_reply(
             messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": text})
 
-    from services.model_policy import emit_model_policy_trace, resolve_owner_policy
+    from services.brain.model_policy import emit_model_policy_trace, resolve_owner_policy
 
     policy = resolve_owner_policy(surface="owner_chat", user_text=text, intent="help")
     model = owner_help_model_name()
     try:
-        from services.llm_core_service import create_chat_completion, sanitize_llm_error
+        from services.brain.llm_core_service import create_chat_completion, sanitize_llm_error
         from services.owner_copilot.flags import owner_max_output_tokens
 
         emit_model_policy_trace(policy)

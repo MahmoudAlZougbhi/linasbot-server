@@ -1,4 +1,4 @@
-from services.credit_buckets import split_credit_remaining
+from services.billing.credit_buckets import split_credit_remaining
 
 
 def test_spend_membership_before_purchased() -> None:

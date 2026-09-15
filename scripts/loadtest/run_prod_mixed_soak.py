@@ -94,7 +94,7 @@ def _enqueue_comment(binding: Any, settings: Any, text: str) -> str:
 
 
 def _snapshot() -> dict[str, Any]:
-    from services.job_queue import job_queue
+    from services.queues.job_queue import job_queue
     from services.scale.latency_histogram import snapshot as hist_snapshot
     from services.scale.rate_window import snapshot_openai_ready, snapshot_rates
     from services.scale.replica_controller import current_replicas, recent_events

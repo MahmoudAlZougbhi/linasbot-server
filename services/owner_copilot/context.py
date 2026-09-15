@@ -7,8 +7,8 @@ from typing import Any
 from services.owner_copilot.account_state import build_account_summary
 from services.owner_copilot.onboarding import is_welcome_chip_prompt
 from services.owner_copilot.profile import normalize_language, resolve_owner_reply_language
-from services.response_formatting import RESPONSE_FORMATTING_RULES
-from services.system_knowledge_retrieval import (
+from services.owner_copilot.response_formatting import RESPONSE_FORMATTING_RULES
+from services.owner_copilot.system_knowledge_retrieval import (
     capabilities_as_prompt_block,
     retrieve_capabilities,
 )

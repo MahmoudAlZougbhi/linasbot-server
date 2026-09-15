@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-import services.durable_event_claim as claims
+import services.scale.durable_event_claim as claims
 import services.scale.inbound_event_reconcile as reconcile
 import services.scale.inbound_event_store as event_store
 from services.scale.inbound_event_store import InboundEventRecord
@@ -249,10 +249,10 @@ async def test_queue_completes_claim_only_after_authoritative_terminal_transitio
         completed_states.append(str(reference.data.get("state")))
 
     monkeypatch.setattr(event_store, "put_inbound_event", race_once)
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event_handle", acquire)
-    monkeypatch.setattr("services.durable_event_claim.run_under_event_claim", run_claim)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", complete)
-    monkeypatch.setattr("services.social_messaging_processor.process_meta_social_event", process)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event_handle", acquire)
+    monkeypatch.setattr("services.scale.durable_event_claim.run_under_event_claim", run_claim)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", complete)
+    monkeypatch.setattr("services.integrations.social.social_messaging_processor.process_meta_social_event", process)
     monkeypatch.setattr(
         "services.queues.meta_inbound_handler._settings_from_snapshot",
         lambda *_args: SimpleNamespace(binding_id="binding-ha-1"),

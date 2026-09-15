@@ -136,7 +136,7 @@ async def send_pending_setup_resources(
         result = await _send_all()
 
     user_data[pending_key] = None
-    from services.ai_reply_delivery import classify_send_result
+    from services.brain.ai_reply.ai_reply_delivery import classify_send_result
 
     evidence = classify_send_result(result)
     delivery = (

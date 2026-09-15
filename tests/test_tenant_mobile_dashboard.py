@@ -11,8 +11,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from services.billing.credit_ledger_service import CreditLedgerService
 from services.billing.entitlements_service import EntitlementsStore
-from services.credit_ledger_service import CreditLedgerService
 from services.dashboard.compose import build_tenant_mobile_dashboard
 from services.dashboard.periods import (
     PeriodValidationError,
@@ -34,9 +34,9 @@ def _write_flow(path: Path, rows: list[dict[str, Any]]) -> None:
 def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> EntitlementsStore:
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", store)
     ledger = CreditLedgerService(root=tmp_path / "ledger")
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     monkeypatch.setattr(
         "services.dashboard.compose.credit_ledger_service",
         ledger,
@@ -124,7 +124,7 @@ def test_last_month_dashboard_survives_corrupt_owner_chat_meta(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
     from services.owner_copilot.chat_store import OwnerChatStore
 
     tenant_id = "t_last_month_corrupt"
@@ -167,7 +167,7 @@ def test_last_month_dashboard_survives_corrupt_owner_chat_meta(
         },
     )
     monkeypatch.setattr(
-        "services.integration_capabilities.list_tenant_integration_status",
+        "services.integrations.integration_capabilities.list_tenant_integration_status",
         lambda _tid: [{"platform": "instagram", "connected": True}],
     )
     monkeypatch.setattr(
@@ -193,7 +193,7 @@ def test_last_month_dashboard_survives_corrupt_owner_chat_meta(
 
 def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monkeypatch: pytest.MonkeyPatch) -> None:
     ledger_env.set_plan(tenant_id="t_zero", plan_id="starter", status="active", source="admin")
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     credit_ledger_service.ensure_period_grant("t_zero")
     # Drain available to real zero.
@@ -266,7 +266,7 @@ def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monk
 
 def test_max_plan_hides_upgrade_action(ledger_env: EntitlementsStore) -> None:
     ledger_env.set_plan(tenant_id="t_max", plan_id="max", status="active", source="admin")
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
     from services.dashboard.compose import _plan_and_credits
 
     credit_ledger_service.ensure_period_grant("t_max")
@@ -522,7 +522,7 @@ def test_mobile_dashboard_api_auth_and_tenant_scope(monkeypatch: pytest.MonkeyPa
 
     import modules.mobile_dashboard_api  # noqa: F401
     from modules.core import app
-    from services.dashboard_session_service import session_service
+    from services.dashboard.dashboard_session_service import session_service
 
     client = TestClient(app)
     denied = client.get("/api/mobile/dashboard")

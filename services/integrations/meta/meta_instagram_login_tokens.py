@@ -8,7 +8,6 @@ import time
 
 import httpx
 
-from services.durable_event_claim import release_job_lock, try_acquire_job_lock
 from services.integrations.meta.meta_app_registry import (
     MetaAppRegistry,
     MetaAssetBinding,
@@ -22,6 +21,7 @@ from services.integrations.meta.meta_instagram_login_oauth import (
     refresh_instagram_long_lived_token,
 )
 from services.integrations.meta.meta_oauth import MetaOAuthError
+from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 _REFRESH_BACKOFF_SECONDS = (1.0, 3.0, 8.0)

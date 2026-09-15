@@ -22,7 +22,7 @@ from services.billing.apple.apple_iap_effects import (
     reverse_consumable_credits,
 )
 from services.billing.entitlements_service import EntitlementStatus
-from services.iap_product_catalog import is_credit_product, is_subscription_product
+from services.billing.iap_product_catalog import is_credit_product, is_subscription_product
 
 logger = logging.getLogger(__name__)
 

@@ -33,7 +33,7 @@ def router_config() -> dict[str, Any]:
 
     Env cannot silently override; startup validation enforces Sol/Terra.
     """
-    from services.model_policy import MODEL_CUSTOMER_TERRA, MODEL_OWNER_SOL
+    from services.brain.model_policy import MODEL_CUSTOMER_TERRA, MODEL_OWNER_SOL
 
     return {
         "owner_help": {
@@ -103,7 +103,7 @@ def classify_owner_route(user_text: str, *, intent: str | None = None) -> RouteK
 
 
 def route_owner_turn(user_text: str, *, intent: str | None = None) -> RouteDecision:
-    from services.model_policy import resolve_owner_policy
+    from services.brain.model_policy import resolve_owner_policy
 
     kind = classify_owner_route(user_text, intent=intent)
     policy = resolve_owner_policy(surface="owner_chat", intent=intent, user_text=user_text)

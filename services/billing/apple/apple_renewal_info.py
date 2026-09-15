@@ -14,8 +14,8 @@ from services.billing.apple.apple_iap_effects import (
 )
 from services.billing.apple.apple_jws import decode_jws_payload
 from services.billing.entitlements_service import EntitlementStatus, entitlements_store
-from services.iap_product_catalog import is_subscription_product
-from services.subscription_downgrade import (
+from services.billing.iap_product_catalog import is_subscription_product
+from services.billing.subscription_downgrade import (
     is_downgrade,
     schedule_pending_downgrade,
 )
@@ -140,7 +140,7 @@ def decode_and_apply_renewal_info(
     pending_downgrade: dict[str, Any] | None = None
     renew_product = str(auto_renew_product_id or "").strip()
     if tid and renew_product and is_subscription_product(renew_product):
-        from services.iap_product_catalog import map_subscription_product
+        from services.billing.iap_product_catalog import map_subscription_product
 
         try:
             renew_plan = map_subscription_product(renew_product)

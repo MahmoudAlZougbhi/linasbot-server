@@ -17,8 +17,8 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from services.auth_rate_limits import auth_rate_limit_rules, check_rate_limit, client_ip
-from services.dashboard_session_service import (
+from services.auth.auth_rate_limits import auth_rate_limit_rules, check_rate_limit, client_ip
+from services.dashboard.dashboard_session_service import (
     CSRF_COOKIE_NAME,
     CSRF_HEADER_NAME,
     SESSION_COOKIE_NAME,

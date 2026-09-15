@@ -7,7 +7,6 @@ from typing import Any
 
 import httpx
 
-from services.async_safety_cleanup import await_safety_task as _await_safety_task
 from services.integrations.meta.meta_app_registry import (
     MetaAppRegistry,
     MetaAssetBinding,
@@ -45,6 +44,7 @@ from services.integrations.meta.meta_page_webhook_subscription import (  # noqa:
     restore_binding_webhook_subscription,
     subscribe_binding_webhook,
 )
+from services.scale.async_safety_cleanup import await_safety_task as _await_safety_task
 
 
 def _other_active_binding_shares_page(binding: MetaAssetBinding, registry: MetaAppRegistry) -> bool:

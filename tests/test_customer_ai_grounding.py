@@ -181,7 +181,7 @@ async def _run_generate(monkeypatch: pytest.MonkeyPatch, replies: list[str], bun
         index = min(len(calls) - 1, len(replies) - 1)
         return _FakeResponse(replies[index])
 
-    monkeypatch.setattr("services.llm_core_service.create_chat_completion", fake_completion)
+    monkeypatch.setattr("services.brain.llm_core_service.create_chat_completion", fake_completion)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key")
     envelope = await generate_grounded_reply(
         turn=_turn(),

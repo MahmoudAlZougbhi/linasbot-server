@@ -44,7 +44,7 @@ from services.ai_setup.publish import publish_draft
 from services.ai_setup.schemas import AiBasics, BranchesSection, BranchRecord, HandoffContact, HandoffMatrixRow, HandoffPolicy, LocalizedLabels, ServicesSection, ServiceRecord
 from services.ai_setup.storage import ensure_defaults, get_draft, put_draft
 from services.ai_setup.version_store import load_published_content
-from handlers.text_handlers_respond import _handle_published_cm_runtime
+from services.brain.inbound.text_handlers_respond import _handle_published_cm_runtime
 
 PROOF_TENANT = "cutover_proof_saas"
 LEAK_TERMS = [

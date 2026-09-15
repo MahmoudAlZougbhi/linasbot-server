@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from services.durable_event_claim import release_job_lock, try_acquire_job_lock
+from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
 
 
 def _run_customer_reply_reconcile_job_sync() -> None:
@@ -13,7 +13,7 @@ def _run_customer_reply_reconcile_job_sync() -> None:
     try:
 
         async def _run() -> dict:
-            from services.customer_reply_reconcile_worker import reconcile_customer_replies
+            from services.brain.customer_reply_reconcile_worker import reconcile_customer_replies
 
             return await reconcile_customer_replies(dry_run=False, older_than_seconds=60.0)
 

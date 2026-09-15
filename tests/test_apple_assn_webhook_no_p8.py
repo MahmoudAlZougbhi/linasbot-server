@@ -16,8 +16,8 @@ from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
 from services.billing.apple.apple_iap_effects import get_or_create_app_account_token  # noqa: E402
 from services.billing.apple.apple_iap_processor import process_notification_v2  # noqa: E402
+from services.billing.credit_ledger_service import CreditLedgerService  # noqa: E402
 from services.billing.entitlements_service import EntitlementsStore  # noqa: E402
-from services.credit_ledger_service import CreditLedgerService  # noqa: E402
 
 
 @pytest.fixture()
@@ -40,8 +40,8 @@ def apple_env_no_p8(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     store = EntitlementsStore(root=tmp_path / "entitlements")
     ledger = CreditLedgerService(root=tmp_path / "credit_ledger")
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     monkeypatch.setattr("services.billing.apple.apple_iap_effects.entitlements_store", store)
     monkeypatch.setattr("services.billing.apple.apple_credit_grant_ops.credit_ledger_service", ledger)
     monkeypatch.setattr("services.billing.entitlements_service._DATA_ROOT", tmp_path)
@@ -111,7 +111,7 @@ def test_process_notification_without_p8_when_decode_mocked(
     assert out.get("ok") is True
     assert out.get("duplicate") is False
 
-    from services.store_iap_service import verify_apple_notification_payload
+    from services.billing.store_iap_service import verify_apple_notification_payload
 
     # Second call is a duplicate; must not raise for missing .p8 credentials.
     verify_out = verify_apple_notification_payload({"signedPayload": "signed.outer.nop8"})

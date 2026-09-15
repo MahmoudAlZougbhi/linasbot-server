@@ -36,7 +36,7 @@ async def run_owner_turn(
     choice_set_id: str | None = None,
     attachment_ids: list[str] | None = None,
 ) -> OwnerTurnResult:
-    from services.credit_ai_gate import ai_generation_blocked, owner_credits_paused_payload
+    from services.billing.credit_ai_gate import ai_generation_blocked, owner_credits_paused_payload
     from services.owner_copilot.brain_run import run_owner_turn_v2
 
     if ai_generation_blocked(tenant_id):

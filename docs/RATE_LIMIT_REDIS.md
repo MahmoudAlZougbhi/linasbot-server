@@ -1,7 +1,7 @@
 # Distributed rate limiting (Redis)
 
 Shared rate limiting for auth and sensitive routes lives in
-`services/rate_limit_service.py`, wired through `services/auth_rate_limits.py`
+`services/scale/rate_limit_service.py`, wired through `services/auth/auth_rate_limits.py`
 (`check_rate_limit` / `auth_rate_limit_rules`) and direct `hit()` callers
 (e.g. guest AI).
 
@@ -45,7 +45,7 @@ When the active backend is Redis and the client/URL is missing or Redis errors:
 ## API surface
 
 ```python
-from services.rate_limit_service import rate_limit_service
+from services.scale.rate_limit_service import rate_limit_service
 
 allowed, retry_after = rate_limit_service.hit(
     "login:1.2.3.4",

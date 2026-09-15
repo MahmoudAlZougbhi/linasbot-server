@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from modules.api_security import PERMISSION_KEYS, SYSTEM_ROLE_PERMISSIONS
-from services.analytics_events import AnalyticsEvents
+from services.dashboard.analytics_events import AnalyticsEvents
 
 
 @pytest.fixture()

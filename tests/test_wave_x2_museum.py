@@ -51,7 +51,7 @@ MUSEUM_MODULES = (
     "modules.event_handlers_populate_jobs",
 )
 
-LIVE_PY_ROOTS = ("services", "modules", "handlers", "utils")
+LIVE_PY_ROOTS = ("services", "modules", "utils")
 SKIP_PARTS = ("/evals/artifacts/", "/__pycache__/", "/node_modules/")
 
 

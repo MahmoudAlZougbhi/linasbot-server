@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from services.ai_setup.schemas import ActionsSection
-from services.tenant_runtime_config_backend import tenant_runtime_config_backend
-from services.tenant_runtime_config_pg_store import RevisionConflictError, upsert_draft_row
+from services.tenant_runtime.tenant_runtime_config_backend import tenant_runtime_config_backend
+from services.tenant_runtime.tenant_runtime_config_pg_store import RevisionConflictError, upsert_draft_row
 
 
 @pytest.fixture(autouse=True)
@@ -58,7 +58,7 @@ def test_draft_revision_cas_conflict() -> None:
 
 
 def test_load_actions_section_reads_postgres_first(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.tenant_runtime_config_service import save_actions_payload
+    from services.tenant_runtime.tenant_runtime_config_service import save_actions_payload
 
     actions = ActionsSection(items=[{"id": "respond_facebook_dm", "enabled": True}])
     save_actions_payload(

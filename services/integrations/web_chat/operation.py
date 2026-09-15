@@ -106,7 +106,7 @@ class WebChatOperationRepository:
             return OperationClaimResult(status="resume", record=row_to_record(row))
         if record.state == OperationState.RELEASED:
             if record.reservation_id:
-                from services.credit_ledger_service import credit_ledger_service
+                from services.billing.credit_ledger_service import credit_ledger_service
 
                 if credit_ledger_service.reservation_terminal(record.tenant_id, record.reservation_id) is None:
                     row.state = OperationState.RESERVED.value

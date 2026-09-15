@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from services.conversation_router import get_gender_from_message, is_human_request
+from services.brain.conversation_router import get_gender_from_message, is_human_request
 
 SOCIAL_CHANNELS = {"instagram", "facebook"}
 

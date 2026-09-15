@@ -9,7 +9,7 @@ from typing import Any
 from services.owner_copilot.flags import owner_recent_history_tokens
 from services.owner_copilot.memory import pack_recent_messages
 from services.owner_copilot.models import StreamEvent
-from services.response_formatting import RESPONSE_FORMATTING_RULES
+from services.owner_copilot.response_formatting import RESPONSE_FORMATTING_RULES
 
 SYSTEM_V2 = (
     "You are Linas AI System Copilot — one brain for the authenticated business owner. "

@@ -92,8 +92,8 @@ async def identity_greeting_result(
         return None
     from services.billing.membership.provider_expense import record_pending_provider
     from services.brain.billing import operation_id_for_turn
+    from services.brain.llm_core_service import create_chat_completion
     from services.brain.providers.config import answer_model
-    from services.llm_core_service import create_chat_completion
 
     dest = _destination(channel, turn)
     context = _identity_context(turn)

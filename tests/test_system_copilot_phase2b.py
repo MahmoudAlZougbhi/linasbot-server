@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from services.billing.plan_economics import PLAN_FAQ_MAX_ENTRIES, PLAN_FEATURES
-from services.customer_response_trace import (
+from services.brain.customer_response_trace import (
     CustomerResponseTraceStore,
     build_safe_trace,
     get_interaction_trace,
@@ -20,7 +20,7 @@ from services.faq.faq_safe_match import find_safe_faq_match, score_candidate
 from services.owner_copilot.cm_approval import CmPatchProposalStore, approve_cm_patch, propose_cm_patch
 from services.owner_copilot.diagnosis import diagnose_interaction, propose_diagnosis_fix
 from services.owner_copilot.model_router import OwnerChatUsageTracker, route_owner_turn
-from services.system_knowledge_registry import get_capability, registry_route_errors
+from services.owner_copilot.system_knowledge_registry import get_capability, registry_route_errors
 
 
 def test_registry_includes_faq_and_diagnosis_routes() -> None:
@@ -185,7 +185,7 @@ async def test_cm_approve_no_publish_prompt(tmp_path: Any, monkeypatch: pytest.M
 
 def test_diagnosis_session_location_service_scenarios(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     store = CustomerResponseTraceStore(root=tmp_path / "traces")
-    monkeypatch.setattr("services.customer_response_trace.customer_response_trace_store", store)
+    monkeypatch.setattr("services.brain.customer_response_trace.customer_response_trace_store", store)
 
     cases = [
         ("tr_sess", "How many sessions?", "You need 7 sessions.", "session_count_mismatch"),
@@ -220,7 +220,7 @@ def test_diagnosis_propose_requires_approval(tmp_path: Any, monkeypatch: pytest.
     from services.owner_copilot import diagnosis as od
 
     store = CustomerResponseTraceStore(root=tmp_path / "traces")
-    monkeypatch.setattr("services.customer_response_trace.customer_response_trace_store", store)
+    monkeypatch.setattr("services.brain.customer_response_trace.customer_response_trace_store", store)
     prop_store = od.DiagnosisProposalStore(root=tmp_path / "diag")
     monkeypatch.setattr(od, "diagnosis_proposal_store", prop_store)
 
@@ -270,7 +270,7 @@ async def test_owner_turn_diagnosis_intent(monkeypatch: pytest.MonkeyPatch) -> N
     from services.owner_copilot.orchestrator import run_owner_turn
 
     captured: dict[str, str] = {}
-    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
+    monkeypatch.setattr("services.billing.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
 
     async def _fake_v2(**kwargs: Any) -> OwnerV2TurnResult:
         captured["tenant"] = str(kwargs.get("tenant_id") or "")

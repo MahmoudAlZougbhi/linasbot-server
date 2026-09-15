@@ -33,7 +33,7 @@ _CHANNEL_COMMENT_ACTION: dict[str, str] = {
 
 def load_actions_section(tenant_id: str) -> ActionsSection | None:
     """Return published actions for the tenant, or None when unpublished/unloadable."""
-    from services.tenant_runtime_config_service import load_actions_payload, postgres_enabled
+    from services.tenant_runtime.tenant_runtime_config_service import load_actions_payload, postgres_enabled
 
     if postgres_enabled():
         payload = load_actions_payload(tenant_id)

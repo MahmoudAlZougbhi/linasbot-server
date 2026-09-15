@@ -5,12 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from inspect import getsource
 
-from services.ai_reply_turn_runtime import (
-    finalize_delivery,
-    on_ai_generated,
-    settle_after_outbound,
-    settle_reserved_credits,
-)
 from services.billing.membership.credit_reservation_index import (
     list_stale_open,
     record_open,
@@ -18,6 +12,12 @@ from services.billing.membership.credit_reservation_index import (
 )
 from services.billing.membership.pending_settlement import list_pending, reset_pending_settlements_for_tests
 from services.billing.membership.reservation_reconcile import watch_stale_legacy_credits
+from services.brain.ai_reply.ai_reply_turn_runtime import (
+    finalize_delivery,
+    on_ai_generated,
+    settle_after_outbound,
+    settle_reserved_credits,
+)
 from services.brain.leftover_reserve import reset_leftover_pins_for_tests
 
 
@@ -30,10 +30,10 @@ def setup_function() -> None:
 def test_on_ai_generated_does_not_capture(monkeypatch) -> None:
     calls: list[str] = []
     monkeypatch.setattr(
-        "services.ai_reply_turn_runtime.capture_after_reply_persisted",
+        "services.brain.ai_reply.ai_reply_turn_runtime.capture_after_reply_persisted",
         lambda *a, **k: calls.append("capture"),
     )
-    monkeypatch.setattr("services.ai_reply_turn_runtime.persist_generated_reply", lambda *a, **k: None)
+    monkeypatch.setattr("services.brain.ai_reply.ai_reply_turn_runtime.persist_generated_reply", lambda *a, **k: None)
     user_data = {"_logical_reply_id": "lid-1", "tenant_id": "shop"}
     on_ai_generated({"user_data": user_data, "bot_reply_text": "hello"})
     assert user_data["_reply_ready"] is True
@@ -44,10 +44,10 @@ def test_on_ai_generated_does_not_capture(monkeypatch) -> None:
 def test_settle_with_reply_captures_after_send(monkeypatch) -> None:
     calls: list[str] = []
     monkeypatch.setattr(
-        "services.ai_reply_turn_runtime.capture_after_reply_persisted",
+        "services.brain.ai_reply.ai_reply_turn_runtime.capture_after_reply_persisted",
         lambda *a, **k: calls.append("capture"),
     )
-    monkeypatch.setattr("services.ai_reply_turn_runtime.persist_generated_reply", lambda *a, **k: None)
+    monkeypatch.setattr("services.brain.ai_reply.ai_reply_turn_runtime.persist_generated_reply", lambda *a, **k: None)
     monkeypatch.setattr("services.brain.billing.settle_after_send", lambda **k: calls.append("settle"))
     user_data = {"_logical_reply_id": "lid-2", "tenant_id": "shop"}
     settle_reserved_credits(user_data, reply="sent text")
@@ -58,11 +58,11 @@ def test_settle_with_reply_captures_after_send(monkeypatch) -> None:
 def test_settle_after_failed_send_does_not_capture(monkeypatch) -> None:
     calls: list[str] = []
     monkeypatch.setattr(
-        "services.ai_reply_turn_runtime.capture_after_reply_persisted",
+        "services.brain.ai_reply.ai_reply_turn_runtime.capture_after_reply_persisted",
         lambda *a, **k: calls.append("capture"),
     )
-    monkeypatch.setattr("services.ai_reply_turn_runtime.on_ai_failed", lambda ctx: calls.append("fail"))
-    monkeypatch.setattr("services.ai_reply_turn_runtime.persist_generated_reply", lambda *a, **k: None)
+    monkeypatch.setattr("services.brain.ai_reply.ai_reply_turn_runtime.on_ai_failed", lambda ctx: calls.append("fail"))
+    monkeypatch.setattr("services.brain.ai_reply.ai_reply_turn_runtime.persist_generated_reply", lambda *a, **k: None)
     user_data = {
         "_logical_reply_id": "lid-fail",
         "tenant_id": "shop",
@@ -76,11 +76,11 @@ def test_settle_after_failed_send_does_not_capture(monkeypatch) -> None:
 def test_settle_after_outbound_without_evidence_keeps_hold(monkeypatch) -> None:
     calls: list[str] = []
     monkeypatch.setattr(
-        "services.ai_reply_turn_runtime.capture_after_reply_persisted",
+        "services.brain.ai_reply.ai_reply_turn_runtime.capture_after_reply_persisted",
         lambda *a, **k: calls.append("capture"),
     )
-    monkeypatch.setattr("services.ai_reply_turn_runtime.on_ai_failed", lambda ctx: calls.append("fail"))
-    monkeypatch.setattr("services.ai_reply_turn_runtime.persist_generated_reply", lambda *a, **k: None)
+    monkeypatch.setattr("services.brain.ai_reply.ai_reply_turn_runtime.on_ai_failed", lambda ctx: calls.append("fail"))
+    monkeypatch.setattr("services.brain.ai_reply.ai_reply_turn_runtime.persist_generated_reply", lambda *a, **k: None)
     user_data = {"_logical_reply_id": "lid-no-ev", "tenant_id": "shop"}
     settle_after_outbound(user_data, reply="generated only")
     assert user_data["_reply_ready"] is True
@@ -90,11 +90,11 @@ def test_settle_after_outbound_without_evidence_keeps_hold(monkeypatch) -> None:
 def test_settle_after_unknown_send_keeps_hold(monkeypatch) -> None:
     calls: list[str] = []
     monkeypatch.setattr(
-        "services.ai_reply_turn_runtime.capture_after_reply_persisted",
+        "services.brain.ai_reply.ai_reply_turn_runtime.capture_after_reply_persisted",
         lambda *a, **k: calls.append("capture"),
     )
-    monkeypatch.setattr("services.ai_reply_turn_runtime.on_ai_failed", lambda ctx: calls.append("fail"))
-    monkeypatch.setattr("services.ai_reply_turn_runtime.persist_generated_reply", lambda *a, **k: None)
+    monkeypatch.setattr("services.brain.ai_reply.ai_reply_turn_runtime.on_ai_failed", lambda ctx: calls.append("fail"))
+    monkeypatch.setattr("services.brain.ai_reply.ai_reply_turn_runtime.persist_generated_reply", lambda *a, **k: None)
     user_data = {
         "_logical_reply_id": "lid-unk",
         "tenant_id": "shop",
@@ -107,7 +107,7 @@ def test_settle_after_unknown_send_keeps_hold(monkeypatch) -> None:
 
 def test_settle_without_reply_keeps_ready_hold(monkeypatch) -> None:
     failed: list[str] = []
-    monkeypatch.setattr("services.ai_reply_turn_runtime.on_ai_failed", lambda ctx: failed.append("fail"))
+    monkeypatch.setattr("services.brain.ai_reply.ai_reply_turn_runtime.on_ai_failed", lambda ctx: failed.append("fail"))
     settle_reserved_credits({"_logical_reply_id": "lid-3", "_reply_ready": True}, reply="")
     assert failed == []
 
@@ -115,12 +115,12 @@ def test_settle_without_reply_keeps_ready_hold(monkeypatch) -> None:
 def test_finalize_delivery_captures_on_success(monkeypatch) -> None:
     calls: list[str] = []
     monkeypatch.setattr(
-        "services.ai_reply_turn_runtime.capture_after_reply_persisted",
+        "services.brain.ai_reply.ai_reply_turn_runtime.capture_after_reply_persisted",
         lambda *a, **k: calls.append("capture"),
     )
     monkeypatch.setattr("services.brain.billing.settle_after_send", lambda **k: None)
     monkeypatch.setattr(
-        "services.ai_reply_turn_runtime.get_turn",
+        "services.brain.ai_reply.ai_reply_turn_runtime.get_turn",
         lambda _lid: type(
             "T",
             (),
@@ -134,8 +134,10 @@ def test_finalize_delivery_captures_on_success(monkeypatch) -> None:
             },
         )(),
     )
-    monkeypatch.setattr("services.ai_reply_turn_runtime.record_delivery_outcome", lambda *a, **k: None)
-    monkeypatch.setattr("services.ai_reply_turn_runtime.maybe_record_product_outbound", lambda *a, **k: None)
+    monkeypatch.setattr("services.brain.ai_reply.ai_reply_turn_runtime.record_delivery_outcome", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "services.brain.ai_reply.ai_reply_turn_runtime.maybe_record_product_outbound", lambda *a, **k: None
+    )
     user_data = {"_logical_reply_id": "lid-4", "_delivery_succeeded": True, "tenant_id": "shop"}
     summary = finalize_delivery({"user_data": user_data})
     assert "capture" in calls
@@ -145,11 +147,11 @@ def test_finalize_delivery_captures_on_success(monkeypatch) -> None:
 def test_finalize_delivery_releases_brain_hold_on_never_submitted_fail(monkeypatch) -> None:
     released: list[str] = []
     monkeypatch.setattr(
-        "services.ai_reply_turn_runtime._release_unused_hold",
+        "services.brain.ai_reply.ai_reply_turn_runtime._release_unused_hold",
         lambda user_data: released.append(str(user_data.get("_logical_reply_id") or "")),
     )
     monkeypatch.setattr(
-        "services.ai_reply_turn_runtime.get_turn",
+        "services.brain.ai_reply.ai_reply_turn_runtime.get_turn",
         lambda _lid: type(
             "T",
             (),
@@ -163,7 +165,7 @@ def test_finalize_delivery_releases_brain_hold_on_never_submitted_fail(monkeypat
             },
         )(),
     )
-    monkeypatch.setattr("services.ai_reply_turn_runtime.record_delivery_outcome", lambda *a, **k: None)
+    monkeypatch.setattr("services.brain.ai_reply.ai_reply_turn_runtime.record_delivery_outcome", lambda *a, **k: None)
     summary = finalize_delivery(
         {
             "user_data": {
@@ -281,7 +283,7 @@ def test_known_credit_tenants_include_pg_reserve_rows(monkeypatch) -> None:
 
     monkeypatch.setattr("services.billing.billing_backend.require_billing_pg_session", _session)
     monkeypatch.setattr(
-        "services.credit_ledger_pg_store.list_reserve_tenant_ids",
+        "services.billing.credit_ledger_pg_store.list_reserve_tenant_ids",
         lambda _s: ["pg-reserve"],
     )
     assert "pg-reserve" in known_credit_tenant_ids()
@@ -357,12 +359,12 @@ def test_seed_does_not_reopen_captured_leftover(tmp_path, monkeypatch) -> None:
     import json
     import time
 
+    from services.billing.credit_ledger_pg_store import list_open_leftover_reservations
     from services.billing.membership.credit_reservation_index import (
         open_counts,
         reset_credit_reservation_index_for_tests,
     )
     from services.billing.membership.credit_reservation_scan import leftover_op, seed_from_known_ledgers
-    from services.credit_ledger_pg_store import list_open_leftover_reservations
 
     reset_credit_reservation_index_for_tests()
     ledger = tmp_path / "credit_ledger"

@@ -7,7 +7,7 @@ import json
 import logging
 from typing import Any
 
-from services.model_policy import MODEL_CUSTOMER_TERRA
+from services.brain.model_policy import MODEL_CUSTOMER_TERRA
 
 logger = logging.getLogger(__name__)
 MAX_VISION_CANDIDATES = 8
@@ -20,7 +20,7 @@ async def vision_rerank_candidates(
     candidates: list[dict[str, Any]],
     media_loader: Any,
 ) -> dict[str, Any]:
-    from services.token_metering import assert_tenant_can_use_ai, debit_ai_usage
+    from services.billing.token_metering import assert_tenant_can_use_ai, debit_ai_usage
 
     bounded = candidates[:MAX_VISION_CANDIDATES]
     if not bounded:
@@ -59,7 +59,7 @@ async def vision_rerank_candidates(
     if not catalog:
         return {"resolved": False, "product_id": None, "confidence": "none"}
 
-    from services.llm_core_service import build_chat_completion_kwargs, client
+    from services.brain.llm_core_service import build_chat_completion_kwargs, client
 
     messages = [{"role": "user", "content": content_parts}]
     kwargs = build_chat_completion_kwargs(

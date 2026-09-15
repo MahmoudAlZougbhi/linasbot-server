@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from services import social_messaging_processor as processor
+from services.integrations.social import social_messaging_processor as processor
 from tests.meta_compliance_helpers import _FakeFirestore
 from tests.meta_social_image_quota_delivery_support import (
     _accepted,
@@ -67,9 +67,9 @@ async def test_first_truncation_notice_preserves_exact_localized_planned_copy(
     runtime: _FakeFirestore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.ai_limits_enforcement as limits
-    from services.ai_limits_messages import customer_photos_truncated_message
-    from services.ai_usage_limits import QuotaDecision
+    import services.ai_setup.ai_limits_enforcement as limits
+    from services.ai_setup.ai_limits_messages import customer_photos_truncated_message
+    from services.ai_setup.ai_usage_limits import QuotaDecision
 
     exact_notice = customer_photos_truncated_message(photo_limit=2, lang="ar")
     quota_calls: list[bool] = []
@@ -103,9 +103,9 @@ async def test_period_reset_notice_replays_exact_snapshot_without_quota_recheck(
     runtime: _FakeFirestore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.ai_limits_enforcement as limits
-    from services.ai_limits_messages import customer_window_limit_message
-    from services.ai_usage_limits import QuotaDecision
+    import services.ai_setup.ai_limits_enforcement as limits
+    from services.ai_setup.ai_limits_messages import customer_window_limit_message
+    from services.ai_setup.ai_usage_limits import QuotaDecision
 
     exact_notice = customer_window_limit_message(
         kind="image",

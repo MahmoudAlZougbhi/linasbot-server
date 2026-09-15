@@ -11,14 +11,14 @@ from pydantic import BaseModel
 from modules.api_security import require_session
 from modules.auth_api_common import AUTH_LOGIN_TIMEOUT_SECONDS
 from modules.core import app
-from services.auth_email_tokens import EMAIL_CHANGE_TTL_SECONDS, auth_email_token_service
-from services.dashboard_session_service import session_service
-from services.email_dispatch import (
+from services.auth.auth_email_tokens import EMAIL_CHANGE_TTL_SECONDS, auth_email_token_service
+from services.dashboard.dashboard_session_service import session_service
+from services.email.email_dispatch import (
     send_email_change_confirm,
     send_email_changed_notice,
     send_password_changed_email,
 )
-from services.mail_service import mail_configured
+from services.email.mail_service import mail_configured
 from services.team.user_service import user_service
 
 

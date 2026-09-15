@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import HTTPException, Request, Response
 
 from modules.core import app
-from services.stripe_checkout_service import stripe_checkout_service
+from services.billing.stripe_checkout_service import stripe_checkout_service
 
 
 @app.post("/api/billing/stripe/webhook")

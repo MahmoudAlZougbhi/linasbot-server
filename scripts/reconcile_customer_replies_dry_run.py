@@ -42,7 +42,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 async def _main_async(args: argparse.Namespace) -> int:
-    from services.customer_reply_reconcile_worker import reconcile_customer_replies
+    from services.brain.customer_reply_reconcile_worker import reconcile_customer_replies
 
     result = await reconcile_customer_replies(
         dry_run=not args.execute,

@@ -281,7 +281,7 @@ def seed_graphs() -> dict[str, Any]:
 
 
 def grant_test_credits() -> dict[str, Any]:
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     ledger = credit_ledger_service.grant_pack(
         tenant_id=TENANT_ID,

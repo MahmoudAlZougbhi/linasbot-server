@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.social_account_sign_in import is_social_only_account
+from services.integrations.social.social_account_sign_in import is_social_only_account
 
 
 def test_password_account_is_not_social_only() -> None:

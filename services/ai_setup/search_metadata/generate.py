@@ -165,8 +165,8 @@ def _llm_enabled() -> bool:
 
 
 def _generate_search_metadata(request: dict[str, Any]) -> SearchMetadata:
-    from services.llm_core_service import build_chat_completion_kwargs, client
-    from services.model_policy import MODEL_OWNER_SOL
+    from services.brain.llm_core_service import build_chat_completion_kwargs, client
+    from services.brain.model_policy import MODEL_OWNER_SOL
 
     include_keywords = bool(request.get("include_keywords"))
     weak = bool(request.get("weak_description"))

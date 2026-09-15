@@ -62,7 +62,7 @@ def test_enqueue_fail_closed_when_redis_required_but_not_ready(monkeypatch):
     from types import SimpleNamespace
 
     monkeypatch.setattr(
-        "services.job_queue.job_queue",
+        "services.queues.job_queue.job_queue",
         SimpleNamespace(backend="memory", production_ready=False, enqueue=lambda **_k: None),
     )
     with pytest.raises(RuntimeError, match="omnichannel_queue_unavailable"):
@@ -85,7 +85,7 @@ def test_enqueue_ambiguous_when_ack_lost(monkeypatch):
         def enqueue(self, **_kwargs):
             raise TimeoutError("ack lost")
 
-    monkeypatch.setattr("services.job_queue.job_queue", Boom())
+    monkeypatch.setattr("services.queues.job_queue.job_queue", Boom())
     result = enqueue_job(
         logical_queue="dm_urgent",
         job_type="omnichannel_generate",

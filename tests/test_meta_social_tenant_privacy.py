@@ -7,8 +7,8 @@ from typing import Any
 import pytest
 
 import config
-from services import social_messaging_processor
 from services.integrations.meta.meta_messaging import MetaMessagingSettings
+from services.integrations.social import social_messaging_processor
 
 
 @pytest.mark.asyncio

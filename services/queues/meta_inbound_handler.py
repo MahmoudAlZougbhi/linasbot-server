@@ -26,11 +26,11 @@ def _evidence_channel(data: dict[str, Any], binding_data: dict[str, Any]) -> str
 async def _settle_failed_event_claim(rec: Any, *, terminal: bool, claim_handle: Any) -> None:
     """Complete terminal claims or release retryable ones without leaking payloads."""
 
-    from services.durable_event_claim import complete_event_claim, release_event_claim
     from services.integrations.meta.meta_cross_flow_dedup import (
         GLOBAL_COMMENT_CLAIM_NAMESPACE,
         GLOBAL_DM_CLAIM_NAMESPACE,
     )
+    from services.scale.durable_event_claim import complete_event_claim, release_event_claim
 
     if rec.kind == "meta_dm":
         namespace = GLOBAL_DM_CLAIM_NAMESPACE
@@ -153,15 +153,15 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
     if rec.state in TERMINAL_STATES:
         return {"skipped": True, "reason": f"already_{rec.state}", "event_id": event_id}
 
-    from services.durable_event_claim import (
+    from services.integrations.meta.meta_cross_flow_dedup import (
+        GLOBAL_COMMENT_CLAIM_NAMESPACE,
+        GLOBAL_DM_CLAIM_NAMESPACE,
+    )
+    from services.scale.durable_event_claim import (
         event_claim_handle_from_token,
         meta_claim_binding_digest,
         renew_event_claim,
         try_claim_event_handle,
-    )
-    from services.integrations.meta.meta_cross_flow_dedup import (
-        GLOBAL_COMMENT_CLAIM_NAMESPACE,
-        GLOBAL_DM_CLAIM_NAMESPACE,
     )
 
     if rec.kind == "meta_dm":
@@ -212,12 +212,12 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
     mark_inbound_state(event_id, state="processing", bump_attempts=True)
     try:
         if rec.kind == "meta_dm":
-            from services.durable_event_claim import complete_event_claim
             from services.integrations.meta.meta_cross_flow_dedup import GLOBAL_DM_CLAIM_NAMESPACE
-            from services.social_messaging_processor import (
+            from services.integrations.social.social_messaging_processor import (
                 meta_social_outcome_requires_retry,
                 process_meta_social_event,
             )
+            from services.scale.durable_event_claim import complete_event_claim
 
             settings = _settings_from_snapshot(rec.settings_snapshot, rec.binding_snapshot)
             outbound_tenant_id = str(rec.tenant_id or rec.binding_snapshot.get("tenant_id") or "").strip()
@@ -230,7 +230,7 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
                 kind="meta_dm",
                 channel=_evidence_channel(rec.payload, rec.binding_snapshot),
             )
-            from services.durable_event_claim import run_under_event_claim
+            from services.scale.durable_event_claim import run_under_event_claim
 
             outcome = await run_under_event_claim(
                 claim_handle,
@@ -319,12 +319,12 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
             return {"ok": not retryable, "kind": "meta_dm", "event_id": event_id, "outcome": outcome}
 
         if rec.kind == "meta_comment":
-            from services.durable_event_claim import complete_event_claim
             from services.integrations.meta.meta_comment_replies import (
                 comment_reply_requires_retry,
                 process_meta_comment_event,
             )
             from services.integrations.meta.meta_cross_flow_dedup import GLOBAL_COMMENT_CLAIM_NAMESPACE
+            from services.scale.durable_event_claim import complete_event_claim
 
             settings = _settings_from_snapshot(rec.settings_snapshot, rec.binding_snapshot)
             evidence_surface = meta_evidence_surface(
@@ -336,7 +336,7 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
                 resolved_binding_id=settings.binding_id,
             )
             resolved = ResolvedMetaCommentEvent(event=rec.payload, settings=settings, binding=binding)
-            from services.durable_event_claim import run_under_event_claim
+            from services.scale.durable_event_claim import run_under_event_claim
 
             result = await run_under_event_claim(
                 claim_handle,

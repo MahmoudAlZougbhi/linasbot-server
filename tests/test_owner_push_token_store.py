@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from services.owner_push_token_store import OwnerPushTokenStore
+from services.owner_copilot.owner_push_token_store import OwnerPushTokenStore
 
 
 @pytest.fixture

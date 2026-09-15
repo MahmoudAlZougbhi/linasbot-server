@@ -11,7 +11,7 @@ import pytest
 
 from scripts.ha import production_mutation_guard as guard
 
-RUNTIME_DIRS = ("scripts", "services", "db", "modules", "handlers", "storage")
+RUNTIME_DIRS = ("scripts", "services", "db", "modules", "storage")
 GIT_ENV = {
     "GIT_AUTHOR_NAME": "test",
     "GIT_AUTHOR_EMAIL": "test@example.invalid",
@@ -55,7 +55,7 @@ def _write_python(path: Path) -> None:
 
 def test_root_python_pathspec_is_top_glob_only() -> None:
     source = inspect.getsource(guard._require_no_untracked_runtime_source)
-    assert 'pathspecs = ("scripts", "services", "db", "modules", "handlers", "storage", ":(top,glob)*.py")' in source
+    assert 'pathspecs = ("scripts", "services", "db", "modules", "storage", ":(top,glob)*.py")' in source
     assert '"*.py"' not in source
     assert "'*.py'" not in source
     assert "for ignored in (False, True):" in source

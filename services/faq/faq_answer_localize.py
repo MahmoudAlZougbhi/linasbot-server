@@ -25,7 +25,7 @@ async def localize_faq_answer(
     if {source, target} <= {"ar", "franco"}:
         return text
 
-    from services.language_detection_service import language_detection_service
+    from services.brain.language_detection_service import language_detection_service
 
     return await language_detection_service.translate_answer_text(
         text,

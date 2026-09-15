@@ -430,7 +430,7 @@ def test_omni_conversation_id_prefers_payload() -> None:
     )
     from inspect import getsource
 
-    from handlers.text_handlers_respond_phase2 import text_handlers_respond_phase2
+    from services.brain.inbound.text_handlers_respond_phase2 import text_handlers_respond_phase2
 
     phase2 = getsource(text_handlers_respond_phase2)
     assert "conversation_id_from_user_data" in phase2

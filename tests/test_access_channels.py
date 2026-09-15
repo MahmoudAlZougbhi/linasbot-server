@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from modules.api_security import required_permission_for, resolve_permissions
-from services.access_channels import (
+from services.integrations.access_channels import (
     allowed_channels_for_session,
     effective_inbox_channel,
     filter_chats_for_session,

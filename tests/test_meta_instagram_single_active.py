@@ -19,7 +19,7 @@ from services.integrations.meta.meta_app_registry import (
     get_meta_registry_readiness,
 )
 from services.integrations.meta.meta_connection_disconnect import disconnect_meta_binding_set
-from services.mobile_integrations_display import bindings_for_disconnect
+from services.integrations.mobile_integrations_display import bindings_for_disconnect
 from tests.meta_instagram_single_active_support import (
     INSTAGRAM_ID,
     PAGE_ID,

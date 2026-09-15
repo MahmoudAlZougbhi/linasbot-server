@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from modules.api_security import _client_ip
 from modules.core import app
-from services.compliance_page_content import (
+from services.dashboard.compliance_page_content import (
     data_deletion_body,
     privacy_policy_body,
     terms_of_service_body,
@@ -50,7 +50,7 @@ from services.integrations.meta.meta_surface_secret_separation import (
     environ_secret_values,
     evaluate_meta_surface_signing_separation,
 )
-from services.rate_limit_service import rate_limit_service
+from services.scale.rate_limit_service import rate_limit_service
 
 _CONTACT_EMAIL = "support@linasai.com"
 _PUBLIC_BASE_URL = "https://www.linasaibot.com"

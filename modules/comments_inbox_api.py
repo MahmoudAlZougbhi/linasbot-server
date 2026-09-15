@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from modules.api_security import require_permission
 from modules.core import app
-from services.access_channels import session_can_use_channel
+from services.integrations.access_channels import session_can_use_channel
 from services.live_chat.comments_inbox.media_feed import list_comment_media
 from services.live_chat.comments_inbox.threads import list_comment_threads
 from services.live_chat.comments_inbox.watchlist import PLATFORMS

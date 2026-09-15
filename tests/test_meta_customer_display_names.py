@@ -8,7 +8,6 @@ from unittest import mock
 import pytest
 
 import config
-from services import social_messaging_processor
 from services.integrations.meta.meta_messaging import (
     SOCIAL_DISPLAY_NAME_FALLBACK,
     MetaMessagingAdapter,
@@ -19,6 +18,7 @@ from services.integrations.meta.meta_messaging import (
     pick_meta_participant_display_name,
     scrub_legacy_meta_channel_placeholder,
 )
+from services.integrations.social import social_messaging_processor
 
 
 def _settings(**overrides: Any) -> MetaMessagingSettings:
@@ -156,7 +156,7 @@ async def test_graph_name_replaces_legacy_placeholder(monkeypatch: pytest.Monkey
     monkeypatch.setattr(social_messaging_processor, "handle_message", handle)
     monkeypatch.setattr(social_messaging_processor, "MetaMessagingAdapter", _Adapter)
     monkeypatch.setattr(
-        "services.social_customer_name.save_user_name_to_firestore",
+        "services.integrations.social.social_customer_name.save_user_name_to_firestore",
         mock.AsyncMock(),
     )
 
@@ -197,7 +197,7 @@ async def test_webhook_name_used_without_graph(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(social_messaging_processor, "get_user_state_from_firestore", restore)
     monkeypatch.setattr(social_messaging_processor, "handle_message", handle)
     monkeypatch.setattr(
-        "services.social_customer_name.save_user_name_to_firestore",
+        "services.integrations.social.social_customer_name.save_user_name_to_firestore",
         mock.AsyncMock(),
     )
 

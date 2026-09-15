@@ -19,7 +19,7 @@ from services.owner_copilot.tool_schemas import tool_names
 
 
 def _fake_turn_credit(tenant_id: str, *, conversation_id: str = "") -> Any:
-    from services.owner_copilot_credit import OwnerTurnCredit
+    from services.owner_copilot.credit import OwnerTurnCredit
 
     return OwnerTurnCredit(tenant_id=tenant_id, reservation_id="test-reservation")
 
@@ -218,11 +218,11 @@ async def test_stream_events_thinking_then_deltas(monkeypatch: pytest.MonkeyPatc
         yield ("result", ToolRoundResult(content="Hello from Sol.", tool_calls=[]))
 
     monkeypatch.setattr("services.owner_copilot.brain_stream_body.iter_sol_tool_round", _fake_tool_round)
-    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
-    monkeypatch.setattr("services.owner_copilot_credit.owner_turn_credit_begin", _fake_turn_credit)
-    monkeypatch.setattr("services.owner_copilot_credit.owner_turn_credit_on_event", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.owner_copilot_credit.owner_turn_credit_finalize", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.owner_copilot_credit.owner_turn_credit_abort", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.billing.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
+    monkeypatch.setattr("services.owner_copilot.credit.owner_turn_credit_begin", _fake_turn_credit)
+    monkeypatch.setattr("services.owner_copilot.credit.owner_turn_credit_on_event", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.owner_copilot.credit.owner_turn_credit_finalize", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.owner_copilot.credit.owner_turn_credit_abort", lambda *_a, **_k: None)
 
     events = []
     texts: list[str] = []
@@ -247,7 +247,7 @@ async def test_stream_events_thinking_then_deltas(monkeypatch: pytest.MonkeyPatc
 async def test_zero_credits_does_not_call_owner_model(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.owner_copilot.brain import iter_owner_turn_v2_events
 
-    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.billing.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
     called = {"n": 0}
 
     async def _fake_tool_round(**kwargs: Any):
@@ -274,7 +274,7 @@ async def test_run_owner_turn_v2_returns_credits_paused_without_model(monkeypatc
 
     from services.owner_copilot.brain_run import run_owner_turn_v2
 
-    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.billing.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
     called = {"n": 0}
 
     async def _fake_tool_round(**kwargs: Any):
@@ -411,7 +411,7 @@ def test_capability_manifest_freshness() -> None:
 
 def test_system_v2_voice_is_warm_with_tasteful_emojis() -> None:
     from services.owner_copilot.brain_support import FINAL_ANSWER_NUDGE, SYSTEM_V2
-    from services.response_formatting import RESPONSE_FORMATTING_RULES
+    from services.owner_copilot.response_formatting import RESPONSE_FORMATTING_RULES
 
     assert "warm, friendly" in SYSTEM_V2
     assert "tasteful emojis" in SYSTEM_V2

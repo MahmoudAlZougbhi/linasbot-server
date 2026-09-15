@@ -12,13 +12,13 @@ from services.billing.apple.apple_credit_grant_ops import (  # noqa: F401 — re
     reverse_consumable_credits,
 )
 from services.billing.entitlements_service import EntitlementStatus, apply_store_notification, entitlements_store
-from services.iap_product_catalog import (
+from services.billing.iap_product_catalog import (
     is_credit_product,
     is_subscription_product,
     map_subscription_product,
 )
-from services.store_iap_service import normalize_apple_status
-from services.subscription_downgrade import (
+from services.billing.store_iap_service import normalize_apple_status
+from services.billing.subscription_downgrade import (
     clear_pending_downgrade,
     schedule_pending_downgrade,
     should_schedule_instead_of_apply,

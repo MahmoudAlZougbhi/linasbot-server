@@ -10,7 +10,7 @@ from modules.api_security import require_permission
 from modules.core import app
 from services.ai_setup.progress import progress_summary
 from services.ai_setup.setup_chat import INTRO_MESSAGE
-from services.dashboard_session_service import SessionRecord
+from services.dashboard.dashboard_session_service import SessionRecord
 
 
 def _session_tenant(session: SessionRecord) -> str:

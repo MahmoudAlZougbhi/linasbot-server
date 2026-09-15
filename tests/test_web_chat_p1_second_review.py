@@ -106,7 +106,7 @@ async def test_ack_before_capture_does_not_complete_billing(tmp_path, monkeypatc
 
     capture_calls = 0
     original_capture = __import__(
-        "services.credit_ledger_service", fromlist=["credit_ledger_service"]
+        "services.billing.credit_ledger_service", fromlist=["credit_ledger_service"]
     ).credit_ledger_service.capture
 
     def flaky_capture(*args, **kwargs):
@@ -116,7 +116,7 @@ async def test_ack_before_capture_does_not_complete_billing(tmp_path, monkeypatc
             raise RuntimeError("capture commit lost")
         return original_capture(*args, **kwargs)
 
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service.capture", flaky_capture)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service.capture", flaky_capture)
 
     delivered = await deliver_web_followup_message(
         tenant_id=tenant_id,
@@ -244,8 +244,8 @@ async def test_sfu_stale_worker_cannot_deliver_after_reclaim(tmp_path, monkeypat
     from db.models import Base
     from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpSequence
     from db.session import reset_engine_for_tests
+    from services.billing.credit_ledger_service import CreditLedgerService
     from services.billing.entitlements_service import EntitlementsStore
-    from services.credit_ledger_service import CreditLedgerService
     from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
 
     url = f"sqlite:///{tmp_path / 'sfu_fence.db'}"
@@ -259,9 +259,9 @@ async def test_sfu_stale_worker_cannot_deliver_after_reclaim(tmp_path, monkeypat
 
     ent_store = EntitlementsStore(root=tmp_path / "ents")
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", ent_store)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", ent_store)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", ent_store)
     ledger = CreditLedgerService(root=tmp_path / "ledger")
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     ent_store.set_plan(tenant_id="tenant-b", plan_id="starter", status="active", source="admin")
     ledger.ensure_period_grant("tenant-b")
 

@@ -57,7 +57,7 @@ def _clean_stores(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_generative_gate_uses_messages_only_when_billing_on(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.billing.membership.generative_gate import generative_block_reason
 
-    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.billing.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "false")
     assert generative_block_reason("shop") == "insufficient_credits"
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")

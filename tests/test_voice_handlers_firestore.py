@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import config
-from handlers import voice_handlers
+from services.brain.inbound import voice_handlers
 
 
 def _mock_firestore_db(doc_snap: MagicMock) -> MagicMock:

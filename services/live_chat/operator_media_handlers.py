@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.live_chat.media_service import build_whatsapp_audio_delivery_url
 from services.live_chat.operator_social_delivery import (
     deliver_social_operator_media,
     is_social_live_chat_user,
 )
 from services.live_chat.operator_text_delivery import operator_media_not_supported
-from services.media_service import build_whatsapp_audio_delivery_url
 
 
 async def send_operator_voice_message(

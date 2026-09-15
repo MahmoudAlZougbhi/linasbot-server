@@ -49,7 +49,7 @@ async def mobile_transcribe(
         raise HTTPException(status_code=400, detail="Invalid audio payload")
     filename = _safe_audio_filename(audio.filename, content_type)
     try:
-        from services import llm_core_service
+        from services.brain import llm_core_service
 
         client = getattr(llm_core_service, "client", None)
         if client is None:

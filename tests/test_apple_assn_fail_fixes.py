@@ -21,9 +21,9 @@ from services.billing.apple.apple_assn_types import classify_assn_action, status
 from services.billing.apple.apple_iap_effects import get_or_create_app_account_token  # noqa: E402
 from services.billing.apple.apple_iap_processor import process_notification_v2  # noqa: E402
 from services.billing.apple.apple_notification_claim import claim_notification, finalize_notification  # noqa: E402
+from services.billing.credit_ledger_service import CreditLedgerService  # noqa: E402
 from services.billing.entitlements_service import EntitlementsStore  # noqa: E402
-from services.credit_ledger_service import CreditLedgerService  # noqa: E402
-from services.store_iap_service import normalize_apple_status  # noqa: E402
+from services.billing.store_iap_service import normalize_apple_status  # noqa: E402
 
 
 @pytest.fixture()
@@ -53,8 +53,8 @@ def apple_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     store = EntitlementsStore(root=ent_root)
     ledger = CreditLedgerService(root=ledger_root)
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     monkeypatch.setattr("services.billing.apple.apple_iap_effects.entitlements_store", store)
     monkeypatch.setattr("services.billing.apple.apple_credit_grant_ops.credit_ledger_service", ledger)
     monkeypatch.setattr("services.billing.apple.apple_renewal_info.entitlements_store", store)

@@ -141,7 +141,7 @@ def create_firestore_event_unless_fenced(
         raise InboundDeletionFenceStoreError("Firestore inbound fence store is unavailable")
     fence_ref = None if skip_shared_fence_reads else _firestore_fence_ref(db, target_binding)
     event_ref = _firestore_event_ref(db, str(event_id))
-    from services.firestore_transaction_compat import run_firestore_transaction
+    from services.scale.firestore_transaction_compat import run_firestore_transaction
 
     last_error: Exception | None = None
     for _attempt in range(5):
@@ -243,7 +243,7 @@ def persist_firestore_event_respecting_fence(
         raise InboundDeletionFenceStoreError("Firestore inbound fence store is unavailable")
     fence_ref = _firestore_fence_ref(db, target_binding)
     event_ref = _firestore_event_ref(db, str(event_id))
-    from services.firestore_transaction_compat import run_firestore_transaction
+    from services.scale.firestore_transaction_compat import run_firestore_transaction
 
     last_error: Exception | None = None
     for _attempt in range(5):

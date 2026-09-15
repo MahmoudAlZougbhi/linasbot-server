@@ -6,7 +6,7 @@ import json
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
-from services.model_policy import owner_stream_route_payload
+from services.brain.model_policy import owner_stream_route_payload
 from services.owner_copilot.cards import card_from_tool
 from services.owner_copilot.models import StreamEvent
 from services.owner_copilot.provider import collect_sol_text, iter_sol_text_deltas
@@ -33,7 +33,7 @@ async def run_confirm_path(
     is_cancelled: CancelCheck | None,
     policy: Any | None = None,
 ) -> AsyncIterator[StreamEvent]:
-    from services.model_policy import ModelPolicyDecision, resolve_owner_policy
+    from services.brain.model_policy import ModelPolicyDecision, resolve_owner_policy
 
     args = dict(tool_args or {})
     intent = confirm_tool

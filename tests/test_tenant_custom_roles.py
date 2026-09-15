@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from services.role_assignment import RoleAssignmentError, assert_assignable_role
-from services.tenant_custom_roles import TenantCustomRolesStore, system_role_payloads
+from services.team.role_assignment import RoleAssignmentError, assert_assignable_role
+from services.team.tenant_custom_roles import TenantCustomRolesStore, system_role_payloads
 
 
 def test_system_role_payloads_include_support_label() -> None:

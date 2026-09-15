@@ -46,7 +46,7 @@ def test_try_enqueue_skips_without_redis_required(monkeypatch: pytest.MonkeyPatc
     monkeypatch.delenv("LINAS_REQUIRE_REDIS", raising=False)
     monkeypatch.delenv("LINAS_ENABLE_DURABLE_QUEUES", raising=False)
     fake_queue = SimpleNamespace(backend="redis", production_ready=True, enqueue=MagicMock())
-    with patch("services.job_queue.job_queue", fake_queue):
+    with patch("services.queues.job_queue.job_queue", fake_queue):
         assert _try_enqueue(event_id="evt-1", kind="meta_dm", tenant_id="linas", conversation_key="k") is None
     fake_queue.enqueue.assert_not_called()
 
@@ -55,7 +55,7 @@ def test_try_enqueue_when_durable_queues_activated(monkeypatch: pytest.MonkeyPat
     monkeypatch.setenv("LINAS_REQUIRE_REDIS", "true")
     job = SimpleNamespace(id="job-1")
     fake_queue = SimpleNamespace(backend="redis", production_ready=True, enqueue=MagicMock(return_value=job))
-    with patch("services.job_queue.job_queue", fake_queue):
+    with patch("services.queues.job_queue.job_queue", fake_queue):
         assert _try_enqueue(event_id="evt-2", kind="meta_dm", tenant_id="linas", conversation_key="k") == "job-1"
     fake_queue.enqueue.assert_called_once()
 
@@ -72,7 +72,7 @@ def _reconcile_record() -> SimpleNamespace:
 
 
 def test_watchdog_retains_claim_when_enqueue_ack_is_ambiguous(monkeypatch: pytest.MonkeyPatch) -> None:
-    import services.job_queue as job_queue_module
+    import services.queues.job_queue as job_queue_module
     import services.scale.inbound_event_reconcile as reconcile
 
     monkeypatch.setattr(reconcile, "redis_required", lambda: True)
@@ -96,7 +96,7 @@ def test_watchdog_retains_claim_when_enqueue_ack_is_ambiguous(monkeypatch: pytes
 
 
 def test_watchdog_retains_claim_when_post_enqueue_ledger_update_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    import services.job_queue as job_queue_module
+    import services.queues.job_queue as job_queue_module
     import services.scale.inbound_event_reconcile as reconcile
 
     monkeypatch.setattr(reconcile, "redis_required", lambda: True)

@@ -8,7 +8,7 @@ def generative_block_reason(tenant_id: str, *, honor_inflight_reserved: bool = F
     tid = (tenant_id or "").strip()
     if not tid:
         return "unpublished"
-    from services.credit_ai_gate import ai_generation_blocked
+    from services.billing.credit_ai_gate import ai_generation_blocked
 
     if ai_generation_blocked(tid, honor_inflight_reserved=honor_inflight_reserved):
         return "insufficient_credits"

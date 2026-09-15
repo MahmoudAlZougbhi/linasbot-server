@@ -427,7 +427,7 @@ async def process_meta_comment_event(
                         safe_reason="provider_call_ambiguous",
                     )
                 )
-                from services.async_safety_cleanup import await_safety_task
+                from services.scale.async_safety_cleanup import await_safety_task
 
                 await await_safety_task(task)
             raise

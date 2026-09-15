@@ -13,13 +13,13 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests, whatsapp_session  # noqa: E402
-from services.admin_credit_idempotency import (  # noqa: E402
+from services.auth.auth_email_tokens import AuthEmailTokenService  # noqa: E402
+from services.auth.mobile_refresh_token_service import MobileRefreshTokenService  # noqa: E402
+from services.billing.admin_credit_idempotency import (  # noqa: E402
     load_admin_credit_idempotent,
     store_admin_credit_idempotent,
 )
-from services.auth_email_tokens import AuthEmailTokenService  # noqa: E402
-from services.mobile_refresh_token_service import MobileRefreshTokenService  # noqa: E402
-from services.stripe_checkout_service import StripeCheckoutService  # noqa: E402
+from services.billing.stripe_checkout_service import StripeCheckoutService  # noqa: E402
 
 
 @pytest.fixture()

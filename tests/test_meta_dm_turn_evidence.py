@@ -9,9 +9,9 @@ from typing import Any
 import pytest
 
 import config
-from handlers import text_handlers_delayed
-from services.ai_reply_lifecycle import get_turn, persist_generated_reply
-from services.ai_reply_turn_runtime import finalize_delivery
+from services.brain.ai_reply.ai_reply_lifecycle import get_turn, persist_generated_reply
+from services.brain.ai_reply.ai_reply_turn_runtime import finalize_delivery
+from services.brain.inbound import text_handlers_delayed
 
 
 @pytest.mark.asyncio
@@ -19,8 +19,8 @@ async def test_sequential_sender_turns_rotate_meta_delivery_evidence(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.ai_reply_lifecycle as lifecycle
-    import services.ai_reply_turn_runtime as turn_runtime
+    import services.brain.ai_reply.ai_reply_lifecycle as lifecycle
+    import services.brain.ai_reply.ai_reply_turn_runtime as turn_runtime
 
     turns = tmp_path / "ai_reply_turns"
     turns.mkdir()
@@ -35,8 +35,8 @@ async def test_sequential_sender_turns_rotate_meta_delivery_evidence(
         return None
 
     monkeypatch.setattr(text_handlers_delayed, "try_claim_ai_turn", _claim)
-    monkeypatch.setattr("services.outbound_turn_idempotency.complete_ai_turn_claim", _claim_done)
-    monkeypatch.setattr("services.outbound_turn_idempotency.release_ai_turn_claim", _claim_done)
+    monkeypatch.setattr("services.scale.outbound_turn_idempotency.complete_ai_turn_claim", _claim_done)
+    monkeypatch.setattr("services.scale.outbound_turn_idempotency.release_ai_turn_claim", _claim_done)
 
     user_id = "instagram:sequential-evidence"
     user_data: dict[str, Any] = {

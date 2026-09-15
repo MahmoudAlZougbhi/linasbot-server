@@ -79,7 +79,7 @@ def provider_config() -> dict[str, Any]:
     """
     import os
 
-    from services.model_policy import MODEL_CUSTOMER_TERRA, MODEL_OWNER_SOL
+    from services.brain.model_policy import MODEL_CUSTOMER_TERRA, MODEL_OWNER_SOL
 
     return {
         "text": {

@@ -44,7 +44,7 @@ Verdict: **FAIL overall.** Freeze (Creative/Luna/BOC/Owner Lab **source**) is PA
 | `DEFAULT_TENANT_ID` empty unless env | `services/ai_setup/constants.py` `os.getenv("LINASBOT_TENANT_ID", "").strip()`; `require_tenant_id` raises. |
 | Subscription exempt default empty | `DEFAULT_SUBSCRIPTION_EXEMPT_TENANTS = frozenset()`; only `SUBSCRIPTION_EXEMPT_TENANT_IDS` env. |
 | Lab tenants not `linas` | WAVE A: lab allowlist is `lab` / `lab_*`. |
-| Laser social **HTTP live path** unhooked | `tenant_allows_legacy_bridge()` always `False`. `handlers/text_handlers_respond_phase1.py` only calls `route_social_contact_request` when that is true **and** tenant has no published CM. |
+| Laser social **HTTP live path** unhooked | `tenant_allows_legacy_bridge()` always `False`. `services/brain/inbound/text_handlers_respond_phase1.py` only calls `route_social_contact_request` when that is true **and** tenant has no published CM. |
 | Invent-tenant | Live hits are **refusals** (`Never invent tenant_id` in requests/billing), not inventors. |
 
 ### FAIL (live or shippable leftovers)
@@ -55,7 +55,7 @@ Verdict: **FAIL overall.** Freeze (Creative/Luna/BOC/Owner Lab **source**) is PA
 | After CM miss, defaults only for `linas` | same file `:231–234` | `if tenant != "linas": return None` then `DEFAULT_SOCIAL_WHATSAPP_CONTACTS` | X1 |
 | Hardcoded clinic WhatsApp numbers | same file `:25–30` | Beirut/Antelias ±961… | X1 empty; X2 delete Laser router |
 | Historical Meta deletion IDs only for `linas` | `services/meta_claim_data_deletion.py:110` | extra `{channel}:{sender}` shapes | X1 |
-| Unlabeled analytics attributed to `linas` | `services/wallet_spend_analytics.py:86` | unlabeled row matches iff `tid == "linas"` | X1 skip unlabeled |
+| Unlabeled analytics attributed to `linas` | `services/billing/wallet_spend_analytics.py:86` | unlabeled row matches iff `tid == "linas"` | X1 skip unlabeled |
 | Laser `INITIAL_RESTRICTED_*` | `services/ai_setup/constants.py:33–61` | tattoo/co2/pigmentation/facial | X1 empty |
 | Prod scripts **write** `LAB=true` | `scripts/prod_apply_customer_brain_flags.sh:12`, `scripts/prod_stage_customer_brain_env.sh:111` | `LINAS_CUSTOMER_AI_LAB: "true"` | X1 `false` |
 | Startup Laser branding | `main.py:171` | `Lina's Laser AI Bot is ready!` | X1 |
@@ -98,9 +98,9 @@ HTTP `/api/smart-messaging` is **flag-disabled** (`product_features.DISABLED_API
 | `modules/wallet_api.py` | `main.py` Stripe webhook | **KEEP** Subscription/Stripe credits webhook (not the old `/wallet` SPA) |
 | `services/billing/token_wallet_*` | wallet_api + Copilot `account_state`/`tools_read` | **UNKNOWN** — WAVE D: does not gate AI; Copilot still reads it |
 | `services/billing/membership/message_catalog.py` | portal Owner Catalog + admin | **KEEP** portal Message catalog page (draft catalog, not live meter) |
-| `services/stripe_checkout_service.py` | wallet_api | **KEEP** with webhook |
-| `services/wallet_spend_analytics.py` | dashboard activity/usage | **KEEP** after X1 unlabeled skip |
-| `services/token_metering.py` | credit preflight only | **KEEP** (WAVE D) |
+| `services/billing/stripe_checkout_service.py` | wallet_api | **KEEP** with webhook |
+| `services/billing/wallet_spend_analytics.py` | dashboard activity/usage | **KEEP** after X1 unlabeled skip |
+| `services/billing/token_metering.py` | credit preflight only | **KEEP** (WAVE D) |
 
 ### customer_reply_v2 vs brain/
 

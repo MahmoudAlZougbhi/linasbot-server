@@ -83,7 +83,7 @@ def _import_admin_credit(session: Session, idem_dir: Path, dry_run: bool) -> int
 
 
 def _import_mobile_refresh(session: Session, refresh_dir: Path, dry_run: bool) -> int:
-    from services.auth_token_pg_store import upsert_mobile_refresh
+    from services.auth.auth_token_pg_store import upsert_mobile_refresh
 
     count = 0
     if not refresh_dir.is_dir():
@@ -105,7 +105,7 @@ def _import_mobile_refresh(session: Session, refresh_dir: Path, dry_run: bool) -
 
 
 def _import_auth_email(session: Session, tokens_dir: Path, dry_run: bool) -> int:
-    from services.auth_token_pg_store import upsert_auth_email_token
+    from services.auth.auth_token_pg_store import upsert_auth_email_token
 
     count = 0
     if not tokens_dir.is_dir():
@@ -127,7 +127,7 @@ def _import_auth_email(session: Session, tokens_dir: Path, dry_run: bool) -> int
 
 
 def _import_credit_ledger(session: Session, ledger_dir: Path, dry_run: bool) -> tuple[int, int]:
-    from services.credit_ledger_pg_store import import_balance, import_entry
+    from services.billing.credit_ledger_pg_store import import_balance, import_entry
 
     balances = 0
     entries = 0
@@ -171,7 +171,7 @@ def _import_credit_ledger(session: Session, ledger_dir: Path, dry_run: bool) -> 
 
 
 def _import_entitlements(session: Session, ents_dir: Path, dry_run: bool) -> tuple[int, int]:
-    from services.entitlements_pg_store import import_entitlement, import_processed_event
+    from services.billing.entitlements_pg_store import import_entitlement, import_processed_event
 
     ents = 0
     events = 0

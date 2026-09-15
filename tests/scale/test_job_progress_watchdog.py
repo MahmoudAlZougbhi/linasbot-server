@@ -6,7 +6,7 @@ import time
 
 import fakeredis
 
-from services.ai_reply_lifecycle import begin_turn, persist_generated_reply
+from services.brain.ai_reply.ai_reply_lifecycle import begin_turn, persist_generated_reply
 from services.queues.models import QueueJob
 from services.queues.redis_backend import RedisQueueBackend
 from services.scale.delivery_ledger import begin_send, set_delivery_redis_for_tests
@@ -203,7 +203,7 @@ def test_stuck_recovery_reuses_saved_ai(monkeypatch) -> None:
     stored = backend.get(claimed.id)
     assert stored is not None
     assert "resume_saved_ai" in str(stored.last_error or "")
-    from services.ai_reply_lifecycle import find_pending_delivery_turn
+    from services.brain.ai_reply.ai_reply_lifecycle import find_pending_delivery_turn
 
     pending = find_pending_delivery_turn(claim_key_basis="c-s")
     assert pending is not None

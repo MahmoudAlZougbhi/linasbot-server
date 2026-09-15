@@ -28,7 +28,7 @@ from language_resolver import (
 
 # Try to import the service (may fail if dependencies aren't available)
 try:
-    from services.language_detection_service import language_detection_service
+    from services.brain.language_detection_service import language_detection_service
 
     SERVICE_AVAILABLE = True
 except ImportError as e:

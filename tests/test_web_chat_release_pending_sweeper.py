@@ -33,7 +33,7 @@ async def test_reply_ready_persist_failure_commit_throw_stays_pending_without_vi
     patch_web_chat_store(monkeypatch, store)
     widget, visitor, _bundle = _widget_and_visitor(store)
     tenant_id = widget.tenant_id
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     original_release = credit_ledger_service.release
 
@@ -89,7 +89,7 @@ async def test_claimed_without_reservation_returns_402_not_fsm_error(
         "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     monkeypatch.setattr(
         credit_ledger_service,
@@ -119,7 +119,7 @@ async def test_sweeper_converges_committed_ack_loss_without_customer_retry(
     patch_web_chat_store(monkeypatch, store)
     widget, visitor, _bundle = _widget_and_visitor(store)
     tenant_id = widget.tenant_id
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     original_release = credit_ledger_service.release
 

@@ -17,7 +17,7 @@ from modules.api_security import (
     required_permission_for,
     resolve_permissions,
 )
-from services.dashboard_session_service import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME, session_service
+from services.dashboard.dashboard_session_service import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME, session_service
 from services.product_features import is_disabled_api_path
 from services.safe_path import is_safe_relative_name, resolve_backup_filename, resolve_under_root
 from services.ssrf_guard import SSRFValidationError, validate_fetch_url

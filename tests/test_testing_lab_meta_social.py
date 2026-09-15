@@ -8,7 +8,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from modules.api_security import DashboardAuthMiddleware
-from services.dashboard_session_service import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, SESSION_COOKIE_NAME, SessionRecord
+from services.dashboard.dashboard_session_service import (
+    CSRF_COOKIE_NAME,
+    CSRF_HEADER_NAME,
+    SESSION_COOKIE_NAME,
+    SessionRecord,
+)
 from services.product_features import is_disabled_api_path
 
 

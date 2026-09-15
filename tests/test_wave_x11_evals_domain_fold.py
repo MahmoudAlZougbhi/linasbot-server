@@ -44,7 +44,7 @@ def test_wave_x11_domain_folds_no_shims() -> None:
         "services/requests/request_drafts/engine.py",
         "services/ai_setup/search_metadata/generate.py",
         "services/billing/membership/message_catalog.py",
-        "handlers/text_handlers.py",
+        "services/brain/inbound/text_handlers.py",
         "scripts/prod_preflight_readonly.sh",
         "pytest.ini",
     )

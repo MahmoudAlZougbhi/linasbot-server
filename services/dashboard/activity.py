@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from services.billing.wallet_spend_analytics import _entry_matches_tenant, _parse_ts
 from services.dashboard.copilot import build_owner_copilot_summary
 from services.dashboard.usage import _is_failure, _load_entries, _normalize_usage_bucket
-from services.wallet_spend_analytics import _entry_matches_tenant, _parse_ts
 
 _ACTIVITY_PLATFORMS = ("instagram", "facebook", "tiktok", "whatsapp", "web")
 _SMART_SOURCES = frozenset({"qa_database", "dynamic_retrieval"})

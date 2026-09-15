@@ -44,7 +44,7 @@ async def test_enqueue_comment_ai_skips_when_global_claim_already_held(
     process = AsyncMock()
 
     monkeypatch.setattr(
-        "services.durable_event_claim.try_claim_event_handle",
+        "services.scale.durable_event_claim.try_claim_event_handle",
         AsyncMock(return_value=None),
     )
     monkeypatch.setattr(
@@ -150,10 +150,10 @@ async def test_poll_and_webhook_overlap_only_first_path_processes(
         "services.integrations.meta.meta_social_comment_sync.save_posts_backfill_cursor", lambda *_a: None
     )
     monkeypatch.setattr(
-        "services.durable_event_claim.try_claim_event_handle",
+        "services.scale.durable_event_claim.try_claim_event_handle",
         AsyncMock(side_effect=claim_side_effect),
     )
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", AsyncMock())
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", AsyncMock())
     monkeypatch.setattr(
         "services.scale.meta_ingress.persist_meta_comment_accepted",
         lambda resolved, global_key: ("ibe_test", True),

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from services.billing.credit_ledger_service import CreditLedgerService
 from services.billing.entitlements_service import EntitlementsStore
-from services.credit_ledger_service import CreditLedgerService
 from services.scale.financial_invariants import unexplained_financial_delta
 
 
@@ -15,7 +15,7 @@ from services.scale.financial_invariants import unexplained_financial_delta
 def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CreditLedgerService:
     store = EntitlementsStore(root=tmp_path / "ents")
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", store)
     store.set_plan(tenant_id="fin", plan_id="starter", status="active", source="admin")
     return CreditLedgerService(root=tmp_path / "ledger")
 

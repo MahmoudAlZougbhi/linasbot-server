@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from services.durable_event_claim import release_job_lock, try_acquire_job_lock
+from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
 
 
 def _run_omnichannel_reconcile_job_sync() -> None:

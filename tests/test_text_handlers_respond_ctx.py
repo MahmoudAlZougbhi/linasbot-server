@@ -6,8 +6,8 @@ from unittest import mock
 
 import pytest
 
-from handlers.text_handlers_respond_ctx import bootstrap_process_respond_ctx
-from handlers.text_handlers_respond_phase1 import text_handlers_respond_phase1
+from services.brain.inbound.text_handlers_respond_ctx import bootstrap_process_respond_ctx
+from services.brain.inbound.text_handlers_respond_phase1 import text_handlers_respond_phase1
 
 
 def test_bootstrap_injects_language_detection_service() -> None:

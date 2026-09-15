@@ -346,7 +346,7 @@ async def test_mutated_v2_notice_quota_authority_fails_closed(
 async def test_legacy_binding_digest_cannot_be_erased_during_v2_upgrade(
     outbound_store: _FakeFirestore,
 ) -> None:
-    from services.durable_event_claim import meta_claim_binding_digest
+    from services.scale.durable_event_claim import meta_claim_binding_digest
 
     event_id = "ibe_" + "5" * 40
     reference = (

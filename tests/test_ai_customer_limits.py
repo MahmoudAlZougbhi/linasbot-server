@@ -8,24 +8,24 @@ from pathlib import Path
 
 import pytest
 
-from services.ai_limits_enforcement import apply_inbound_word_limit, enforce_text_reply_quota
-from services.ai_limits_source import section_to_enforcement_updates, sync_enforcement_from_payload
-from services.ai_setup.schemas import AiLimitsSection
-from services.ai_usage_limits import AiUsageLimitsService, month_period_key
-from services.ai_usage_limits_settings import (
+from services.ai_setup.ai_limits_enforcement import apply_inbound_word_limit, enforce_text_reply_quota
+from services.ai_setup.ai_limits_source import section_to_enforcement_updates, sync_enforcement_from_payload
+from services.ai_setup.ai_usage_limits import AiUsageLimitsService, month_period_key
+from services.ai_setup.ai_usage_limits_settings import (
     day_period_key,
     period_reset_at,
     truncate_text_to_words,
     week_period_key,
 )
+from services.ai_setup.schemas import AiLimitsSection
 
 
 @pytest.fixture()
 def limits_svc(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AiUsageLimitsService:
     svc = AiUsageLimitsService(store_dir=tmp_path / "ai_limits")
-    monkeypatch.setattr("services.ai_usage_limits.ai_usage_limits_service", svc)
-    monkeypatch.setattr("services.ai_limits_enforcement.ai_usage_limits_service", svc)
-    monkeypatch.setattr("services.ai_limits_source.ai_usage_limits_service", svc)
+    monkeypatch.setattr("services.ai_setup.ai_usage_limits.ai_usage_limits_service", svc)
+    monkeypatch.setattr("services.ai_setup.ai_limits_enforcement.ai_usage_limits_service", svc)
+    monkeypatch.setattr("services.ai_setup.ai_limits_source.ai_usage_limits_service", svc)
     return svc
 
 

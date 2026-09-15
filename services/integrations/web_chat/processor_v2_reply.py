@@ -30,7 +30,7 @@ async def generate_web_chat_reply_text(
     inbound_media: dict[str, Any] | None = None,
     attachment_types: list[str] | None = None,
 ) -> str:
-    from services.ai_limits_enforcement import customer_reply_limit_message
+    from services.ai_setup.ai_limits_enforcement import customer_reply_limit_message
     from services.ai_setup.language_policy import detect_and_resolve_customer_languages
     from services.brain.reply.orchestrator import run_customer_reply_v2_dm
     from services.integrations.web_chat.operation_heartbeat import OperationLeaseHeartbeat

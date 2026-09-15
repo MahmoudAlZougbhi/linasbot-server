@@ -44,8 +44,8 @@ from services.ai_setup.structured_resolver import (
 )
 from services.ai_setup.version_store import PublishedVersionError, load_published_content
 from services.ai_setup.voyage_search import search_kind as semantic_search
-from services.dynamic_messages_service import get_dynamic_message
 from services.faq.local_qa_service import local_qa_service
+from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
 RegenerateFn = Callable[[str, list[str]], Awaitable[str]]
 

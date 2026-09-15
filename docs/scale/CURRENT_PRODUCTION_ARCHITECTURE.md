@@ -152,11 +152,11 @@ Do **not** claim “supports 100k” until synthetic scenarios A–E pass on a d
 
 - `main.py`, `modules/dashboard_api_health.py`
 - `deploy/systemd/linasbot-worker@.service`
-- `services/job_queue.py`, `services/queues/*`
-- `services/rate_limit_service.py`
+- `services/queues/job_queue.py`, `services/queues/*`
+- `services/scale/rate_limit_service.py`
 - `db/session.py`
 - `modules/webhook_handlers_dedupe.py`
-- `services/outbound_turn_idempotency.py`
+- `services/scale/outbound_turn_idempotency.py`
 - `services/meta_social_media_store.py`
 - `docs/release/PHASE13_PRODUCTION_PREP_REPORT.md`
 

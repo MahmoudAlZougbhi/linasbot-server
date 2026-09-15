@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from modules.api_security import DashboardAuthMiddleware
-from services.dashboard_session_service import session_service
+from services.dashboard.dashboard_session_service import session_service
 
 
 @pytest.fixture()
@@ -30,12 +30,12 @@ def stt_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     fake_client = MagicMock()
     fake_client.audio.transcriptions.create = AsyncMock(return_value=fake_result)
     monkeypatch.setattr(
-        "services.llm_core_service.client",
+        "services.brain.llm_core_service.client",
         fake_client,
         raising=False,
     )
     # Ensure import path used inside handler sees the mock.
-    import services.llm_core_service as llm
+    import services.brain.llm_core_service as llm
 
     monkeypatch.setattr(llm, "client", fake_client)
 
@@ -61,7 +61,7 @@ def test_mobile_transcribe_returns_text(stt_client: TestClient, monkeypatch: pyt
     )
     token = session_service.cookie_value_for(session)
 
-    import services.llm_core_service as llm
+    import services.brain.llm_core_service as llm
 
     create = llm.client.audio.transcriptions.create
 

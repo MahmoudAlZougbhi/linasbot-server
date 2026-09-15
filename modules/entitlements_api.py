@@ -15,7 +15,7 @@ from services.billing.entitlements_service import (
     entitlements_store,
     get_tenant_entitlement_public,
 )
-from services.subscription_downgrade import (
+from services.billing.subscription_downgrade import (
     clear_pending_downgrade,
     is_downgrade,
     schedule_pending_downgrade,

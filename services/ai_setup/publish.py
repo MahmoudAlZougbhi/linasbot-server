@@ -103,7 +103,7 @@ def _sync_published_state_to_postgres(
     pointer: PublishedPointer,
     sections: dict[str, dict[str, Any]],
 ) -> None:
-    from services.tenant_runtime_config_service import postgres_enabled, save_actions_payload
+    from services.tenant_runtime.tenant_runtime_config_service import postgres_enabled, save_actions_payload
 
     if not postgres_enabled():
         return
@@ -223,7 +223,7 @@ async def publish_draft_sections(
 
     _sync_published_state_to_postgres(tenant_id=tid, pointer=pointer_out, sections=sections)
 
-    from services.ha_cm_peer_replicate import warm_published_cm_peer_cache
+    from services.scale.ha_cm_peer_replicate import warm_published_cm_peer_cache
 
     warm_published_cm_peer_cache(tenant_id=tid, pointer=pointer_out)
 
@@ -231,7 +231,7 @@ async def publish_draft_sections(
 
     clear_manifest_cache(tid)
 
-    from services.ai_limits_source import sync_enforcement_from_payload
+    from services.ai_setup.ai_limits_source import sync_enforcement_from_payload
 
     sync_enforcement_from_payload(tid, sections.get("ai_limits") or {})
 
@@ -338,7 +338,7 @@ def rollback_to_version(
     sections = read_version_content(tid, pointer.content_version_id) or {}
     _sync_published_state_to_postgres(tenant_id=tid, pointer=pointer, sections=sections)
 
-    from services.ha_cm_peer_replicate import warm_published_cm_peer_cache
+    from services.scale.ha_cm_peer_replicate import warm_published_cm_peer_cache
 
     warm_published_cm_peer_cache(tenant_id=tid, pointer=pointer)
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from services.live_chat.contracts import utc_now
 from services.live_chat.service import live_chat_service
-from services.takeover_customer_notice import customer_human_handover_notice, public_staff_label
+from services.live_chat.takeover_customer_notice import customer_human_handover_notice, public_staff_label
 
 
 def test_public_staff_label_never_returns_email() -> None:

@@ -44,7 +44,7 @@ async def _claim_inline_handle(
     event_id: str,
     binding_id: str,
 ) -> Any:
-    from services.durable_event_claim import meta_claim_binding_digest, try_claim_event_handle
+    from services.scale.durable_event_claim import meta_claim_binding_digest, try_claim_event_handle
 
     return await try_claim_event_handle(
         namespace,
@@ -68,10 +68,10 @@ async def process_inline_meta_dm(
     process_dm: ProcessDm,
     log_prefix: str = "[meta-social]",
 ) -> None:
-    from services.durable_event_claim import complete_event_claim, release_event_claim, run_under_event_claim
+    from services.integrations.social.social_messaging_processor import meta_social_outcome_requires_retry
+    from services.scale.durable_event_claim import complete_event_claim, release_event_claim, run_under_event_claim
     from services.scale.inbound_event_store import mark_inbound_state
     from services.scale.meta_ingress import mark_dm_completed, mark_dm_failed, mark_dm_processing
-    from services.social_messaging_processor import meta_social_outcome_requires_retry
 
     event = resolved.event
     channel = str(event.get("channel") or resolved.binding.channel or "unknown").strip().lower()
@@ -211,8 +211,8 @@ async def process_inline_meta_comment(
     claim_handle: Any,
     process_comment: ProcessComment,
 ) -> None:
-    from services.durable_event_claim import complete_event_claim, release_event_claim, run_under_event_claim
     from services.integrations.meta.meta_comment_replies import comment_reply_requires_retry
+    from services.scale.durable_event_claim import complete_event_claim, release_event_claim, run_under_event_claim
     from services.scale.meta_ingress import mark_dm_completed, mark_dm_failed, mark_dm_processing
 
     evidence_surface = meta_evidence_surface(kind="meta_comment", channel=resolved.binding.channel)

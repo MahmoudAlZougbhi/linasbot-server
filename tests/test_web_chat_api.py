@@ -199,7 +199,7 @@ def test_mobile_payload_includes_mode_and_installation(client, web_store, monkey
         lambda *_a, **_k: (True, None),
     )
 
-    from services.dashboard_session_service import SESSION_COOKIE_NAME, session_service
+    from services.dashboard.dashboard_session_service import SESSION_COOKIE_NAME, session_service
 
     session = session_service.create_session(
         user_id="u-web",

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from services.tenant_runtime_config_service import load_sync_cursor, postgres_enabled, save_sync_cursor
+from services.tenant_runtime.tenant_runtime_config_service import load_sync_cursor, postgres_enabled, save_sync_cursor
 
 POSTS_BACKFILL_CURSOR_KEY = "posts_backfill"
 LEGACY_POSTS_CURSOR_KEY = "posts"

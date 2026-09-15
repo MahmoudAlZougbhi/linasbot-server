@@ -15,16 +15,16 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from services.ai_setup.schemas import AnswerPacket
-from services.llm_core_service import create_chat_completion
-from services.model_pricing import COST_BASIS_TOKEN_RATES, compute_cost_from_usage
-from services.response_formatting import RESPONSE_FORMATTING_RULES
+from services.brain.llm_core_service import create_chat_completion
+from services.brain.model_pricing import COST_BASIS_TOKEN_RATES, compute_cost_from_usage
+from services.owner_copilot.response_formatting import RESPONSE_FORMATTING_RULES
 
 # Customer-facing IG/FB DMs/comments — OpenAI API id gpt-5.6-terra (policy; no weak fallback).
 DEFAULT_CM_ANSWER_MODEL = "gpt-5.6-terra"
 
 
 def cm_answer_model() -> str:
-    from services.model_policy import assert_customer_social_model, customer_social_model_id
+    from services.brain.model_policy import assert_customer_social_model, customer_social_model_id
 
     return assert_customer_social_model(customer_social_model_id())
 
@@ -144,7 +144,7 @@ async def generate_answer(message: str, packet: AnswerPacket) -> str:
 
 async def generate_answer_with_usage(message: str, packet: AnswerPacket) -> AnswerGenerationResult:
     """Call the LLM once and return text + real OpenAI usage tokens / estimated USD cost."""
-    from services.model_policy import emit_model_policy_trace, resolve_customer_social_policy
+    from services.brain.model_policy import emit_model_policy_trace, resolve_customer_social_policy
 
     policy = resolve_customer_social_policy(channel=getattr(packet, "channel", None) or "instagram_dm")
     model = cm_answer_model()
@@ -170,7 +170,7 @@ def make_regenerate_fn(message: str, packet: AnswerPacket) -> Callable[[str, lis
     """Build a bound ``regenerate_fn`` for :func:`services.ai_setup.runtime_pipeline.finalize_response`."""
 
     async def _regenerate(previous_text: str, failed_rules: list[str]) -> str:
-        from services.model_policy import resolve_customer_social_policy
+        from services.brain.model_policy import resolve_customer_social_policy
 
         policy = resolve_customer_social_policy(channel="instagram_dm", regeneration=True)
         model = cm_answer_model()
@@ -205,7 +205,7 @@ def make_regenerate_fn_with_usage(
     """Like :func:`make_regenerate_fn` but accumulates OpenAI usage into ``usage_acc``."""
 
     async def _regenerate(previous_text: str, failed_rules: list[str]) -> str:
-        from services.model_policy import resolve_customer_social_policy
+        from services.brain.model_policy import resolve_customer_social_policy
 
         policy = resolve_customer_social_policy(channel="instagram_dm", regeneration=True)
         model = cm_answer_model()

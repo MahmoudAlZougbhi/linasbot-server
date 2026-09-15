@@ -101,7 +101,7 @@ def _install_feed_mocks(
 
     monkeypatch.setattr("services.scale.meta_ingress.persist_meta_comment_accepted", fake_persist)
     monkeypatch.setattr("services.scale.meta_ingress.enqueue_meta_inbound_event", lambda *a, **k: "queued")
-    monkeypatch.setattr("services.durable_event_claim.meta_claim_binding_digest", lambda _v: "digest")
+    monkeypatch.setattr("services.scale.durable_event_claim.meta_claim_binding_digest", lambda _v: "digest")
 
 
 @pytest.mark.asyncio
@@ -138,7 +138,7 @@ async def test_signed_feed_comment_accepted_once(monkeypatch: pytest.MonkeyPatch
     async def fake_claim(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("queued webhook must not await Firestore claim")
 
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event_handle", fake_claim)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event_handle", fake_claim)
     first = await meta_messaging_webhook.receive_meta_messaging_webhook(_request(body, signature))
     second = await meta_messaging_webhook.receive_meta_messaging_webhook(_request(body, signature))
     assert first.status_code == 200

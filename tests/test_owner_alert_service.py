@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services import owner_alert_service as mod
-from services.owner_alert_service import (
+from services.owner_copilot import owner_alert_service as mod
+from services.owner_copilot.owner_alert_service import (
     TYPE_CUSTOMER_ANGRY,
     TYPE_HUMAN_REQUEST,
     TYPE_OFFENSIVE_LANGUAGE,
     OwnerAlertService,
     build_titles,
 )
-from services.owner_alert_store import OwnerAlertStore
+from services.owner_copilot.owner_alert_store import OwnerAlertStore
 
 
 def test_build_titles_instagram_human_request() -> None:

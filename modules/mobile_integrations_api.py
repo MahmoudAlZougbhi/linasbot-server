@@ -9,8 +9,7 @@ from fastapi.responses import JSONResponse
 
 from modules.api_security import require_permission, require_session, user_has_permission
 from modules.core import app
-from services.credit_ledger_service import credit_ledger_service
-from services.integration_capabilities import list_tenant_integration_status
+from services.billing.credit_ledger_service import credit_ledger_service
 from services.integrations.channel_capability_disconnect import (
     clear_channel_toggles_after_disconnect,
     clear_invalid_dm_enabled_state_async,
@@ -23,10 +22,11 @@ from services.integrations.channel_capability_toggles import (
     set_channel_toggle,
     supported_platforms,
 )
+from services.integrations.integration_capabilities import list_tenant_integration_status
 from services.integrations.meta.meta_app_registry import MetaRegistryError, get_meta_app_registry
 from services.integrations.meta.meta_connection_disconnect import disconnect_meta_binding_set
 from services.integrations.meta.meta_oauth import MetaOAuthError
-from services.mobile_integrations_display import bindings_for_disconnect, enrich_mobile_integration_rows
+from services.integrations.mobile_integrations_display import bindings_for_disconnect, enrich_mobile_integration_rows
 
 ToggleKey = Literal["dm", "comments"]
 
@@ -295,10 +295,10 @@ async def mobile_usage(request: Request) -> Any:
     """
 
     session = require_session(request)
+    from services.billing.credit_ai_gate import remaining_credits
+    from services.billing.credit_buckets import split_credit_remaining
     from services.billing.entitlements_service import entitlements_store
     from services.billing.plan_economics import PLAN_PRICES_USD, recommend_allowance
-    from services.credit_ai_gate import remaining_credits
-    from services.credit_buckets import split_credit_remaining
 
     available = remaining_credits(session.tenant_id)
     reserved = 0

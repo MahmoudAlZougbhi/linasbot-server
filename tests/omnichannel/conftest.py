@@ -66,7 +66,7 @@ def durable_jobs(monkeypatch):
             return job
 
     monkeypatch.setenv("LINAS_REQUIRE_REDIS", "true")
-    monkeypatch.setattr("services.job_queue.job_queue", Queue())
+    monkeypatch.setattr("services.queues.job_queue.job_queue", Queue())
     return jobs
 
 
@@ -94,5 +94,5 @@ def credits(monkeypatch):
             log.append(("release", str(kwargs.get("reservation_id") or "")))
             return {"op": "release"}
 
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", Ledger())
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", Ledger())
     return log

@@ -78,7 +78,7 @@ GONE_IMPORT_FRAGMENTS = (
     "services.service_catalog",
 )
 
-PY_ROOTS = ("services", "modules", "handlers", "scripts")
+PY_ROOTS = ("services", "modules", "scripts")
 UI_ROOTS = ("dashboard/src", "mobile/linas-ai/src")
 GONE_UI_NEEDLES = ("OwnerLab", "OwnerCopilotSetup", "SimpleResourceScreen", "CreativeDraft")
 SKIP_NAME_PARTS = ("/evals/artifacts/", "/node_modules/")
@@ -251,7 +251,7 @@ def test_wave_b_domain_packages_match_drawer() -> None:
 
 def test_wave_c_voyage_only_and_luna_titles_gone() -> None:
     publish = (ROOT / "services/ai_setup/publish.py").read_text(encoding="utf-8")
-    policy = (ROOT / "services/model_policy.py").read_text(encoding="utf-8")
+    policy = (ROOT / "services/brain/model_policy.py").read_text(encoding="utf-8")
     pipeline = (ROOT / "services/ai_setup/runtime_pipeline.py").read_text(encoding="utf-8")
     assert "from services.ai_setup.semantic_index import build_index" not in publish
     assert "VOYAGE_PROVIDER" in publish or "voyage" in publish.lower()
@@ -272,7 +272,7 @@ def test_wave_c_customer_runtime_has_no_luna_engine_names() -> None:
         ROOT / "services/products",
         ROOT / "services/ai_setup/search_metadata",
         ROOT / "services/brain/reply",
-        ROOT / "services/model_policy.py",
+        ROOT / "services/brain/model_policy.py",
     )
     offenders: list[str] = []
     for root in roots:
@@ -285,15 +285,15 @@ def test_wave_c_customer_runtime_has_no_luna_engine_names() -> None:
 
 
 def test_wave_d_one_credit_meter() -> None:
+    from services.billing.iap_product_catalog import credit_product_map, subscription_product_map
     from services.billing.membership.message_flags import message_billing_cutover, message_billing_enabled
+    from services.billing.token_metering import debit_ai_usage
     from services.dashboard.message_surface import overlay_message_fields
-    from services.iap_product_catalog import credit_product_map, subscription_product_map
-    from services.token_metering import debit_ai_usage
 
     flags = (ROOT / "services/billing/membership/message_flags.py").read_text(encoding="utf-8")
-    metering = (ROOT / "services/token_metering.py").read_text(encoding="utf-8")
+    metering = (ROOT / "services/billing/token_metering.py").read_text(encoding="utf-8")
     row = (ROOT / "db/models/credit_entitlements.py").read_text(encoding="utf-8")
-    catalog = (ROOT / "services/iap_product_catalog.py").read_text(encoding="utf-8")
+    catalog = (ROOT / "services/billing/iap_product_catalog.py").read_text(encoding="utf-8")
     assert "Subscription charges credits only" in flags
     assert message_billing_enabled() is False
     assert message_billing_cutover() is False
@@ -346,7 +346,7 @@ def test_wave_e_hub_tiles_and_prices_sot() -> None:
 
 
 def test_wave_f_portal_drawer_no_snapchat() -> None:
-    from services.integration_capabilities import list_tenant_integration_status
+    from services.integrations.integration_capabilities import list_tenant_integration_status
 
     shell = (ROOT / "dashboard/src/pages/owner/OwnerPortalShell.jsx").read_text(encoding="utf-8")
     app = (ROOT / "dashboard/src/App.jsx").read_text(encoding="utf-8")
@@ -357,7 +357,7 @@ def test_wave_f_portal_drawer_no_snapchat() -> None:
         encoding="utf-8"
     )
     about = (ROOT / "dashboard/src/pages/public/About.jsx").read_text(encoding="utf-8")
-    caps = (ROOT / "services/integration_capabilities.py").read_text(encoding="utf-8")
+    caps = (ROOT / "services/integrations/integration_capabilities.py").read_text(encoding="utf-8")
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
 
     assert shell.count("{ to: '/owner") == 5

@@ -93,11 +93,11 @@ async def test_sync_facebook_binding_comments_enqueues_new_comment(monkeypatch: 
         )(),
     )
     monkeypatch.setattr(
-        "services.durable_event_claim.try_claim_event_handle",
+        "services.scale.durable_event_claim.try_claim_event_handle",
         AsyncMock(return_value=MagicMock()),
     )
     monkeypatch.setattr(
-        "services.durable_event_claim.complete_event_claim",
+        "services.scale.durable_event_claim.complete_event_claim",
         AsyncMock(),
     )
     monkeypatch.setattr(
@@ -176,11 +176,11 @@ async def test_sync_facebook_binding_comments_always_scans_recent_posts_with_sta
         lambda _id, cursor: saved_cursor.append(cursor),
     )
     monkeypatch.setattr(
-        "services.durable_event_claim.try_claim_event_handle",
+        "services.scale.durable_event_claim.try_claim_event_handle",
         AsyncMock(return_value=MagicMock()),
     )
     monkeypatch.setattr(
-        "services.durable_event_claim.complete_event_claim",
+        "services.scale.durable_event_claim.complete_event_claim",
         AsyncMock(),
     )
     monkeypatch.setattr(

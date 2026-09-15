@@ -12,7 +12,7 @@ from services.integrations.meta.meta_app_registry import (
     MetaRegistryError,
 )
 from services.integrations.meta.meta_connection_disconnect import disconnect_meta_binding_set
-from services.mobile_integrations_display import bindings_for_disconnect
+from services.integrations.mobile_integrations_display import bindings_for_disconnect
 from tests.meta_instagram_single_active_support import (
     INSTAGRAM_ID,
     _activate_direct,

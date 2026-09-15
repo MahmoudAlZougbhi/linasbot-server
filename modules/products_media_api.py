@@ -9,7 +9,7 @@ from fastapi.responses import Response
 
 from modules.api_security import require_session
 from modules.core import app
-from services.dashboard_session_service import SessionRecord
+from services.dashboard.dashboard_session_service import SessionRecord
 from services.products.media import load_media_bytes, load_media_meta, store_product_media
 
 

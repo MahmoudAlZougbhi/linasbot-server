@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from services.admin_provisioning_service import (
+from services.team.admin_provisioning_service import (
     ProvisionResult,
     audit_line,
     provision_first_admin,
@@ -24,7 +24,7 @@ def test_rejects_known_default_password() -> None:
 
 
 def test_provision_refuses_when_users_exist() -> None:
-    with patch("services.admin_provisioning_service.count_existing_users", return_value=1):
+    with patch("services.team.admin_provisioning_service.count_existing_users", return_value=1):
         result = provision_first_admin(
             email="owner@example.com",
             password="SecurePassPhrase99!",
@@ -37,8 +37,8 @@ def test_provision_refuses_when_users_exist() -> None:
 def test_provision_creates_when_empty() -> None:
     created = {"id": "u-1", "email": "owner@example.com", "role": "admin"}
     with (
-        patch("services.admin_provisioning_service.count_existing_users", return_value=0),
-        patch("services.admin_provisioning_service.user_service.create_user", return_value=created) as create,
+        patch("services.team.admin_provisioning_service.count_existing_users", return_value=0),
+        patch("services.team.admin_provisioning_service.user_service.create_user", return_value=created) as create,
     ):
         result = provision_first_admin(
             email="Owner@Example.com",
@@ -92,11 +92,11 @@ def test_provision_platform_owner_sets_platform_tenant() -> None:
     }
     with (
         patch(
-            "services.admin_provisioning_service.user_service.get_user_by_email",
+            "services.team.admin_provisioning_service.user_service.get_user_by_email",
             return_value=None,
         ),
         patch(
-            "services.admin_provisioning_service.user_service.create_user",
+            "services.team.admin_provisioning_service.user_service.create_user",
             return_value=created,
         ) as create,
     ):

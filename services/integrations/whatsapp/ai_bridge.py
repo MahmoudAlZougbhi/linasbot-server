@@ -49,7 +49,7 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
     expected_epoch = int(snapshot.get("control_epoch") or 0)
     customer_wa_id = str(snapshot.get("customer_wa_id") or "")
 
-    from services.ai_limits_enforcement import (
+    from services.ai_setup.ai_limits_enforcement import (
         apply_inbound_word_limit,
         customer_image_limit_message,
         customer_reply_limit_message,
@@ -274,8 +274,8 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             control_epoch_at_send=int(conv.control_epoch),
         )
 
-        from services.job_queue import job_queue
         from services.queues.config import redis_required
+        from services.queues.job_queue import job_queue
 
         if redis_required():
             repo.update_outbound_intent(

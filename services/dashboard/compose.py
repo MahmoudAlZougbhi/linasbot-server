@@ -7,6 +7,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from services.billing.billing_backend import billing_uses_postgres
+from services.billing.credit_ai_gate import remaining_credits, upgrade_plan_allowed
+from services.billing.credit_buckets import split_credit_remaining
+from services.billing.credit_ledger_service import credit_ledger_service
 from services.billing.entitlements_service import (
     get_tenant_entitlement_public,
     is_subscription_exempt_tenant,
@@ -15,9 +18,6 @@ from services.billing.membership.daily_edits import status as daily_edit_status
 from services.billing.membership.message_flags import message_billing_enabled
 from services.billing.membership.plan_catalog import PLAN_CATALOG
 from services.billing.plan_economics import PLAN_PRICES_USD, recommend_allowance
-from services.credit_ai_gate import remaining_credits, upgrade_plan_allowed
-from services.credit_buckets import split_credit_remaining
-from services.credit_ledger_service import credit_ledger_service
 from services.dashboard.activity import build_activity_summary
 from services.dashboard.channels import build_channel_breakdown
 from services.dashboard.message_surface import overlay_message_fields, workspace_message_balance
@@ -32,7 +32,7 @@ from services.dashboard.periods import (
 from services.dashboard.status import build_alerts, derive_workspace_status
 from services.dashboard.usage import aggregate_tenant_usage
 from services.owner_copilot.account_state import compute_cm_progress
-from services.platform_owner_service import PlatformOwnerService
+from services.team.platform_owner_service import PlatformOwnerService
 
 platform_owner_service = PlatformOwnerService()
 
@@ -413,7 +413,7 @@ def build_tenant_mobile_dashboard(
         smart_followup_section = _section_error("smart_followup_unavailable", str(exc))
 
     try:
-        from services.integration_capabilities import list_tenant_integration_status
+        from services.integrations.integration_capabilities import list_tenant_integration_status
 
         integration_rows = list_tenant_integration_status(tid)
         activity_summary = build_activity_summary(

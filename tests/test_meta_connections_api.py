@@ -11,7 +11,7 @@ import pytest
 from starlette.requests import Request
 
 from modules import meta_connections_api, meta_connections_api_lifecycle
-from services.dashboard_session_service import SessionRecord
+from services.dashboard.dashboard_session_service import SessionRecord
 from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     APP_B_KEY,

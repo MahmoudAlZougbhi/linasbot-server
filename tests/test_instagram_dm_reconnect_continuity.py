@@ -227,7 +227,7 @@ def test_combine_processing_job_enqueues_follow_up(monkeypatch: pytest.MonkeyPat
             return job
 
     monkeypatch.setattr(
-        "services.job_queue.job_queue",
+        "services.queues.job_queue.job_queue",
         SimpleNamespace(_redis=_Backend()),
         raising=False,
     )
@@ -322,8 +322,8 @@ async def test_inline_combine_scheduled_stays_queued(monkeypatch: pytest.MonkeyP
     async def complete(*_args: Any, **_kwargs: Any) -> None:
         return None
 
-    monkeypatch.setattr("services.durable_event_claim.run_under_event_claim", run_under)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", complete)
+    monkeypatch.setattr("services.scale.durable_event_claim.run_under_event_claim", run_under)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", complete)
     monkeypatch.setattr("services.scale.meta_ingress.mark_dm_processing", lambda *_a, **_k: None)
     monkeypatch.setattr(
         "services.scale.inbound_event_store.mark_inbound_state",

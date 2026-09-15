@@ -40,7 +40,7 @@ def _write_report() -> Path:
 
 
 async def main() -> int:
-    import services.credit_ai_gate as credit_ai_gate
+    import services.billing.credit_ai_gate as credit_ai_gate
 
     credit_ai_gate.ai_generation_blocked = lambda *_a, **_k: False  # type: ignore[assignment]
     init_sqlite(os.environ["LINAS_WHATSAPP_DATABASE_URL"])

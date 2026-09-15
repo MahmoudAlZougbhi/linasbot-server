@@ -7,7 +7,6 @@ from dataclasses import dataclass, replace
 
 import httpx
 
-from services.async_safety_cleanup import await_safety_task as _await_cleanup_shielded
 from services.integrations.meta.meta_app_registry import (
     MetaAppRegistry,
     MetaAssetBinding,
@@ -33,6 +32,7 @@ from services.integrations.meta.meta_subject_deletion_guard import (
     acquire_meta_oauth_subject_guard,
     meta_deletion_subject_hmac,
 )
+from services.scale.async_safety_cleanup import await_safety_task as _await_cleanup_shielded
 
 
 @dataclass(frozen=True)
