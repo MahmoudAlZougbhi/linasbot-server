@@ -92,7 +92,7 @@ class LanguageResolver:
     # langdetect confidence threshold
     LANGDETECT_CONF_THRESHOLD = 0.70
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._cache: dict[str, LangState] = {}
 
     def set_expecting_full_name(self, conversation_id: str, expecting: bool) -> None:
