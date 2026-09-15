@@ -53,12 +53,14 @@ from services.brain.language_resolver_text import (  # noqa: F401
 # 7) State + resolver
 # ============================================================
 
+
 @dataclass
 class LangState:
     lang_locked: str = "en"
     confidence: float = 0.0
     expecting_full_name: bool = False
     last_reasons: list[str] = field(default_factory=list)
+
 
 class LanguageResolver:
     """
@@ -128,7 +130,6 @@ class LanguageResolver:
             self._cache[conversation_id] = state
             return state.lang_locked
 
-
         # Arabic script dominates (check early, even for short messages)
         if ARABIC_RE.search(raw):
             state.lang_locked = "ar"
@@ -192,15 +193,8 @@ class LanguageResolver:
                 # Don't switch to English - user likely continuing in same language
                 words = raw.split()
                 prev_ar = state.lang_locked == "ar"
-                if (
-                    lang == "en"
-                    and len(words) <= 1
-                    and alpha_len(t) <= 8
-                    and prev_ar
-                ):
-                    state.last_reasons.append(
-                        f"single_word_en_keep_ar(len={alpha_len(t)},prev={state.lang_locked})"
-                    )
+                if lang == "en" and len(words) <= 1 and alpha_len(t) <= 8 and prev_ar:
+                    state.last_reasons.append(f"single_word_en_keep_ar(len={alpha_len(t)},prev={state.lang_locked})")
                     self._cache[conversation_id] = state
                     return state.lang_locked
                 state.lang_locked = lang
@@ -257,6 +251,7 @@ class LanguageResolver:
 # 8) Prompt injection helper
 # ============================================================
 
+
 def system_language_instruction(lang: str) -> str:
     if lang == "ar":
         return (
@@ -269,7 +264,4 @@ def system_language_instruction(lang: str) -> str:
             "Réponds en français. "
             "Garde le code, les noms de produits, et les identifiants en alphabet latin si nécessaire."
         )
-    return (
-        "Respond in English. "
-        "Keep code, product names, and identifiers in Latin characters when needed."
-    )
+    return "Respond in English. Keep code, product names, and identifiers in Latin characters when needed."
