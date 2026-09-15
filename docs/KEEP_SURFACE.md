@@ -293,3 +293,13 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - **Kept:** `message_catalog` + Owner Catalog + `platform_message_api`. Credit IAP `com.linasai.credits.*`.
 - Tests: `tests/test_wave_x9_kill_token_wallet.py`.
 
+## WAVE X10 — legacy bridge + booking museum
+
+- Inbound text path is CM-only: no `route_social_contact_request` from handlers. Unpublished tenants get the unpublished message (`tenant_allows_legacy_bridge` stays False).
+- `is_social_channel` stays in `social_contact_routing_detect.py` for Smart Follow-Up + Meta DM identity.
+- Clinic OpenAI booking/CRM tool schemas (`utils_tools_booking.py`, `utils_tools_lookup.py`) deleted. `get_openai_tools_schema()` returns `[]`.
+- Creative schedule list deleted: `services/schedule_service.py` gone. Copilot `read_scheduled_posts` handler gone. Queue `publish_scheduled` fail-closes.
+- **Kept:** CM publish runtime, Meta DM reply, `creative_policy.py` refusal (includes `read_scheduled_posts` name).
+- Tests: `tests/test_wave_x10_legacy_bridge_booking.py`.
+
+

@@ -196,23 +196,6 @@ async def tool_read_dashboard_metrics(*, tenant_id: str, role: str, user_id: str
     return ToolResult(ok=True, name="read_dashboard_metrics", data=data)
 
 
-async def tool_read_scheduled_posts(*, tenant_id: str, role: str) -> ToolResult:
-    del role
-    from services.schedule_service import schedule_service
-
-    posts = schedule_service.list_for_tenant(tenant_id)
-    compact = [
-        {
-            "id": getattr(p, "id", None),
-            "platform": getattr(p, "platform", None),
-            "scheduled_at": getattr(p, "scheduled_at", None),
-            "status": getattr(p, "status", None),
-        }
-        for p in posts[:50]
-    ]
-    return ToolResult(ok=True, name="read_scheduled_posts", data={"posts": compact, "count": len(compact)})
-
-
 async def tool_read_jobs_errors(*, tenant_id: str, role: str) -> ToolResult:
     del role, tenant_id
     import os

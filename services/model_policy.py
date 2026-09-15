@@ -106,7 +106,6 @@ OWNER_READONLY_INTENTS = frozenset(
         "validate_cm",
         "read_cm",
         "read_dashboard_metrics",
-        "read_scheduled_posts",
         "read_jobs_errors",
         "read_profile",
         "read_account_summary",

@@ -108,73 +108,6 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
     print(f"[_process_and_respond] 🌐 Language detected: {current_preferred_lang} → respond in: {response_language}")
     # =====================================
 
-    # Instagram/Facebook never create or manage appointments inside the social DM.
-    # Laser-specific branch/gender WhatsApp routing is legacy-bridge only.
-    # Published CM tenants use the CM handoff pipeline (no Beirut/Antelias leakage).
-    from services.ai_setup.constants import (
-        tenant_allows_legacy_bridge as _tenant_allows_legacy_bridge,
-    )
-    from services.ai_setup.constants import (
-        tenant_uses_cm_runtime as _tenant_uses_cm_runtime,
-    )
-    from services.integrations.social.social_contact_routing import (
-        clear_social_booking_preference,
-        is_social_channel,
-        route_social_contact_request,
-        social_booking_preference_key,
-        social_booking_preference_reply,
-    )
-
-    if is_social_channel(user_data.get("channel")):
-        _social_tenant = str(user_data.get("tenant_id") or "").strip()
-        _use_legacy_social_router = _tenant_allows_legacy_bridge(_social_tenant) and not _tenant_uses_cm_runtime(
-            _social_tenant
-        )
-        if _use_legacy_social_router:
-            if user_data.get("user_preferred_lang") != current_preferred_lang:
-                user_persistence.save_user_language(user_id, current_preferred_lang)
-            social_route = route_social_contact_request(
-                user_input_to_process,
-                user_data,
-                current_preferred_lang,
-            )
-            if social_route:
-                preference_persisted = True
-                if social_route.preference_to_persist:
-                    preference_persisted = await user_persistence.save_social_booking_preference(
-                        user_id,
-                        social_booking_preference_key(user_data),
-                        social_route.preference_to_persist,
-                    )
-                    if not preference_persisted:
-                        clear_social_booking_preference(user_data)
-
-                reply = social_route.reply
-                if social_route.intent == "preference" and social_route.gender in {"male", "female"}:
-                    reply = social_booking_preference_reply(
-                        current_preferred_lang,
-                        social_route.gender,
-                        persisted=preference_persisted,
-                    )
-
-                await send_message_func(user_id, reply)
-                await save_conversation_message_to_firestore(
-                    user_id,
-                    "ai",
-                    reply,
-                    current_conversation_id,
-                    user_name,
-                    user_data.get("phone_number"),
-                    metadata={
-                        "handled_by": "deterministic_social_router",
-                        "channel": user_data.get("channel"),
-                        "social_contact_intent": social_route.intent,
-                        "social_contact_env": social_route.contact_env,
-                        "social_preference_persisted": preference_persisted,
-                    },
-                )
-                return _PHASE_HALT
-
     # DEBUG: Log gender state at start of processing
     print(f"[_process_and_respond] 🔍 USER STATE for ...{str(user_id)[-4:]}:")
     print(f"   - current_gender: '{current_gender}'")
@@ -309,10 +242,7 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
         "_dynamic_retrieval_flow_meta",
         "_lang_tenant",
         "_resolve_latest_conversation_id",
-        "_social_tenant",
-        "_tenant_allows_legacy_bridge",
         "_tenant_uses_cm_runtime",
-        "_use_legacy_social_router",
         "alt_candidate",
         "candidate",
         "candidate_ref",
@@ -320,7 +250,6 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
         "candidate_user_id",
         "candidate_user_ids",
         "canonical_user_id",
-        "clear_social_booking_preference",
         "conv_data",
         "conv_id_to_check",
         "conversations_collection_for_user",
@@ -338,25 +267,17 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
         "is_expecting_name",
         "is_flow_logging_enabled",
         "is_post_takeover_escalation_cooldown",
-        "is_social_channel",
         "lang_result",
         "language_detection_service",
         "limit_msg",
         "log_interaction",
-        "preference_persisted",
-        "reply",
         "resolve_customer_response_language",
         "response_language",
-        "route_social_contact_request",
-        "router_reply_lang",
         "save_conversation_message_to_firestore",
         "send_action_func",
         "send_message_func",
         "set_post_takeover_escalation_cooldown",
         "should_send_waiting",
-        "social_booking_preference_key",
-        "social_booking_preference_reply",
-        "social_route",
         "start_time",
         "sync_post_release_cooldown_from_conv_payload",
         "takeover_check_error",
