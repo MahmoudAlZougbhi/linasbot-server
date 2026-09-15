@@ -200,6 +200,9 @@ def put_draft(
         from services.ai_setup.search_metadata.cm_apply import enrich_section_payload
 
         safe_payload = enrich_section_payload(name, safe_payload, previous_payload)
+        from services.brain.compiler.chunk_apply import apply_save_chunks
+
+        apply_save_chunks(name, safe_payload, previous_payload, tenant_id=tid)
         envelope = SectionDraftEnvelope(
             tenant_id=tid,
             section=name,

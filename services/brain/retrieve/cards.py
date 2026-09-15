@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from services.ai_setup.version_store import PublishedVersionError, load_published_content
@@ -19,6 +19,7 @@ class TitleCard:
     revision: str = ""
     aliases: tuple[str, ...] = field(default_factory=tuple)
     body: str = ""
+    chunks: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _label(labels: Any) -> str:
@@ -157,6 +158,7 @@ def cards_from_sections(
                     revision=old.revision or card.revision,
                     aliases=tuple(dict.fromkeys([*old.aliases, *card.aliases])),
                     body=old.body or card.body,
+                    chunks=old.chunks or card.chunks,
                 )
     # Mobile Services screen writes published CM prices.catalog — that is the service SoT.
     prices = sections.get("prices")
@@ -168,14 +170,9 @@ def cards_from_sections(
             source_id = service_card.item_id.partition(":")[2]
             blob = price_search_blob(sections, source_id)
             if blob:
-                service_card = TitleCard(
-                    item_id=service_card.item_id,
-                    source_family=service_card.source_family,
-                    title=service_card.title,
+                service_card = replace(
+                    service_card,
                     search_text=normalize_search_text(f"{service_card.search_text} {blob}"),
-                    revision=service_card.revision,
-                    aliases=service_card.aliases,
-                    body=service_card.body,
                 )
             cards.append(service_card)
     off_payload = sections.get("off_days")
@@ -194,7 +191,36 @@ def cards_from_sections(
             )
             if off_card is not None:
                 cards.append(off_card)
-    return cards
+    return _attach_saved_chunks(cards, tenant_id)
+
+
+_SECTION_FOR_FAMILY = {
+    "knowledge": "knowledge",
+    "care": "care",
+    "branches": "branches",
+    "services": "prices",
+}
+
+
+def _attach_saved_chunks(cards: list[TitleCard], tenant_id: str) -> list[TitleCard]:
+    """Hydrate save-time sidecar texts for Voyage. Disk read only — no chunker LLM."""
+    if not tenant_id:
+        return cards
+    from services.brain.compiler.chunk_store import chunk_texts
+
+    attached: list[TitleCard] = []
+    for card in cards:
+        section = _SECTION_FOR_FAMILY.get(card.source_family)
+        if not section:
+            attached.append(card)
+            continue
+        source_id = card.item_id.partition(":")[2]
+        texts = chunk_texts(tenant_id, section, source_id)
+        if texts:
+            attached.append(replace(card, chunks=texts))
+        else:
+            attached.append(card)
+    return attached
 
 
 def load_published_cards(tenant_id: str) -> list[TitleCard]:
