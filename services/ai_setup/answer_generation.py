@@ -3,9 +3,8 @@
 The :class:`~services.ai_setup.schemas.AnswerPacket` is a self-contained, grounded context bundle
 (identity, style, facts, chunks, platform rules). This module turns it into a single OpenAI
 chat completion — not the removed classic GPT orchestration (booking
-FSM/CRM/tool-calling), which is out of scope for the CM content-answer runtime. Callers that
-need booking/CRM behavior should keep using the legacy path (``CM_RUNTIME_MODE=legacy``, the
-default) until a future cutover phase.
+FSM/CRM/tool-calling), which is out of scope for the CM content-answer runtime.
+Live customer answers run published-only.
 """
 
 from __future__ import annotations

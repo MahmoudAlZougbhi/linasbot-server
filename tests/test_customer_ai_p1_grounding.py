@@ -14,9 +14,9 @@ from services.brain.providers.spaces import spaces_snapshot
 from services.brain.retrieve.cards import cards_from_sections
 from services.brain.retrieve.lexical import bm25_scores, search_cards, tokenize
 from services.brain.templates import brain_template
-from services.brain.test_lab import run_lab_verification_exercises
 from services.brain.visual import visual_retrieval_decision
 from tests.brain_evals.golden_pack import run_golden_pack
+from tests.cm_test_lab import run_lab_verification_exercises
 
 
 def _bundle(*texts: str) -> EvidenceBundle:

@@ -92,7 +92,7 @@ export function TeachServices({ play }) {
           <span className="font-semibold">$49</span>
         </div>
         <div className="flex items-center justify-between text-[#171A19]">
-          <span>Full body · 90 min</span>
+          <span>Workshop · 90 min</span>
           <span className="font-semibold">$299</span>
         </div>
         <div className="lp-fade-up flex items-center justify-between rounded-lg bg-white px-2 py-1.5" style={{ animationDelay: '200ms' }}>
@@ -114,11 +114,9 @@ export function TeachServices({ play }) {
 export function TeachProducts({ play }) {
   return (
     <MiniFrame play={play}>
-      <img
-        src="/brand/landing/product-serum.jpg"
-        alt=""
-        className="lp-fade-up mx-auto h-20 w-16 rounded-xl object-cover"
-      />
+      <div className="lp-fade-up mx-auto flex h-20 w-16 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-[#E6EBE8]">
+        <span className="text-[0.65rem] font-bold text-[#06715F]">Kit</span>
+      </div>
       <p className="mt-2 text-center text-xs text-[#06715F]">$59</p>
       <div className="mt-2 flex justify-center gap-1.5">
         {['#06715F', '#C5CDCA', '#E4E8E6', '#8A938F'].map((c, i) => (
@@ -131,9 +129,9 @@ export function TeachProducts({ play }) {
       </div>
       <div className="mt-2 flex justify-center gap-2 text-[0.65rem]">
         <span className="lp-fade-up rounded-full border border-[#06715F] px-2 py-0.5 text-[#06715F]" style={{ animationDelay: '500ms' }}>
-          30ml
+          Starter
         </span>
-        <span className="rounded-full border border-[#D5DCD8] px-2 py-0.5 text-[#5C6663]">50ml</span>
+        <span className="rounded-full border border-[#D5DCD8] px-2 py-0.5 text-[#5C6663]">Pro</span>
       </div>
     </MiniFrame>
   );

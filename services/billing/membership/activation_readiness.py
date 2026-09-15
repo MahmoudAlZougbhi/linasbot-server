@@ -182,7 +182,7 @@ def activation_readiness() -> dict[str, Any]:
         "blockers": blockers,
         "note": (
             "testing_ready means Brain/admin code paths import. Owner Lab HTTP and /owner/lab "
-            "are unmounted (WAVE 1). Capture-only pytest helpers remain under services.brain.test_lab. "
+            "are unmounted (WAVE 1). Capture-only pytest helpers remain under tests/cm_test_lab.py. "
             "ready_to_enable stays false until commercial/live verification blockers clear. "
             "This report never enables message billing."
         ),

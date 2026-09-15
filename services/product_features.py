@@ -113,8 +113,8 @@ LEGACY_BOOKING_TOOL_NAMES: frozenset[str] = frozenset(
     }
 )
 
-# Single runtime: BOC is not in SaaS. Always off.
-BOC_BOOKING_ENABLED_ENV: Final[str] = "LINASLASER_BOC_BOOKING_ENABLED"
+# Single runtime: BOC is not in SaaS. Always off. Env name is documentation-only.
+BOC_BOOKING_ENABLED_ENV: Final[str] = "BOC_BOOKING_ENABLED"
 BOC_BOOKING_DISABLED_CODE: Final[str] = "boc_not_in_saas"
 
 

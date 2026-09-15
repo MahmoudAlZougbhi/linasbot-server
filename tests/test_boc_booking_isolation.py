@@ -26,6 +26,7 @@ def test_boc_is_not_in_saas() -> None:
 
 
 def test_boc_env_cannot_reenable(monkeypatch) -> None:
+    monkeypatch.setenv("BOC_BOOKING_ENABLED", "true")
     monkeypatch.setenv("LINASLASER_BOC_BOOKING_ENABLED", "true")
     assert boc_booking_enabled() is False
 
