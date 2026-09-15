@@ -58,9 +58,9 @@ def build_contextual_rows(
         if not chunks:
             continue
         grouped = contextual_groups(chunks)
-        for parent_id, texts in grouped.items():
+        for parent_id, group_texts in grouped.items():
             parents.append(parent_id)
-            groups.append(texts)
+            groups.append(group_texts)
             for chunk in chunks:
                 if chunk.parent_id != parent_id:
                     continue
