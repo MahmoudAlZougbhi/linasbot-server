@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
+from services.auth.mobile_refresh_token_service import MobileRefreshTokenService
+from services.billing.credit_ledger_service import CreditLedgerService
 from services.billing.entitlements_service import EntitlementsStore, apply_store_notification
-from services.credit_ledger_service import CreditLedgerService
-from services.mobile_refresh_token_service import MobileRefreshTokenService
+from services.brain.safety_gateway import SafetyGateway
 from services.owner_copilot.chat_store import OwnerChatStore
-from services.platform_owner_service import PlatformOwnerService
-from services.safety_gateway import SafetyGateway
+from services.team.platform_owner_service import PlatformOwnerService
 
 
 def test_mobile_refresh_rotate(tmp_path) -> None:
@@ -64,7 +64,7 @@ def test_credit_reserve_release(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(es, "entitlements_store", store)
     store.set_plan(tenant_id="t1", plan_id="pro", status="active", source="admin")
     monkeypatch.setattr(
-        "services.credit_ledger_service.entitlements_store",
+        "services.billing.credit_ledger_service.entitlements_store",
         store,
     )
     ledger = CreditLedgerService(root=tmp_path / "ledger")

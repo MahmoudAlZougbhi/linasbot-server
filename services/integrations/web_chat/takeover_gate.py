@@ -16,7 +16,7 @@ class WebChatTakeoverState:
 
 
 def _waiting_notice(lang: str = "ar") -> str:
-    from services.dynamic_messages_service import get_dynamic_message
+    from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
     return get_dynamic_message("waiting_queue_message", lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
 
@@ -29,7 +29,7 @@ async def read_web_chat_takeover_state(*, user_id: str, conversation_id: str) ->
         db = get_firestore_db()
         if not db:
             return WebChatTakeoverState(active=False, operator_id=None)
-        from handlers.text_handlers_message_takeover import resolve_conversation_doc_ref
+        from services.brain.inbound.text_handlers_message_takeover import resolve_conversation_doc_ref
 
         canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
         users_coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("users")

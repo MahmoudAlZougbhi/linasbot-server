@@ -271,7 +271,7 @@ async def execute_guarded_meta_send(
                 pass
         raise
 
-    from services.ai_reply_delivery import classify_send_result
+    from services.brain.ai_reply.ai_reply_delivery import classify_send_result
 
     evidence = classify_send_result(result)
     provider_message_id = str(evidence.get("provider_message_id") or "").strip()

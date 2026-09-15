@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import HTTPException, Request
 
 from modules.core import app
-from services.store_iap_service import (
+from services.billing.store_iap_service import (
     apply_normalized_notification,
     normalize_google_status,
     verify_google_notification_payload,

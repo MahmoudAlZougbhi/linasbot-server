@@ -9,12 +9,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_wave_x10_handlers_do_not_import_social_contact_routing() -> None:
     hits: list[str] = []
-    for path in (ROOT / "handlers").rglob("*.py"):
+    for path in (ROOT / "services/brain/inbound").rglob("*.py"):
         text = path.read_text(encoding="utf-8")
         if "social_contact_routing import" in text or "route_social_contact_request" in text:
             hits.append(str(path.relative_to(ROOT)))
     assert hits == []
-    message = (ROOT / "handlers/text_handlers_message.py").read_text(encoding="utf-8")
+    message = (ROOT / "services/brain/inbound/text_handlers_message.py").read_text(encoding="utf-8")
     assert "social_contact_routing_detect import is_social_channel" in message
 
 

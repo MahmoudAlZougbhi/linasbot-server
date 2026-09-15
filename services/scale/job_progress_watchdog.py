@@ -71,7 +71,7 @@ def _has_saved_ai(job: Any) -> bool:
     lid = _delivery_key(job)
     basis = str(payload.get("_claim_key_basis") or payload.get("claim_key_basis") or "").strip()
     try:
-        from services.ai_reply_lifecycle import find_pending_delivery_turn, get_turn
+        from services.brain.ai_reply.ai_reply_lifecycle import find_pending_delivery_turn, get_turn
 
         if lid:
             rec = get_turn(lid)

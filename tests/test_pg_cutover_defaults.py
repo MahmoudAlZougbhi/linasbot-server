@@ -47,8 +47,8 @@ def test_billing_fail_closed_no_file_write(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.delenv("LINAS_WHATSAPP_DATABASE_URL", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
     from db.session import reset_engine_for_tests
+    from services.billing.credit_ledger_service import CreditLedgerService
     from services.billing.entitlements_service import EntitlementsStore
-    from services.credit_ledger_service import CreditLedgerService
 
     reset_engine_for_tests()
     ledger_root = tmp_path / "credit_ledger"
@@ -56,8 +56,8 @@ def test_billing_fail_closed_no_file_write(tmp_path: Path, monkeypatch: pytest.M
     ledger = CreditLedgerService(root=ledger_root)
     store = EntitlementsStore(root=ents_root)
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_pg_ops.entitlements_store", store)
 
     with pytest.raises(BillingBackendError, match="unavailable"):
         ledger.grant_pack(tenant_id="t_fail", credits=10, request_id="r1", source="test")
@@ -76,7 +76,7 @@ def test_auth_token_fail_closed_no_file_write(tmp_path: Path, monkeypatch: pytes
     monkeypatch.delenv("LINAS_WHATSAPP_DATABASE_URL", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
     from db.session import reset_engine_for_tests
-    from services.mobile_refresh_token_service import MobileRefreshTokenService
+    from services.auth.mobile_refresh_token_service import MobileRefreshTokenService
 
     reset_engine_for_tests()
     store_dir = tmp_path / "mobile_refresh"

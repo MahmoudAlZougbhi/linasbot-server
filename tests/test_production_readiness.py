@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 
 from modules import dashboard_api_health
 from scripts.ha.integration_capability_preflight import evaluate_deploy_preflight
-from services.channel_health import evaluate_channel_health
+from services.integrations.channel_health import evaluate_channel_health
 from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     LINAS_INSTAGRAM_ACCOUNT_ID,
@@ -257,7 +257,7 @@ def test_ha_lb_deploy_rollback_never_use_channel_health() -> None:
 
 def test_new_readiness_modules_stay_under_500_lines() -> None:
     for rel in (
-        "services/channel_health.py",
+        "services/integrations/channel_health.py",
         "services/integrations/meta/meta_app_registry.py",
         "modules/dashboard_api_health.py",
         "scripts/ha/integration_capability_preflight.py",

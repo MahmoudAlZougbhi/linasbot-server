@@ -87,7 +87,7 @@ def test_build_greeting_uses_pool_not_llm(monkeypatch) -> None:
 
 
 def test_guest_greeting_uses_same_pool() -> None:
-    from services.guest_ai_service import build_guest_greeting
+    from services.guest.guest_ai_service import build_guest_greeting
 
     reset_last_picks()
     text = build_guest_greeting(language="fr", session_id="sess-1")

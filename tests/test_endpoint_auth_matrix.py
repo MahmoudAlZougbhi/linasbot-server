@@ -16,7 +16,12 @@ from modules.api_security import (
     _PUBLIC_PREFIX,
     is_public_api,
 )
-from services.dashboard_session_service import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, SESSION_COOKIE_NAME, session_service
+from services.dashboard.dashboard_session_service import (
+    CSRF_COOKIE_NAME,
+    CSRF_HEADER_NAME,
+    SESSION_COOKIE_NAME,
+    session_service,
+)
 
 # Populated by test_route_inventory_counts for reporting (no response bodies / PII).
 ENDPOINT_AUTH_COUNTS: dict[str, int] = {}
@@ -326,7 +331,7 @@ class TestDebugAndSimulationEndpoints:
     def test_simulate_webhook_disabled_in_production_like_env(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from services.rate_limit_service import rate_limit_service
+        from services.scale.rate_limit_service import rate_limit_service
 
         monkeypatch.setenv("ENVIRONMENT", "production")
         monkeypatch.setenv("ALLOW_DEBUG_SIMULATE_WEBHOOK", "true")

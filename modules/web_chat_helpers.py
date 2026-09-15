@@ -14,7 +14,7 @@ from services.integrations.web_chat.embed import build_embed_snippet, public_api
 from services.integrations.web_chat.flags import web_chat_containment_active
 from services.integrations.web_chat.processor import evaluate_web_ai_eligibility
 from services.integrations.web_chat.store import web_chat_store
-from services.rate_limit_service import rate_limit_service
+from services.scale.rate_limit_service import rate_limit_service
 
 
 def reject_if_web_chat_contained() -> None:

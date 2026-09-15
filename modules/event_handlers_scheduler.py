@@ -7,7 +7,7 @@ from typing import Any
 
 
 async def run_smart_followup_worker_job() -> None:
-    from services.durable_event_claim import release_job_lock, try_acquire_job_lock
+    from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
 
     if not try_acquire_job_lock("whatsapp_smart_followup_worker", ttl_seconds=55):
         return

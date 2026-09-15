@@ -47,8 +47,8 @@ class IngressJobLookupError(Exception):
 
 
 def lookup_ingress_job(rec: InboundEventRecord) -> Any:
-    from services.job_queue import job_queue
     from services.queues.config import redis_required
+    from services.queues.job_queue import job_queue
 
     if getattr(job_queue, "backend", None) != "redis" or not getattr(job_queue, "production_ready", False):
         return None

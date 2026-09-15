@@ -250,7 +250,7 @@ async def _run_guarded(
     fail_prefix: str,
     definitive: Any,
 ) -> dict[str, Any]:
-    from services.ai_reply_delivery import classify_send_result
+    from services.brain.ai_reply.ai_reply_delivery import classify_send_result
     from services.integrations.meta.meta_controlled_evidence import meta_evidence_surface
     from services.integrations.meta.meta_outbound_attempts import execute_guarded_meta_send
 

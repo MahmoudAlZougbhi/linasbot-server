@@ -35,7 +35,7 @@ def compute_cm_progress(tenant_id: str) -> dict[str, Any]:
 
 
 def compute_integration_summary(tenant_id: str) -> dict[str, Any]:
-    from services.integration_capabilities import list_tenant_integration_status
+    from services.integrations.integration_capabilities import list_tenant_integration_status
 
     rows = list_tenant_integration_status(tenant_id)
     connected = False
@@ -97,7 +97,7 @@ def build_account_summary(*, tenant_id: str, user_id: str) -> dict[str, Any]:
     except Exception:
         plan = {"available": False}
     try:
-        from services.credit_ai_gate import owner_credits_public
+        from services.billing.credit_ai_gate import owner_credits_public
 
         credits = owner_credits_public(tenant_id)
     except Exception:

@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from modules.api_security import is_public_api
-from services.mobile_app_version import compare_semver, evaluate_app_version, parse_semver
+from services.dashboard.mobile_app_version import compare_semver, evaluate_app_version, parse_semver
 
 
 @pytest.fixture(scope="module")

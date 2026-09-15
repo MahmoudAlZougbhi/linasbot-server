@@ -12,7 +12,7 @@ from starlette.requests import Request
 
 from modules import auth_api
 from modules.api_security import DashboardAuthMiddleware
-from services.dashboard_session_service import SessionRecord
+from services.dashboard.dashboard_session_service import SessionRecord
 
 
 def _request(tenant_id: str = "tenant-a") -> Request:

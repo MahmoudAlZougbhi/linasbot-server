@@ -20,7 +20,7 @@ async def transcribe_inbound_audio(*, data: bytes, filename: str = "voice.ogg") 
     if cfg.get("provider") != "openai":
         return {"ok": False, "error": "stt_provider_not_openai", "text": "", "model": str(cfg.get("model") or "")}
     try:
-        from services import llm_core_service
+        from services.brain import llm_core_service
 
         client = getattr(llm_core_service, "client", None)
         if client is None or not hasattr(client, "audio"):

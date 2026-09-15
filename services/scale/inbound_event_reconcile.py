@@ -38,7 +38,7 @@ def _claim_contract(rec: InboundEventRecord) -> tuple[str, str]:
 def _enqueue_or_mark(rec: InboundEventRecord, claim_handle: Any) -> dict[str, Any]:
     queue_available = False
     try:
-        from services.job_queue import job_queue
+        from services.queues.job_queue import job_queue
 
         queue_available = bool(
             getattr(job_queue, "backend", None) == "redis"
@@ -95,7 +95,7 @@ def _enqueue_or_mark(rec: InboundEventRecord, claim_handle: Any) -> dict[str, An
     # Queue was proven unavailable before an enqueue attempt. Release safely so
     # a later tick can retry without waiting for lease expiry.
     mark_inbound_state(rec.event_id, state="accepted", bump_attempts=True)
-    from services.durable_event_claim import release_event_claim, run_claim_coroutine_blocking
+    from services.scale.durable_event_claim import release_event_claim, run_claim_coroutine_blocking
 
     namespace, collection = _claim_contract(rec)
     run_claim_coroutine_blocking(
@@ -140,7 +140,7 @@ def _requeue_one_stuck(rec: InboundEventRecord) -> dict[str, Any]:
         return {"event_id": rec.event_id, "action": "ingress_job_lookup_failed"}
     if owned is not None:
         return owned
-    from services.durable_event_claim import (
+    from services.scale.durable_event_claim import (
         complete_event_claim,
         meta_claim_binding_digest,
         run_claim_coroutine_blocking,

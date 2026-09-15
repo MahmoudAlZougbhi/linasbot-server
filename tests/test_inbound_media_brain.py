@@ -178,9 +178,9 @@ def test_inbound_bytes_store_resource_id(tmp_path, monkeypatch) -> None:
 
 
 def test_whatsapp_photo_and_voice_stamp_inbound_media() -> None:
-    from handlers import photo_handlers, voice_handlers
-    from handlers.text_handlers_respond_phase2 import text_handlers_respond_phase2
     from modules import webhook_handlers_photo
+    from services.brain.inbound import photo_handlers, voice_handlers
+    from services.brain.inbound.text_handlers_respond_phase2 import text_handlers_respond_phase2
 
     webhook = getsource(webhook_handlers_photo)
     assert "store_inbound_image_base64" in webhook

@@ -270,14 +270,14 @@ async def _enqueue_comment_ai(*, binding: MetaAssetBinding, settings: Any, event
     post_id = str(event.get("post_id") or event.get("media_id") or "").strip()
     if not comment_id:
         return False
-    from services.durable_event_claim import (
+    from services.integrations.meta.meta_comment_replies import process_meta_comment_event
+    from services.integrations.meta.meta_cross_flow_dedup import global_comment_claim_key
+    from services.scale.durable_event_claim import (
         complete_event_claim,
         meta_claim_binding_digest,
         release_event_claim,
         try_claim_event_handle,
     )
-    from services.integrations.meta.meta_comment_replies import process_meta_comment_event
-    from services.integrations.meta.meta_cross_flow_dedup import global_comment_claim_key
     from services.scale.meta_ingress import enqueue_meta_inbound_event, persist_meta_comment_accepted
 
     global_key = global_comment_claim_key(event)

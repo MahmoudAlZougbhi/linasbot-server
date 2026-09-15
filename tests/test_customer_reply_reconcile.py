@@ -8,18 +8,18 @@ from pathlib import Path
 
 import pytest
 
-from services.ai_reply_credit_gate import capture_after_reply_persisted, reserve_before_ai
-from services.ai_reply_delivery import classify_send_result, record_delivery_outcome
-from services.ai_reply_lifecycle import begin_turn, get_turn, put_turn
+from services.billing.credit_ledger_service import CreditLedgerService
 from services.billing.entitlements_service import EntitlementsStore
-from services.credit_ledger_service import CreditLedgerService
-from services.customer_reply_reconcile_classify import (
+from services.brain.ai_reply.ai_reply_credit_gate import capture_after_reply_persisted, reserve_before_ai
+from services.brain.ai_reply.ai_reply_delivery import classify_send_result, record_delivery_outcome
+from services.brain.ai_reply.ai_reply_lifecycle import begin_turn, get_turn, put_turn
+from services.brain.customer_reply_reconcile_classify import (
     classify_event_turn,
     scan_reconcile_candidates,
     summarize_candidates,
 )
-from services.customer_reply_reconcile_worker import reconcile_customer_replies, reset_reconcile_metrics
-from services.durable_event_claim import _file_claim_path
+from services.brain.customer_reply_reconcile_worker import reconcile_customer_replies, reset_reconcile_metrics
+from services.scale.durable_event_claim import _file_claim_path
 from services.scale.inbound_event_store import (
     InboundEventRecord,
     get_inbound_event,
@@ -32,11 +32,11 @@ from services.scale.inbound_event_store import (
 def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CreditLedgerService:
     store = EntitlementsStore(root=tmp_path / "ents")
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_pg_ops.entitlements_store", store)
     store.set_plan(tenant_id="t1", plan_id="starter", status="active", source="admin")
     ledger = CreditLedgerService(root=tmp_path / "ledger")
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     return ledger
 
 
@@ -50,7 +50,7 @@ def stores(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     inbound.mkdir(parents=True)
     claims.mkdir(parents=True)
 
-    import services.ai_reply_lifecycle as lifecycle
+    import services.brain.ai_reply.ai_reply_lifecycle as lifecycle
     import services.scale.inbound_event_store as inbound_store
 
     monkeypatch.setattr(lifecycle, "LOGS_DIR", logs)
@@ -62,7 +62,7 @@ def stores(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     monkeypatch.setattr(ps, "LOGS_DIR", logs)
 
-    import services.durable_event_claim as claims_mod
+    import services.scale.durable_event_claim as claims_mod
 
     monkeypatch.setattr(claims_mod, "LOGS_DIR", logs)
     monkeypatch.setattr(claims_mod, "ensure_dirs", lambda: None)
@@ -379,7 +379,7 @@ def test_scan_finds_undelivered_when_active_list_fails(stores: Path, monkeypatch
         raise InboundEventStoreUnavailableError("Unable to query the shared inbound-event ledger")
 
     monkeypatch.setattr(
-        "services.customer_reply_reconcile_classify.list_active_inbound_events",
+        "services.brain.customer_reply_reconcile_classify.list_active_inbound_events",
         _boom,
     )
     candidates = scan_reconcile_candidates(older_than_seconds=0.0)
@@ -433,8 +433,8 @@ async def test_one_transition_failure_does_not_abort_others(
     stores: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import services.customer_reply_reconcile_worker as worker
-    from services.customer_reply_reconcile_worker import mark_inbound_state as worker_mark
+    import services.brain.customer_reply_reconcile_worker as worker
+    from services.brain.customer_reply_reconcile_worker import mark_inbound_state as worker_mark
     from services.scale.inbound_event_store import InboundEventStateTransitionError
 
     good = _seed_inbound(message_id="mid-good-iso", state="completed", outbound_status="unknown")
@@ -472,7 +472,7 @@ async def test_undelivered_retries_when_active_scan_unavailable(
         raise InboundEventStoreUnavailableError("Unable to query the shared inbound-event ledger")
 
     monkeypatch.setattr(
-        "services.customer_reply_reconcile_classify.list_active_inbound_events",
+        "services.brain.customer_reply_reconcile_classify.list_active_inbound_events",
         _boom,
     )
     monkeypatch.setattr(

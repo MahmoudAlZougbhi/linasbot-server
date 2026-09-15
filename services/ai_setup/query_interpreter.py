@@ -154,7 +154,7 @@ async def interpret_query(
 
 async def _enrich_with_llm(result: InterpretedQuery) -> None:
     """Optional tiny LLM enrichment. Never required; caller must tolerate failure."""
-    from services.llm_core_service import client as openai_client
+    from services.brain.llm_core_service import client as openai_client
 
     prompt = (
         "Extract intent as strict JSON only: "

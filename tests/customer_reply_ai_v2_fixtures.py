@@ -23,7 +23,7 @@ def v2_env(tmp_path, monkeypatch):
 
     clear_manifest_cache()
     monkeypatch.setattr(
-        "services.credit_ai_gate.ai_generation_blocked",
+        "services.billing.credit_ai_gate.ai_generation_blocked",
         lambda *_a, **_k: False,
     )
     return tmp_path

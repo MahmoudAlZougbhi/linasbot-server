@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from services.mobile_integrations_display import enrich_mobile_integration_row
+from services.integrations.mobile_integrations_display import enrich_mobile_integration_row
 
 
 def _base_row(**overrides: Any) -> dict[str, Any]:
@@ -50,15 +50,15 @@ def test_enrich_strips_technical_fields(monkeypatch: pytest.MonkeyPatch) -> None
         instagram_username = ""
 
     monkeypatch.setattr(
-        "services.mobile_integrations_display.canonical_channel_bindings",
+        "services.integrations.mobile_integrations_display.canonical_channel_bindings",
         lambda tenant_id, platform: [_Binding()],
     )
     monkeypatch.setattr(
-        "services.mobile_integrations_display.get_meta_app_registry",
+        "services.integrations.mobile_integrations_display.get_meta_app_registry",
         lambda: object(),
     )
     monkeypatch.setattr(
-        "services.mobile_integrations_display._binding_connection_healthy",
+        "services.integrations.mobile_integrations_display._binding_connection_healthy",
         lambda binding, registry=None: True,
     )
 
@@ -83,15 +83,15 @@ def test_enrich_stays_connected_when_comment_scopes_are_missing(monkeypatch: pyt
         instagram_username = ""
 
     monkeypatch.setattr(
-        "services.mobile_integrations_display.canonical_channel_bindings",
+        "services.integrations.mobile_integrations_display.canonical_channel_bindings",
         lambda tenant_id, platform: [_Binding()],
     )
     monkeypatch.setattr(
-        "services.mobile_integrations_display.get_meta_app_registry",
+        "services.integrations.mobile_integrations_display.get_meta_app_registry",
         lambda: object(),
     )
     monkeypatch.setattr(
-        "services.mobile_integrations_display._binding_connection_healthy",
+        "services.integrations.mobile_integrations_display._binding_connection_healthy",
         lambda binding, registry=None: True,
     )
 
@@ -121,15 +121,15 @@ def test_enrich_marks_needs_reconnect_when_unhealthy(monkeypatch: pytest.MonkeyP
         instagram_username = ""
 
     monkeypatch.setattr(
-        "services.mobile_integrations_display.canonical_channel_bindings",
+        "services.integrations.mobile_integrations_display.canonical_channel_bindings",
         lambda tenant_id, platform: [_Binding()],
     )
     monkeypatch.setattr(
-        "services.mobile_integrations_display.get_meta_app_registry",
+        "services.integrations.mobile_integrations_display.get_meta_app_registry",
         lambda: object(),
     )
     monkeypatch.setattr(
-        "services.mobile_integrations_display._binding_connection_healthy",
+        "services.integrations.mobile_integrations_display._binding_connection_healthy",
         lambda binding, registry=None: False,
     )
 
@@ -158,15 +158,15 @@ def test_enrich_instagram_username_display(monkeypatch: pytest.MonkeyPatch) -> N
         instagram_username = "clinic_ig"
 
     monkeypatch.setattr(
-        "services.mobile_integrations_display.canonical_channel_bindings",
+        "services.integrations.mobile_integrations_display.canonical_channel_bindings",
         lambda tenant_id, platform: [_Binding()],
     )
     monkeypatch.setattr(
-        "services.mobile_integrations_display.get_meta_app_registry",
+        "services.integrations.mobile_integrations_display.get_meta_app_registry",
         lambda: object(),
     )
     monkeypatch.setattr(
-        "services.mobile_integrations_display._binding_connection_healthy",
+        "services.integrations.mobile_integrations_display._binding_connection_healthy",
         lambda binding, registry=None: True,
     )
 

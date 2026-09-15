@@ -128,7 +128,7 @@ def test_public_plans_omit_provider_cost() -> None:
 
 
 def test_iap_product_map_covers_five_monthly() -> None:
-    from services.store_iap_service import _product_map, map_product_to_plan
+    from services.billing.store_iap_service import _product_map, map_product_to_plan
 
     mapping = _product_map()
     for pid in PUBLIC_PLAN_IDS:

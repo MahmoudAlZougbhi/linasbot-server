@@ -29,11 +29,11 @@ async def test_soak_gate_skips_get_mark_claim_and_openai(monkeypatch: pytest.Mon
     )
     monkeypatch.setattr("services.scale.rate_window.bump", lambda kind, n=1: bumps.append(str(kind)))
     monkeypatch.setattr(
-        "services.durable_event_claim.try_claim_event_handle",
+        "services.scale.durable_event_claim.try_claim_event_handle",
         lambda *_args, **_kwargs: pytest.fail("soak job claimed a Firestore lease"),
     )
     monkeypatch.setattr(
-        "services.social_messaging_processor.process_meta_social_event",
+        "services.integrations.social.social_messaging_processor.process_meta_social_event",
         lambda *_args, **_kwargs: pytest.fail("soak job entered OpenAI"),
     )
 

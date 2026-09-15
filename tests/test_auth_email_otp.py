@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.auth_email_tokens import AuthEmailTokenService, otp_secret
+from services.auth.auth_email_tokens import AuthEmailTokenService, otp_secret
 
 
 def test_email_verify_otp_roundtrip(tmp_path: Path) -> None:

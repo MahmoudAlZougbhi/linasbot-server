@@ -35,7 +35,7 @@ load_env()
 os.environ.setdefault("LINASBOT_DATA_ROOT", "/opt/linasbot_data")
 os.environ.setdefault("ENVIRONMENT", "production")
 
-from handlers.text_handlers_respond import _handle_published_cm_runtime
+from services.brain.inbound.text_handlers_respond import _handle_published_cm_runtime
 from services.ai_setup.constants import (
     cm_disable_linas_legacy_bridge,
     tenant_allows_legacy_bridge,

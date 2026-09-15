@@ -44,17 +44,17 @@ def sfu_db(tmp_path, monkeypatch):
 @pytest.fixture()
 def sfu_credit_entitlement(tmp_path, monkeypatch):
     """Provision active credits for SFU worker routing tests."""
+    from services.billing.credit_ledger_service import CreditLedgerService
     from services.billing.entitlements_service import EntitlementsStore
-    from services.credit_ledger_service import CreditLedgerService
 
     store = EntitlementsStore(root=tmp_path / "sfu-ents")
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_pg_ops.entitlements_store", store)
     ledger = CreditLedgerService(root=tmp_path / "sfu-ledger")
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     monkeypatch.setattr(
-        "services.credit_ai_gate.ai_generation_blocked",
+        "services.billing.credit_ai_gate.ai_generation_blocked",
         lambda *_a, **_k: False,
     )
 

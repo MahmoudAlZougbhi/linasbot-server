@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-import services.durable_event_claim as durable_claims
+import services.scale.durable_event_claim as durable_claims
 import services.scale.inbound_event_store as event_store
 from services.integrations.meta.meta_app_registry import APP_A_KEY
 from services.integrations.meta.meta_data_deletion import (

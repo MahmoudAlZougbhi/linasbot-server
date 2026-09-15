@@ -34,8 +34,8 @@ async def _vision_dump_text(*, tenant_id: str, attachment_id: str) -> str | None
     import base64
     import json
 
-    from services.llm_core_service import build_chat_completion_kwargs, client
-    from services.model_policy import resolve_owner_policy
+    from services.brain.llm_core_service import build_chat_completion_kwargs, client
+    from services.brain.model_policy import resolve_owner_policy
     from services.owner_copilot.attachments import load_attachment_bytes, load_attachment_meta
     from services.owner_copilot.vision_import import multimodal_supported
 

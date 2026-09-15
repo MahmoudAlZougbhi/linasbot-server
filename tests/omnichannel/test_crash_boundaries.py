@@ -141,7 +141,7 @@ async def test_crash_after_credit_before_send_retries_without_second_capture(
     sends = {"n": 0}
 
     async def boom(_snapshot):
-        from services.credit_ledger_service import credit_ledger_service
+        from services.billing.credit_ledger_service import credit_ledger_service
 
         credit_ledger_service.capture(
             tenant_id="tenant-a", reservation_id="res-9", provider_cost_usd=None, model_provider="instagram"

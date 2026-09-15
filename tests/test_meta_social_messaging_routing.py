@@ -410,7 +410,7 @@ class SocialCanonicalAiPathTests(unittest.TestCase):
         ud = _social_user_data()
         self.assertIsNone(route_social_contact_request("Hello", ud, "en"))
         self.assertIsNone(route_social_contact_request("Hello", ud, "en", force_intent="booking"))
-        processor_src = Path("services/social_messaging_processor.py").read_text(encoding="utf-8")
+        processor_src = Path("services/integrations/social/social_messaging_processor.py").read_text(encoding="utf-8")
         self.assertIn("await handle_message(", processor_src)
         self.assertNotIn("social_ai", processor_src.lower())
         self.assertNotIn("simplified_prompt", processor_src.lower())

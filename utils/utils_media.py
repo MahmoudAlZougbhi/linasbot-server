@@ -181,7 +181,7 @@ async def upload_base64_to_firebase_storage(
             traceback.print_exc()
 
             # Fallback to local serve URL
-            from services.media_service import build_public_media_url
+            from services.live_chat.media_service import build_public_media_url
 
             serve_url = build_public_media_url(unique_filename)
             if serve_url.startswith("/"):

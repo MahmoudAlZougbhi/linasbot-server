@@ -95,7 +95,7 @@ def _try_enqueue(
     soak_simulation: bool = False,
 ) -> str | None:
     try:
-        from services.job_queue import job_queue
+        from services.queues.job_queue import job_queue
 
         if (
             getattr(job_queue, "backend", None) != "redis"

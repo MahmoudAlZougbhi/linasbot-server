@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from services import interaction_flow_logger as ifl
-from services.model_pricing import COST_BASIS_TOKEN_RATES, compute_cost_from_usage
+from services.brain.model_pricing import COST_BASIS_TOKEN_RATES, compute_cost_from_usage
+from services.owner_copilot import interaction_flow_logger as ifl
 
 
 def test_compute_cost_from_usage_gpt4o_mini():

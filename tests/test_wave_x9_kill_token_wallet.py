@@ -14,18 +14,18 @@ def test_wave_x9_token_wallet_modules_gone() -> None:
         "services/billing/membership/message_catalog.py",
         "modules/platform_message_api.py",
         "dashboard/src/pages/owner/OwnerCatalog.jsx",
-        "services/credit_ai_gate.py",
-        "services/credit_ledger_service.py",
-        "services/iap_product_catalog.py",
+        "services/billing/credit_ai_gate.py",
+        "services/billing/credit_ledger_service.py",
+        "services/billing/iap_product_catalog.py",
     ):
         assert (ROOT / rel).is_file(), rel
-    iap = (ROOT / "services/iap_product_catalog.py").read_text(encoding="utf-8")
+    iap = (ROOT / "services/billing/iap_product_catalog.py").read_text(encoding="utf-8")
     assert "com.linasai.credits." in iap
 
 
 def test_wave_x9_no_runtime_token_wallet_imports() -> None:
     hits: list[str] = []
-    for folder in ("services", "modules", "handlers"):
+    for folder in ("services", "modules"):
         for path in (ROOT / folder).rglob("*.py"):
             if "token_wallet" in path.read_text(encoding="utf-8"):
                 hits.append(str(path.relative_to(ROOT)))

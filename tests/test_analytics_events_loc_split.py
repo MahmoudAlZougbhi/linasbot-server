@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.analytics_events import AnalyticsEvents, analytics
-from services.analytics_events_aggregate import AnalyticsEventsAggregateMixin
-from services.analytics_events_conversation import AnalyticsEventsConversationMixin
-from services.analytics_events_format import AnalyticsEventsFormatMixin
-from services.analytics_events_log import AnalyticsEventsLogMixin
+from services.dashboard.analytics_events import AnalyticsEvents, analytics
+from services.dashboard.analytics_events_aggregate import AnalyticsEventsAggregateMixin
+from services.dashboard.analytics_events_conversation import AnalyticsEventsConversationMixin
+from services.dashboard.analytics_events_format import AnalyticsEventsFormatMixin
+from services.dashboard.analytics_events_log import AnalyticsEventsLogMixin
 
 
 def _line_count(rel: str) -> int:
@@ -16,11 +16,11 @@ def _line_count(rel: str) -> int:
 
 
 def test_analytics_events_modules_under_500_lines() -> None:
-    assert _line_count("services/analytics_events.py") < 500
-    assert _line_count("services/analytics_events_log.py") < 500
-    assert _line_count("services/analytics_events_conversation.py") < 500
-    assert _line_count("services/analytics_events_aggregate.py") < 500
-    assert _line_count("services/analytics_events_format.py") < 500
+    assert _line_count("services/dashboard/analytics_events.py") < 500
+    assert _line_count("services/dashboard/analytics_events_log.py") < 500
+    assert _line_count("services/dashboard/analytics_events_conversation.py") < 500
+    assert _line_count("services/dashboard/analytics_events_aggregate.py") < 500
+    assert _line_count("services/dashboard/analytics_events_format.py") < 500
 
 
 def test_analytics_events_preserves_public_api_via_mixins() -> None:

@@ -11,7 +11,7 @@ AMBIGUOUS_ENQUEUE = "__omni_enqueue_ack_unknown__"
 
 
 def queue_is_durable() -> bool:
-    from services.job_queue import job_queue
+    from services.queues.job_queue import job_queue
 
     return getattr(job_queue, "backend", None) == "redis" and bool(getattr(job_queue, "production_ready", False))
 
@@ -31,7 +31,7 @@ def enqueue_job(
     conversation_key: str = "",
     provider: str = "openai",
 ) -> str | None:
-    from services.job_queue import job_queue
+    from services.queues.job_queue import job_queue
 
     if redis_required() and not queue_is_durable():
         raise RuntimeError("omnichannel_queue_unavailable")

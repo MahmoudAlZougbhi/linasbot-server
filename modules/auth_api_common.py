@@ -9,7 +9,7 @@ from fastapi import Response
 from pydantic import BaseModel
 
 from modules.api_security import is_production_env
-from services.dashboard_session_service import (
+from services.dashboard.dashboard_session_service import (
     CSRF_COOKIE_NAME,
     SESSION_COOKIE_NAME,
 )

@@ -38,7 +38,7 @@ def _cost_for_operation(tenant_id: str, operation_id: str) -> dict[str, Any]:
 
 def _interaction_row(tenant_id: str, operation_id: str) -> dict[str, Any] | None:
     try:
-        from services.interaction_flow_logger import get_recent_flows
+        from services.owner_copilot.interaction_flow_logger import get_recent_flows
 
         rows = get_recent_flows(tenant_id=tenant_id, limit=200)
     except Exception:

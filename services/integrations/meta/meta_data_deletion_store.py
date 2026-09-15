@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 from typing import Any, Literal
 
-from services.firestore_transaction_compat import run_firestore_transaction
 from services.integrations.meta.meta_app_registry_common import AuthFlow
 from services.integrations.meta.meta_data_deletion_types import (
     _ACK_SAFE_FIELDS,
@@ -24,6 +23,7 @@ from services.integrations.meta.meta_data_deletion_types import (
     _subject_index_ref,
     generate_opaque_confirmation_code,
 )
+from services.scale.firestore_transaction_compat import run_firestore_transaction
 
 
 def _parse_binding_scopes(value: object) -> tuple[_DeletionBindingScope, ...]:

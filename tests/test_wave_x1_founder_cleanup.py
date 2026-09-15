@@ -7,10 +7,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-LIVE_PY_ROOTS = ("services", "modules", "handlers", "utils")
+LIVE_PY_ROOTS = ("services", "modules", "utils")
 SKIP_REL = {
-    "services/tenant_registration_service.py",
-    "services/admin_provisioning_service.py",
+    "services/team/tenant_registration_service.py",
+    "services/team/admin_provisioning_service.py",
 }
 SKIP_PARTS = ("/evals/artifacts/", "/__pycache__/", "/node_modules/")
 _LINAS_EQ = re.compile(

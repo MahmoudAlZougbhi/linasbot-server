@@ -24,7 +24,7 @@ from services.ai_setup.search_metadata.errors import (
     MetadataPreparationError,
 )
 from services.ai_setup.storage import ConflictError, UnknownSectionError, get_draft, put_draft
-from services.dashboard_session_service import SessionRecord
+from services.dashboard.dashboard_session_service import SessionRecord
 
 
 def _publish_disabled_response(message: str | None = None) -> JSONResponse:
@@ -233,7 +233,7 @@ async def cm_put_draft(
         commit_edit(tenant_id=tenant_id, operation_id=edit_op)
     data = _owner_sanitize_envelope(_envelope_dict(envelope), name)
     if name == "ai_limits":
-        from services.ai_limits_source import sync_enforcement_from_payload
+        from services.ai_setup.ai_limits_source import sync_enforcement_from_payload
 
         sync_enforcement_from_payload(tenant_id, envelope.payload if hasattr(envelope, "payload") else payload)
 

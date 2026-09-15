@@ -35,7 +35,7 @@ def is_completed_undelivered(rec: InboundEventRecord) -> bool:
 
 
 def combine_user_key_for_event(rec: InboundEventRecord) -> str:
-    from services.social_user_id import compose_social_user_id
+    from services.integrations.social.social_user_id import compose_social_user_id
 
     payload = rec.payload or {}
     channel = str(payload.get("channel") or rec.binding_snapshot.get("channel") or "").strip().lower()

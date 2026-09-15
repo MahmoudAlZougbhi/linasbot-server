@@ -95,7 +95,7 @@ async def send_pending_product_media(
         result = await _send_all()
 
     user_data["_pending_product_media"] = None
-    from services.ai_reply_delivery import classify_send_result
+    from services.brain.ai_reply.ai_reply_delivery import classify_send_result
 
     evidence = classify_send_result(result)
     delivery = (

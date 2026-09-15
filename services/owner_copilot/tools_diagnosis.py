@@ -20,7 +20,7 @@ async def tool_get_recent_customer_interactions(
     limit: int = 20,
 ) -> ToolResult:
     _require(role, "liveChat")
-    from services.customer_response_trace import get_recent_customer_interactions
+    from services.brain.customer_response_trace import get_recent_customer_interactions
 
     items = get_recent_customer_interactions(tenant_id=tenant_id, limit=max(1, min(int(limit or 20), 50)))
     compact = [
@@ -50,7 +50,7 @@ async def tool_get_interaction_trace(
     trace_id: str,
 ) -> ToolResult:
     _require(role, "liveChat")
-    from services.customer_response_trace import get_interaction_trace
+    from services.brain.customer_response_trace import get_interaction_trace
     from services.owner_copilot.diagnosis import diagnose_interaction
 
     if not (trace_id or "").strip():

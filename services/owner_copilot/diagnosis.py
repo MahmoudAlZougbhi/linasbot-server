@@ -103,7 +103,7 @@ def _scenario_from_trace(trace: dict[str, Any]) -> str:
 
 def diagnose_interaction(*, tenant_id: str, trace_id: str) -> dict[str, Any]:
     """Explain root cause for a bad customer reply using TRACE evidence (no CoT)."""
-    from services.customer_response_trace import get_interaction_trace
+    from services.brain.customer_response_trace import get_interaction_trace
 
     trace = get_interaction_trace(tenant_id=tenant_id, trace_id=trace_id)
     if not trace:

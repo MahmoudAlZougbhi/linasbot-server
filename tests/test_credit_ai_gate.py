@@ -6,27 +6,27 @@ from pathlib import Path
 
 import pytest
 
-from services.billing.entitlements_service import EntitlementsStore
-from services.billing.membership.plan_catalog import is_highest_catalog_plan
-from services.credit_ai_gate import (
+from services.billing.credit_ai_gate import (
     ai_generation_blocked,
     remaining_credits,
     upgrade_plan_allowed,
 )
-from services.credit_ledger_service import CreditLedgerService
+from services.billing.credit_ledger_service import CreditLedgerService
+from services.billing.entitlements_service import EntitlementsStore
+from services.billing.membership.plan_catalog import is_highest_catalog_plan
 
 
 @pytest.fixture()
 def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CreditLedgerService:
     store = EntitlementsStore(root=tmp_path / "ents")
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
-    monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", store)
+    monkeypatch.setattr("services.billing.credit_ledger_pg_ops.entitlements_store", store)
     store.set_plan(tenant_id="clinic", plan_id="starter", status="active", source="admin")
     store.set_plan(tenant_id="linas", plan_id="max", status="active", source="admin")
     store.set_plan(tenant_id="t_max", plan_id="max", status="active", source="admin")
     ledger = CreditLedgerService(root=tmp_path / "ledger")
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     return ledger
 
 
@@ -124,7 +124,7 @@ async def test_comment_orchestrator_does_not_generate_at_zero(ledger_env: Credit
 
 
 def test_try_reserve_fail_closed_at_zero(ledger_env: CreditLedgerService) -> None:
-    from services.ai_reply_turn_runtime import try_reserve_for_ai
+    from services.brain.ai_reply.ai_reply_turn_runtime import try_reserve_for_ai
 
     _drain(ledger_env, "clinic", "drain-reserve")
     user_data = {"tenant_id": "clinic", "_source_message_id": "mid-1", "channel": "instagram"}
@@ -135,7 +135,7 @@ def test_try_reserve_fail_closed_at_zero(ledger_env: CreditLedgerService) -> Non
 
 
 def test_copilot_pause_payload_hides_upgrade_on_max(ledger_env: CreditLedgerService) -> None:
-    from services.credit_ai_gate import owner_credits_paused_payload
+    from services.billing.credit_ai_gate import owner_credits_paused_payload
 
     _drain(ledger_env, "linas", "drain-max-payload")
     paused = owner_credits_paused_payload("linas")
@@ -151,7 +151,7 @@ def test_copilot_pause_payload_hides_upgrade_on_max(ledger_env: CreditLedgerServ
 def test_copilot_pause_stays_leftover_when_message_billing_on(
     ledger_env: CreditLedgerService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from services.credit_ai_gate import owner_credits_paused_payload
+    from services.billing.credit_ai_gate import owner_credits_paused_payload
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     paused = owner_credits_paused_payload("clinic")
@@ -193,7 +193,7 @@ def test_inflight_reserved_does_not_fund_new_owner_turn(ledger_env: CreditLedger
 
 
 def test_owner_turn_credit_begin_blocks_at_zero(ledger_env: CreditLedgerService) -> None:
-    from services.owner_copilot_credit import owner_turn_credit_begin
+    from services.owner_copilot.credit import owner_turn_credit_begin
 
     _drain(ledger_env, "linas", "drain-owner-begin")
     credit = owner_turn_credit_begin("linas", conversation_id="conv-1")
@@ -202,7 +202,7 @@ def test_owner_turn_credit_begin_blocks_at_zero(ledger_env: CreditLedgerService)
 
 
 def test_owner_turn_credit_begin_capture_debits_ledger(ledger_env: CreditLedgerService) -> None:
-    from services.owner_copilot_credit import (
+    from services.owner_copilot.credit import (
         owner_turn_credit_abort,
         owner_turn_credit_begin,
         owner_turn_credit_finalize,

@@ -15,8 +15,8 @@ from services.integrations.omnichannel.limiter import DistributedProviderLimiter
 from services.integrations.omnichannel.meta_errors import MetaProviderError
 from services.integrations.omnichannel.queues import logical_for_channel, outbound_logical, physical_queue_for
 from services.integrations.tiktok.comment_sync import enqueue_tiktok_comment_ai
-from services.rate_limit_service import RateLimitService
 from services.scale.provider_limiter import ProviderLimiter
+from services.scale.rate_limit_service import RateLimitService
 
 
 def test_dms_and_comments_use_different_physical_queues():
@@ -111,7 +111,7 @@ def test_tiktok_enqueue_failure_is_not_swallowed(monkeypatch):
         def enqueue(self, **_kwargs):
             raise RuntimeError("redis_down")
 
-    monkeypatch.setattr("services.job_queue.job_queue", Boom())
+    monkeypatch.setattr("services.queues.job_queue.job_queue", Boom())
     with pytest.raises(RuntimeError, match="redis_down"):
         enqueue_tiktok_comment_ai(tenant_id="t", connection_id="c", comment_id="x", item_id="v")
 

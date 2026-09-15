@@ -56,7 +56,7 @@ def _clean(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_failed_capture_after_send_keeps_hold(monkeypatch: pytest.MonkeyPatch) -> None:
     ledger = _Ledger()
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     rid = reserve_leftover_reply(tenant_id="shop-a", request_id="omni:1", operation_type="omni")
     assert rid == "rid-hold-1"
     assert leftover_policy_for("shop-a", "omni:1") == "legacy_credits"
@@ -71,7 +71,7 @@ def test_failed_capture_after_send_keeps_hold(monkeypatch: pytest.MonkeyPatch) -
 def test_reconcile_settles_once_and_does_not_double_capture(monkeypatch: pytest.MonkeyPatch) -> None:
     ledger = _Ledger()
     ledger.fail_capture = False
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     record_pending_after_send(
         tenant_id="shop-a",
         reservation_id="rid-hold-1",
@@ -115,7 +115,7 @@ def test_unknown_stale_reservation_is_unresolved_not_released(monkeypatch: pytes
 
 def test_reconcile_unpins_leftover_after_failed_capture(monkeypatch: pytest.MonkeyPatch) -> None:
     ledger = _Ledger()
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     rid = reserve_leftover_reply(tenant_id="shop-retry", request_id="omni:retry", operation_type="omni")
     assert capture_leftover_reply("shop-retry", rid, model_provider="whatsapp") is False
     assert leftover_policy_for("shop-retry", "omni:retry") == "legacy_credits"
@@ -127,7 +127,7 @@ def test_reconcile_unpins_leftover_after_failed_capture(monkeypatch: pytest.Monk
 
 def test_unused_release_only_when_not_sent(monkeypatch: pytest.MonkeyPatch) -> None:
     ledger = _Ledger()
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     rid = reserve_leftover_reply(tenant_id="shop-c", request_id="omni:miss", operation_type="omni")
     release_leftover_reply("shop-c", rid)
     assert ledger.releases == 1
@@ -136,7 +136,7 @@ def test_unused_release_only_when_not_sent(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_policy_pin_blocks_message_debit_after_flag_flip(monkeypatch: pytest.MonkeyPatch) -> None:
     ledger = _Ledger()
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     reserve_leftover_reply(
         tenant_id="pin-shop",
         request_id="evt-pin",
@@ -168,7 +168,7 @@ def test_policy_pin_blocks_message_debit_after_flag_flip(monkeypatch: pytest.Mon
 
 def test_leftover_pin_ids_persist_as_candidate_ids(monkeypatch: pytest.MonkeyPatch) -> None:
     ledger = _Ledger()
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     rid = reserve_leftover_reply(
         tenant_id="alias-shop",
         request_id="evt-alias",
@@ -191,7 +191,7 @@ def test_capture_failure_keeps_existing_candidate_ids(monkeypatch: pytest.Monkey
     from services.billing.membership.reservation_reconcile import hold_failed_capture_after_send
 
     ledger = _Ledger()
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     rid = reserve_leftover_reply(
         tenant_id="keep-shop",
         request_id="evt-keep",
@@ -379,7 +379,7 @@ def test_pending_counts_union_memory_and_sql(monkeypatch: pytest.MonkeyPatch) ->
 def test_capture_leftover_with_alias_settles_original_hold(monkeypatch: pytest.MonkeyPatch) -> None:
     ledger = _Ledger()
     ledger.fail_capture = False
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     rid = reserve_leftover_reply(
         tenant_id="alias-cap",
         request_id="wa:inbound",

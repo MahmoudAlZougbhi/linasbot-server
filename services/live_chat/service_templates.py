@@ -69,8 +69,8 @@ class LiveChatTemplatesMixin:
         Match live_chat_index rows to Smart Messaging message_logs (successful template sends).
         Scans up to scan_limit index docs (newest first). Date filter applies to log sent_at (UTC day).
         """
+        from services.live_chat.message_logs_service import message_logs_service
         from services.live_chat.template_ids import normalize_template_id
-        from services.message_logs_service import message_logs_service
 
         tid = normalize_template_id((template_id or "").strip())
         if not tid:

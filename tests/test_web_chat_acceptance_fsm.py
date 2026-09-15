@@ -161,7 +161,7 @@ async def test_fsm_capture_failure_enters_billing_pending(tmp_path, monkeypatch,
     widget, visitor, _bundle = _widget_and_visitor(store)
 
     patch_ai_reply(monkeypatch, reply="AI")
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     monkeypatch.setattr(
         "services.integrations.web_chat.processor.persist_web_chat_message",
@@ -323,7 +323,7 @@ async def test_fsm_followup_queue_failure_then_recovery(tmp_path, monkeypatch, a
 
 def test_credit_handle_idle_reserve_capture_equation(tmp_path, monkeypatch, acceptance_pg_ha_env) -> None:
     start_total = patch_acceptance_eligibility(monkeypatch, tmp_path, tenant_id="biz")
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     handle = WebChatCreditHandle(tenant_id="biz", reservation_id=None, request_id="web:fsm:1")
     assert handle.state == CreditFsmState.IDLE

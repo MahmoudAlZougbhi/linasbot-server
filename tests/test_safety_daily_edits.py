@@ -131,13 +131,13 @@ def test_social_processor_stays_under_line_cap_and_finalizes_delivery() -> None:
     from inspect import getsource
     from pathlib import Path
 
-    from services.social_messaging_processor import (
+    from services.integrations.social.social_messaging_processor import (
         meta_social_outcome_requires_retry,
         process_meta_social_event,
     )
-    from services.social_turn_outcome import finalize_social_turn
+    from services.integrations.social.social_turn_outcome import finalize_social_turn
 
-    processor = Path("services/social_messaging_processor.py").read_text(encoding="utf-8")
+    processor = Path("services/integrations/social/social_messaging_processor.py").read_text(encoding="utf-8")
     assert processor.count("\n") <= 500
     assert "finalize_social_turn" in getsource(process_meta_social_event)
     assert "finalize_delivery" in getsource(finalize_social_turn)

@@ -57,7 +57,7 @@ async def test_outbound_fail_closed_skips_when_redis_unavailable(monkeypatch):
 
 def test_job_lock_fail_closed_denies_when_redis_unavailable(monkeypatch):
     monkeypatch.setenv("LINAS_FAIL_CLOSED_REDIS_CLAIMS", "true")
-    from services.durable_event_claim import try_acquire_job_lock
+    from services.scale.durable_event_claim import try_acquire_job_lock
 
     with patch("services.scale.redis_claims.redis_try_claim", return_value=None):
         assert try_acquire_job_lock("job-fc-1", ttl_seconds=30) is False

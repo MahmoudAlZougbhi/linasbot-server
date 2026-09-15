@@ -44,7 +44,7 @@ from services.integrations.meta.meta_page_subscription_transaction import (
     reconcile_page_activation_after_exception,
     reconcile_page_rollback_after_exception,
 )
-from services.mobile_integrations_display import bindings_for_disconnect
+from services.integrations.mobile_integrations_display import bindings_for_disconnect
 
 
 async def _activate_meta_connection_locked(

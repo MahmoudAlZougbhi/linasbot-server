@@ -35,8 +35,8 @@ async def iter_owner_turn_v2_events(
         yield StreamEvent(type="error", payload={"message": "OWNER_COPILOT_V2 disabled"})
         return
 
-    from services.credit_ai_gate import owner_credits_paused_payload
-    from services.owner_copilot_credit import (
+    from services.billing.credit_ai_gate import owner_credits_paused_payload
+    from services.owner_copilot.credit import (
         owner_turn_credit_abort,
         owner_turn_credit_begin,
         owner_turn_credit_on_event,

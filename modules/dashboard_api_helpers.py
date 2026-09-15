@@ -8,8 +8,8 @@ from typing import Any
 from fastapi import HTTPException
 
 import config
-from handlers.text_handlers import _delayed_processing_tasks
 from modules.core import dashboard_bot_responses
+from services.brain.inbound.text_handlers import _delayed_processing_tasks
 from services.product_features import DISABLED_PRODUCT_MESSAGE
 
 

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from modules.api_security import require_permission
 from modules.core import app
-from services.tenant_custom_roles import system_role_payloads, tenant_custom_roles
+from services.team.tenant_custom_roles import system_role_payloads, tenant_custom_roles
 
 
 class CreateRoleRequest(BaseModel):

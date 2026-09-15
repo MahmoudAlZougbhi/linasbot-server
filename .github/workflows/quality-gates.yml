@@ -98,7 +98,6 @@ jobs:
           services
           modules
           utils
-          handlers
           storage
           config.py
           main.py
@@ -110,19 +109,17 @@ jobs:
           services
           modules
           utils
-          handlers
           storage
           config.py
           main.py
           tests
           scripts
-      - name: Mypy (services, modules, utils, handlers, storage, entrypoints, scripts)
+      - name: Mypy (services, modules, utils, storage, entrypoints, scripts)
         run: >
           mypy --config-file mypy.ini
           services
           modules
           utils
-          handlers
           storage
           config.py
           main.py

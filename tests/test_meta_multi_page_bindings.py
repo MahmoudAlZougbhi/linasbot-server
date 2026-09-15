@@ -14,7 +14,10 @@ from services.integrations.meta.meta_app_registry import (
     MetaBindingCredential,
     authorized_meta_user_id_hash,
 )
-from services.social_user_id import compose_social_user_id, tenant_channel_has_multiple_active_assets
+from services.integrations.social.social_user_id import (
+    compose_social_user_id,
+    tenant_channel_has_multiple_active_assets,
+)
 
 SCOPES = (
     "pages_show_list",
@@ -199,7 +202,7 @@ def test_compose_user_id_scopes_by_asset_only_when_multiple_pages(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("services.social_user_id.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.integrations.social.social_user_id.get_meta_app_registry", lambda: registry)
     page_a = "111222333444"
     page_b = "555666777888"
     registry.authorize_oauth_asset(

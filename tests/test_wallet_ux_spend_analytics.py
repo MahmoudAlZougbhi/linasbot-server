@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from services.ai_usage_limits import (
+from services.ai_setup.ai_usage_limits import (
     RECOMMENDED_CONTEXT_LINES_PER_DAY,
     RECOMMENDED_IMAGE_PER_WEEK,
     AiUsageLimitsService,
@@ -15,14 +15,14 @@ from services.ai_usage_limits import (
     recommended_defaults,
     week_period_key,
 )
-from services.token_metering import assert_tenant_can_use_ai, debit_ai_usage
-from services.token_package_catalog import (
+from services.billing.token_metering import assert_tenant_can_use_ai, debit_ai_usage
+from services.billing.token_package_catalog import (
     assert_public_payload_has_no_internal_economics,
     build_package,
     catalog_public_payload,
     list_token_packages,
 )
-from services.wallet_spend_analytics import build_wallet_spend_analytics
+from services.billing.wallet_spend_analytics import build_wallet_spend_analytics
 
 
 @pytest.fixture()

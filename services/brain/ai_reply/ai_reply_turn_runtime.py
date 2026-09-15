@@ -1,0 +1,348 @@
+"""Runtime hooks wiring lifecycle + credit gate into text_handlers respond pipeline."""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+from services.brain.ai_reply.ai_reply_credit_gate import (
+    capture_after_reply_persisted,
+    release_on_ai_failure,
+    reserve_before_ai,
+)
+from services.brain.ai_reply.ai_reply_delivery import record_delivery_outcome
+from services.brain.ai_reply.ai_reply_lifecycle import (
+    begin_turn,
+    find_pending_delivery_turn,
+    get_turn,
+    persist_generated_reply,
+)
+from services.products.outbound_hook import maybe_record_product_outbound
+
+_TURN_RUNTIME_KEYS = (
+    "_logical_reply_id",
+    "_last_outbound_delivery",
+    "_delivery_succeeded",
+    "_credit_captured_for_turn",
+    "_reply_ready",
+    "_ai_credit_blocked",
+    "_ai_turn_started",
+)
+
+
+def reset_turn_runtime_state(user_data: dict[str, Any]) -> None:
+    """Remove per-turn evidence before reusing a sender's conversation state."""
+
+    for key in _TURN_RUNTIME_KEYS:
+        user_data.pop(key, None)
+
+
+def _tenant_channel_inbound(user_data: dict[str, Any]) -> tuple[str, str, str, str | None]:
+    tenant_id = str(user_data.get("tenant_id") or user_data.get("tenantId") or "").strip().lower()
+    channel = str(user_data.get("channel") or "whatsapp").strip().lower()
+    external_id = str(
+        user_data.get("_source_message_id")
+        or user_data.get("source_message_id")
+        or user_data.get("_batch_inbound_mids", [""])[-1]
+        or ""
+    ).strip()
+    inbound_event_id = user_data.get("_inbound_event_id")
+    return tenant_id, channel, external_id, str(inbound_event_id) if inbound_event_id else None
+
+
+def ensure_turn_started(
+    user_data: dict[str, Any],
+    *,
+    claim_key_basis: str | None = None,
+    external_inbound_id: str | None = None,
+) -> str | None:
+    """Create or return logical_reply_id for this inbound turn."""
+    existing = user_data.get("_logical_reply_id")
+    if existing:
+        return str(existing)
+    tenant_id, channel, discovered_external_id, inbound_event_id = _tenant_channel_inbound(user_data)
+    external_id = str(external_inbound_id or discovered_external_id or "").strip()
+    if not external_id and inbound_event_id:
+        external_id = str(inbound_event_id).strip()
+    if not tenant_id or not external_id:
+        return None
+    turn = begin_turn(
+        tenant_id=tenant_id,
+        channel=channel,
+        external_inbound_id=external_id,
+        inbound_event_id=inbound_event_id,
+        claim_key_basis=claim_key_basis,
+    )
+    user_data["_logical_reply_id"] = turn.logical_reply_id
+    user_data["_ai_turn_started"] = True
+    return turn.logical_reply_id
+
+
+def try_reserve_for_ai(user_data: dict[str, Any]) -> bool:
+    tenant_id = str(user_data.get("tenant_id") or user_data.get("tenantId") or "").strip().lower()
+    if not tenant_id:
+        user_data["_ai_credit_blocked"] = True
+        return False
+    from services.billing.membership.generative_gate import generative_ai_blocked
+
+    if generative_ai_blocked(tenant_id):
+        user_data["_ai_credit_blocked"] = True
+        return False
+    lid = ensure_turn_started(user_data)
+    if not lid:
+        user_data["_ai_credit_blocked"] = True
+        return False
+    turn = get_turn(lid)
+    if turn is None:
+        user_data["_ai_credit_blocked"] = True
+        return False
+    try:
+        reserve_before_ai(turn)
+        from services.brain.ai_reply.ai_reply_lifecycle import mark_state
+
+        mark_state(lid, "AI_PROCESSING")
+        from services.scale.turn_pipeline import set_pipeline_stage
+
+        set_pipeline_stage(lid, "ai_started")
+        return True
+    except PermissionError:
+        user_data["_ai_credit_blocked"] = True
+        return False
+
+
+def on_ai_generated(ctx: dict[str, Any]) -> None:
+    """Call after GPT produced bot_reply_text."""
+    user_data = ctx.get("user_data") or {}
+    lid = user_data.get("_logical_reply_id")
+    if not lid:
+        return
+    flow_meta = ctx.get("flow_meta") or {}
+    reply = str(ctx.get("bot_reply_text") or "").strip()
+    if not reply:
+        on_ai_failed(ctx)
+        return
+    persist_generated_reply(
+        str(lid),
+        reply_text=reply,
+        model=flow_meta.get("final_response_model") or flow_meta.get("model"),
+        prompt_tokens=flow_meta.get("prompt_tokens"),
+        completion_tokens=flow_meta.get("completion_tokens"),
+        cost_usd=flow_meta.get("cost_usd"),
+    )
+    from services.scale.turn_pipeline import set_pipeline_stage
+
+    set_pipeline_stage(str(lid), "ai_generated")
+    try:
+        from services.scale.job_progress import mark_stage
+
+        mark_stage("ai_generated")
+    except Exception:
+        pass
+    user_data["_reply_ready"] = True
+
+
+def _message_settle_ids(user_data: dict[str, Any]) -> tuple[str, ...]:
+    from services.brain.history_ids import conversation_id_from_user_data
+
+    return (
+        str(user_data.get("_logical_reply_id") or ""),
+        str(user_data.get("_combine_mid") or ""),
+        str(user_data.get("_source_message_id") or ""),
+        str(user_data.get("_inbound_event_id") or ""),
+        conversation_id_from_user_data(user_data),
+    )
+
+
+def _settle_unsent_message(user_data: dict[str, Any]) -> None:
+    from services.brain.billing import settle_after_send
+    from services.brain.history_ids import message_id_for_brain
+
+    lid = str(user_data.get("_logical_reply_id") or "")
+    inbound = message_id_for_brain(user_data)
+    settle_after_send(
+        tenant_id=str(user_data.get("tenant_id") or user_data.get("tenantId") or ""),
+        operation_id=inbound or lid,
+        accepted=False,
+        channel=str(user_data.get("channel") or ""),
+        extra_ids=_message_settle_ids(user_data),
+    )
+
+
+def on_ai_failed(ctx: dict[str, Any]) -> None:
+    user_data = ctx.get("user_data") or {}
+    lid = user_data.get("_logical_reply_id")
+    if lid:
+        release_on_ai_failure(str(lid))
+    _settle_unsent_message(user_data)
+
+
+def _capture_ready_turn(user_data: dict[str, Any], *, flow_meta: dict[str, Any] | None = None) -> None:
+    lid = str(user_data.get("_logical_reply_id") or "")
+    if not lid or user_data.get("_credit_captured_for_turn"):
+        return
+    meta = flow_meta or {}
+    capture_after_reply_persisted(
+        lid,
+        prompt_tokens=meta.get("prompt_tokens"),
+        completion_tokens=meta.get("completion_tokens"),
+        cost_usd=meta.get("cost_usd"),
+        model=meta.get("final_response_model") or meta.get("model"),
+    )
+    user_data["_credit_captured_for_turn"] = True
+    from services.brain.billing import settle_after_send
+    from services.brain.history_ids import message_id_for_brain
+
+    inbound = message_id_for_brain(user_data)
+    settle_after_send(
+        tenant_id=str(user_data.get("tenant_id") or user_data.get("tenantId") or ""),
+        operation_id=inbound or lid,
+        accepted=True,
+        channel=str(user_data.get("channel") or ""),
+        extra_ids=_message_settle_ids(user_data),
+    )
+
+
+def settle_reserved_credits(
+    user_data: dict[str, Any],
+    *,
+    reply: str = "",
+    flow_meta: dict[str, Any] | None = None,
+) -> None:
+    """Capture leftover-credit reserve after a customer reply, else release."""
+    if not user_data.get("_logical_reply_id"):
+        return
+    if (reply or "").strip():
+        on_ai_generated({"user_data": user_data, "bot_reply_text": reply, "flow_meta": flow_meta or {}})
+        _capture_ready_turn(user_data, flow_meta=flow_meta)
+        return
+    if user_data.get("_reply_ready") or user_data.get("_delivery_succeeded"):
+        return
+    on_ai_failed({"user_data": user_data})
+
+
+def _release_unused_hold(user_data: dict[str, Any]) -> None:
+    """Release leftover credits and message units when the send was never submitted."""
+    on_ai_failed({"user_data": user_data})
+
+
+def settle_after_outbound(
+    user_data: dict[str, Any],
+    *,
+    reply: str = "",
+    flow_meta: dict[str, Any] | None = None,
+) -> None:
+    """Capture only after a confirmed send. Failed never-submitted holds release."""
+    evidence = user_data.get("_last_outbound_delivery")
+    if isinstance(evidence, dict) and evidence:
+        if evidence.get("success"):
+            settle_reserved_credits(user_data, reply=reply, flow_meta=flow_meta)
+            return
+        if evidence.get("success") is False and not evidence.get("retryable") and not evidence.get("submitted"):
+            _release_unused_hold(user_data)
+            return
+        if (reply or "").strip():
+            on_ai_generated({"user_data": user_data, "bot_reply_text": reply, "flow_meta": flow_meta or {}})
+        return
+    if user_data.get("_delivery_succeeded"):
+        settle_reserved_credits(user_data, reply=reply, flow_meta=flow_meta)
+        return
+    if (reply or "").strip():
+        on_ai_generated({"user_data": user_data, "bot_reply_text": reply, "flow_meta": flow_meta or {}})
+
+
+async def run_reserved_customer_turn(user_data: dict[str, Any], produce: Callable[[], Awaitable[Any]]) -> bool:
+    """Reserve leftover credits, run the customer reply, then capture or release."""
+    if not try_reserve_for_ai(user_data):
+        return False
+    try:
+        await produce()
+    finally:
+        if not user_data.get("_credit_captured_for_turn"):
+            settle_reserved_credits(user_data)
+        finalize_delivery({"user_data": user_data})
+    return True
+
+
+def finalize_delivery(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Record delivery outcome after send phase. Returns summary for inbound event marking."""
+    user_data = ctx.get("user_data") or {}
+    lid = user_data.get("_logical_reply_id")
+    if not lid:
+        return {"delivery": "unknown"}
+    evidence = user_data.get("_last_outbound_delivery") or {}
+    if not evidence and user_data.get("_delivery_succeeded"):
+        evidence = {"success": True, "reason": "implicit_ok"}
+    if evidence:
+        record_delivery_outcome(str(lid), evidence)
+    if evidence.get("success"):
+        maybe_record_product_outbound(
+            user_data,
+            provider_message_id=str(evidence.get("provider_message_id") or ""),
+        )
+        _capture_ready_turn(user_data)
+    elif evidence.get("success") is False and not evidence.get("retryable") and not evidence.get("submitted"):
+        if not user_data.get("_credit_captured_for_turn"):
+            _release_unused_hold(user_data)
+    turn = get_turn(str(lid))
+    if turn is None:
+        return {"delivery": "unknown"}
+    delivered = turn.state == "DELIVERED"
+    retryable = bool(turn.delivery_evidence.get("retryable", not delivered))
+    terminal = bool(delivered or turn.state in {"PERMANENT_DELIVERY_BLOCK", "NEEDS_OWNER_ACTION"})
+    if turn.delivery_evidence and not retryable:
+        terminal = True
+    return {
+        "delivery": "delivered" if delivered else turn.outbound_state or "pending",
+        "state": turn.state,
+        "logical_reply_id": turn.logical_reply_id,
+        "credit_captured": turn.credit_captured,
+        "has_saved_reply": bool(turn.generated_reply),
+        "retryable": bool(not terminal and retryable),
+        "terminal": terminal,
+        "provider_message_id_present": bool(turn.delivery_evidence.get("provider_message_id")),
+    }
+
+
+def pending_delivery_for_claim(claim_key_basis: str) -> dict[str, Any] | None:
+    """If a prior turn has a saved reply awaiting delivery, return retry payload."""
+    turn = find_pending_delivery_turn(claim_key_basis=claim_key_basis)
+    if turn is None or not turn.generated_reply:
+        return None
+    return {
+        "logical_reply_id": turn.logical_reply_id,
+        "reply_text": turn.generated_reply,
+        "state": turn.state,
+        "credit_captured": turn.credit_captured,
+    }
+
+
+async def retry_saved_reply_delivery(
+    *,
+    user_data: dict[str, Any],
+    send_message_func: Any,
+    user_id: str,
+    pending: dict[str, Any],
+) -> bool:
+    """Send persisted reply without calling OpenAI. Returns True if delivered."""
+    from services.brain.ai_reply.ai_reply_delivery import classify_send_result, wrap_tracked_send
+    from services.scale.delivery_ledger import release_unknown_for_retry
+    from services.scale.outbound_turn_idempotency import complete_ai_turn_claim
+
+    lid = str(pending.get("logical_reply_id") or "")
+    if lid:
+        release_unknown_for_retry(lid)
+    inbound = str(user_data.get("_inbound_event_id") or "").strip()
+    if inbound:
+        release_unknown_for_retry(inbound)
+
+    tracked = wrap_tracked_send(send_message_func, user_data)
+    result = await tracked(user_id, pending["reply_text"])
+    evidence = classify_send_result(result)
+    user_data["_last_outbound_delivery"] = evidence
+    record_delivery_outcome(str(pending["logical_reply_id"]), evidence)
+    if evidence.get("success"):
+        basis = get_turn(str(pending["logical_reply_id"])) or None
+        if basis and basis.claim_key_basis:
+            await complete_ai_turn_claim(basis.claim_key_basis)
+        return True
+    return False

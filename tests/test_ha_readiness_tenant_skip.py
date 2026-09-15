@@ -9,7 +9,7 @@ from modules.dashboard_api_health import tenant_runtime_config_readiness_check
 
 def test_tenant_runtime_config_readiness_skips_file_migrate(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.tenant_runtime_config_backend.tenant_runtime_config_postgres_required",
+        "services.tenant_runtime.tenant_runtime_config_backend.tenant_runtime_config_postgres_required",
         lambda: True,
     )
 
@@ -29,7 +29,7 @@ def test_tenant_runtime_config_readiness_skips_file_migrate(monkeypatch) -> None
 
 def test_tenant_runtime_config_readiness_fails_when_postgres_down(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.tenant_runtime_config_backend.tenant_runtime_config_postgres_required",
+        "services.tenant_runtime.tenant_runtime_config_backend.tenant_runtime_config_postgres_required",
         lambda: True,
     )
     monkeypatch.setattr("db.session.ping_whatsapp_db", lambda: {"reachable": False})

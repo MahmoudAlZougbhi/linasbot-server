@@ -227,7 +227,7 @@ def _normalize_direct_script(raw: str) -> str:
 
 
 def _require_no_untracked_runtime_source(repo_dir: Path) -> None:
-    pathspecs = ("scripts", "services", "db", "modules", "handlers", "storage", ":(top,glob)*.py")
+    pathspecs = ("scripts", "services", "db", "modules", "storage", ":(top,glob)*.py")
     for ignored in (False, True):
         arguments = ["ls-files", "--others", "--exclude-standard"]
         if ignored:

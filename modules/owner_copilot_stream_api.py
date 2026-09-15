@@ -80,7 +80,7 @@ async def stream_owner_message(
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    from services.credit_ai_gate import ai_generation_blocked, owner_credits_paused_payload
+    from services.billing.credit_ai_gate import ai_generation_blocked, owner_credits_paused_payload
     from services.owner_copilot.models import StreamEvent as CopilotStreamEvent
 
     if ai_generation_blocked(session.tenant_id):

@@ -8,7 +8,6 @@ import time
 import unicodedata
 from typing import Any
 
-from services.firestore_transaction_compat import run_firestore_transaction
 from services.integrations.meta.meta_controlled_evidence import MetaEvidenceSurface
 from services.integrations.meta.meta_outbound_attempts_types import (
     _ALLOWED_QUOTA_DISPOSITIONS,
@@ -31,6 +30,7 @@ from services.integrations.meta.meta_outbound_attempts_types import (
     MetaOutboundPurpose,
     _validate_purpose,
 )
+from services.scale.firestore_transaction_compat import run_firestore_transaction
 
 
 def _validate_event_id(event_id: str) -> str:
@@ -202,7 +202,7 @@ def _binding_authority(db: Any, binding_id: str) -> tuple[Any | None, str]:
     from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
 
     fence_reference = firestore_binding_deletion_fence_ref(db, binding_id)
-    from services.durable_event_claim import meta_claim_binding_digest
+    from services.scale.durable_event_claim import meta_claim_binding_digest
 
     return fence_reference, meta_claim_binding_digest(binding_id)
 
@@ -330,8 +330,8 @@ def reconcile_fenced_image_quota_attempts_for_bindings(
     safe_bindings = frozenset(str(value).strip() for value in binding_ids if str(value).strip())
     if not safe_bindings:
         return 0
-    from services.durable_event_claim import meta_claim_binding_digest
     from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
+    from services.scale.durable_event_claim import meta_claim_binding_digest
 
     by_digest = {meta_claim_binding_digest(value): value for value in safe_bindings}
     collection = db.collection("artifacts").document(_APP_DOCUMENT).collection(_COLLECTION)

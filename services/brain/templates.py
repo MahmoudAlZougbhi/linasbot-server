@@ -60,7 +60,7 @@ def brain_template(key: str, response_language: str = "") -> str:
     }.get(key) or _NO_EVIDENCE
     lang = _lang(response_language)
     try:
-        from services.dynamic_messages_service import get_dynamic_message
+        from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
         mapped = {
             "handoff": "brain_handoff_ack",

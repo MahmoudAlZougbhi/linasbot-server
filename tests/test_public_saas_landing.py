@@ -87,8 +87,8 @@ def test_register_creates_isolated_tenant(app_client: TestClient) -> None:
         "passwordEpoch": 0,
     }
 
-    with mock.patch("services.tenant_registration_service.register_company_account") as register_mock:
-        from services.tenant_registration_service import RegistrationResult
+    with mock.patch("services.team.tenant_registration_service.register_company_account") as register_mock:
+        from services.team.tenant_registration_service import RegistrationResult
 
         register_mock.return_value = RegistrationResult(
             user=created,
@@ -134,9 +134,9 @@ def test_register_rejects_weak_password(app_client: TestClient) -> None:
 
 
 def test_allocate_tenant_never_returns_reserved_linas() -> None:
-    from services.tenant_registration_service import allocate_tenant_id
+    from services.team.tenant_registration_service import allocate_tenant_id
 
-    with mock.patch("services.tenant_registration_service.user_service") as users:
+    with mock.patch("services.team.tenant_registration_service.user_service") as users:
         users._normalize_tenant_id.side_effect = lambda value: str(value).strip().lower()
         users.tenant_id_exists.return_value = False
         tenant_id = allocate_tenant_id("Linas")

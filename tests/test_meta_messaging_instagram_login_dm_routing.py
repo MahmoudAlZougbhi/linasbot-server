@@ -169,9 +169,9 @@ async def _post_ig_dm(account_id: str, *, mid: str, monkeypatch: pytest.MonkeyPa
         processed.append(str(event.get("meta_auth_flow") or ""))
         return {"delivery": "delivered"}
 
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event", claim)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", finish)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", finish)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event", claim)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", finish)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", finish)
     monkeypatch.setattr(meta_messaging_webhook, "process_meta_social_event", process)
     body = _ig_dm_body(account_id, mid=mid)
     response = await meta_messaging_webhook.receive_meta_messaging_webhook(_request(body, _sign(APP_A_SECRET, body)))

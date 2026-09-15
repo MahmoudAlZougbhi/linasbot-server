@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from handlers.text_handlers_respond import _handle_published_cm_runtime
+from services.brain.inbound.text_handlers_respond import _handle_published_cm_runtime
 from services.brain.reply.models import CustomerReplyOutcome
 from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
@@ -19,7 +19,7 @@ def _openai_published_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture(autouse=True)
 def _cm_handler_credit_entitlement(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.credit_ai_gate.ai_generation_blocked",
+        "services.billing.credit_ai_gate.ai_generation_blocked",
         lambda *_a, **_k: False,
     )
 

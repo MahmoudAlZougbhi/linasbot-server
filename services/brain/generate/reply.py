@@ -57,7 +57,7 @@ def _language_rule(turn: CustomerTurn) -> str:
 async def _ask_model(*, turn: CustomerTurn, prompt: str, attempt: int) -> str:
     from services.billing.membership.provider_expense import record_pending_provider
     from services.brain.billing import operation_id_for_turn
-    from services.llm_core_service import create_chat_completion
+    from services.brain.llm_core_service import create_chat_completion
 
     op = operation_id_for_turn(turn)
     record_pending_provider(

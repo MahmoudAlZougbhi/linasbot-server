@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from services.rate_limit_service import RateLimitService, rate_limit_service
+from services.scale.rate_limit_service import RateLimitService, rate_limit_service
 
 
 @pytest.fixture(autouse=True)
@@ -122,7 +122,7 @@ async def test_check_rate_limit_returns_503_when_backend_unavailable(
 ) -> None:
     from unittest.mock import MagicMock
 
-    from services import auth_rate_limits as arl
+    from services.auth import auth_rate_limits as arl
 
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("RATE_LIMIT_BACKEND", "redis")

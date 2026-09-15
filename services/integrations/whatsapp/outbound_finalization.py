@@ -113,7 +113,7 @@ def _settle_confirmed_send(
     reservation_id = ""
     if request_id:
         try:
-            from services.credit_ledger_service import credit_ledger_service
+            from services.billing.credit_ledger_service import credit_ledger_service
 
             reservation_id = credit_ledger_service.find_open_reservation_by_request(tenant_id, request_id) or ""
         except Exception:
@@ -161,7 +161,7 @@ def release_unsent_ai_outbound(
     mid = inbound_mid or intent_mid
     if not rid and mid:
         try:
-            from services.credit_ledger_service import credit_ledger_service
+            from services.billing.credit_ledger_service import credit_ledger_service
 
             rid = credit_ledger_service.find_open_reservation_by_request(tenant_id, f"wa:{mid}") or ""
         except Exception:

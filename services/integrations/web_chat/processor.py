@@ -284,7 +284,7 @@ async def process_web_chat_message(
         OperationState.CAPTURED,
     }
 
-    from services.ai_limits_enforcement import (
+    from services.ai_setup.ai_limits_enforcement import (
         apply_inbound_word_limit,
         customer_reply_limit_message,
         enforce_text_reply_quota,
@@ -472,7 +472,7 @@ async def _persist_web_turn(
         raise WebChatError("persist_failed", exc.message, status_code=503) from exc
 
     try:
-        from services.interaction_flow_logger import is_flow_logging_enabled, log_interaction
+        from services.owner_copilot.interaction_flow_logger import is_flow_logging_enabled, log_interaction
 
         if is_flow_logging_enabled():
             log_interaction(

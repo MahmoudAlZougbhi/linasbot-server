@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from services.model_pricing import compute_cost_from_usage
+from services.brain.model_pricing import compute_cost_from_usage
 from services.providers.base import TextGenerationResult, provider_config
 
 RouteKind = Literal["customer_dm", "owner_chat", "setup_complex", "creative_text"]
@@ -34,7 +34,7 @@ class ProviderRouter:
         # Reuse existing OpenAI client path when provider is openai.
         if route["provider"] != "openai":
             raise RuntimeError(f"Text provider not configured: {route['provider']}")
-        from services.llm_core_service import create_chat_completion
+        from services.brain.llm_core_service import create_chat_completion
 
         resp = await create_chat_completion(
             model=route["model"],

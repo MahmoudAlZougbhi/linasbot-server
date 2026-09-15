@@ -32,7 +32,7 @@ def record_analytics_channel_usage(
     """Attach standardized WhatsApp channel metadata to analytics without secrets."""
 
     try:
-        from services.interaction_flow_logger import log_interaction
+        from services.owner_copilot.interaction_flow_logger import log_interaction
 
         log_interaction(
             user_id=f"wa:{conversation_id}",

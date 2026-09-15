@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from services.owner_alert_store import OwnerAlertStore
+from services.owner_copilot.owner_alert_store import OwnerAlertStore
 
 
 @pytest.fixture

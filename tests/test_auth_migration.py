@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from services.dashboard_session_service import (
+from services.dashboard.dashboard_session_service import (
     DashboardSessionService,
     get_auth_secret,
     require_auth_secret_configured,
@@ -115,4 +115,4 @@ def test_no_http_bootstrap_and_cli_provisioning_exists():
     assert "bootstrap-admin" not in auth_src
     assert "provision_dashboard_admin.py" in auth_src
     assert Path("scripts/provision_dashboard_admin.py").is_file()
-    assert Path("services/admin_provisioning_service.py").is_file()
+    assert Path("services/team/admin_provisioning_service.py").is_file()

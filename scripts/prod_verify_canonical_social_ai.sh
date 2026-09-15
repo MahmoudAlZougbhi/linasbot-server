@@ -82,8 +82,8 @@ print("[canonical-ai-verify] social_router_hello=none")
 
 # 3) Canonical handle_message path with Instagram channel (capture only; no Graph send).
 import config as cfg
-from handlers.text_handlers import handle_message
-from handlers.text_handlers_firestore import _delayed_processing_tasks
+from services.brain.inbound.text_handlers import handle_message
+from services.brain.inbound.text_handlers_firestore import _delayed_processing_tasks
 
 user_id = "instagram:internal_openai_key_verify"
 cfg.user_data_whatsapp[user_id] = {

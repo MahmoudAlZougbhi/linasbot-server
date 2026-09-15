@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.outbound_text_firestore_dedupe import (
+from services.scale.outbound_text_firestore_dedupe import (
     release_outbound_send_firestore,
     try_acquire_outbound_send_firestore,
 )

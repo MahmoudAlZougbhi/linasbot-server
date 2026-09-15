@@ -10,8 +10,8 @@ import httpx
 
 import config
 from config import WHATSAPP_API_TOKEN
-from handlers.text_handlers import _process_and_respond
 from modules.core import whatsapp_api_client
+from services.brain.inbound.text_handlers import _process_and_respond
 from services.integrations.whatsapp.adapters.whatsapp_factory import WhatsAppFactory
 from services.saas_no_boc import log_report_event
 from utils.utils import save_conversation_message_to_firestore
@@ -91,7 +91,7 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
         image_metadata = {"type": "image"}
         if source_message_id:
             image_metadata["source_message_id"] = source_message_id
-        from services.outbound_turn_idempotency import (
+        from services.scale.outbound_turn_idempotency import (
             record_inbound_mid_for_ai_turn,
             stable_ai_claim_identity,
             try_claim_ai_turn,
@@ -150,8 +150,8 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
         from services.brain.reply.inbound_media import store_inbound_image_base64
 
         store_inbound_image_base64(user_data, b64=str(base64_image or ""))
-        from services.ai_reply_delivery import wrap_tracked_send
-        from services.ai_reply_turn_runtime import run_reserved_customer_turn
+        from services.brain.ai_reply.ai_reply_delivery import wrap_tracked_send
+        from services.brain.ai_reply.ai_reply_turn_runtime import run_reserved_customer_turn
 
         tracked_send = wrap_tracked_send(adapter_send_message, user_data)
         await run_reserved_customer_turn(
@@ -179,7 +179,7 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
             {"media_type": "image", "error": str(e)},
         )
         try:
-            from services.interaction_flow_logger import is_flow_logging_enabled, log_interaction
+            from services.owner_copilot.interaction_flow_logger import is_flow_logging_enabled, log_interaction
 
             if is_flow_logging_enabled():
                 log_interaction(

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from handlers.text_handlers_respond import _handle_published_cm_runtime
+from services.brain.inbound.text_handlers_respond import _handle_published_cm_runtime
 from services.brain.reply.models import CustomerReplyOutcome
 from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
@@ -20,7 +20,7 @@ def _openai_published_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
 def _cm_handler_credit_entitlement(monkeypatch: pytest.MonkeyPatch) -> None:
     """These tests exercise CM routing, not credit policy."""
     monkeypatch.setattr(
-        "services.credit_ai_gate.ai_generation_blocked",
+        "services.billing.credit_ai_gate.ai_generation_blocked",
         lambda *_a, **_k: False,
     )
 
@@ -157,7 +157,7 @@ async def test_insufficient_credits_short_circuits_without_classic_generate(
     tenant_id = "cm_handler_test_no_credits"
     await publish_test_content(tenant_id)
     monkeypatch.setattr(
-        "services.credit_ai_gate.ai_generation_blocked",
+        "services.billing.credit_ai_gate.ai_generation_blocked",
         lambda *_a, **_k: True,
     )
 

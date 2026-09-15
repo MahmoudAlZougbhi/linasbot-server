@@ -7,7 +7,6 @@ import secrets
 import time
 from typing import Any
 
-from services.firestore_transaction_compat import run_firestore_transaction
 from services.integrations.meta.meta_controlled_evidence import MetaEvidenceSurface
 from services.integrations.meta.meta_outbound_attempts_types import (
     _MAX_TRANSACTION_ATTEMPTS,
@@ -27,6 +26,7 @@ from services.integrations.meta.meta_outbound_attempts_validate import (
     _validate_stored_authority,
     _validate_surface,
 )
+from services.scale.firestore_transaction_compat import run_firestore_transaction
 
 
 def _reconcile_image_quota_receipt_sync(

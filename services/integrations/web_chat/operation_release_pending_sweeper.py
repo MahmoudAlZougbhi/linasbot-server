@@ -54,7 +54,7 @@ def reconcile_release_pending_operation(
     lease_owner: str,
 ) -> str:
     """Reconcile one RELEASE_PENDING row; never run AI or visible side effects."""
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     claimed = _claim_release_pending_row(
         tenant_id=record.tenant_id,

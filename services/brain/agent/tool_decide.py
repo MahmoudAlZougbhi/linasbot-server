@@ -48,8 +48,8 @@ async def propose_tools_dynamic(
     if not missing or not (os.getenv("OPENAI_API_KEY") or "").strip():
         return base
     try:
+        from services.brain.llm_core_service import create_chat_completion
         from services.brain.providers.config import answer_model
-        from services.llm_core_service import create_chat_completion
 
         allowed = sorted(READ_TOOLS | ACTION_TOOLS)
         response = await create_chat_completion(

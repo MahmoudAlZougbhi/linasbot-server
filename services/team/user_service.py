@@ -98,7 +98,7 @@ class UserService(UserServiceAuthMixin):
         if not user_data.get("password"):
             raise ValueError("Password is required")
 
-        from services.role_assignment import RoleAssignmentError, assert_assignable_role
+        from services.team.role_assignment import RoleAssignmentError, assert_assignable_role
 
         try:
             role = assert_assignable_role(
@@ -344,7 +344,7 @@ class UserService(UserServiceAuthMixin):
             update_data: dict[str, Any] = {"updatedAt": datetime.utcnow().isoformat()}
 
             if "role" in updates:
-                from services.role_assignment import RoleAssignmentError, assert_assignable_role
+                from services.team.role_assignment import RoleAssignmentError, assert_assignable_role
 
                 try:
                     updates = {

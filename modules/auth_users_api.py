@@ -9,9 +9,9 @@ from fastapi import HTTPException, Request
 from modules.api_security import require_session
 from modules.auth_api_common import CreateUserRequest, UpdateUserRequest
 from modules.core import app
-from services.dashboard_session_service import session_service
+from services.dashboard.dashboard_session_service import session_service
+from services.team.tenant_custom_roles import tenant_custom_roles
 from services.team.user_service import user_service
-from services.tenant_custom_roles import tenant_custom_roles
 
 
 @app.get("/api/auth/users")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import patch
 
-from services.durable_event_claim import (
+from services.scale.durable_event_claim import (
     complete_event_claim,
     release_event_claim,
     release_job_lock,
@@ -17,7 +17,7 @@ from services.durable_event_claim import (
 class TestDurableClaims:
     def test_file_claim_exclusive_and_release(self):
         async def _run():
-            with patch("services.durable_event_claim.get_firestore_db", create=True):
+            with patch("services.scale.durable_event_claim.get_firestore_db", create=True):
                 with patch("utils.utils.get_firestore_db", return_value=None):
                     a = await try_claim_event("unit_ns", "mid-1", ttl_seconds=60)
                     b = await try_claim_event("unit_ns", "mid-1", ttl_seconds=60)
@@ -73,7 +73,7 @@ class TestFlowLogPrivacy:
     def test_masks_phone_and_omits_full_prompts_by_default(self, monkeypatch, tmp_path):
         monkeypatch.delenv("FLOW_LOG_FULL_PROMPTS", raising=False)
         monkeypatch.setenv("INTERACTION_FLOW_DEBUG", "1")
-        from services import interaction_flow_logger as ifl
+        from services.owner_copilot import interaction_flow_logger as ifl
 
         monkeypatch.setattr(ifl, "FLOW_LOG_FILE", str(tmp_path / "activity_flow.jsonl"))
         monkeypatch.setattr(ifl, "_FLOW_BUFFER", ifl.deque(maxlen=50))

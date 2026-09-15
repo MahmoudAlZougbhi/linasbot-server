@@ -48,7 +48,7 @@ def test_anonymous_status_requires_auth(client):
 
 def test_status_full_number_is_scoped_to_authenticated_tenant(client):
     from db.session import whatsapp_session
-    from services.dashboard_session_service import session_service
+    from services.dashboard.dashboard_session_service import session_service
     from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
     with whatsapp_session() as db:

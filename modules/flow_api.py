@@ -11,7 +11,7 @@ from fastapi import HTTPException, Query, Request
 
 from modules.api_security import is_platform_owner, require_session
 from modules.core import app
-from services.interaction_flow_logger import get_recent_flows
+from services.owner_copilot.interaction_flow_logger import get_recent_flows
 
 
 @app.get("/api/flow/logs")

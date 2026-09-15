@@ -42,7 +42,7 @@ class GreetingDecision:
 def inactivity_threshold() -> timedelta:
     """Use the existing Meta DM 12-hour constant; do not invent a new window."""
     try:
-        from handlers.text_handlers_message_greeting import GREETING_INACTIVITY_SECONDS
+        from services.brain.inbound.text_handlers_message_greeting import GREETING_INACTIVITY_SECONDS
 
         seconds = int(GREETING_INACTIVITY_SECONDS)
         if seconds > 0:
@@ -81,7 +81,7 @@ def inbound_greeting_language(message: str) -> str:
     if not text:
         return "en"
     try:
-        from services.system_knowledge_retrieval import detect_message_language
+        from services.owner_copilot.system_knowledge_retrieval import detect_message_language
 
         code = detect_message_language(text, fallback="en")
         if code in {"ar", "franco"}:

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 from modules.api_security import require_session
 from modules.core import app
-from services.dashboard_session_service import SessionRecord
+from services.dashboard.dashboard_session_service import SessionRecord
 from services.products.media import delete_product_media
 from services.products.schemas import ProductImportBody, ProductWriteBody, ProductXlsxImportBody
 from services.products.service import ProductsError, ProductsService

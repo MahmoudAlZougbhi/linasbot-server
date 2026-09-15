@@ -19,7 +19,7 @@ from tests.web_chat_acceptance_support import patch_acceptance_eligibility, seed
 
 
 def _reserve_followup_credit(*, tenant_id: str, idem: str) -> str:
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
     from services.smart_followup.constants import OPERATION_TYPE
     from services.smart_followup.idempotency import canonical_sfu_credit_request_id
 
@@ -238,8 +238,8 @@ async def test_sfu_worker_duplicate_visible_delivery_never_releases_reservation(
     from db.models import Base
     from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob, WhatsAppSmartFollowUpSequence
     from db.session import reset_engine_for_tests
+    from services.billing.credit_ledger_service import CreditLedgerService
     from services.billing.entitlements_service import EntitlementsStore
-    from services.credit_ledger_service import CreditLedgerService
     from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
     from services.smart_followup.types import FollowUpConversationView
     from services.smart_followup.worker_job import process_one_followup_job
@@ -255,9 +255,9 @@ async def test_sfu_worker_duplicate_visible_delivery_never_releases_reservation(
 
     ent_store = EntitlementsStore(root=tmp_path / "ents")
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", ent_store)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", ent_store)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", ent_store)
     ledger = CreditLedgerService(root=tmp_path / "ledger")
-    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     ent_store.set_plan(tenant_id="tenant-b", plan_id="starter", status="active", source="admin")
     ledger.ensure_period_grant("tenant-b")
     start_total = ledger.get_balance("tenant-b")

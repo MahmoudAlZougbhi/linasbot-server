@@ -42,11 +42,11 @@ from modules.auth_users_api import (  # noqa: E402, F401
     update_user,
 )
 from modules.core import app
-from services.dashboard_session_service import (
+from services.dashboard.dashboard_session_service import (
     SESSION_COOKIE_NAME,
     session_service,
 )
-from services.platform_portal_hosts import cookie_login_error
+from services.dashboard.platform_portal_hosts import cookie_login_error
 from services.team.user_service import AuthBackendUnavailableError, user_service
 
 
@@ -57,7 +57,7 @@ async def ensure_auth_secret_configured() -> None:
     First-admin provisioning is offline-only: scripts/provision_dashboard_admin.py
     (no public HTTP bootstrap, no startup password injection).
     """
-    from services.dashboard_session_service import require_auth_secret_configured
+    from services.dashboard.dashboard_session_service import require_auth_secret_configured
 
     try:
         require_auth_secret_configured()
@@ -73,7 +73,7 @@ async def ensure_auth_secret_configured() -> None:
 @app.on_event("startup")
 async def ensure_model_policy_configured() -> None:
     """Fail closed when env tries to silently override Sol/Terra routing policy."""
-    from services.model_policy import validate_model_policy_config
+    from services.brain.model_policy import validate_model_policy_config
 
     try:
         snap = validate_model_policy_config()
@@ -161,7 +161,7 @@ async def register(request: RegisterRequest, response: Response) -> Any:
     Public SaaS registration: create an isolated tenant admin and sign them in.
     Never creates users under the reserved ``linas`` tenant.
     """
-    from services.tenant_registration_service import register_company_account
+    from services.team.tenant_registration_service import register_company_account
 
     try:
         result = await asyncio.wait_for(
@@ -197,8 +197,8 @@ async def register(request: RegisterRequest, response: Response) -> Any:
     user = result.user
     # Issue email verification token + attempt delivery (Resend/SMTP env required in production).
     try:
-        from services.auth_email_tokens import auth_email_token_service
-        from services.email_dispatch import send_verify_email
+        from services.auth.auth_email_tokens import auth_email_token_service
+        from services.email.email_dispatch import send_verify_email
 
         issued = auth_email_token_service.issue(
             purpose="email_verify",

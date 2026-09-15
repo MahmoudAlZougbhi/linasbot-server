@@ -41,9 +41,13 @@ def _turn(**kwargs: Any) -> CustomerTurn:
 
 
 def _generate_holds_until_send() -> bool:
-    from handlers.text_handlers_respond_phase2 import text_handlers_respond_phase2
-    from services.ai_reply_turn_runtime import _capture_ready_turn, on_ai_generated, settle_after_outbound
+    from services.brain.ai_reply.ai_reply_turn_runtime import (
+        _capture_ready_turn,
+        on_ai_generated,
+        settle_after_outbound,
+    )
     from services.brain.billing import settle_after_send
+    from services.brain.inbound.text_handlers_respond_phase2 import text_handlers_respond_phase2
     from services.integrations.whatsapp.ai_bridge import _release_reservation
     from services.smart_followup.worker_job import process_one_followup_job
 
@@ -125,8 +129,8 @@ def _history_routes_by_channel() -> bool:
 
 
 def _legacy_photo_fetches_ssrf_safe() -> bool:
-    from handlers import photo_handlers
-    from handlers.photo_handlers import handle_photo_message
+    from services.brain.inbound import photo_handlers
+    from services.brain.inbound.photo_handlers import handle_photo_message
 
     src = getsource(handle_photo_message)
     module = getsource(photo_handlers)
@@ -171,7 +175,7 @@ def _tiktok_comment_settles_after_send() -> bool:
 
 
 def _legacy_voice_journals_stt() -> bool:
-    from handlers.voice_handlers import handle_voice_message
+    from services.brain.inbound.voice_handlers import handle_voice_message
 
     src = getsource(handle_voice_message)
     return "record_pending_provider" in src and 'category="stt"' in src and "0.006" not in src

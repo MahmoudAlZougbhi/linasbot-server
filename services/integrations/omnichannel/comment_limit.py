@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.rate_limit_service import RateLimitService, RateLimitUnavailableError
+from services.scale.rate_limit_service import RateLimitService, RateLimitUnavailableError
 
 _COMMENT_RATE_WINDOW_SECONDS = 60
 _COMMENT_RATE_LIMIT_PER_ASSET = 30

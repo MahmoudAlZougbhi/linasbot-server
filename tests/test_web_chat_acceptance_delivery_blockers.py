@@ -245,7 +245,7 @@ async def test_followup_crash_after_reply_ready_before_persist_recovers(
 
 def test_release_ack_loss_stays_release_pending(tmp_path, monkeypatch, acceptance_pg_ha_env) -> None:
     start_total = patch_acceptance_eligibility(monkeypatch, tmp_path)
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     handle = WebChatCreditHandle(tenant_id="biz", reservation_id=None, request_id="web:release:1")
     handle.reserve()

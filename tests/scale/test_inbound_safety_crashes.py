@@ -127,7 +127,11 @@ def test_soak_openai_gate_requires_armed_redis() -> None:
 def test_pending_delivery_reuses_saved_reply(monkeypatch: pytest.MonkeyPatch) -> None:
     import fakeredis
 
-    from services.ai_reply_lifecycle import begin_turn, find_pending_delivery_turn, persist_generated_reply
+    from services.brain.ai_reply.ai_reply_lifecycle import (
+        begin_turn,
+        find_pending_delivery_turn,
+        persist_generated_reply,
+    )
     from services.scale.turn_store import set_turn_redis_for_tests
 
     fake = fakeredis.FakeRedis(decode_responses=True)

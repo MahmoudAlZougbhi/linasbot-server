@@ -127,7 +127,7 @@ async def save_conversation_message_to_firestore(
     defer_external_for_speed = role == "user" and normalized_phone
     if normalized_phone and not defer_external_for_speed:
         try:
-            from services.customer_identity_service import resolve_customer_from_external
+            from services.brain.customer_identity_service import resolve_customer_from_external
 
             external = await resolve_customer_from_external(normalized_phone)
             _log.info(

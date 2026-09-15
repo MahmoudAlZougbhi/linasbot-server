@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_db_configured
-from services.durable_event_claim import release_job_lock, try_acquire_job_lock
+from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
 
 
 async def run_tiktok_comment_webhook_register_job() -> None:

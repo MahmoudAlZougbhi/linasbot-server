@@ -12,10 +12,10 @@ from unittest import mock
 import pytest
 
 import config
-from handlers import text_handlers_delayed
-from handlers.text_handlers_firestore import _delayed_processing_tasks
 from modules import meta_messaging_webhook
-from services import social_messaging_processor
+from services.brain.inbound import text_handlers_delayed
+from services.brain.inbound.text_handlers_firestore import _delayed_processing_tasks
+from services.integrations.social import social_messaging_processor
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -69,7 +69,7 @@ async def test_typing_failure_does_not_abort_customer_reply_pipeline(capsys: pyt
     try:
         with (
             mock.patch.object(text_handlers_delayed, "_process_and_respond", side_effect=captured_process),
-            mock.patch("services.ai_reply_turn_runtime.try_reserve_for_ai", return_value=True),
+            mock.patch("services.brain.ai_reply.ai_reply_turn_runtime.try_reserve_for_ai", return_value=True),
         ):
             await text_handlers_delayed._delayed_process_messages(
                 user_id,

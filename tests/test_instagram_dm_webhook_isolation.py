@@ -202,9 +202,9 @@ async def _capture_process(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, An
         )
         return {"delivery": "delivered"}
 
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event", claim)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", finish)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", finish)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event", claim)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", finish)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", finish)
     monkeypatch.setattr(
         "services.scale.meta_ingress.persist_meta_dm_accepted",
         lambda *_args, **_kwargs: ("event-iso-1", True),
@@ -330,9 +330,9 @@ async def test_k_instagram_comments_still_accepted(
         processed.append(str(resolved.binding.auth_flow))
         return CommentReplyResult(status="sent", reply_id="reply-1")
 
-    monkeypatch.setattr("services.durable_event_claim.try_claim_event", claim)
-    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", finish)
-    monkeypatch.setattr("services.durable_event_claim.release_event_claim", finish)
+    monkeypatch.setattr("services.scale.durable_event_claim.try_claim_event", claim)
+    monkeypatch.setattr("services.scale.durable_event_claim.complete_event_claim", finish)
+    monkeypatch.setattr("services.scale.durable_event_claim.release_event_claim", finish)
     monkeypatch.setattr(
         "services.scale.meta_ingress.persist_meta_comment_accepted",
         lambda *_args, **_kwargs: ("event-comment-1", True),

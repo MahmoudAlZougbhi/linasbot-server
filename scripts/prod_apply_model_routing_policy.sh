@@ -36,7 +36,7 @@ systemctl is-active linasbot
 import os
 from pathlib import Path
 
-from services.model_policy import (
+from services.brain.model_policy import (
     MODEL_CUSTOMER_TERRA,
     MODEL_OWNER_SOL,
     validate_model_policy_config,

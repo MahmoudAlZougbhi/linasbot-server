@@ -62,7 +62,7 @@ def _snapshot(tenant_id: str = "biz", session_id: str = "visitor-reconcile") -> 
 
 def test_pg_reserve_idempotent_by_request_id(tmp_path, monkeypatch, acceptance_pg_ha_env) -> None:
     start_total = patch_acceptance_eligibility(monkeypatch, tmp_path, tenant_id="biz")
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     first = credit_ledger_service.reserve(
         tenant_id="biz",
@@ -280,7 +280,7 @@ async def test_capture_failure_replay_reconciles_without_release(tmp_path, monke
 
     patch_ai_reply(monkeypatch, reply="Visible reply")
     calls = {"capture": 0}
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     monkeypatch.setattr(
         "services.integrations.web_chat.processor.persist_web_chat_message",
@@ -343,7 +343,7 @@ async def test_capture_failure_replay_reconciles_without_release(tmp_path, monke
 def test_pg_reserve_fifty_concurrent_same_request_id(tmp_path, monkeypatch, acceptance_pg_ha_env) -> None:
     """Direct 50-way reserve must converge: one reservation, zero IntegrityError."""
     start_total = patch_acceptance_eligibility(monkeypatch, tmp_path, tenant_id="biz")
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     request_id = "web:biz:concurrent-reserve-50"
     errors: list[BaseException] = []

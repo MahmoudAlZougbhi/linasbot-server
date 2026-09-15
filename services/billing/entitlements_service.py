@@ -104,7 +104,7 @@ class EntitlementsStore:
     def list_tenant_ids(self) -> list[str]:
         if billing_uses_postgres():
             try:
-                from services.entitlements_pg_store import list_tenant_ids
+                from services.billing.entitlements_pg_store import list_tenant_ids
 
                 with require_billing_pg_session() as session:
                     return list_tenant_ids(session)
@@ -115,7 +115,7 @@ class EntitlementsStore:
 
     def get(self, tenant_id: str) -> TenantEntitlement:
         if billing_uses_postgres():
-            from services.entitlements_pg_store import get_entitlement
+            from services.billing.entitlements_pg_store import get_entitlement
 
             with require_billing_pg_session() as session:
                 data = get_entitlement(session, tenant_id)
@@ -132,7 +132,7 @@ class EntitlementsStore:
     def save(self, ent: TenantEntitlement) -> TenantEntitlement:
         ent.updated_at = time.time()
         if billing_uses_postgres():
-            from services.entitlements_pg_store import save_entitlement
+            from services.billing.entitlements_pg_store import save_entitlement
 
             with require_billing_pg_session() as session:
                 save_entitlement(session, asdict(ent))
@@ -227,7 +227,7 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         from services.billing.membership.plan_catalog import require_plan
 
         display_name = require_plan(plan_id).display_name
-    from services.subscription_downgrade import pending_downgrade_public
+    from services.billing.subscription_downgrade import pending_downgrade_public
 
     pending = pending_downgrade_public(ent)
     payload = {
@@ -292,7 +292,7 @@ def apply_store_notification(
     force_apply: bool = False,
 ) -> dict[str, Any]:
     """Idempotent entitlement update from Apple/Google server notifications."""
-    from services.subscription_downgrade import (
+    from services.billing.subscription_downgrade import (
         clear_pending_downgrade,
         is_downgrade,
         schedule_pending_downgrade,
@@ -307,7 +307,7 @@ def apply_store_notification(
             effective_at=existing.current_period_end,
         )
         if billing_uses_postgres():
-            from services.entitlements_pg_store import mark_processed_event, processed_event_exists
+            from services.billing.entitlements_pg_store import mark_processed_event, processed_event_exists
 
             with require_billing_pg_session() as session:
                 if processed_event_exists(session, idempotency_key):
@@ -359,7 +359,7 @@ def apply_store_notification(
         if plan_id == existing.pending_plan_id or not is_downgrade(existing.plan_id, plan_id):
             clear_pending_downgrade(tenant_id)
     if billing_uses_postgres():
-        from services.entitlements_pg_store import mark_processed_event, processed_event_exists
+        from services.billing.entitlements_pg_store import mark_processed_event, processed_event_exists
 
         with require_billing_pg_session() as session:
             if processed_event_exists(session, idempotency_key):

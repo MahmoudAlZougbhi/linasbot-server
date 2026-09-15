@@ -81,7 +81,7 @@ async def _run_ai_turn(
     trace_id: str,
 ) -> dict[str, Any]:
     import config
-    from handlers.text_handlers_delayed import _delayed_process_messages
+    from services.brain.inbound.text_handlers_delayed import _delayed_process_messages
 
     channel = str(context.get("channel") or "").strip().lower()
     user_data = _user_data_for(user_key, context, event_ids, trace_id)
@@ -103,7 +103,7 @@ async def _run_ai_turn(
         closer = user_data.pop("_combine_adapter_close", None)
         if closer is not None:
             await closer()
-    from services.ai_reply_turn_runtime import finalize_delivery
+    from services.brain.ai_reply.ai_reply_turn_runtime import finalize_delivery
 
     return finalize_delivery({"user_data": user_data})
 
@@ -230,7 +230,7 @@ async def _meta_send_pair(
     async def send_action(_namespaced_id: str) -> Any:
         return await adapter.send_typing(sender_id)
 
-    from services.ai_reply_delivery import wrap_tracked_send
+    from services.brain.ai_reply.ai_reply_delivery import wrap_tracked_send
 
     return wrap_tracked_send(send_message, user_data), send_action
 

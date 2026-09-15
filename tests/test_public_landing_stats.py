@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from modules.api_security import is_public_api
-from services.public_landing_stats import collect_public_landing_stats, reset_public_landing_stats_cache
+from services.dashboard.public_landing_stats import collect_public_landing_stats, reset_public_landing_stats_cache
 
 
 def _write_entitlement(root: Path, tenant_id: str, *, status: str, plan_id: str) -> None:
@@ -90,7 +90,7 @@ def test_collects_subscribers_and_ai_replies(tmp_path: Path, monkeypatch: pytest
             },
         ],
     )
-    monkeypatch.setattr("services.public_landing_stats._count_requests", lambda: (3, "customer_requests_db"))
+    monkeypatch.setattr("services.dashboard.public_landing_stats._count_requests", lambda: (3, "customer_requests_db"))
     payload = collect_public_landing_stats(
         entitlements_root=ents,
         log_path=str(log),

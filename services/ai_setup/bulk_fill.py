@@ -128,8 +128,8 @@ def mark_section_status(plan: dict[str, Any], section: str, status: str) -> dict
 
 async def extract_sections_from_dump(*, text: str, reply_style: str = "") -> dict[str, Any]:
     """LLM: map business dump → per-section patches (JSON only)."""
-    from services.llm_core_service import build_chat_completion_kwargs, client
-    from services.model_policy import emit_model_policy_trace, resolve_owner_policy
+    from services.brain.llm_core_service import build_chat_completion_kwargs, client
+    from services.brain.model_policy import emit_model_policy_trace, resolve_owner_policy
 
     policy = resolve_owner_policy(
         surface="owner_copilot",

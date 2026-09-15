@@ -9,8 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from modules.api_security import _client_ip
 from modules.core import app
-from services.guest_ai_service import GuestAIModelError, build_guest_greeting, compose_guest_reply
-from services.guest_chat_limits import (
+from services.guest.guest_ai_service import GuestAIModelError, build_guest_greeting, compose_guest_reply
+from services.guest.guest_chat_limits import (
     GUEST_MAX_INPUT_TOKENS,
     GUEST_MAX_QUESTIONS,
     GUEST_MAX_WORDS,
@@ -20,9 +20,9 @@ from services.guest_chat_limits import (
     tokens_ok,
     words_ok,
 )
-from services.guest_chat_store import guest_chat_store
+from services.guest.guest_chat_store import guest_chat_store
 from services.owner_copilot.profile import resolve_owner_reply_language
-from services.rate_limit_service import rate_limit_service
+from services.scale.rate_limit_service import rate_limit_service
 
 _INPUT_TOO_LARGE_MESSAGE = {
     "en": ("What you sent is too large (over 500 tokens). Subscribe to Linas AI to continue with larger messages."),

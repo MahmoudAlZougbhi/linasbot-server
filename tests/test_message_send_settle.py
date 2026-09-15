@@ -88,7 +88,7 @@ def test_settle_matches_inbound_id_not_logical_reply() -> None:
 
 
 def test_never_submitted_releases_ready_message_hold() -> None:
-    from services.ai_reply_turn_runtime import settle_after_outbound
+    from services.brain.ai_reply.ai_reply_turn_runtime import settle_after_outbound
 
     turn, result = _generated("mid-ready")
     apply_message_billing(turn, result)
@@ -162,7 +162,7 @@ def test_comment_and_omni_settle_after_delivery() -> None:
     assert "accepted=False" in release
     assert "message_operation_id" in release
     assert "credit_ledger_service.release" not in release
-    from services.ai_reply_turn_runtime import finalize_delivery as finalize_meta_delivery
+    from services.brain.ai_reply.ai_reply_turn_runtime import finalize_delivery as finalize_meta_delivery
 
     meta = getsource(finalize_meta_delivery)
     assert "_release_unused_hold" in meta
@@ -378,7 +378,7 @@ def test_reconcile_settles_alias_operation_id() -> None:
 
 
 def test_empty_generate_and_exception_release_message_hold() -> None:
-    from services.ai_reply_turn_runtime import _message_settle_ids, on_ai_failed, on_ai_generated
+    from services.brain.ai_reply.ai_reply_turn_runtime import _message_settle_ids, on_ai_failed, on_ai_generated
 
     turn, result = _generated("mid-empty")
     apply_message_billing(turn, result)

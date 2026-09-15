@@ -255,7 +255,7 @@ async def test_capture_failure_does_not_append_turn(web_chat_pg_store, monkeypat
         greeting="Hi",
         authority_hash=bundle.authority_hash,
     )
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
     from services.integrations.web_chat.persistence import PersistOutcome, PersistResult
     from services.integrations.web_chat.processor import WebChatError, process_web_chat_message
 

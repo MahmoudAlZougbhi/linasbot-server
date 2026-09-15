@@ -16,7 +16,7 @@ from modules.auth_api_common import (
     _clear_auth_cookies,
 )
 from modules.core import app
-from services.dashboard_session_service import SESSION_COOKIE_NAME, session_service
+from services.dashboard.dashboard_session_service import SESSION_COOKIE_NAME, session_service
 from services.team.user_service import user_service
 
 
@@ -26,9 +26,9 @@ async def forgot_password(body: ForgotPasswordRequest) -> Any:
     Always return a generic success message (do not reveal whether email exists).
     When mail is configured, send a time-limited reset link plus a 6-digit code.
     """
-    from services.auth_email_tokens import auth_email_token_service
-    from services.email_dispatch import send_reset_password_email
-    from services.mail_service import mail_configured
+    from services.auth.auth_email_tokens import auth_email_token_service
+    from services.email.email_dispatch import send_reset_password_email
+    from services.email.mail_service import mail_configured
 
     email = (body.email or "").strip().lower()
     generic = {
@@ -80,8 +80,8 @@ async def forgot_password(body: ForgotPasswordRequest) -> Any:
 
 @app.post("/api/auth/reset-password")
 async def reset_password(body: ResetPasswordRequest, response: Response) -> Any:
-    from services.admin_provisioning_service import validate_provision_password
-    from services.auth_email_tokens import auth_email_token_service
+    from services.auth.auth_email_tokens import auth_email_token_service
+    from services.team.admin_provisioning_service import validate_provision_password
 
     token = (body.token or "").strip()
     if not token:
@@ -119,7 +119,7 @@ async def reset_password(body: ResetPasswordRequest, response: Response) -> Any:
 
 @app.post("/api/auth/verify-email")
 async def verify_email(body: VerifyEmailRequest) -> Any:
-    from services.auth_email_tokens import auth_email_token_service
+    from services.auth.auth_email_tokens import auth_email_token_service
 
     token = (body.token or "").strip()
     if not token:
@@ -142,9 +142,9 @@ async def verify_email(body: VerifyEmailRequest) -> Any:
 
 @app.post("/api/auth/resend-verification")
 async def resend_verification(body: ResendVerificationRequest, request: Request) -> Any:
-    from services.auth_email_tokens import auth_email_token_service
-    from services.email_dispatch import send_verify_email
-    from services.mail_service import mail_configured
+    from services.auth.auth_email_tokens import auth_email_token_service
+    from services.email.email_dispatch import send_verify_email
+    from services.email.mail_service import mail_configured
 
     email = (body.email or "").strip().lower()
     cookie = request.cookies.get(SESSION_COOKIE_NAME)

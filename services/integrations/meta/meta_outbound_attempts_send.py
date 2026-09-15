@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 from typing import Any, Literal
 
-from services.firestore_transaction_compat import run_firestore_transaction
 from services.integrations.meta.meta_controlled_evidence import MetaEvidenceSurface
 from services.integrations.meta.meta_outbound_attempts_types import (
     _MAX_TRANSACTION_ATTEMPTS,
@@ -21,6 +20,7 @@ from services.integrations.meta.meta_outbound_attempts_validate import (
     _validate_stored_authority,
 )
 from services.integrations.meta.meta_outbound_purposes import PURPOSE_PREDECESSORS as _PURPOSE_PREDECESSORS
+from services.scale.firestore_transaction_compat import run_firestore_transaction
 
 
 def _begin_sync(

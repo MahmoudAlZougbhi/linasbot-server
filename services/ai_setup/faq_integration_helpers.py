@@ -8,7 +8,7 @@ from typing import Any
 
 from services.ai_setup.schemas import FaqRecord, FaqSection
 from services.ai_setup.storage import ConflictError, get_draft, put_draft
-from services.language_detection_service import language_detection_service
+from services.brain.language_detection_service import language_detection_service
 
 FAQ_SECTION = "faq"
 FAQ_TARGET_LANGUAGES = ("ar", "en", "fr", "franco")  # legacy default; use load_faq_target_languages()

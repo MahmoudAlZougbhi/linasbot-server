@@ -22,7 +22,7 @@ async def scale_metrics() -> Any:
     except Exception as exc:
         payload["omnichannel_error"] = type(exc).__name__
     try:
-        from services.job_queue import job_queue
+        from services.queues.job_queue import job_queue
 
         payload["queue_depth"] = job_queue.depth()
         backend = getattr(job_queue, "_redis", None)

@@ -35,13 +35,13 @@ def wire_pg_billing_stores(monkeypatch: pytest.MonkeyPatch) -> None:
     ent = EntitlementsStore()
     monkeypatch.setattr(es, "entitlements_store", ent)
     monkeypatch.setattr(wg, "entitlements_store", ent)
-    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", ent)
-    monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", ent)
+    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", ent)
+    monkeypatch.setattr("services.billing.credit_ledger_pg_ops.entitlements_store", ent)
 
 
 def seed_acceptance_credit_ledger(*, tenant_id: str = "biz", plan_id: str = "starter") -> int:
+    from services.billing.credit_ledger_service import credit_ledger_service
     from services.billing.entitlements_service import entitlements_store
-    from services.credit_ledger_service import credit_ledger_service
 
     entitlements_store.set_plan(tenant_id=tenant_id, plan_id=plan_id, status="active", source="admin")
     credit_ledger_service.ensure_period_grant(tenant_id)

@@ -42,8 +42,8 @@ async def test_persist_web_turn_passes_tenant_scoped_user_data_to_log_interactio
     save_mock = AsyncMock(return_value=("web:tenant-z:visitor-tenant", None))
     log_mock = MagicMock()
     monkeypatch.setattr("services.integrations.web_chat.persistence.save_conversation_message_to_firestore", save_mock)
-    monkeypatch.setattr("services.interaction_flow_logger.is_flow_logging_enabled", lambda: True)
-    monkeypatch.setattr("services.interaction_flow_logger.log_interaction", log_mock)
+    monkeypatch.setattr("services.owner_copilot.interaction_flow_logger.is_flow_logging_enabled", lambda: True)
+    monkeypatch.setattr("services.owner_copilot.interaction_flow_logger.log_interaction", log_mock)
 
     user_id = "web:visitor-tenant"
     widget = WebChatWidgetConfig(

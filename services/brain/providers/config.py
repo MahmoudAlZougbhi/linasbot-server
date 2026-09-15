@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 from services.brain.flags import voyage_configured
+from services.brain.model_policy import MODEL_CUSTOMER_TERRA
 from services.brain.providers.spaces import (
     ENTITY_MODEL,
     KNOWLEDGE_MODEL,
@@ -14,7 +15,6 @@ from services.brain.providers.spaces import (
     RERANK_MODEL,
     spaces_snapshot,
 )
-from services.model_policy import MODEL_CUSTOMER_TERRA
 from services.providers.base import provider_config
 
 

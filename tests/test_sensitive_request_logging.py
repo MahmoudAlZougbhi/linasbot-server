@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 import pytest
 from starlette.requests import Request
 
-from services.sensitive_request_logging import (
+from services.scale.sensitive_request_logging import (
     SensitiveQueryLogFilter,
     install_sensitive_query_log_filter,
     redact_sensitive_query_text,

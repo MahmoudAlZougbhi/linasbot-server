@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services.llm_core_service import build_chat_completion_kwargs
-from services.model_policy import (
+from services.brain.llm_core_service import build_chat_completion_kwargs
+from services.brain.model_policy import (
     MODEL_CUSTOMER_TERRA,
     MODEL_OWNER_SOL,
     assert_customer_social_model,
@@ -100,7 +100,7 @@ def test_owner_ui_mode_chat_low_work_high() -> None:
 
 
 def test_owner_stream_route_suggests_work_for_high() -> None:
-    from services.model_policy import owner_stream_route_payload
+    from services.brain.model_policy import owner_stream_route_payload
 
     high = resolve_owner_policy(surface="owner_copilot", user_text="Update FAQ answers")
     route = owner_stream_route_payload(high)
@@ -220,7 +220,7 @@ async def test_cm_answer_generation_openai_payload_is_terra_medium(
 async def test_owner_provider_openai_payload_sol_effort(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.model_policy import resolve_owner_policy
+    from services.brain.model_policy import resolve_owner_policy
     from services.owner_copilot import provider as prov
 
     captured: dict[str, Any] = {}
@@ -240,7 +240,7 @@ async def test_owner_provider_openai_payload_sol_effort(
                     resp.choices = [choice]
                     return resp
 
-    monkeypatch.setattr("services.llm_core_service.client", _FakeClient)
+    monkeypatch.setattr("services.brain.llm_core_service.client", _FakeClient)
     low = resolve_owner_policy(surface="owner_copilot", user_text="How does usage work?")
     await prov.sol_chat_completion(
         messages=[{"role": "user", "content": "How does usage work?"}],
@@ -278,7 +278,7 @@ async def test_owner_provider_openai_payload_sol_effort(
 
 
 def test_sol_chat_completions_tools_force_none_effort() -> None:
-    from services.llm_core_service import (
+    from services.brain.llm_core_service import (
         build_chat_completion_kwargs,
         effective_chat_completions_reasoning_effort,
     )

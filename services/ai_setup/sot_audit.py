@@ -84,7 +84,7 @@ LEGACY_BUSINESS_FACT_SOURCES: tuple[SotSource, ...] = (
         id="default_dynamic_messages",
         description="Hardcoded default dynamic bot messages (dynamic_messages_service defaults)",
         kind="code_default",
-        module="services.dynamic_messages_service",
+        module="services.owner_copilot.dynamic_messages_service",
         attribute="DEFAULT_DYNAMIC_MESSAGES",
     ),
 )
@@ -92,7 +92,7 @@ LEGACY_BUSINESS_FACT_SOURCES: tuple[SotSource, ...] = (
 #: Response-generation entry points in scope for this audit. Fixed, hand-maintained scope —
 #: NOT a full-repo crawl — so results are predictable and reviewable.
 SCAN_TARGET_FILES: tuple[str, ...] = (
-    "handlers/text_handlers_respond.py",
+    "services/brain/inbound/text_handlers_respond.py",
     "services/brain/reply/orchestrator.py",
     "services/faq/local_qa_service.py",
     "services/integrations/social/social_contact_routing.py",

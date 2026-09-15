@@ -152,7 +152,7 @@ def route_social_contact_request(
         if explicit == "human":
             # Owner inbox alert (Instagram/Facebook never enter waiting_human queue).
             try:
-                from services.owner_alert_service import owner_alert_service
+                from services.owner_copilot.owner_alert_service import owner_alert_service
 
                 scope_tenant = str(
                     user_data.get("tenant_id") or user_data.get("tenantId") or user_data.get("workspace_id") or ""
@@ -173,7 +173,7 @@ def route_social_contact_request(
                         social_uid = phone[5:].strip()
                 if not social_uid and user_data.get("social_sender_id"):
                     try:
-                        from services.social_user_id import compose_social_user_id
+                        from services.integrations.social.social_user_id import compose_social_user_id
 
                         social_uid = compose_social_user_id(
                             tenant_id=scope_tenant,

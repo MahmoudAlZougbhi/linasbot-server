@@ -105,7 +105,7 @@ def test_meta_comment_enqueue_queue_is_background(monkeypatch):
             return type("J", (), {"id": "job-1"})()
 
     monkeypatch.setattr("services.scale.meta_ingress.redis_required", lambda: True)
-    monkeypatch.setattr("services.job_queue.job_queue", Queue())
+    monkeypatch.setattr("services.queues.job_queue.job_queue", Queue())
     from services.scale import meta_ingress
 
     job_id = meta_ingress._try_enqueue(

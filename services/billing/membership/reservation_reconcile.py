@@ -31,7 +31,7 @@ def _age_seconds(stamp: str) -> float:
 
 
 def _retry_legacy(item: PendingSettlement) -> str:
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
 
     if item.send_status != "sent":
         if _age_seconds(item.created_at) < ACTIVE_MAX_AGE_SECONDS:

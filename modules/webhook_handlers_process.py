@@ -37,7 +37,7 @@ async def process_parsed_message(parsed_message: dict[str, Any], adapter: Any) -
 
 async def _process_parsed_message_impl(parsed_message: dict[str, Any], adapter: Any) -> None:
     """Process a parsed message regardless of provider. Uses normalized phone as canonical user_id to prevent duplicates."""
-    from services.customer_identity_service import resolve_customer_from_external
+    from services.brain.customer_identity_service import resolve_customer_from_external
     from utils.phone_utils import is_phone_like_user_id
     from utils.utils import get_canonical_user_id_and_phone, persist_room_to_phone_mapping
 
@@ -280,7 +280,7 @@ async def _process_parsed_message_impl(parsed_message: dict[str, Any], adapter: 
             user_input_text = str(content)
 
         if config.user_data_whatsapp.get(user_id, {}).get("awaiting_post_session_feedback_rating"):
-            from services.post_session_feedback_rating_service import (
+            from services.live_chat.post_session_feedback_rating_service import (
                 try_handle_post_session_feedback_reply,
             )
 
@@ -288,7 +288,7 @@ async def _process_parsed_message_impl(parsed_message: dict[str, Any], adapter: 
                 return
 
         if config.user_data_whatsapp.get(user_id, {}).get("awaiting_session_rating"):
-            from services.session_rating_service import try_handle_session_rating_reply
+            from services.live_chat.session_rating_service import try_handle_session_rating_reply
 
             if await try_handle_session_rating_reply(user_id, user_input_text, adapter):
                 return

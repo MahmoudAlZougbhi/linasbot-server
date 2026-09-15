@@ -14,7 +14,7 @@ def test_second_schedule_bumps_existing_job(monkeypatch) -> None:
     fake = fakeredis.FakeRedis(decode_responses=True)
     monkeypatch.setenv("REDIS_URL", "redis://fake/0")
     import services.queues.redis_backend as rb
-    from services import job_queue as jq
+    from services.queues import job_queue as jq
 
     monkeypatch.setattr(rb, "_client", lambda: fake)
     backend = rb.RedisQueueBackend()

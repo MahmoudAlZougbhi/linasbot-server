@@ -14,12 +14,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from modules.api_security import is_public_api
-from services.auth_email_tokens import AuthEmailTokenService
-from services.email_delivery_store import EmailDeliveryStore
-from services.email_dispatch import dispatch_template_email, oauth_email_policy
-from services.email_templates_catalog import list_template_ids
-from services.email_templates_render import render_transactional_email
-from services.resend_webhook_verify import WebhookSignatureError, verify_resend_webhook
+from services.auth.auth_email_tokens import AuthEmailTokenService
+from services.email.email_delivery_store import EmailDeliveryStore
+from services.email.email_dispatch import dispatch_template_email, oauth_email_policy
+from services.email.email_templates_catalog import list_template_ids
+from services.email.email_templates_render import render_transactional_email
+from services.email.resend_webhook_verify import WebhookSignatureError, verify_resend_webhook
 
 
 @pytest.fixture()
@@ -127,10 +127,10 @@ def test_dispatch_idempotency(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("RESEND_API_KEY_SENDING", "")
     monkeypatch.setenv("SMTP_HOST", "")
     monkeypatch.setenv("MAIL_LOG_LINKS", "true")
-    from services import email_dispatch as ed
+    from services.email import email_dispatch as ed
 
     ed._idempotency = ed._IdempotencyStore(store_dir=tmp_path / "idem")  # type: ignore[attr-defined]
-    with mock.patch("services.email_dispatch.send_email") as send_mock:
+    with mock.patch("services.email.email_dispatch.send_email") as send_mock:
         send_mock.return_value = mock.Mock(sent=True, reason="ok", provider="resend", message_id="msg_1")
         first = dispatch_template_email(
             template_id="welcome",
@@ -193,10 +193,10 @@ def test_resend_webhook_endpoint_rejects_bad_signature(app_client: TestClient, m
 
 def test_mail_service_prefers_resend(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RESEND_API_KEY", "re_test_key_not_real")
-    from services import mail_service as ms
+    from services.email import mail_service as ms
 
-    with mock.patch("services.resend_client.resend_configured", return_value=True):
-        with mock.patch("services.resend_client.send_resend_email") as inner:
+    with mock.patch("services.email.resend_client.resend_configured", return_value=True):
+        with mock.patch("services.email.resend_client.send_resend_email") as inner:
             inner.return_value = mock.Mock(ok=True, reason="ok", message_id="m1", status_code=200)
             result = ms.send_email(to_email="t@example.com", subject="Hi", text_body="Hello")
     assert result.sent is True

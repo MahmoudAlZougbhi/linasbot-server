@@ -137,7 +137,7 @@ def get_draft(
     """Load a draft section envelope. Optionally materialize defaults."""
     tid = _normalize_tenant(tenant_id)
     name = _validate_section(section)
-    from services.tenant_runtime_config_service import load_draft_envelope, postgres_enabled
+    from services.tenant_runtime.tenant_runtime_config_service import load_draft_envelope, postgres_enabled
 
     if postgres_enabled():
         envelope = load_draft_envelope(tid, name)
@@ -172,7 +172,7 @@ def put_draft(
     expected = (if_match or "").strip()
 
     with tenant_server_lock(tid):
-        from services.tenant_runtime_config_service import load_draft_envelope, postgres_enabled
+        from services.tenant_runtime.tenant_runtime_config_service import load_draft_envelope, postgres_enabled
 
         current: SectionDraftEnvelope | None = None
         if postgres_enabled():
@@ -209,7 +209,7 @@ def put_draft(
             updated_by=updated_by,
             payload=safe_payload,
         )
-        from services.tenant_runtime_config_service import save_draft_envelope
+        from services.tenant_runtime.tenant_runtime_config_service import save_draft_envelope
 
         if postgres_enabled():
             expected_rev = current.revision if current is not None else -1

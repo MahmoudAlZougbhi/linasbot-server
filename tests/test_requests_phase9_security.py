@@ -25,7 +25,7 @@ from modules.api_security import (  # noqa: E402
     resolve_permissions,
     user_has_permission,
 )
-from services.dashboard_session_service import SessionRecord  # noqa: E402
+from services.dashboard.dashboard_session_service import SessionRecord  # noqa: E402
 from services.requests.ai_tool import AiToolContext, execute_create_customer_request  # noqa: E402
 from services.requests.constants import REQUEST_PERMISSION_KEYS  # noqa: E402
 from services.requests.schemas import RequestCreateBody  # noqa: E402

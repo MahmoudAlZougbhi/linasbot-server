@@ -8,8 +8,8 @@ from fastapi import Body, Query, Request
 
 from modules.api_security import require_permission
 from modules.core import app
-from services.owner_alert_store import owner_alert_store
-from services.owner_push_token_store import owner_push_token_store
+from services.owner_copilot.owner_alert_store import owner_alert_store
+from services.owner_copilot.owner_push_token_store import owner_push_token_store
 
 
 @app.get("/api/owner-notifications")

@@ -29,8 +29,8 @@ from services.integrations.meta.meta_instagram_login_config import (
 )
 from services.integrations.meta.meta_messaging import InMemoryMessageDeduper, get_meta_messaging_settings
 from services.integrations.meta.meta_multi_app_router import resolve_registry_events
+from services.integrations.social.social_messaging_processor import process_meta_social_event
 from services.scale.meta_webhook_accept import accept_meta_comment_events, accept_meta_dm_events
-from services.social_messaging_processor import process_meta_social_event
 
 _message_deduper = InMemoryMessageDeduper(ttl_seconds=300.0)
 _comment_deduper = InMemoryMessageDeduper(ttl_seconds=86400.0)

@@ -8,8 +8,8 @@ from fastapi import Request
 
 from modules.api_security import require_session
 from modules.core import app
-from services.job_queue import job_queue
 from services.queues.config import redis_required, redis_url
+from services.queues.job_queue import job_queue
 
 
 @app.get("/api/queue/health")

@@ -14,7 +14,7 @@ from services.integrations.meta.meta_app_registry import (
 from services.integrations.meta.meta_connection_disconnect import disconnect_meta_binding_set
 from services.integrations.meta.meta_instagram_login_subscription import ensure_instagram_login_webhook_subscription
 from services.integrations.meta.meta_oauth import MetaOAuthError
-from services.mobile_integrations_display import bindings_for_disconnect
+from services.integrations.mobile_integrations_display import bindings_for_disconnect
 from tests.meta_instagram_single_active_support import (
     INSTAGRAM_ID,
     _activate_direct,

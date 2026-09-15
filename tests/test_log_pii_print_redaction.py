@@ -20,7 +20,6 @@ _FORBIDDEN_SNIPPETS = (
 )
 
 _SCAN_GLOBS = (
-    "handlers/**/*.py",
     "services/**/*.py",
     "modules/**/*.py",
 )
@@ -40,7 +39,7 @@ def test_handlers_services_modules_print_strings_mask_phone_and_message_bodies()
 
 
 def test_text_handlers_message_still_excludes_sec047_debug_patterns() -> None:
-    source = (ROOT / "handlers/text_handlers_message.py").read_text(encoding="utf-8")
+    source = (ROOT / "services/brain/inbound/text_handlers_message.py").read_text(encoding="utf-8")
     for pattern in (
         "phone_number from user_data",
         "phone_number from config",

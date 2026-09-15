@@ -11,7 +11,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from services.firestore_transaction_compat import run_firestore_transaction
 from services.integrations.meta.meta_app_registry_common import AuthFlow
 from services.integrations.meta.meta_data_deletion_store import (
     _binding_scopes,
@@ -38,6 +37,7 @@ from services.integrations.meta.meta_data_deletion_types import (
     _SharedDeletionRequest,
     _subject_index_key,
 )
+from services.scale.firestore_transaction_compat import run_firestore_transaction
 from storage.persistent_storage import _DATA_ROOT
 
 _LOCK_DIR = Path(_DATA_ROOT) / "meta_deletion_runtime"

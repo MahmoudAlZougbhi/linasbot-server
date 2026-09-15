@@ -9,9 +9,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from modules.api_security import is_public_api
-from services.auth_email_tokens import AuthEmailTokenService
-from services.token_metering import assert_tenant_can_use_ai
-from services.token_package_catalog import (
+from services.auth.auth_email_tokens import AuthEmailTokenService
+from services.billing.token_metering import assert_tenant_can_use_ai
+from services.billing.token_package_catalog import (
     assert_public_payload_has_no_internal_economics,
     build_package,
     catalog_public_payload,
@@ -123,7 +123,7 @@ def test_landing_pricing_section_in_source() -> None:
 
 def test_zero_credits_blocks_unlimited_linas(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "linas")
-    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.billing.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
     with pytest.raises(PermissionError, match="Insufficient credits"):
         assert_tenant_can_use_ai("linas")
 

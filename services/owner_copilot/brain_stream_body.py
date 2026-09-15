@@ -6,7 +6,7 @@ import json
 from collections.abc import AsyncGenerator, Callable
 from typing import Any, Literal
 
-from services.model_policy import emit_model_policy_trace, owner_stream_route_payload, resolve_owner_policy
+from services.brain.model_policy import emit_model_policy_trace, owner_stream_route_payload, resolve_owner_policy
 from services.owner_copilot.assent import looks_like_owner_assent, resolve_pending_confirm_token
 from services.owner_copilot.brain_support import (
     FINAL_ANSWER_NUDGE,
@@ -354,7 +354,7 @@ async def _iter_owner_turn_v2_events_body(
             ),
         )
     except Exception as exc:  # noqa: BLE001
-        from services.llm_core_service import sanitize_llm_error
+        from services.brain.llm_core_service import sanitize_llm_error
 
         yield StreamEvent(
             type="error",

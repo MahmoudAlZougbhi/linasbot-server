@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from services.durable_event_claim import (
+from services.scale.durable_event_claim import (
     _file_claim_path,
     _firestore_claim_document_id,
     local_event_claim_store_lock,
@@ -37,7 +37,7 @@ _CLAIM_COLLECTIONS = (
 
 
 def _claim_root() -> Path:
-    import services.durable_event_claim as durable_claims
+    import services.scale.durable_event_claim as durable_claims
 
     return durable_claims._claims_dir()
 
@@ -92,7 +92,7 @@ def _event_stable_identities(raw: dict[str, Any]) -> frozenset[str]:
         return frozenset()
     candidates: set[str] = set()
     try:
-        from services.social_user_id import compose_social_user_id
+        from services.integrations.social.social_user_id import compose_social_user_id
 
         candidates.add(
             compose_social_user_id(

@@ -22,7 +22,7 @@ from services.billing.membership.plan_catalog import (
     require_plan,
     topup_pack_matrix,
 )
-from services.model_pricing import MODEL_PRICING
+from services.brain.model_pricing import MODEL_PRICING
 
 # Fixed list prices (USD / month) — frozen membership-v1 matrix.
 PLAN_PRICES_USD: Final[dict[str, float]] = {pid: plan_price_usd(pid) for pid in PUBLIC_PLAN_IDS}
@@ -207,7 +207,7 @@ def build_economics_report() -> dict[str, Any]:
         "public_plans": public_plan_matrix(),
         "topup_packs": topup_pack_matrix(),
         "pricing_source": {
-            "text_models": "services.billing.membership.rate_card + services.model_pricing.MODEL_PRICING",
+            "text_models": "services.billing.membership.rate_card + services.brain.model_pricing.MODEL_PRICING",
             "text_pricing_date": pricing_date,
             "dm_model": DM_MODEL,
             "owner_model": OWNER_MODEL,

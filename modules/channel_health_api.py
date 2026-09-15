@@ -13,6 +13,6 @@ from modules.core import app
 async def channel_health() -> Any:
     """Per-channel PASS / WARNING / FAIL. Never a load-balancer or HA gate."""
 
-    from services.channel_health import evaluate_channel_health
+    from services.integrations.channel_health import evaluate_channel_health
 
     return JSONResponse(status_code=200, content=evaluate_channel_health())

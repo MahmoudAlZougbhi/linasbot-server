@@ -25,7 +25,7 @@ from services.integrations.meta.meta_app_registry import (  # noqa: E402
 )
 from services.integrations.meta.meta_app_registry_pg_store import load_state, state_fingerprint  # noqa: E402
 from services.integrations.meta.meta_connection_disconnect import disconnect_meta_binding_set  # noqa: E402
-from services.mobile_integrations_display import bindings_for_disconnect  # noqa: E402
+from services.integrations.mobile_integrations_display import bindings_for_disconnect  # noqa: E402
 from tests.meta_app_registry_helpers import _credential  # noqa: E402
 
 pytest_plugins = ("tests.meta_app_registry_fixtures",)

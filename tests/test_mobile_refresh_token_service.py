@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from services.mobile_refresh_token_service import (
+from services.auth.mobile_refresh_token_service import (
     MobileRefreshRecord,
     MobileRefreshTokenService,
     _hash_token,

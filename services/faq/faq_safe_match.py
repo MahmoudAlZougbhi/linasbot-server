@@ -70,7 +70,7 @@ def _tenant_ok(entry: dict[str, Any], tenant_id: str) -> bool:
 def _resolve_match_language(*, question: str, language: str, tenant_id: str) -> str:
     """Prefer broad inbound detection so saved per-language Q&A works beyond ar/en/fr/franco."""
     from services.ai_setup.customer_language_detect import detect_broad_customer_language, normalize_language_code
-    from services.language_detection_service import language_detection_service
+    from services.brain.language_detection_service import language_detection_service
 
     normalized_hint = language_detection_service.normalize_training_language(language, default="")
     detected = detect_broad_customer_language(

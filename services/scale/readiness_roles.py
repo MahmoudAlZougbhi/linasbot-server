@@ -87,7 +87,7 @@ def _redis_check(*, required: bool) -> tuple[bool, dict[str, Any]]:
         detail = {"ok": not required, "configured": False, "required": required}
         return (not required), detail
     try:
-        from services.job_queue import job_queue
+        from services.queues.job_queue import job_queue
 
         health = job_queue.health()
         ok = bool(health.get("ok"))

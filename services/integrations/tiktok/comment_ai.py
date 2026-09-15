@@ -58,7 +58,7 @@ def _log_usage(
     diagnostics: dict[str, Any] | None = None,
 ) -> None:
     try:
-        from services.interaction_flow_logger import log_interaction
+        from services.owner_copilot.interaction_flow_logger import log_interaction
 
         extra = {"tenant_id": tenant_id}
         if diagnostics:

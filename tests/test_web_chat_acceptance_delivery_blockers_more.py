@@ -34,7 +34,7 @@ async def test_unresolved_release_failure_blocks_second_reserve_until_confirmed(
     patch_web_chat_store(monkeypatch, store)
     widget, visitor, _bundle = _widget_and_visitor(store)
     tenant_id = widget.tenant_id
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
     from tests.test_web_chat_operation_lease_fence import _operation_snapshot
 
     release_calls = 0
@@ -143,7 +143,7 @@ async def test_release_ack_loss_after_commit_converges_before_ai(tmp_path, monke
     patch_web_chat_store(monkeypatch, store)
     widget, visitor, _bundle = _widget_and_visitor(store)
     tenant_id = widget.tenant_id
-    from services.credit_ledger_service import credit_ledger_service
+    from services.billing.credit_ledger_service import credit_ledger_service
     from services.integrations.web_chat.operation_credit_reconcile import list_release_pending_operations
     from tests.test_web_chat_operation_lease_fence import _expire_operation_lease, _operation_snapshot
 

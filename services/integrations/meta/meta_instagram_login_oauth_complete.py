@@ -9,7 +9,6 @@ from typing import cast
 
 import httpx
 
-from services.async_safety_cleanup import await_safety_task as _await_safety_task
 from services.integrations.meta.meta_app_registry import (
     APP_A_KEY,
     META_FORBIDDEN_SCOPES,
@@ -66,6 +65,7 @@ from services.integrations.meta.meta_subject_deletion_guard import (
     acquire_meta_oauth_subject_guard,
     meta_deletion_subject_hmac,
 )
+from services.scale.async_safety_cleanup import await_safety_task as _await_safety_task
 
 
 async def complete_instagram_login(

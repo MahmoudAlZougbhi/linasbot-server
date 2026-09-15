@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from services.ai_setup.schemas import AiBasics, AnswerPacket, StylePolicy
-from services.guest_ai_service import build_guest_system_prompt
+from services.guest.guest_ai_service import build_guest_system_prompt
 from services.owner_copilot.brain_support import SYSTEM_V2
 from services.owner_copilot.context import SYSTEM_PROMPT
-from services.response_formatting import RESPONSE_FORMATTING_RULES
+from services.owner_copilot.response_formatting import RESPONSE_FORMATTING_RULES
 
 
 def test_response_formatting_rules_are_scannable_and_bilingual_safe() -> None:

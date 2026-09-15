@@ -45,7 +45,7 @@ def products_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _auth_headers(tenant_id: str) -> dict[str, str]:
-    from services.dashboard_session_service import session_service
+    from services.dashboard.dashboard_session_service import session_service
 
     session = session_service.create_session(
         user_id="u-products",

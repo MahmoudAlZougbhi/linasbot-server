@@ -52,7 +52,7 @@ DRAWER_IDS = (
     "subscription",
 )
 
-LIVE_PY_ROOTS = ("services", "modules", "handlers", "utils")
+LIVE_PY_ROOTS = ("services", "modules", "utils")
 SKIP_PARTS = ("/evals/artifacts/", "/__pycache__/", "/node_modules/")
 
 
@@ -143,9 +143,9 @@ def test_wave_g_no_live_test_lab_or_monty_or_linas_fallback() -> None:
 
 def test_wave_g_luna_engine_and_dual_index_gone() -> None:
     publish = _text("services/ai_setup/publish.py")
-    policy = _text("services/model_policy.py")
-    pricing = _text("services/model_pricing.py")
-    llm = _text("services/llm_core_service.py")
+    policy = _text("services/brain/model_policy.py")
+    pricing = _text("services/brain/model_pricing.py")
+    llm = _text("services/brain/llm_core_service.py")
     assert "from services.ai_setup.semantic_index import build_index" not in publish
     assert "schedule_tenant_index" in publish
     assert "customer_social_retrieval_voyage" in policy
@@ -158,7 +158,7 @@ def test_wave_g_luna_engine_and_dual_index_gone() -> None:
         ROOT / "services/products",
         ROOT / "services/ai_setup/search_metadata",
         ROOT / "services/brain/reply",
-        ROOT / "services/model_policy.py",
+        ROOT / "services/brain/model_policy.py",
     )
     offenders: list[str] = []
     for root in roots:
@@ -219,7 +219,7 @@ def test_wave_g_drawer_tiles_and_hub() -> None:
 def test_wave_g_live_chat_tenant_a_not_b() -> None:
     from types import SimpleNamespace
 
-    from services.access_channels import filter_chats_for_session
+    from services.integrations.access_channels import filter_chats_for_session
 
     session = SimpleNamespace(tenant_id="tenant-a", role="admin", permissions=None, user_id="op-1")
     payload = {
@@ -265,10 +265,10 @@ def test_wave_g_two_commenters_and_media() -> None:
 
 
 def test_wave_g_ai_setup_voyage_requests_integrations_billing() -> None:
+    from services.billing.iap_product_catalog import credit_product_map, subscription_product_map
     from services.billing.membership.message_flags import message_billing_enabled
     from services.dashboard.message_surface import overlay_message_fields
-    from services.iap_product_catalog import credit_product_map, subscription_product_map
-    from services.integration_capabilities import list_tenant_integration_status
+    from services.integrations.integration_capabilities import list_tenant_integration_status
 
     publish = _text("services/ai_setup/publish.py")
     pipeline = _text("services/ai_setup/runtime_pipeline.py")

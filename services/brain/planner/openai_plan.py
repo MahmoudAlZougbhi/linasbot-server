@@ -14,7 +14,7 @@ from services.brain.providers.config import planner_model
 async def plan_with_openai(message: str, history: str = "", *, tenant_id: str = "") -> PlannerPlan | None:
     if not openai_configured():
         return None
-    from services.llm_core_service import create_chat_completion
+    from services.brain.llm_core_service import create_chat_completion
 
     schema_hint = (
         '{"tasks":[{"id":"t1","type":"information","entity_mentions":[],'

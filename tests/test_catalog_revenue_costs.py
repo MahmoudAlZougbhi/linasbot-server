@@ -23,7 +23,7 @@ def test_intended_message_price_matches_credit_catalog() -> None:
 
 
 def test_owner_metrics_keep_live_mrr_and_add_catalog_mrr(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.platform_owner_service import PlatformOwnerService
+    from services.team.platform_owner_service import PlatformOwnerService
 
     root = tmp_path / "entitlements"
     root.mkdir()
@@ -31,7 +31,7 @@ def test_owner_metrics_keep_live_mrr_and_add_catalog_mrr(tmp_path, monkeypatch: 
         '{"plan_id":"lite","status":"active","included_credits":7000}',
         encoding="utf-8",
     )
-    monkeypatch.setattr("services.platform_owner_service._DATA_ROOT", tmp_path)
+    monkeypatch.setattr("services.team.platform_owner_service._DATA_ROOT", tmp_path)
     metrics = PlatformOwnerService(root=tmp_path / "owner").business_metrics()
     assert metrics["mrr_usd"] == PLAN_PRICES_USD["lite"]
     assert metrics["intended_message_mrr_usd"] == PLAN_PRICES_USD["lite"]
@@ -61,7 +61,7 @@ def test_expense_environment_stamps_prod(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_iap_config_exposes_intended_message_prices() -> None:
-    from services.store_iap_service import iap_config_status
+    from services.billing.store_iap_service import iap_config_status
 
     status = iap_config_status()
     assert status["plans"]["lite"] == PLAN_PRICES_USD["lite"]

@@ -36,7 +36,7 @@ def owner_copilot_shadow_planning() -> bool:
 
 def owner_model_name() -> str:
     """Single canonical owner brain from model policy (gpt-5.6-sol). No mini fallback."""
-    from services.model_policy import owner_model_id
+    from services.brain.model_policy import owner_model_id
 
     return owner_model_id()
 

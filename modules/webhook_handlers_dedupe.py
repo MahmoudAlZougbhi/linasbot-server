@@ -153,7 +153,7 @@ async def _webhook_firestore_try_acquire(message_id: str) -> bool:
         return True
     db = get_firestore_db()
     if not db:
-        from services.durable_event_claim import try_claim_event
+        from services.scale.durable_event_claim import try_claim_event
 
         return await try_claim_event(
             "webhook_inbound_processed",
@@ -193,7 +193,7 @@ async def _webhook_firestore_try_acquire(message_id: str) -> bool:
         if _is_dup(e):
             return False
         print(f"⚠️ Webhook Firestore dedupe create failed; durable file fallback: {e}")
-        from services.durable_event_claim import try_claim_event
+        from services.scale.durable_event_claim import try_claim_event
 
         return await try_claim_event(
             "webhook_inbound_processed",
@@ -215,7 +215,7 @@ async def _webhook_bodyfp_firestore_try_acquire(body_fp: str, current_time: floa
     basis = f"{fp}\0bodyfp_slot{slot}"
     db = get_firestore_db()
     if not db:
-        from services.durable_event_claim import try_claim_event
+        from services.scale.durable_event_claim import try_claim_event
 
         return await try_claim_event(
             "webhook_text_body_processed",
@@ -256,7 +256,7 @@ async def _webhook_bodyfp_firestore_try_acquire(body_fp: str, current_time: floa
         if _is_dup(e):
             return False
         print(f"⚠️ Webhook body-fp Firestore dedupe create failed; durable file fallback: {e}")
-        from services.durable_event_claim import try_claim_event
+        from services.scale.durable_event_claim import try_claim_event
 
         return await try_claim_event(
             "webhook_text_body_processed",
@@ -307,7 +307,7 @@ async def await_whatsapp_delayed_processing(user_id: str) -> None:
     is also run via ensure_future after the webhook returns 200 — if we do not await this task here,
     the background chain can end before the reply is sent (users see no AI response on WhatsApp).
     """
-    from handlers.text_handlers import _delayed_processing_tasks
+    from services.brain.inbound.text_handlers import _delayed_processing_tasks
 
     if user_id not in _delayed_processing_tasks:
         return

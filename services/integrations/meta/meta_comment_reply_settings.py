@@ -91,7 +91,7 @@ def get_comment_reply_setting(
 ) -> MetaCommentReplySetting:
     tenant = normalize_meta_tenant_id(tenant_id)
     key = binding_asset_key(tenant, app_key, channel, asset_id)
-    from services.tenant_runtime_config_service import load_comment_asset_setting, postgres_enabled
+    from services.tenant_runtime.tenant_runtime_config_service import load_comment_asset_setting, postgres_enabled
 
     if postgres_enabled():
         raw = load_comment_asset_setting(tenant_id=tenant, asset_key=key)
@@ -172,7 +172,7 @@ def set_comment_reply_setting(
         instructions=str(instructions or "").strip()[:2000],
         updated_at=time.time(),
     )
-    from services.tenant_runtime_config_service import postgres_enabled, save_comment_asset_setting
+    from services.tenant_runtime.tenant_runtime_config_service import postgres_enabled, save_comment_asset_setting
 
     if postgres_enabled():
         save_comment_asset_setting(
