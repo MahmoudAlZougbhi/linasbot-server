@@ -12,13 +12,13 @@ from services.guest_chat_limits import (
     count_words,
 )
 from services.model_policy import MODEL_OWNER_SOL
+from services.owner_copilot.welcome_pool import pick_welcome
 from services.response_formatting import RESPONSE_FORMATTING_RULES
 from services.system_knowledge_retrieval import (
     capabilities_as_prompt_block,
     detect_message_language,
     retrieve_capabilities,
 )
-from services.welcome_pool import pick_welcome
 
 # Explicit denylist: guest path must never dispatch these (defence in depth).
 FORBIDDEN_GUEST_TOOLS = frozenset(

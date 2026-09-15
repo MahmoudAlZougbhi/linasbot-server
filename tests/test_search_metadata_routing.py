@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from services.ai_setup.request_rules import format_request_rules_for_ai
+from services.ai_setup.search_metadata.title_fields import retrieval_title_fields
 from services.brain.reply.retrieval_item_index import record_content
-from services.search_metadata.title_fields import retrieval_title_fields
 
 
 def test_retrieval_title_fields_show_original_plus_ai() -> None:

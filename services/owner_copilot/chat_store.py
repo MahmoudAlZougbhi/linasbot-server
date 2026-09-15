@@ -111,7 +111,7 @@ class OwnerChatStore:
 
                 greeting_text = build_greeting(tenant_id=tenant_id, user_id=user_id)["text"]
             except Exception:
-                from services.welcome_pool import pick_welcome
+                from services.owner_copilot.welcome_pool import pick_welcome
 
                 greeting_text = pick_welcome(language="en", user_key=user_id, hi="Hello")
         conv = OwnerConversation(

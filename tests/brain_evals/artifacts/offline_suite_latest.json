@@ -1,0 +1,100 @@
+{
+  "bank": {
+    "by_category": {
+      "abstain": 60,
+      "ambiguous": 60,
+      "arabic": 41,
+      "arabizi": 41,
+      "booking": 40,
+      "contradiction": 40,
+      "duplicate_chunks": 30,
+      "english": 40,
+      "faq": 40,
+      "french": 40,
+      "hallucination": 1,
+      "handoff": 40,
+      "hours": 1,
+      "injection": 100,
+      "lebanese_arabic": 40,
+      "long_kb": 30,
+      "mixed_language": 40,
+      "multi_intent": 60,
+      "multi_turn": 100,
+      "near_duplicate": 30,
+      "noisy": 2
+    },
+    "by_language": {
+      "ar": 41,
+      "arabizi": 41,
+      "en": 634,
+      "fr": 80,
+      "lb": 40,
+      "mixed": 40
+    },
+    "case_count": 876,
+    "live_spend": false,
+    "target_max": 1500,
+    "target_min": 800
+  },
+  "gates": {
+    "case_count_ge_800": false,
+    "missed_unsupported_eq_0": true,
+    "recall@10_ge_0.98": true,
+    "recall@5_ge_0.95": true
+  },
+  "live_spend": false,
+  "ok": false,
+  "suite": "customer_brain_offline_v1",
+  "summary": {
+    "by_category_pass_rate": {
+      "arabic": 1.0,
+      "arabizi": 1.0,
+      "english": 1.0,
+      "french": 1.0,
+      "hallucination": 1.0,
+      "hours": 1.0,
+      "lebanese_arabic": 1.0,
+      "mixed_language": 1.0
+    },
+    "by_language_pass_rate": {
+      "ar": 1.0,
+      "arabizi": 1.0,
+      "en": 1.0,
+      "fr": 1.0,
+      "lb": 1.0,
+      "mixed": 1.0
+    },
+    "case_count": 120,
+    "cost_usd": {
+      "average": 0.0,
+      "live_spend": false,
+      "note": "offline deterministic suite",
+      "p95": 0.0
+    },
+    "grounding": {
+      "cases": 25,
+      "caught_unsupported_rate": 1.0,
+      "missed_unsupported": 0
+    },
+    "latency_ms": {
+      "mean": 0.02863333333333328,
+      "p50": 0.001,
+      "p90": 0.0031000000000000086,
+      "p95": 0.07204999999999999,
+      "p99": 0.9011900000000013
+    },
+    "pass_rate": 1.0,
+    "retrieval": {
+      "cases": 3,
+      "mrr": 1.0,
+      "ndcg@10": 1.0,
+      "ndcg@5": 1.0,
+      "precision@10": 0.8333333333333334,
+      "precision@5": 0.8333333333333334,
+      "recall@1": 1.0,
+      "recall@10": 1.0,
+      "recall@3": 1.0,
+      "recall@5": 1.0
+    }
+  }
+}

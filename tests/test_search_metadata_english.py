@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from services.search_metadata.english import english_only_or_empty, looks_like_english
-from services.search_metadata.errors import METADATA_PREPARATION_MESSAGE, MetadataPreparationError
-from services.search_metadata.generate import (
+from services.ai_setup.search_metadata.english import english_only_or_empty, looks_like_english
+from services.ai_setup.search_metadata.errors import METADATA_PREPARATION_MESSAGE, MetadataPreparationError
+from services.ai_setup.search_metadata.generate import (
     SearchMetadata,
     generate_search_metadata,
     last_generate_stats,
@@ -87,9 +87,9 @@ def test_non_english_llm_output_retries_then_saves_english(monkeypatch) -> None:
     monkeypatch.setenv("LINAS_SEARCH_METADATA_LLM", "1")
     monkeypatch.setenv("ENVIRONMENT", "development")
     reset_metadata_generator()
-    monkeypatch.setattr("services.search_metadata.generate._llm_enabled", lambda: True)
-    monkeypatch.setattr("services.search_metadata.generate._generate_search_metadata", fake_luna)
-    from services.search_metadata.generate import last_generate_stats
+    monkeypatch.setattr("services.ai_setup.search_metadata.generate._llm_enabled", lambda: True)
+    monkeypatch.setattr("services.ai_setup.search_metadata.generate._generate_search_metadata", fake_luna)
+    from services.ai_setup.search_metadata.generate import last_generate_stats
 
     meta = generate_search_metadata(
         {
@@ -114,8 +114,8 @@ def test_retry_still_non_english_fails_save(monkeypatch) -> None:
         return SearchMetadata(title="Horaires d'ouverture", description="Contient les heures")
 
     reset_metadata_generator()
-    monkeypatch.setattr("services.search_metadata.generate._llm_enabled", lambda: True)
-    monkeypatch.setattr("services.search_metadata.generate._generate_search_metadata", fake_luna)
+    monkeypatch.setattr("services.ai_setup.search_metadata.generate._llm_enabled", lambda: True)
+    monkeypatch.setattr("services.ai_setup.search_metadata.generate._generate_search_metadata", fake_luna)
 
     with pytest.raises(MetadataPreparationError) as exc:
         generate_search_metadata(

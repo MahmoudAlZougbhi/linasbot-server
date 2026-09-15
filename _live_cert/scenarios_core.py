@@ -11,7 +11,7 @@ from _live_cert.calls import comment, dm, has_price, record, trace
 
 async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
     from db.session import whatsapp_session
-    from services.request_drafts.engine import apply_draft_action
+    from services.requests.request_drafts.engine import apply_draft_action
 
     out = await dm("مرحبا", conversation_id="c_greet", provider_sender_id="u_greet")
     tr = trace(out, message="مرحبا", channel="instagram_dm")

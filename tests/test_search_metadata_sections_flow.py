@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from services.ai_setup.search_metadata.cm_apply import enrich_section_payload, last_cm_apply_stats
+from services.ai_setup.search_metadata.english import contains_non_english_script, looks_like_english
+from services.ai_setup.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
+from services.ai_setup.search_metadata.title_fields import retrieval_title_fields
 from services.brain.reply.retrieval_item_index import record_content
-from services.search_metadata.cm_apply import enrich_section_payload, last_cm_apply_stats
-from services.search_metadata.english import contains_non_english_script, looks_like_english
-from services.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
-from services.search_metadata.title_fields import retrieval_title_fields
 
 
 def setup_function() -> None:

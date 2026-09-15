@@ -88,7 +88,7 @@ class ProductsService:
         row = self.repo.get_product(tenant_id=tenant_id, product_id=product_id)
         if row is None:
             raise ProductsError(code="NOT_FOUND", message="product_not_found", http_status=404)
-        from services.search_metadata.product_apply import product_content_payload
+        from services.ai_setup.search_metadata.product_apply import product_content_payload
 
         previous = product_content_payload(row)
         self._validate_images(tenant_id=tenant_id, images=body.images)
@@ -198,8 +198,8 @@ class ProductsService:
         }
 
     def _refresh_search_metadata(self, row: Any, *, previous: dict[str, Any] | None = None) -> bool:
-        from services.search_metadata.errors import MetadataPreparationError
-        from services.search_metadata.product_apply import enrich_product_row
+        from services.ai_setup.search_metadata.errors import MetadataPreparationError
+        from services.ai_setup.search_metadata.product_apply import enrich_product_row
 
         try:
             return enrich_product_row(row, previous=previous)

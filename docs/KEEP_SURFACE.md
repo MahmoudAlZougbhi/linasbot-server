@@ -302,4 +302,11 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - **Kept:** CM publish runtime, Meta DM reply, `creative_policy.py` refusal (includes `read_scheduled_posts` name).
 - Tests: `tests/test_wave_x10_legacy_bridge_booking.py`.
 
+## WAVE X11 — evals out of runtime + domain folds
+
+- `services/brain/evals/**` moved to `tests/brain_evals/` (no runtime shim). Production `brain/readiness.py` does not overlay eval artifacts.
+- Folds (no shims): `welcome_pool` → `services/owner_copilot/welcome_pool/`; `local_qa_service*` → `services/faq/`; `request_graphs` + `request_drafts` → `services/requests/`; `search_metadata` → `services/ai_setup/search_metadata/`.
+- **Kept:** Brain reply/media/comments; HA scale core; Owner Catalog; credit ledger; marketing + portal + drawer.
+- Tests: `tests/test_wave_x11_evals_domain_fold.py`.
+
 

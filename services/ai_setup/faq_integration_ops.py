@@ -15,8 +15,8 @@ from services.ai_setup.faq_integration_helpers import (
 )
 from services.ai_setup.schemas import FaqRecord, FaqSection, FaqVariant
 from services.ai_setup.storage import get_draft, put_draft
+from services.faq.local_qa_service import local_qa_service
 from services.language_detection_service import language_detection_service
-from services.local_qa_service import local_qa_service
 
 
 def list_cm_faq(

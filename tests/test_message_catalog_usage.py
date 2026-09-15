@@ -343,7 +343,7 @@ def test_google_unmapped_sku_grants_only_sale_ready_pack(monkeypatch: pytest.Mon
 
 
 def test_offline_eval_contract_cases() -> None:
-    from services.brain.evals.runner import run_fixture_corpus
+    from tests.brain_evals.runner import run_fixture_corpus
 
     result = run_fixture_corpus()
     assert result["live_spend"] is False

@@ -13,7 +13,7 @@ from typing import Any
 
 from services.ai_setup.query_interpreter import interpret_query
 from services.ai_setup.semantic_index import index_exists, search
-from services.local_qa_service import local_qa_service
+from services.faq.local_qa_service import local_qa_service
 
 
 @dataclass

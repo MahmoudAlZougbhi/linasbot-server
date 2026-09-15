@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 
 from services.ai_setup.save_live import put_draft_and_go_live
+from services.ai_setup.search_metadata.errors import METADATA_PREPARATION_MESSAGE, MetadataPreparationError
+from services.ai_setup.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
 from services.ai_setup.storage import get_draft
 from services.ai_setup.version_store import load_published_content, read_published_pointer
-from services.search_metadata.errors import METADATA_PREPARATION_MESSAGE, MetadataPreparationError
-from services.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
 
 pytest_plugins = ("tests.customer_reply_ai_v2_fixtures",)
 

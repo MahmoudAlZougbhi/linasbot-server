@@ -197,7 +197,7 @@ def put_draft(
             revision = 0
             previous_payload = {}
         safe_payload = _sanitize_section_payload(name, payload)
-        from services.search_metadata.cm_apply import enrich_section_payload
+        from services.ai_setup.search_metadata.cm_apply import enrich_section_payload
 
         safe_payload = enrich_section_payload(name, safe_payload, previous_payload)
         envelope = SectionDraftEnvelope(

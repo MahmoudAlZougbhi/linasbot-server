@@ -14,7 +14,7 @@ from services.ai_setup.faq_integration import (
     create_faq_pair,
     list_cm_faq,
 )
-from services.local_qa_service import local_qa_service
+from services.faq.local_qa_service import local_qa_service
 
 pytestmark = pytest.mark.usefixtures("enable_faq_plan")
 

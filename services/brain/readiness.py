@@ -44,8 +44,8 @@ def brain_readiness_report(*, tenant_id: str) -> dict[str, Any]:
             "PASS" if spaces.get("contextual_active") == "true" else "FAIL",
             KNOWLEDGE_MODEL,
         ),
-        "RETRIEVAL_EVAL": _gate("NOT_RUN"),
-        "GROUNDING": _gate("NOT_RUN"),
+        "RETRIEVAL_EVAL": _gate("NOT_RUN", "evals_not_runtime"),
+        "GROUNDING": _gate("NOT_RUN", "evals_not_runtime"),
         "MULTILINGUAL": _gate("PASS", "normalize+voyage"),
         "TOOLS": _gate("NOT_RUN", "needs live tool loop"),
         "MEMORY": _gate("NOT_RUN", "needs durable PG proof"),
@@ -59,26 +59,7 @@ def brain_readiness_report(*, tenant_id: str) -> dict[str, Any]:
         "SECURITY": _gate("NOT_RUN"),
     }
 
-    try:
-        from services.brain.evals.artifacts import latest_offline_artifact
-
-        artifact = latest_offline_artifact()
-        if artifact:
-            gates_map = (artifact.get("gates") if isinstance(artifact, dict) else None) or {}
-            if gates_map.get("recall@10_ge_0.98"):
-                gates["RETRIEVAL_EVAL"] = _gate("PASS", "recall@10>=0.98")
-            elif "recall@10_ge_0.98" in gates_map:
-                gates["RETRIEVAL_EVAL"] = _gate("FAIL", "recall@10<0.98")
-            if gates_map.get("missed_unsupported_eq_0"):
-                gates["GROUNDING"] = _gate("PASS", "missed_unsupported=0")
-            elif "missed_unsupported_eq_0" in gates_map:
-                gates["GROUNDING"] = _gate("FAIL", "unsupported_miss")
-        else:
-            artifact = None
-    except Exception:
-        artifact = None
-
-    # Live lab artifacts are eval-only. Production readiness does not overlay them.
+    artifact = None
 
     checks: dict[str, bool] = {
         "openai_configured": openai_configured(),

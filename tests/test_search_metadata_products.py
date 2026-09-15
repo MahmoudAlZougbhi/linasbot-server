@@ -4,16 +4,20 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from services.products.details_for_tera import product_details_for_tera
-from services.products.search import _unique_queries
-from services.products.search_scoring import rank_products
-from services.search_metadata.generate import (
+from services.ai_setup.search_metadata.generate import (
     SearchMetadata,
     is_weak_owner_description,
     reset_metadata_generator,
     set_metadata_generator,
 )
-from services.search_metadata.product_apply import enrich_product_row, last_product_apply_stats, product_content_payload
+from services.ai_setup.search_metadata.product_apply import (
+    enrich_product_row,
+    last_product_apply_stats,
+    product_content_payload,
+)
+from services.products.details_for_tera import product_details_for_tera
+from services.products.search import _unique_queries
+from services.products.search_scoring import rank_products
 
 
 def setup_function() -> None:

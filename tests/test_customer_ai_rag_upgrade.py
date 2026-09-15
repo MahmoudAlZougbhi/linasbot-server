@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.conversation_resolve import resolve_followup_query
-from services.brain.evals.case_bank import build_case_bank, case_bank_snapshot
-from services.brain.evals.metrics import mrr, ndcg_at_k, recall_at_k
-from services.brain.evals.suite_runner import run_offline_suite
 from services.brain.grounding.claims import claims_fail_closed, verify_claims
 from services.brain.grounding.contradiction import detect_amount_contradictions
 from services.brain.readiness import brain_readiness_report
 from services.brain.security.injection import evidence_has_injection, sanitize_evidence_for_prompt
 from services.brain.shadow import shadow_compare_payload, shadow_mode_enabled
+from tests.brain_evals.case_bank import build_case_bank, case_bank_snapshot
+from tests.brain_evals.metrics import mrr, ndcg_at_k, recall_at_k
+from tests.brain_evals.suite_runner import run_offline_suite
 
 
 def test_case_bank_meets_minimum() -> None:

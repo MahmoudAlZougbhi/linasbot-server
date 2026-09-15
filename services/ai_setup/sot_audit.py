@@ -94,7 +94,7 @@ LEGACY_BUSINESS_FACT_SOURCES: tuple[SotSource, ...] = (
 SCAN_TARGET_FILES: tuple[str, ...] = (
     "handlers/text_handlers_respond.py",
     "services/brain/reply/orchestrator.py",
-    "services/local_qa_service.py",
+    "services/faq/local_qa_service.py",
     "services/integrations/social/social_contact_routing.py",
     "config.py",
     "utils/utils.py",

@@ -18,13 +18,13 @@ from services.ai_setup.constants import CM_SECTIONS, PUBLISH_DISABLED_MESSAGE, c
 from services.ai_setup.provenance_headers import sanitize_section_payload
 from services.ai_setup.publish import PublishBlockedError, publish_draft, publish_faq_only
 from services.ai_setup.publish_gate import PublishDisabledError, ensure_publish_enabled, publish_status
-from services.ai_setup.storage import ConflictError, UnknownSectionError, get_draft, put_draft
-from services.dashboard_session_service import SessionRecord
-from services.search_metadata.errors import (
+from services.ai_setup.search_metadata.errors import (
     METADATA_PREPARATION_CODE,
     METADATA_PREPARATION_MESSAGE,
     MetadataPreparationError,
 )
+from services.ai_setup.storage import ConflictError, UnknownSectionError, get_draft, put_draft
+from services.dashboard_session_service import SessionRecord
 
 
 def _publish_disabled_response(message: str | None = None) -> JSONResponse:

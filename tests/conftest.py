@@ -74,7 +74,11 @@ def _default_search_metadata_generator():
     Production has no such stub: missing/invalid metadata raises MetadataPreparationError.
     Tests that need failure call reset_metadata_generator() then inject a failing generator.
     """
-    from services.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
+    from services.ai_setup.search_metadata.generate import (
+        SearchMetadata,
+        reset_metadata_generator,
+        set_metadata_generator,
+    )
 
     set_metadata_generator(
         lambda _req: SearchMetadata(

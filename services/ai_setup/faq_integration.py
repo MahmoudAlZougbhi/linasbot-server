@@ -1,6 +1,6 @@
 """Bridge between CM FAQ drafts and the existing LocalQAService JSONL store (plan §8).
 
-Actual Q&A rows stay in ``qa_pairs.jsonl`` via :mod:`services.local_qa_service` for full
+Actual Q&A rows stay in ``qa_pairs.jsonl`` via :mod:`services.faq.local_qa_service` for full
 compatibility with the existing bot-matching path. The CM ``faq`` draft section only tracks
 group metadata (qa_group_id + a variant preview + tags/notes) so AI Setup can author
 and audit FAQ without a second, divergent Q&A store.
@@ -40,8 +40,8 @@ from services.ai_setup.faq_integration_ops import (  # noqa: F401
 )
 from services.ai_setup.schemas import FaqRecord, FaqSection, FaqVariant
 from services.ai_setup.storage import get_draft, put_draft
+from services.faq.local_qa_service import local_qa_service
 from services.language_detection_service import language_detection_service
-from services.local_qa_service import local_qa_service
 
 
 async def create_faq_pair(

@@ -10,9 +10,13 @@ from fastapi.responses import JSONResponse
 from modules.api_security import require_permission, require_session
 from modules.core import app
 from services.ai_setup.storage import ConflictError
-from services.request_graphs.cm_sync import DraftMatchRequired, delete_with_optional_draft, publish_with_optional_draft
-from services.request_graphs.db_guard import RequestGraphsDbError, request_graphs_session
-from services.request_graphs.service import list_active_graphs, preview_graph
+from services.requests.request_graphs.cm_sync import (
+    DraftMatchRequired,
+    delete_with_optional_draft,
+    publish_with_optional_draft,
+)
+from services.requests.request_graphs.db_guard import RequestGraphsDbError, request_graphs_session
+from services.requests.request_graphs.service import list_active_graphs, preview_graph
 
 
 def _http_db(exc: RequestGraphsDbError) -> HTTPException:

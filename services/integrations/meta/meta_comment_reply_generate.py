@@ -88,7 +88,7 @@ async def generate_comment_reply_text(
         plan = destinations_from_outcome(v2_outcome)
         return plan if plan.has_any else None
 
-    from services.local_qa_service import local_qa_service
+    from services.faq.local_qa_service import local_qa_service
 
     tiered_match = await local_qa_service.find_match_with_tier(comment_text, "ar")
     if tiered_match and tiered_match.get("answer"):

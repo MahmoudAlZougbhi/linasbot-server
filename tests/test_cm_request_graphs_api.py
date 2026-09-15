@@ -10,8 +10,8 @@ from sqlalchemy import create_engine, event, text
 
 from db.models import Base
 from db.session import reset_engine_for_tests, whatsapp_session
-from services.request_graphs.db_guard import RequestGraphsDbError, graphs_tables_ready, request_graphs_session
-from services.request_graphs.service import list_active_graphs, preview_graph, publish_graph
+from services.requests.request_graphs.db_guard import RequestGraphsDbError, graphs_tables_ready, request_graphs_session
+from services.requests.request_graphs.service import list_active_graphs, preview_graph, publish_graph
 
 
 @pytest.fixture()

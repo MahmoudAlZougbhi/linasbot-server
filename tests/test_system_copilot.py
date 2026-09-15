@@ -200,7 +200,7 @@ def test_greeting_stages(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr("services.owner_copilot.greeting.resolve_setup_stage", lambda _tid: "new")
     g = build_greeting(tenant_id="t1", user_id="u1", language="en")
-    from services.welcome_pool import format_welcome, lines_for
+    from services.owner_copilot.welcome_pool import format_welcome, lines_for
 
     pool_texts = {format_welcome(line, hi="Hello") for line in lines_for("en")}
     assert any(g["text"].startswith(line) for line in pool_texts)
