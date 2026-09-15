@@ -124,15 +124,27 @@ DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
     "answer_validation_failed": {
         "label": "Answer Validation Failed (CM Runtime)",
         "when_used": (
-            "Sent when the CM runtime pipeline's deterministic validator rejects a generated "
-            "answer twice (once, plus one constrained regeneration) — polite clarify/contact "
-            "handoff with no invented facts. See services/ai_setup/runtime_pipeline.py."
+            "Sent only when CM finalize_response rejects a generated answer (captions / "
+            "runtime_pipeline validator). Not used for Instagram/Facebook DM technical failures."
         ),
         "messages": {
             "ar": "آسف، ما قدرت أتأكد من هالمعلومة هلق.",
             "en": "Sorry, I couldn't fully confirm that detail right now.",
             "fr": "Désolé, je n'ai pas pu confirmer entièrement ce détail pour le moment.",
             "franco": "آسف، ما قدرت أتأكد من هالمعلومة هلق.",
+        },
+    },
+    "brain_temporary_error": {
+        "label": "Brain Temporary Error",
+        "when_used": (
+            "Sent when Customer Brain raises on a live IG/FB DM (catch-all around "
+            "run_customer_reply_v2_dm). Technical failure — not a validator miss."
+        ),
+        "messages": {
+            "ar": "آسف، في مشكلة مؤقتة هلق. جرّب كمان شوي.",
+            "en": "Sorry, something went wrong on our side. Please try again in a moment.",
+            "fr": "Désolé, un problème temporaire est survenu. Réessayez dans un instant.",
+            "franco": "آسف، في مشكلة مؤقتة هلق. جرّب كمان شوي.",
         },
     },
 }

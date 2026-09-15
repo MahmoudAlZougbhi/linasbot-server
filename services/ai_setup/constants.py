@@ -91,6 +91,7 @@ UNPUBLISHED_AI_MESSAGE: Final[dict[str, str]] = {
 }
 
 ANSWER_VALIDATION_FAILED_MESSAGE_KEY: Final[str] = "answer_validation_failed"
+BRAIN_TEMPORARY_ERROR_MESSAGE_KEY: Final[str] = "brain_temporary_error"
 
 CM_SECTIONS: Final[tuple[str, ...]] = (
     "ai_basics",

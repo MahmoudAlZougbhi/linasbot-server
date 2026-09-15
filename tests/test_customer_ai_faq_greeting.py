@@ -198,8 +198,12 @@ async def test_greeting_only_does_not_retrieve_knowledge_when_identity_fails(
     monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", boom)
     turn = CustomerTurn(tenant_id="linas", conversation_id="c-hi2", event_ids=["m-hi2"])
     out = await run_dm_after_gates(turn, message="Hi", channel="instagram_dm")
-    assert out.envelope.decision == "no_reply"
-    assert out.stop_reason in {"failed_closed", "provider_not_configured"}
+    assert out.envelope.decision == "reply"
+    assert out.envelope.messages
+    text = out.envelope.messages[0].text
+    assert text.strip()
+    assert "ما قدرت أتأكد" not in text
+    assert "confirm that detail" not in text.lower()
 
 
 def test_greeting_follows_inbound_language(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -240,3 +240,7 @@ async def test_finalize_response_validation_failed_message_path() -> None:
     assert "UNSUPPORTED_PRICE_CLAIM" in result.failed_rules
     assert result.text  # non-empty honest clarify/contact message
     assert "999" not in result.text
+    from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
+    from services.owner_copilot.dynamic_messages_service import get_dynamic_message
+
+    assert result.text == get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "en")

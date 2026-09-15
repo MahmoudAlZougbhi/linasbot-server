@@ -109,6 +109,8 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
             "validated": cm_metadata.get("validated"),
             "regenerated": cm_metadata.get("regenerated"),
             "failed_rules": list(cm_metadata.get("failed_rules") or []),
+            "blocker": (str(cm_metadata.get("blocker") or "")[:200] or None),
+            "exception_class": (str(cm_metadata.get("exception_class") or "")[:80] or None),
         }
         if user_data.get("_dashboard_test_simulation"):
             user_data["_dashboard_cm_diagnostics"] = cm_diag
@@ -150,6 +152,8 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
                 "metadata": {
                     "pipeline_decisions": cm_metadata.get("pipeline_decisions"),
                     "ai_called": cm_metadata.get("ai_called"),
+                    "blocker": cm_metadata.get("blocker"),
+                    "exception_class": cm_metadata.get("exception_class"),
                 },
             },
             {
@@ -182,6 +186,7 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
                 pipeline_decisions=list(cm_metadata.get("pipeline_decisions") or []),
                 cm_diagnostics=cm_diag,
                 ai_called=bool(cm_metadata.get("ai_called")),
+                flow_error=(str(cm_metadata.get("blocker") or "")[:200] or None),
                 flow_steps=cm_steps,
             )
             return _PHASE_HALT
@@ -226,6 +231,7 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
             cost_basis=cm_metadata.get("cost_basis"),
             ai_called=bool(cm_metadata.get("ai_called")),
             token_source="backend" if cm_metadata.get("prompt_tokens") is not None else None,
+            flow_error=(str(cm_metadata.get("blocker") or "")[:200] or None),
             flow_steps=cm_steps,
         )
         return _PHASE_HALT

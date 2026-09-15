@@ -188,6 +188,39 @@ def evaluate_greeting(
     return GreetingDecision(False, reason="no_match")
 
 
+def safe_greeting_text(
+    *,
+    tenant_id: str,
+    message: str,
+    language: str = "",
+    history: HistorySnapshot | None = None,
+) -> str:
+    """Published opener, then catalog greetings. Never validator or temporary-error copy."""
+    lang = (language or inbound_greeting_language(message)).strip().lower() or "en"
+    try:
+        decision = evaluate_greeting(
+            tenant_id=tenant_id,
+            message=message,
+            history=history or HistorySnapshot(),
+            language=lang,
+        )
+        if decision.eligible and decision.text.strip():
+            return decision.text.strip()
+    except Exception:
+        pass
+    from services.owner_copilot.dynamic_messages_service import get_dynamic_message
+
+    for key in ("session_greeting_after_inactivity", "router_greeting"):
+        text = str(get_dynamic_message(key, lang) or "").strip()
+        if text:
+            return text
+    if lang in {"ar", "franco"}:
+        return "مرحباً! كيف يمكنني مساعدتك؟"
+    if lang == "fr":
+        return "Bonjour ! Comment puis-je vous aider ?"
+    return "Hello! How can I help you today?"
+
+
 def is_greeting_only(message: str) -> bool:
     """True for hello / marhaba kifak with no hours, price, or booking ask."""
     return bool(_GREETING_ONLY_RE.match((message or "").strip()))

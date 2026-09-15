@@ -54,22 +54,25 @@ def _greeting_notes(tenant_id: str, language: str) -> list[str]:
 
 
 def _identity_context(turn: CustomerTurn) -> str:
-    identity = load_identity_bundle(turn.tenant_id)
-    from services.brain.compose.blocks import compose_evidence_context
-    from services.brain.contracts.evidence import EvidenceBundle
+    try:
+        identity = load_identity_bundle(turn.tenant_id)
+        from services.brain.compose.blocks import compose_evidence_context
+        from services.brain.contracts.evidence import EvidenceBundle
 
-    plan = PlannerPlan(
-        tasks=[PlannerTask(id="greet", type="acknowledgement", span=TaskSpan(text="greeting"))],
-        read_only=True,
-    )
-    notes = _greeting_notes(turn.tenant_id, _response_language(turn) or "en")
-    notes.append("Greeting-only turn: do not retrieve Knowledge. Do not invent hours or prices.")
-    return compose_evidence_context(
-        identity=identity,
-        plan=plan,
-        bundle=EvidenceBundle(outcome="not_found"),
-        policy_notes=notes,
-    )
+        plan = PlannerPlan(
+            tasks=[PlannerTask(id="greet", type="acknowledgement", span=TaskSpan(text="greeting"))],
+            read_only=True,
+        )
+        notes = _greeting_notes(turn.tenant_id, _response_language(turn) or "en")
+        notes.append("Greeting-only turn: do not retrieve Knowledge. Do not invent hours or prices.")
+        return compose_evidence_context(
+            identity=identity,
+            plan=plan,
+            bundle=EvidenceBundle(outcome="not_found"),
+            policy_notes=notes,
+        )
+    except Exception:
+        return ""
 
 
 def _social_ungrounded(text: str) -> list[str]:
@@ -88,8 +91,58 @@ async def identity_greeting_result(
 ) -> TurnResult | None:
     if turn.invocation_kind in {"followup", "comment"} or not is_greeting_only(message):
         return None
+    try:
+        return await _identity_greeting_llm(turn, message=message, channel=channel, flow_base=flow_base)
+    except Exception as exc:
+        print(f"[identity_greeting] fail-soft {type(exc).__name__}: {str(exc)[:200]}")
+        return _fallback_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
+
+
+def _fallback_greeting_result(
+    turn: CustomerTurn,
+    *,
+    message: str,
+    channel: str,
+    flow_base: dict | None = None,
+) -> TurnResult:
+    from services.brain.greeting import inbound_greeting_language, safe_greeting_text
+
+    lang = _response_language(turn) or inbound_greeting_language(message)
+    text = safe_greeting_text(
+        tenant_id=turn.tenant_id,
+        message=message,
+        language=lang,
+        history=turn.history,
+    )
+    turn.state = turn.state.model_copy(update={"greeted": True})
+    try:
+        from services.brain.conversation_store import remember_turn
+
+        remember_turn(turn)
+    except Exception:
+        pass
+    extra = dict(flow_base or {})
+    extra = stamp(extra, "greeting", title="Greeting fail-soft (no LLM identity line)", detail={"ai_called": False})
+    return TurnResult(
+        stop_reason="ok",
+        envelope=FinalReplyEnvelope(
+            decision="reply",
+            messages=[OutboundMessage(destination=_destination(channel, turn), text=text)],
+        ),
+        ai_called=False,
+        extra={**extra, "phase": "identity_greeting", "path": "identity_greeting_fail_soft"},
+    )
+
+
+async def _identity_greeting_llm(
+    turn: CustomerTurn,
+    *,
+    message: str,
+    channel: str,
+    flow_base: dict | None = None,
+) -> TurnResult:
     if not openai_configured():
-        return None
+        return _fallback_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
     from services.billing.membership.provider_expense import record_pending_provider
     from services.brain.billing import operation_id_for_turn
     from services.brain.llm_core_service import create_chat_completion
@@ -127,7 +180,7 @@ async def identity_greeting_result(
     except Exception:
         text = ""
     if not text or _social_ungrounded(text):
-        return None
+        return _fallback_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
     turn.state = turn.state.model_copy(update={"greeted": True})
     from services.brain.conversation_store import remember_turn
 
