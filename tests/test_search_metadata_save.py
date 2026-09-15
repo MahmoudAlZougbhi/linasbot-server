@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from services.ai_setup.storage import put_draft
-from services.search_metadata.cm_apply import enrich_section_payload, last_cm_apply_stats
-from services.search_metadata.english import contains_non_english_script, english_only_or_empty
-from services.search_metadata.generate import (
+from services.ai_setup.search_metadata.cm_apply import enrich_section_payload, last_cm_apply_stats
+from services.ai_setup.search_metadata.english import contains_non_english_script, english_only_or_empty
+from services.ai_setup.search_metadata.generate import (
     SearchMetadata,
     generate_search_metadata,
     reset_metadata_generator,
     set_metadata_generator,
 )
-from services.search_metadata.title_fields import retrieval_title_fields
+from services.ai_setup.search_metadata.title_fields import retrieval_title_fields
+from services.ai_setup.storage import put_draft
 
 
 def _recording_generator(calls: list[dict]) -> None:
@@ -60,7 +60,7 @@ def test_english_only_rejects_arabic_and_chinese() -> None:
 
 
 def test_generate_clamps_non_english_from_generator() -> None:
-    from services.search_metadata.errors import MetadataPreparationError
+    from services.ai_setup.search_metadata.errors import MetadataPreparationError
 
     set_metadata_generator(
         lambda _req: SearchMetadata(title="أسعار الليزر", description="价格说明", keywords=["creme"])

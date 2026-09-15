@@ -5,11 +5,11 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from services.brain.evals.metrics import mean, percentile, retrieval_row
 from services.brain.flags import voyage_configured
 from services.brain.providers.voyage_client import VoyageContractError
 from services.brain.retrieve.cards import TitleCard, load_published_cards
 from services.brain.retrieve.hybrid import search_hybrid
+from tests.brain_evals.metrics import mean, percentile, retrieval_row
 
 _MAX_CASES = 16
 

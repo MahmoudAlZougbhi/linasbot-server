@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from services.brain.evals.qa_tenants import shop_a_qa_sections
 from services.brain.retrieve.cards import cards_from_sections
 from services.brain.retrieve.expand import expand_hits
 from services.brain.retrieve.lexical import LexicalHit, search_cards
+from tests.brain_evals.qa_tenants import shop_a_qa_sections
 
 
 def test_branch_hours_hydrate_when_opening_hours_exist() -> None:

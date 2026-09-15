@@ -5,8 +5,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from services.request_graphs.compiler import GraphCompileResult, compile_request_graph, destination_from_type
-from services.request_graphs.repository import RequestGraphRepository
+from services.requests.request_graphs.compiler import GraphCompileResult, compile_request_graph, destination_from_type
+from services.requests.request_graphs.repository import RequestGraphRepository
 
 
 def _metering(compiled: GraphCompileResult, *, operation: str) -> dict[str, Any]:
@@ -132,7 +132,7 @@ def delete_graph(session: Any, *, tenant_id: str, definition_id: str) -> dict[st
     repo = RequestGraphRepository(session)
     count = repo.mark_deleted(tenant_id=tenant_id, definition_id=definition_id)
     session.flush()
-    from services.request_drafts.engine import mark_definition_deleted
+    from services.requests.request_drafts.engine import mark_definition_deleted
 
     mark_definition_deleted(session, tenant_id=tenant_id, definition_id=definition_id)
     return {"ok": True, "deleted": count, "definition_id": definition_id, "is_ai": False}

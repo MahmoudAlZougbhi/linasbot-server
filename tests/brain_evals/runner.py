@@ -5,18 +5,18 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from services.brain.evals.contract_cases import run_contract_cases
-from services.brain.evals.fixtures import (
+from services.brain.planner.heuristic import plan_message
+from services.brain.retrieve.cards import cards_from_sections
+from services.brain.retrieve.expand import expand_ranked
+from services.brain.retrieve.lexical import LexicalHit, search_cards
+from tests.brain_evals.contract_cases import run_contract_cases
+from tests.brain_evals.fixtures import (
     hospitality_corpus,
     knowledge_heavy_corpus,
     product_retailer_corpus,
     service_appointment_corpus,
 )
-from services.brain.evals.golden_pack import run_golden_pack
-from services.brain.planner.heuristic import plan_message
-from services.brain.retrieve.cards import cards_from_sections
-from services.brain.retrieve.expand import expand_ranked
-from services.brain.retrieve.lexical import LexicalHit, search_cards
+from tests.brain_evals.golden_pack import run_golden_pack
 
 
 def all_corpora() -> dict[str, dict[str, Any]]:
@@ -78,8 +78,8 @@ def run_fixture_corpus() -> dict[str, Any]:
             )
     contract = run_contract_cases()
     golden = run_golden_pack()
-    from services.brain.evals.latency_bench import run_latency_benchmark
-    from services.brain.evals.suite_runner import run_offline_suite
+    from tests.brain_evals.latency_bench import run_latency_benchmark
+    from tests.brain_evals.suite_runner import run_offline_suite
 
     offline = run_offline_suite(write_artifact=True)
     latency = run_latency_benchmark(repeats=20)

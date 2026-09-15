@@ -9,10 +9,10 @@ from sqlalchemy import create_engine, event
 
 from db.models import Base
 from db.session import reset_engine_for_tests, whatsapp_session
+from services.ai_setup.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
 from services.products.schemas import ProductWriteBody
 from services.products.search import search_product_by_title
 from services.products.service import ProductsError, ProductsService
-from services.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
 
 
 @pytest.fixture()

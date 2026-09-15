@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from services.ai_setup.request_rules import format_request_rules_for_ai
-from services.brain.evals.qa_tenants import shop_a_qa_sections, shop_b_qa_sections
 from services.brain.planner.heuristic import overlay_plan, plan_message
+from tests.brain_evals.qa_tenants import shop_a_qa_sections, shop_b_qa_sections
 
 
 def test_appointment_paraphrases_are_service_request() -> None:

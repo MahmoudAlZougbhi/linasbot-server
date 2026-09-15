@@ -8,18 +8,18 @@ from pathlib import Path
 from typing import Any
 
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.brain.evals.case_bank import build_case_bank, case_bank_snapshot
-from services.brain.evals.case_schema import EvalCase
-from services.brain.evals.fixtures import (
+from services.brain.grounding.facts import ungrounded_claims
+from services.brain.retrieve.cards import TitleCard, cards_from_sections
+from services.brain.retrieve.lexical import search_cards
+from tests.brain_evals.case_bank import build_case_bank, case_bank_snapshot
+from tests.brain_evals.case_schema import EvalCase
+from tests.brain_evals.fixtures import (
     hospitality_corpus,
     knowledge_heavy_corpus,
     product_retailer_corpus,
     service_appointment_corpus,
 )
-from services.brain.evals.metrics import mean, percentile, retrieval_row
-from services.brain.grounding.facts import ungrounded_claims
-from services.brain.retrieve.cards import TitleCard, cards_from_sections
-from services.brain.retrieve.lexical import search_cards
+from tests.brain_evals.metrics import mean, percentile, retrieval_row
 
 ARTIFACT_DIR = Path(__file__).resolve().parent / "artifacts"
 

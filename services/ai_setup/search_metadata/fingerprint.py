@@ -6,7 +6,7 @@ import hashlib
 import json
 from typing import Any
 
-from services.search_metadata.limits import META_FIELD_KEYS
+from services.ai_setup.search_metadata.limits import META_FIELD_KEYS
 
 
 def strip_meta_fields(item: dict[str, Any]) -> dict[str, Any]:

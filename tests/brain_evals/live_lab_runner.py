@@ -14,11 +14,6 @@ from contextlib import AbstractContextManager
 from typing import Any
 
 from db.session import whatsapp_session
-from services.brain.evals.artifacts import durable_report_path
-from services.brain.evals.live_lab_corpus import retrieval_eval_cases
-from services.brain.evals.live_lab_publish import publish_lab_tenant
-from services.brain.evals.live_lab_switch import atomic_switch_live as _atomic_switch_live
-from services.brain.evals.metrics import mean, percentile, retrieval_row
 from services.brain.flags import voyage_configured
 from services.brain.generate.reply import openai_configured
 from services.brain.memory import store_pg as memory_pg
@@ -28,6 +23,11 @@ from services.brain.retrieve.cards import load_published_cards
 from services.brain.retrieve.hybrid import search_hybrid
 from services.brain.search.store import query_similar
 from services.brain.tools.registry import list_tools
+from tests.brain_evals.artifacts import durable_report_path
+from tests.brain_evals.live_lab_corpus import retrieval_eval_cases
+from tests.brain_evals.live_lab_publish import publish_lab_tenant
+from tests.brain_evals.live_lab_switch import atomic_switch_live as _atomic_switch_live
+from tests.brain_evals.metrics import mean, percentile, retrieval_row
 
 LAB_TENANT = "eval-lab-a"
 OTHER_TENANT = "eval-lab-b"
@@ -385,7 +385,7 @@ async def run_live_lab() -> dict[str, Any]:
     gates["RERANK"] = await live_rerank()
     await asyncio.sleep(0.3)
     gates["LOAD"] = await light_load()
-    from services.brain.evals.live_lab_openai import openai_agent_live
+    from tests.brain_evals.live_lab_openai import openai_agent_live
 
     if gates["INDEX"]["status"] == "PASS" and openai_configured():
         await asyncio.sleep(0.5)

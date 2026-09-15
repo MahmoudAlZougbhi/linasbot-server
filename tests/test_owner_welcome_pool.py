@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.welcome_pool import (
+from services.owner_copilot.welcome_pool import (
     BANNED_SNIPPETS,
     MIN_POOL_SIZE,
     POOLS,

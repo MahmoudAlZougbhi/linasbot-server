@@ -6,10 +6,10 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from services.brain.evals.fixtures import hospitality_corpus, knowledge_heavy_corpus
-from services.brain.evals.metrics import mean, percentile
 from services.brain.retrieve.cards import cards_from_sections
 from services.brain.retrieve.lexical import search_cards
+from tests.brain_evals.fixtures import hospitality_corpus, knowledge_heavy_corpus
+from tests.brain_evals.metrics import mean, percentile
 
 
 def run_load_simulation(

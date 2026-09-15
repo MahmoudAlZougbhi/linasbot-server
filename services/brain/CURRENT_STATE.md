@@ -12,8 +12,8 @@
 
 ## Live lab (non-production)
 
-Runner: `python -m services.brain.evals.live_lab_runner`  
-Artifact: `services/brain/evals/artifacts/live_lab_latest.json`  
+Runner: `python -m tests.brain_evals.live_lab_runner`  
+Artifact: `tests/brain_evals/artifacts/live_lab_latest.json`  
 Requires: `VOYAGE_API_KEY`, `DATABASE_URL` / `LINAS_WHATSAPP_DATABASE_URL` with pgvector, Redis optional.
 
 Proven live in lab (see QUALITY_REPORT for gate table):

@@ -6,7 +6,7 @@ from typing import Any
 
 from services.owner_copilot.account_state import resolve_setup_stage
 from services.owner_copilot.profile import address_line, normalize_language, read_owner_profile
-from services.welcome_pool import pick_welcome
+from services.owner_copilot.welcome_pool import pick_welcome
 
 _ADDRESS_PROMPT: dict[str, str] = {
     "en": " How should I address you? 😊",

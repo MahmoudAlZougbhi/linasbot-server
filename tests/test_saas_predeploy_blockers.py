@@ -202,7 +202,7 @@ def test_legacy_bridge_kill_switch(monkeypatch, tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_generic_gym_tenant_zero_linas_leakage(monkeypatch: pytest.MonkeyPatch) -> None:
     """Restaurant/gym published path must not mention Linas/Marwa/Beirut/Antelias/legacy phones."""
-    from services.local_qa_service import local_qa_service
+    from services.faq.local_qa_service import local_qa_service
 
     tenant_id = "acme-gym-e2e"
     banned = (

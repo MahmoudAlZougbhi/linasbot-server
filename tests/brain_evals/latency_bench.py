@@ -5,11 +5,11 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from services.brain.evals.fixtures import hospitality_corpus, service_appointment_corpus
-from services.brain.evals.metrics import mean, percentile
 from services.brain.planner.heuristic import plan_message
 from services.brain.retrieve.cards import cards_from_sections
 from services.brain.retrieve.lexical import search_cards
+from tests.brain_evals.fixtures import hospitality_corpus, service_appointment_corpus
+from tests.brain_evals.metrics import mean, percentile
 
 
 def run_latency_benchmark(*, repeats: int = 50) -> dict[str, Any]:

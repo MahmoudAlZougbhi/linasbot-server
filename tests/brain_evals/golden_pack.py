@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.brain.evals.fixtures import hospitality_corpus, service_appointment_corpus
 from services.brain.grounding.facts import evidence_supports_text, ungrounded_claims
 from services.brain.planner.heuristic import plan_message
 from services.brain.retrieve.cards import cards_from_sections
 from services.brain.retrieve.expand import expand_ranked
 from services.brain.retrieve.lexical import LexicalHit, search_cards
+from tests.brain_evals.fixtures import hospitality_corpus, service_appointment_corpus
 
 
 def _case(case_id: str, *, ok: bool, detail: dict[str, Any] | None = None) -> dict[str, Any]:

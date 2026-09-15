@@ -9,14 +9,14 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from services.brain.evals.case_schema import EvalCase
-from services.brain.evals.fixtures import (
+from services.brain.retrieve.cards import cards_from_sections
+from tests.brain_evals.case_schema import EvalCase
+from tests.brain_evals.fixtures import (
     hospitality_corpus,
     knowledge_heavy_corpus,
     product_retailer_corpus,
     service_appointment_corpus,
 )
-from services.brain.retrieve.cards import cards_from_sections
 
 
 def _merged_sections() -> dict[str, Any]:

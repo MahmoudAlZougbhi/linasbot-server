@@ -256,7 +256,7 @@ def seed_catalog(assets: dict[str, Path]) -> dict[str, Any]:
 
 def seed_graphs() -> dict[str, Any]:
     from db.session import whatsapp_session
-    from services.request_graphs.service import publish_graph
+    from services.requests.request_graphs.service import publish_graph
 
     with whatsapp_session(require=True) as db:
         appt = publish_graph(

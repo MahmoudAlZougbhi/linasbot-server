@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import re
 
-from services.search_metadata.english import looks_like_english
-from services.search_metadata.errors import MetadataPreparationError
-from services.search_metadata.generate import SearchMetadata
-from services.search_metadata.limits import (
+from services.ai_setup.search_metadata.english import looks_like_english
+from services.ai_setup.search_metadata.errors import MetadataPreparationError
+from services.ai_setup.search_metadata.generate import SearchMetadata
+from services.ai_setup.search_metadata.limits import (
     AI_SEARCH_DESCRIPTION_MAX,
     AI_SEARCH_KEYWORD_MAX,
     AI_SEARCH_TITLE_MAX,

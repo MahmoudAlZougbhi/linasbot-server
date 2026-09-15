@@ -114,8 +114,8 @@ rule / window immediately before send.
 ### How to run offline evals
 
 ```bash
-python3.11 -c "from services.brain.evals.runner import run_fixture_corpus; import json; print(json.dumps(run_fixture_corpus(), indent=2)[:2000])"
-python3.11 -c "from services.brain.evals.golden_pack_linas import run_golden_pack_linas; print(run_golden_pack_linas())"
+python3.11 -c "from tests.brain_evals.runner import run_fixture_corpus; import json; print(json.dumps(run_fixture_corpus(), indent=2)[:2000])"
+python3.11 -c "from tests.brain_evals.golden_pack_linas import run_golden_pack_linas; print(run_golden_pack_linas())"
 python3.11 -m pytest tests/test_customer_ai_p1_grounding.py tests/test_customer_ai_lexical.py tests/test_customer_ai_retrieve.py -q
 ```
 

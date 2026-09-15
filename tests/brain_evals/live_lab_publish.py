@@ -8,8 +8,8 @@ from services.ai_setup.atomic_io import compute_checksum
 from services.ai_setup.paths import ensure_cm_dirs
 from services.ai_setup.schemas import PublishedPointer, utc_now
 from services.ai_setup.version_store import write_published_pointer, write_version_content
-from services.brain.evals.live_lab_corpus import lab_published_sections
 from services.brain.providers.spaces import KNOWLEDGE_MODEL
+from tests.brain_evals.live_lab_corpus import lab_published_sections
 
 
 def publish_lab_tenant(tenant_id: str, *, revision: str = "lab_v1") -> dict[str, Any]:

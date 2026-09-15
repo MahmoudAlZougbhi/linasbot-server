@@ -15,8 +15,8 @@ def test_wave_x6_preview_and_gender_gone() -> None:
         "services/message_preview_service_settings.py",
         "services/gender_recognition_service.py",
         "data/message_preview_queue.json",
-        "services/brain/evals/linas_real_index.py",
-        "services/brain/evals/golden_pack_linas.py",
+        "tests/brain_evals/linas_real_index.py",
+        "tests/brain_evals/golden_pack_linas.py",
     )
     leftover = [rel for rel in gone if (ROOT / rel).exists()]
     assert not leftover, leftover
@@ -57,16 +57,16 @@ def test_wave_x6_app_settings_has_no_museum_keys() -> None:
 def test_wave_x6_evals_not_prod_laser_defaults() -> None:
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
     readiness = (ROOT / "services/brain/readiness.py").read_text(encoding="utf-8")
-    qa = (ROOT / "services/brain/evals/qa_tenants.py").read_text(encoding="utf-8")
-    runner = (ROOT / "services/brain/evals/live_lab_runner.py").read_text(encoding="utf-8")
+    qa = (ROOT / "tests/brain_evals/qa_tenants.py").read_text(encoding="utf-8")
+    runner = (ROOT / "tests/brain_evals/live_lab_runner.py").read_text(encoding="utf-8")
     assert "WAVE X6" in keep
     assert "live_lab_latest.json" not in readiness
     assert "def shop_a_qa_sections" in qa
     assert "linas_like_qa_sections" not in qa
     assert "Linas Laser" not in qa
     assert 'LAB_TENANT = "eval-lab-a"' in runner
-    from services.brain.evals.golden_pack import run_golden_pack
     from services.integrations.whatsapp.template_header_image import get_template_header_image_url
+    from tests.brain_evals.golden_pack import run_golden_pack
 
     assert callable(run_golden_pack)
     assert callable(get_template_header_image_url)

@@ -54,7 +54,6 @@ def _brain_imports() -> dict[str, bool]:
         "followup_billing": "services.smart_followup.billing_ids",
         "web_followup": "services.integrations.web_chat.followup_delivery",
         "web_fence": "services.integrations.web_chat.operation_fence",
-        "evals": "services.brain.evals.runner",
         "turn_pipeline": "services.brain.turn_pipeline",
         "pending_actions": "services.brain.actions.pending",
         "followup_revalidate": "services.brain.followup.revalidate",

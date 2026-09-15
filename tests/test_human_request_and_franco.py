@@ -8,8 +8,8 @@ from services.ai_setup.query_interpreter import HUMAN_INTENT_RE
 from services.ai_setup.request_rules import normalize_request_rule_item
 from services.ai_setup.setup_chat import SETUP_SECTION_ORDER
 from services.owner_copilot.setup_flow import SETUP_SECTIONS
-from services.request_graphs.compiler import destination_from_type
 from services.requests.constants import REQUEST_TYPES
+from services.requests.request_graphs.compiler import destination_from_type
 
 
 def test_human_is_a_request_type() -> None:

@@ -15,7 +15,7 @@ from services.ai_setup.schemas import (
     RestrictedPolicy,
     RestrictedTopic,
 )
-from services.local_qa_service import local_qa_service
+from services.faq.local_qa_service import local_qa_service
 from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
 _PHONE_RE = re.compile(r"\+\d{8,15}")

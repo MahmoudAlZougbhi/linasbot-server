@@ -1,7 +1,7 @@
 # Customer Brain — QUALITY REPORT
 
 **Branch:** `cleanup/ai-setup-runtime`  
-**Live artifact:** `services/brain/evals/artifacts/live_lab_latest.json`  
+**Live artifact:** `tests/brain_evals/artifacts/live_lab_latest.json`  
 **Offline suite:** PASS (`ok: true`)
 
 ## Live lab gates (authoritative for runtime)

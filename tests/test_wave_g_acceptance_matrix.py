@@ -17,7 +17,7 @@ GONE = (
     "services/api_integrations.py",
     "data/qa_database.json",
     "data/knowledge_files/marwa_extended_tool_rules.json",
-    "services/search_metadata/luna_titles.py",
+    "services/ai_setup/search_metadata/luna_titles.py",
     "services/products/luna_title_resolver.py",
     "dashboard/src/pages/owner/OwnerLab.jsx",
     "modules/mobile_services_api.py",
@@ -94,7 +94,7 @@ def test_wave_g_live_mounts_have_no_forbidden_imports() -> None:
         "services.smart_retrieval_service",
         "modules.owner_ai_api",
         "luna_title_resolver",
-        "services.search_metadata.luna_titles",
+        "services.ai_setup.search_metadata.luna_titles",
     )
     for path in _live_py():
         text = path.read_text(encoding="utf-8")
@@ -156,7 +156,7 @@ def test_wave_g_luna_engine_and_dual_index_gone() -> None:
     roots = (
         ROOT / "services/ai_setup",
         ROOT / "services/products",
-        ROOT / "services/search_metadata",
+        ROOT / "services/ai_setup/search_metadata",
         ROOT / "services/brain/reply",
         ROOT / "services/model_policy.py",
     )

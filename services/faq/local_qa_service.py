@@ -11,8 +11,8 @@ import os
 from datetime import datetime
 from typing import Any, cast
 
+from services.faq.local_qa_service_match import LocalQAServiceMatchMixin
 from services.language_detection_service import language_detection_service
-from services.local_qa_service_match import LocalQAServiceMatchMixin
 from storage.persistent_storage import QA_PAIRS_FILE, ensure_dirs
 
 

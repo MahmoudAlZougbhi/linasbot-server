@@ -8,13 +8,13 @@ import os
 from typing import Any
 
 from services.ai_setup.version_store import read_published_pointer
-from services.brain.evals.artifacts import durable_report_path
 from services.brain.flags import voyage_configured
 from services.brain.providers.spaces import ENTITY_MODEL, KNOWLEDGE_MODEL
 from services.brain.retrieve.cards import load_published_cards
 from services.brain.search.index_backfill import enqueue_stale_or_missing
 from services.brain.search.index_lifecycle import owner_status
 from services.brain.search.store import query_similar, tenant_pointer_ready
+from tests.brain_evals.artifacts import durable_report_path
 
 REPORT_PATH = durable_report_path("real_tenant_index_latest.json")
 LAB_TENANTS = frozenset({"linas-lab", "linas-lab-b", "eval-lab-a", "eval-lab-b"})
@@ -175,12 +175,12 @@ async def brain_sanity(tenant_id: str) -> dict[str, Any]:
 
 async def run_real_linas_index() -> dict[str, Any]:
     from db.session import whatsapp_session
-    from services.brain.evals.published_retrieval import retrieval_eval_for_tenant
     from services.brain.providers.spaces import ENTITY_DOCUMENT, KNOWLEDGE_DOCUMENT
     from services.brain.search.contextual_index import CONTEXT_FAMILY
     from services.brain.search.index_job import index_published_tenant
     from services.brain.search.index_lifecycle import mark_active, mark_failed
     from services.brain.search.store import activate_pointer
+    from tests.brain_evals.published_retrieval import retrieval_eval_for_tenant
 
     tid = resolve_real_tenant_id()
     pointer = read_published_pointer(tid)

@@ -12,7 +12,7 @@ from services.ai_setup.query_interpreter import interpret_query, interpret_query
 from services.ai_setup.schemas import LocalizedLabels, RestrictedPolicy, RestrictedTopic
 from services.ai_setup.semantic_index import build_index, load_index, search
 from services.ai_setup.shadow_eval import run_shadow_eval
-from services.local_qa_service import local_qa_service
+from services.faq.local_qa_service import local_qa_service
 
 pytestmark = pytest.mark.usefixtures("enable_faq_plan")
 

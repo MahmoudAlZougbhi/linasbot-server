@@ -52,8 +52,8 @@ def mock_voyage(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 async def test_new_tenant_publish_indexes_without_admin(tenant_fs: Path, mock_voyage: None) -> None:
-    from services.brain.evals.auto_index_e2e import run_new_tenant_auto_index_e2e
     from services.queues.handlers import get_handler
+    from tests.brain_evals.auto_index_e2e import run_new_tenant_auto_index_e2e
 
     assert get_handler("customer_ai_index") is not None
     result = await run_new_tenant_auto_index_e2e()
@@ -110,8 +110,8 @@ async def test_embed_failure_keeps_old_active_and_retries(
     tenant_fs: Path, mock_voyage: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from services.ai_setup.publish import publish_draft
-    from services.brain.evals.auto_index_e2e import seed_minimal_setup
     from services.brain.search.index_job import index_published_tenant
+    from tests.brain_evals.auto_index_e2e import seed_minimal_setup
 
     seed_minimal_setup("retry-shop", price="80 USD", faq=True)
     first = await publish_draft(tenant_id="retry-shop", published_by="tester")
@@ -143,11 +143,11 @@ async def test_embed_failure_keeps_old_active_and_retries(
 @pytest.mark.asyncio
 async def test_tenant_isolation_and_product_change_enqueues(tenant_fs: Path, mock_voyage: None) -> None:
     from services.ai_setup.publish import publish_draft
-    from services.brain.evals.auto_index_e2e import seed_minimal_setup
     from services.brain.providers.spaces import ENTITY_DOCUMENT
     from services.brain.search.index_schedule import run_tenant_index_job
     from services.brain.search.invalidate import notify_product_change
     from services.brain.search.store import query_similar
+    from tests.brain_evals.auto_index_e2e import seed_minimal_setup
 
     seed_minimal_setup("iso-a", price="80 USD", faq=True)
     seed_minimal_setup("iso-b", price="80 USD", faq=True)
@@ -180,7 +180,7 @@ async def test_tenant_isolation_and_product_change_enqueues(tenant_fs: Path, moc
 
 
 def test_gate_accepts_retrieval_payload_with_status_key() -> None:
-    from services.brain.evals.real_tenant_index import _gate
+    from tests.brain_evals.real_tenant_index import _gate
 
     retrieval = {"status": "PASS", "detail": "recall_ok", "recall": 1.0, "tenant_id": "linas"}
     row = _gate(str(retrieval.get("status") or "FAIL"), str(retrieval.get("detail") or ""), **retrieval)
@@ -191,7 +191,7 @@ def test_gate_accepts_retrieval_payload_with_status_key() -> None:
 
 
 def test_isolation_probe_passes_before_first_active_pointer(tenant_fs: Path) -> None:
-    from services.brain.evals.real_tenant_index import isolation_probe
+    from tests.brain_evals.real_tenant_index import isolation_probe
 
     row = isolation_probe("brand-new-shop")
     assert row["status"] == "PASS"
@@ -201,7 +201,7 @@ def test_isolation_probe_passes_before_first_active_pointer(tenant_fs: Path) -> 
 
 
 def test_real_tenant_resolver_refuses_lab(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.brain.evals.real_tenant_index import resolve_real_tenant_id
+    from tests.brain_evals.real_tenant_index import resolve_real_tenant_id
 
     monkeypatch.setenv("LINAS_REAL_TENANT_ID", "linas-lab")
     with pytest.raises(RuntimeError, match="refusing_lab"):

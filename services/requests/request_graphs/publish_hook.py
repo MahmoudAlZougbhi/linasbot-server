@@ -15,8 +15,8 @@ def sync_request_graphs_after_publish(*, tenant_id: str, sections: dict[str, Any
     not migrated yet. Other errors propagate so publish does not hide graph failures.
     """
     from db.session import WhatsAppDatabaseUnavailable, database_url, whatsapp_session
-    from services.request_graphs.db_guard import graphs_tables_ready
-    from services.request_graphs.service import sync_graphs_from_request_rules
+    from services.requests.request_graphs.db_guard import graphs_tables_ready
+    from services.requests.request_graphs.service import sync_graphs_from_request_rules
 
     if not database_url():
         logger.info("request_graph_sync_skipped_no_db tenant_id=%s", tenant_id)

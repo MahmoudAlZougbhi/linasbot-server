@@ -5,7 +5,7 @@ from __future__ import annotations
 from inspect import getsource
 
 from services.brain.actions.request_fields import merge_fields_for_persist, published_request_fields
-from services.request_graphs.cm_sync import publish_with_optional_draft
+from services.requests.request_graphs.cm_sync import publish_with_optional_draft
 
 
 def test_publish_and_delete_use_one_guarded_edit() -> None:
@@ -25,7 +25,7 @@ def test_publish_helper_writes_draft_before_graph() -> None:
     src = getsource(publish_with_optional_draft)
     assert src.index("_optional_draft") < src.index("publish_graph")
     assert "write_request_draft" in getsource(
-        __import__("services.request_graphs.cm_sync", fromlist=["_optional_draft"])._optional_draft
+        __import__("services.requests.request_graphs.cm_sync", fromlist=["_optional_draft"])._optional_draft
     )
 
 

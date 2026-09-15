@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.ai_setup.search_metadata.title_fields import original_title_of
 from services.brain.reply.retrieval_item_index import record_content
-from services.search_metadata.title_fields import original_title_of
 
 
 def save_time_item_content(section_id: str, raw: dict[str, Any]) -> str:

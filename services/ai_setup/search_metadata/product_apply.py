@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from services.products.schemas import normalize_product_name
-from services.search_metadata.fingerprint import content_fingerprint
-from services.search_metadata.generate import (
+from services.ai_setup.search_metadata.fingerprint import content_fingerprint
+from services.ai_setup.search_metadata.generate import (
     SearchMetadata,
     generate_search_metadata,
     is_weak_owner_description,
 )
+from services.products.schemas import normalize_product_name
 
 _LAST_PRODUCT_APPLY: dict[str, Any] = {"product_id": "", "generated": False}
 
@@ -64,7 +64,7 @@ def enrich_product_row(row: Any, *, previous: dict[str, Any] | None = None) -> b
     )
     if weak:
         meta = _weaken_product_meta(meta, name=str(current.get("name") or ""))
-        from services.search_metadata.validate import require_ready_metadata
+        from services.ai_setup.search_metadata.validate import require_ready_metadata
 
         require_ready_metadata(
             meta,
@@ -111,7 +111,7 @@ def _weaken_product_meta(meta: SearchMetadata, *, name: str) -> SearchMetadata:
 
 
 def _has_non_latin(text: str) -> bool:
-    from services.search_metadata.english import contains_non_english_script
+    from services.ai_setup.search_metadata.english import contains_non_english_script
 
     return contains_non_english_script(text)
 

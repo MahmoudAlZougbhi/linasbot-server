@@ -6,9 +6,9 @@ import random
 import threading
 from typing import Literal
 
-from services.welcome_pool.ar import WELCOME_AR
-from services.welcome_pool.en import WELCOME_EN
-from services.welcome_pool.fr import WELCOME_FR
+from services.owner_copilot.welcome_pool.ar import WELCOME_AR
+from services.owner_copilot.welcome_pool.en import WELCOME_EN
+from services.owner_copilot.welcome_pool.fr import WELCOME_FR
 
 Lang = Literal["ar", "en", "fr"]
 

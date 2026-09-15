@@ -31,6 +31,8 @@ os.environ.setdefault("DISABLE_API_DOCS", "true")
 os.environ.setdefault("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
 os.environ.pop("ALLOW_DEBUG_SIMULATE_WEBHOOK", None)
 
+collect_ignore = ["brain_evals"]
+
 
 @pytest.fixture(scope="session")
 def event_loop_policy():
@@ -74,7 +76,11 @@ def _default_search_metadata_generator():
     Production has no such stub: missing/invalid metadata raises MetadataPreparationError.
     Tests that need failure call reset_metadata_generator() then inject a failing generator.
     """
-    from services.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
+    from services.ai_setup.search_metadata.generate import (
+        SearchMetadata,
+        reset_metadata_generator,
+        set_metadata_generator,
+    )
 
     set_metadata_generator(
         lambda _req: SearchMetadata(

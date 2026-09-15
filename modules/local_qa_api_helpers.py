@@ -102,7 +102,7 @@ def build_qa_entry(
 def reload_local_qa_cache() -> None:
     """Reload in-memory local QA cache so bot uses latest training instantly."""
     try:
-        from services.local_qa_service import local_qa_service
+        from services.faq.local_qa_service import local_qa_service
 
         local_qa_service.qa_pairs = local_qa_service.load_from_jsonl()
     except Exception as e:

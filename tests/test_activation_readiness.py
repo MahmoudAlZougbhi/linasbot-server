@@ -22,7 +22,7 @@ def test_readiness_stays_blocked_and_does_not_enable() -> None:
     assert all(report["imports"].values())
     assert report["imports"]["followup_billing"] is True
     assert report["imports"]["omni_hold"] is True
-    assert report["imports"]["evals"] is True
+    assert "evals" not in report["imports"]
     assert report["imports"]["social_turn_outcome"] is True
     assert report["imports"]["social_customer_name"] is True
     assert report["imports"]["hold_policy"] is True

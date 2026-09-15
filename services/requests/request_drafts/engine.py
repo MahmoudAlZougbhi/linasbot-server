@@ -8,8 +8,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from services.request_drafts.repository import DraftRepository
-from services.request_graphs.service import get_active_graph
+from services.requests.request_drafts.repository import DraftRepository
+from services.requests.request_graphs.service import get_active_graph
 
 MUTABLE_STATUSES = {"collecting", "paused", "ready"}
 DEST_TO_TYPE = {

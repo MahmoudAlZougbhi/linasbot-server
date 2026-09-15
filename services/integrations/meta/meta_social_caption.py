@@ -70,7 +70,7 @@ async def generate_social_caption(
         text = str(result.text or "").strip()
         return text[:2200] if text and result.ok else None
 
-    from services.local_qa_service import local_qa_service
+    from services.faq.local_qa_service import local_qa_service
 
     tiered_match = await local_qa_service.find_match_with_tier(topic or "services", "ar")
     if tiered_match and tiered_match.get("answer"):

@@ -10,9 +10,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from services.search_metadata.english import english_only_or_empty
-from services.search_metadata.errors import MetadataPreparationError
-from services.search_metadata.limits import (
+from services.ai_setup.search_metadata.english import english_only_or_empty
+from services.ai_setup.search_metadata.errors import MetadataPreparationError
+from services.ai_setup.search_metadata.limits import (
     AI_SEARCH_DESCRIPTION_MAX,
     AI_SEARCH_KEYWORD_MAX,
     AI_SEARCH_KEYWORDS_MAX,
@@ -100,7 +100,7 @@ def generate_search_metadata(request: dict[str, Any]) -> SearchMetadata:
     Empty, non-English, language-clamped, or ungrounded results raise
     ``MetadataPreparationError`` after the allowed retry. Callers must not Save/live.
     """
-    from services.search_metadata.validate import require_ready_metadata
+    from services.ai_setup.search_metadata.validate import require_ready_metadata
 
     include_keywords = bool(request.get("include_keywords"))
     content = str(request.get("content") or "")

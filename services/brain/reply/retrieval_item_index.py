@@ -6,9 +6,9 @@ import json
 from typing import Any
 
 from services.ai_setup.resource_attachment import resource_summary
+from services.ai_setup.search_metadata.limits import FULL_TITLE_SECTIONS
+from services.ai_setup.search_metadata.title_fields import retrieval_title_fields
 from services.brain.reply.models import ItemIndexEntry
-from services.search_metadata.limits import FULL_TITLE_SECTIONS
-from services.search_metadata.title_fields import retrieval_title_fields
 
 MAX_ITEMS_PER_SECTION = 80
 MAX_ITEMS_PER_READ = 20

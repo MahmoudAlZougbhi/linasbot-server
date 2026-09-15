@@ -5,10 +5,10 @@ from __future__ import annotations
 import time
 from types import SimpleNamespace
 
+from services.ai_setup.search_metadata.cm_apply import enrich_section_payload, last_cm_apply_stats
+from services.ai_setup.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
+from services.ai_setup.search_metadata.product_apply import enrich_product_row, last_product_apply_stats
 from services.products.search_scoring import rank_products
-from services.search_metadata.cm_apply import enrich_section_payload, last_cm_apply_stats
-from services.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
-from services.search_metadata.product_apply import enrich_product_row, last_product_apply_stats
 
 
 def setup_function() -> None:

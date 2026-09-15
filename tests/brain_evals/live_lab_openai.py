@@ -83,7 +83,7 @@ async def openai_agent_live(gate: GateFn, *, tenant_id: str) -> dict[str, Any]:
             }
         )
 
-    from services.brain.evals.metrics import percentile
+    from tests.brain_evals.metrics import percentile
 
     passed = sum(1 for r in rows if r.get("status") == "PASS")
     status = "PASS" if passed == len(_CASES) and not failures else "FAIL"

@@ -29,9 +29,9 @@ test('owner greeting module uses hardcoded pool, not stage-status copy', () => {
   assert.doesNotMatch(greeting, /core looks configured/i);
   assert.doesNotMatch(greeting, /AI Setup tweaks/);
   assert.doesNotMatch(greeting, /Everything core/);
-  const en = readFileSync(join(repoRoot, 'services/welcome_pool/en.py'), 'utf8');
-  const ar = readFileSync(join(repoRoot, 'services/welcome_pool/ar.py'), 'utf8');
-  const fr = readFileSync(join(repoRoot, 'services/welcome_pool/fr.py'), 'utf8');
+  const en = readFileSync(join(repoRoot, 'services/owner_copilot/welcome_pool/en.py'), 'utf8');
+  const ar = readFileSync(join(repoRoot, 'services/owner_copilot/welcome_pool/ar.py'), 'utf8');
+  const fr = readFileSync(join(repoRoot, 'services/owner_copilot/welcome_pool/fr.py'), 'utf8');
   assert.match(en, /Welcome back — what do you want to do today/);
   assert.doesNotMatch(en, /core looks configured|AI Setup|System Copilot/i);
   assert.doesNotMatch(ar, /الإعداد الأساسي يبدو مكتملاً/);

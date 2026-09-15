@@ -14,7 +14,7 @@ def published_request_fields(tenant_id: str, request_type: str) -> dict[str, Any
         return {}
     try:
         from db.session import whatsapp_session
-        from services.request_graphs.service import list_active_graphs
+        from services.requests.request_graphs.service import list_active_graphs
 
         with whatsapp_session(require=False) as session:
             if session is None:

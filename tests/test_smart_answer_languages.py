@@ -62,7 +62,7 @@ def test_purge_smart_answer_language_deletes_variants_and_runtime_rows(monkeypat
     from services.ai_setup.faq_integration_ops import purge_smart_answer_language_data
     from services.ai_setup.schemas import FaqRecord, FaqVariant
     from services.ai_setup.storage import ensure_defaults, get_draft, put_draft
-    from services.local_qa_service import local_qa_service
+    from services.faq.local_qa_service import local_qa_service
 
     tenant_id = "purge_lang_test"
     ensure_defaults(tenant_id=tenant_id)

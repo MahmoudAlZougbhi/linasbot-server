@@ -11,8 +11,8 @@ from services.brain.comments.pipeline import deterministic_comment_result, winni
 from services.brain.compiler.chunks import chunk_document, contextual_groups
 from services.brain.contracts.plan import PlannerPlan, PlannerTask
 from services.brain.coverage import coverage_ok, omitted_task_types
-from services.brain.evals.fixtures import knowledge_heavy_corpus, service_appointment_corpus
 from services.brain.retrieve.cards import cards_from_sections
+from tests.brain_evals.fixtures import knowledge_heavy_corpus, service_appointment_corpus
 
 
 def test_coverage_detects_planner_omission() -> None:

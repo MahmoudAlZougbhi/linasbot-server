@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 
 from services.ai_setup.save_live import put_draft_and_go_live
+from services.ai_setup.search_metadata.cm_apply import last_cm_apply_stats
+from services.ai_setup.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
 from services.ai_setup.storage import get_draft, put_draft
 from services.ai_setup.version_store import load_published_content, read_published_pointer
-from services.search_metadata.cm_apply import last_cm_apply_stats
-from services.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
 
 pytest_plugins = ("tests.customer_reply_ai_v2_fixtures",)
 
@@ -235,7 +235,7 @@ async def test_greeting_and_service_save_go_live(v2_env) -> None:
 
 @pytest.mark.asyncio
 async def test_empty_metadata_does_not_publish_or_flip_live(v2_env) -> None:
-    from services.search_metadata.errors import MetadataPreparationError
+    from services.ai_setup.search_metadata.errors import MetadataPreparationError
 
     tid = "t_save_live_meta_fail"
     env, first = await _save(

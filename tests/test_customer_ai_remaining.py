@@ -424,7 +424,7 @@ def test_knowledge_index_rows_are_chunked() -> None:
 
 
 def test_fixture_eval_runner_has_no_live_spend() -> None:
-    from services.brain.evals.runner import run_fixture_corpus
+    from tests.brain_evals.runner import run_fixture_corpus
 
     report = run_fixture_corpus()
     assert report["live_spend"] is False
