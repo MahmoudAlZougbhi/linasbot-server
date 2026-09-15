@@ -47,12 +47,29 @@ def test_voyage_index_still_voyage_embeddings() -> None:
     index_job = (ROOT / "services/brain/search/index_job.py").read_text(encoding="utf-8")
     contextual = (ROOT / "services/brain/search/contextual_index.py").read_text(encoding="utf-8")
     storage = (ROOT / "services/ai_setup/storage.py").read_text(encoding="utf-8")
+    compiler = (ROOT / "services/brain/compiler/chunks.py").read_text(encoding="utf-8")
+    init = (ROOT / "services/brain/compiler/__init__.py").read_text(encoding="utf-8")
     assert "embed_texts" in index_job
     assert "embed_contextual_groups" in contextual
     assert "luna_chunker" not in index_job
     assert "luna_chunker" not in contextual
+    assert "chunk_document" not in index_job
+    assert "chunk_document" not in contextual
+    assert "def chunk_document" not in compiler
+    assert "chunk_document" not in init
     assert "apply_save_chunks" in storage
     assert "luna" not in storage.lower()
+
+
+def test_live_py_never_imports_chunk_document() -> None:
+    offenders: list[str] = []
+    for folder in ("services", "modules"):
+        for path in (ROOT / folder).rglob("*.py"):
+            rel = str(path.relative_to(ROOT)).replace("\\", "/")
+            text = path.read_text(encoding="utf-8")
+            if "chunk_document" in text:
+                offenders.append(rel)
+    assert not offenders, offenders
 
 
 def test_chunker_model_not_contiguous_retrieval_id() -> None:

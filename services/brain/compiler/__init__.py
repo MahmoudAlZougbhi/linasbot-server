@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from services.brain.compiler.chunks import KnowledgeChunk, chunk_document, contextual_groups
+from services.brain.compiler.chunks import KnowledgeChunk, chunks_from_texts, contextual_groups
 
-__all__ = ["KnowledgeChunk", "chunk_document", "contextual_groups"]
+__all__ = ["KnowledgeChunk", "chunks_from_texts", "contextual_groups"]

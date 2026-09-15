@@ -8,7 +8,7 @@ from services.ai_setup.schemas import CommentRule, CommentsSection
 from services.brain.actions.confirm import confirmation_valid
 from services.brain.comment_normalize import normalize_comment_mode
 from services.brain.comments.pipeline import deterministic_comment_result, winning_comment_mode
-from services.brain.compiler.chunks import chunk_document, contextual_groups
+from services.brain.compiler.chunks import chunks_from_texts, contextual_groups
 from services.brain.contracts.plan import PlannerPlan, PlannerTask
 from services.brain.coverage import coverage_ok, omitted_task_types
 from services.brain.retrieve.cards import cards_from_sections
@@ -109,8 +109,10 @@ def test_ignore_comment_is_policy_suppressed(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_knowledge_chunks_keep_two_sections() -> None:
-    body = "# Aftercare\nDo not wash for 24 hours.\n# Refunds\nRefunds are allowed within seven days."
-    chunks = chunk_document(document_id="doc1", body=body)
+    chunks = chunks_from_texts(
+        document_id="doc1",
+        texts=("Aftercare\nDo not wash for 24 hours.", "Refunds\nRefunds are allowed within seven days."),
+    )
     assert len(chunks) >= 2
     groups = contextual_groups(chunks)
     assert list(groups) == ["doc1"]

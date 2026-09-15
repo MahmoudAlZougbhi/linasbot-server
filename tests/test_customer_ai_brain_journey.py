@@ -151,22 +151,19 @@ async def test_handoff_executes_receipt(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_deep_knowledge_chunk_is_indexed_separately() -> None:
-    from services.brain.compiler.chunks import chunk_document
     from services.brain.retrieve.cards import TitleCard
     from services.brain.search.index_job import document_rows
 
-    body = "# Intro\nWelcome.\n# Deep Policy\nOnly this later section mentions copper cooling gel.\n"
-    chunks = chunk_document(document_id="knowledge:doc", body=body)
-    assert any("copper cooling gel" in chunk.text for chunk in chunks)
-    assert any("copper cooling gel" not in chunk.text for chunk in chunks)
     card = TitleCard(
         item_id="knowledge:doc",
         source_family="knowledge",
         title="Policy",
         search_text="Policy",
-        body=body,
+        body="# Intro\nWelcome.\n# Deep Policy\nOnly this later section mentions copper cooling gel.\n",
         revision="v1",
+        chunks=("Welcome.", "Only this later section mentions copper cooling gel."),
     )
     rows = document_rows([card], tenant_id="brain-shop", version="v1")
-    assert len(rows) >= 2
+    assert len(rows) == 2
     assert any("copper cooling gel" in row["search_text"] for row in rows)
+    assert {row["chunk_id"] for row in rows} == {"knowledge:doc:c1", "knowledge:doc:c2"}

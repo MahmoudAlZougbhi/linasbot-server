@@ -416,11 +416,12 @@ def test_knowledge_index_rows_are_chunked() -> None:
         title="Hours",
         search_text="hours policy",
         body="# Hours\nWe open at 10.\n\n# Returns\nNo cash refunds after 7 days.",
+        chunks=("We open at 10.", "No cash refunds after 7 days."),
     )
     rows = document_rows([card], tenant_id="shop", version="v1")
-    assert len(rows) >= 2
+    assert len(rows) == 2
     assert all(row["source_family"] == "knowledge" for row in rows)
-    assert any(row["chunk_id"] for row in rows)
+    assert all(row["chunk_id"] for row in rows)
 
 
 def test_fixture_eval_runner_has_no_live_spend() -> None:

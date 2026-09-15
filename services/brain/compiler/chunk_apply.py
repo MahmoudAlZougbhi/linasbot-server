@@ -155,6 +155,7 @@ def _refresh_item(
         existing = read_chunks(tenant_id, section, item_id)
         if existing and existing.get("fingerprint") == fingerprint:
             return "copied"
+    delete_chunks(tenant_id, section, item_id)
     chunks = luna_chunk_prose(
         {
             "section": section,
@@ -163,7 +164,6 @@ def _refresh_item(
         }
     )
     if not chunks:
-        delete_chunks(tenant_id, section, item_id)
         return "skipped"
     write_chunks(tenant_id, section=section, item_id=item_id, fingerprint=fingerprint, chunks=chunks)
     return "generated"

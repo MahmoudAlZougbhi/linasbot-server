@@ -309,6 +309,72 @@ def test_index_rows_use_stored_luna_chunks(tmp_path, monkeypatch) -> None:
     rows = document_rows(cards, tenant_id="t-luna-ix", version="v1")
     assert len(rows) == len(cards[0].chunks)
     assert all(row["chunk_id"] for row in rows)
+    assert {row["chunk_id"] for row in rows} == {
+        f"{cards[0].item_id}:c{index}" for index in range(1, len(cards[0].chunks) + 1)
+    }
+
+
+def test_knowledge_without_luna_sidecar_is_single_row_not_mechanical_split() -> None:
+    card = TitleCard(
+        item_id="knowledge:k1",
+        source_family="knowledge",
+        title="Aftercare",
+        search_text="aftercare " + LONG_NOTE,
+        body="# Part A\n" + LONG_NOTE + "\n# Part B\n" + LONG_NOTE,
+    )
+    rows = document_rows([card], tenant_id="t-no-luna", version="v1")
+    assert len(rows) == 1
+    assert rows[0]["chunk_id"] == ""
+    ctx_rows, _groups, _parents = build_contextual_rows([card], tenant_id="t-no-luna", version="v1")
+    assert len(ctx_rows) == 1
+
+
+def test_luna_and_legacy_chunk_ids_do_not_mix() -> None:
+    card = TitleCard(
+        item_id="knowledge:k1",
+        source_family="knowledge",
+        title="Aftercare",
+        search_text="aftercare",
+        body="# Heading One\nlegacy split bait one.\n# Heading Two\nlegacy split bait two.",
+        chunks=("Luna piece one.", "Luna piece two."),
+    )
+    rows = document_rows([card], tenant_id="shop", version="v1")
+    ids = [row["chunk_id"] for row in rows]
+    assert ids == ["knowledge:k1:c1", "knowledge:k1:c2"]
+    assert len(ids) == len(set(ids))
+    blob = " ".join(row["search_text"] for row in rows)
+    assert "legacy split bait" not in blob
+
+
+def test_rewrite_drops_leftover_chunk_ids_for_same_item() -> None:
+    from services.brain.search.store import _MEMORY, reset_memory_store, write_documents
+
+    reset_memory_store()
+    old = TitleCard(
+        item_id="knowledge:k1",
+        source_family="knowledge",
+        title="Aftercare",
+        search_text="aftercare",
+        chunks=("one", "two", "three"),
+    )
+    new = TitleCard(
+        item_id="knowledge:k1",
+        source_family="knowledge",
+        title="Aftercare",
+        search_text="aftercare",
+        chunks=("one", "two"),
+    )
+    old_rows = document_rows([old], tenant_id="t-drop", version="v1")
+    write_documents(None, old_rows, [[0.1, 0.0] for _ in old_rows])
+    new_rows = document_rows([new], tenant_id="t-drop", version="v1")
+    write_documents(None, new_rows, [[0.2, 0.0] for _ in new_rows])
+    leftover = [
+        item
+        for item in _MEMORY.get("t-drop", [])
+        if str(item.get("source_id") or "") == "k1" and str(item.get("index_version") or "") == "v1"
+    ]
+    assert len(leftover) == 2
+    assert {str(item.get("chunk_id") or "") for item in leftover} == {"knowledge:k1:c1", "knowledge:k1:c2"}
 
 
 def test_contextual_index_prefers_luna_chunks() -> None:
