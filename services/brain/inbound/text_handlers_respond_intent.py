@@ -9,7 +9,7 @@ from services.brain.inbound.text_handlers_respond_keywords import (
     _GREETING_PREFIX_RE,
     _LEADING_ADDRESS_RE,
     ALLOWED_GENERAL_QUERIES,
-    CLINIC_SCOPE_KEYWORDS,
+    BUSINESS_SCOPE_KEYWORDS,
     GENERAL_QUESTION_PREFIX_RE,
     GREETING_OPENERS,
     OFF_TOPIC_KEYWORDS,
@@ -22,7 +22,7 @@ def _is_price_intent(text: str) -> bool:
     return any(keyword in normalized for keyword in PRICE_INTENT_KEYWORDS)
 
 
-def _is_out_of_clinic_scope_query(text: str) -> bool:
+def _is_out_of_business_scope_query(text: str) -> bool:
     probe = str(text or "").strip()
     if len(probe) < 3:
         return False
@@ -32,7 +32,7 @@ def _is_out_of_clinic_scope_query(text: str) -> bool:
     if any(phrase in lowered for phrase in ALLOWED_GENERAL_QUERIES):
         return False
 
-    if any(keyword in lowered for keyword in CLINIC_SCOPE_KEYWORDS):
+    if any(keyword in lowered for keyword in BUSINESS_SCOPE_KEYWORDS):
         return False
 
     if any(keyword in lowered for keyword in OFF_TOPIC_KEYWORDS):

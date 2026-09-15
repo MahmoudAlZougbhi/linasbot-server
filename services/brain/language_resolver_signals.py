@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from language_resolver_text import alpha_len, clean, mask_times, tokenize
+from services.brain.language_resolver_text import alpha_len, clean, mask_times, tokenize
 
 try:
     from langdetect import LangDetectException, detect, detect_langs
@@ -27,64 +27,165 @@ ARABIZI_DIGITS_RE = re.compile(r"[2356789]")  # phoneme digits
 
 ARABIZI_WORDS = {
     # Greetings
-    "kifak", "kifik", "kifkon", "kif",
-    "marhaba", "ahla", "ahlan", "ahleen",
-    "sabah", "masa", "saba7", "masa2",
-
+    "kifak",
+    "kifik",
+    "kifkon",
+    "kif",
+    "marhaba",
+    "ahla",
+    "ahlan",
+    "ahleen",
+    "sabah",
+    "masa",
+    "saba7",
+    "masa2",
     # Common verbs/phrases
-    "bade", "badde", "bde", "badi", "baddi", "bdi",
-    "a3mel", "a3mil", "3amel", "3amil",  # "to do/make"
-    "rouh", "ruh", "roh",  # "go"
-    "ta3a", "ta3i", "ta3o",  # "come"
-    "sheel", "shil", "shel",  # "remove"
-
+    "bade",
+    "badde",
+    "bde",
+    "badi",
+    "baddi",
+    "bdi",
+    "a3mel",
+    "a3mil",
+    "3amel",
+    "3amil",  # "to do/make"
+    "rouh",
+    "ruh",
+    "roh",  # "go"
+    "ta3a",
+    "ta3i",
+    "ta3o",  # "come"
+    "sheel",
+    "shil",
+    "shel",  # "remove"
     # Questions
-    "le", "leh", "lesh", "leish", "ليش",
-    "sho", "shu", "shou", "chou",
-    "wen", "wein", "wayn", "fein", "fain",
-    "aya", "ayya", "adesh", "addesh", "2adesh", "2addesh", "adde", "2adde",
-
+    "le",
+    "leh",
+    "lesh",
+    "leish",
+    "ليش",
+    "sho",
+    "shu",
+    "shou",
+    "chou",
+    "wen",
+    "wein",
+    "wayn",
+    "fein",
+    "fain",
+    "aya",
+    "ayya",
+    "adesh",
+    "addesh",
+    "2adesh",
+    "2addesh",
+    "adde",
+    "2adde",
     # Gender words (CRITICAL for gender detection)
-    "shab", "chab", "shabb",  # male
-    "sabieh", "sabiye", "sabiyeh", "benet", "bint",  # female
-    "zakar", "ontha",  # formal male/female
-
+    "shab",
+    "chab",
+    "shabb",  # male
+    "sabieh",
+    "sabiye",
+    "sabiyeh",
+    "benet",
+    "bint",  # female
+    "zakar",
+    "ontha",  # formal male/female
     # Name-related
-    "esme", "esmi", "isme", "ismi", "ana",
-
+    "esme",
+    "esmi",
+    "isme",
+    "ismi",
+    "ana",
     # Prices/services
-    "se3er", "s3r", "as3ar", "asaar", "si3r",
-    "jalse", "jalseh", "jalset",
-    "makana", "makane", "makanet",
-    "washem", "washmet", "washme",
-    "tebyeed", "tebyid",
-
+    "se3er",
+    "s3r",
+    "as3ar",
+    "asaar",
+    "si3r",
+    "jalse",
+    "jalseh",
+    "jalset",
+    "makana",
+    "makane",
+    "makanet",
+    "washem",
+    "washmet",
+    "washme",
+    "tebyeed",
+    "tebyid",
     # Common words
-    "bi", "fi", "fih", "feeh",
-    "ma", "msh", "mesh", "mish",
-    "hek", "heik", "hayk", "heke",
-    "tab", "tayeb", "tayyeb",
-    "ktir", "kteer", "ktr", "ketir",
-    "waja3", "wj3", "btwaje3",
-    "hbb", "7bb", "7abibi", "habibi", "habibti",
-
+    "bi",
+    "fi",
+    "fih",
+    "feeh",
+    "ma",
+    "msh",
+    "mesh",
+    "mish",
+    "hek",
+    "heik",
+    "hayk",
+    "heke",
+    "tab",
+    "tayeb",
+    "tayyeb",
+    "ktir",
+    "kteer",
+    "ktr",
+    "ketir",
+    "waja3",
+    "wj3",
+    "btwaje3",
+    "hbb",
+    "7bb",
+    "7abibi",
+    "habibi",
+    "habibti",
     # Time/scheduling
-    "bukra", "bokra", "ba3d", "ba3den",
-    "lyom", "elyom", "alyom",
-    "kel", "kil",  # "every"
-
+    "bukra",
+    "bokra",
+    "ba3d",
+    "ba3den",
+    "lyom",
+    "elyom",
+    "alyom",
+    "kel",
+    "kil",  # "every"
     # Confirmations
-    "la2", "laa", "la", "eh", "eih", "ah", "aiwa",
-    "yalla", "yas", "tamam", "tammam",
-    "mn7", "mne7", "mnee7", "mnih",
-
+    "la2",
+    "laa",
+    "la",
+    "eh",
+    "eih",
+    "ah",
+    "aiwa",
+    "yalla",
+    "yas",
+    "tamam",
+    "tammam",
+    "mn7",
+    "mne7",
+    "mnee7",
+    "mnih",
     # Other common
-    "shukran", "thanks",  # NOTE: "merci" removed - it's French, not Franco
-    "3am", "3amma",
-    "arkhas", "ar5as",
-    "ghale", "8ale", "8ali", "ghali",
-    "w", "wel", "wil",  # "and"
+    "shukran",
+    "thanks",  # NOTE: "merci" removed - it's French, not Franco
+    "3am",
+    "3amma",
+    "arkhas",
+    "ar5as",
+    "ghale",
+    "8ale",
+    "8ali",
+    "ghali",
+    "w",
+    "wel",
+    "wil",  # "and"
 }
+
 
 def arabizi_score(text: str) -> int:
     """
@@ -114,6 +215,7 @@ def arabizi_score(text: str) -> int:
 
     return score
 
+
 def is_arabizi(text: str, threshold: int) -> tuple[bool, int]:
     s = arabizi_score(text)
     return (s >= threshold), s
@@ -125,27 +227,99 @@ def is_arabizi(text: str, threshold: int) -> tuple[bool, int]:
 
 FRENCH_MARKERS = {
     # NOTE: "bonjour" excluded - too common, shouldn't switch language alone
-    "salut", "merci", "svp", "stp", "oui", "non",
-    "je", "j", "tu", "vous", "il", "elle", "on", "nous", "ils", "elles",
-    "mon", "ma", "mes", "ton", "ta", "tes", "votre", "vos",
-    "de", "des", "du", "au", "aux", "dans", "avec", "sans", "pour", "sur",
-    "et", "mais", "donc", "parce", "que", "quoi", "comment", "pourquoi",
-    "rdv", "rendezvous", "rendez-vous",
+    "salut",
+    "merci",
+    "svp",
+    "stp",
+    "oui",
+    "non",
+    "je",
+    "j",
+    "tu",
+    "vous",
+    "il",
+    "elle",
+    "on",
+    "nous",
+    "ils",
+    "elles",
+    "mon",
+    "ma",
+    "mes",
+    "ton",
+    "ta",
+    "tes",
+    "votre",
+    "vos",
+    "de",
+    "des",
+    "du",
+    "au",
+    "aux",
+    "dans",
+    "avec",
+    "sans",
+    "pour",
+    "sur",
+    "et",
+    "mais",
+    "donc",
+    "parce",
+    "que",
+    "quoi",
+    "comment",
+    "pourquoi",
+    "rdv",
+    "rendezvous",
+    "rendez-vous",
 }
 FRENCH_DIACRITICS_RE = re.compile(r"[àâäéèêëïîôùûüÿçœæÀÂÄÉÈÊËÏÎÔÙÛÜŸÇŒÆ]", re.IGNORECASE)
 
 ENGLISH_MARKERS = {
-    "hi", "hello", "thanks", "thank", "please", "yes", "no",
-    "i", "you", "we", "they", "he", "she",
-    "my", "your", "our", "their",
-    "the", "a", "an", "and", "but", "because",
-    "appointment", "schedule", "price", "cost", "laser",
-    "want", "need", "can", "would", "like",
-    "what", "when", "where", "how", "why",
+    "hi",
+    "hello",
+    "thanks",
+    "thank",
+    "please",
+    "yes",
+    "no",
+    "i",
+    "you",
+    "we",
+    "they",
+    "he",
+    "she",
+    "my",
+    "your",
+    "our",
+    "their",
+    "the",
+    "a",
+    "an",
+    "and",
+    "but",
+    "because",
+    "appointment",
+    "schedule",
+    "price",
+    "cost",
+    "laser",
+    "want",
+    "need",
+    "can",
+    "would",
+    "like",
+    "what",
+    "when",
+    "where",
+    "how",
+    "why",
 }
+
 
 def _marker_hits(tokens: list[str], marker_set: set) -> int:
     return len(set(tokens) & marker_set)
+
 
 def french_features(text: str) -> tuple[int, int, bool]:
     raw = clean(text)
@@ -161,6 +335,7 @@ def french_features(text: str) -> tuple[int, int, bool]:
         score += 2
     return score, hits, has_diacritics
 
+
 def english_features(text: str) -> tuple[int, int]:
     raw = clean(text)
     toks = tokenize(raw)
@@ -172,6 +347,7 @@ def english_features(text: str) -> tuple[int, int]:
 # ============================================================
 # 6) Language detection for English/French (langdetect)
 # ============================================================
+
 
 def detect_en_fr(text: str) -> tuple[str, float] | None:
     """

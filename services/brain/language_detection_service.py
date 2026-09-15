@@ -1,5 +1,5 @@
 """
-Language Detection Service - Wraps language_resolver.py
+Language Detection Service - Wraps services.brain.language_resolver
 Detects language BEFORE GPT call on each message
 """
 
@@ -8,8 +8,8 @@ from __future__ import annotations
 import json
 import re
 
-from language_resolver import LanguageResolver, system_language_instruction
 from services.ai_setup.iso639_languages import normalize_language_code
+from services.brain.language_resolver import LanguageResolver, system_language_instruction
 from services.brain.llm_core_service import client as openai_client
 from services.team.user_persistence_service import user_persistence
 

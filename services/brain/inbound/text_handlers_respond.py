@@ -10,7 +10,7 @@ from typing import Any
 from services.brain.inbound.text_handlers_respond_ctx import bootstrap_process_respond_ctx
 from services.brain.inbound.text_handlers_respond_intent import (
     _build_out_of_scope_reply,
-    _is_out_of_clinic_scope_query,
+    _is_out_of_business_scope_query,
     _is_price_intent,
 )
 from services.brain.inbound.text_handlers_respond_keywords import (
@@ -75,7 +75,7 @@ __all__ = [
     "_apply_turn_by_turn_policy",
     "_build_out_of_scope_reply",
     "_handle_published_cm_runtime",
-    "_is_out_of_clinic_scope_query",
+    "_is_out_of_business_scope_query",
     "_is_price_intent",
     "_process_and_respond",
     "_reply_offers_handover_confirmation",

@@ -220,7 +220,7 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - `DEFAULT_SOCIAL_WHATSAPP_CONTACTS` is empty. Unpublished tenants resolve no clinic WhatsApp numbers.
 - Prod apply/stage scripts write `LINAS_CUSTOMER_AI_LAB=false` (never `true`).
 - Authenticated KEEP APIs (Live Chat, Requests, WhatsApp, Copilot, CM, billing, …) use one allowlist for every tenant. Founder slug `linas` is not exempt. Missing session tenant is 403. Meta connection activate requires published CM for every tenant.
-- Evidence: `docs/FINAL_CLEANUP_VERIFY.md`. Tests: `tests/test_wave_x1_founder_cleanup.py`.
+- Evidence: this KEEP_SURFACE WAVE X1 section. Tests: `tests/test_wave_x1_founder_cleanup.py`.
 
 ## WAVE X2 — museum delete
 

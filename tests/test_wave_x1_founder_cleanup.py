@@ -75,10 +75,9 @@ def test_wave_x1_live_py_has_no_linas_tenant_equality() -> None:
 
 def test_wave_x1_keep_surface_records_wave() -> None:
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
-    verify = (ROOT / "docs/FINAL_CLEANUP_VERIFY.md").read_text(encoding="utf-8")
     assert "WAVE X1" in keep
-    assert "INITIAL_RESTRICTED" in verify
-    assert "LINAS_CUSTOMER_AI_LAB" in verify
+    assert "INITIAL_RESTRICTED" in keep
+    assert "LINAS_CUSTOMER_AI_LAB" in keep
     from modules.api_security import is_keep_tenant_api_path
 
     assert is_keep_tenant_api_path("/api/live-chat/unified-chats") is True

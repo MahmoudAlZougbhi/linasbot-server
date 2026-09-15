@@ -52,7 +52,6 @@ from utils.utils_misc import (
     save_for_training_conversation_log,
     translate_qa_pair_with_gpt,
 )
-from utils.utils_prompt import get_system_instruction
 from utils.utils_takeover import (
     _build_user_id_variants_for_release,
     _clear_takeover_flags_for_user,
@@ -107,7 +106,6 @@ __all__ = [
     "get_last_bot_message_for_gpt_context",
     "get_last_bot_message_from_conversation",
     "get_openai_tools_schema",
-    "get_system_instruction",
     "get_user_state_from_firestore",
     "initialize_firestore",
     "is_post_takeover_escalation_cooldown",
