@@ -45,10 +45,8 @@ WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN")  # The access token for Met
 WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID")  # Your specific WhatsApp phone number ID
 WHATSAPP_BUSINESS_ACCOUNT_ID = os.getenv("WHATSAPP_BUSINESS_ACCOUNT_ID")  # Your WhatsApp Business Account ID
 
-# Deprecated clinic aliases of EXTERNAL_API_*. Prefer EXTERNAL_API_*.
-# LINASLASER_BOC_BOOKING_ENABLED stays the fail-closed BOC env name (always off).
-LINASLASER_API_BASE_URL = os.getenv("EXTERNAL_API_BASE_URL") or os.getenv("LINASLASER_API_BASE_URL")
-LINASLASER_API_TOKEN = os.getenv("EXTERNAL_API_TOKEN") or os.getenv("LINASLASER_API_TOKEN")
+EXTERNAL_API_BASE_URL = (os.getenv("EXTERNAL_API_BASE_URL") or "").strip()
+EXTERNAL_API_TOKEN = os.getenv("EXTERNAL_API_TOKEN")
 
 # --- Firebase Firestore Configuration (NEW) ---
 # Path to your Firebase service account key JSON file.
@@ -73,27 +71,6 @@ TESTING_MODE = False  # When True, Firebase saving is disabled for testing
 AI_PRIMARY_ORCHESTRATION = os.getenv("AI_PRIMARY_ORCHESTRATION", "true").strip().lower() == "true"
 # After operator releases chat to bot: block auto re-escalation (handover_degree / error→handover) for this many minutes.
 POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES = int(os.getenv("POST_TAKEOVER_ESCALATION_COOLDOWN_MINUTES", "45"))
-
-# Booking flags (deprecated LINASLASER_* env names; values stay fail-closed defaults).
-# Booking: when True, chat_response may infer body_part_ids from conversation + fuzzy CRM row match (legacy path).
-BOOKING_LEGACY_INFERENCE = os.getenv("LINASLASER_BOOKING_LEGACY_INFERENCE", "false").strip().lower() in (
-    "1",
-    "true",
-    "yes",
-)
-
-# When True, submit_booking_intent rejects execution if datetime was inferred only from raw_user_* (AI must send resolved date+time).
-BOOKING_REQUIRE_RESOLVED_DATETIME = os.getenv(
-    "LINASLASER_BOOKING_REQUIRE_RESOLVED_DATETIME", "false"
-).strip().lower() in ("1", "true", "yes")
-
-# When True (default): backend does NOT map service/branch/machine/body names to IDs — AI must send IDs from tools first.
-# Set LINASLASER_BOOKING_BACKEND_RESOLVES_NAMES=true for legacy fuzzy resolution on the server.
-BOOKING_BACKEND_RESOLVES_NAMES = os.getenv("LINASLASER_BOOKING_BACKEND_RESOLVES_NAMES", "false").strip().lower() in (
-    "1",
-    "true",
-    "yes",
-)
 
 # --- Local / development environment (same APIs as prod, safe messaging) ---
 # Set APP_MODE=local or ENV=development to run locally with real APIs but controlled sending.
@@ -121,26 +98,9 @@ def is_production_runtime() -> bool:
     return False
 
 
-def _booking_default_id(env_name: str, local_default: int) -> int | None:
-    """Booking CRM id defaults.
-
-    Local/dev: keep numeric defaults so boot and founder-clinic flows work.
-    Production: require explicit env — no silent DEFAULT_*_ID=1 privilege (SEC-025).
-    Callers must handle None (refuse / ask) rather than inventing branch/service IDs.
-    """
-    raw = (os.getenv(env_name) or "").strip()
-    if raw:
-        return int(raw)
-    if is_production_runtime():
-        return None
-    return local_default
-
-
 # --- Bot Operational Settings ---
 # WhatsApp Number for Human Notifications (e.g., your admin/staff number)
 WHATSAPP_TO = os.getenv("WHATSAPP_TO")
-# Trainer's WhatsApp Number (for training mode access and daily reports)
-TRAINER_WHATSAPP_NUMBER = os.getenv("TRAINER_WHATSAPP_NUMBER")
 
 # FFMPEG Path for voice message processing
 FFMPEG_PATH = os.getenv("FFMPEG_PATH")
@@ -218,26 +178,8 @@ user_in_human_takeover_mode: defaultdict[str, bool] = defaultdict(
 user_last_waiting_reply_sent: defaultdict[str, datetime.datetime] = defaultdict(lambda: datetime.datetime.min)
 WAITING_REPLY_COOLDOWN_SECONDS = 60
 
-# NEW: Booking State Tracking - persists booking progress across messages
-# Tracks: service, body_area, machine, branch, date, etc.
+# HA conversation session still snapshots this blob; live Brain does not collect booking FSM.
 user_booking_state: defaultdict[str, dict[str, Any]] = defaultdict(dict)
-
-# Server-side booking state machine (strict collection + one confirmation before submit).
-BOOKING_FSM_ENABLED = os.getenv("LINASLASER_BOOKING_FSM", "true").strip().lower() in (
-    "1",
-    "true",
-    "yes",
-)
-# When True (default): submit_booking_intent is rejected until user confirms once in booking mode.
-BOOKING_FSM_REQUIRE_CONFIRMATION = os.getenv("LINASLASER_BOOKING_FSM_REQUIRE_CONFIRMATION", "true").strip().lower() in (
-    "1",
-    "true",
-    "yes",
-)
-
-# For training handlers:
-training_stage: defaultdict[str, int] = defaultdict(int)
-last_generated_qa_for_save: defaultdict[str, list[Any]] = defaultdict(list)
 
 
 # --- Constants and Limits ---
@@ -245,10 +187,7 @@ MAX_PHOTO_ANALYSIS_PER_USER = 10  # Maximum number of photos a user can request 
 ENFORCE_TOTAL_PHOTO_ANALYSIS_LIMIT = False  # If False, do not enforce conversation-wide photo limit
 MAX_IMAGES_PER_SINGLE_MESSAGE = 10  # Hard limit per single inbound message
 MAX_TEXT_LINES_PER_SINGLE_MESSAGE = 30  # Hard limit per single inbound text message
-MAX_CONTEXT_MESSAGES = (
-    20  # Max number of messages to keep in conversation context (increased from 15 for better booking flow)
-)
-MAX_CONTEXT_MESSAGES_TRAINING = 10  # Max messages for training conversation context
+MAX_CONTEXT_MESSAGES = 20  # Max number of messages to keep in conversation context
 # Context window for AI memory:
 # - Include only messages from the last N hours in GPT context.
 # - If MAX_CONTEXT_MESSAGES_IN_WINDOW = 0, do not apply a hard count cap after time filtering.
@@ -256,13 +195,6 @@ CONTEXT_WINDOW_HOURS = int(os.getenv("CONTEXT_WINDOW_HOURS", "12"))
 MAX_CONTEXT_MESSAGES_IN_WINDOW = int(os.getenv("MAX_CONTEXT_MESSAGES_IN_WINDOW", "0"))
 MAX_RELEVANT_CUSTOM_QA = 3  # Max relevant custom Q&A entries to fetch
 MAX_GENDER_ASK_ATTEMPTS = 3  # Max times bot will ask for gender before suggesting human handover
-
-# Default IDs for booking (if not explicitly provided by user in conversation).
-# SEC-025: no DEFAULT role/tenant in this module. Booking IDs are env-driven;
-# production without env → None (fail-closed), local keeps 1 for founder-clinic boot.
-DEFAULT_BRANCH_ID = _booking_default_id("DEFAULT_BRANCH_ID", 1)
-DEFAULT_SERVICE_ID = _booking_default_id("DEFAULT_SERVICE_ID", 1)
-DEFAULT_MACHINE_ID = _booking_default_id("DEFAULT_MACHINE_ID", 1)
 
 # Delay for combining rapid messages from a user (e.g., multiple short texts sent quickly)
 # Requirement: wait 3 seconds after the LAST message before responding.
@@ -318,58 +250,6 @@ GENDER_QUESTIONS = {
         "3azizi/azati, la mosa3adetak bi shakel afdal w aktar ta5sees, chou jinsak?",
     ],
 }
-
-# --- Keywords for Training Mode Commands ---
-SAVE_KEYWORDS = [
-    "احفظ",
-    "حفظ",
-    "سيف",
-    "تمام",
-    "ok",
-    "خلاص",
-    "تخزين",
-    "اعتمد",
-    "save",
-    "confirm",
-    "store",
-    "accept",
-    "done",
-    "enregistrer",
-    "confirmer",
-    "sauvegarder",
-    "c'est bon",
-    "okey",
-    "احفظ هذا",
-    "احفظها",
-]
-
-GENERATE_QA_KEYWORDS = [
-    "سؤال وجواب",
-    "qa",
-    "question answer",
-    "صيغ سؤال وجواب",
-    "generate qa",
-    "cree question reponse",
-    "questions reponses",
-    "سؤال و جواب",
-    "اسئله واجوبه",
-    "Q and A",
-]
-
-SUMMARIZE_QA_KEYWORDS = [
-    "لخص",
-    "شو اتفقنا",
-    "ملخص",
-    "تلخيص",
-    "summarize",
-    "recap",
-    "recapituler",
-    "show summary",
-    "give summary",
-    "kif fina n7afza",
-    "how to save this",
-    "comment sauvegarder ceci",
-]
 
 # --- Bot Knowledge Base (Loaded from files) ---
 PRICE_LIST = ""

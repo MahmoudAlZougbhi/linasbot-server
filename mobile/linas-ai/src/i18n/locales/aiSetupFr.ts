@@ -331,7 +331,7 @@ export const aiSetupFr = {
   resourceMetaHeading: 'Ressource',
   resourceFieldTitle: 'Titre',
   resourceFieldDescription: 'Description courte',
-  resourceTitlePlaceholder: 'ex. Avant laser femmes',
+  resourceTitlePlaceholder: 'ex. Photos avant / après de la boutique',
   resourceDescriptionPlaceholder: 'Envoyer quand le client demande un exemple avant traitement.',
   resourceTitleRequired: 'Le titre est obligatoire.',
   resourceDescriptionRequired: 'La description courte est obligatoire.',

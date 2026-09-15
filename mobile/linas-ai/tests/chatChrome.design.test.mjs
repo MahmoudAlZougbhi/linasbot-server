@@ -21,7 +21,7 @@ test('chat header: overlay hamburger only in light-gray square', () => {
   const header = read('features/chat/ChatHeader.tsx');
   const icons = read('features/chat/ChatHeaderIcons.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
-  const footer = read('features/nav/DrawerFooter.tsx');
+  const recents = read('features/nav/DrawerRecents.tsx');
   assert.match(header, /HeaderMenuButton/);
   assert.match(header, /ChatTopFade/);
   assert.match(header, /LIST_BELOW_OVERLAY_GAP = spacing\.md \+ spacing\.sm/);
@@ -56,8 +56,7 @@ test('chat header: overlay hamburger only in light-gray square', () => {
   assert.match(list, /insets\.top \+ CHAT_LIST_TOP_CLEARANCE/);
   const listStyles = read('features/chat/chatScreenStyles.ts');
   assert.match(listStyles, /paddingTop:\s*16/);
-  assert.match(footer, /tr\('newChat'\)/);
-  assert.match(footer, /<NewChatIcon /);
+  assert.match(recents, /tr\('newChat'\)/);
 });
 
 test('module screens reuse the same silver HeaderMenuButton as chat', () => {

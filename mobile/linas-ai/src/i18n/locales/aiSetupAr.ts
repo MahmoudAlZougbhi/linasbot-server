@@ -329,7 +329,7 @@ export const aiSetupAr = {
   resourceMetaHeading: 'مورد',
   resourceFieldTitle: 'العنوان',
   resourceFieldDescription: 'وصف قصير',
-  resourceTitlePlaceholder: 'مثال: صور قبل الليزر للنساء',
+  resourceTitlePlaceholder: 'مثال: صور الواجهة قبل وبعد',
   resourceDescriptionPlaceholder: 'أرسل هذا عندما يطلب الزبون مثال قبل الجلسة.',
   resourceTitleRequired: 'العنوان مطلوب.',
   resourceDescriptionRequired: 'الوصف القصير مطلوب.',

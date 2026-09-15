@@ -22,7 +22,7 @@ describe("permissions utils", () => {
     }));
     expect(perms.liveChat).toBe(true);
     expect(perms.settings).toBe(true);
-    expect(perms.training).toBe(false);
+    expect(perms).not.toHaveProperty("training");
   });
 
   it("keeps platform_owner userManagement for owner-portal sessions", () => {

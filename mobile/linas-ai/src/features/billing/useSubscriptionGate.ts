@@ -25,7 +25,7 @@ export function useSubscriptionGate(isAuthenticated: boolean) {
     try {
       const next = await fetchSubscriptionAccess();
       // Ignore stale responses — login triggers effect refresh + explicit refresh;
-      // a late fail-closed must not overwrite a newer success (Linas Laser reopen bug).
+      // a late fail-closed must not overwrite a newer success (reopen race).
       if (gen !== requestGen.current) {
         return;
       }

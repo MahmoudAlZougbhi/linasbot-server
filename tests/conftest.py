@@ -12,8 +12,8 @@ import pytest
 # Deterministic env before any app imports in test modules.
 _ROOT = tempfile.mkdtemp(prefix="linas_pytest_")
 os.environ.setdefault("LINASBOT_DATA_ROOT", _ROOT)
-os.environ.setdefault("LINASLASER_API_BASE_URL", "https://example.com")
-os.environ.setdefault("LINASLASER_API_TOKEN", "pytest-token")
+os.environ.setdefault("EXTERNAL_API_BASE_URL", "https://example.com")
+os.environ.setdefault("EXTERNAL_API_TOKEN", "pytest-token")
 os.environ.setdefault("DASHBOARD_AUTH_SECRET", "pytest-dashboard-secret")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-a-real-key")
 os.environ.setdefault("ENVIRONMENT", "test")

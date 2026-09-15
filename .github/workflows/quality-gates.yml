@@ -132,8 +132,8 @@ jobs:
       - name: Backend tests
         env:
           OPENAI_API_KEY: sk-test-ci-not-real
-          LINASLASER_API_BASE_URL: https://example.com
-          LINASLASER_API_TOKEN: ci-token
+          EXTERNAL_API_BASE_URL: https://example.com
+          EXTERNAL_API_TOKEN: ci-token
           DASHBOARD_AUTH_SECRET: ci-dashboard-secret
           ENVIRONMENT: test
           DISABLE_API_DOCS: "true"

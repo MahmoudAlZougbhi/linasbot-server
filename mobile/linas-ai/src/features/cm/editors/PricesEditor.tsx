@@ -274,7 +274,7 @@ export function PricesEditor({ payload, onChange }: Props) {
                 labels: { ...emptyLabels(), ...asRecord(selectedBook.labels), en: v },
               })
             }
-            placeholder="e.g. Laser hair removal price list"
+            placeholder="e.g. Service price list"
           />
 
           <Text style={[cmFormStyles.label, { marginTop: 8 }]}>Rows</Text>

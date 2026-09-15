@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -27,13 +27,6 @@ if not _DATA_MIGRATED:
 # Serve dashboard static files and SPA
 DASHBOARD_BUILD_PATH = os.path.join(os.path.dirname(__file__), "dashboard", "build")
 INDEX_HTML_PATH = os.path.join(DASHBOARD_BUILD_PATH, "index.html")
-LIVE_CHAT_ANDROID_APK_PATH = os.path.join(
-    os.path.dirname(__file__),
-    "mobile",
-    "releases",
-    "linas-live-chat-android.apk",
-)
-
 if os.path.exists(DASHBOARD_BUILD_PATH):
     # Mount static files (js, css, etc.)
     app.mount("/static", StaticFiles(directory=os.path.join(DASHBOARD_BUILD_PATH, "static")), name="static")
@@ -45,7 +38,6 @@ import modules.cm_faq_api  # noqa: E402, F401
 import modules.cm_media_api  # noqa: E402, F401
 import modules.cm_request_graphs_api  # noqa: E402, F401
 import modules.cm_setup_api  # noqa: E402, F401
-import modules.local_qa_api  # noqa: E402, F401
 
 # Dashboard
 import modules.dashboard_api  # noqa: E402, F401
@@ -117,25 +109,6 @@ import modules.products_media_api  # noqa: E402, F401
 import modules.queue_api  # noqa: E402, F401
 import modules.resend_webhook_api  # noqa: E402, F401
 import modules.scale_api  # noqa: E402, F401
-
-
-@app.get("/downloads/live-chat-android.apk")
-async def download_live_chat_android_apk(request: Request) -> FileResponse:
-    from modules.api_security import user_has_permission
-    from services.dashboard_session_service import SESSION_COOKIE_NAME, session_service
-
-    session = session_service.get_valid_session(request.cookies.get(SESSION_COOKIE_NAME))
-    if session is None:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    if not user_has_permission(session, "liveChat"):
-        raise HTTPException(status_code=403, detail="Forbidden")
-    if not os.path.exists(LIVE_CHAT_ANDROID_APK_PATH):
-        raise HTTPException(status_code=404, detail="APK not found")
-    return FileResponse(
-        LIVE_CHAT_ANDROID_APK_PATH,
-        media_type="application/vnd.android.package-archive",
-        filename="linas-live-chat-android.apk",
-    )
 
 
 # Serve dashboard SPA (index.html for / and all non-API routes) - must be after API routes

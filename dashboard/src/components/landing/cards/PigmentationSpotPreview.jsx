@@ -1,4 +1,4 @@
-/** Illustration of hyperpigmentation for the voice + vision reply card (no stock portrait). */
+/** Illustration of a photo question for the voice + vision reply card (no stock portrait). */
 export default function PigmentationSpotPreview() {
   return (
     <div
@@ -30,7 +30,7 @@ export default function PigmentationSpotPreview() {
         <rect x="18" y="16" width="44" height="44" fill="#06715F" opacity="0.06" rx="4" />
         <path d="M18 16 L28 16 M18 16 L18 26 M62 16 L52 16 M62 16 L62 26 M18 60 L28 60 M18 60 L18 50 M62 60 L52 60 M62 60 L62 50" stroke="#06715F" strokeWidth="1.4" opacity="0.7" />
         <text x="140" y="98" textAnchor="middle" fill="#8A938F" fontSize="9" fontFamily="Inter, ui-sans-serif, system-ui, sans-serif">
-          Pigmentation area · vision scan
+          Photo question · vision scan
         </text>
       </svg>
     </div>

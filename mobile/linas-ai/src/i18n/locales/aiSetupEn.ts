@@ -330,7 +330,7 @@ export const aiSetupEn = {
   resourceMetaHeading: 'Resource',
   resourceFieldTitle: 'Title',
   resourceFieldDescription: 'Short description',
-  resourceTitlePlaceholder: 'e.g. Women Before Laser Hair Removal',
+  resourceTitlePlaceholder: 'e.g. Storefront before photos',
   resourceDescriptionPlaceholder: 'Send this when the customer asks for a before-treatment example.',
   resourceTitleRequired: 'Title is required.',
   resourceDescriptionRequired: 'Short description is required.',

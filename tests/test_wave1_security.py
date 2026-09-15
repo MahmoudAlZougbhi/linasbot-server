@@ -210,8 +210,8 @@ class TestAuthRateLimitRules:
 
 @pytest.fixture(scope="module")
 def client():
-    os.environ["LINASLASER_API_BASE_URL"] = "https://example.com"
-    os.environ["LINASLASER_API_TOKEN"] = "test-token"
+    os.environ["EXTERNAL_API_BASE_URL"] = "https://example.com"
+    os.environ["EXTERNAL_API_TOKEN"] = "test-token"
     os.environ["DASHBOARD_AUTH_SECRET"] = "wave1-test-secret"
     os.environ["ENVIRONMENT"] = "test"
     os.environ["DISABLE_API_DOCS"] = "true"

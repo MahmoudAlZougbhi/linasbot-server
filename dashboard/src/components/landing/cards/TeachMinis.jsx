@@ -88,7 +88,7 @@ export function TeachServices({ play }) {
     <MiniFrame play={play}>
       <div className="space-y-2 text-xs">
         <div className="flex items-center justify-between text-[#171A19]">
-          <span>Laser consultation · 30 min</span>
+          <span>Intro call · 30 min</span>
           <span className="font-semibold">$49</span>
         </div>
         <div className="flex items-center justify-between text-[#171A19]">
