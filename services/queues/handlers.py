@@ -19,35 +19,8 @@ class JobNotReady(Exception):
 
 
 async def handle_publish_scheduled(job: QueueJob) -> dict[str, Any]:
-    from services.schedule_service import schedule_service
-
-    post_id = str(job.payload.get("scheduled_post_id") or "")
-    posts = schedule_service.list_for_tenant(job.tenant_id)
-    post = next((p for p in posts if p.id == post_id), None)
-    if post is None:
-        raise PermanentJobError("scheduled post not found")
-    if post.status == "canceled":
-        return {"skipped": True, "reason": "canceled"}
-    if post.status == "published":
-        return {"skipped": True, "reason": "already_published"}
-    from services.integration_capabilities import list_tenant_integration_status
-
-    statuses = list_tenant_integration_status(job.tenant_id)
-    live = False
-    for row in statuses:
-        if row.get("platform") not in {"facebook", "instagram", "meta"}:
-            continue
-        caps = row.get("capabilities") or {}
-        publish = caps.get("content_publish") or {}
-        if isinstance(publish, dict):
-            live = bool(publish.get("live_verified"))
-        else:
-            live = publish == "connected"
-        if live:
-            break
-    if not live:
-        raise PermanentJobError("content_publish not live_verified for tenant")
-    raise PermanentJobError("Meta publish provider path not live_verified — job not executed")
+    del job
+    raise PermanentJobError("scheduled creative publish is not a live product path")
 
 
 async def handle_creative_expensive(job: QueueJob) -> dict[str, Any]:

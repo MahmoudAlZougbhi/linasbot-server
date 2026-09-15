@@ -27,9 +27,10 @@ def test_utils_preserves_public_api() -> None:
     assert callable(save_conversation_message_to_firestore)
     assert callable(get_openai_tools_schema)
     tools = get_openai_tools_schema()
-    assert len(tools) == 29
-    assert tools[0]["function"]["name"] == "update_customer_profile"
-    assert tools[-1]["function"]["name"] == "create_customer"
+    assert tools == []
+    names = {t.get("function", {}).get("name") for t in tools}
+    assert "submit_booking_intent" not in names
+    assert "create_appointment" not in names
 
 
 def test_utils_keeps_qiscus_room_id_identity() -> None:

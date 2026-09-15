@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-import config
 from services.ai_reply_turn_runtime import settle_after_outbound, settle_reserved_credits
 from services.brain.history_ids import conversation_id_from_user_data, message_id_for_brain
 from services.brain.reply.inbound_media import inbound_payload_from_user_data as _inbound_from_user_data
@@ -14,16 +13,13 @@ _PHASE_HALT = "_PHASE_HALT"
 
 async def text_handlers_respond_phase2(ctx: dict) -> Any:
     _build_out_of_scope_reply = cast(Any, ctx.get("_build_out_of_scope_reply"))
-    _ge = cast(Any, ctx.get("_ge"))
     _handle_published_cm_runtime = cast(Any, ctx.get("_handle_published_cm_runtime"))
     _is_out_of_clinic_scope_query = cast(Any, ctx.get("_is_out_of_clinic_scope_query"))
     current_conversation_id = cast(Any, ctx.get("current_conversation_id"))
     current_gender = cast(Any, ctx.get("current_gender"))
     current_preferred_lang = cast(Any, ctx.get("current_preferred_lang"))
-    get_gender_from_message = cast(Any, ctx.get("get_gender_from_message"))
     log_interaction = cast(Any, ctx.get("log_interaction"))
     response_language = cast(Any, ctx.get("response_language"))
-    router_route = cast(Any, ctx.get("router_route"))
     save_conversation_message_to_firestore = cast(Any, ctx.get("save_conversation_message_to_firestore"))
     send_message_func = cast(Any, ctx.get("send_message_func"))
     user_data = cast(Any, ctx.get("user_data"))
@@ -31,7 +27,6 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
     user_image_base64 = cast(Any, ctx.get("user_image_base64"))
     user_input_to_process = cast(Any, ctx.get("user_input_to_process"))
     user_name = cast(Any, ctx.get("user_name"))
-    user_persistence = cast(Any, ctx.get("user_persistence"))
     if not user_image_base64 and _is_out_of_clinic_scope_query(user_input_to_process):
         out_of_scope_reply = _build_out_of_scope_reply(current_preferred_lang)
         await send_message_func(user_id, out_of_scope_reply)
@@ -277,84 +272,4 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
             ],
         )
         return _PHASE_HALT
-    # =====================================================================
-
-    # ===== AI SMART EMPLOYEE: ROUTER (Phase 2, 10) =====
-    # Long one-line messages often include gender («ana shab», «شاب», etc.). Infer before router/GPT
-    # so runtime context and router do not ask again. Full user_input_to_process is still sent to GPT unchanged.
-    if current_gender == "unknown" and (user_input_to_process or "").strip():
-        _ginf = get_gender_from_message(user_input_to_process)
-        if _ginf in ("male", "female"):
-            config.user_gender[user_id] = _ginf
-            current_gender = _ginf
-            if config.user_greeting_stage.get(user_id, 0) < 2:
-                config.user_greeting_stage[user_id] = 2
-            try:
-                await user_persistence.save_user_gender(
-                    user_id,
-                    _ginf,
-                    phone=user_data.get("phone_number", user_id),
-                    name=user_name,
-                )
-            except Exception as _ge:
-                print(f"⚠️ save_user_gender (pre-router infer): {_ge}")
-            print(f"[_process_and_respond] ✅ Gender inferred from full message (pre-router): {_ginf}")
-
-    config.ensure_conversation_state(user_data)
-    conv_state = config.get_conversation_state(user_id, user_data)
-    ai_primary_mode = bool(getattr(config, "AI_PRIMARY_ORCHESTRATION", True))
-    router_action = router_route(user_id, user_input_to_process, conv_state)
-    if ai_primary_mode:
-        router_action = None
-
-    # Phase 12: Debugging/logging (Plan §18)
-    print("[_process_and_respond] 📋 ORCHESTRATION LOG:")
-    print(f"   - normalized_input_len={len((user_input_to_process or '').strip())}")
-    print(
-        f"   - state_before: gender={conv_state.get('gender')}, awaiting_gender={conv_state.get('awaiting_gender')}, awaiting_clarification={conv_state.get('awaiting_clarification')}, original_question={bool(conv_state.get('original_question'))}"
-    )
-    print(f"   - ai_primary_mode: {ai_primary_mode}")
-    print(f"   - detected_action: {router_action if router_action else 'ai_decides'}")
-    _pack = [
-        "DEFAULT_TENANT_ID",
-        "UNPUBLISHED_AI_MESSAGE",
-        "_build_out_of_scope_reply",
-        "_ge",
-        "_ginf",
-        "_handle_published_cm_runtime",
-        "_is_out_of_clinic_scope_query",
-        "ai_primary_mode",
-        "cm_diag",
-        "cm_metadata",
-        "cm_reply",
-        "cm_steps",
-        "cm_tenant_id",
-        "conv_state",
-        "current_conversation_id",
-        "current_gender",
-        "current_preferred_lang",
-        "get_gender_from_message",
-        "k",
-        "lang_key",
-        "log_interaction",
-        "out_of_scope_reply",
-        "response_language",
-        "router_action",
-        "router_route",
-        "save_conversation_message_to_firestore",
-        "send_message_func",
-        "tenant_allows_legacy_bridge",
-        "tenant_uses_cm_runtime",
-        "unpublished_reply",
-        "user_data",
-        "user_id",
-        "user_image_base64",
-        "user_input_to_process",
-        "user_name",
-        "user_persistence",
-        "v",
-    ]
-    for _k in _pack:
-        if _k in locals():
-            ctx[_k] = locals()[_k]
-    return None
+    return _PHASE_HALT
