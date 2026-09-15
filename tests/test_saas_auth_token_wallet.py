@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 
 from modules.api_security import is_public_api
 from services.auth_email_tokens import AuthEmailTokenService
-from services.billing.token_wallet_service import InsufficientTokenBalance, TokenWalletService, is_unlimited_tenant
 from services.token_metering import assert_tenant_can_use_ai
 from services.token_package_catalog import (
     assert_public_payload_has_no_internal_economics,
@@ -18,11 +17,6 @@ from services.token_package_catalog import (
     catalog_public_payload,
     list_token_packages,
 )
-
-
-@pytest.fixture()
-def wallet_svc(tmp_path: Path) -> TokenWalletService:
-    return TokenWalletService(store_dir=tmp_path / "wallets")
 
 
 @pytest.fixture()
@@ -127,37 +121,11 @@ def test_landing_pricing_section_in_source() -> None:
     assert "30% profit" not in pricing_text
 
 
-def test_unlimited_linas_bypass(wallet_svc: TokenWalletService, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "linas")
-    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
-    assert is_unlimited_tenant("linas")
-    assert not is_unlimited_tenant("acme-co")
-    assert_tenant_can_use_ai("linas")
-    assert_tenant_can_use_ai("acme-co")
-
-
 def test_zero_credits_blocks_unlimited_linas(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "linas")
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
     with pytest.raises(PermissionError, match="Insufficient credits"):
         assert_tenant_can_use_ai("linas")
-
-
-def test_wallet_credit_debit_atomic_no_negative(wallet_svc: TokenWalletService) -> None:
-    wallet_svc.credit("acme", input_tokens=800, output_tokens=200, amount_usd=3.9, reason="test")
-    snap = wallet_svc.debit("acme", prompt_tokens=300, completion_tokens=100, cost_usd=0.01)
-    assert snap.input_remaining == 500
-    assert snap.output_remaining == 100
-    with pytest.raises(InsufficientTokenBalance):
-        wallet_svc.debit("acme", prompt_tokens=501, completion_tokens=1)
-    assert wallet_svc.get_wallet("acme").input_remaining == 500
-
-
-def test_zero_balance_blocks_ai_gate(wallet_svc: TokenWalletService, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
-    assert_tenant_can_use_ai("newbiz")
-    wallet_svc.credit("newbiz", input_tokens=10, output_tokens=10, reason="seed")
-    assert_tenant_can_use_ai("newbiz")
 
 
 def test_catalog_public_payload_shape() -> None:
@@ -167,39 +135,6 @@ def test_catalog_public_payload_shape() -> None:
     assert "profit_multiplier" not in payload
     assert "orchestration_model" not in payload
     assert_public_payload_has_no_internal_economics(payload)
-
-
-def test_credit_ledger_includes_actor_tenant_amount_before_after(wallet_svc: TokenWalletService) -> None:
-    wallet_svc.credit(
-        "acme",
-        input_tokens=100,
-        output_tokens=50,
-        amount_usd=1.25,
-        reason="seed",
-        actor="ops-1",
-    )
-    wallet_svc.credit(
-        "acme",
-        input_tokens=40,
-        output_tokens=10,
-        amount_usd=0.5,
-        reason="admin_credit",
-        actor="ops-1",
-        reference="ref-1",
-    )
-    rows = wallet_svc.recent_ledger("acme", limit=5)
-    assert len(rows) >= 2
-    latest = rows[0]
-    assert latest["actor"] == "ops-1"
-    assert latest["tenant_id"] == "acme"
-    assert latest["amount_usd"] == 0.5
-    assert latest["reason"] == "admin_credit"
-    assert latest["input_remaining_before"] == 100
-    assert latest["output_remaining_before"] == 50
-    assert latest["balance_before"] == 150
-    assert latest["input_remaining_after"] == 140
-    assert latest["output_remaining_after"] == 60
-    assert latest["balance_after"] == 200
 
 
 def test_cors_production_drops_http_linasaibot_keeps_localhost() -> None:

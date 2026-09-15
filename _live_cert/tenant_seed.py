@@ -282,7 +282,6 @@ def seed_graphs() -> dict[str, Any]:
 
 def grant_test_credits() -> dict[str, Any]:
     from services.credit_ledger_service import credit_ledger_service
-    from services.billing.token_wallet_service import token_wallet_service
 
     ledger = credit_ledger_service.grant_pack(
         tenant_id=TENANT_ID,
@@ -291,11 +290,4 @@ def grant_test_credits() -> dict[str, Any]:
         source="v10_live_cert",
         meta={"isolated": True},
     )
-    wallet = token_wallet_service.credit(
-        TENANT_ID,
-        input_tokens=2_000_000,
-        output_tokens=2_000_000,
-        reason="v10_live_cert",
-        reference="v10-live-cert-wallet",
-    )
-    return {"ledger": ledger, "wallet_ok": True, "wallet_input": wallet.input_remaining}
+    return {"ledger": ledger}

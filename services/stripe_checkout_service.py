@@ -1,7 +1,8 @@
 """Stripe Checkout for prepaid token packages (env-gated).
 
 When STRIPE_SECRET_KEY is unset, checkout endpoints report payments unavailable —
-no fake charges. Webhook credits wallet only after verified ``checkout.session.completed``.
+no fake charges. Webhook records verified ``checkout.session.completed`` events;
+token packs are not credited.
 """
 
 from __future__ import annotations

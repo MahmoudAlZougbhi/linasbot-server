@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Import file-backed billing + auth token stores into Postgres (idempotent).
 
-Reads wallets, ledgers, Stripe events, admin credit idempotency, mobile refresh
-tokens, and auth email tokens from _DATA_ROOT file paths, upserts into Postgres.
+Reads Stripe events, admin credit idempotency, mobile refresh tokens, auth email
+tokens, and the credit ledger from _DATA_ROOT file paths, upserts into Postgres.
+Prepaid token wallets are retired — leftover files are ignored.
 Does not change LINAS_BILLING_BACKEND or LINAS_AUTH_TOKEN_BACKEND.
 
 Usage:
@@ -29,37 +30,6 @@ def _data_root() -> Path:
     from storage.persistent_storage import _DATA_ROOT
 
     return Path(_DATA_ROOT)
-
-
-def _import_wallets(session: Session, wallets_dir: Path, dry_run: bool) -> tuple[int, int]:
-    from services.billing.token_wallet_file_store import TokenWalletFileStore
-    from services.billing.token_wallet_pg_store import import_ledger_lines, upsert_wallet_from_file_dict
-
-    store = TokenWalletFileStore(wallets_dir)
-    wallet_count = 0
-    ledger_count = 0
-    for path in store.iter_wallet_files():
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(data, dict):
-            continue
-        tenant_id = str(data.get("tenant_id") or path.stem).strip().lower()
-        if not tenant_id:
-            continue
-        if dry_run:
-            wallet_count += 1
-        else:
-            upsert_wallet_from_file_dict(session, {**data, "tenant_id": tenant_id})
-            wallet_count += 1
-        ledger_path = store._ledger_dir / f"{tenant_id}.jsonl"
-        if ledger_path.is_file() and not dry_run:
-            lines = ledger_path.read_text(encoding="utf-8").splitlines()
-            ledger_count += import_ledger_lines(session, tenant_id, lines)
-        elif ledger_path.is_file():
-            ledger_count += sum(1 for line in ledger_path.read_text(encoding="utf-8").splitlines() if line.strip())
-    return wallet_count, ledger_count
 
 
 def _import_stripe_events(session: Session, events_dir: Path, dry_run: bool) -> int:
@@ -250,7 +220,6 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     root = _data_root()
-    wallets_dir = root / "billing" / "wallets"
     stripe_dir = root / "billing" / "stripe_events"
     admin_dir = root / "billing" / "admin_credit_idempotency"
     refresh_dir = root / "auth" / "mobile_refresh"
@@ -264,7 +233,6 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         with whatsapp_session(require=True) as session:
-            wallets, ledger = _import_wallets(session, wallets_dir, args.dry_run)
             stripe = _import_stripe_events(session, stripe_dir, args.dry_run)
             admin = _import_admin_credit(session, admin_dir, args.dry_run)
             mobile = _import_mobile_refresh(session, refresh_dir, args.dry_run)
@@ -278,7 +246,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(
-        f"wallets={wallets} ledger_lines={ledger} stripe_events={stripe} "
+        f"stripe_events={stripe} "
         f"admin_credit_keys={admin} mobile_refresh={mobile} auth_email={email} "
         f"credit_balances={credit_balances} credit_entries={credit_entries} "
         f"entitlements={ents} entitlement_events={ent_events}"

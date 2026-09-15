@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 from services.ai_usage_limits import (
     RECOMMENDED_CONTEXT_LINES_PER_DAY,
@@ -16,7 +15,6 @@ from services.ai_usage_limits import (
     recommended_defaults,
     week_period_key,
 )
-from services.billing.token_wallet_service import InsufficientTokenBalance, TokenWalletService
 from services.token_metering import assert_tenant_can_use_ai, debit_ai_usage
 from services.token_package_catalog import (
     assert_public_payload_has_no_internal_economics,
@@ -28,21 +26,8 @@ from services.wallet_spend_analytics import build_wallet_spend_analytics
 
 
 @pytest.fixture()
-def wallet_svc(tmp_path: Path) -> TokenWalletService:
-    return TokenWalletService(store_dir=tmp_path / "wallets")
-
-
-@pytest.fixture()
 def limits_svc(tmp_path: Path) -> AiUsageLimitsService:
     return AiUsageLimitsService(store_dir=tmp_path / "ai_limits")
-
-
-@pytest.fixture(scope="module")
-def app_client() -> TestClient:
-    import main  # noqa: F401
-    from modules.core import app
-
-    return TestClient(app)
 
 
 def test_six_packages_have_input_and_output_allotments() -> None:
@@ -116,20 +101,6 @@ def test_settings_wallet_removed_and_ai_limits_in_cm() -> None:
     assert "/api/settings" not in blob
 
 
-def test_dual_balance_credit_debit(wallet_svc: TokenWalletService) -> None:
-    wallet_svc.credit("acme", input_tokens=1000, output_tokens=500, amount_usd=5.0, reason="test")
-    snap = wallet_svc.get_wallet("acme")
-    assert snap.input_remaining == 1000
-    assert snap.output_remaining == 500
-    snap = wallet_svc.debit("acme", prompt_tokens=200, completion_tokens=50, cost_usd=0.01)
-    assert snap.input_remaining == 800
-    assert snap.output_remaining == 450
-    with pytest.raises(InsufficientTokenBalance) as exc:
-        wallet_svc.debit("acme", prompt_tokens=801, completion_tokens=1)
-    assert exc.value.bucket == "input"
-    assert wallet_svc.get_wallet("acme").input_remaining == 800
-
-
 def test_preflight_uses_credit_gate_not_token_wallet(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "services.billing.membership.generative_gate.generative_ai_blocked",
@@ -142,31 +113,6 @@ def test_preflight_uses_credit_gate_not_token_wallet(monkeypatch: pytest.MonkeyP
         lambda *_a, **_k: False,
     )
     assert_tenant_can_use_ai("newbiz")
-
-
-def test_debit_ai_usage_does_not_touch_token_wallet(wallet_svc: TokenWalletService) -> None:
-    wallet_svc.credit("metered", input_tokens=500, output_tokens=200, reason="seed")
-    assert debit_ai_usage(tenant_id="metered", prompt_tokens=100, completion_tokens=40, model="gpt-5.1") is None
-    snap = wallet_svc.get_wallet("metered")
-    assert snap.input_remaining == 500
-    assert snap.output_remaining == 200
-
-
-def test_legacy_balance_migrates_80_20(wallet_svc: TokenWalletService) -> None:
-    path = wallet_svc._wallet_path("legacyco")
-    path.write_text(
-        '{"tenant_id":"legacyco","balance_tokens":1000,"lifetime_credited":1000,'
-        '"lifetime_debited":0,"lifetime_spent_usd":3.0,"updated_at":1}',
-        encoding="utf-8",
-    )
-    snap = wallet_svc.get_wallet("legacyco")
-    assert snap.input_remaining == 800
-    assert snap.output_remaining == 200
-    assert snap.migrated_from_legacy is True
-    # Second read stays stable.
-    snap2 = wallet_svc.get_wallet("legacyco")
-    assert snap2.input_remaining == 800
-    assert snap2.output_remaining == 200
 
 
 def test_ai_preflight_does_not_treat_linas_as_unlimited(monkeypatch: pytest.MonkeyPatch) -> None:

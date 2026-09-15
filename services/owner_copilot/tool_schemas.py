@@ -19,7 +19,7 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_account_summary",
-            "description": "Read setup stage, CM completeness, integrations, plan, wallet brief.",
+            "description": "Read setup stage, CM completeness, integrations, plan, leftover credits.",
             "parameters": {"type": "object", "properties": {}},
         },
     },
@@ -59,7 +59,7 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "read_usage",
             "description": (
-                "Read the credit wallet plus message-catalog fields. Wallet quantities "
+                "Read leftover credits plus Subscription overlay fields. Quantities "
                 "are leftover credits, never Messages remaining. available_messages is "
                 "live remaining only when message_billing_active is true."
             ),
