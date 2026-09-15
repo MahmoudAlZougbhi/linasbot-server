@@ -45,18 +45,21 @@ def _row(*, tenant_id: str, card: TitleCard, version: str, chunk_id: str, text: 
 
 
 def document_rows(cards: list[TitleCard], *, tenant_id: str, version: str) -> list[dict[str, Any]]:
-    from services.brain.compiler.chunks import chunk_document
-
+    """One authority: Luna sidecar texts, else a single row. Never mechanically re-slice."""
     rows: list[dict[str, Any]] = []
     for card in cards:
-        if card.source_family == "knowledge":
-            chunks = chunk_document(document_id=card.item_id, body=card.body or card.search_text)
-            if chunks:
-                for chunk in chunks:
-                    rows.append(
-                        _row(tenant_id=tenant_id, card=card, version=version, chunk_id=chunk.chunk_id, text=chunk.text)
+        if card.chunks:
+            for index, text in enumerate(card.chunks, 1):
+                rows.append(
+                    _row(
+                        tenant_id=tenant_id,
+                        card=card,
+                        version=version,
+                        chunk_id=f"{card.item_id}:c{index}",
+                        text=text,
                     )
-                continue
+                )
+            continue
         rows.append(_row(tenant_id=tenant_id, card=card, version=version, chunk_id="", text=card.search_text))
     return rows
 

@@ -60,6 +60,9 @@ def write_documents(
 ) -> dict[str, Any]:
     if len(rows) != len(vectors):
         return {"ok": False, "reason": "provider_error", "count": 0}
+    from services.brain.search.replace_source_rows import drop_stale_source_rows
+
+    drop_stale_source_rows(session, rows)
     if session is None:
         return _write_memory(rows, vectors)
     if not probe_pgvector(session):

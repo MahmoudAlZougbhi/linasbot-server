@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from services.brain.compiler.chunks import chunk_document, contextual_groups
+from services.brain.compiler.chunks import chunks_from_texts, contextual_groups
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.ingest.multimodal import classify_media, process_knowledge_media
 from services.brain.memory.store import recall_facts, remember_fact, reset_memory_for_tests
@@ -18,9 +18,9 @@ from services.brain.tools.registry import list_tools
 
 
 def test_contextual_chunks_keep_raw_and_context() -> None:
-    chunks = chunk_document(
+    chunks = chunks_from_texts(
         document_id="knowledge:laser",
-        body="# Full Body\nPrice is 120 USD in Antelias.",
+        texts=("Full Body\nPrice is 120 USD in Antelias.",),
         document_title="Laser Guide",
         entity="Full Body",
         branch="Antelias",

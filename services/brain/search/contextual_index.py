@@ -6,7 +6,7 @@ import hashlib
 import logging
 from typing import Any
 
-from services.brain.compiler.chunks import CONTEXTUALIZATION_VERSION, chunk_document, contextual_groups
+from services.brain.compiler.chunks import CONTEXTUALIZATION_VERSION, chunks_from_texts, contextual_groups
 from services.brain.flags import voyage_configured
 from services.brain.providers.spaces import KNOWLEDGE_DOCUMENT, KNOWLEDGE_MODEL
 from services.brain.providers.voyage_client import VoyageContractError, embed_contextual_groups
@@ -40,9 +40,15 @@ def build_contextual_rows(
     groups: list[list[str]] = []
     parents: list[str] = []
     for card in knowledge_cards(cards):
-        chunks = chunk_document(
+        texts = card.chunks
+        if not texts:
+            blob = (card.body or card.search_text or "").strip()
+            if not blob:
+                continue
+            texts = (blob,)
+        chunks = chunks_from_texts(
             document_id=card.item_id,
-            body=card.body or card.search_text,
+            texts=texts,
             document_title=card.title,
             entity=card.title,
             source_family=card.source_family,
@@ -52,9 +58,9 @@ def build_contextual_rows(
         if not chunks:
             continue
         grouped = contextual_groups(chunks)
-        for parent_id, texts in grouped.items():
+        for parent_id, group_texts in grouped.items():
             parents.append(parent_id)
-            groups.append(texts)
+            groups.append(group_texts)
             for chunk in chunks:
                 if chunk.parent_id != parent_id:
                     continue
