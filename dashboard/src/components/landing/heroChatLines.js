@@ -7,13 +7,13 @@ export const HERO_CHAT_LINES = [
     text: 'If someone asks how long we’ve been in business, tell them the company was founded in 1977.',
   },
   { role: 'linas', text: 'Got it — I saved this in your Business Knowledge.' },
-  { role: 'you', text: 'Every new client gets a free skin consultation.' },
-  { role: 'linas', text: 'Saved — I’ll mention the free consultation to first-time clients.' },
-  { role: 'you', text: 'We open at 10am in Beirut and 11am in Antelias.' },
-  { role: 'linas', text: 'Opening hours are set for both branches.' },
+  { role: 'you', text: 'Every new client gets a free intro call.' },
+  { role: 'linas', text: 'Saved — I’ll mention the free intro to first-time clients.' },
+  { role: 'you', text: 'We open at 10am downtown and 11am at the second location.' },
+  { role: 'linas', text: 'Opening hours are set for both locations.' },
   {
     role: 'you',
-    text: 'Add our hydrating serum to Products — $59, 30ml. No brand name, just the product details.',
+    text: 'Add our starter kit to Products — $59. No brand name, just the product details.',
   },
   { role: 'linas', text: 'Saved to Products — I’ll use that when customers ask about it.' },
   {

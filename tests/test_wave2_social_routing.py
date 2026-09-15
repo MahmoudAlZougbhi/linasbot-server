@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import os
 
-os.environ.setdefault("LINASLASER_API_BASE_URL", "https://example.com")
-os.environ.setdefault("LINASLASER_API_TOKEN", "test-token")
+os.environ.setdefault("EXTERNAL_API_BASE_URL", "https://example.com")
+os.environ.setdefault("EXTERNAL_API_TOKEN", "test-token")
 os.environ.setdefault("DASHBOARD_AUTH_SECRET", "wave2-test-secret")
 
 from services.conversation_router import is_human_request

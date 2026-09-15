@@ -39,7 +39,6 @@ META_ENV_LIVE_WORKFLOWS = (
     "whatsapp-cloud-phase1-apply.yml",
 )
 DISABLED_ENV_WORKFLOWS = (
-    "copilot-v2-flags-apply.yml",
     "dashboard-auth-secret-apply.yml",
     "model-routing-policy-apply.yml",
     "openai-api-key-apply.yml",
@@ -47,8 +46,6 @@ DISABLED_ENV_WORKFLOWS = (
 )
 DISABLED_PRIVILEGED_WORKFLOWS = ("ha-infra-ssh-bootstrap.yml",)
 READ_ONLY_SSH_WORKFLOWS = (
-    "cm-linas-content-audit.yml",
-    "prod-brain-linas-smoke.yml",
     "prod-preflight-readonly.yml",
     "subscription-exempt-probe.yml",
     "wa-cloud-webhook-readonly-probe.yml",
@@ -247,7 +244,6 @@ def test_cm_env_restart_phases_are_explicitly_blocked_but_db_data_phases_remain_
 
 def test_guard_inventory_blocks_every_unsafe_single_node_env_entrypoint() -> None:
     expected = {
-        "scripts/prod_apply_copilot_v2_flags.sh",
         "scripts/prod_apply_customer_brain_flags.sh",
         "scripts/prod_apply_dashboard_auth.sh",
         "scripts/prod_apply_model_routing_policy.sh",
@@ -817,7 +813,6 @@ def test_exact_release_gate_rejects_untracked_or_ignored_runtime_source(tmp_path
 
 def test_mutating_entrypoints_require_the_guard_and_use_only_the_canonical_env() -> None:
     scripts = (
-        "prod_apply_copilot_v2_flags.sh",
         "prod_apply_dashboard_auth.sh",
         "prod_apply_model_routing_policy.sh",
         "prod_apply_openai_api_key.sh",
@@ -832,7 +827,6 @@ def test_mutating_entrypoints_require_the_guard_and_use_only_the_canonical_env()
         assert "linas_require_production_mutation_guard" in source, name
         assert "linaslaserbot-2.7.22/.env" not in source, name
     for name in (
-        "prod_apply_copilot_v2_flags.sh",
         "prod_apply_dashboard_auth.sh",
         "prod_apply_model_routing_policy.sh",
         "prod_apply_openai_api_key.sh",

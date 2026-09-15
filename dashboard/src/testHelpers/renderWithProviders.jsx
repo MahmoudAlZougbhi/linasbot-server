@@ -28,15 +28,11 @@ export function makeAuthUser(overrides = {}) {
     resolvedPermissions: {
       dashboard: true,
       liveChat: true,
-      training: false,
-      testing: false,
       analytics: true,
-      smartMessaging: true,
       settings: false,
       userManagement: false,
       contentManagers: false,
       contentPublish: false,
-      activityFlow: true,
     },
     ...overrides,
   };

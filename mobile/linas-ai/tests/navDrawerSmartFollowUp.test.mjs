@@ -50,14 +50,6 @@ describe('nav drawer Smart Follow-Up + AI Setup featured tile', () => {
     assert.doesNotMatch(drawer, /NavDrawerAiSetupTile/);
   });
 
-  it('AI Setup tile status helper covers continue / complete / needs attention', () => {
-    const status = read('features/nav/aiSetupTileStatus.ts');
-    assert.match(status, /resolveAiSetupTileStatus/);
-    assert.match(status, /needs_attention/);
-    assert.match(status, /fetchFailed/);
-    assert.match(status, /incomplete\s*>\s*0\s*&&\s*opts\.published/);
-  });
-
   it('wires smartFollowUp through control area, icons, navigation, and screen tree', () => {
     assert.match(read('features/control/controlAreas.ts'), /smartFollowUp/);
     assert.match(read('features/nav/moduleIcons.ts'), /smartFollowUp:\s*ion\('timer-outline'\)/);

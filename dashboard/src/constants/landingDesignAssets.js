@@ -17,7 +17,6 @@ export const LANDING_ASSETS = {
     requests: '/brand/landing/app-screens/screens/09-requests-screen.png',
     users: '/brand/landing/app-screens/screens/10-users-screen.png',
     subscription: '/brand/landing/app-screens/screens/11-subscription-screen.png',
-    aiLimits: '/brand/landing/app-screens/screens/12-ai-limits-screen.png',
     settings: '/brand/landing/app-screens/screens/13-settings-screen.png',
   },
 };

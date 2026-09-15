@@ -1,5 +1,0 @@
-{
-  "phone_to_room_mapping": {},
-  "room_to_phone_mapping": {},
-  "notes": "Runtime Live Chat phone/room map. Git copy is empty — no clinic PII. Missing file resolves to empty (fail-closed)."
-}

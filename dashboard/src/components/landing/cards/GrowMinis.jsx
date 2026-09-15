@@ -23,8 +23,8 @@ export function GrowFollowUp({ play }) {
 /** @param {MiniPlay} props */
 export function GrowRequests({ play }) {
   const rows = [
-    { name: 'Laser appointment', status: 'New', cls: 'bg-[#E8F5F1] text-[#06715F]', delay: '0ms' },
-    { name: 'Hair treatment request', status: 'In progress', cls: 'bg-[#FFF4D6] text-[#8A5A00]', delay: '700ms' },
+    { name: 'Consultation request', status: 'New', cls: 'bg-[#E8F5F1] text-[#06715F]', delay: '0ms' },
+    { name: 'Membership question', status: 'In progress', cls: 'bg-[#FFF4D6] text-[#8A5A00]', delay: '700ms' },
     { name: 'Product order', status: 'Done', cls: 'bg-[#E8F5F1] text-[#06715F]', delay: '1400ms' },
   ];
   return (
@@ -53,10 +53,10 @@ export function GrowSmartAnswers({ play }) {
     <MiniFrame play={play}>
       <p className="text-[0.6rem] font-semibold uppercase tracking-wide text-[#06715F]">Write once</p>
       <p className="mt-1 text-xs leading-snug text-[#171A19]">
-        I tanned yesterday — can I still do full-body laser? How much is it?
+        Are you open Thursday after 8pm? How much is a starter visit?
       </p>
       <p className="mt-2 text-xs font-semibold leading-snug text-[#171A19]">
-        Full body is $299. Wait until the tan fades — then I can book you.
+        A starter visit is $49. Last Thursday slot is 6pm — I can hold Friday 10am.
       </p>
       <p className="mt-2 text-[0.6rem] text-[#5C6663]">Auto in every language you select</p>
       <div className="mt-1 flex flex-wrap gap-1">

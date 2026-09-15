@@ -13,9 +13,8 @@ This guide sets up a **local environment that behaves like production**: same ex
 
 2. **Edit `.env.local`**
    - Set **External API** (same as production):
-     - `EXTERNAL_API_BASE_URL` – e.g. `https://boc-lb.com/agent/`
-     - `EXTERNAL_API_TOKEN` – your API token  
-     You can use `LINASLASER_API_BASE_URL` / `LINASLASER_API_TOKEN` instead; both are supported.
+     - `EXTERNAL_API_BASE_URL` – e.g. `https://example.invalid/agent/`
+     - `EXTERNAL_API_TOKEN` – your API token
    - Set **local mode**: `APP_MODE=local` (or `ENV=development`).
    - **Sending safety** (pick one):
      - **Option 1 (recommended):** `ENABLE_SENDING=true` and set `LOCAL_ALLOWED_WHATSAPP_NUMBERS` to a comma-separated list of test/sandbox numbers. Only those numbers receive real messages.
@@ -101,8 +100,8 @@ See `docs/LIVE_CHAT_REALTIME.md` for architecture and troubleshooting.
 | Backend (reload)  | `python main.py` (from project root) |
 | Frontend (hot)    | `cd dashboard && npm start` |
 | Env overrides     | `.env.local` (after `.env`) |
-| External API URL  | `EXTERNAL_API_BASE_URL` or `LINASLASER_API_BASE_URL` |
-| External API auth | `EXTERNAL_API_TOKEN` or `LINASLASER_API_TOKEN` |
+| External API URL  | `EXTERNAL_API_BASE_URL` or `EXTERNAL_API_BASE_URL` |
+| External API auth | `EXTERNAL_API_TOKEN` or `EXTERNAL_API_TOKEN` |
 | Local mode        | `APP_MODE=local` or `ENV=development` |
 | Dry-run log       | `data/dry_run_messages.jsonl` |
 | Sent/would_send   | Dashboard Smart Messaging → Messages list |

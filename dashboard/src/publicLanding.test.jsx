@@ -11,7 +11,6 @@ vi.mock("./contexts/AuthContext", () => ({
     user: null,
     loading: false,
     login: vi.fn(),
-    register: vi.fn(),
     logout: vi.fn(),
   }),
   /** @param {{ children: import('react').ReactNode }} props */
@@ -143,8 +142,8 @@ describe("public marketing landing", () => {
       expect(screen.getByText("Off day saved")).toBeInTheDocument();
       expect(screen.getByText("5 channels connected")).toBeInTheDocument();
       expect(screen.getByText("What would you like to teach me about your business?")).toBeInTheDocument();
-      expect(screen.getByText("Every new client gets a free skin consultation.")).toBeInTheDocument();
-      expect(screen.getByText(/hydrating serum/i)).toBeInTheDocument();
+      expect(screen.getByText("Every new client gets a free intro call.")).toBeInTheDocument();
+      expect(screen.getByText(/starter kit/i)).toBeInTheDocument();
       expect(screen.getByText(/Saved to Products/i)).toBeInTheDocument();
       expect(screen.getByText(/book an appointment/i)).toBeInTheDocument();
       expect(screen.getByText(/Appointment requests go to your team/i)).toBeInTheDocument();
@@ -154,11 +153,11 @@ describe("public marketing landing", () => {
       expect(screen.getAllByText("AI Basic").length).toBeGreaterThan(0);
       expect(screen.queryByText("Languages")).not.toBeInTheDocument();
       expect(screen.queryByText("Off Days")).not.toBeInTheDocument();
-      expect(screen.getAllByText(/tanned yesterday/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/open Thursday after 8pm/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText("العربية").length).toBeGreaterThan(0);
       expect(screen.getAllByText("You taught").length).toBeGreaterThan(0);
       expect(screen.getAllByText("Price questions → Private DM").length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/Can you treat this pigmentation/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Can you see this in the photo/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText("Write once").length).toBeGreaterThan(0);
       expect(screen.getAllByText(/0 messages/i).length).toBeGreaterThan(0);
       expect(screen.queryByText(/AI Limits/i)).not.toBeInTheDocument();

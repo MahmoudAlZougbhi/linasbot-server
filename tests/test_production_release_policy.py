@@ -28,13 +28,9 @@ NODE01_SSH_HOST_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM21a0E0v4XBUVRgai2Z4
 
 ALL_WORKFLOWS = frozenset(
     {
-        "cm-linas-content-audit.yml",
         "cm-production-cutover.yml",
         "customer-brain-env-apply-ha.yml",
-        "customer-brain-live-lab-ha.yml",
-        "customer-brain-linas-index-ha.yml",
         "bootstrap-meta-ha.yml",
-        "copilot-v2-flags-apply.yml",
         "dashboard-auth-secret-apply.yml",
         "deploy.yml",
         "ha-infra-ssh-bootstrap.yml",
@@ -58,7 +54,6 @@ ALL_WORKFLOWS = frozenset(
         "meta-webhook-nginx-setup.yml",
         "model-routing-policy-apply.yml",
         "openai-api-key-apply.yml",
-        "prod-brain-linas-smoke.yml",
         "prod-preflight-readonly.yml",
         "provision-python-runtime-ha.yml",
         "quality-gates.yml",
@@ -78,10 +73,8 @@ ALL_WORKFLOWS = frozenset(
 # alternate release lane.
 REMOTE_WORKFLOWS = frozenset(
     {
-        "cm-linas-content-audit.yml",
         "cm-production-cutover.yml",
         "customer-brain-env-apply-ha.yml",
-        "customer-brain-linas-index-ha.yml",
         "bootstrap-meta-ha.yml",
         "deploy.yml",
         "instagram-login-secrets-apply.yml",
@@ -100,7 +93,6 @@ REMOTE_WORKFLOWS = frozenset(
         "meta-social-token-validate.yml",
         "meta-whatsapp-app-review-token-apply.yml",
         "meta-webhook-nginx-setup.yml",
-        "prod-brain-linas-smoke.yml",
         "prod-preflight-readonly.yml",
         "provision-python-runtime-ha.yml",
         "subscription-exempt-probe.yml",

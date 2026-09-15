@@ -153,8 +153,8 @@ def _web_chat_server_env(
             "LINAS_AUTH_TOKEN_BACKEND": "file",
             "META_REGISTRY_BACKEND": "file",
             "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", "sk-test-ci-not-real"),
-            "LINASLASER_API_BASE_URL": os.environ.get("LINASLASER_API_BASE_URL", "https://example.com"),
-            "LINASLASER_API_TOKEN": os.environ.get("LINASLASER_API_TOKEN", "pytest-token"),
+            "EXTERNAL_API_BASE_URL": os.environ.get("EXTERNAL_API_BASE_URL", "https://example.com"),
+            "EXTERNAL_API_TOKEN": os.environ.get("EXTERNAL_API_TOKEN", "pytest-token"),
             "DASHBOARD_AUTH_SECRET": os.environ.get("DASHBOARD_AUTH_SECRET", "pytest-dashboard-secret"),
         }
     )

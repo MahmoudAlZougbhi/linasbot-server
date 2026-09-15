@@ -12,12 +12,12 @@ export function ReplyCustomer({ play }) {
     <MiniFrame play={play}>
       <p className="text-[0.65rem] text-[#8A938F]">WhatsApp · 10:30 AM</p>
       <p className="mt-1 rounded-2xl bg-white px-3 py-1.5 text-xs leading-snug text-[#171A19] shadow-sm">
-        I tanned yesterday — can I still do full-body laser this week? Any slots after 8pm Thursday?
+        Are you open Thursday after 8pm? I need a starter visit this week.
       </p>
       <div className="lp-fade-up mt-2.5" style={{ animationDelay: '600ms' }}>
         <p className="text-[0.65rem] text-[#06715F]">Linas · 10:31 AM</p>
         <p className="mt-1 rounded-2xl bg-[#D7EFE8] px-3 py-1.5 text-xs leading-snug text-[#171A19]">
-          Not until the tan fades — laser on tanned skin can burn. Thursday last slot is 6pm. I can hold Friday 10am.
+          Last Thursday slot is 6pm. I can hold Friday 10am and send a request to your team.
         </p>
       </div>
     </MiniFrame>
@@ -42,10 +42,10 @@ export function ReplyLanguage({ play }) {
         ))}
       </div>
       <p className="mt-2 text-right text-xs leading-snug text-[#171A19]" dir="rtl">
-        في عندكن ليزر جسم كامل؟ عندي بشرة حساسة
+        في عندكن موعد يوم الجمعة؟ عندي بشرة حساسة
       </p>
       <p className="lp-fade-up mt-2 text-right text-xs leading-snug text-[#06715F]" dir="rtl" style={{ animationDelay: '700ms' }}>
-        نعم — $299. للبشرة الحساسة منبلّش بـ patch test. في موعد الجمعة ١٠ صباحاً.
+        نعم — الزيارة الأولى $49. منبلّش بـ intro call. في موعد الجمعة ١٠ صباحاً.
       </p>
     </MiniFrame>
   );
@@ -66,7 +66,7 @@ export function ReplyComments({ play }) {
       </p>
       <div className="lp-fade-up mt-2 rounded-xl border border-[#06715F]/30 bg-white p-2" style={{ animationDelay: '1000ms' }}>
         <p className="text-[0.65rem] font-semibold text-[#06715F]">Private DM</p>
-        <p className="mt-1 text-xs leading-snug text-[#171A19]">Full body is $299. Would you like to book?</p>
+        <p className="mt-1 text-xs leading-snug text-[#171A19]">A starter visit is $49. Would you like to book?</p>
       </div>
     </MiniFrame>
   );
@@ -82,9 +82,9 @@ export function ReplyVoiceVision({ play }) {
         <span className="text-[0.65rem] text-[#5C6663]">0:12</span>
       </div>
       <PigmentationSpotPreview />
-      <p className="mt-2 text-center text-[0.65rem] text-[#5C6663]">Can you treat this pigmentation?</p>
+      <p className="mt-2 text-center text-[0.65rem] text-[#5C6663]">Can you see this in the photo?</p>
       <p className="lp-fade-up mt-1 text-center text-xs text-[#06715F]" style={{ animationDelay: '1100ms' }}>
-        Yes — pigmentation laser can help. Patch test first.
+        Yes — I’ll send the photo to your team with the question.
       </p>
     </MiniFrame>
   );
@@ -94,8 +94,8 @@ export function ReplyVoiceVision({ play }) {
 export function ReplyOneInbox({ play }) {
   const rows = [
     { channel: 'Instagram', name: 'Sara K.', preview: 'Do you have a slot Friday?', unread: 2, delay: '0ms' },
-    { channel: 'WhatsApp', name: 'Omar', preview: 'Full-body laser — still $299?', unread: 0, delay: '180ms' },
-    { channel: 'Facebook', name: 'Maya', preview: 'Can you treat pigmentation?', unread: 1, delay: '360ms' },
+    { channel: 'WhatsApp', name: 'Omar', preview: 'Starter visit — still $49?', unread: 0, delay: '180ms' },
+    { channel: 'Facebook', name: 'Maya', preview: 'Can you see this in the photo?', unread: 1, delay: '360ms' },
   ];
   return (
     <MiniFrame play={play}>

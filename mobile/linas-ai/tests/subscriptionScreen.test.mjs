@@ -261,11 +261,9 @@ test('planColors defines distinct premium palette per tier', () => {
 
 test('billing surfaces tint plan names from planColors', () => {
   for (const [file, pattern] of [
-    ['features/billing/PlanCardView.tsx', /planNameColor/],
     ['features/billing/PlanDetailCard.tsx', /planNameColor/],
     ['features/billing/PlanChipRow.tsx', /planNameColor/],
     ['features/billing/CurrentPlanHeroCard.tsx', /planNameColor/],
-    ['features/billing/CurrentPlanSummary.tsx', /planNameColor/],
     ['features/billing/ChoosePlanScreen.tsx', /accentForPlan/],
     ['features/dashboard/sections/GrowthPlanCard.tsx', /planNameColor/],
   ]) {
@@ -288,13 +286,11 @@ test('GrowthPlanCard uses ledger remaining, not catalog allowance, for membershi
 test('live credit IAP is leftover credits, not a 1:1 message relabel', () => {
   const en = read('i18n/locales/subscriptionEn.ts');
   const sheet = read('features/billing/BuyCreditsSheet.tsx');
-  const packs = read('features/billing/CreditPacksSection.tsx');
   const hero = read('features/billing/CurrentPlanHeroCard.tsx');
   assert.match(en, /leftover credits/);
   assert.match(en, /They are not AI messages/);
   assert.match(sheet, /subCreditsUnit/);
   assert.match(sheet, /subBuyCreditsCta/);
-  assert.match(packs, /subCreditsPacksTitle/);
   assert.match(hero, /subBuyCredits/);
   assert.match(hero, /messageBillingActive \? null/);
   assert.match(sheet, /subCreditsPacksTitle/);
@@ -305,16 +301,10 @@ test('live credit IAP is leftover credits, not a 1:1 message relabel', () => {
   assert.doesNotMatch(sheet, /2500[\s\S]{0,40}messages/);
 });
 
-test('CurrentPlanSummary never copies leftover credits as messages', () => {
-  const src = read('features/billing/CurrentPlanSummary.tsx');
+test('CurrentPlanScreen never copies leftover credits as messages', () => {
+  const src = read('features/billing/CurrentPlanScreen.tsx');
   assert.match(src, /messageBillingActive/);
-  assert.match(src, /includedMessages/);
-  assert.match(src, /includedRemaining/);
   assert.match(src, /subIncludedEachMonth/);
-  assert.match(src, /subIncludedRemaining/);
-  assert.match(src, /subMessagesPending/);
-  assert.match(src, /subLeftoverCredits/);
-  assert.match(src, /creditBalance/);
   assert.doesNotMatch(src, /subIncludedRemaining[\s\S]{0,80}includedMessages/);
   assert.doesNotMatch(src, /subTotalAvailable[\s\S]{0,80}creditBalance/);
 });

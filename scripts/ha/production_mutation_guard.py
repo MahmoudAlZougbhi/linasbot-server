@@ -31,7 +31,6 @@ ENV_KEY_RE = re.compile(r"[A-Z][A-Z0-9_]*")
 # Only reviewed production entrypoints may run below the global mutation lock.
 ALLOWED_SCRIPTS = frozenset(
     {
-        "scripts/prod_apply_copilot_v2_flags.sh",
         "scripts/prod_apply_customer_brain_flags.sh",
         "scripts/prod_apply_dashboard_auth.sh",
         "scripts/prod_apply_model_routing_policy.sh",
@@ -71,7 +70,6 @@ ALLOWED_SCRIPTS = frozenset(
 # implemented.  The existing Meta synchronizer intentionally copies META_* only.
 TWO_NODE_ENV_TRANSACTION_REQUIRED = frozenset(
     {
-        "scripts/prod_apply_copilot_v2_flags.sh",
         "scripts/prod_apply_customer_brain_flags.sh",
         "scripts/prod_apply_dashboard_auth.sh",
         "scripts/prod_apply_model_routing_policy.sh",

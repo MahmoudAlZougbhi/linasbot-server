@@ -16,8 +16,8 @@ _ROUTE_MODULES = ("modules.live_chat_api",)
 
 @pytest.fixture(scope="module")
 def client() -> TestClient:
-    os.environ.setdefault("LINASLASER_API_BASE_URL", "https://example.com")
-    os.environ.setdefault("LINASLASER_API_TOKEN", "test-token")
+    os.environ.setdefault("EXTERNAL_API_BASE_URL", "https://example.com")
+    os.environ.setdefault("EXTERNAL_API_TOKEN", "test-token")
     os.environ.setdefault("DASHBOARD_AUTH_SECRET", "live-chat-manual-reinspect-secret")
     os.environ["ENVIRONMENT"] = "test"
     os.environ.setdefault("DISABLE_API_DOCS", "true")

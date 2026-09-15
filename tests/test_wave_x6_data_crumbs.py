@@ -25,7 +25,6 @@ def test_wave_x6_preview_and_gender_gone() -> None:
         "services/integrations/whatsapp/cloud_template_payload.py",
         "services/billing/token_wallet_service.py",
         "services/billing/membership/message_catalog.py",
-        "data/phone_to_room_mapping.json",
     )
     missing = [rel for rel in keep if not (ROOT / rel).exists()]
     assert not missing, missing
@@ -35,12 +34,11 @@ def test_wave_x6_preview_and_gender_gone() -> None:
 
 
 def test_wave_x6_phone_map_has_no_clinic_pii() -> None:
-    raw = json.loads((ROOT / "data/phone_to_room_mapping.json").read_text(encoding="utf-8"))
-    phones = raw.get("phone_to_room_mapping") or {}
-    rooms = raw.get("room_to_phone_mapping") or {}
-    assert phones == {}
-    assert rooms == {}
-    blob = json.dumps(raw)
+    mapping = ROOT / "data/phone_to_room_mapping.json"
+    assert not mapping.exists()
+    blob = ""
+    for path in (ROOT / "data").glob("*.json"):
+        blob += path.read_text(encoding="utf-8")
     assert "76466674" not in blob
     assert "+961" not in blob
 

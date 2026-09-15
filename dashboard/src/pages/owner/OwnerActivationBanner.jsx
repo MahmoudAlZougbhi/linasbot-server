@@ -41,7 +41,7 @@ export default function OwnerActivationBanner() {
       }`}
     >
       <p className="font-semibold">
-        {testingReady ? 'Ready for staging Brain testing' : 'Brain testing not ready'}
+        {testingReady ? 'Activation ready' : 'Activation not ready'}
       </p>
       <p className="mt-1 opacity-90">
         testing_ready={String(testingReady)} · ready_to_enable=
@@ -54,7 +54,6 @@ export default function OwnerActivationBanner() {
           : ''}
       </p>
       <p className="mt-1 opacity-80">
-        For staging Brain checks, keep LINAS_CUSTOMER_AI_LAB=false in production.
         Pending provider events attribute to tenant_id; known_usd stays 0 until invoice finalization.
       </p>
       <p className="mt-1 opacity-80">

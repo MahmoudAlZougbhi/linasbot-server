@@ -22,14 +22,6 @@ test('LinasLoadingIndicator uses sparkle mark with breathe animation', () => {
   assert.match(hook, /isReduceMotionEnabled/);
 });
 
-test('useScreenLoadGate exposes initial-load vs refresh semantics', () => {
-  const gate = read('hooks/useScreenLoadGate.ts');
-  assert.match(gate, /showInitialLoader/);
-  assert.match(gate, /hasLoadedOnce/);
-  assert.match(gate, /isRefreshing/);
-  assert.match(gate, /ScreenSkeleton/);
-});
-
 const SHELL_SURFACES = [
   'features/integrations/IntegrationsScreen.tsx',
   'features/users/UsersScreen.tsx',

@@ -249,17 +249,17 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - `customer-brain-live-lab-ha.yml` is retired: no production SSH, dispatch refuses.
 - `prod_migration` does not seed `laser_hair_removal`, shave-before-laser, or clinic Beirut/Antelias branches.
 - `section_classifier` `_SERVICE_SPECS` are generic SaaS fixtures only (no Laser/tattoo/CO2/DPL catalog).
-- `LINASLASER_API_*` in `config.py` is a deprecated alias of `EXTERNAL_API_*`. `LINASLASER_BOC_BOOKING_ENABLED` stays the fail-closed BOC env name.
+- `LINASLASER_API_*` aliases are gone from `config.py`. `LINASLASER_BOC_BOOKING_ENABLED` stays the fail-closed BOC env name in `product_features.py`.
 - Tests: `tests/test_wave_x5_lab_ops.py`.
 
 ## WAVE X6 — data / preview crumbs
 
 - WhatsApp template IMAGE header URL lives in `services/integrations/whatsapp/template_header_image.py`. `message_preview_service*` and `data/message_preview_queue.json` are deleted (queue was unused after X2).
-- Git `data/phone_to_room_mapping.json` is empty. Missing file resolves empty (fail-closed). No founder phones in the repo.
+- Git no longer ships `data/phone_to_room_mapping.json`. Missing file resolves empty (fail-closed). No founder phones in the repo.
 - `data/app_settings.json` has no smartMessaging schedules, booking body-part map, or `enableTraining`.
 - `gender_recognition_service` deleted (barrel re-export only; no live callers).
 - Brain evals: `real_tenant_index` / `golden_pack` / `shop_a_qa_sections`. Live-lab tenant ids are `eval-lab-a` / `eval-lab-b`. Production readiness does not overlay `live_lab_latest.json`.
-- **Kept on purpose:** `services/billing/token_wallet_*` and `services/billing/membership/message_catalog.py` — Owner Catalog, Copilot wallet reads, and `/api/wallet` still import them.
+- **Kept on purpose (until X9):** `services/billing/token_wallet_*` (Copilot wallet display + Stripe `token_pack` only — not Owner Catalog). Owner Catalog is `services/billing/membership/message_catalog.py`.
 - Tests: `tests/test_wave_x6_data_crumbs.py`.
 
 ## WAVE X7 — Meta + Apple fold
@@ -270,6 +270,19 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - `social_contact_routing*` moved to `services/integrations/social/` (still live: published CM WhatsApp handoff, SFU `is_social_channel`). Not deleted.
 - HA preflight/admission and prod apply scripts read the packaged Meta registry / secret-separation modules. A SHA that still only has the old flat path stays tenant-gated (fail-closed).
 - Tests: `tests/test_wave_x7_structure.py`.
+
+## WAVE X8 — safe deletes + naming scrub + web/mobile crumbs
+
+- Comment Graph poll stubs `modules/meta_social_comment_sync_job.py` and `modules/tiktok_sync_job.py` are deleted. Leftover queue job types still skip webhook-only.
+- `services/moderation_service.py` deleted (zero importers; Laser-context museum).
+- Empty `data/knowledge_base.txt`, `data/style_guide.txt`, and git `phone_to_room_mapping.json` removed. Live Chat still fail-closed if the mapping file is missing.
+- `main.py` no longer mounts `local_qa_api` (helpers stay for FAQ/CM) and has no APK download route.
+- `config.py` has no `LINASLASER_*` bindings. Booking FSM/training keyword museum stripped. `user_booking_state` / `user_in_training_mode` stay as HA session snapshot fields.
+- Retired founder/lab workflows: live-lab, copilot-v2-flags-apply, cm-linas-content-audit, linas-index-ha, prod-brain-linas-smoke.
+- **Kept on purpose:** `prod_cm_linas_*` / bridge scripts still invoked by `cm-production-cutover.yml`. `contentManagers` permission (live CM). `PricesEditor` (reachable from ServicesScreen). `message_catalog` + token_wallet (X9).
+- Web: orphan AI-limits screenshot gone; landing demo copy de-clinicked; AuthContext.register removed; museum LiveChat types stripped.
+- Mobile: runtime-unreachable dashboard/billing/CM/nav orphans deleted. Drawer module list unchanged.
+- Tests: `tests/test_wave_x8_radical_safe.py`.
 
 
 
