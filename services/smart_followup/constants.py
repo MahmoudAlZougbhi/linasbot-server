@@ -73,9 +73,6 @@ QUALIFYING_SOCIAL_ACTIONS = frozenset(
         "ask_for_details",
         "ask_for_tattoo_photo",
         "ask_clarification",
-        "initial_greet_and_ask_gender",
-        "ask_gender",
-        "confirm_gender",
         "confirm_booking_details",
         "return_to_normal_chat",
     }

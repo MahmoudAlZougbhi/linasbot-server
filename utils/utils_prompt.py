@@ -57,9 +57,7 @@ def get_system_instruction(
         **GENDER DECISION POLICY (AI-PRIMARY):**
         User's gender is UNKNOWN.
         - You are the decision owner: decide from context whether gender is required now.
-        - If gender is required for safe/personalized next step, use action "ask_gender".
         - If gender is not required for the current informational answer, answer directly.
-        - When the user provides gender, use action "confirm_gender" and continue naturally.
         - Use neutral wording whenever gender is still unknown.
         """
 

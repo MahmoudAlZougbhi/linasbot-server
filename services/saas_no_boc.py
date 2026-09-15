@@ -1,4 +1,4 @@
-"""BOC / LinasLaser Agent CRM is not part of the SaaS product.
+"""BOC booking (not in SaaS) CRM is not part of the SaaS product.
 
 Callers that historically talked to boc-lb.com must fail closed here.
 No HTTP, no env gate, no hidden clinic fallback.

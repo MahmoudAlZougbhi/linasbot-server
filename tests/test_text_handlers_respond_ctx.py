@@ -22,8 +22,8 @@ def test_bootstrap_injects_cm_and_gpt_runtime_deps() -> None:
     ctx: dict = {}
     bootstrap_process_respond_ctx(ctx)
     assert callable(ctx.get("_handle_published_cm_runtime"))
-    assert callable(ctx.get("get_gender_from_message"))
-    assert callable(ctx.get("router_route"))
+    assert "router_route" not in ctx
+    assert "get_gender_from_message" not in ctx
 
 
 def test_bootstrap_is_idempotent() -> None:

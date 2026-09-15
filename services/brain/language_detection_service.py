@@ -194,7 +194,7 @@ class LanguageDetectionService:
         target_languages_str = ", ".join(normalized_targets)
 
         prompt = (
-            "You are an expert translator for a laser clinic customer-service bot in Lebanon.\n"
+            "You are an expert translator for a business customer-service assistant.\n"
             "Translate the input question and answer into the requested target languages.\n"
             "Return strict JSON object only.\n"
             "JSON shape:\n"
@@ -289,7 +289,7 @@ class LanguageDetectionService:
             return text
 
         prompt = (
-            "You are an expert translator for a laser clinic customer-service bot.\n"
+            "You are an expert translator for a business customer-service assistant.\n"
             "Translate the answer into the requested target language.\n"
             'Return strict JSON only: {"answer": "..."}.\n'
             "Rules:\n"

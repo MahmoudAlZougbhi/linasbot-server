@@ -1,7 +1,7 @@
 """Post-migration: remove Linas legacy bridge after published CM cutover is verified.
 
 This script does NOT deploy or publish. It only documents / validates readiness to flip
-``CM_DISABLE_LINAS_LEGACY_BRIDGE=true`` and later delete bridge code paths.
+``CM_DISABLE_LEGACY_BRIDGE=true`` and later delete bridge code paths.
 
 Usage (read-only check):
   python scripts/cm_prepare_remove_linas_bridge.py --tenant linas
@@ -45,7 +45,7 @@ def main() -> int:
         report["next_steps"] = [
             "Publish Linas CM content first (scripts/cm_publish_tenant.py) with explicit production approval.",
             "Verify customer answers come from cm_runtime_pipeline (not legacy Marwa prompts).",
-            "Then set CM_DISABLE_LINAS_LEGACY_BRIDGE=true and restart.",
+            "Then set CM_DISABLE_LEGACY_BRIDGE=true and restart.",
             "After soak, delete tenant_allows_legacy_bridge call sites.",
         ]
         print(json.dumps(report, indent=2))
@@ -65,7 +65,7 @@ def main() -> int:
     report["ready_to_disable_bridge"] = bool(tenant_has_published_cm(tenant_id) and tenant_uses_cm_runtime(tenant_id))
     report["next_steps"] = [
         "Confirm production traffic uses handler_path=cm_runtime_pipeline for Linas.",
-        "Set CM_DISABLE_LINAS_LEGACY_BRIDGE=true (bridge becomes unreachable).",
+        "Set CM_DISABLE_LEGACY_BRIDGE=true (bridge becomes unreachable).",
         "Soak, then remove bridge code from text_handlers_respond / constants.",
     ]
     print(json.dumps(report, indent=2))

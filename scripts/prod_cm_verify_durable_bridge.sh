@@ -45,9 +45,9 @@ os.environ.setdefault("ENVIRONMENT", "production")
 
 from services.ai_setup.constants import cm_disable_linas_legacy_bridge, tenant_has_published_cm, tenant_uses_cm_runtime
 from services.ai_setup.durable_flags import (
-    CM_DISABLE_LINAS_LEGACY_BRIDGE,
+    CM_DISABLE_LEGACY_BRIDGE,
     default_production_env_paths,
-    parse_env_bool,
+    parse_disable_legacy_bridge,
     read_env_file_map,
     readiness_requires_disable_bridge,
 )
@@ -55,7 +55,7 @@ from services.ai_setup.durable_flags import (
 app_dir = os.environ.get("CM_PRESERVE_APP_DIR") or "/opt/linasbot"
 paths = default_production_env_paths(app_dir=app_dir)
 env_file = Path(app_dir) / ".env"
-file_val = parse_env_bool(read_env_file_map(env_file).get(CM_DISABLE_LINAS_LEGACY_BRIDGE))
+file_val = parse_disable_legacy_bridge(read_env_file_map(env_file))
 # Load EnvironmentFile values into process for effective check (no secrets printed).
 for path in paths:
     mapping = read_env_file_map(path)

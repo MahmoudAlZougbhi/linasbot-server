@@ -134,7 +134,7 @@ def redistribute_knowledge_draft(
     dyn = DynamicMessagesSection.model_validate(dyn_env.payload)
 
     services_by_id: dict[str, ServiceRecord] = {}
-    # Drop prior redistributed Care rows so remigrate can re-home (e.g. Marwa → handoff).
+    # Drop prior redistributed Care rows so remigrate can re-home.
     care_by_id = {item.id: item for item in care.items if _REDISTRIBUTED_TAG not in (item.tags or [])}
     dyn_by_id = {item.id: item for item in dyn.items if not str(item.id).startswith("redistributed_")}
 
