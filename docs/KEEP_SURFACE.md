@@ -327,4 +327,14 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - **Kept:** `prod_cm_linas_*` + `cm-production-cutover.yml`; `message_catalog`; `is_social_channel`; alembic `token_wallets` (no DROP); hub-hidden CM editors; Stripe skip of `linas_token_pack`.
 - Tests: `tests/test_wave_p1_crumb_clean.py`.
 
+## WAVE O1–O5 — router/gender, translator, classifier, dashboard name, durable flag
+
+- Inbound ctx no longer binds unused `router_route` / `get_gender_from_message`. `conversation_router` KEEP is `is_human_request` + `GREETING_TEMPLATES`.
+- Translator prompts are generic SaaS; Lebanese dialect / franco rules stay.
+- Classifier has no founder branch ids (`marwa` / `antelias` / `beirut`) as product defaults. Anti-leak `answer_packet` still blocks those names in customer answers.
+- Dashboard package name is `linas-ai-dashboard`.
+- Durable env key is `CM_DISABLE_LEGACY_BRIDGE` (old `CM_DISABLE_LINAS_LEGACY_BRIDGE` honored on read). Write new key. Fail-closed published CM unchanged.
+- **Skipped:** Redis `luna_*`; `prod_cm_linas_*` archive; hub-hidden CM editors; modules fold; `token_wallets` DROP; HA deploy.
+- Tests: `tests/test_wave_o1_o5_scrub.py`.
+
 

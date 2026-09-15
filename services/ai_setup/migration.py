@@ -236,7 +236,7 @@ def _migrate_knowledge_and_care(
 
 def _classify_contact_key(key: str) -> tuple[str | None, str, str | None]:
     upper = key.upper()
-    branch_id = "beirut" if "BEIRUT" in upper else ("antelias" if "ANTELIAS" in upper else None)
+    branch_id = None
     if "FEMALE" in upper:
         gender = "female"
     elif upper.endswith("_MALE"):

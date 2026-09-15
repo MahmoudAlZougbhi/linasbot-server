@@ -190,6 +190,7 @@ def test_comments_action_gate_and_readiness() -> None:
 
 def test_legacy_bridge_kill_switch(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("CM_EMERGENCY_FORCE_LEGACY", raising=False)
+    monkeypatch.setenv("CM_DISABLE_LEGACY_BRIDGE", "true")
     monkeypatch.setenv("CM_DISABLE_LINAS_LEGACY_BRIDGE", "true")
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
     # Re-import path uses env each call

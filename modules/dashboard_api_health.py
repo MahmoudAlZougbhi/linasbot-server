@@ -162,7 +162,7 @@ async def ready() -> Any:
     # social integration. This readiness signal is intentionally configuration-free.
     checks["whatsapp_inbound_ai"] = {"ok": True, "enabled": False}
 
-    # BOC / LinasLaser Agent booking — default OFF; healthy without token or booking IDs.
+    # BOC booking (not in SaaS) — default OFF; healthy without token or booking IDs.
     from services.product_features import boc_booking_readiness
 
     boc_check = boc_booking_readiness()

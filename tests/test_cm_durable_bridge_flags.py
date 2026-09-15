@@ -1,11 +1,13 @@
-"""Unit tests for durable CM_DISABLE_LINAS_LEGACY_BRIDGE preservation."""
+"""Unit tests for durable CM_DISABLE_LEGACY_BRIDGE preservation."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from services.ai_setup.durable_flags import (
+    CM_DISABLE_LEGACY_BRIDGE,
     CM_DISABLE_LINAS_LEGACY_BRIDGE,
+    parse_disable_legacy_bridge,
     parse_env_bool,
     preserve_disable_linas_legacy_bridge,
     read_env_file_map,
@@ -32,6 +34,19 @@ def test_resolve_keeps_unset_when_unpublished() -> None:
     assert "unset" in reason
 
 
+def test_parse_honors_old_key_when_new_unset() -> None:
+    assert parse_disable_legacy_bridge({CM_DISABLE_LINAS_LEGACY_BRIDGE: "true"}) is True
+    assert parse_disable_legacy_bridge({CM_DISABLE_LINAS_LEGACY_BRIDGE: "false"}) is False
+
+
+def test_parse_prefers_new_key_over_old() -> None:
+    mapping = {
+        CM_DISABLE_LINAS_LEGACY_BRIDGE: "false",
+        CM_DISABLE_LEGACY_BRIDGE: "true",
+    }
+    assert parse_disable_legacy_bridge(mapping) is True
+
+
 def test_preserve_syncs_env_file(tmp_path: Path) -> None:
     root = tmp_path / "opt" / "linasbot"
     root.mkdir(parents=True)
@@ -44,8 +59,12 @@ def test_preserve_syncs_env_file(tmp_path: Path) -> None:
     )
     assert report["ok"] is True
     assert report["effective"] is True
-    assert parse_env_bool(read_env_file_map(root / ".env").get(CM_DISABLE_LINAS_LEGACY_BRIDGE)) is True
-    assert "OPENAI_API_KEY" in read_env_file_map(root / ".env")
+    assert report["key"] == CM_DISABLE_LEGACY_BRIDGE
+    mapping = read_env_file_map(root / ".env")
+    assert parse_disable_legacy_bridge(mapping) is True
+    assert parse_env_bool(mapping.get(CM_DISABLE_LEGACY_BRIDGE)) is True
+    assert parse_env_bool(mapping.get(CM_DISABLE_LINAS_LEGACY_BRIDGE)) is True
+    assert "OPENAI_API_KEY" in mapping
 
 
 def test_preserve_recovers_missing_flag_for_published_linas(tmp_path: Path) -> None:
@@ -60,7 +79,9 @@ def test_preserve_recovers_missing_flag_for_published_linas(tmp_path: Path) -> N
     )
     assert report["ok"] is True
     assert report["reason"] == "recover_true_for_published_linas"
-    assert parse_env_bool(read_env_file_map(env_path).get(CM_DISABLE_LINAS_LEGACY_BRIDGE)) is True
+    mapping = read_env_file_map(env_path)
+    assert parse_env_bool(mapping.get(CM_DISABLE_LEGACY_BRIDGE)) is True
+    assert parse_disable_legacy_bridge(mapping) is True
 
 
 def test_readiness_fails_when_published_without_disable() -> None:

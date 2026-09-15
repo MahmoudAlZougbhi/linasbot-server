@@ -7,7 +7,6 @@ from typing import Any
 
 def _lazy_bindings() -> dict[str, Any]:
     """Bindings actually read by phase 1 / phase 2."""
-    from services.brain.conversation_router import get_gender_from_message, route
     from services.brain.inbound.text_handlers_respond_intent import (
         _build_out_of_scope_reply,
         _is_out_of_clinic_scope_query,
@@ -30,11 +29,9 @@ def _lazy_bindings() -> dict[str, Any]:
         "get_canonical_user_id_and_phone": get_canonical_user_id_and_phone,
         "get_dynamic_message": get_dynamic_message,
         "get_firestore_db": get_firestore_db,
-        "get_gender_from_message": get_gender_from_message,
         "is_flow_logging_enabled": is_flow_logging_enabled,
         "language_detection_service": language_detection_service,
         "log_interaction": log_interaction,
-        "router_route": route,
         "save_conversation_message_to_firestore": save_conversation_message_to_firestore,
         "user_persistence": user_persistence,
     }

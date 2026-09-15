@@ -41,9 +41,9 @@ os.environ.setdefault("LINASBOT_DATA_ROOT", "/opt/linasbot_data")
 os.environ.setdefault("ENVIRONMENT", "production")
 
 from services.ai_setup.durable_flags import (
-    CM_DISABLE_LINAS_LEGACY_BRIDGE,
+    CM_DISABLE_LEGACY_BRIDGE,
     default_production_env_paths,
-    parse_env_bool,
+    parse_disable_legacy_bridge,
     preserve_disable_linas_legacy_bridge,
     read_env_file_map,
     readiness_requires_disable_bridge,
@@ -62,12 +62,12 @@ report = preserve_disable_linas_legacy_bridge(
 effective = report.get("effective")
 if effective is not None:
     atomic_update_canonical_env(
-        {CM_DISABLE_LINAS_LEGACY_BRIDGE: "true" if effective else "false"}
+        {CM_DISABLE_LEGACY_BRIDGE: "true" if effective else "false"}
     )
     report["updated_paths"] = ["/opt/linasbot/.env"]
     report["dry_run"] = False
-persisted = parse_env_bool(
-    read_env_file_map(Path("/opt/linasbot/.env")).get(CM_DISABLE_LINAS_LEGACY_BRIDGE)
+persisted = parse_disable_legacy_bridge(
+    read_env_file_map(Path("/opt/linasbot/.env"))
 )
 if effective is not None and persisted != effective:
     report["ok"] = False

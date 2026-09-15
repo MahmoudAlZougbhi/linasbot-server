@@ -127,7 +127,7 @@ def tenant_uses_cm_runtime(tenant_id: str | None) -> bool:
 
 
 def cm_disable_linas_legacy_bridge() -> bool:
-    """Classic GPT bridge is gone. Kept as a durable env-file contract (always on)."""
+    """Classic GPT bridge is gone. Durable env key is ``CM_DISABLE_LEGACY_BRIDGE`` (always on)."""
     return True
 
 

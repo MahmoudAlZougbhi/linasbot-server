@@ -1,7 +1,8 @@
 """Durable CM ops flags that must survive normal production deploys/restarts.
 
-``CM_DISABLE_LINAS_LEGACY_BRIDGE`` lives in the systemd ``EnvironmentFile`` ``.env``
+``CM_DISABLE_LEGACY_BRIDGE`` lives in the systemd ``EnvironmentFile`` ``.env``
 (not in git). Deploy rewrites the unit file but must not lose this key.
+The previous name ``CM_DISABLE_LINAS_LEGACY_BRIDGE`` is still honored on read.
 Emergency rollback remains ``CM_EMERGENCY_FORCE_LEGACY=true`` (separate flag).
 """
 
@@ -11,6 +12,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+CM_DISABLE_LEGACY_BRIDGE = "CM_DISABLE_LEGACY_BRIDGE"
 CM_DISABLE_LINAS_LEGACY_BRIDGE = "CM_DISABLE_LINAS_LEGACY_BRIDGE"
 CM_EMERGENCY_FORCE_LEGACY = "CM_EMERGENCY_FORCE_LEGACY"
 
@@ -49,6 +51,14 @@ def parse_env_bool(raw: str | None) -> bool | None:
     if text == "":
         return None
     return None
+
+
+def parse_disable_legacy_bridge(mapping: dict[str, str]) -> bool | None:
+    """Prefer ``CM_DISABLE_LEGACY_BRIDGE``; honor the old key when new is unset."""
+    new = parse_env_bool(mapping.get(CM_DISABLE_LEGACY_BRIDGE))
+    if new is not None:
+        return new
+    return parse_env_bool(mapping.get(CM_DISABLE_LINAS_LEGACY_BRIDGE))
 
 
 def read_env_file_map(path: Path) -> dict[str, str]:
@@ -91,7 +101,7 @@ def resolve_disable_bridge_value(
     *,
     linas_has_published_cm: bool,
 ) -> tuple[bool | None, str]:
-    """Choose durable value for ``CM_DISABLE_LINAS_LEGACY_BRIDGE``.
+    """Choose durable value for ``CM_DISABLE_LEGACY_BRIDGE``.
 
     Returns ``(value_or_None_if_unset, reason)``.
     """
@@ -116,21 +126,20 @@ def preserve_disable_linas_legacy_bridge(
     values: list[bool | None] = []
     for path in env_paths:
         mapping = read_env_file_map(path)
-        raw = mapping.get(CM_DISABLE_LINAS_LEGACY_BRIDGE)
-        parsed = parse_env_bool(raw)
+        parsed = parse_disable_legacy_bridge(mapping)
         values.append(parsed)
         snapshots.append(
             {
                 "path": str(path),
                 "exists": path.is_file(),
-                "raw_present": CM_DISABLE_LINAS_LEGACY_BRIDGE in mapping,
+                "raw_present": CM_DISABLE_LEGACY_BRIDGE in mapping or CM_DISABLE_LINAS_LEGACY_BRIDGE in mapping,
                 "parsed": parsed,
             }
         )
 
     effective, reason = resolve_disable_bridge_value(values, linas_has_published_cm=linas_has_published_cm)
     report: dict[str, Any] = {
-        "key": CM_DISABLE_LINAS_LEGACY_BRIDGE,
+        "key": CM_DISABLE_LEGACY_BRIDGE,
         "paths": snapshots,
         "linas_has_published_cm": linas_has_published_cm,
         "effective": effective,
@@ -152,14 +161,14 @@ def preserve_disable_linas_legacy_bridge(
         for path in env_paths:
             if not path.parent.exists():
                 continue
-            upsert_env_file(path, {CM_DISABLE_LINAS_LEGACY_BRIDGE: desired})
+            upsert_env_file(path, {CM_DISABLE_LEGACY_BRIDGE: desired})
             report["updated_paths"].append(str(path))
 
     # Post-condition: every written/existing file must parse to effective.
     for path in env_paths:
         if dry_run or not path.is_file():
             continue
-        got = parse_env_bool(read_env_file_map(path).get(CM_DISABLE_LINAS_LEGACY_BRIDGE))
+        got = parse_disable_legacy_bridge(read_env_file_map(path))
         if got != effective:
             report["ok"] = False
             report["failures"].append(f"path_mismatch:{path}")
@@ -190,6 +199,6 @@ def readiness_requires_disable_bridge(
         "emergency_rollback_flag": CM_EMERGENCY_FORCE_LEGACY,
         "note": (
             f"Set {CM_EMERGENCY_FORCE_LEGACY}=true for emergency legacy rollback; "
-            f"keep {CM_DISABLE_LINAS_LEGACY_BRIDGE}=true so normal deploys stay on published CM."
+            f"keep {CM_DISABLE_LEGACY_BRIDGE}=true so normal deploys stay on published CM."
         ),
     }

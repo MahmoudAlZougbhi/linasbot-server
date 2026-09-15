@@ -72,11 +72,6 @@ _LOCATION_MARKERS = (
     "<location_rules>",
     "branch hours",
     "opening hours",
-    "ramlet",
-    "antelias",
-    "أنطلياس",
-    "بيروت",
-    "beirut",
     "where are you",
     "our branches",
     "our locations",
@@ -103,7 +98,6 @@ _BOOKING_MARKERS = (
     "human handoff",
     "human handover",
     "whatsapp routing",
-    "marwa",
 )
 
 _PRICE_MARKERS = (
@@ -304,7 +298,6 @@ def classify_article(
                 "booking",
                 "existing_appointment",
                 "operational_tool",
-                "marwa",
                 "handoff",
             )
         )
