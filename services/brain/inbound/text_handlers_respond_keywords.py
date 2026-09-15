@@ -32,7 +32,7 @@ PRICE_INTENT_KEYWORDS = [
     "price list",
 ]
 
-CLINIC_SCOPE_KEYWORDS = [
+BUSINESS_SCOPE_KEYWORDS = [
     "ليزر",
     "laser",
     "epilation",

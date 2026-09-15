@@ -8,7 +8,6 @@ from services.brain.grounding.claims import claims_fail_closed, verify_claims
 from services.brain.grounding.contradiction import detect_amount_contradictions
 from services.brain.readiness import brain_readiness_report
 from services.brain.security.injection import evidence_has_injection, sanitize_evidence_for_prompt
-from services.brain.shadow import shadow_compare_payload, shadow_mode_enabled
 from tests.brain_evals.case_bank import build_case_bank, case_bank_snapshot
 from tests.brain_evals.metrics import mrr, ndcg_at_k, recall_at_k
 from tests.brain_evals.suite_runner import run_offline_suite
@@ -85,15 +84,11 @@ def test_readiness_report_no_secrets() -> None:
     assert report["rollback"]["tag"] == "rollback/pre-brain-2026-09-11"
 
 
-def test_shadow_disabled_by_default(monkeypatch) -> None:
-    monkeypatch.delenv("CUSTOMER_BRAIN_SHADOW_MODE", raising=False)
-    assert shadow_mode_enabled() is False
-    payload = shadow_compare_payload(
-        authoritative={"decision": "reply", "evidence_ids": ["a"]},
-        shadow={"decision": "clarify", "evidence_ids": ["b"]},
-    )
-    assert payload["customer_message_sent_from_shadow"] is False
-    assert payload["billing_from_shadow"] is False
+def test_shadow_module_removed() -> None:
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    assert not (root / "services/brain/shadow.py").exists()
 
 
 def test_build_case_bank_unique_ids() -> None:

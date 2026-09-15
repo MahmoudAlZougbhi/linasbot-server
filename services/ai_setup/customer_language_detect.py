@@ -29,7 +29,7 @@ def detect_broad_customer_language(
     accept_language: str | None = None,
 ) -> str:
     """Detect inbound customer language — product codes plus any ISO language via langdetect."""
-    from language_resolver import LanguageResolver
+    from services.brain.language_resolver import LanguageResolver
 
     resolver = LanguageResolver()
     detected = resolver.resolve(

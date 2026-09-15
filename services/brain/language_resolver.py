@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from language_resolver_signals import (  # noqa: F401
+from services.brain.language_resolver_signals import (  # noqa: F401
     ARABIZI_DIGITS_RE,
     ARABIZI_WORDS,
     ENGLISH_MARKERS,
@@ -33,8 +33,8 @@ from language_resolver_signals import (  # noqa: F401
     is_arabizi,
 )
 
-# Public re-exports (keep `from language_resolver import ...` working)
-from language_resolver_text import (  # noqa: F401
+# Public re-exports (keep `from services.brain.language_resolver import ...` working)
+from services.brain.language_resolver_text import (  # noqa: F401
     ARABIC_RE,
     CODEBLOCK_RE,
     FULL_NAME_RE,

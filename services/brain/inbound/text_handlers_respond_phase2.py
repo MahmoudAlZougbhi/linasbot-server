@@ -14,7 +14,7 @@ _PHASE_HALT = "_PHASE_HALT"
 async def text_handlers_respond_phase2(ctx: dict) -> Any:
     _build_out_of_scope_reply = cast(Any, ctx.get("_build_out_of_scope_reply"))
     _handle_published_cm_runtime = cast(Any, ctx.get("_handle_published_cm_runtime"))
-    _is_out_of_clinic_scope_query = cast(Any, ctx.get("_is_out_of_clinic_scope_query"))
+    _is_out_of_business_scope_query = cast(Any, ctx.get("_is_out_of_business_scope_query"))
     current_conversation_id = cast(Any, ctx.get("current_conversation_id"))
     current_gender = cast(Any, ctx.get("current_gender"))
     current_preferred_lang = cast(Any, ctx.get("current_preferred_lang"))
@@ -27,7 +27,7 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
     user_image_base64 = cast(Any, ctx.get("user_image_base64"))
     user_input_to_process = cast(Any, ctx.get("user_input_to_process"))
     user_name = cast(Any, ctx.get("user_name"))
-    if not user_image_base64 and _is_out_of_clinic_scope_query(user_input_to_process):
+    if not user_image_base64 and _is_out_of_business_scope_query(user_input_to_process):
         out_of_scope_reply = _build_out_of_scope_reply(current_preferred_lang)
         await send_message_func(user_id, out_of_scope_reply)
         await save_conversation_message_to_firestore(

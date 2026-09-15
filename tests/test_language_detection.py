@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass
 
 # Import the language resolver
-from language_resolver import (
+from services.brain.language_resolver import (
     ARABIC_RE,
     LanguageResolver,
     alpha_len,

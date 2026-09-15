@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from language_resolver_text import alpha_len, clean, mask_times, tokenize
+from services.brain.language_resolver_text import alpha_len, clean, mask_times, tokenize
 
 try:
     from langdetect import LangDetectException, detect, detect_langs

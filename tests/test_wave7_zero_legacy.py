@@ -208,14 +208,14 @@ def test_wave6_owner_stays_monty_stays_refused() -> None:
 def test_wave_a_fail_closed_and_deleted_clinic_paths() -> None:
     history = (ROOT / "services/brain/history_ids.py").read_text(encoding="utf-8")
     constants = (ROOT / "services/ai_setup/constants.py").read_text(encoding="utf-8")
-    prompt = (ROOT / "utils/utils_prompt.py").read_text(encoding="utf-8")
     main = (ROOT / "main.py").read_text(encoding="utf-8")
     catalog = (ROOT / "services/billing/membership/plan_catalog.py").read_text(encoding="utf-8")
     webhook = (ROOT / "modules/webhook_handlers.py").read_text(encoding="utf-8")
     api_config = (ROOT / "api_config.py").read_text(encoding="utf-8")
     assert "if explicit:" not in history.split("def comment_conversation_id", 1)[1][:400]
     assert 'os.getenv("LINASBOT_TENANT_ID", "linas")' not in constants
-    assert "published_mode = True" in prompt
+    assert not (ROOT / "utils/utils_prompt.py").exists()
+    assert not (ROOT / "prompt_templates.py").exists()
     assert "modules.owner_ai_api" not in main
     assert "modules.owner_copilot_api" in main
     assert "creative_studio" not in catalog
