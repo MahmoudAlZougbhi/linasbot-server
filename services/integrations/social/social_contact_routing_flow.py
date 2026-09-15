@@ -1,11 +1,10 @@
-"""Social contact routing flow state and booking preference helpers (LOC split)."""
+"""Social booking-preference restore and contact-flow TTL (Meta DM / persistence)."""
 
 from __future__ import annotations
 
 import hashlib
 import time
 
-from services.brain.conversation_router import get_gender_from_message
 from services.integrations.social.social_contact_routing_detect import (
     SOCIAL_BOOKING_PREFERENCE_MEMORY_PREFIX,
     SOCIAL_BOOKING_PREFERENCES_FIELD,
@@ -13,11 +12,6 @@ from services.integrations.social.social_contact_routing_detect import (
     SOCIAL_CONTACT_FLOW_TTL_SECONDS,
     SocialContactScope,
     SocialContactScopeError,
-    _explicit_handoff_intent,
-    _is_cancel_handoff,
-    _is_greeting_only,
-    _other_person_booking_gender,
-    detect_branch,
 )
 
 
@@ -89,69 +83,6 @@ def restore_social_booking_preference(user_data: dict, persisted_state: dict) ->
     return preference
 
 
-def _sender_fingerprint(sender_id: str) -> str:
-    return hashlib.sha256(sender_id.encode("utf-8")).hexdigest()
-
-
-def _flow_state_key(user_data: dict) -> str:
-    """Key active handoff state by tenant, channel, business asset, and sender."""
-    return f"social_contact_flow::v2::{_scope_fingerprint(_flow_scope(user_data))}"
-
-
-def _purge_legacy_flow_state(user_data: dict) -> None:
-    """Retire unsafe unscoped and pre-v2 flow blobs instead of migrating their fields."""
-    user_data.pop("social_contact_flow", None)
-    for key in list(user_data.keys()):
-        if str(key).startswith("social_contact_flow::") and not str(key).startswith("social_contact_flow::v2::"):
-            user_data.pop(key, None)
-
-
-def _get_flow_state(user_data: dict) -> dict:
-    _purge_legacy_flow_state(user_data)
-    scope = _flow_scope(user_data)
-    key = _flow_state_key(user_data)
-    state = user_data.get(key)
-    expected_fingerprint = key.rsplit("::", 1)[-1]
-    if not isinstance(state, dict):
-        return {}
-    if (
-        state.get("status") != "active"
-        or state.get("intent") not in {"booking", "human"}
-        or state.get("scope_fingerprint") != expected_fingerprint
-        or state.get("tenant_id") != scope.tenant_id
-        or state.get("channel") != scope.channel
-        or state.get("business_asset_id") != scope.business_asset_id
-        or state.get("sender_fingerprint") != _sender_fingerprint(scope.sender_id)
-        or not isinstance(state.get("flow_id"), str)
-        or not state.get("flow_id")
-    ):
-        user_data.pop(key, None)
-        return {}
-    return state
-
-
-def _set_flow_state(user_data: dict, state: dict) -> None:
-    scope = _flow_scope(user_data)
-    key = _flow_state_key(user_data)
-    state = dict(state)
-    state["status"] = "active"
-    state["scope_fingerprint"] = key.rsplit("::", 1)[-1]
-    state["tenant_id"] = scope.tenant_id
-    state["channel"] = scope.channel
-    state["business_asset_id"] = scope.business_asset_id
-    state["sender_fingerprint"] = _sender_fingerprint(scope.sender_id)
-    state["updated_at"] = time.time()
-    if "started_at" not in state:
-        state["started_at"] = state["updated_at"]
-    user_data[key] = state
-    _purge_legacy_flow_state(user_data)
-
-
-def _clear_flow_state(user_data: dict) -> None:
-    _purge_legacy_flow_state(user_data)
-    user_data.pop(_flow_state_key(user_data), None)
-
-
 def _state_expired(state: dict) -> bool:
     """Expire after SOCIAL_CONTACT_FLOW_TTL_SECONDS of inactivity (updated_at)."""
     if not state:
@@ -164,26 +95,3 @@ def _state_expired(state: dict) -> bool:
     except (TypeError, ValueError):
         return True
     return (time.time() - stamp_f) > SOCIAL_CONTACT_FLOW_TTL_SECONDS
-
-
-def _is_valid_continuation(message: str, state: dict) -> bool:
-    """Only branch/gender answers (or re-stated handoff intent) continue a pending flow."""
-    if detect_branch(message):
-        return True
-    if _other_person_booking_gender(message):
-        return True
-    if get_gender_from_message(message):
-        return True
-    if _explicit_handoff_intent(message):
-        return True
-    return False
-
-
-def _is_topic_change_during_handoff(message: str, state: dict) -> bool:
-    """Greetings, cancels, or non-answer text while waiting for branch/gender → return to AI."""
-    if not state.get("intent"):
-        return False
-    if _is_cancel_handoff(message) or _is_greeting_only(message):
-        return True
-    # Waiting for a field but message is neither a valid answer nor a new handoff intent.
-    return not _is_valid_continuation(message, state)

@@ -9,14 +9,9 @@ from typing import Any
 
 from services.brain.inbound.text_handlers_respond_ctx import bootstrap_process_respond_ctx
 from services.brain.inbound.text_handlers_respond_intent import (
-    _booking_not_confirmed_safe_reply,
     _build_out_of_scope_reply,
-    _classify_booking_offer_confirmation_reply,
-    _flow_meta_has_crm_booking_confirmation,
     _is_out_of_clinic_scope_query,
     _is_price_intent,
-    _parse_tool_round_bot_returned,
-    _reply_claims_booking_done,
 )
 from services.brain.inbound.text_handlers_respond_keywords import (
     ASK_ONE_BY_ONE_ACTIONS,
@@ -78,16 +73,11 @@ __all__ = [
     "BRIEF_REPLY_ACTIONS",
     "PRICE_INTENT_KEYWORDS",
     "_apply_turn_by_turn_policy",
-    "_booking_not_confirmed_safe_reply",
     "_build_out_of_scope_reply",
-    "_classify_booking_offer_confirmation_reply",
-    "_flow_meta_has_crm_booking_confirmation",
     "_handle_published_cm_runtime",
     "_is_out_of_clinic_scope_query",
     "_is_price_intent",
-    "_parse_tool_round_bot_returned",
     "_process_and_respond",
-    "_reply_claims_booking_done",
     "_reply_offers_handover_confirmation",
     "_user_explicitly_requests_human_agent",
 ]

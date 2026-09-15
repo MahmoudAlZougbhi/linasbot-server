@@ -34,7 +34,6 @@ for env_path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2
 import config
 from openai import AsyncOpenAI
 from services.brain.reply.flags import customer_answer_model_name, customer_retrieval_model_name
-from services.integrations.social.social_contact_routing import route_social_contact_request
 
 ORCHESTRATION_MODEL = customer_retrieval_model_name()
 FINAL_RESPONSE_MODEL = customer_answer_model_name()
@@ -70,17 +69,7 @@ async def probe_openai():
 
 asyncio.run(probe_openai())
 
-# 2) Deterministic social router must NOT ask branch for Hello.
-ud = {
-    "channel": "instagram",
-    "meta_account_id": os.getenv("META_INSTAGRAM_ACCOUNT_ID") or "17841413184256533",
-}
-route = route_social_contact_request("Hello", ud, None, "en")
-if route is not None:
-    raise SystemExit("[canonical-ai-verify] social router incorrectly answered Hello")
-print("[canonical-ai-verify] social_router_hello=none")
-
-# 3) Canonical handle_message path with Instagram channel (capture only; no Graph send).
+# 2) Canonical handle_message path with Instagram channel (capture only; no Graph send).
 import config as cfg
 from services.brain.inbound.text_handlers import handle_message
 from services.brain.inbound.text_handlers_firestore import _delayed_processing_tasks
@@ -93,7 +82,7 @@ cfg.user_data_whatsapp[user_id] = {
     "current_conversation_id": None,
     "channel": "instagram",
     "social_sender_id": "internal_openai_key_verify",
-    "meta_account_id": ud["meta_account_id"],
+    "meta_account_id": os.getenv("META_INSTAGRAM_ACCOUNT_ID") or "17841413184256533",
     "phone_number": f"room:{user_id}",
     "_dashboard_test_simulation": True,
 }

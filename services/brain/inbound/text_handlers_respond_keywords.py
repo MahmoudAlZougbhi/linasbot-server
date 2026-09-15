@@ -32,48 +32,6 @@ PRICE_INTENT_KEYWORDS = [
     "price list",
 ]
 
-LASER_HAIR_INTENT_KEYWORDS = [
-    "ليزر شعر",
-    "إزالة شعر",
-    "ازالة شعر",
-    "laser hair",
-    "hair laser",
-    "epilation",
-    "laser removal",
-    "ليزر",
-]
-
-BODY_AREA_HINT_KEYWORDS = [
-    "وجه",
-    "وش",
-    "خد",
-    "شنب",
-    "دقن",
-    "إبط",
-    "ابط",
-    "بيكيني",
-    "حساسة",
-    "يد",
-    "ايد",
-    "ذراع",
-    "رجل",
-    "فخذ",
-    "ظهر",
-    "صدر",
-    "بطن",
-    "رقبة",
-    "underarm",
-    "arm",
-    "arms",
-    "leg",
-    "legs",
-    "face",
-    "back",
-    "chest",
-    "bikini",
-    "body",
-]
-
 CLINIC_SCOPE_KEYWORDS = [
     "ليزر",
     "laser",
@@ -252,64 +210,4 @@ _GREETING_PREFIX_RE = re.compile(
 
 _LEADING_ADDRESS_RE = re.compile(
     r"^\s*(?:أستاذ|استاذ|عزيزتي|حضرتك)\s+[^\s،,:;!?-]+(?:\s+[^\s،,:;!?-]+){0,2}\s*[،,:;!\-–—]*"
-)
-
-BOOKING_OFFER_QUESTION_RE = re.compile(
-    r"(?:"
-    r"هل\s*(?:ترغب|تحب|بدك).*(?:حجز|نحجز).*(?:موعد)"
-    r"|(?:بدك|بتحب|تحب).*(?:نحجز|حجز).*(?:موعد)"
-    r"|would\s+you\s+like.*(?:book|schedule).*(?:appointment)"
-    r"|do\s+you\s+want.*(?:book|schedule).*(?:appointment)"
-    r"|souhaitez[-\s]*vous.*(?:prendre|r[ée]server).*(?:rendez[-\s]*vous)"
-    r"|voulez[-\s]*vous.*(?:prendre|r[ée]server).*(?:rendez[-\s]*vous)"
-    r"|(?:bade|baddi|baddak|bet7eb|te7eb).*(?:hajz|ehjez|ehjoz|maw3ad)"
-    r")",
-    re.IGNORECASE | re.UNICODE,
-)
-
-AFFIRMATIVE_CONFIRMATION_TOKENS = {
-    "اه",
-    "اي",
-    "ايه",
-    "نعم",
-    "تمام",
-    "اكيد",
-    "أكيد",
-    "yes",
-    "yeah",
-    "yep",
-    "oui",
-    "ok",
-    "okay",
-    "sure",
-    "eh",
-}
-AFFIRMATIVE_CONFIRMATION_PHRASES = (
-    "يا ريت",
-    "أكيد بدي",
-    "اكيد بدي",
-    "yes please",
-    "sure please",
-)
-NEGATIVE_CONFIRMATION_TOKENS = {"لا", "no", "non", "nope", "nah"}
-NEGATIVE_CONFIRMATION_PHRASES = (
-    "ما بدي",
-    "مش ضروري",
-    "لا شكرا",
-    "لا شكرًا",
-    "خليني معك",
-    "no thanks",
-    "non merci",
-)
-BOOKING_INTENT_CONFIRMATION_KEYWORDS = (
-    "حجز",
-    "احجز",
-    "موعد",
-    "book",
-    "booking",
-    "appointment",
-    "rendez",
-    "rdv",
-    "hajz",
-    "maw3ad",
 )

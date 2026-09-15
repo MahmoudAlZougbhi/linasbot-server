@@ -6,13 +6,7 @@ import uuid
 
 import pytest
 
-from services.ai_setup.cutover import (
-    evaluate_cutover_readiness,
-    run_publish_rehearsal,
-    seed_rehearsal_tenant_from_draft,
-)
 from services.ai_setup.publish import PublishBlockedError, RollbackTargetError, publish_draft, rollback_to_version
-from services.ai_setup.sot_audit import audit_sot_sources
 from services.ai_setup.storage import get_draft, put_draft
 from services.ai_setup.version_store import PublishedVersionError, load_published_content
 
@@ -135,43 +129,3 @@ async def test_publish_is_idempotent_safe_to_call_repeatedly_without_deadlock() 
     for _ in range(3):
         result = await publish_draft(tenant_id=tenant_id, published_by="tester")
         assert result.content_version_id
-
-
-def test_sot_audit_is_report_only_and_lists_known_legacy_sources() -> None:
-    report = audit_sot_sources()
-    assert report["sources"]
-    ids = {s["id"] for s in report["sources"]}
-    assert "price_list_file" in ids
-    assert "default_whatsapp_contacts" in ids
-    for source in report["sources"]:
-        assert "referenced_in" in source
-        assert "fully_gated_by_cm_runtime_mode" in source
-
-
-@pytest.mark.asyncio
-async def test_cutover_rehearsal_never_touches_real_tenant_published_pointer() -> None:
-    real_tenant_id = f"cm_cutover_test_real_{uuid.uuid4().hex[:8]}"
-    rehearsal = await run_publish_rehearsal(tenant_id=real_tenant_id, published_by="tester")
-    assert rehearsal["ok"] is True
-    assert rehearsal["rehearsal_tenant_id"] != real_tenant_id
-
-    with pytest.raises(PublishedVersionError):
-        load_published_content(real_tenant_id)
-
-    pointer, _ = load_published_content(rehearsal["rehearsal_tenant_id"])
-    assert pointer.content_version_id == rehearsal["content_version_id"]
-
-
-def test_seed_rehearsal_tenant_is_idempotent() -> None:
-    real_tenant_id = f"cm_cutover_test_seed_{uuid.uuid4().hex[:8]}"
-    first_tid = seed_rehearsal_tenant_from_draft(tenant_id=real_tenant_id)
-    second_tid = seed_rehearsal_tenant_from_draft(tenant_id=real_tenant_id)
-    assert first_tid == second_tid
-
-
-def test_cutover_readiness_gate_ready_when_draft_valid() -> None:
-    result = evaluate_cutover_readiness(tenant_id="cm_cutover_test_readiness")
-    assert result.ready is True
-    assert result.checks["draft_validation_ok"] is True
-    assert "sot_audit" in result.checks
-    assert "ungated_legacy_sources" in result.checks

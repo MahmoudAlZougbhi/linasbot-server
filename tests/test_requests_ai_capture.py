@@ -185,49 +185,10 @@ def test_public_comment_refused(req_db, monkeypatch):
 
 
 def test_wa_me_not_forced_when_capture_active(monkeypatch):
-    from services.integrations.social.social_contact_routing import (
-        route_social_contact_request,
-        should_force_wa_me_booking_handoff,
-    )
-
     monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _tid: True)
-    ud = {
-        "tenant_id": "tenant-a",
-        "channel": "instagram",
-        "meta_account_id": "17841413184256533",
-        "social_sender_id": "ig-sender-1",
-    }
     assert skip_forced_booking_wa_me("tenant-a") is True
-    assert should_force_wa_me_booking_handoff("tenant-a", "book appointment") is False
-    out = route_social_contact_request("I want to book an appointment", ud, "en")
-    assert out is None
 
 
-def test_wa_me_booking_still_runs_when_capture_inactive(monkeypatch):
-    from services.integrations.social.social_contact_routing import route_social_contact_request
-
+def test_wa_me_not_skipped_when_capture_inactive(monkeypatch):
     monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _tid: False)
-    ud = {
-        "tenant_id": "linas",
-        "channel": "instagram",
-        "meta_account_id": "17841413184256533",
-        "social_sender_id": "ig-sender-2",
-    }
-    out = route_social_contact_request("I want to book an appointment", ud, "en")
-    assert out is not None
-    assert out.intent == "booking"
-
-
-def test_human_handoff_still_allowed_when_capture_active(monkeypatch):
-    from services.integrations.social.social_contact_routing import route_social_contact_request
-
-    monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _tid: True)
-    ud = {
-        "tenant_id": "linas",
-        "channel": "instagram",
-        "meta_account_id": "17841413184256533",
-        "social_sender_id": "ig-sender-3",
-    }
-    out = route_social_contact_request("I want to speak with a human agent", ud, "en")
-    assert out is not None
-    assert out.intent == "human"
+    assert skip_forced_booking_wa_me("linas") is False

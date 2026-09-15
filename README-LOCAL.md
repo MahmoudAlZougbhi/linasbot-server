@@ -33,7 +33,7 @@ python main.py
 
 - With `APP_MODE=local` or `ENV=development`, the server runs with **auto-reload** (code changes restart the server).
 - Backend listens on **http://localhost:8003**.
-- You should see: `🔄 Local mode: auto-reload enabled` and `🤖 Lina's Laser AI Bot is ready!`.
+- You should see: `🔄 Local mode: auto-reload enabled` and `Linas AI is ready.`
 
 ---
 

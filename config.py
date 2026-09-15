@@ -215,42 +215,6 @@ WELCOME_MESSAGES = {
     "franco": _welcome_message("franco", "مرحباً! كيف يمكنني مساعدتك؟"),
 }
 
-# --- Gender Question Variations ---
-GENDER_QUESTIONS = {
-    "ar": [
-        "كرمال نقدر نساعدك ونفيدك بأفضل شكل، ممكن تخبرنا لو سمحت إذا أنتَ شب أو أنتِ صبية؟ 👦👧",
-        "لنضمن لك تجربة مريحة ومميزة، فينا نعرف لو حضرتك شب أو صبية؟ 🙏😊",
-        "لتقديم مساعدة أكثر دقة وودية، يا ريت تحدد لنا جنسك (شب/صبية)؟ 🌟",
-        "كرمال نكون على مستوى توقعاتك ونفيدك بالمعلومات الصح، هل أنتِ صبية أم أنتَ شاب؟",
-        "من فضلك، لتسهيل تواصلنا وخدمتك بأريحية، ما هو جنسك (ذكر/أنثى)؟",
-        "عزيزي/عزيزتي، لمساعدتك بشكل أفضل وأكثر تخصيصاً، ما هو جنسك؟",
-    ],
-    "en": [
-        "To help and serve you in the best way, could you please tell us if you are male or female? 👦👧",
-        "To ensure a comfortable and excellent experience, may we know if you are male or female? 🙏😊",
-        "For more accurate and friendly assistance, kindly specify your gender (male/female)? 🌟",
-        "To meet your expectations and provide correct information, are you a lady or a gentleman?",
-        "Please, to facilitate our communication and serve you comfortably, what is your gender (male/female)?",
-        "Dear client, to assist you better and more personally, what is your gender?",
-    ],
-    "fr": [
-        "Pour pouvoir vous aider et vous servir au mieux, pourriez-vous nous dire si vous êtes un homme ou une femme ? 👦👧",
-        "Pour vous assurer une expérience confortable et excellente, pouvons-nous savoir si vous êtes un homme ou une femme ? 🙏😊",
-        "Pour une assistance plus précise et amicale, pourriez-vous nous indiquer votre genre (homme/femme) ? 🌟",
-        "Pour répondre à vos attentes et vous fournir des informations correctes, êtes-vous une dame ou un monsieur ?",
-        "S'il vous plaît, pour faciliter notre communication et vous servir confortablement, quel est votre genre (masculin/féminin) ?",
-        "Cher/Chère client(e), pour mieux vous aider et de manière plus personnalisée, quel est votre genre ?",
-    ],
-    "franco": [
-        "Kermel ne2dar nsa3edak w nfeedak bi afdal shakel, mumkin tkabbirna law sama7t iza inta chab aw inti sabieh? 👦👧",
-        "La naddammenlak tajroubeh mray7a w moumayyaze, fina na3ref law 7adertak chab aw sabieh? 🙏😊",
-        "La ta2deem mosa3adeh aktar de2a w wadoudiyeh, ya rit t7addidelna jinsak (chab/sabieh)? 🌟",
-        "Kermel nkoun 3a moustawe tawako3atak w nfeedak bel ma3loumat el sa7, hal enti sabieh aw inta chab?",
-        "Min fadlak, la tasheel tawsolna w khedmetak bi ari7iye, chou jinsak (zakar/ountha)?",
-        "3azizi/azati, la mosa3adetak bi shakel afdal w aktar ta5sees, chou jinsak?",
-    ],
-}
-
 # --- Bot Knowledge Base (Loaded from files) ---
 PRICE_LIST = ""
 BOT_STYLE_GUIDE = ""

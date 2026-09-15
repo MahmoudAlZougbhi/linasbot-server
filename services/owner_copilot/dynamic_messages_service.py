@@ -8,7 +8,6 @@ Used by AI Setup to let operators inspect/edit runtime wording.
 from __future__ import annotations
 
 import json
-import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -43,10 +42,10 @@ DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
         "label": "Ask Clarification",
         "when_used": "Sent when user request is too vague and missing required detail (service/topic).",
         "messages": {
-            "ar": "أكيد، لأي خدمة بدك الأسعار أو المعلومات؟ (إزالة الشعر بالليزر)",
-            "en": "Sure! Which service would you like prices or information about? (laser hair removal)",
-            "fr": "Bien sûr ! Pour quel service souhaitez-vous des prix ou des informations ? (épilation laser)",
-            "franco": "أكيد، لأي خدمة بدك الأسعار أو المعلومات؟ (إزالة الشعر بالليزر)",
+            "ar": "أكيد، لأي خدمة أو موضوع بدك الأسعار أو المعلومات؟",
+            "en": "Sure! Which service or topic would you like prices or information about?",
+            "fr": "Bien sûr ! Pour quel service ou sujet souhaitez-vous des prix ou des informations ?",
+            "franco": "أكيد، لأي خدمة أو موضوع بدك الأسعار أو المعلومات؟",
         },
     },
     "session_greeting_after_inactivity": {
@@ -221,24 +220,4 @@ def get_dynamic_message(key: str, lang: str = "ar") -> str:
     msgs = item.get("messages") or {}
     lang_key = (lang or "ar").lower()
     message = msgs.get(lang_key) or msgs.get("ar") or ""
-    if lang_key in ("ar", "franco"):
-        # Keep Arabic-facing runtime messages in Arabic script for known assistant/brand names.
-        replacements = {
-            "Marwa AI Assistant": "مروى",
-            "Marwa": "مروى",
-            "Lina’s Laser Center": "مركز ليناز ليزر",
-            "Lina's Laser Center": "مركز ليناز ليزر",
-            "Lina’s Laser": "ليناز ليزر",
-            "Lina's Laser": "ليناز ليزر",
-            "مركز ليناس ليزر": "مركز ليناز ليزر",
-            "ليناس ليزر": "ليناز ليزر",
-            "مركز لينا ليزر": "مركز ليناز ليزر",
-            "لينا ليزر": "ليناز ليزر",
-        }
-        for latin_text, arabic_text in replacements.items():
-            message = message.replace(latin_text, arabic_text)
-
-        # Normalize accidental mixed-script leftovers around brand naming.
-        message = re.sub(r"\bLina(?:['’]s)?\b", "ليناز", message, flags=re.IGNORECASE)
-        message = re.sub(r"\bLaser\b", "ليزر", message, flags=re.IGNORECASE)
     return message

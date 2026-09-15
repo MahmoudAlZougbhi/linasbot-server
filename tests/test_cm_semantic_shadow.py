@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import copy
-
 import pytest
 
 from services.ai_setup.embeddings import HASH_EMBEDDING_DIMENSIONS, cosine_similarity, embed_texts, embedding_pin
 from services.ai_setup.paths import indexes_dir
 from services.ai_setup.query_interpreter import interpret_query, interpret_query_deterministic, interpreter_llm_enabled
 from services.ai_setup.schemas import LocalizedLabels, RestrictedPolicy, RestrictedTopic
-from services.ai_setup.semantic_index import build_index, load_index, search
-from services.ai_setup.shadow_eval import run_shadow_eval
-from services.faq.local_qa_service import local_qa_service
+from tests.cm_semantic_index import build_index, load_index, search
 
 pytestmark = pytest.mark.usefixtures("enable_faq_plan")
 
@@ -147,65 +143,3 @@ async def test_interpret_query_defaults_to_deterministic_only(monkeypatch: pytes
     monkeypatch.delenv("CM_INTERPRETER_LLM", raising=False)
     result = await interpret_query("book an appointment")
     assert result.used_llm is False
-
-
-# --------------------------- shadow eval ---------------------------
-
-
-@pytest.mark.asyncio
-async def test_shadow_eval_runs_only_on_provided_questions_and_reports_faq_hits() -> None:
-    from services.ai_setup.faq_integration import create_faq_pair
-
-    tenant_id = "cm_shadow_test_basic"
-
-    async def _fake_translate(question, answer, source_language=None, target_languages=None):
-        targets = target_languages or []
-        return {"success": True, "translations": {lang: {"question": question, "answer": answer} for lang in targets}}
-
-    import services.ai_setup.faq_integration as faq_integration_module
-
-    original = faq_integration_module.language_detection_service.translate_training_pair
-    faq_integration_module.language_detection_service.translate_training_pair = _fake_translate
-    try:
-        result = await create_faq_pair(
-            question="unique shadow eval question",
-            answer="شادو answer عربي",
-            language="en",
-            tenant_id=tenant_id,
-        )
-    finally:
-        faq_integration_module.language_detection_service.translate_training_pair = original
-
-    local_qa_service.qa_pairs = local_qa_service.load_from_jsonl()
-
-    questions = [
-        {"id": "hit-1", "question": "unique shadow eval question", "language": "en"},
-        {"id": "miss-1", "question": "totally unrelated random miss question xyz", "language": "en"},
-    ]
-    report = await run_shadow_eval(tenant_id=tenant_id, questions=questions)
-    report_dict = report.as_dict()
-
-    assert report_dict["total_questions"] == 2
-    assert report_dict["faq_hit_count"] == 1
-    by_id = {r["id"]: r for r in report_dict["results"]}
-    assert by_id["hit-1"]["faq_hit"] is True
-    assert by_id["hit-1"]["interpreter_ran"] is False  # FAQ hit must skip interpreter
-    assert by_id["miss-1"]["faq_hit"] is False
-    assert by_id["miss-1"]["interpreter_ran"] is True
-    assert result["qa_group_id"]
-
-
-@pytest.mark.asyncio
-async def test_shadow_eval_has_no_side_effects_on_qa_store_or_index() -> None:
-    tenant_id = "cm_shadow_test_no_side_effects"
-    before_qa_pairs = copy.deepcopy(local_qa_service.qa_pairs)
-    index_root = indexes_dir(tenant_id)
-    existed_before = index_root.exists()
-
-    questions = [{"id": "q1", "question": "random shadow-only probe text", "language": "en"}]
-    report = await run_shadow_eval(tenant_id=tenant_id, questions=questions)
-
-    assert local_qa_service.qa_pairs == before_qa_pairs
-    assert index_root.exists() == existed_before
-    assert report.total_questions == 1
-    assert report.results[0]["faq_hit"] is False

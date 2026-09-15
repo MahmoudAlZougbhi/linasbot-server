@@ -43,7 +43,6 @@ if not (os.environ.get("OPENAI_API_KEY") or "").strip():
 print("[cm-migrate] env_loaded=true")
 
 from services.ai_setup.prod_migration import run_production_content_migration
-from services.ai_setup.sot_audit import audit_sot_sources
 from services.ai_setup.validation import validate_cm
 
 report = run_production_content_migration(
@@ -53,7 +52,7 @@ report = run_production_content_migration(
     updated_by="prod_cm_migration",
 )
 validation = validate_cm(tenant_id="${TENANT_ID}")
-sot = audit_sot_sources()
+sot = {"retired": True}
 out = {
     "migration": {
         "tenant_id": report["tenant_id"],

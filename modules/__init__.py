@@ -1,7 +1,4 @@
-"""
-Modules package for Lina's Laser AI Bot
-This package contains all modular components of the bot application.
-"""
+"""HTTP modules for Linas AI (owner portal, Live Chat, Meta, billing)."""
 
 from __future__ import annotations
 

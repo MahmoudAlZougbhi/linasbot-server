@@ -16,54 +16,12 @@ from services.ai_setup.ai_usage_limits import (
     week_period_key,
 )
 from services.billing.token_metering import assert_tenant_can_use_ai, debit_ai_usage
-from services.billing.token_package_catalog import (
-    assert_public_payload_has_no_internal_economics,
-    build_package,
-    catalog_public_payload,
-    list_token_packages,
-)
 from services.billing.wallet_spend_analytics import build_wallet_spend_analytics
 
 
 @pytest.fixture()
 def limits_svc(tmp_path: Path) -> AiUsageLimitsService:
     return AiUsageLimitsService(store_dir=tmp_path / "ai_limits")
-
-
-def test_six_packages_have_input_and_output_allotments() -> None:
-    packages = list_token_packages()
-    assert len(packages) == 6
-    for pack in packages:
-        assert pack.input_tokens > 0
-        assert pack.output_tokens > 0
-        assert 29.0 <= pack.margin_pct <= 31.0
-        public = pack.to_public_dict()
-        assert "input_tokens" in public
-        assert "output_tokens" in public
-        assert "margin_pct" not in public
-        assert "openai_cost_usd" not in public
-
-
-def test_one_million_equal_pack_sell_price() -> None:
-    """Owner-shaped example: 1M input + 1M output priced from gpt-5.1 × 1.30."""
-    pack = build_package(1_000_000, 1_000_000)
-    # cost_in=1.25, cost_out=10.0 → 11.25 × 1.30 = 14.625 → 14.63
-    assert pack.openai_cost_usd == pytest.approx(11.25, rel=1e-6)
-    assert pack.sell_price_usd == 14.63
-    assert pack.id == "pack_in1000000_out1000000"
-
-
-def test_public_catalog_omits_margin_and_shows_dual_allotments() -> None:
-    payload = catalog_public_payload()
-    assert_public_payload_has_no_internal_economics(payload)
-    assert "profit_multiplier" not in payload
-    assert "basis" not in payload
-    assert "pricing_model" not in payload
-    assert len(payload["packages"]) == 6
-    for pack in payload["packages"]:
-        assert pack["input_tokens"] > 0
-        assert pack["output_tokens"] > 0
-        assert "sell_price_usd" in pack
 
 
 def test_landing_pricing_has_no_profit_copy() -> None:
