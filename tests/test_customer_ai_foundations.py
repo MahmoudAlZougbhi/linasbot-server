@@ -175,7 +175,7 @@ async def test_facade_always_brain_engine(monkeypatch: pytest.MonkeyPatch) -> No
 async def test_lab_turn_echoes_ids_and_receipts(monkeypatch: pytest.MonkeyPatch) -> None:
     from types import SimpleNamespace
 
-    from services.brain.test_lab import run_lab_turn
+    from tests.cm_test_lab import run_lab_turn
 
     monkeypatch.setenv("LINAS_CUSTOMER_AI_LAB", "true")
 

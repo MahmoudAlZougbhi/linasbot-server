@@ -1,5 +1,5 @@
 import MiniFrame from './MiniFrame';
-import PigmentationSpotPreview from './PigmentationSpotPreview';
+import PhotoQuestionPreview from './PhotoQuestionPreview';
 import { HERO_CHANNELS } from '../HeroChannelRow';
 
 /** @typedef {{ play?: boolean }} MiniPlay */
@@ -42,7 +42,7 @@ export function ReplyLanguage({ play }) {
         ))}
       </div>
       <p className="mt-2 text-right text-xs leading-snug text-[#171A19]" dir="rtl">
-        في عندكن موعد يوم الجمعة؟ عندي بشرة حساسة
+        في عندكن موعد يوم الجمعة؟ بدي أسأل عن الأسعار
       </p>
       <p className="lp-fade-up mt-2 text-right text-xs leading-snug text-[#06715F]" dir="rtl" style={{ animationDelay: '700ms' }}>
         نعم — الزيارة الأولى $49. منبلّش بـ intro call. في موعد الجمعة ١٠ صباحاً.
@@ -60,7 +60,7 @@ export function ReplyComments({ play }) {
         <p className="mt-0.5 text-xs text-[#171A19]">Price questions → Private DM</p>
       </div>
       <p className="mt-2 text-[0.65rem] font-semibold text-[#5C6663]">Public comment</p>
-      <p className="text-xs text-[#171A19]">How much is a full body session?</p>
+        <p className="text-xs text-[#171A19]">How much is a starter visit?</p>
       <p className="lp-fade-up mt-1.5 text-xs text-[#06715F]" style={{ animationDelay: '400ms' }}>
         Sending the details privately ✓
       </p>
@@ -81,7 +81,7 @@ export function ReplyVoiceVision({ play }) {
         <span className="h-5 flex-1 rounded-sm bg-gradient-to-r from-[#06715F] via-[#54C7AC] to-[#06715F] opacity-80" />
         <span className="text-[0.65rem] text-[#5C6663]">0:12</span>
       </div>
-      <PigmentationSpotPreview />
+      <PhotoQuestionPreview />
       <p className="mt-2 text-center text-[0.65rem] text-[#5C6663]">Can you see this in the photo?</p>
       <p className="lp-fade-up mt-1 text-center text-xs text-[#06715F]" style={{ animationDelay: '1100ms' }}>
         Yes — I’ll send the photo to your team with the question.

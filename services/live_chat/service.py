@@ -19,7 +19,6 @@ from services.live_chat.service_history import LiveChatHistoryMixin
 from services.live_chat.service_history_api import LiveChatHistoryApiMixin
 from services.live_chat.service_inbox_cache import LiveChatInboxCacheMixin
 from services.live_chat.service_index import LiveChatIndexMixin
-from services.live_chat.service_legacy_scan import LiveChatLegacyScanMixin
 from services.live_chat.service_lifecycle import LiveChatLifecycleMixin
 from services.live_chat.service_operator import LiveChatOperatorMixin
 from services.live_chat.service_phone import LiveChatPhoneMixin
@@ -33,7 +32,6 @@ class LiveChatService(
     LiveChatInboxCacheMixin,
     LiveChatRebuildMixin,
     LiveChatHistoryMixin,
-    LiveChatLegacyScanMixin,
     LiveChatUnifiedMixin,
     LiveChatTemplatesMixin,
     LiveChatHistoryApiMixin,

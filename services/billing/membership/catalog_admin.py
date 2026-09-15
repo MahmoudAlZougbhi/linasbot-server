@@ -91,7 +91,7 @@ def payment_readiness() -> dict[str, Any]:
             "blocker": "google_iap_not_fully_implemented",
         },
         "stripe": {
-            "status": "legacy_token_packs",
+            "status": "retired_token_packs",
             "sale_ready": False,
             "blocker": "not_message_subscription_checkout",
         },

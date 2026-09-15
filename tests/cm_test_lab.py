@@ -1,4 +1,7 @@
-"""Isolated Customer Brain lab. Capture-only; no live channel send."""
+"""Isolated Customer Brain lab helpers for pytest. Capture-only; no live channel send.
+
+Not imported by production HTTP modules. LINAS_CUSTOMER_AI_LAB stays false in prod.
+"""
 
 from __future__ import annotations
 

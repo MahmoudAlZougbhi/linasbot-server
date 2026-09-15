@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.brain.test_lab import lab_turn_tenant_allowed
+from tests.cm_test_lab import lab_turn_tenant_allowed
 
 
 def test_lab_turn_allows_lab_prefix_only() -> None:
