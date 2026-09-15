@@ -106,7 +106,7 @@ Fields the Subscription UI reads:
 - `available_messages` / `included_remaining` / `purchased_messages` only when `message_billing_active` is true
 - leftover credit quantities stay labeled credits (`wallet_unit=credits`). Credits are not Messages remaining.
 
-This wave does **not** flip `MESSAGE_BILLING_ENABLED`. Credit ledger, leftover_reserve, and token_wallet stay until Mahmoud approves cutover.
+This wave does **not** flip `MESSAGE_BILLING_ENABLED`. Credit ledger and leftover_reserve stay until Mahmoud approves message-meter cutover.
 
 WAVE D executed the cutover: live meter is **credits** (plan allowance + IAP `com.linasai.credits.*`). Message billing, token-wallet AI gate, and draft message catalog are not live.
 
@@ -259,7 +259,7 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - `data/app_settings.json` has no smartMessaging schedules, booking body-part map, or `enableTraining`.
 - `gender_recognition_service` deleted (barrel re-export only; no live callers).
 - Brain evals: `real_tenant_index` / `golden_pack` / `shop_a_qa_sections`. Live-lab tenant ids are `eval-lab-a` / `eval-lab-b`. Production readiness does not overlay `live_lab_latest.json`.
-- **Kept on purpose (until X9):** `services/billing/token_wallet_*` (Copilot wallet display + Stripe `token_pack` only — not Owner Catalog). Owner Catalog is `services/billing/membership/message_catalog.py`.
+- **Retired in X9:** `services/billing/token_wallet_*`. Owner Catalog is `services/billing/membership/message_catalog.py`.
 - Tests: `tests/test_wave_x6_data_crumbs.py`.
 
 ## WAVE X7 — Meta + Apple fold
@@ -279,12 +279,17 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - `main.py` no longer mounts `local_qa_api` (helpers stay for FAQ/CM) and has no APK download route.
 - `config.py` has no `LINASLASER_*` bindings. Booking FSM/training keyword museum stripped. `user_booking_state` / `user_in_training_mode` stay as HA session snapshot fields.
 - Retired founder/lab workflows: live-lab, copilot-v2-flags-apply, cm-linas-content-audit, linas-index-ha, prod-brain-linas-smoke.
-- **Kept on purpose:** `prod_cm_linas_*` / bridge scripts still invoked by `cm-production-cutover.yml`. `contentManagers` permission (live CM). `PricesEditor` (reachable from ServicesScreen). `message_catalog` + token_wallet (X9).
+- **Kept on purpose:** `prod_cm_linas_*` / bridge scripts still invoked by `cm-production-cutover.yml`. `contentManagers` permission (live CM). `PricesEditor` (reachable from ServicesScreen). `message_catalog` (Owner Catalog).
 - Web: orphan AI-limits screenshot gone; landing demo copy de-clinicked; AuthContext.register removed; museum LiveChat types stripped.
 - Mobile: runtime-unreachable dashboard/billing/CM/nav orphans deleted. Drawer module list unchanged.
 - Tests: `tests/test_wave_x8_radical_safe.py`.
 
+## WAVE X9 — kill token_wallet dual
 
-
-
+- Live AI meter is the **credit ledger** (`credit_ai_gate` / Copilot + Subscription).
+- Copilot `account_state` / `tools_read` expose `credits.remaining`, not a prepaid token wallet.
+- Stripe `/api/billing/stripe/webhook` keeps the credits/`message_pack` path. `token_pack` is skipped (`token_pack_retired`).
+- `services/billing/token_wallet_*.py` deleted. SQLAlchemy `token_wallets` tables stay in alembic/HA models (no schema drop).
+- **Kept:** `message_catalog` + Owner Catalog + `platform_message_api`. Credit IAP `com.linasai.credits.*`.
+- Tests: `tests/test_wave_x9_kill_token_wallet.py`.
 

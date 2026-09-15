@@ -14,7 +14,6 @@ from handlers import photo_handlers
 from services.ai_setup.capability_gates import human_handoff_enabled, image_analysis_enabled, voice_processing_enabled
 from services.ai_usage_limits import AiUsageLimitsService
 from services.auth_email_tokens import AuthEmailTokenRecord, AuthEmailTokenService
-from services.billing.token_wallet_service import TokenWalletService
 from services.wallet_spend_analytics import _entry_matches_tenant, build_wallet_spend_analytics
 
 
@@ -60,33 +59,6 @@ async def test_whatsapp_cloud_ops_bind_unbind_require_tenant(monkeypatch: pytest
         await ops.whatsapp_app_review_unbind(request, body={"tenant_id": "  "})
     assert unbind_exc.value.status_code == 400
     assert unbind_exc.value.detail == "tenant_id_required"
-
-
-@pytest.mark.parametrize("tenant_id", [None, "", "   "])
-def test_token_wallet_rejects_missing_tenant(tmp_path: Path, tenant_id: str | None) -> None:
-    svc = TokenWalletService(store_dir=tmp_path / "wallets")
-    with pytest.raises(ValueError, match="tenant_id required"):
-        svc.get_wallet(tenant_id)  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="tenant_id required"):
-        svc.debit(tenant_id=tenant_id, prompt_tokens=1, completion_tokens=1)  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="tenant_id required"):
-        svc.recent_ledger(tenant_id)  # type: ignore[arg-type]
-
-
-def test_wallet_cross_tenant_metering_isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "linas")
-    svc = TokenWalletService(store_dir=tmp_path / "wallets")
-    svc.credit(tenant_id="clinic-a", input_tokens=100, output_tokens=50, reason="test")
-    svc.credit(tenant_id="clinic-b", input_tokens=200, output_tokens=80, reason="test")
-
-    svc.debit(tenant_id="clinic-a", prompt_tokens=10, completion_tokens=5)
-    snap_a = svc.get_wallet("clinic-a")
-    snap_b = svc.get_wallet("clinic-b")
-
-    assert snap_a.input_remaining == 90
-    assert snap_a.output_remaining == 45
-    assert snap_b.input_remaining == 200
-    assert snap_b.output_remaining == 80
 
 
 @pytest.mark.parametrize("tenant_id", [None, "", "   "])

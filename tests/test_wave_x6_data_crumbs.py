@@ -23,7 +23,6 @@ def test_wave_x6_preview_and_gender_gone() -> None:
     keep = (
         "services/integrations/whatsapp/template_header_image.py",
         "services/integrations/whatsapp/cloud_template_payload.py",
-        "services/billing/token_wallet_service.py",
         "services/billing/membership/message_catalog.py",
     )
     missing = [rel for rel in keep if not (ROOT / rel).exists()]

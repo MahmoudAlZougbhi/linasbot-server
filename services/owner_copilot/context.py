@@ -123,7 +123,7 @@ def pack_owner_turn_context(
             "cm": account.get("cm"),
             "integrations": account.get("integrations"),
             "plan_id": (account.get("plan") or {}).get("plan_id") or (account.get("plan") or {}).get("plan"),
-            "wallet_brief": account.get("wallet"),
+            "credits_brief": account.get("credits"),
             "profile": {
                 "display_name": (account.get("profile") or {}).get("display_name"),
                 "gender": (account.get("profile") or {}).get("gender"),

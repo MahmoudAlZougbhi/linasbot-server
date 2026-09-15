@@ -132,16 +132,15 @@ async def tool_validate_cm(*, tenant_id: str, role: str) -> ToolResult:
 async def tool_read_usage(*, tenant_id: str, role: str) -> ToolResult:
     del role
     from services.billing.entitlements_service import get_tenant_entitlement_public
-    from services.billing.token_wallet_service import token_wallet_service
+    from services.credit_ai_gate import owner_credits_public
     from services.dashboard.message_surface import copilot_usage_overlay
 
-    wallet = token_wallet_service.get_wallet(tenant_id).to_public_dict()
     plan = get_tenant_entitlement_public(tenant_id)
     return ToolResult(
         ok=True,
         name="read_usage",
         data={
-            "wallet": wallet,
+            "credits": owner_credits_public(tenant_id),
             **copilot_usage_overlay(tenant_id, str(plan.get("plan_id") or "")),
         },
     )
@@ -173,7 +172,7 @@ async def tool_read_dashboard_metrics(*, tenant_id: str, role: str, user_id: str
     data: dict[str, Any] = {"tenant_id": tenant_id}
     try:
         from services.billing.entitlements_service import get_tenant_entitlement_public
-        from services.billing.token_wallet_service import token_wallet_service
+        from services.credit_ai_gate import owner_credits_public
         from services.owner_copilot.account_state import compute_cm_progress, compute_integration_summary
 
         cm = compute_cm_progress(tenant_id)
@@ -183,7 +182,7 @@ async def tool_read_dashboard_metrics(*, tenant_id: str, role: str, user_id: str
             "cm_published": cm.get("published"),
             "integrations_connected": integ.get("any_connected"),
         }
-        data["wallet"] = token_wallet_service.get_wallet(tenant_id).to_public_dict()
+        data["credits"] = owner_credits_public(tenant_id)
         data["plan"] = get_tenant_entitlement_public(tenant_id)
         if user_id:
             data["viewer_user_id"] = user_id

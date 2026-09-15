@@ -1,7 +1,7 @@
 """Canonical remaining-credit gate for Owner Copilot and channel AI.
 
 Dashboard remaining and every AI generation gate must use ``remaining_credits``.
-This is the credit ledger spend wallet — not the prepaid token wallet.
+This is the credit ledger spend wallet.
 """
 
 from __future__ import annotations
@@ -78,3 +78,11 @@ def owner_credits_paused_payload(tenant_id: str | None) -> dict[str, Any]:
         "show_upgrade": show_upgrade,
         "actions": {"buy_credits": True, "upgrade_plan": show_upgrade},
     }
+
+
+def owner_credits_public(tenant_id: str | None) -> dict[str, Any]:
+    """Copilot/account snapshot. Live meter is leftover credits only."""
+    tid = (tenant_id or "").strip().lower()
+    if not tid:
+        return {"unit": "credits", "remaining": 0, "available": False}
+    return {"unit": "credits", "remaining": remaining_credits(tid), "available": True}

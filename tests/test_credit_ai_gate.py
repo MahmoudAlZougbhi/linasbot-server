@@ -69,15 +69,11 @@ def test_upgrade_hidden_only_on_max() -> None:
 
 def test_clinic_tenants_are_not_linas_exempt(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.billing.entitlements_service import is_subscription_exempt_tenant
-    from services.billing.token_wallet_service import is_unlimited_tenant
 
     monkeypatch.delenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", raising=False)
-    monkeypatch.delenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", raising=False)
     assert is_subscription_exempt_tenant("linas") is False
-    assert is_unlimited_tenant("linas") is False
     for tid in ("ok-clinic", "clinic", "linas-clinic", "linas_clinic"):
         assert is_subscription_exempt_tenant(tid) is False
-        assert is_unlimited_tenant(tid) is False
 
 
 @pytest.mark.asyncio

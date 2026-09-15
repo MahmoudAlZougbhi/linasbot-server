@@ -18,7 +18,6 @@ from services.admin_credit_idempotency import (  # noqa: E402
     store_admin_credit_idempotent,
 )
 from services.auth_email_tokens import AuthEmailTokenService  # noqa: E402
-from services.billing.token_wallet_service import InsufficientTokenBalance, TokenWalletService  # noqa: E402
 from services.mobile_refresh_token_service import MobileRefreshTokenService  # noqa: E402
 from services.stripe_checkout_service import StripeCheckoutService  # noqa: E402
 
@@ -40,19 +39,6 @@ def pg_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     Base.metadata.create_all(engine)
     yield tmp_path
     reset_engine_for_tests()
-
-
-def test_wallet_credit_debit_transactional(pg_env: Path) -> None:
-    svc = TokenWalletService(store_dir=pg_env / "wallets")
-    svc.credit("tenant-a", input_tokens=100, output_tokens=50, reason="test_seed")
-    snap = svc.debit("tenant-a", prompt_tokens=10, completion_tokens=5, reason="ai_usage")
-    assert snap.input_remaining == 90
-    assert snap.output_remaining == 45
-    ledger = svc.recent_ledger("tenant-a", limit=10)
-    assert any(row.get("type") == "credit" for row in ledger)
-    assert any(row.get("type") == "debit" for row in ledger)
-    with pytest.raises(InsufficientTokenBalance):
-        svc.debit("tenant-a", prompt_tokens=10_000, completion_tokens=0)
 
 
 def test_stripe_event_idempotency_unique(pg_env: Path) -> None:
