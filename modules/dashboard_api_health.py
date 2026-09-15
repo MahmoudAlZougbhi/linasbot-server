@@ -15,7 +15,7 @@ _HA_INTERNAL_READINESS = contextvars.ContextVar("linas_ha_internal_readiness", d
 def tenant_runtime_config_readiness_check() -> dict[str, Any]:
     """Postgres ping only. Per-tenant file→Postgres copy is not a live admit gate.
 
-    tenant env for HA maintenance only — not Linas Laser product
+    tenant env for HA maintenance only — not founder clinic product
     """
     from services.tenant_runtime.tenant_runtime_config_backend import tenant_runtime_config_postgres_required
 

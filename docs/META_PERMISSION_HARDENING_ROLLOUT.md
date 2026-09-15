@@ -33,7 +33,7 @@ Deploy **only** the final **`main` merge SHA** via the existing protected workfl
 2. Transient target verification API
 3. **`run_target_alembic_migrate`** → `scripts/ha/release_alembic_migrate.py`  
    (systemd `linasbot-ha-alembic-migrate.service`, `LINAS_HA_VERIFY_RELEASE_SHA` pinned).  
-   Production nodes do **not** need `LINASBOT_TENANT_ID` for this admit step: the leftover node-local tenant-file copy is skipped (Postgres is already the runtime SoT). Set `LINASBOT_TENANT_ID` only for offline `scripts/ha/migrate_tenant_runtime_config_to_postgres.py` (ops maintenance tenant, not Linas Laser product).
+   Production nodes do **not** need `LINASBOT_TENANT_ID` for this admit step: the leftover node-local tenant-file copy is skipped (Postgres is already the runtime SoT). Set `LINASBOT_TENANT_ID` only for offline `scripts/ha/migrate_tenant_runtime_config_to_postgres.py` (ops maintenance tenant, not founder clinic product).
 4. Readiness probe
 5. LB admission only after parity
 
