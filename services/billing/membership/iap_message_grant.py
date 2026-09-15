@@ -1,4 +1,7 @@
-"""Verified-purchase message grants are not a live meter. IAP credits grant the ledger."""
+"""Verified-purchase message grants are not a live meter. IAP credits grant the ledger.
+
+Retired Stripe `linas_token_pack` metadata is skip-only (`token_pack_retired`).
+"""
 
 from __future__ import annotations
 

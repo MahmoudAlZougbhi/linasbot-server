@@ -89,9 +89,9 @@ def _tiktok_media_reaches_brain() -> bool:
 
 
 def _omni_generate_releases_unsent() -> bool:
-    from services.brain.test_lab import run_lab_turn
     from services.integrations.omnichannel.channel_whatsapp import generate_whatsapp_reply
     from services.integrations.omnichannel.generate import handle_omnichannel_generate
+    from tests.cm_test_lab import run_lab_turn
 
     return (
         "release_unsent_omni_hold" in getsource(handle_omnichannel_generate)

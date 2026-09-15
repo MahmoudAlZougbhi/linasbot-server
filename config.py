@@ -220,8 +220,6 @@ PRICE_LIST = ""
 BOT_STYLE_GUIDE = ""
 CORE_KNOWLEDGE_BASE = ""
 SYSTEM_PROMPT_TEMPLATE = ""
-CUSTOM_TRAINING_DATA: list[Any] = []  # List of custom Q&A entries
-CUSTOM_TRAINING_DATA_MAP: dict[Any, Any] = {}  # Map for quick lookup of custom Q&A by (question, language)
 
 
 def load_bot_assets() -> None:
@@ -235,13 +233,5 @@ def load_bot_assets() -> None:
     SYSTEM_PROMPT_TEMPLATE = ""
 
 
-def load_training_data() -> None:
-    """Clinic /train corpus is not loaded. FAQ lives in published CM."""
-    global CUSTOM_TRAINING_DATA, CUSTOM_TRAINING_DATA_MAP
-    CUSTOM_TRAINING_DATA.clear()
-    CUSTOM_TRAINING_DATA_MAP.clear()
-
-
 # --- Initialize Bot Assets on startup ---
 load_bot_assets()
-# load_training_data()  # DISABLED - No longer needed, Q&A is API-based

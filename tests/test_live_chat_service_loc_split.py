@@ -22,7 +22,6 @@ def test_live_chat_service_modules_under_500_lines() -> None:
         Path("services/live_chat/operator_idle.py"),
         Path("services/live_chat/tenant.py"),
         Path("services/live_chat/service_inbox_cache.py"),
-        Path("services/live_chat/service_legacy_scan.py"),
     ]
     assert files
     for path in [*files, *extra]:

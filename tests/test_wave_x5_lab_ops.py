@@ -54,8 +54,9 @@ def test_wave_x5_linaslaser_api_is_alias_of_external() -> None:
     example = (ROOT / ".env.example").read_text(encoding="utf-8")
     assert "EXTERNAL_API_BASE_URL" in config
     assert "LINASLASER_API_" not in config
-    assert "LINASLASER_BOC_BOOKING_ENABLED" in (ROOT / "services/product_features.py").read_text(encoding="utf-8")
-    assert "Never set LINASLASER_BOC_BOOKING_ENABLED" in example
+    assert "BOC_BOOKING_ENABLED" in (ROOT / "services/product_features.py").read_text(encoding="utf-8")
+    assert "LINASLASER_BOC_BOOKING_ENABLED" not in (ROOT / "services/product_features.py").read_text(encoding="utf-8")
+    assert "Never set BOC_BOOKING_ENABLED" in example
     from services.product_features import boc_booking_enabled
 
     assert boc_booking_enabled() is False

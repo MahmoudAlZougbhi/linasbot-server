@@ -249,7 +249,7 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - `customer-brain-live-lab-ha.yml` is retired: no production SSH, dispatch refuses.
 - `prod_migration` does not seed `laser_hair_removal`, shave-before-laser, or clinic Beirut/Antelias branches.
 - `section_classifier` `_SERVICE_SPECS` are generic SaaS fixtures only (no Laser/tattoo/CO2/DPL catalog).
-- `LINASLASER_API_*` aliases are gone from `config.py`. `LINASLASER_BOC_BOOKING_ENABLED` stays the fail-closed BOC env name in `product_features.py`.
+- `LINASLASER_API_*` aliases are gone from `config.py`. `BOC_BOOKING_ENABLED` is the fail-closed BOC env name in `product_features.py` (`boc_booking_enabled()` is always false).
 - Tests: `tests/test_wave_x5_lab_ops.py`.
 
 ## WAVE X6 — data / preview crumbs
@@ -316,5 +316,15 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - Named clusters folded without shims: `ai_reply_*` → `brain/ai_reply/`; `credit_*` + IAP/Stripe meter → `billing/`; `social_*` → `integrations/social/`; `guest_*` → `guest/`; `ha_*` → `scale/`; email/auth/tenant_runtime packages; remaining flats into dashboard/live_chat/team/owner_copilot/ai_setup/queues.
 - **Kept:** Brain reply/media/comments; HA scale core; Owner Catalog; credit ledger; marketing + portal + drawer.
 - Tests: `tests/test_wave_x12_handlers_flat_fold.py`.
+
+## WAVE P1 — landing / lab / naming scrub
+
+- Marketing minis keep structure; clinic serum/pigment/full-body demo copy is neutralized.
+- Capture-only lab helpers live under `tests/cm_test_lab.py` (no production import). Owner Lab HTTP stays unmounted. Prod workflows still write `LINAS_CUSTOMER_AI_LAB=false`.
+- Live Chat `_legacy_active_scan_for_fallback` deleted (zero callers). Inbox stays tenant-scoped index paths.
+- `FaqListToolbar.tsx` deleted. `BOC_BOOKING_ENABLED` is the documented env name; `boc_booking_enabled()` stays always false.
+- **Skipped:** Redis `luna_*` stage labels (infra/histogram break without Mahmoud approval).
+- **Kept:** `prod_cm_linas_*` + `cm-production-cutover.yml`; `message_catalog`; `is_social_channel`; alembic `token_wallets` (no DROP); hub-hidden CM editors; Stripe skip of `linas_token_pack`.
+- Tests: `tests/test_wave_p1_crumb_clean.py`.
 
 
