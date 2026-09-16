@@ -15,6 +15,8 @@ def test_wave_p0_dead_modules_gone() -> None:
         "services/ai_setup/sot_audit.py",
         "services/products/crv2_tools_stub.py",
         "services/brain/inbound/VERSION.py",
+        "utils/appointment_slot_rules.py",
+        "utils/reminder_analytics.py",
     )
     leftover = [rel for rel in gone if (ROOT / rel).exists()]
     assert not leftover, leftover
@@ -46,8 +48,22 @@ def test_wave_p0_health_brand_is_saas() -> None:
     init = (ROOT / "modules/__init__.py").read_text(encoding="utf-8")
     assert "Lina's Laser AI Bot" not in health
     assert "Lina’s Laser AI Bot" not in health
+    assert "Linas Laser" not in health
     assert "Lina's Laser AI Bot" not in init
     assert "Linas AI is running." in health
+
+
+def test_wave_p0_systemd_brand_and_live_cert_generic() -> None:
+    unit = (ROOT / "deploy/systemd/linasbot.service").read_text(encoding="utf-8")
+    worker = (ROOT / "deploy/systemd/linasbot-worker@.service").read_text(encoding="utf-8")
+    assert "Description=Linas AI\n" in unit
+    assert "Linas Laser" not in unit
+    assert "Linas Laser" not in worker
+    assert "MAX_GENDER_ASK_ATTEMPTS" not in (ROOT / "config.py").read_text(encoding="utf-8")
+    live = ROOT / "_live_cert"
+    blob = "\n".join(path.read_text(encoding="utf-8") for path in live.rglob("*.py") if path.is_file())
+    for token in ("Antelias", "Beirut", "أنطلياس", "بيروت", "Beyrouth"):
+        assert token not in blob, token
 
 
 def test_wave_p0_keep_social_channel_and_expire() -> None:

@@ -14,8 +14,8 @@ ASSETS = CERT / "assets"
 TENANT_ID = "v10_live_cert_store"
 FAQ_AR_Q = "شو أوقات الدوام؟"
 FAQ_EN_Q = "What are your opening hours?"
-FAQ_AR_A = "بيروت من 10:00 إلى 20:00. أنطلياس من 11:00 إلى 19:00."
-FAQ_EN_A = "Beirut 10:00–20:00. Antelias 11:00–19:00."
+FAQ_AR_A = "الفرع الشمالي من 10:00 إلى 20:00. الفرع الجنوبي من 11:00 إلى 19:00."
+FAQ_EN_A = "North 10:00–20:00. South 11:00–19:00."
 
 _KEY_CANDIDATES = (
     Path("/Users/alzoughbi/linasbot-v10-live-cert-wt/.secrets/openai_api_key"),

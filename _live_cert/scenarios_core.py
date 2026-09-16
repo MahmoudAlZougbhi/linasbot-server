@@ -34,11 +34,11 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
         evidence_has_service=any("svc_full_body" in str(x) for x in tr["selected_source_ids"]),
     )
 
-    out = await dm("إيمتى بتسكروا بأنطلياس؟", conversation_id="c_hours", provider_sender_id="u_hours")
-    tr = trace(out, message="إيمتى بتسكروا بأنطلياس؟", channel="instagram_dm")
+    out = await dm("إيمتى بتسكروا بالفرع الجنوبي؟", conversation_id="c_hours", provider_sender_id="u_hours")
+    tr = trace(out, message="إيمتى بتسكروا بالفرع الجنوبي؟", channel="instagram_dm")
     reply = out.reply or ""
     record(
-        "location_hours_antelias",
+        "location_hours_south",
         "REAL OPENAI",
         ok=("19" in reply or "٧" in reply or "7" in reply) and tr["voyage_called"],
         reason=out.reason,
@@ -113,7 +113,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
             action={
                 "action": "update_fields",
                 "draft_id": created.get("draft_id"),
-                "field_updates": {"name": "نور", "age": 28, "height": 170, "area": "Antelias", "day": "Thursday"},
+                "field_updates": {"name": "نور", "age": 28, "height": 170, "area": "South", "day": "Thursday"},
             },
         )
         added = apply_draft_action(
@@ -182,7 +182,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
         result={"paused": paused, "resumed": resumed},
     )
 
-    cmt_msg = "قدي سعر Full Body بأنطلياس وإيمتى بتسكروا؟"
+    cmt_msg = "قدي سعر Full Body بالفرع الجنوبي وإيمتى بتسكروا؟"
     out = await comment(cmt_msg, channel="instagram_comment", post_id="POST_GENERIC")
     tr = trace(out, message=cmt_msg, channel="instagram_comment")
     record(

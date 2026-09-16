@@ -76,7 +76,7 @@ sudo journalctl -u linasbot -f
 
 ```ini
 [Unit]
-Description=Linas Laser AI Bot
+Description=Linas AI
 After=network.target
 
 [Service]

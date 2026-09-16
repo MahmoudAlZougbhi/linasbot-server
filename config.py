@@ -194,7 +194,6 @@ MAX_CONTEXT_MESSAGES = 20  # Max number of messages to keep in conversation cont
 CONTEXT_WINDOW_HOURS = int(os.getenv("CONTEXT_WINDOW_HOURS", "12"))
 MAX_CONTEXT_MESSAGES_IN_WINDOW = int(os.getenv("MAX_CONTEXT_MESSAGES_IN_WINDOW", "0"))
 MAX_RELEVANT_CUSTOM_QA = 3  # Max relevant custom Q&A entries to fetch
-MAX_GENDER_ASK_ATTEMPTS = 3  # Max times bot will ask for gender before suggesting human handover
 
 # Delay for combining rapid messages from a user (e.g., multiple short texts sent quickly)
 # Requirement: wait 3 seconds after the LAST message before responding.

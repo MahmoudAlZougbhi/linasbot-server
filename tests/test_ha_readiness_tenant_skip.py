@@ -24,7 +24,7 @@ def test_tenant_runtime_config_readiness_skips_file_migrate(monkeypatch) -> None
     assert result["per_tenant_file_migrate"] == "skipped"
     assert "tenant_id required" not in str(result)
     src = inspect.getsource(tenant_runtime_config_readiness_check)
-    assert "tenant env for HA maintenance only — not Linas Laser product" in src
+    assert "tenant env for HA maintenance only — not founder clinic product" in src
 
 
 def test_tenant_runtime_config_readiness_fails_when_postgres_down(monkeypatch) -> None:
