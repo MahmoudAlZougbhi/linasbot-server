@@ -46,6 +46,10 @@ def apply_greeting(turn: CustomerTurn, message: str, channel: str, envelope: Fin
     )
     if not (greet.eligible and greet.text):
         return envelope
+    from services.brain.outbound_safety import is_customer_safe_opener
+
+    if not is_customer_safe_opener(greet.text):
+        return envelope
     turn.state = turn.state.model_copy(update={"greeted": True})
     remember_turn(turn)
     destination = envelope.messages[0].destination or _destination(channel, turn)
@@ -115,11 +119,18 @@ async def generate_verified(
                     **extra,
                 },
             )
+        from services.brain.templates import brain_template
+
+        lang = str((turn.extra or {}).get("response_language") or "")
         return TurnResult(
             stop_reason="failed_closed",
-            envelope=FinalReplyEnvelope(decision="clarify"),
+            envelope=FinalReplyEnvelope(
+                decision="clarify",
+                messages=[OutboundMessage(destination=dest, text=brain_template("no_evidence", lang))],
+            ),
             extra={
                 "phase": "generate",
+                "llm_fail_soft": True,
                 "plan": plan.model_dump(),
                 "receipts": list(resource_receipts),
                 "agent_trace": agent_trace,

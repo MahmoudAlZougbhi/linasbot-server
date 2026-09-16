@@ -184,6 +184,10 @@ def evaluate_greeting(
         text = _rule_text(rule, language)
         if not text:
             continue
+        from services.brain.outbound_safety import is_customer_safe_opener
+
+        if not is_customer_safe_opener(text):
+            continue
         return GreetingDecision(True, text=text, rule_id=rule.id, reason="matched")
     return GreetingDecision(False, reason="no_match")
 

@@ -19,14 +19,42 @@ from services.brain.reply.models import CustomerReplyOutcome
 from services.brain.turn_pipeline import run_dm_after_gates
 
 
+def _scrub_instruction_reply(result: TurnResult, reply: str | None) -> tuple[str | None, dict[str, Any]]:
+    extra = dict(result.extra or {})
+    text = (reply or "").strip()
+    if not text:
+        return reply, extra
+    from services.brain.outbound_safety import looks_like_instruction_text
+
+    if not looks_like_instruction_text(text):
+        return reply, extra
+    tenant_id = str(extra.get("tenant_id") or "")
+    lang = str(extra.get("response_language") or "")
+    inbound = str(extra.get("inbound_preview") or "")
+    path = str(extra.get("path") or extra.get("phase") or "")
+    extra["outbound_instruction_blocked"] = True
+    extra["blocker"] = str(extra.get("blocker") or "outbound_instruction_blocked")[:200]
+    extra["exception_class"] = str(extra.get("exception_class") or "OutboundInstructionBlocked")
+    from services.brain.greeting import is_greeting_only, safe_greeting_text
+
+    if "identity_greeting" in path or is_greeting_only(inbound):
+        extra["outbound_replacement"] = "safe_greeting"
+        return safe_greeting_text(tenant_id=tenant_id, message=inbound or "hi", language=lang), extra
+    from services.brain.templates import brain_template
+
+    extra["outbound_replacement"] = "no_evidence"
+    return brain_template("no_evidence", lang), extra
+
+
 def _outcome(result: TurnResult, *, comment_surface: bool = False) -> CustomerReplyOutcome:
     public = result.envelope.public_comment_text
     private = result.envelope.private_dm_text
+    extra = dict(result.extra or {})
     if comment_surface:
         reply = public or None
         has_out = bool(public or private)
     else:
-        reply = result.envelope.reply_text or None
+        reply, extra = _scrub_instruction_reply(result, result.envelope.reply_text or None)
         has_out = bool(reply)
     stop = result.stop_reason != "ok" or not has_out
     return CustomerReplyOutcome(
@@ -41,8 +69,8 @@ def _outcome(result: TurnResult, *, comment_surface: bool = False) -> CustomerRe
             "outbound_messages": [item.model_dump() for item in result.envelope.messages],
             "public_comment_text": result.envelope.public_comment_text,
             "private_dm_text": result.envelope.private_dm_text,
-            **result.extra,
-            "operation_id": result.extra.get("operation_id") or "",
+            **extra,
+            "operation_id": extra.get("operation_id") or "",
         },
     )
 

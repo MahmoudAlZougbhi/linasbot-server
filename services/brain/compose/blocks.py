@@ -37,6 +37,7 @@ def compose_evidence_context(
     policy_notes: list[str] | None = None,
     receipts: list[str] | None = None,
     followup_goal: str = "",
+    greeting_turn: bool = False,
 ) -> str:
     parts: list[str] = []
     if identity:
@@ -47,16 +48,18 @@ def compose_evidence_context(
             f"do={'; '.join(identity.do_list)}",
             f"dont={'; '.join(identity.dont_list)}",
         ]
-        if identity.identity_summary:
+        from services.brain.outbound_safety import is_customer_safe_opener
+
+        if identity.identity_summary and (not greeting_turn or is_customer_safe_opener(identity.identity_summary)):
             ident_lines.append(f"summary={identity.identity_summary}")
-        if identity.short_introduction:
+        if identity.short_introduction and (not greeting_turn or is_customer_safe_opener(identity.short_introduction)):
             ident_lines.append(f"introduction={identity.short_introduction}")
-        if identity.greeting_behavior:
+        if identity.greeting_behavior and (not greeting_turn or is_customer_safe_opener(identity.greeting_behavior)):
             ident_lines.append(f"greeting_behavior={identity.greeting_behavior}")
-        if identity.advanced_instructions:
+        if identity.advanced_instructions and not greeting_turn:
             ident_lines.append(f"advanced={identity.advanced_instructions}")
         parts.append("IDENTITY\n" + "\n".join(ident_lines))
-        if identity.style_body:
+        if identity.style_body and not greeting_turn:
             parts.append(f"STYLE\n{identity.style_body}")
     if followup_goal:
         from services.brain.followup_goals import resolve_followup_instruction

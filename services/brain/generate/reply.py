@@ -69,14 +69,20 @@ async def _ask_model(*, turn: CustomerTurn, prompt: str, attempt: int) -> str:
         model=answer_model(),
         operation_id=op,
     )
-    response = await create_chat_completion(
-        model=answer_model(),
-        messages=[
-            {"role": "system", "content": system_prompt()},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=700,
-    )
+    try:
+        response = await create_chat_completion(
+            model=answer_model(),
+            messages=[
+                {"role": "system", "content": system_prompt()},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=700,
+        )
+    except Exception as exc:
+        from services.brain.llm_core_service import sanitize_llm_error
+
+        print(f"[generate_grounded_reply] fail-soft {type(exc).__name__}: {sanitize_llm_error(exc)}")
+        return ""
     try:
         return str(response.choices[0].message.content or "").strip()
     except Exception:

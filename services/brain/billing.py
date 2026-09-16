@@ -203,6 +203,21 @@ def reserve_generative(turn: CustomerTurn, *, mixed: bool = False) -> TurnResult
             stop_reason="insufficient_messages",
             extra={"billing": {"remaining": exc.remaining}, "response_class": response_class},
         )
+    except Exception as exc:
+        from services.billing.membership.pg_store import MessageStoreUnavailable
+
+        if not isinstance(exc, MessageStoreUnavailable):
+            raise
+        print(f"[reserve_generative] fail-soft {type(exc).__name__}: {str(exc)[:200]}")
+        return TurnResult(
+            stop_reason="failed_closed",
+            extra={
+                "billing": {"error": type(exc).__name__},
+                "response_class": response_class,
+                "exception_class": type(exc).__name__,
+                "blocker": f"{type(exc).__name__}: {str(exc)[:200]}",
+            },
+        )
     return None
 
 
