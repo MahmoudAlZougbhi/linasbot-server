@@ -40,20 +40,26 @@ async def plan_with_openai(message: str, history: str = "", *, tenant_id: str = 
             "ORDER → product_request, HUMAN → human_request. Paraphrases count, not only "
             f"keywords.\n{rules_block}"
         )
-    response = await create_chat_completion(
-        model=planner_model(),
-        messages=[
-            {
-                "role": "system",
-                "content": system,
-            },
-            {
-                "role": "user",
-                "content": f"History:\n{history[-4000:]}\n\nMessage:\n{message}\nExample shape:\n{schema_hint}",
-            },
-        ],
-        max_tokens=800,
-    )
+    try:
+        response = await create_chat_completion(
+            model=planner_model(),
+            messages=[
+                {
+                    "role": "system",
+                    "content": system,
+                },
+                {
+                    "role": "user",
+                    "content": f"History:\n{history[-4000:]}\n\nMessage:\n{message}\nExample shape:\n{schema_hint}",
+                },
+            ],
+            max_tokens=800,
+        )
+    except Exception as exc:
+        from services.brain.llm_core_service import sanitize_llm_error
+
+        print(f"[plan_with_openai] fail-soft {type(exc).__name__}: {sanitize_llm_error(exc)}")
+        return None
     raw = ""
     try:
         raw = str(response.choices[0].message.content or "").strip()

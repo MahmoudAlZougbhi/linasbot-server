@@ -224,19 +224,36 @@ def _v2_failed_closed_reply(
     message: str,
     response_language: str,
     exc: BaseException,
+    conversation_id: str = "",
 ) -> tuple[str, dict[str, Any]]:
     from services.ai_setup.constants import BRAIN_TEMPORARY_ERROR_MESSAGE_KEY
     from services.brain.greeting import is_greeting_only, safe_greeting_text
+    from services.brain.outbound_safety import looks_like_instruction_text
+    from services.brain.temporary_error_debounce import should_silence_repeat_temporary_error
     from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
     exc_name = type(exc).__name__
     exc_msg = str(exc)[:200]
     print(f"[_handle_published_cm_runtime] ⚠️ customer_reply_v2 failed closed: {exc_name}: {exc_msg}")
     greeting_only = is_greeting_only(message)
+    silenced = False
     if greeting_only:
         safe = safe_greeting_text(tenant_id=tenant_id, message=message, language=response_language)
+        if looks_like_instruction_text(safe):
+            safe = str(get_dynamic_message("session_greeting_after_inactivity", response_language) or "").strip()
+            if not safe or looks_like_instruction_text(safe):
+                if response_language in {"ar", "franco"}:
+                    safe = "مرحباً! كيف يمكنني مساعدتك؟"
+                else:
+                    safe = "Hello! How can I help you today?"
     else:
-        safe = get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, response_language)
+        blocker = f"{exc_name}: {exc_msg}"
+        silenced = should_silence_repeat_temporary_error(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            blocker=blocker,
+        )
+        safe = "" if silenced else get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, response_language)
     return safe, {
         "reason": "v2_failed_closed",
         "customer_reply_ai_v2": True,
@@ -244,6 +261,7 @@ def _v2_failed_closed_reply(
         "exception_class": exc_name,
         "blocker": f"{exc_name}: {exc_msg}",
         "greeting_fail_soft": greeting_only,
+        "temporary_error_silenced": silenced,
         "ai_called": False,
         "cost_status": "none",
         "pipeline_decisions": [
@@ -305,6 +323,7 @@ async def _handle_published_cm_runtime(
             message=message,
             response_language=response_language,
             exc=v2_exc,
+            conversation_id=conversation_id or user_id or "",
         )
 
     reply = (v2_outcome.reply or "").strip()

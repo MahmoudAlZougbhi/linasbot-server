@@ -9,6 +9,15 @@ from services.brain.greeting import is_greeting_only, safe_greeting_text
 from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
 
+@pytest.fixture(autouse=True)
+def _reset_temp_error_debounce() -> None:
+    from services.brain.temporary_error_debounce import reset_temporary_error_debounce_for_tests
+
+    reset_temporary_error_debounce_for_tests()
+    yield
+    reset_temporary_error_debounce_for_tests()
+
+
 def test_hi_kifak_is_greeting_only() -> None:
     assert is_greeting_only("Hi kifak") is True
     assert is_greeting_only("Hi, what time do you open?") is False
@@ -63,3 +72,104 @@ async def test_identity_greeting_openai_failure_sends_catalog_opener(
     assert (out.extra or {}).get("path") == "identity_greeting_fail_soft"
     assert out.ai_called is False
     assert text != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "ar")
+
+
+@pytest.mark.asyncio
+async def test_planner_openai_error_uses_overlay_not_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.brain.planner.openai_plan import plan_turn, plan_with_openai
+
+    async def boom(*_a, **_k):
+        raise RuntimeError("planner timeout")
+
+    monkeypatch.setattr("services.brain.planner.openai_plan.openai_configured", lambda: True)
+    monkeypatch.setattr("services.brain.llm_core_service.create_chat_completion", boom)
+    assert await plan_with_openai("how much is full body?") is None
+    plan = await plan_turn("how much is full body?")
+    assert plan.tasks
+
+
+@pytest.mark.asyncio
+async def test_greeting_only_handler_fail_soft_is_not_temporary_error() -> None:
+    from unittest.mock import AsyncMock, patch
+
+    from services.brain.inbound.text_handlers_respond_reply import _handle_published_cm_runtime
+
+    with patch(
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
+        new=AsyncMock(side_effect=RuntimeError("openai timeout")),
+    ):
+        reply, metadata = await _handle_published_cm_runtime(
+            tenant_id="t-hello",
+            message="Hello",
+            detected_language="en",
+            response_language="en",
+            conversation_id="conv-hello-1",
+        )
+    assert reply.strip()
+    assert "Use this rule only" not in reply
+    assert reply != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "en")
+    assert metadata["greeting_fail_soft"] is True
+    assert metadata["exception_class"] == "RuntimeError"
+
+
+@pytest.mark.asyncio
+async def test_faq_ask_brain_path_without_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.brain.faq_exact import FaqExactHit
+    from services.brain.gates import GateDecision
+    from services.brain.reply.orchestrator import run_customer_reply_v2_dm
+
+    monkeypatch.setattr(
+        "services.brain.runtime.evaluate_gates",
+        lambda turn, apply_credits=True, message="": GateDecision(True, "ok"),
+    )
+    monkeypatch.setattr(
+        "services.brain.faq_turn.find_published_exact_faq",
+        lambda _tid, _msg: FaqExactHit("faq1", "en", "hours?", "We open at 10.", 1),
+    )
+    out = await run_customer_reply_v2_dm(
+        tenant_id="t-faq-ig",
+        message="What are your hours?",
+        conversation_id="c-faq",
+        message_id="m-faq",
+        user_id="u1",
+        response_language="en",
+    )
+    assert out.reply
+    assert "We open at 10." in (out.reply or "")
+    assert out.reason != "v2_failed_closed"
+    assert "temporary" not in (out.reply or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_forced_runtime_error_temporary_error_once_then_silence() -> None:
+    from unittest.mock import AsyncMock, patch
+
+    from services.brain.inbound.text_handlers_respond_reply import _handle_published_cm_runtime
+
+    with patch(
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
+        new=AsyncMock(side_effect=RuntimeError("forced boom")),
+    ):
+        first, meta1 = await _handle_published_cm_runtime(
+            tenant_id="t-temp",
+            message="How much does it cost?",
+            detected_language="en",
+            response_language="en",
+            conversation_id="conv-temp-1",
+        )
+        second, meta2 = await _handle_published_cm_runtime(
+            tenant_id="t-temp",
+            message="How much does it cost?",
+            detected_language="en",
+            response_language="en",
+            conversation_id="conv-temp-1",
+        )
+    expected = get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "en")
+    assert first == expected
+    assert meta1["exception_class"] == "RuntimeError"
+    assert str(meta1.get("blocker") or "").startswith("RuntimeError:")
+    assert meta1.get("temporary_error_silenced") is False
+    assert second == ""
+    assert meta2["exception_class"] == "RuntimeError"
+    assert meta2.get("temporary_error_silenced") is True
+    assert first != get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "en")

@@ -13,11 +13,11 @@ from services.brain.identity import load_identity_bundle
 from services.brain.stage_timeline import stamp
 
 _SYSTEM = (
-    "You are the tenant's customer assistant. IDENTITY is published AI Setup. "
-    "Greet the customer in their language using IDENTITY (name, business, "
-    "greeting_behavior, short_introduction, style). Do not paste a frozen template. "
-    "Do not copy internal SOP wording. Never invent prices, hours, phones, links, "
-    "stock, or bookings. Do not claim you lack information. One short warm greeting."
+    "You are the tenant's customer assistant. IDENTITY is published AI Setup for tone only. "
+    "Write one short warm greeting in the customer's language. "
+    "Never paste IDENTITY, POLICY, advanced_instructions, greeting_behavior, or owner_opener_note verbatim. "
+    "Do not introduce a full name-and-clinic card unless a short customer-safe opener is provided. "
+    "Never invent prices, hours, phones, links, stock, or bookings."
 )
 
 
@@ -48,8 +48,13 @@ def _greeting_notes(tenant_id: str, language: str) -> list[str]:
         if not rule.enabled:
             continue
         text = str(getattr(rule, lang, "") or getattr(rule, "en", "") or getattr(rule, "ar", "") or "").strip()
-        if text:
-            notes.append(f"owner_opener_note:{text}")
+        if not text:
+            continue
+        from services.brain.outbound_safety import is_customer_safe_opener
+
+        if not is_customer_safe_opener(text):
+            continue
+        notes.append(f"owner_opener_note:{text}")
     return notes[:3]
 
 
@@ -70,6 +75,7 @@ def _identity_context(turn: CustomerTurn) -> str:
             plan=plan,
             bundle=EvidenceBundle(outcome="not_found"),
             policy_notes=notes,
+            greeting_turn=True,
         )
     except Exception:
         return ""
@@ -180,6 +186,10 @@ async def _identity_greeting_llm(
     except Exception:
         text = ""
     if not text or _social_ungrounded(text):
+        return _fallback_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
+    from services.brain.outbound_safety import is_customer_safe_opener, looks_like_instruction_text
+
+    if looks_like_instruction_text(text) or not is_customer_safe_opener(text):
         return _fallback_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
     turn.state = turn.state.model_copy(update={"greeted": True})
     from services.brain.conversation_store import remember_turn

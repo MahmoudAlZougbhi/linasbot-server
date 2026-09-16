@@ -31,6 +31,7 @@ from services.ai_setup.section_classifier import (
     detect_service_availability_conflicts,
 )
 from services.ai_setup.storage import get_draft, put_draft
+from services.brain.outbound_safety import is_customer_safe_opener
 
 _REDISTRIBUTED_TAG = "cm_redistributed"
 _PROVENANCE_PREFIX = "--- redistributed from "
@@ -294,11 +295,13 @@ def redistribute_knowledge_draft(
 
         if classification.notes_home == "ai_basics" and classification.ai_basics_field:
             field_name = classification.ai_basics_field
-            current = str(getattr(ai, field_name) or "")
-            setattr(ai, field_name, _append_text(current, block))
-            derived_ids.append(f"ai_basics:{field_name}")
+            greeting_field = field_name in {"greeting_behavior", "short_introduction"}
+            if not (greeting_field and not is_customer_safe_opener(article.body)):
+                current = str(getattr(ai, field_name) or "")
+                setattr(ai, field_name, _append_text(current, block))
+                derived_ids.append(f"ai_basics:{field_name}")
 
-        if classification.dynamic_message_id:
+        if classification.dynamic_message_id and is_customer_safe_opener(article.body):
             msg_id = classification.dynamic_message_id
             if msg_id not in dyn_by_id:
                 # Store full rule text in EN; owner can localize later — never invent translations.

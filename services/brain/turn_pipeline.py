@@ -72,6 +72,10 @@ def _apply_greeting(
     )
     if not (greet.eligible and greet.text):
         return envelope
+    from services.brain.outbound_safety import is_customer_safe_opener
+
+    if not is_customer_safe_opener(greet.text):
+        return envelope
     turn.state = turn.state.model_copy(update={"greeted": True})
     remember_turn(turn)
     destination = envelope.messages[0].destination or _destination(channel, turn)
@@ -89,7 +93,10 @@ async def _semantic_faq_result(turn: CustomerTurn, message: str, channel: str) -
 
 async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) -> TurnResult:
     flow_base = _flow_extra(
-        None,
+        {
+            "tenant_id": turn.tenant_id,
+            "response_language": _response_language(turn),
+        },
         (
             "received",
             "Message received",

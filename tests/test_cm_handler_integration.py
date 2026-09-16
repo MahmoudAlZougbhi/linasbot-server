@@ -12,6 +12,15 @@ from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test
 
 
 @pytest.fixture(autouse=True)
+def _reset_temp_error_debounce() -> None:
+    from services.brain.temporary_error_debounce import reset_temporary_error_debounce_for_tests
+
+    reset_temporary_error_debounce_for_tests()
+    yield
+    reset_temporary_error_debounce_for_tests()
+
+
+@pytest.fixture(autouse=True)
 def _openai_published_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
     install_mocked_openai_embeddings(monkeypatch, published_mode=True)
 

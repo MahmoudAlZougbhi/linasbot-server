@@ -330,10 +330,33 @@ async def run_agentic_turn(
             evidence=evidence,
         )
         return result
-    except Exception:
+    except Exception as exc:
         from services.brain.billing import release_turn_reservation
+        from services.brain.outbound_safety import is_llm_provider_error
 
         release_turn_reservation(turn)
+        if is_llm_provider_error(exc):
+            from services.brain.contracts.reply import OutboundMessage
+            from services.brain.llm_core_service import sanitize_llm_error
+            from services.brain.templates import brain_template
+
+            print(f"[run_agentic_turn] generate fail-soft {type(exc).__name__}: {sanitize_llm_error(exc)}")
+            lang = str((turn.extra or {}).get("response_language") or "")
+            return TurnResult(
+                stop_reason="failed_closed",
+                envelope=FinalReplyEnvelope(
+                    decision="clarify",
+                    messages=[OutboundMessage(destination=dest, text=brain_template("no_evidence", lang))],
+                ),
+                extra={
+                    "phase": "generate",
+                    "llm_fail_soft": True,
+                    "exception_class": type(exc).__name__,
+                    "blocker": f"{type(exc).__name__}: {str(exc)[:200]}",
+                    "agent_trace": agent_trace,
+                    **extra,
+                },
+            )
         raise
     finally:
         if result is not None and not _keep_generate_hold(result):

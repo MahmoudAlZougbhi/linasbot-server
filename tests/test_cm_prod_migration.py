@@ -126,7 +126,10 @@ def test_stage_and_migrate_keeps_topic_content_active(tmp_path: Path) -> None:
 
     ai = get_draft("ai_basics", tenant_id="cm_prod_mig_test", create_default=True)
     instructions = str(ai.payload.get("advanced_instructions") or "")
-    assert "Full prompt body retained" in instructions
+    notes = str(ai.payload.get("notes") or "")
+    assert "INTERNAL_LEGACY_SYSTEM_PROMPT" in notes
+    assert "Full prompt body retained" in notes
+    assert "Full prompt body retained" not in instructions
     assert "Never offer tattoo removal" not in instructions
 
     restricted = get_draft("restricted", tenant_id="cm_prod_mig_test", create_default=True)

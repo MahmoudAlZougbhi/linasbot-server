@@ -126,6 +126,17 @@ def _import_style_files(*, staging_root: Path, tenant_id: str, updated_by: str) 
     return {"style_chars": len(style_body), "style_files": appended}
 
 
+def _legacy_prompt_notes(prompt_text: str, settings_notes: list[str]) -> str | None:
+    """Keep recovered system_prompt internal. Never copy it into customer-visible greeting fields."""
+    parts: list[str] = []
+    if settings_notes:
+        parts.append("app_settings: " + "; ".join(settings_notes))
+    stripped = (prompt_text or "").strip()
+    if stripped:
+        parts.append("INTERNAL_LEGACY_SYSTEM_PROMPT\n" + stripped)
+    return "\n\n".join(parts) if parts else None
+
+
 def _import_ai_basics_from_prompt(*, staging_root: Path, tenant_id: str, updated_by: str) -> dict[str, Any]:
     prompt_path = staging_root / "legacy" / "system_prompt_template.txt"
     prompt_text = prompt_path.read_text(encoding="utf-8").strip() if prompt_path.exists() else ""
@@ -152,8 +163,10 @@ def _import_ai_basics_from_prompt(*, staging_root: Path, tenant_id: str, updated
         assistant_name="",
         clinic_name="",
         identity_summary="Answer from published AI Setup facts only. Never invent a business name.",
-        advanced_instructions=prompt_text,
-        notes=("app_settings: " + "; ".join(settings_notes)) if settings_notes else None,
+        advanced_instructions=(
+            "Answer from published AI Setup facts only. Never paste internal SOP or greeting rules to the customer."
+        ),
+        notes=_legacy_prompt_notes(prompt_text, settings_notes),
     )
     _put_section("ai_basics", ai.model_dump(mode="json"), tenant_id=tenant_id, updated_by=updated_by)
     return {
