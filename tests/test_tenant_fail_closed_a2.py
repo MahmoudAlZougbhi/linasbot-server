@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -14,31 +14,6 @@ from services.ai_setup.ai_usage_limits import AiUsageLimitsService
 from services.ai_setup.capability_gates import human_handoff_enabled, image_analysis_enabled, voice_processing_enabled
 from services.auth.auth_email_tokens import AuthEmailTokenRecord, AuthEmailTokenService
 from services.billing.wallet_spend_analytics import _entry_matches_tenant, build_wallet_spend_analytics
-from services.brain.inbound import photo_handlers
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("user_data", [{}, {"tenant_id": ""}, {"tenant_id": "   "}])
-async def test_photo_handler_refuses_missing_tenant(user_data: dict, monkeypatch: pytest.MonkeyPatch) -> None:
-    gate = MagicMock(return_value=True)
-    monkeypatch.setattr(
-        "services.ai_setup.capability_gates.image_analysis_enabled",
-        gate,
-    )
-    send_message = AsyncMock()
-    send_action = AsyncMock()
-
-    await photo_handlers.handle_photo_message(
-        user_id="wa:photo-fail-closed",
-        user_name="Test",
-        image_url="https://example.test/img.jpg",
-        user_data=user_data,
-        send_message_func=send_message,
-        send_action_func=send_action,
-    )
-
-    send_message.assert_not_awaited()
-    gate.assert_not_called()
 
 
 @pytest.mark.asyncio

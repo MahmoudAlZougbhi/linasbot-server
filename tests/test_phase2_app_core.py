@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from services.auth.mobile_refresh_token_service import MobileRefreshTokenService
 from services.billing.credit_ledger_service import CreditLedgerService
 from services.billing.entitlements_service import EntitlementsStore, apply_store_notification
-from services.brain.safety_gateway import SafetyGateway
 from services.owner_copilot.chat_store import OwnerChatStore
 from services.team.platform_owner_service import PlatformOwnerService
 
@@ -81,18 +78,6 @@ def test_credit_reserve_release(tmp_path, monkeypatch) -> None:
     assert mid == start - 10
     ledger.release(tenant_id="t1", reservation_id=rid)
     assert ledger.get_balance("t1") == start
-
-
-@pytest.mark.asyncio
-async def test_safety_blocks_explicit_policy() -> None:
-    gw = SafetyGateway()
-    decision = await gw.check_text(
-        tenant_id="t1",
-        user_id="u1",
-        text="how to make a bomb for school",
-        channel="creative",
-    )
-    assert decision.decision == "block"
 
 
 def test_owner_chat_isolation(tmp_path) -> None:

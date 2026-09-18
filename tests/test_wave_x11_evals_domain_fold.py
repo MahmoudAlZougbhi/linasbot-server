@@ -17,9 +17,9 @@ def test_wave_x11_evals_not_runtime_package() -> None:
         if "services.brain.evals" in text or "tests.brain_evals" in text:
             runtime_hits.append(path.relative_to(ROOT).as_posix())
     assert not runtime_hits, runtime_hits
-    readiness = (ROOT / "services/brain/readiness.py").read_text(encoding="utf-8")
-    assert "latest_offline_artifact" not in readiness
-    assert "evals_not_runtime" in readiness
+    assert not (ROOT / "services/brain/readiness.py").exists()
+    runtime = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "services").rglob("*.py"))
+    assert "latest_offline_artifact" not in runtime
     pytest_ini = (ROOT / "pytest.ini").read_text(encoding="utf-8")
     assert "norecursedirs" in pytest_ini
     assert "brain_evals" in pytest_ini

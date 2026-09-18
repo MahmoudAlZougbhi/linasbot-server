@@ -4,9 +4,9 @@ import pytest
 
 from services.ai_setup.language_policy import resolve_customer_response_language
 from services.ai_setup.progress_quality import assess_section_fill
-from services.ai_setup.query_interpreter import HUMAN_INTENT_RE
 from services.ai_setup.request_rules import normalize_request_rule_item
 from services.ai_setup.setup_chat import SETUP_SECTION_ORDER
+from services.brain.conversation_router import is_human_request
 from services.owner_copilot.setup_flow import SETUP_SECTIONS
 from services.requests.constants import REQUEST_TYPES
 from services.requests.request_graphs.compiler import destination_from_type
@@ -20,11 +20,11 @@ def test_human_is_a_request_type() -> None:
 
 
 def test_human_intent_matches_owner_examples() -> None:
-    assert HUMAN_INTENT_RE.search("human")
-    assert HUMAN_INTENT_RE.search("I want an agent")
-    assert HUMAN_INTENT_RE.search("بدي موظف")
-    assert HUMAN_INTENT_RE.search("أريد أتحدث مع شخص")
-    assert not HUMAN_INTENT_RE.search("what is the price")
+    assert is_human_request("human")
+    assert is_human_request("I want to speak with an agent")
+    assert is_human_request("بدي موظف")
+    assert is_human_request("أريد موظف")
+    assert not is_human_request("what is the price")
 
 
 def test_franco_reply_language_is_arabic_script() -> None:

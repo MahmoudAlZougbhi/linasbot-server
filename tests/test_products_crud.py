@@ -14,8 +14,8 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests, whatsapp_session  # noqa: E402
 from services.products.media import store_product_media  # noqa: E402
+from services.products.repository import ProductsRepository  # noqa: E402
 from services.products.schemas import ProductImageInput, ProductWriteBody  # noqa: E402
-from services.products.search import search_product_by_title  # noqa: E402
 from services.products.service import ProductsError, ProductsService  # noqa: E402
 
 
@@ -242,13 +242,12 @@ def test_search_product_by_title_fuzzy(products_env: Path) -> None:
             tenant_id="tenant-search",
             body=ProductWriteBody(description="test product", name="SPF 50 Sunscreen", sizes=[], colors=[], links=[]),
         )
-        matches = search_product_by_title(
-            session,
+        matches = ProductsRepository(session).search_by_title_prefix(
             tenant_id="tenant-search",
-            title="hydrating cream",
+            query="hydrating",
             limit=3,
         )
-    assert any(row["name"] == "Hydrating Face Cream" for row in matches)
+        assert any(row.name == "Hydrating Face Cream" for row in matches)
 
 
 def test_service_rejects_unknown_media(products_env: Path) -> None:

@@ -56,11 +56,11 @@ def test_wave_x6_app_settings_has_no_museum_keys() -> None:
 
 def test_wave_x6_evals_not_prod_laser_defaults() -> None:
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
-    readiness = (ROOT / "services/brain/readiness.py").read_text(encoding="utf-8")
     qa = (ROOT / "tests/brain_evals/qa_tenants.py").read_text(encoding="utf-8")
     runner = (ROOT / "tests/brain_evals/live_lab_runner.py").read_text(encoding="utf-8")
     assert "WAVE X6" in keep
-    assert "live_lab_latest.json" not in readiness
+    runtime = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "services/brain").rglob("*.py"))
+    assert "live_lab_latest.json" not in runtime
     assert "def shop_a_qa_sections" in qa
     assert "linas_like_qa_sections" not in qa
     assert "Linas Laser" not in qa

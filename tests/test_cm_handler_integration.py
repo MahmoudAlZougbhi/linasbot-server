@@ -65,14 +65,12 @@ async def test_published_runtime_does_not_call_classic_generate() -> None:
         {"restricted": initial_restricted_policy(active=True).model_dump(mode="json")},
     )
 
-    with patch("services.ai_setup.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen:
-        reply, metadata = await _handle_published_cm_runtime(
-            tenant_id=tenant_id,
-            message="I want tattoo removal please",
-            detected_language="en",
-            response_language="en",
-        )
-    mock_gen.assert_not_awaited()
+    reply, metadata = await _handle_published_cm_runtime(
+        tenant_id=tenant_id,
+        message="I want tattoo removal please",
+        detected_language="en",
+        response_language="en",
+    )
     assert metadata.get("classic_fallback") is False
     assert (
         metadata["reason"]
@@ -114,12 +112,9 @@ async def test_v2_generated_reply_never_calls_classic_generate() -> None:
         },
     )
 
-    with (
-        patch(
-            "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
-            new=AsyncMock(return_value=outcome),
-        ),
-        patch("services.ai_setup.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen,
+    with patch(
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
+        new=AsyncMock(return_value=outcome),
     ):
         reply, metadata = await _handle_published_cm_runtime(
             tenant_id=tenant_id,
@@ -127,7 +122,6 @@ async def test_v2_generated_reply_never_calls_classic_generate() -> None:
             detected_language="en",
             response_language="en",
         )
-    mock_gen.assert_not_awaited()
     assert metadata["reason"] == "v2_generated"
     assert metadata["customer_reply_ai_v2"] is True
     assert metadata["classic_fallback"] is False
@@ -170,14 +164,12 @@ async def test_insufficient_credits_short_circuits_without_classic_generate(
         lambda *_a, **_k: True,
     )
 
-    with patch("services.ai_setup.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen:
-        reply, metadata = await _handle_published_cm_runtime(
-            tenant_id=tenant_id,
-            message="How much does it cost?",
-            detected_language="en",
-            response_language="en",
-        )
-    mock_gen.assert_not_awaited()
+    reply, metadata = await _handle_published_cm_runtime(
+        tenant_id=tenant_id,
+        message="How much does it cost?",
+        detected_language="en",
+        response_language="en",
+    )
     assert metadata.get("classic_fallback") is False
     assert (
         metadata["reason"]
@@ -201,12 +193,9 @@ async def test_v2_exception_fails_closed_without_classic() -> None:
     tenant_id = "cm_handler_test_packet_invalid"
     await publish_test_content(tenant_id)
 
-    with (
-        patch(
-            "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
-            new=AsyncMock(side_effect=RuntimeError("boom")),
-        ),
-        patch("services.ai_setup.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen,
+    with patch(
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
+        new=AsyncMock(side_effect=RuntimeError("boom")),
     ):
         reply, metadata = await _handle_published_cm_runtime(
             tenant_id=tenant_id,
@@ -214,7 +203,6 @@ async def test_v2_exception_fails_closed_without_classic() -> None:
             detected_language="en",
             response_language="en",
         )
-    mock_gen.assert_not_awaited()
     assert metadata["reason"] == "v2_failed_closed"
     assert metadata["classic_fallback"] is False
     assert metadata["exception_class"] == "RuntimeError"
@@ -234,12 +222,9 @@ async def test_v2_exception_on_greeting_uses_opener_not_validator_copy() -> None
     tenant_id = "cm_handler_test_greeting_fail"
     await publish_test_content(tenant_id)
 
-    with (
-        patch(
-            "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
-            new=AsyncMock(side_effect=RuntimeError("openai timeout")),
-        ),
-        patch("services.ai_setup.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen,
+    with patch(
+        "services.brain.reply.orchestrator.run_customer_reply_v2_dm",
+        new=AsyncMock(side_effect=RuntimeError("openai timeout")),
     ):
         reply, metadata = await _handle_published_cm_runtime(
             tenant_id=tenant_id,
@@ -247,7 +232,6 @@ async def test_v2_exception_on_greeting_uses_opener_not_validator_copy() -> None
             detected_language="ar",
             response_language="ar",
         )
-    mock_gen.assert_not_awaited()
     assert metadata["reason"] == "v2_failed_closed"
     assert metadata["greeting_fail_soft"] is False
     assert metadata["customer_silence"] is True

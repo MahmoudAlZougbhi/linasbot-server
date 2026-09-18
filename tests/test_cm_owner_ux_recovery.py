@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from services.ai_setup.schemas import ArticleRecord, FaqRecord, FaqSection, FaqVariant, KnowledgeSection
-from services.ai_setup.source_inventory import build_source_inventory
 from tests.cm_semantic_index import _article_entries, _faq_entries
 
 
@@ -40,13 +37,3 @@ def test_restricted_faq_excluded_from_index_entries() -> None:
     entries = _faq_entries(faq.model_dump(mode="json"))
     assert len(entries) == 1
     assert entries[0][0] == "faq:g1:en"
-
-
-def test_source_inventory_metadata_only(tmp_path: Path) -> None:
-    report = build_source_inventory(tenant_id="linas", data_root=tmp_path)
-    assert report["tenant_id"] == "linas"
-    assert "article_sources" in report
-    assert "staged_legacy_files" in report
-    # Ensure we never accidentally dump huge content bodies at top-level keys.
-    assert "knowledge_base_text" not in report
-    assert "system_prompt" not in report

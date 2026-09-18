@@ -271,9 +271,8 @@ def test_wave_g_ai_setup_voyage_requests_integrations_billing() -> None:
     from services.integrations.integration_capabilities import list_tenant_integration_status
 
     publish = _text("services/ai_setup/publish.py")
-    pipeline = _text("services/ai_setup/runtime_pipeline.py")
     assert "schedule_tenant_index" in publish
-    assert "voyage_search" in pipeline
+    assert not (ROOT / "services/ai_setup/runtime_pipeline.py").exists()
     assert (ROOT / "modules/requests_api.py").is_file()
     assert (ROOT / "mobile/linas-ai/src/features/requests/RequestsScreen.tsx").is_file()
     rows = list_tenant_integration_status("wave-g")

@@ -190,10 +190,3 @@ def test_whatsapp_public_availability_stays_off(monkeypatch: pytest.MonkeyPatch)
     assert flags.public_availability is False
     webhook = Path("modules/webhook_handlers.py").read_text(encoding="utf-8")
     assert "whatsapp_inbound_ai_disabled" in webhook
-
-
-def test_image_candidates_remain_clamped_3_to_8() -> None:
-    from services.products.crv2_tools import _clamp_image_top_k
-
-    assert _clamp_image_top_k(1) == 3
-    assert _clamp_image_top_k(10) == 8

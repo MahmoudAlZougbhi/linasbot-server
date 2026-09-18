@@ -12,7 +12,6 @@ from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.flags import flags_snapshot
 from services.brain.history import build_history_snapshot
-from services.brain.precedence import wins
 from services.brain.providers.spaces import ENTITY_DOCUMENT, ENTITY_QUERY, KNOWLEDGE_DOCUMENT, compatible
 from services.brain.reply.models import ENGINE_REMOVED
 from services.brain.reply.orchestrator import run_customer_reply_v2_dm
@@ -148,7 +147,19 @@ def test_specific_post_beats_all_posts() -> None:
 
 
 def test_human_control_outranks_faq() -> None:
-    assert wins("human_control", "faq_fast_path") == "human_control"
+    from services.brain.contracts.turn import ConversationState, CustomerTurn
+    from services.brain.gates import evaluate_gates
+
+    turn = CustomerTurn(
+        tenant_id="t1",
+        customer_id="c1",
+        conversation_id="cv1",
+        channel="instagram",
+        state=ConversationState(handoff_active=True),
+    )
+    decision = evaluate_gates(turn, apply_credits=False, message="what is the price")
+    assert decision.allow is False
+    assert decision.reason == "human_control"
 
 
 def test_spaces_same_dimension_are_not_compatible() -> None:

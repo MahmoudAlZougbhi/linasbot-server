@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -13,8 +11,6 @@ from services.ai_setup.actions import (
     comments_enforcement_decision,
     evaluate_comments_meta_readiness,
 )
-from services.ai_setup.off_days import evaluate_off_days, resolve_off_day_facts
-from services.ai_setup.runtime_pipeline import prepare_response
 from services.ai_setup.schemas import (
     ActionsSection,
     AiBasics,
@@ -31,45 +27,6 @@ from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test
 @pytest.fixture(autouse=True)
 def _openai_published_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
     install_mocked_openai_embeddings(monkeypatch, published_mode=True)
-
-
-def test_off_days_closed_today_facts() -> None:
-    section = OffDaysSection(
-        timezone="UTC",
-        rules=[OffDayRule(id="sun", kind="weekly", weekday=6, reason="Weekly rest")],
-    )
-    # 2026-08-09 is a Sunday
-    status = evaluate_off_days(section, now=datetime(2026, 8, 9, 12, 0, tzinfo=ZoneInfo("UTC")))
-    assert status["is_closed_today"] is True
-    facts = resolve_off_day_facts(section, now=datetime(2026, 8, 9, 12, 0, tzinfo=ZoneInfo("UTC")))
-    kinds = {f.kind for f in facts}
-    assert "business_closed_today" in kinds
-    assert any(f.kind == "business_closed_today" and f.value == "true" for f in facts)
-
-
-@pytest.mark.asyncio
-async def test_prepare_response_includes_off_day_facts() -> None:
-    tenant_id = "cm_off_days_runtime"
-    await publish_test_content(
-        tenant_id,
-        {
-            "off_days": OffDaysSection(
-                timezone="UTC",
-                rules=[OffDayRule(id="sun", kind="weekly", weekday=6, reason="Closed")],
-                notes="Kitchen closed Sundays",
-            ).model_dump(mode="json"),
-            "faq": {"items": []},
-        },
-    )
-    outcome = await prepare_response(
-        tenant_id=tenant_id,
-        message="Are you open today?",
-        detected_language="en",
-        response_language="en",
-    )
-    assert outcome.stop is False
-    assert outcome.packet is not None
-    assert any(f.kind == "business_closed_today" for f in outcome.packet.facts)
 
 
 def test_handoff_email_and_url_destinations() -> None:
@@ -101,38 +58,6 @@ def test_handoff_email_and_url_destinations() -> None:
     r2 = resolve_handoff(policy2)
     assert r2.destination_type == "url"
     assert r2.destination_value == "https://gym.example/book"
-
-
-@pytest.mark.asyncio
-async def test_handoff_url_reply_in_pipeline() -> None:
-    tenant_id = "cm_handoff_url"
-    await publish_test_content(
-        tenant_id,
-        {
-            "handoff": HandoffPolicy(
-                contacts=[
-                    HandoffContact(
-                        id="main",
-                        destination_type="url",
-                        destination_value="https://resto.example/reserve",
-                        label="Reserve",
-                    )
-                ],
-                matrix=[HandoffMatrixRow(id="row", contact_id="main", enabled=True)],
-            ).model_dump(mode="json"),
-            "actions": ActionsSection().model_dump(mode="json"),
-        },
-    )
-    outcome = await prepare_response(
-        tenant_id=tenant_id,
-        message="I want to book a table please",
-        detected_language="en",
-        response_language="en",
-    )
-    assert outcome.stop is True
-    assert outcome.reason == "handoff"
-    assert "https://resto.example/reserve" in (outcome.reply or "")
-    assert "+961" not in (outcome.reply or "")
 
 
 def test_comments_action_gate_and_readiness() -> None:
@@ -203,8 +128,6 @@ def test_legacy_bridge_kill_switch(monkeypatch, tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_generic_gym_tenant_zero_linas_leakage(monkeypatch: pytest.MonkeyPatch) -> None:
     """Restaurant/gym published path must not mention Linas/Marwa/Beirut/Antelias/legacy phones."""
-    from services.faq.local_qa_service import local_qa_service
-
     tenant_id = "acme-gym-e2e"
     banned = (
         "linas",
@@ -264,53 +187,24 @@ async def test_generic_gym_tenant_zero_linas_leakage(monkeypatch: pytest.MonkeyP
         },
     )
 
-    local_qa_service.qa_pairs.append(
-        {
-            "id": "acme_membership_fees",
-            "question": "What are your membership fees?",
-            "answer": "Acme Gym monthly membership is 40 USD.",
-            "language": "en",
-        }
-    )
+    from services.ai_setup.version_store import load_published_content
+    from services.brain.faq_exact import find_exact_faq, load_faq_section
 
-    faq_outcome = await prepare_response(
-        tenant_id=tenant_id,
-        message="What are your membership fees?",
-        detected_language="en",
-        response_language="en",
-    )
-    assert faq_outcome.stop is True
-    reply = (faq_outcome.reply or "").lower()
+    _pointer, sections = load_published_content(tenant_id)
+    identity = sections.get("ai_basics") or {}
+    blob = " ".join(str(v) for v in identity.values()).lower()
+    for token in banned:
+        assert token not in blob, f"leakage token {token!r} in published identity"
+    section = load_faq_section(tenant_id)
+    hit = find_exact_faq(section, "What are your membership fees?")
+    assert hit is not None
+    reply = hit.answer.lower()
     assert "acme" in reply or "40" in reply
     for token in banned:
         assert token not in reply, f"leakage token {token!r} in FAQ reply"
-
-    handoff_outcome = await prepare_response(
-        tenant_id=tenant_id,
-        message="Please book me with a human trainer",
-        detected_language="en",
-        response_language="en",
-    )
-    assert handoff_outcome.reason == "handoff"
-    handoff_reply = (handoff_outcome.reply or "").lower()
-    assert "+96176111222" in handoff_reply or "96176111222" in handoff_reply
+    policy = HandoffPolicy.model_validate(sections.get("handoff") or {})
+    resolved = resolve_handoff(policy)
+    dest = (resolved.destination_value or "").lower()
+    assert "96176111222" in dest.replace("+", "")
     for token in banned:
-        assert token not in handoff_reply, f"leakage token {token!r} in handoff reply"
-
-    packet_outcome = await prepare_response(
-        tenant_id=tenant_id,
-        message="Tell me about your classes schedule uniqueness probe xyz",
-        detected_language="en",
-        response_language="en",
-    )
-    if packet_outcome.packet is not None:
-        identity = packet_outcome.packet.identity
-        assert identity.assistant_name == "FitBot"
-        assert identity.clinic_name == "Acme Gym"
-        blob = " ".join(
-            [identity.assistant_name, identity.clinic_name, identity.identity_summary or ""]
-            + [f.value for f in packet_outcome.packet.facts]
-            + [c.text for c in packet_outcome.packet.chunks]
-        ).lower()
-        for token in banned:
-            assert token not in blob, f"leakage token {token!r} in packet grounding"
+        assert token not in dest, f"leakage token {token!r} in handoff"

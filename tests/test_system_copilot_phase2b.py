@@ -16,7 +16,6 @@ from services.brain.customer_response_trace import (
 from services.faq.faq_cm_invalidation import extract_session_markers
 from services.faq.faq_entitlements import FaqEntitlementError, assert_can_create_faq, get_faq_entitlement
 from services.faq.faq_metrics import FaqMetricsStore
-from services.faq.faq_safe_match import find_safe_faq_match, score_candidate
 from services.owner_copilot.cm_approval import CmPatchProposalStore, approve_cm_patch, propose_cm_patch
 from services.owner_copilot.diagnosis import diagnose_interaction, propose_diagnosis_fix
 from services.owner_copilot.model_router import OwnerChatUsageTracker, route_owner_turn
@@ -64,77 +63,57 @@ def test_faq_entitlements_central_plan_config(tmp_path: Any, monkeypatch: pytest
     assert "Upgrade" in str(exc.value)
 
 
-def test_faq_tenant_isolation_safe_match(monkeypatch: pytest.MonkeyPatch) -> None:
-    pairs = [
-        {
-            "tenant_id": "tenant_a",
-            "question": "How many sessions do I need?",
-            "answer": "You need 7 sessions.",
-            "language": "en",
-            "is_active": True,
-            "status": "active",
-            "qa_group_id": "qa_a",
-        },
-        {
-            "tenant_id": "tenant_b",
-            "question": "How many sessions do I need?",
-            "answer": "You need 7-10 sessions.",
-            "language": "en",
-            "is_active": True,
-            "status": "active",
-            "qa_group_id": "qa_b",
-        },
-    ]
-    monkeypatch.setattr(
-        "services.faq.faq_entitlements.get_faq_entitlement",
-        lambda _tid: {"faq_enabled": True},
-    )
-    hit_a = find_safe_faq_match(
-        tenant_id="tenant_a",
-        question="How many sessions do I need?",
-        language="en",
-        qa_pairs=pairs,
-    )
-    hit_b = find_safe_faq_match(
-        tenant_id="tenant_b",
-        question="How many sessions do I need?",
-        language="en",
-        qa_pairs=pairs,
-    )
+def test_faq_tenant_isolation_safe_match() -> None:
+    from services.ai_setup.schemas import FaqRecord, FaqSection, FaqVariant
+    from services.brain.faq_exact import find_exact_faq
+
+    def _section(group_id: str, answer: str) -> FaqSection:
+        return FaqSection(
+            items=[
+                FaqRecord(
+                    qa_group_id=group_id,
+                    status="active",
+                    variants=[
+                        FaqVariant(
+                            language="en",
+                            question="How many sessions do I need?",
+                            answer=answer,
+                            reviewed=True,
+                        )
+                    ],
+                )
+            ]
+        )
+
+    hit_a = find_exact_faq(_section("qa_a", "You need 7 sessions."), "How many sessions do I need?")
+    hit_b = find_exact_faq(_section("qa_b", "You need 7-10 sessions."), "How many sessions do I need?")
     assert hit_a is not None
-    assert hit_a["qa_pair"]["qa_group_id"] == "qa_a"
+    assert hit_a.faq_id == "qa_a"
     assert hit_b is not None
-    assert hit_b["qa_pair"]["qa_group_id"] == "qa_b"
+    assert hit_b.faq_id == "qa_b"
 
 
-def test_safe_match_rejects_stale_and_blind_similarity(monkeypatch: pytest.MonkeyPatch) -> None:
-    stale = {
-        "tenant_id": "t1",
-        "question": "Where is the clinic located?",
-        "answer": "Old street 1",
-        "language": "en",
-        "status": "needs_review",
-        "cm_stale": True,
-        "is_active": True,
-    }
-    scored = score_candidate(
-        question="Where is the clinic located?",
-        language="en",
-        entry=stale,
-        intent="location",
-    )
-    assert scored["accept"] is False
+def test_safe_match_rejects_stale_and_blind_similarity() -> None:
+    from services.ai_setup.schemas import FaqRecord, FaqSection, FaqVariant
+    from services.brain.faq_exact import find_exact_faq
 
-    monkeypatch.setattr(
-        "services.faq.faq_entitlements.get_faq_entitlement",
-        lambda _tid: {"faq_enabled": True},
+    stale = FaqSection(
+        items=[
+            FaqRecord(
+                qa_group_id="stale",
+                status="needs_review",
+                variants=[
+                    FaqVariant(
+                        language="en",
+                        question="Where is the clinic located?",
+                        answer="Old street 1",
+                        reviewed=True,
+                    )
+                ],
+            )
+        ]
     )
-    miss = find_safe_faq_match(
-        tenant_id="t1",
-        question="Where is the clinic located?",
-        language="en",
-        qa_pairs=[stale],
-    )
+    miss = find_exact_faq(stale, "Where is the clinic located?")
     assert miss is None
 
 

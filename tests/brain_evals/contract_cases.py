@@ -129,18 +129,14 @@ def _history_routes_by_channel() -> bool:
 
 
 def _legacy_photo_fetches_ssrf_safe() -> bool:
-    from services.brain.inbound import photo_handlers
-    from services.brain.inbound.photo_handlers import handle_photo_message
+    from services.brain.reply.inbound_media import store_inbound_image_from_url
 
-    src = getsource(handle_photo_message)
-    module = getsource(photo_handlers)
+    src = getsource(store_inbound_image_from_url)
     return (
-        "store_inbound_image_from_url" in src
-        and "run_reserved_customer_turn" in src
-        and "httpx.AsyncClient" not in module
-        and "get_bot_photo_analysis_from_gpt" not in module
-        and "0.01" not in src
-        and "0.03" not in src
+        "fetch_inbound_url" in src
+        and "Fail soft" in src
+        and "httpx.AsyncClient" not in src
+        and "get_bot_photo_analysis_from_gpt" not in src
     )
 
 
