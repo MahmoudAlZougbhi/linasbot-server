@@ -7,7 +7,7 @@ from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.generate.reply import openai_configured
-from services.brain.greeting import is_greeting_only, load_dynamic_messages
+from services.brain.greeting import load_dynamic_messages
 from services.brain.grounding.facts import ungrounded_claims
 from services.brain.identity import load_identity_bundle
 from services.brain.stage_timeline import stamp
