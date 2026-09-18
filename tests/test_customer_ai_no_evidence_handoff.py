@@ -74,16 +74,10 @@ def test_should_handoff_only_unanswered_questions() -> None:
     assert should_handoff_unanswered(plan=info, outcome="not_found", message="عنوان") is True
 
 
-def test_polite_copy_does_not_send_customer_away() -> None:
-    sorry = brain_template("no_evidence_handoff", "en").lower()
-    assert "sorry" in sorry
-    assert "team" in sorry
-    assert "reach out" not in sorry
-    assert "ask a teammate" not in sorry
-    ar = brain_template("no_evidence_handoff", "ar")
-    assert "آسف" in ar
-    assert "فريق" in ar
-    assert brain_template("handoff", "en") != brain_template("handoff", "ar")
+def test_protocol_copy_is_owner_authored_not_hardcoded() -> None:
+    assert brain_template("no_evidence_handoff", "en") == ""
+    assert brain_template("handoff", "en") == ""
+    assert brain_template("handoff", "ar") == ""
 
 
 @pytest.mark.asyncio
@@ -105,6 +99,10 @@ async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.Monkey
         )
     )
     monkeypatch.setattr("services.brain.agent.no_evidence_handoff.execute_actions", execute)
+    monkeypatch.setattr(
+        "services.brain.agent.no_evidence_handoff.brain_template",
+        lambda _key, _lang="": "I'll connect you with someone from the team shortly.",
+    )
     plan = _plan(_task("t1", "information", span="unpublished policy?"))
     result = await unanswered_question_result(
         _turn(),

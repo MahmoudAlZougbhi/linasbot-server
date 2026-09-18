@@ -301,8 +301,6 @@ def test_facebook_login_instagram_readiness_uses_manage_comments(registry: MetaA
 def test_webhook_and_polling_share_enforcement_decision(
     registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from services.integrations.meta.meta_social_comment_sync import _comment_reply_enabled
-
     _enable_cm_comments(monkeypatch)
     binding = _binding(
         registry,
@@ -335,10 +333,7 @@ def test_webhook_and_polling_share_enforcement_decision(
         registry=registry,
     )
     monkeypatch.setattr("services.integrations.meta.meta_app_registry.get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr("services.integrations.meta.meta_social_comment_sync.get_meta_app_registry", lambda: registry)
-    polling_enabled = _comment_reply_enabled(binding)
     assert webhook_decision["allow"] is True
-    assert polling_enabled is True
 
 
 def test_toggle_stays_on_with_blocker_when_unknown(registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch) -> None:

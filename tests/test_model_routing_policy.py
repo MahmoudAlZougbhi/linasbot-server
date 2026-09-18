@@ -181,42 +181,6 @@ def test_env_cannot_silently_override_customer_or_owner(monkeypatch: pytest.Monk
 
 
 @pytest.mark.asyncio
-async def test_cm_answer_generation_openai_payload_is_terra_medium(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from services.ai_setup import answer_generation as ag
-    from services.ai_setup.schemas import AnswerPacket
-
-    captured: dict[str, Any] = {}
-
-    async def _fake_create(**kwargs: Any) -> Any:
-        captured.update(kwargs)
-        msg = MagicMock()
-        msg.content = "ok"
-        choice = MagicMock()
-        choice.message = msg
-        usage = MagicMock()
-        usage.prompt_tokens = 10
-        usage.completion_tokens = 5
-        resp = MagicMock()
-        resp.choices = [choice]
-        resp.usage = usage
-        return resp
-
-    monkeypatch.setattr(ag, "create_chat_completion", _fake_create)
-    packet = AnswerPacket(
-        tenant_id="t1",
-        content_version_id="v1",
-        detected_language="en",
-        response_language="en",
-    )
-    result = await ag.generate_answer_with_usage("hi", packet)
-    assert result.model == MODEL_CUSTOMER_TERRA
-    assert captured["model"] == MODEL_CUSTOMER_TERRA
-    assert captured["reasoning_effort"] == "medium"
-
-
-@pytest.mark.asyncio
 async def test_owner_provider_openai_payload_sol_effort(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -344,7 +308,7 @@ def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.Mo
     ):
         monkeypatch.delenv(key, raising=False)
 
-    from services.ai_setup.answer_generation import DEFAULT_CM_ANSWER_MODEL, cm_answer_model
+    from services.brain.providers.config import answer_model
     from services.brain.reply.flags import customer_answer_model_name, customer_retrieval_model_name
     from services.owner_copilot.model_router import router_config
     from services.providers.base import provider_config
@@ -354,8 +318,7 @@ def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.Mo
     assert cfg["text"]["owner_chat"] == MODEL_OWNER_SOL
     assert router_config()["customer_high_volume"]["model"] == MODEL_CUSTOMER_TERRA
     assert router_config()["owner_help"]["model"] == MODEL_OWNER_SOL
-    assert DEFAULT_CM_ANSWER_MODEL == MODEL_CUSTOMER_TERRA
-    assert cm_answer_model() == MODEL_CUSTOMER_TERRA
+    assert answer_model() == MODEL_CUSTOMER_TERRA
     # Brain stubs — not Luna/Terra engine names.
     assert customer_answer_model_name() == "customer_brain_answer"
     assert customer_retrieval_model_name() == "customer_brain_voyage_entity"
@@ -364,12 +327,12 @@ def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.Mo
 def test_no_active_social_getter_returns_forbidden_models(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LINAS_CUSTOMER_MODEL", "gpt-5.6-luna")
     monkeypatch.setenv("LINAS_CM_ANSWER_MODEL", "gpt-5.6-sol")
-    from services.ai_setup.answer_generation import cm_answer_model
+    from services.brain.providers.config import answer_model
     from services.brain.reply.flags import customer_answer_model_name, customer_retrieval_model_name
 
     # Deprecated stubs stay on Brain names; CM answer stays Terra (not luna/sol env).
     assert customer_answer_model_name() == "customer_brain_answer"
-    assert cm_answer_model() == MODEL_CUSTOMER_TERRA
+    assert answer_model() == MODEL_CUSTOMER_TERRA
     assert customer_retrieval_model_name() == "customer_brain_voyage_entity"
     assert "luna" not in customer_retrieval_model_name().lower()
     assert "luna" not in customer_answer_model_name().lower()

@@ -11,8 +11,8 @@ from services.ai_setup.version_store import read_published_pointer
 from services.brain.flags import voyage_configured
 from services.brain.providers.spaces import ENTITY_MODEL, KNOWLEDGE_MODEL
 from services.brain.retrieve.cards import load_published_cards
-from services.brain.search.index_backfill import enqueue_stale_or_missing
 from services.brain.search.index_lifecycle import owner_status
+from services.brain.search.index_schedule import enqueue_tenant_index
 from services.brain.search.store import query_similar, tenant_pointer_ready
 from tests.brain_evals.artifacts import durable_report_path
 
@@ -268,8 +268,8 @@ async def run_real_linas_index() -> dict[str, Any]:
     gates["ATOMIC_SWITCH"] = _gate("PASS" if activated else "FAIL", "activated" if activated else "not_activated")
     sanity = await brain_sanity(tid) if activated else _gate("NOT_RUN", "index_not_activated")
     gates["BRAIN"] = sanity
-    backfill = await enqueue_stale_or_missing(limit=2, skip={tid})
-    gates["BACKFILL"] = _gate("PASS", f"scheduled={backfill.get('scheduled_count')}", **backfill)
+    backfill = enqueue_tenant_index(tid, reason="lab_backfill")
+    gates["BACKFILL"] = _gate("PASS", f"queued={backfill.get('queued')}", **backfill)
 
     life = owner_status(tid)
     report = {

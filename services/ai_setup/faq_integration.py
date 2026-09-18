@@ -1,9 +1,4 @@
-"""Bridge between CM FAQ drafts and the existing LocalQAService JSONL store (plan §8).
-
-Actual Q&A rows stay in ``qa_pairs.jsonl`` via :mod:`services.faq.local_qa_service` for full
-compatibility with the existing bot-matching path. The CM ``faq`` draft section only tracks
-group metadata (qa_group_id + a variant preview + tags/notes) so AI Setup can author
-and audit FAQ without a second, divergent Q&A store.
+"""CM FAQ draft authoring. Published CM FAQ is the only customer-matching store.
 
 Preserves Smart Answer groups with per-tenant ``smart_answer_languages`` (not always 4).
 Franco question stays Franco (Latin) while its answer is always Arabic script, same as the AR answer.
@@ -41,7 +36,6 @@ from services.ai_setup.faq_integration_ops import (  # noqa: F401
 from services.ai_setup.schemas import FaqRecord, FaqSection, FaqVariant
 from services.ai_setup.storage import get_draft, put_draft
 from services.brain.language_detection_service import language_detection_service
-from services.faq.local_qa_service import local_qa_service
 
 
 async def create_faq_pair(
@@ -54,7 +48,7 @@ async def create_faq_pair(
     tenant_id: str | None = None,
     updated_by: str = "content_manager",
 ) -> dict[str, Any]:
-    """Create a 4-language FAQ pair via LocalQAService and mirror its metadata into CM draft.
+    """Create a multilingual FAQ pair in the CM draft. Customer answers require CM publish.
 
     Answer rule (frozen): AR and Franco rows always carry an Arabic-script answer.
     """
@@ -137,12 +131,6 @@ async def create_faq_pair(
     if not created_entries:
         raise FaqIntegrationError("No FAQ variants could be created")
 
-    local_qa_service.qa_pairs.extend(created_entries)
-    if not local_qa_service.save_to_jsonl():
-        for _ in created_entries:
-            local_qa_service.qa_pairs.pop()
-        raise FaqIntegrationError("Failed to write FAQ pair to qa_pairs.jsonl")
-
     record = FaqRecord(
         qa_group_id=qa_group_id,
         variants=variants,
@@ -176,7 +164,7 @@ async def create_faq_pair_from_livechat(
     tenant_id: str | None = None,
     publish: bool = False,
 ) -> dict[str, Any]:
-    """Canonical Live Chat Like → FAQ writer. Never writes remote/dead QA stores."""
+    """Canonical Live Chat Like → FAQ writer. Draft-only until CM publish."""
     duplicates = find_duplicate_faq_groups(question=question, language=language, tenant_id=tenant_id)
     result = await create_faq_pair(
         question=question,

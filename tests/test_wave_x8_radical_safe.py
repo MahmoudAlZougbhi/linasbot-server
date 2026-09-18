@@ -18,7 +18,7 @@ def test_wave_x8_stub_jobs_and_moderation_gone() -> None:
     )
     leftover = [rel for rel in gone if (ROOT / rel).exists()]
     assert not leftover, leftover
-    assert (ROOT / "modules/local_qa_api.py").is_file()
+    assert not (ROOT / "modules/local_qa_api.py").exists()
     assert (ROOT / "services/billing/membership/message_catalog.py").is_file()
     assert (ROOT / "modules/flow_api.py").is_file()
 

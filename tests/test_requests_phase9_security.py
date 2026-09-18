@@ -26,7 +26,6 @@ from modules.api_security import (  # noqa: E402
     user_has_permission,
 )
 from services.dashboard.dashboard_session_service import SessionRecord  # noqa: E402
-from services.requests.ai_tool import AiToolContext, execute_create_customer_request  # noqa: E402
 from services.requests.constants import REQUEST_PERMISSION_KEYS  # noqa: E402
 from services.requests.schemas import RequestCreateBody  # noqa: E402
 from services.requests.service import CustomerRequestsError, CustomerRequestsService  # noqa: E402
@@ -218,31 +217,6 @@ def test_create_without_customer_confirmed_refused(req_db, monkeypatch):
 
 
 # --- AI tool public comment -------------------------------------------------
-
-
-def test_ai_tool_public_comment_refused(req_db, monkeypatch):
-    monkeypatch.setattr("services.requests.ai_tool.requests_capture_active", lambda _tid: True)
-    out = execute_create_customer_request(
-        {
-            "request_type": "APPOINTMENT",
-            "customer_confirmed": True,
-            "idempotency_key": "idem-p9-comment",
-            "title": "Book from comment",
-        },
-        AiToolContext(
-            tenant_id="tenant-a",
-            source_channel="instagram_dm",
-            conversation_id="conv-c1",
-            response_language="en",
-            public_comment=True,
-        ),
-        session=req_db,
-    )
-    assert out["ok"] is False
-    assert out["error"] == "PUBLIC_COMMENT_REFUSED"
-
-
-# --- Sensitive field redaction ----------------------------------------------
 
 
 def test_get_omits_sensitive_without_flag(req_db, monkeypatch):

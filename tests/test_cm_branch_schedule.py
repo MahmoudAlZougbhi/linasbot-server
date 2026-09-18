@@ -11,7 +11,6 @@ from services.ai_setup.branch_schedule import (
     normalize_branch_day,
     normalize_branches_payload,
 )
-from services.ai_setup.off_days import resolve_off_day_facts
 from services.ai_setup.schemas import (
     BranchDaySchedule,
     BranchesSection,
@@ -128,5 +127,4 @@ def test_derive_off_days_from_specific_rules() -> None:
     derived = derive_off_days_section(section)
     assert derived.timezone == "Asia/Beirut"
     assert len(derived.rules) == 1
-    facts = resolve_off_day_facts(derived, now=__import__("datetime").datetime(2026, 12, 25, 12, 0))
-    assert any(f.kind == "business_closed_today" and f.value == "true" for f in facts)
+    assert derived.rules[0].date == "2026-12-25"

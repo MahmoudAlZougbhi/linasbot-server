@@ -82,17 +82,7 @@ async def generate_web_chat_reply_text(
         from services.brain.outbound_safety import looks_like_instruction_text
 
         if reply_text and looks_like_instruction_text(reply_text):
-            from services.brain.greeting import is_greeting_only, safe_greeting_text
-            from services.brain.templates import brain_template
-
-            if is_greeting_only(text):
-                reply_text = safe_greeting_text(
-                    tenant_id=tid,
-                    message=text,
-                    language=str(_lang.get("response_language") or ""),
-                )
-            else:
-                reply_text = brain_template("no_evidence", str(_lang.get("response_language") or ""))
+            reply_text = ""
         reason = str(getattr(outcome, "reason", "") or "")
         if reason.endswith("_limit") or reason == "ai_reply_limit":
             _fence(runtime, credit, conversation_id, text)

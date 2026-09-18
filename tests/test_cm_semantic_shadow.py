@@ -6,8 +6,6 @@ import pytest
 
 from services.ai_setup.embeddings import HASH_EMBEDDING_DIMENSIONS, cosine_similarity, embed_texts, embedding_pin
 from services.ai_setup.paths import indexes_dir
-from services.ai_setup.query_interpreter import interpret_query, interpret_query_deterministic, interpreter_llm_enabled
-from services.ai_setup.schemas import LocalizedLabels, RestrictedPolicy, RestrictedTopic
 from tests.cm_semantic_index import build_index, load_index, search
 
 pytestmark = pytest.mark.usefixtures("enable_faq_plan")
@@ -93,53 +91,3 @@ def test_index_is_tenant_scoped_on_disk() -> None:
     assert str(root_a) != str(root_b)
     assert "tenant_a_semantic" in str(root_a)
     assert "tenant_b_semantic" in str(root_b)
-
-
-# --------------------------- query interpreter ---------------------------
-
-
-def test_interpreter_llm_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CM_INTERPRETER_LLM", raising=False)
-    assert interpreter_llm_enabled() is False
-
-
-def test_deterministic_interpreter_extracts_booking_and_restricted() -> None:
-    restricted = RestrictedPolicy(
-        topics=[
-            RestrictedTopic(
-                id="tattoo_removal",
-                labels=LocalizedLabels(en="tattoo removal"),
-                keywords=["tattoo", "tattoo removal"],
-                active=True,
-            )
-        ]
-    )
-    result = interpret_query_deterministic(
-        "I want to book an appointment for tattoo removal",
-        restricted=restricted,
-    )
-    assert result.booking_requested is True
-    assert result.restricted_topic_id == "tattoo_removal"
-    assert result.used_llm is False
-
-
-def test_deterministic_interpreter_no_false_positive_on_plain_question() -> None:
-    result = interpret_query_deterministic("What is your address?", restricted=RestrictedPolicy())
-    assert result.booking_requested is False
-    assert result.human_requested is False
-    assert result.restricted_topic_id is None
-
-
-@pytest.mark.asyncio
-async def test_interpret_query_is_skippable_via_use_llm_false() -> None:
-    """MUST be skippable regardless of env — explicit use_llm=False never calls the LLM."""
-    result = await interpret_query("book an appointment", use_llm=False)
-    assert result.used_llm is False
-    assert result.booking_requested is True
-
-
-@pytest.mark.asyncio
-async def test_interpret_query_defaults_to_deterministic_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CM_INTERPRETER_LLM", raising=False)
-    result = await interpret_query("book an appointment")
-    assert result.used_llm is False

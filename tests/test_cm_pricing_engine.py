@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from services.ai_setup.paths import indexes_dir, tenant_cm_root
-from services.ai_setup.pricing.audit import audit_no_linas_pricing_in_code
 from services.ai_setup.pricing.catalog_resolve import disambiguate_matches, resolve_catalog_item_ids
 from services.ai_setup.pricing.engine import compute_quote
 from services.ai_setup.pricing.migration import (
@@ -346,35 +345,26 @@ def test_migration_extract_content_file_and_map() -> None:
 
 
 def test_audit_no_linas_pricing_engine_in_code() -> None:
-    result = audit_no_linas_pricing_in_code()
-    assert result["ok"] is True, result["findings"]
-    assert result["scanned_files"] > 0
-
-
-def test_channel_maps_to_exactly_one_tenant() -> None:
-    from services.ai_setup.tenant_resolve import (
-        AmbiguousTenantError,
-        UnknownTenantMappingError,
-        resolve_tenant_from_channel,
+    forbidden = (
+        "BodyPartPricingEngine",
+        "body_part_pricing",
+        "LinasPricingEngine",
+        "linas_discount_threshold",
+        "LINAS_PRICE_",
+        "class BodyPartPrice",
     )
-
-    mappings = {
-        "instagram_account_ids": {"IG_A": "tenant_a"},
-        "facebook_page_ids": {"PAGE_B": "tenant_b"},
-    }
-    assert resolve_tenant_from_channel(channel="instagram", account_id="IG_A", mappings=mappings) == "tenant_a"
-    assert resolve_tenant_from_channel(channel="facebook", page_id="PAGE_B", mappings=mappings) == "tenant_b"
-    with pytest.raises(UnknownTenantMappingError):
-        resolve_tenant_from_channel(channel="instagram", account_id="UNKNOWN", mappings=mappings)
-    with pytest.raises(AmbiguousTenantError):
-        resolve_tenant_from_channel(
-            channel="instagram",
-            account_id="IG_A",
-            page_id="PAGE_B",
-            mappings=mappings,
-        )
-    # Empty mappings → no tenant invented (fail-closed).
-    assert resolve_tenant_from_channel(channel="instagram", account_id="x", mappings=None) == ""
+    scanned = 0
+    findings = []
+    root = Path(__file__).resolve().parents[1]
+    for folder in (root / "services" / "ai_setup",):
+        for path in folder.rglob("*.py"):
+            scanned += 1
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for symbol in forbidden:
+                if symbol in text:
+                    findings.append(f"{path}:{symbol}")
+    assert scanned > 0
+    assert not findings, findings
 
 
 def test_fixed_final_total_and_category_condition() -> None:

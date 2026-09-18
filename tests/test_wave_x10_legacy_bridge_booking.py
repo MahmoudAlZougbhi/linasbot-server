@@ -38,5 +38,5 @@ def test_wave_x10_booking_tools_and_schedule_gone() -> None:
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
     assert "WAVE X10" in keep
     assert (ROOT / "services/integrations/social/social_contact_routing_detect.py").is_file()
-    sfu = (ROOT / "services/smart_followup/social_schedule.py").read_text(encoding="utf-8")
-    assert "is_social_channel" in sfu
+    detect = (ROOT / "services/integrations/social/social_contact_routing_detect.py").read_text(encoding="utf-8")
+    assert "def is_social_channel" in detect

@@ -14,11 +14,12 @@ def test_wave_o1_no_unused_router_gender_bindings() -> None:
     assert "get_gender_from_message" not in ctx
     assert "def route(" not in router
     assert "ask_gender" not in router
-    from services.brain.conversation_router import GREETING_TEMPLATES, is_human_request
+    from services.brain.conversation_router import is_human_request
 
     assert is_human_request("بدي احكي مع حدا") is True
     assert is_human_request("personal care tips") is False
-    assert "en" in GREETING_TEMPLATES
+    router = (ROOT / "services/brain/conversation_router.py").read_text(encoding="utf-8")
+    assert "GREETING_TEMPLATES" not in router
 
 
 def test_wave_o2_no_laser_clinic_translator_in_brain() -> None:
@@ -31,10 +32,7 @@ def test_wave_o3_no_founder_branch_defaults_keep_antileak() -> None:
     assert '"marwa"' not in classifier
     assert '"antelias"' not in classifier
     assert '"beirut"' not in classifier
-    packet = (ROOT / "services/ai_setup/answer_packet.py").read_text(encoding="utf-8")
-    assert "Marwa" in packet
-    assert "Beirut" in packet
-    assert "Antelias" in packet
+    assert not (ROOT / "services/ai_setup/answer_packet.py").exists()
 
 
 def test_wave_o4_dashboard_package_name() -> None:
@@ -75,7 +73,7 @@ def test_wave_o1_o5_keep_portal_drawer_credits_catalog_ig() -> None:
     assert drawer.count("id: '") + drawer.count('id: "') >= 9
     assert (ROOT / "services/billing/membership/message_catalog.py").is_file()
     assert (ROOT / "services/billing/credit_ledger_service.py").is_file()
-    assert (ROOT / "modules/local_qa_api.py").is_file()
+    assert not (ROOT / "modules/local_qa_api.py").exists()
     from services.integrations.social.social_contact_routing_detect import is_social_channel
 
     assert is_social_channel("instagram") is True

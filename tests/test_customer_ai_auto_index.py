@@ -223,20 +223,10 @@ def test_owner_status_has_no_secret_keys() -> None:
     assert "retry_count" in row
 
 
-def test_backfill_is_bounded(tenant_fs: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.brain.search import index_backfill
+def test_backfill_module_is_gone_schedule_is_canonical() -> None:
+    from pathlib import Path
 
-    monkeypatch.setattr(index_backfill, "published_tenant_ids", lambda: ["t1", "t2", "t3", "t4"])
-    monkeypatch.setattr(index_backfill, "tenant_needs_index", lambda _tid: True)
+    from services.brain.search.index_schedule import schedule_tenant_index
 
-    async def _sched(tid: str, **_k: object) -> dict[str, object]:
-        return {"queued": True, "health": "BUILDING", "reason": "backfill"}
-
-    monkeypatch.setattr("services.brain.search.index_schedule.schedule_tenant_index", _sched)
-
-    async def _run() -> None:
-        out = await index_backfill.enqueue_stale_or_missing(limit=2, skip={"t1"})
-        assert out["scheduled_count"] == 2
-        assert [row["tenant_id"] for row in out["scheduled"]] == ["t2", "t3"]
-
-    __import__("asyncio").run(_run())
+    assert not Path("services/brain/search/index_backfill.py").exists()
+    assert callable(schedule_tenant_index)

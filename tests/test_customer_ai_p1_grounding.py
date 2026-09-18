@@ -13,7 +13,6 @@ from services.brain.grounding.facts import evidence_supports_text, ungrounded_am
 from services.brain.providers.spaces import spaces_snapshot
 from services.brain.retrieve.cards import cards_from_sections
 from services.brain.retrieve.lexical import bm25_scores, search_cards, tokenize
-from services.brain.templates import brain_template
 from services.brain.visual import visual_retrieval_decision
 from tests.brain_evals.golden_pack import run_golden_pack
 from tests.cm_test_lab import run_lab_verification_exercises
@@ -227,9 +226,6 @@ def test_identity_prompt_includes_ai_setup_greeting_behavior() -> None:
     assert "Clinic X" in blob
     assert "never use a canned Hi Linas Laser line" in blob
     assert "I help with published clinic questions" in blob
-    assert brain_template("handoff", "en") != brain_template("handoff", "ar")
-    assert "confirm" in brain_template("confirm_request", "en").lower()
-    assert brain_template("faq_ambiguous", "fr")
 
 
 def test_golden_pack_and_lab_exercises() -> None:

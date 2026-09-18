@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_wave_x12_handlers_package_gone() -> None:
     assert not (ROOT / "handlers").exists()
     assert (ROOT / "services/brain/inbound/text_handlers.py").is_file()
-    assert (ROOT / "services/brain/inbound/photo_handlers.py").is_file()
+    assert (ROOT / "modules/webhook_handlers_photo.py").is_file()
     assert (ROOT / "modules/webhook_handlers.py").is_file()
     webhook = (ROOT / "modules/webhook_handlers.py").read_text(encoding="utf-8")
     assert "from services.brain.inbound.text_handlers import handle_message" in webhook

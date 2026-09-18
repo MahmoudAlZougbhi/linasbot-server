@@ -1,0 +1,164 @@
+{
+  "generated_at": "2026-09-18T21:39:33.696857+00:00",
+  "starting_sha": "2d2c6d835c48e1f970064bb5260e811db3c38fc1",
+  "phases_completed": [
+    "0-baseline",
+    "1-dead-runtime",
+    "2-faq-cm-only",
+    "3-handoff-owner-only",
+    "4-greeting-terra",
+    "5-webchat-adapter",
+    "6-sfu-canonical"
+  ],
+  "phases_remaining": [
+    "7-requests-unify",
+    "8-comments-modes-e2e",
+    "9-ai-setup-remaining",
+    "10-copilot",
+    "11-billing-obsolete-only",
+    "12-integrations-classify",
+    "13-modules-fold-domain-by-domain",
+    "14-museum",
+    "15-duplicate-rescan",
+    "16-full-emitter-inventory",
+    "17-failure-contracts",
+    "18-e2e-domains"
+  ],
+  "canonical": {
+    "faq": "services/brain/faq_exact.py + faq_semantic.py (published CM only)",
+    "greeting": "services/brain/agent/greeting_turn.py Terra + evaluate_greeting published CM",
+    "handoff_copy": "owner_protocol_text / get_owner_persisted_message only",
+    "web_chat": "processor_v2_reply.py -> run_customer_reply_v2_dm",
+    "comments": "meta_comment_reply_generate.py -> run_customer_reply_v2_comment",
+    "smart_followup": "services/smart_followup/",
+    "removed": [
+      "modules/local_qa_api.py",
+      "services/faq/local_qa_service.py",
+      "services/integrations/whatsapp/smart_followup/",
+      "GREETING_TEMPLATES",
+      "brain_template hardcoded AR/EN/FR tables"
+    ]
+  },
+  "emitter_needles": [
+    {
+      "file": "services/owner_copilot/dynamic_messages_service.py",
+      "needle": "run_customer_reply_v2_dm",
+      "count": 1
+    },
+    {
+      "file": "services/owner_copilot/dynamic_messages_service.py",
+      "needle": "get_owner_persisted_message",
+      "count": 1
+    },
+    {
+      "file": "services/integrations/web_chat/processor_v2_reply.py",
+      "needle": "run_customer_reply_v2_dm",
+      "count": 2
+    },
+    {
+      "file": "services/integrations/web_chat/takeover_gate.py",
+      "needle": "owner_protocol_text(",
+      "count": 1
+    },
+    {
+      "file": "services/integrations/omnichannel/generate.py",
+      "needle": "run_customer_reply_v2_dm",
+      "count": 2
+    },
+    {
+      "file": "services/integrations/omnichannel/channel_whatsapp.py",
+      "needle": "run_customer_reply_v2_dm",
+      "count": 2
+    },
+    {
+      "file": "services/integrations/tiktok/messaging.py",
+      "needle": "run_customer_reply_v2_dm",
+      "count": 2
+    },
+    {
+      "file": "services/integrations/whatsapp/ai_bridge.py",
+      "needle": "run_customer_reply_v2_dm",
+      "count": 2
+    },
+    {
+      "file": "services/smart_followup/generation.py",
+      "needle": "run_customer_reply_v2_dm",
+      "count": 2
+    },
+    {
+      "file": "services/brain/greeting.py",
+      "needle": "safe_greeting_text(",
+      "count": 1
+    },
+    {
+      "file": "services/brain/faq_exact.py",
+      "needle": "find_published_exact_faq",
+      "count": 1
+    },
+    {
+      "file": "services/brain/templates.py",
+      "needle": "brain_template(",
+      "count": 1
+    },
+    {
+      "file": "services/brain/templates.py",
+      "needle": "owner_protocol_text(",
+      "count": 2
+    },
+    {
+      "file": "services/brain/templates.py",
+      "needle": "get_owner_persisted_message",
+      "count": 2
+    },
+    {
+      "file": "services/brain/faq_turn.py",
+      "needle": "find_published_exact_faq",
+      "count": 2
+    },
+    {
+      "file": "services/brain/agent/no_evidence_handoff.py",
+      "needle": "brain_template(",
+      "count": 1
+    },
+    {
+      "file": "services/brain/agent/action_gate.py",
+      "needle": "owner_protocol_text(",
+      "count": 3
+    },
+    {
+      "file": "services/brain/agent/generate_path.py",
+      "needle": "owner_protocol_text(",
+      "count": 1
+    },
+    {
+      "file": "services/brain/reply/__init__.py",
+      "needle": "run_customer_reply_v2_dm",
+      "count": 2
+    },
+    {
+      "file": "services/brain/reply/orchestrator.py",
+      "needle": "run_customer_reply_v2_dm",
+      "count": 1
+    },
+    {
+      "file": "services/brain/inbound/text_handlers_message_greeting.py",
+      "needle": "get_owner_persisted_message",
+      "count": 2
+    },
+    {
+      "file": "services/brain/inbound/text_handlers_respond_reply.py",
+      "needle": "run_customer_reply_v2_dm",
+      "count": 2
+    },
+    {
+      "file": "services/brain/actions/pending.py",
+      "needle": "owner_protocol_text(",
+      "count": 1
+    },
+    {
+      "file": "modules/webhook_handlers_process.py",
+      "needle": "WELCOME_MESSAGES",
+      "count": 2
+    }
+  ]
+}

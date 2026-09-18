@@ -8,7 +8,6 @@ from types import SimpleNamespace
 from services.ai_setup.search_metadata.cm_apply import enrich_section_payload, last_cm_apply_stats
 from services.ai_setup.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
 from services.ai_setup.search_metadata.product_apply import enrich_product_row, last_product_apply_stats
-from services.products.search_scoring import rank_products
 
 
 def setup_function() -> None:
@@ -77,34 +76,6 @@ def test_save_one_product_among_20000() -> None:
     enrich_product_row(row, previous=None)
     assert last_product_apply_stats()["product_id"] == "p19999"
     assert calls == ["p19999"]
-
-
-def test_rank_20000_products_original_query() -> None:
-    rows = [
-        SimpleNamespace(
-            id=f"p{i}",
-            name=f"Catalog {i:05d}",
-            name_normalized=f"catalog {i:05d}",
-            description="generic item",
-            description_normalized="generic item",
-            ai_search_title=f"Catalog Item {i:05d}",
-            ai_search_description="generic catalog row",
-            ai_search_keywords=["catalog"],
-            note="",
-        )
-        for i in range(20000)
-    ]
-    rows[12345].name = "Nivea Face Cream"
-    rows[12345].name_normalized = "nivea face cream"
-    rows[12345].description = "Moisturizing cream for the face."
-    rows[12345].description_normalized = "moisturizing cream for the face"
-    rows[12345].ai_search_title = "Nivea Face Moisturizing Cream"
-    started = time.perf_counter()
-    scored = rank_products("nevia creem", rows, limit=5)
-    elapsed = time.perf_counter() - started
-    assert scored
-    assert scored[0][1].id == "p12345"
-    assert elapsed < 12.0
 
 
 def test_save_one_comment_rule_among_300() -> None:

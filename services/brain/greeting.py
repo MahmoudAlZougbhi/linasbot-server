@@ -199,7 +199,7 @@ def safe_greeting_text(
     language: str = "",
     history: HistorySnapshot | None = None,
 ) -> str:
-    """Published opener, then catalog greetings. Never validator or temporary-error copy."""
+    """Published Identity/Greeting Behavior opener only. Empty when Terra must own the turn."""
     lang = (language or inbound_greeting_language(message)).strip().lower() or "en"
     try:
         decision = evaluate_greeting(
@@ -212,17 +212,7 @@ def safe_greeting_text(
             return decision.text.strip()
     except Exception:
         pass
-    from services.owner_copilot.dynamic_messages_service import get_dynamic_message
-
-    for key in ("session_greeting_after_inactivity", "router_greeting"):
-        text = str(get_dynamic_message(key, lang) or "").strip()
-        if text:
-            return text
-    if lang in {"ar", "franco"}:
-        return "مرحباً! كيف يمكنني مساعدتك؟"
-    if lang == "fr":
-        return "Bonjour ! Comment puis-je vous aider ?"
-    return "Hello! How can I help you today?"
+    return ""
 
 
 def is_greeting_only(message: str) -> bool:

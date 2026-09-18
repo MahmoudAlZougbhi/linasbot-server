@@ -59,6 +59,6 @@ def test_wave_p1_keep_portal_drawer_credits_catalog() -> None:
     from services.integrations.social.social_contact_routing_detect import is_social_channel
 
     assert is_social_channel("instagram") is True
-    assert (ROOT / "modules/local_qa_api.py").is_file()
+    assert not (ROOT / "modules/local_qa_api.py").exists()
     webhook = (ROOT / "modules/wallet_api.py").read_text(encoding="utf-8")
     assert "token_pack_retired" in webhook

@@ -63,7 +63,7 @@ def _set_whatsapp_ai_default(session: Any, connection_id: str, *, enabled: bool)
             detail={},
         )
         if not enabled:
-            from services.integrations.whatsapp.smart_followup.hooks import cancel_tenant_followups
+            from services.smart_followup.hooks import cancel_tenant_followups
 
             cancel_tenant_followups(db, tenant_id=session.tenant_id, reason="ai_disabled")
         return {"success": True, "connection": connection_status_payload(db, conn)}
@@ -196,7 +196,7 @@ async def whatsapp_disconnect(connection_id: str, request: Request, body: dict[s
             event_type="connection_revoked",
             detail={"reason": "owner_disconnect"},
         )
-        from services.integrations.whatsapp.smart_followup.hooks import cancel_tenant_followups
+        from services.smart_followup.hooks import cancel_tenant_followups
 
         cancel_tenant_followups(db, tenant_id=session.tenant_id, reason="whatsapp_disconnected")
         return {"success": True, "lifecycle_status": "revoked"}

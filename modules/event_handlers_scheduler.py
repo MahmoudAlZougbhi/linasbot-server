@@ -12,7 +12,7 @@ async def run_smart_followup_worker_job() -> None:
     if not try_acquire_job_lock("whatsapp_smart_followup_worker", ttl_seconds=55):
         return
     try:
-        from services.integrations.whatsapp.smart_followup.worker import process_due_followup_jobs
+        from services.smart_followup.worker import process_due_followup_jobs
 
         result = await process_due_followup_jobs(limit=25)
         processed = int(result.get("processed") or 0)

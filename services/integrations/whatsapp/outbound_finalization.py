@@ -74,7 +74,7 @@ def finalize_ai_outbound_sent(
     )
 
     try:
-        from services.integrations.whatsapp.smart_followup.hooks import schedule_after_ai_reply
+        from services.smart_followup.hooks import schedule_after_ai_reply
 
         schedule_after_ai_reply(
             session,

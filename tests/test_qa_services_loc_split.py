@@ -1,25 +1,26 @@
-"""LOC split: local_qa_service match mixins under 500 lines."""
+"""LOC split: canonical FAQ services stay under 500 lines; local QA is gone."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from services.faq.local_qa_service import LocalQAService
-from services.faq.local_qa_service import get_qa_response as local_get
-from services.faq.local_qa_service_match import LocalQAServiceMatchMixin
+from services.brain.faq_exact import find_published_exact_faq, published_faq_entry
+from services.faq.faq_cm_invalidation import invalidate_faq_for_cm_patch
 
 
 def _line_count(rel: str) -> int:
     return len(Path(rel).read_text(encoding="utf-8").splitlines())
 
 
-def test_qa_service_modules_under_500_lines() -> None:
-    assert _line_count("services/faq/local_qa_service.py") < 500
-    assert _line_count("services/faq/local_qa_service_match.py") < 500
+def test_canonical_faq_modules_under_500_lines() -> None:
+    assert _line_count("services/brain/faq_exact.py") < 500
+    assert _line_count("services/brain/faq_semantic.py") < 500
+    assert _line_count("services/faq/faq_cm_invalidation.py") < 500
+    assert not Path("services/faq/local_qa_service.py").exists()
+    assert not Path("services/faq/local_qa_service_match.py").exists()
 
 
-def test_qa_services_preserve_public_api_via_mixin() -> None:
-    assert issubclass(LocalQAService, LocalQAServiceMatchMixin)
-    assert callable(local_get)
-    for name in ("find_match", "normalize_text", "get_statistics", "get_categories"):
-        assert callable(getattr(LocalQAService, name))
+def test_canonical_faq_public_api() -> None:
+    assert callable(find_published_exact_faq)
+    assert callable(published_faq_entry)
+    assert callable(invalidate_faq_for_cm_patch)

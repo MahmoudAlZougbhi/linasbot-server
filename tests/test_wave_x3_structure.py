@@ -14,12 +14,13 @@ GONE = (
     "services/tiktok_business",
     "services/web_chat",
     "services/omnichannel",
+    "services/integrations/whatsapp/smart_followup",
 )
 
 KEEP = (
     "services/brain/reply/orchestrator.py",
     "services/live_chat/comments_inbox/threads.py",
-    "services/integrations/whatsapp/smart_followup/worker.py",
+    "services/smart_followup/worker.py",
     "services/integrations/whatsapp/adapters/whatsapp_factory.py",
     "services/integrations/tiktok",
     "services/integrations/web_chat",
@@ -42,7 +43,7 @@ def test_wave_x3_live_imports_use_domain_packages() -> None:
     comments_api = (ROOT / "modules/comments_inbox_api.py").read_text(encoding="utf-8")
     main = (ROOT / "main.py").read_text(encoding="utf-8")
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
-    assert "services.integrations.whatsapp.smart_followup.worker" in scheduler
+    assert "services.smart_followup.worker" in scheduler
     assert "services.live_chat.comments_inbox" in comments_api
     assert "modules.web_chat_api" in main
     assert "modules.comments_inbox_api" in main

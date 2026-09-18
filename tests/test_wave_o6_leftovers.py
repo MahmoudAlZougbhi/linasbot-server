@@ -35,7 +35,7 @@ def test_o6_business_scope_guard_renamed_not_removed() -> None:
 def test_o6_keep_surfaces_intact() -> None:
     assert (ROOT / "docs/KEEP_SURFACE.md").is_file()
     assert (ROOT / "docs/BACKEND_ENV.md").is_file()
-    assert (ROOT / "modules/local_qa_api.py").is_file()
+    assert not (ROOT / "modules/local_qa_api.py").exists()
     assert (ROOT / "services/saas_no_boc.py").is_file()
     billing = (ROOT / "services/billing/iap_product_catalog.py").read_text(encoding="utf-8")
     assert "com.linasai.credits." in billing

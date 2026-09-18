@@ -60,8 +60,8 @@ def test_wave_p0_keep_social_channel_and_expire() -> None:
     assert is_social_channel("instagram") is True
     assert DEFAULT_SOCIAL_WHATSAPP_CONTACTS == {}
     assert callable(expire_social_contact_flows_in_user_data)
-    sfu = (ROOT / "services/smart_followup/social_schedule.py").read_text(encoding="utf-8")
-    assert "is_social_channel" in sfu
+    detect = (ROOT / "services/integrations/social/social_contact_routing_detect.py").read_text(encoding="utf-8")
+    assert "def is_social_channel" in detect
 
 
 def test_wave_p0_keep_portal_drawer_credits_catalog() -> None:
