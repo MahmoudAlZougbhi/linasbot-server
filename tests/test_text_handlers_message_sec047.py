@@ -60,6 +60,10 @@ async def test_session_greeting_send_has_task_local_semantic_purpose(
         "services.brain.inbound.text_handlers_message.sentiment_service.analyze_sentiment",
         lambda **_: {"sentiment": "neutral"},
     )
+    monkeypatch.setattr(
+        "services.owner_copilot.dynamic_messages_service.get_owner_persisted_message",
+        lambda _key, _lang="ar": "مرحباً",
+    )
     monkeypatch.setattr(config, "AI_PRIMARY_ORCHESTRATION", False)
     config.user_greeting_stage[user_id] = 0
     config.user_gender[user_id] = "unknown"
