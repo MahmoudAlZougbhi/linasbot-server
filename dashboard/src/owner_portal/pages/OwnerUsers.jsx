@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ownerApi } from './ownerApi';
+import { ownerApi } from '../api/ownerApi';
 
 /** @param {{ tenantId: string; onClose: () => void }} props */
 function LogsPanel({ tenantId, onClose }) {

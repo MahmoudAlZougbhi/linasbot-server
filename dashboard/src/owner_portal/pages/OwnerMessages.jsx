@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ownerApi } from './ownerApi';
+import { ownerApi } from '../api/ownerApi';
 
 /** @param {any} detail */
 function StageList({ detail }) {

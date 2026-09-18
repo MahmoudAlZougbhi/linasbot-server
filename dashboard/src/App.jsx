@@ -15,12 +15,7 @@ import { PublicLandingLocaleProvider } from './contexts/PublicLandingLocaleConte
 import AppEntry from './pages/AppEntry';
 import { OBSOLETE_OPERATOR_PATHS } from './constants/publicSite';
 import { isMarketingPublicHost, isPlatformPortalHost } from './pages/portalHost';
-import OwnerPortalShell from './pages/owner/OwnerPortalShell';
-import OwnerOverview from './pages/owner/OwnerOverview';
-import OwnerUsers from './pages/owner/OwnerUsers';
-import OwnerCatalog from './pages/owner/OwnerCatalog';
-import OwnerCosts from './pages/owner/OwnerCosts';
-import OwnerMessages from './pages/owner/OwnerMessages';
+import { ownerPortalRouteElements } from './owner_portal';
 
 /**
  * Operator SPA shell removed after FINAL_WEB_TO_MOBILE_PARITY_MATRIX.csv.
@@ -39,11 +34,6 @@ function PublicMarketingShell() {
 function LoginRoute() {
   if (isMarketingPublicHost()) return <Navigate to="/#get-app" replace />;
   return <Login />;
-}
-
-function OwnerGate() {
-  if (isMarketingPublicHost()) return <Navigate to="/#get-app" replace />;
-  return <OwnerPortalShell />;
 }
 
 function App() {
@@ -68,13 +58,7 @@ function App() {
           <Route path="/verify-email" element={<VerifyEmail />} />
 
           <Route path="/app" element={<AppEntry />} />
-          <Route path="/owner" element={<OwnerGate />}>
-            <Route index element={<OwnerOverview />} />
-            <Route path="users" element={<OwnerUsers />} />
-            <Route path="messages" element={<OwnerMessages />} />
-            <Route path="catalog" element={<OwnerCatalog />} />
-            <Route path="costs" element={<OwnerCosts />} />
-          </Route>
+          {ownerPortalRouteElements()}
           {OBSOLETE_OPERATOR_PATHS.map((path) => (
             <Route key={path} path={path} element={<Navigate to="/#get-app" replace />} />
           ))}

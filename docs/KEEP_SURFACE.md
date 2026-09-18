@@ -200,7 +200,8 @@ Keep #677 media analysis.
 ## WAVE F — web marketing+portal; mobile drawer-only
 
 - Web KEEP: public marketing, owner portal (Overview / Users / Message flow / Message catalog / Costs), auth recovery, web-chat widget. Lab, Creative, and operator SPA pages stay gone.
-- Portal sidebar is those five items only (`dashboard/src/pages/owner/OwnerPortalShell.jsx`).
+- Portal sidebar is those five items only (`dashboard/src/owner_portal/components/OwnerPortalShell.jsx`).
+- Platform Owner Portal code lives in `dashboard/src/owner_portal/` and `services/owner_portal/`. HTTP stays `modules/platform_*`. Owner Copilot stays `services/owner_copilot/`.
 - Mobile screen union is drawer tiles + Copilot chat + auth + notifications + nested AI Setup / products / services + deep links. `owner` remains the platform_owner WA pilot (not a tenant drawer tile).
 - Snapchat is not a live Integrations row (no coming-soon stub). Connectable channels: Instagram, Facebook, WhatsApp, Website, TikTok.
 - KEEP hub tiles stay `mobileSupported: true`. Creative types stay refused under Owner Copilot only.
@@ -234,7 +235,7 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - Operator comments inbox: `services/live_chat/comments_inbox/`.
 - Channel packages under `services/integrations/`: `whatsapp/` (includes `adapters/` + Cloud `smart_followup/`), `tiktok/`, `web_chat/`, `omnichannel/`.
 - HTTP mounts stay in `modules/*`. Meta `services/meta_*.py` and Apple IAP/Sign-In stay as sibling modules this wave (Apple stays billing/auth; Meta fold is a follow-up).
-- Web stays marketing `pages/public/*` + owner portal `pages/owner/*` (no leftover operator SPA pages).
+- Web stays marketing `pages/public/*` + owner portal `owner_portal/*` (no leftover operator SPA pages).
 
 ## WAVE X4 — freeze + KEEP enabled
 

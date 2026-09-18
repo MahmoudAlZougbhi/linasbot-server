@@ -1,0 +1,1 @@
+export { ownerPortalRouteElements } from './OwnerPortalRoutes';

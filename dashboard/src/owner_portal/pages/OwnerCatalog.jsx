@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ownerApi } from './ownerApi';
+import { ownerApi } from '../api/ownerApi';
 
 function parseOptionalInt(/** @type {unknown} */ raw, /** @type {string} */ label) {
   const text = String(raw ?? '').trim();

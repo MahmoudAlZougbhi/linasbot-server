@@ -1,4 +1,4 @@
-"""Read models for the authenticated Linas.ai platform-owner portal."""
+"""Platform Owner overview read models. Billing remains the catalog/credit source of truth."""
 
 from __future__ import annotations
 

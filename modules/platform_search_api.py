@@ -8,16 +8,16 @@ from fastapi import HTTPException, Request
 
 from modules.api_security import require_platform_owner
 from modules.core import app
-from services.brain.search.force_reindex import force_reindex_tenant
+from services.owner_portal.costs import reindex_customer_ai
 
 
 @app.post("/api/platform/customer-ai-index/{tenant_id}/reindex")
 async def platform_force_reindex(tenant_id: str, request: Request) -> Any:
     require_platform_owner(request)
-    tid = tenant_id.strip()
-    if not tid:
-        raise HTTPException(status_code=400, detail="tenant_id is required")
-    result = await force_reindex_tenant(tid)
+    try:
+        result = await reindex_customer_ai(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     status = 200
     if result.get("reason") == "unpublished":
         status = 409

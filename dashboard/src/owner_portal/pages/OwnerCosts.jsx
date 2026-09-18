@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ownerApi } from './ownerApi';
+import { ownerApi } from '../api/ownerApi';
 
 /** @param {{ label: string, value?: string | number }} props */
 function Metric({ label, value }) {

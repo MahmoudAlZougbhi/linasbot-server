@@ -1,4 +1,4 @@
-"""Platform-admin catalog, cost, and daily-edit APIs. Tenant owners are not authorized."""
+"""Platform-admin catalog, cost, and daily-edit HTTP facade. Tenant owners are not authorized."""
 
 from __future__ import annotations
 
@@ -9,10 +9,26 @@ from pydantic import BaseModel, Field
 
 from modules.api_security import require_platform_owner
 from modules.core import app
-from services.billing.membership.catalog_admin import CatalogPublishBlocked, current_catalog, publish, update_draft
-from services.billing.membership.conversion_dry_run import dry_run_credit_inventory
-from services.billing.membership.cost_dashboard import global_dashboard, period_bounds, tenant_dashboard
-from services.billing.membership.daily_edits import decision_payload, set_platform_baseline, set_tenant_override, status
+from services.owner_portal.activation import activation_readiness
+from services.owner_portal.catalog import (
+    CatalogPublishBlocked,
+    daily_edits_for_tenant,
+    get_message_catalog,
+    publish_message_catalog,
+    save_message_catalog_draft,
+    set_daily_edit_policy,
+)
+from services.owner_portal.costs import (
+    credit_conversion_dry_run,
+    message_ledger,
+)
+from services.owner_portal.costs import (
+    platform_costs as load_platform_costs,
+)
+from services.owner_portal.costs import (
+    tenant_costs as load_tenant_costs,
+)
+from services.owner_portal.messages import list_platform_message_flows, platform_message_flow
 
 
 class CatalogDraftBody(BaseModel):
@@ -32,7 +48,7 @@ class DailyEditPolicyBody(BaseModel):
 @app.get("/api/platform/message-catalog")
 async def platform_message_catalog(request: Request) -> Any:
     require_platform_owner(request)
-    return {"success": True, "catalog": current_catalog()}
+    return {"success": True, "catalog": get_message_catalog()}
 
 
 @app.patch("/api/platform/message-catalog")
@@ -41,7 +57,6 @@ async def platform_message_catalog_draft(body: CatalogDraftBody, request: Reques
     changes: dict[str, Any] = {}
     if body.ai_setup_daily_edit_limit is not None:
         changes["ai_setup_daily_edit_limit"] = body.ai_setup_daily_edit_limit
-        set_platform_baseline(body.ai_setup_daily_edit_limit)
     if body.free is not None:
         changes["free"] = body.free
     if body.plans is not None:
@@ -49,7 +64,7 @@ async def platform_message_catalog_draft(body: CatalogDraftBody, request: Reques
     if body.topup_packs is not None:
         changes["topup_packs"] = body.topup_packs
     try:
-        catalog = update_draft(
+        catalog = save_message_catalog_draft(
             actor=session.user_id or session.email or "platform",
             changes=changes,
             reason=body.reason,
@@ -63,7 +78,7 @@ async def platform_message_catalog_draft(body: CatalogDraftBody, request: Reques
 async def platform_message_catalog_publish(request: Request) -> Any:
     session = require_platform_owner(request)
     try:
-        catalog = publish(actor=session.user_id or session.email or "platform")
+        catalog = publish_message_catalog(actor=session.user_id or session.email or "platform")
     except CatalogPublishBlocked as exc:
         raise HTTPException(
             status_code=409,
@@ -85,18 +100,17 @@ async def platform_costs(
     period: str | None = Query(default=None),
 ) -> Any:
     require_platform_owner(request)
-    start, end = period_bounds(period)
-    env = (environment or "").strip() or None
     return {
         "success": True,
-        "dashboard": global_dashboard(
-            environment=env,
+        "dashboard": load_platform_costs(
+            environment=environment,
             category=category,
             feature=feature,
             provider=provider,
             model=model,
-            since=since or start,
-            until=until or end,
+            since=since,
+            until=until,
+            period=period,
         ),
     }
 
@@ -115,19 +129,18 @@ async def platform_tenant_costs(
     period: str | None = Query(default=None),
 ) -> Any:
     require_platform_owner(request)
-    start, end = period_bounds(period)
-    env = (environment or "").strip() or None
     return {
         "success": True,
-        "dashboard": tenant_dashboard(
+        "dashboard": load_tenant_costs(
             tenant_id,
-            environment=env,
+            environment=environment,
             category=category,
             feature=feature,
             provider=provider,
             model=model,
-            since=since or start,
-            until=until or end,
+            since=since,
+            until=until,
+            period=period,
         ),
     }
 
@@ -141,43 +154,38 @@ async def platform_daily_edits(
     tid = tenant_id.strip()
     if not tid:
         raise HTTPException(status_code=400, detail="tenant_id is required")
-    return {"success": True, "daily_edits": decision_payload(status(tid))}
+    return {"success": True, "daily_edits": daily_edits_for_tenant(tid)}
 
 
 @app.patch("/api/platform/daily-edits")
 async def platform_daily_edits_policy(body: DailyEditPolicyBody, request: Request) -> Any:
     require_platform_owner(request)
+    result = set_daily_edit_policy(tenant_id=body.tenant_id, limit=body.limit)
     if body.tenant_id:
-        set_tenant_override(body.tenant_id, body.limit)
-        return {"success": True, "daily_edits": decision_payload(status(body.tenant_id))}
-    set_platform_baseline(body.limit)
-    return {"success": True, "limit": body.limit, "source": "platform_baseline"}
+        return {"success": True, "daily_edits": result}
+    return {"success": True, **result}
 
 
 @app.get("/api/platform/credit-conversion/dry-run")
 async def platform_credit_conversion_dry_run(request: Request) -> Any:
     require_platform_owner(request)
-    return {"success": True, "dry_run": dry_run_credit_inventory()}
+    return {"success": True, "dry_run": credit_conversion_dry_run()}
 
 
 @app.get("/api/platform/activation-readiness")
 async def platform_activation_readiness(request: Request) -> Any:
     require_platform_owner(request)
-    from services.billing.membership.activation_readiness import activation_readiness
-
     return {"success": True, "readiness": activation_readiness()}
 
 
 @app.get("/api/platform/message-ledger/{tenant_id}")
 async def platform_message_ledger(tenant_id: str, request: Request) -> Any:
     require_platform_owner(request)
-    from services.billing.membership.message_ledger import snapshot_dict
-    from services.billing.membership.reconcile import ledger_health
-
-    tid = tenant_id.strip()
-    if not tid:
-        raise HTTPException(status_code=400, detail="tenant_id is required")
-    return {"success": True, "ledger": snapshot_dict(tid), "health": ledger_health(tid)}
+    try:
+        payload = message_ledger(tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True, **payload}
 
 
 @app.get("/api/platform/message-flows")
@@ -187,20 +195,16 @@ async def platform_message_flows(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> Any:
     require_platform_owner(request)
-    from services.brain.turn_inspector import list_message_flows
-
     return {
         "success": True,
-        "messages": list_message_flows(tenant_id=(tenant_id or "").strip(), limit=limit),
+        "messages": list_platform_message_flows(tenant_id=tenant_id or "", limit=limit),
     }
 
 
 @app.get("/api/platform/message-flows/{tenant_id}/{operation_id}")
 async def platform_message_flow_detail(tenant_id: str, operation_id: str, request: Request) -> Any:
     require_platform_owner(request)
-    from services.brain.turn_inspector import get_message_flow
-
-    detail = get_message_flow(tenant_id=tenant_id, operation_id=operation_id)
+    detail = platform_message_flow(tenant_id=tenant_id, operation_id=operation_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="message_flow_not_found")
     return {"success": True, "message": detail}

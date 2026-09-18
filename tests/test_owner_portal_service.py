@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 import services.owner_copilot.interaction_flow_logger as flow_logger
-import services.owner_copilot.owner_portal_service as portal
+import services.owner_portal.overview as portal
 from services.billing.plan_economics import PLAN_PRICES_USD
 
 
