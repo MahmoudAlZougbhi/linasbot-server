@@ -78,7 +78,7 @@ def _information_plan_for_comment(plan: PlannerPlan, message: str) -> PlannerPla
             task.model_copy(
                 update={
                     "type": "information",
-                    "source_families": ["knowledge", "care", "services", "faq"],
+                    "source_families": ["knowledge", "care", "services", "faq", "branches", "prices"],
                 }
             )
         )
@@ -187,7 +187,9 @@ async def run_agentic_turn(
             operation_id=operation_id_for_turn(turn),
         )
     if str(getattr(turn, "surface", "") or "") == "comment":
-        plan = _information_plan_for_comment(plan, message)
+        from services.brain.planner.heuristic import planner_customer_text
+
+        plan = _information_plan_for_comment(plan, planner_customer_text(message))
     extra = _flow_extra(
         extra,
         ("plan", "Understood the customer request", {"plan_tasks": [{"id": t.id, "type": t.type} for t in plan.tasks]}),

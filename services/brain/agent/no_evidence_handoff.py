@@ -38,7 +38,7 @@ _QUESTION_RE = re.compile(
     r"|\b(what|when|where|which|who|why|how|how much|tell me|do you|does this|"
     r"is there|are there|can you|could you|looking for)\b"
     r"|شو|وين|امتى|متى|كم|هل|ليش|كيف|عندكم|عندكن|بدي اعرف|خبرني|قلي"
-    r"|سعر|دوام|غلى|كلفة"
+    r"|سعر|دوام|غلى|كلفة|عنوان|العنون"
     r")",
     re.IGNORECASE | re.UNICODE,
 )

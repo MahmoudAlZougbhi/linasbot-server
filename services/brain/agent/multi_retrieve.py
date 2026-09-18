@@ -59,7 +59,10 @@ def _task_query(
     variants: list[str],
     round_idx: int,
 ) -> tuple[str, set[SourceFamily] | None]:
+    from services.brain.planner.heuristic import planner_customer_text
+
     families = _families(task)
+    message = planner_customer_text(message)
     if task.type == "hours":
         seed = (task.span.text or message).strip() or message
         lowered = seed.casefold()
@@ -180,9 +183,12 @@ async def multi_round_retrieve(
     max_rounds: int | None = None,
 ) -> tuple[EvidenceBundle, list[dict[str, Any]], dict[str, Any]]:
     """Returns (EvidenceBundle, round_trace, structured_facts)."""
+    from services.brain.planner.heuristic import planner_customer_text
+
     rounds = max(1, int(max_rounds if max_rounds is not None else DEFAULT_BUDGETS.max_retrieval_rounds))
     history = list(turn.history.messages)
     language = str((turn.extra or {}).get("response_language") or "")
+    message = planner_customer_text(message)
     rewritten = await rewrite_queries(message, history, language, tenant_id=turn.tenant_id)
     normalized = normalize_query(rewritten.get("rewritten") or message)
     variants = list(rewritten.get("variants") or []) + list(normalized.get("alternates") or [])

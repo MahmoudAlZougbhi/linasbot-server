@@ -71,6 +71,7 @@ def test_should_handoff_only_unanswered_questions() -> None:
     )
     assert should_handoff_unanswered(plan=catchall, outcome="not_found", message="ok") is False
     assert should_handoff_unanswered(plan=catchall, outcome="not_found", message="cool") is False
+    assert should_handoff_unanswered(plan=info, outcome="not_found", message="عنوان") is True
 
 
 def test_polite_copy_does_not_send_customer_away() -> None:

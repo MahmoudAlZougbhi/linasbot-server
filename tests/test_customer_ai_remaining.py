@@ -104,7 +104,8 @@ def test_inbound_task_text_uses_transcript_and_file_extract() -> None:
     text = inbound_task_text(turn, "")
     assert "said hours" in text
     assert "menu.pdf: open 9-5" in text
-    assert text.startswith("Summer hours")
+    assert "post_caption=Summer hours" in text
+    assert text.index("said hours") < text.index("Summer hours")
 
 
 def test_live_human_control_blocks_turn(monkeypatch: pytest.MonkeyPatch) -> None:

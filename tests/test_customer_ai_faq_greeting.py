@@ -320,6 +320,7 @@ def test_comment_inbound_includes_post_photo_or_video() -> None:
         },
     )
     blob = inbound_task_text(turn, "price?")
-    assert "Spring laser reel" in blob
+    assert blob.startswith("price?")
+    assert "post_caption=Spring laser reel" in blob
     assert "post_kind=VIDEO" in blob
     assert "https://cdn.example/reel.jpg" in blob

@@ -143,7 +143,8 @@ def test_inbound_task_text_sends_saved_analysis_with_comment() -> None:
         },
     )
     blob = inbound_task_text(turn, "شو السعر؟")
-    assert "Spring laser reel" in blob
+    assert blob.startswith("شو السعر؟")
+    assert "post_caption=Spring laser reel" in blob
     assert "post_audio_transcript=ask us for prices" in blob
     assert "post_visual=before after laser arms" in blob
     assert "https://cdn.example/reel.jpg" not in blob
@@ -166,6 +167,8 @@ def test_comment_what_is_not_catalog_photo_request() -> None:
     types = {task.type for task in plan_message(blob).tasks}
     assert "resource_request" not in types
     assert "information" in types
+    collapsed = "What post_kind=VIDEO post_caption=Lina's Laser reel"
+    assert "resource_request" not in {task.type for task in plan_message(collapsed).tasks}
 
 
 def test_resource_turn_skips_comment_surface() -> None:
@@ -203,3 +206,37 @@ def test_analyzed_inbound_image_does_not_use_visual_disabled_gate() -> None:
         extra={"response_language": "ar"},
     )
     assert "a white cream jar on a table" in _task(turn, "what is this?")
+
+
+def test_comment_query_keeps_customer_text_ahead_of_caption() -> None:
+    from services.brain.planner.heuristic import plan_message, planner_customer_text
+
+    turn = CustomerTurn(
+        tenant_id="t1",
+        surface="comment",
+        invocation_kind="comment",
+        extra={
+            "post_caption": "POV farewell tattoo with PicoSecond Laser",
+            "post_media_type": "VIDEO",
+        },
+    )
+    blob = inbound_task_text(turn, "وين فرعكم؟")
+    assert blob.startswith("وين فرعكم؟")
+    assert "post_caption=" in blob
+    customer = planner_customer_text(blob)
+    assert customer.startswith("وين فرعكم؟")
+    assert "post_caption=" not in customer
+    assert "PicoSecond" not in customer
+    types = {task.type for task in plan_message(blob).tasks}
+    families = {fam for task in plan_message(blob).tasks for fam in task.source_families}
+    assert "information" in types
+    assert "branches" in families
+
+
+def test_address_comment_plans_branches() -> None:
+    from services.brain.planner.heuristic import plan_message
+
+    plan = plan_message("عنوان")
+    families = {fam for task in plan.tasks for fam in task.source_families}
+    assert {task.type for task in plan.tasks} == {"information"}
+    assert "branches" in families
