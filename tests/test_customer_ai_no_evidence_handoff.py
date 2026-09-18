@@ -36,11 +36,13 @@ def _task(
 
 
 def _turn(*, kind: str = "dm", lang: str = "en") -> CustomerTurn:
+    comment = kind == "comment"
     return CustomerTurn(
         tenant_id="t-unanswered",
         customer_id="u-1",
         conversation_id="c-1",
-        channel="instagram_dm",
+        channel="instagram_comment" if comment else "instagram_dm",
+        surface="comment" if comment else "dm",
         invocation_kind=kind,  # type: ignore[arg-type]
         extra={"response_language": lang},
         history=HistorySnapshot(),
@@ -62,7 +64,7 @@ def test_should_handoff_only_unanswered_questions() -> None:
         should_handoff_unanswered(
             plan=info, outcome="not_found", message="Do you have guest wifi?", invocation_kind="comment"
         )
-        is False
+        is True
     )
     catchall = _plan(
         _task("t1", "information", families=["knowledge", "care", "services", "faq", "branches"], span="ok")
@@ -275,3 +277,85 @@ async def test_index_not_ready_does_not_auto_handoff(monkeypatch: pytest.MonkeyP
     assert result.envelope.decision == "no_reply"
     assert result.stop_reason == "index_not_ready"
     execute.assert_not_called()
+
+
+def test_comment_ack_and_emoji_are_small_talk() -> None:
+    from services.brain.agent.no_evidence_handoff import is_comment_ack
+
+    assert is_comment_ack("nice") is True
+    assert is_comment_ack("🔥") is True
+    assert is_comment_ack("WAW") is True
+    assert is_comment_ack("Whats") is True
+    assert is_comment_ack("hey") is True
+    assert is_comment_ack("price?") is False
+    assert is_comment_ack("عنوان") is False
+
+
+@pytest.mark.asyncio
+async def test_comment_ack_replies_when_retrieve_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _gate(turn, plan, *, message, dest, lang, extra, agent_trace):
+        return ActionGateResult(early=None, extra=dict(extra))
+
+    async def _retrieve(*_a, **_k):
+        return EvidenceBundle(items=[], outcome="not_found"), [], {}
+
+    async def _greet(turn, *, message, channel, flow_base=None):
+        from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+
+        return TurnResult(
+            stop_reason="ok",
+            envelope=FinalReplyEnvelope(
+                decision="reply",
+                messages=[OutboundMessage(destination="comment", text="Thanks for commenting!")],
+            ),
+        )
+
+    monkeypatch.setattr("services.brain.agent.loop.apply_action_gate", _gate)
+    monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
+    monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
+    monkeypatch.setattr("services.brain.agent.greeting_turn.identity_greeting_result", _greet)
+    result = await run_agentic_turn(
+        _turn(kind="comment"),
+        "nice",
+        "instagram_comment",
+        plan=_plan(_task("t1", "information", span="nice")),
+    )
+    assert result.stop_reason == "ok"
+    assert result.envelope.messages[0].destination == "comment"
+    assert "Thanks" in result.envelope.messages[0].text
+
+
+@pytest.mark.asyncio
+async def test_comment_question_hands_off_instead_of_silence(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _gate(turn, plan, *, message, dest, lang, extra, agent_trace):
+        return ActionGateResult(early=None, extra=dict(extra))
+
+    async def _retrieve(*_a, **_k):
+        return EvidenceBundle(items=[], outcome="not_found"), [], {}
+
+    execute = AsyncMock(
+        return_value=ActionReceiptSet(
+            receipts=[
+                ActionReceipt(
+                    action_id="handoff:unanswered",
+                    action_type="escalate_to_human",
+                    state="success",
+                    backend_id="c-1",
+                )
+            ]
+        )
+    )
+    monkeypatch.setattr("services.brain.agent.loop.apply_action_gate", _gate)
+    monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
+    monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
+    monkeypatch.setattr("services.brain.agent.no_evidence_handoff.human_handoff_enabled", lambda _tid: True)
+    monkeypatch.setattr("services.brain.agent.no_evidence_handoff.execute_actions", execute)
+    result = await run_agentic_turn(
+        _turn(kind="comment"),
+        "What is the underarm price?",
+        "instagram_comment",
+        plan=_plan(_task("t1", "information", families=["prices", "services"], span="underarm")),
+    )
+    assert result.stop_reason == "ok"
+    assert result.envelope.decision == "handoff_ack"
+    execute.assert_awaited_once()
