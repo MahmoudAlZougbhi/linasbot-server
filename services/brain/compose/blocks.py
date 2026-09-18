@@ -48,7 +48,7 @@ def compose_evidence_context(
             f"do={'; '.join(identity.do_list)}",
             f"dont={'; '.join(identity.dont_list)}",
         ]
-        from services.brain.outbound_safety import is_customer_safe_opener
+        from services.brain.outbound_safety import is_customer_safe_opener, looks_like_instruction_text
 
         if identity.identity_summary and (not greeting_turn or is_customer_safe_opener(identity.identity_summary)):
             ident_lines.append(f"summary={identity.identity_summary}")
@@ -59,7 +59,7 @@ def compose_evidence_context(
         if identity.advanced_instructions and not greeting_turn:
             ident_lines.append(f"advanced={identity.advanced_instructions}")
         parts.append("IDENTITY\n" + "\n".join(ident_lines))
-        if identity.style_body and not greeting_turn:
+        if identity.style_body and not looks_like_instruction_text(identity.style_body):
             parts.append(f"STYLE\n{identity.style_body}")
     if followup_goal:
         from services.brain.followup_goals import resolve_followup_instruction

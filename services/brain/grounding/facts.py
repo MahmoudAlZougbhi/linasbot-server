@@ -32,7 +32,7 @@ def _hours_reasons(reply_text: str, corpus: str) -> list[str]:
     for variants in claims:
         if not (variants & allowed):
             reasons.append(f"hours:{min(variants)}")
-    open_claim = extract.has_marker(extract.marker_text(reply_text), extract.OPEN_MARKERS)
+    open_claim = extract.has_marker(extract.marker_text(reply_text), extract.OPEN_CLAIM_MARKERS)
     if open_claim and not allowed:
         reasons.append("hours:no_hours_evidence")
     if claims or open_claim:
@@ -86,6 +86,9 @@ def ungrounded_claims(
     reply_text: str,
     bundle: EvidenceBundle,
     receipts: list[str] | None = None,
+    *,
+    message: str = "",
+    plan=None,
 ) -> list[str]:
     """Reasons the reply is not supported by evidence. Empty list means grounded."""
     text = (reply_text or "").strip()
@@ -95,8 +98,10 @@ def ungrounded_claims(
         return ["evidence:empty"]
     receipt_lines = [line for line in (receipts or []) if str(line).strip()]
     corpus = "\n".join([_evidence_text(bundle), *receipt_lines])
+    from services.brain.grounding.price_claims import ungrounded_price_claims
+
     reasons = [
-        *_amount_reasons(text, corpus),
+        *ungrounded_price_claims(text, bundle, message=message, plan=plan, receipts=receipt_lines),
         *_hours_reasons(text, corpus),
         *_phone_reasons(text, corpus),
         *_url_reasons(text, corpus),

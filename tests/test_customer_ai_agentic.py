@@ -92,9 +92,9 @@ async def test_tool_unknown_rejected() -> None:
 
 
 def test_normalize_arabizi() -> None:
-    out = normalize_query("se3er laser antelyas")
+    out = normalize_query("se3er laser khadamat")
     assert "سعر" in out["primary"] or any("سعر" in alt for alt in out["alternates"])
-    assert "antelias" in out["primary"] or any("antelias" in alt for alt in out["alternates"])
+    assert "خدمات" in out["primary"] or any("خدمات" in alt for alt in out["alternates"])
 
 
 @pytest.mark.asyncio

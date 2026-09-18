@@ -401,9 +401,8 @@ def test_ai_both_comment_uses_public_placeholder() -> None:
     )
     dual = apply_ai_comment_destinations(generated, "ai_both")
     dests = [item.destination for item in dual.envelope.messages]
-    assert dests == ["dm", "comment"]
-    assert dual.envelope.messages[1].depends_on == ["private"]
-    assert "DM" in dual.envelope.messages[1].text
+    assert dests == ["dm"]
+    assert "Sent you a DM." not in [item.text for item in dual.envelope.messages]
 
 
 def test_knowledge_index_rows_are_chunked() -> None:

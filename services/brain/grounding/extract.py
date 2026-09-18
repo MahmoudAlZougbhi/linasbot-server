@@ -21,8 +21,8 @@ _DIGITS = re.compile(r"\D+")
 
 _CURRENCY_ALIAS = {"$": "usd", "€": "eur"}
 
-# Reply surfaces that assert opening hours. Presence forces a time/day evidence check.
-OPEN_MARKERS: tuple[str, ...] = (
+# Reply surfaces that assert a schedule. Conversational mention of "opening hours" is not a claim.
+OPEN_CLAIM_MARKERS: tuple[str, ...] = (
     "open until",
     "open till",
     "open from",
@@ -34,16 +34,21 @@ OPEN_MARKERS: tuple[str, ...] = (
     "we are open",
     "we re open",
     "were open",
+    "مفتوحين",
+    "بنفتح",
+    "بنسكر",
+)
+
+OPEN_TOPIC_MARKERS: tuple[str, ...] = (
     "opening hours",
     "working hours",
     "business hours",
     "ساعات العمل",
     "ساعات الدوام",
-    "مفتوحين",
-    "مفتوح",
-    "بنفتح",
-    "بنسكر",
 )
+
+# Back-compat alias used by older tests: claims only, not topic mentions.
+OPEN_MARKERS: tuple[str, ...] = OPEN_CLAIM_MARKERS
 
 # Day surfaces map to one canonical day so an Arabic reply about English evidence (and the
 # reverse) is compared by day, not by spelling.

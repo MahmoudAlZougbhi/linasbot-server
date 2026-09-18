@@ -39,9 +39,9 @@ def _restore(text: str, held: list[str]) -> str:
     return " ".join(out.split())
 
 
-def _deterministic(message: str, history: list[Any] | None, language: str) -> dict[str, Any]:
+def _deterministic(message: str, history: list[Any] | None, language: str, *, tenant_id: str = "") -> dict[str, Any]:
     original = (message or "").strip()
-    resolved = resolve_followup_query(original, history)
+    resolved = resolve_followup_query(original, history, tenant_id=tenant_id)
     protected, held = _protect(resolved.rewritten_query or original)
     cleaned = _NOISE.sub(" ", protected)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" ?!.،؟")
@@ -77,9 +77,11 @@ async def rewrite_queries(
     message: str,
     history: list[Any] | tuple[Any, ...] | None = None,
     language: str = "",
+    *,
+    tenant_id: str = "",
 ) -> dict[str, Any]:
     """Return {original, rewritten, variants}. Live path is deterministic (no extra LLM)."""
-    base = _deterministic(message, list(history or []), language)
+    base = _deterministic(message, list(history or []), language, tenant_id=tenant_id)
     base.pop("held", None)
     return {
         "original": base["original"],

@@ -97,6 +97,15 @@ def _task(task_id: str, task_type: TaskType, text: str, families: list[SourceFam
 
 def plan_message(message: str) -> PlannerPlan:
     text = planner_customer_text(message)
+    from services.brain.greeting import is_greeting_only
+
+    if is_greeting_only(text):
+        return PlannerPlan(
+            tasks=[_task("t_greet", "acknowledgement", text, ["none"])],
+            read_only=True,
+        )
+    from services.brain.catalog_intent import is_catalog_list
+
     tasks: list[PlannerTask] = []
     if _has(_HUMAN, text, "موظف", "شخص حقيقي", "بدي مسؤول", "شكوى") and not _NEGATE_HUMAN.search(text):
         tasks.append(_task("t_human", "human_request", text, ["none"]))
@@ -115,6 +124,19 @@ def plan_message(message: str) -> PlannerPlan:
         if _has(_PRODUCT, text, "منتج", "سيروم", "كريم"):
             families = ["products", "prices"]
         tasks.append(_task("t_info", "information", text, families))
+    if is_catalog_list(text) and not any(task.type == "information" for task in tasks):
+        families = ["services", "products"]
+        if _has(_PRODUCT, text, "منتج", "سيروم", "كريم"):
+            families = ["products"]
+        listed = _task("t_list", "information", text, families)
+        listed.entity_mentions = ["catalog_list"]
+        tasks.append(listed)
+    elif is_catalog_list(text):
+        for task in tasks:
+            if task.type == "information" and "catalog_list" not in task.entity_mentions:
+                task.entity_mentions.append("catalog_list")
+                if not task.source_families:
+                    task.source_families = ["services", "products"]
     if _COMPARE.search(text):
         cmp_fams: list[SourceFamily] = ["services", "products", "prices", "knowledge"]
         if "فرع" in text or "branch" in text.casefold() or _has(_HOURS, text, "ساعات", "دوام"):
@@ -188,6 +210,8 @@ def overlay_plan(
     Published request rules win over heuristic/LLM action guesses.
     """
     heur = plan_message(message)
+    if all(task.type == "acknowledgement" for task in heur.tasks):
+        return _bind_request_rules(heur, message, enabled_action_types)
     if llm is None or not llm.tasks:
         return _bind_request_rules(heur, message, enabled_action_types)
     tasks = [task.model_copy(deep=True) for task in llm.tasks]

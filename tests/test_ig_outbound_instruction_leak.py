@@ -126,7 +126,9 @@ async def test_identity_llm_sop_echo_falls_back_to_safe_greeting(monkeypatch: py
         extra={"response_language": "ar"},
     )
     out = await identity_greeting_result(turn, message="Hello", channel="instagram_dm")
-    assert out is None
+    assert out is not None
+    assert out.stop_reason == "failed_closed"
+    assert not out.envelope.messages
 
 
 def test_apply_greeting_does_not_prepend_sop() -> None:

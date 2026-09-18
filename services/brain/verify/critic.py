@@ -45,7 +45,7 @@ def _deterministic(
     receipts: list[str] | None,
     message: str,
 ) -> VerifierResult:
-    conflicts = detect_amount_contradictions("\n".join(item.text for item in bundle.items))
+    conflicts = detect_amount_contradictions("", items=list(bundle.items))
     if conflicts:
         return VerifierResult(
             verdict="FAIL",
@@ -53,7 +53,7 @@ def _deterministic(
             repair_instruction="Do not pick a price when evidence conflicts; ask which applies.",
             conflicts=list(conflicts),
         )
-    reasons = ungrounded_claims(text, bundle, receipts)
+    reasons = ungrounded_claims(text, bundle, receipts, message=message, plan=plan)
     verdicts = verify_claims(text, bundle, receipts=receipts)
     coverage = evaluate_task_coverage(plan, bundle, structured_facts, receipts=receipts)
     missing = missing_tasks(plan, coverage)

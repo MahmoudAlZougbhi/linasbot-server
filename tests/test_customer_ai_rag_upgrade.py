@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.conversation_resolve import resolve_followup_query
 from services.brain.grounding.claims import claims_fail_closed, verify_claims
@@ -53,8 +55,48 @@ def test_claim_verifier_fail_closed() -> None:
 
 
 def test_contradiction_amounts() -> None:
-    conflicts = detect_amount_contradictions("A 50.0 USD\nB 60.0 USD")
+    from services.brain.contracts.evidence import EvidenceItem
+
+    conflicts = detect_amount_contradictions(
+        "",
+        items=[
+            EvidenceItem(
+                evidence_id="p1",
+                source_family="prices",
+                source_id="full_body",
+                title="Full Body",
+                text="60 USD",
+            ),
+            EvidenceItem(
+                evidence_id="p2",
+                source_family="knowledge",
+                source_id="old",
+                title="Full Body",
+                text="50 USD",
+            ),
+        ],
+    )
     assert conflicts
+    distinct = detect_amount_contradictions(
+        "",
+        items=[
+            EvidenceItem(
+                evidence_id="a",
+                source_family="prices",
+                source_id="underarms",
+                title="Underarms",
+                text="15 USD",
+            ),
+            EvidenceItem(
+                evidence_id="b",
+                source_family="prices",
+                source_id="underarms_bikini",
+                title="Underarms + Bikini",
+                text="200 USD",
+            ),
+        ],
+    )
+    assert not distinct
 
 
 def test_injection_detection() -> None:
@@ -72,8 +114,35 @@ def test_conversation_resolve_carry() -> None:
             {"role": "assistant", "text": "Full body is 99.0 USD"},
         ],
     )
-    assert "antelias" in resolved.rewritten_query.lower()
-    assert resolved.carry.get("branch") == "antelias"
+    assert resolved.carry.get("branch") != "antelias" or not resolved.carry
+    assert "laser" not in (resolved.carry.get("service") or "")
+
+
+def test_conversation_resolve_uses_published_labels(monkeypatch) -> None:
+    from services.brain import conversation_resolve as cr
+
+    monkeypatch.setattr(
+        cr,
+        "published_label_index",
+        lambda _tid: {
+            "branches": (("antelias", "br_antelias"), ("beirut", "br_beirut")),
+            "services": (("full body", "svc_full_body"),),
+            "products": (),
+        },
+    )
+    resolved = cr.resolve_followup_query(
+        "And in Antelias?",
+        [{"role": "user", "text": "How much is full body?"}],
+        tenant_id="t-clinic",
+    )
+    assert resolved.carry.get("branch") == "br_antelias"
+    shifted = cr.resolve_followup_query(
+        "شو خدمات الليزر اللي عندكن؟",
+        [{"role": "user", "text": "What are your opening hours in Antelias?"}],
+        tenant_id="t-clinic",
+    )
+    assert "br_antelias" not in shifted.rewritten_query
+    assert shifted.carry.get("branch") in {"", None}
 
 
 def test_readiness_report_no_secrets() -> None:

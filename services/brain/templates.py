@@ -49,7 +49,34 @@ def _lang(code: str) -> str:
     return "en"
 
 
+def owner_protocol_text(key: str, response_language: str = "") -> str:
+    """Owner-authored dynamic message only. Empty when the tenant has no verbatim copy."""
+    lang = _lang(response_language)
+    mapped = {
+        "handoff": "brain_handoff_ack",
+        "confirm_request": "brain_confirm_request",
+        "visual_disabled": "brain_visual_disabled",
+        "no_evidence": "brain_no_evidence",
+        "no_evidence_handoff": "brain_no_evidence_handoff",
+        "faq_ambiguous": "brain_faq_ambiguous",
+    }.get(key)
+    if not mapped:
+        return ""
+    try:
+        from services.owner_copilot.dynamic_messages_service import get_dynamic_message
+
+        text = (get_dynamic_message(mapped, lang) or "").strip()
+        if text and text != mapped:
+            return text
+    except Exception:
+        pass
+    return ""
+
+
 def brain_template(key: str, response_language: str = "") -> str:
+    owner = owner_protocol_text(key, response_language)
+    if owner:
+        return owner
     table = {
         "handoff": _HANDOFF,
         "confirm_request": _CONFIRM,
@@ -59,21 +86,4 @@ def brain_template(key: str, response_language: str = "") -> str:
         "faq_ambiguous": _FAQ_AMBIGUOUS,
     }.get(key) or _NO_EVIDENCE
     lang = _lang(response_language)
-    try:
-        from services.owner_copilot.dynamic_messages_service import get_dynamic_message
-
-        mapped = {
-            "handoff": "brain_handoff_ack",
-            "confirm_request": "brain_confirm_request",
-            "visual_disabled": "brain_visual_disabled",
-            "no_evidence": "brain_no_evidence",
-            "no_evidence_handoff": "brain_no_evidence_handoff",
-            "faq_ambiguous": "brain_faq_ambiguous",
-        }.get(key)
-        if mapped:
-            text = (get_dynamic_message(mapped, lang) or "").strip()
-            if text and text != mapped:
-                return text
-    except Exception:
-        pass
     return table.get(lang) or table["en"]

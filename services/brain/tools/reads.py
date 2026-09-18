@@ -174,50 +174,55 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
                 if branch_id and entry_branch and entry_branch != branch_id:
                     continue
                 if query and not service_id:
-                    cat_row = _match_id(catalog, catalog_id)
-                    blob = normalize_search_text(
-                        " ".join(
-                            [
-                                catalog_id,
-                                _label(cat_row or {}),
-                                str((cat_row or {}).get("description") or ""),
-                                " ".join(str(a) for a in ((cat_row or {}).get("aliases") or [])),
-                            ]
-                        )
-                    )
-                    if normalize_search_text(query) not in blob and not any(
-                        tok and tok in blob for tok in normalize_search_text(query).split()
-                    ):
+                    from services.brain.tools.price_match import MIN_PRICE_SCORE, score_catalog_row
+
+                    cat_row = _match_id(catalog, catalog_id) or {}
+                    row_for_score = {
+                        **cat_row,
+                        "id": catalog_id,
+                        "title": _label(cat_row or {"id": catalog_id}),
+                    }
+                    if score_catalog_row(query, row_for_score) < MIN_PRICE_SCORE:
                         continue
                 cat = _match_id(catalog, catalog_id) or {"id": catalog_id}
+                title = _label(cat)
                 matched_entries.append(
                     {
                         "id": entry.get("id") or catalog_id,
                         "service_id": catalog_id,
                         "branch_id": entry_branch or None,
-                        "title": _label(cat),
+                        "title": title,
                         "price": entry.get("amount") if entry.get("amount") is not None else entry.get("price"),
                         "amount": entry.get("amount"),
                         "currency": entry.get("currency") or "USD",
                         "unit": entry.get("unit") or "",
+                        "entity_id": catalog_id,
+                        "price_entry_id": str(entry.get("id") or ""),
+                        "bundle": "+" in title or " and " in title.casefold(),
+                        "aliases": list((cat or {}).get("aliases") or []),
                     }
                 )
             if matched_entries:
-                # Prefer exact branch match when multiple remain.
+                from services.brain.tools.price_match import rank_price_rows
+
                 if branch_id:
                     branch_hits = [row for row in matched_entries if row.get("branch_id") == branch_id]
                     if branch_hits:
                         matched_entries = branch_hits
+                ranked = rank_price_rows(query or service_id, matched_entries, service_id=service_id, limit=4)
+                matched_entries = [row for _score, row in ranked] or matched_entries[:1]
                 data = (
                     matched_entries[0] if (service_id or branch_id) and len(matched_entries) == 1 else matched_entries
                 )
                 if isinstance(data, list) and service_id and branch_id and data:
                     data = data[0]
                 return {"ok": True, "data": data}
+        from services.brain.tools.price_match import rank_price_rows
+
         rows = (
             [_match_id(catalog, service_id or item_id)]
             if (service_id or item_id)
-            else _search_rows(catalog, query, limit=5)
+            else [row for _score, row in rank_price_rows(query, catalog, limit=5)]
         )
         rows = [row for row in rows if row]
         if not rows:

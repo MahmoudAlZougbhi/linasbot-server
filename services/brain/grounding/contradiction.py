@@ -2,26 +2,20 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
+from services.brain.contracts.evidence import EvidenceItem
 from services.brain.grounding import extract
+from services.brain.retrieve.conflict import detect_entity_amount_conflicts
 
-_AMOUNT = re.compile(r"(\d+(?:\.\d+)?)\s*(usd|lbp|eur|gbp|\$|€)", re.I)
 
-
-def detect_amount_contradictions(evidence_text: str) -> list[dict[str, Any]]:
-    """If the same entity-ish window asserts different money amounts, flag conflict."""
-    text = evidence_text or ""
-    amounts = []
-    for match in _AMOUNT.finditer(text):
-        unit = match.group(2).lower().replace("$", "usd")
-        amounts.append(f"{match.group(1)}|{unit}")
-    unique = sorted(set(amounts))
-    if len(unique) <= 1:
-        return []
-    # Multiple distinct amounts in one evidence blob → contradiction for price questions.
-    return [{"type": "amount", "values": unique, "reason": "conflicting_amounts_in_evidence"}]
+def detect_amount_contradictions(evidence_text: str, items: list[EvidenceItem] | None = None) -> list[dict[str, Any]]:
+    """Conflicting amounts only count when they belong to the same entity."""
+    if items is not None:
+        return detect_entity_amount_conflicts(items)
+    # Blob-only callers have no entity identity; overlapping names are not a conflict.
+    _ = evidence_text
+    return []
 
 
 def detect_phone_contradictions(evidence_text: str) -> list[dict[str, Any]]:

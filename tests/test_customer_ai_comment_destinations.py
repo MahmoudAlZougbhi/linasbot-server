@@ -101,7 +101,24 @@ def test_missing_comment_mode_rewrites_ai_dm_destination_to_comment() -> None:
     assert [item.destination for item in rewritten.envelope.messages] == ["comment"]
     assert rewritten.envelope.messages[0].text == "We open at 10."
     dual = apply_ai_comment_destinations(generated, "ai_both")
-    assert [item.destination for item in dual.envelope.messages] == ["dm", "comment"]
+    assert [item.destination for item in dual.envelope.messages] == ["dm"]
+    assert "Sent you a DM." not in [item.text for item in dual.envelope.messages]
+    both = apply_ai_comment_destinations(
+        generated.model_copy(
+            update={
+                "envelope": FinalReplyEnvelope(
+                    decision="reply",
+                    messages=[
+                        OutboundMessage(destination="dm", text="Private hours"),
+                        OutboundMessage(destination="comment", text="I'll message you the details."),
+                    ],
+                )
+            }
+        ),
+        "ai_both",
+    )
+    assert [item.destination for item in both.envelope.messages] == ["dm", "comment"]
+    assert both.envelope.messages[1].text == "I'll message you the details."
 
 
 def test_mixed_outcome_keeps_public_and_private_separate() -> None:

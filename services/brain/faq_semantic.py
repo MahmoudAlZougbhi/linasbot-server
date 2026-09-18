@@ -26,4 +26,11 @@ async def semantic_faq_bundle(sections: dict, query: str, *, tenant_id: str = ""
         )
     if len(bundle.items) != 1:
         return bundle
+    item = bundle.items[0]
+    from services.brain.entity_identity import score_label
+
+    title_score = score_label(query, item.title)
+    lexical = float((item.extra or {}).get("lexical_score") or 0.0)
+    if title_score < 62.0 and lexical < 0.35:
+        return EvidenceBundle(outcome="not_found")
     return bundle

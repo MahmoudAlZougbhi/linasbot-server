@@ -206,6 +206,11 @@ async def run_agentic_turn(
     if gated.early is not None:
         return gated.early
 
+    if plan.tasks and all(task.type == "acknowledgement" for task in plan.tasks):
+        from services.brain.agent.greeting_turn import identity_greeting_result
+
+        return await identity_greeting_result(turn, message=message, channel=channel, flow_base=extra)
+
     steps += 1
     retrieve_timer = StageTimer()
     max_rounds = 1 if _fast_path_eligible(plan) else DEFAULT_BUDGETS.max_retrieval_rounds
@@ -231,6 +236,9 @@ async def run_agentic_turn(
         trace=agent_trace,
         coverage=evaluate_task_coverage(plan, bundle, structured_facts),
     )
+    from services.brain.facts.receipt_align import align_fact_receipts
+
+    tool_receipts = align_fact_receipts(tool_receipts, bundle)
     coverage = evaluate_task_coverage(plan, bundle, structured_facts, receipts=tool_receipts)
     agent_trace.append({"step": "DECIDE", "n": steps, "tools_used": tools_used, "coverage": coverage})
 
@@ -399,7 +407,7 @@ async def run_agentic_dm_path(
     from services.brain.turn_pipeline import inbound_task_text
 
     task_text = inbound_task_text(turn, message)
-    rewritten = await rewrite_queries(task_text, list(turn.history.messages), _response_language(turn))
+    rewritten = await rewrite_queries(task_text, list(turn.history.messages), _response_language(turn), tenant_id=turn.tenant_id)
     if rewritten.get("rewritten") and rewritten["rewritten"].strip() != task_text.strip():
         task_text = rewritten["rewritten"]
         flow_base = _flow_extra(

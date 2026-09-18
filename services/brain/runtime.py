@@ -306,6 +306,27 @@ async def run_customer_ai_comment(
         post_id=post_id_value,
         author_id=sender,
     )
+    stub = apply_live_control(
+        CustomerTurn(
+            tenant_id=tenant_id,
+            conversation_id=conv_id,
+            channel=channel,
+            surface="comment",
+            invocation_kind="comment",
+            event_ids=[comment_id] if comment_id else [],
+        )
+    )
+    gate = evaluate_gates(stub, message=comment_text)
+    if not gate.allow:
+        gated = _gate_result(stub, gate, channel)
+        record_turn_history(
+            stub,
+            inbound_id=comment_id,
+            inbound_text=comment_text,
+            result=gated,
+            comment_surface=True,
+        )
+        return _outcome(gated, comment_surface=True)
     mode, decision = winning_comment_mode(
         tenant_id=tenant_id,
         comment_text=comment_text,
@@ -381,6 +402,7 @@ async def run_customer_ai_comment(
             extra={
                 "comment_mode": mode or "",
                 "winning_rule": getattr(decision, "rule_id", ""),
+                "comment_rule_text": str(getattr(decision, "policy_text", "") or ""),
                 "post_caption": caption,
                 "post_id": post_id_value,
                 "post_media_type": media_type,
@@ -395,17 +417,6 @@ async def run_customer_ai_comment(
     )
     turn = apply_live_control(turn)
     remember_turn(turn)
-    gate = evaluate_gates(turn, message=comment_text)
-    if not gate.allow:
-        gated = _gate_result(turn, gate, channel)
-        record_turn_history(
-            turn,
-            inbound_id=comment_id,
-            inbound_text=comment_text,
-            result=gated,
-            comment_surface=True,
-        )
-        return _outcome(gated, comment_surface=True)
     from services.brain.billing import release_turn_reservation
     from services.brain.comments.pipeline import apply_ai_comment_destinations
 

@@ -126,15 +126,18 @@ def apply_ai_comment_destinations(result: TurnResult, mode: CommentMode | None) 
         messages = [item.model_copy(update={"destination": "dm"}) for item in messages]
     elif mode == "ai_both":
         text = next((item.text for item in messages if item.text.strip()), "")
-        messages = [
-            OutboundMessage(destination="dm", text=text, component_id="private"),
-            OutboundMessage(
-                destination="comment",
-                text="Sent you a DM.",
-                component_id="public",
-                depends_on=["private"],
-            ),
-        ]
+        public = next((item.text for item in messages if item.destination == "comment" and item.text.strip()), "")
+        private = next((item.text for item in messages if item.destination == "dm" and item.text.strip()), "") or text
+        messages = [OutboundMessage(destination="dm", text=private, component_id="private")]
+        if public and public.strip().casefold() != "sent you a dm.":
+            messages.append(
+                OutboundMessage(
+                    destination="comment",
+                    text=public,
+                    component_id="public",
+                    depends_on=["private"],
+                )
+            )
     envelope = result.envelope.model_copy(update={"messages": messages})
     extra = dict(result.extra)
     extra["comment_mode"] = mode

@@ -104,7 +104,7 @@ async def generate_grounded_reply(
     if not bundle.items:
         # No provenance means nothing factual can be said. Ask instead of guessing.
         return _clarify()
-    conflicts = detect_amount_contradictions("\n".join(item.text for item in bundle.items))
+    conflicts = detect_amount_contradictions("", items=list(bundle.items))
     if conflicts:
         return FinalReplyEnvelope(
             decision="clarify",
@@ -117,6 +117,36 @@ async def generate_grounded_reply(
         from services.brain.planner.published_rules import request_rule_notes
 
         policy_notes = request_rule_notes(turn.tenant_id)
+    comment_rule = str((turn.extra or {}).get("comment_rule_text") or "").strip()
+    if comment_rule:
+        policy_notes.append(f"comment_rule:{comment_rule[:1200]}")
+    comment_mode = str((turn.extra or {}).get("comment_mode") or "").strip()
+    if comment_mode.startswith("ai"):
+        policy_notes.append(
+            f"AI comment mode={comment_mode}. Write customer-facing wording from Comment Rules and Style. "
+            "Do not use canned system copy such as 'Sent you a DM.'"
+        )
+    from services.brain.greeting import evaluate_greeting, is_greeting_only
+
+    if turn.invocation_kind not in {"followup", "comment"} and not is_greeting_only(message):
+        greet = evaluate_greeting(
+            tenant_id=turn.tenant_id,
+            message=message,
+            history=turn.history,
+            invocation_kind=turn.invocation_kind,
+            already_greeted=turn.state.greeted,
+        )
+        if greet.eligible and greet.text:
+            from services.brain.outbound_safety import is_customer_safe_opener
+
+            if is_customer_safe_opener(greet.text):
+                policy_notes.append(f"owner_opener_note:{greet.text}")
+                policy_notes.append(
+                    "If this starts a session, weave at most one short greeting into the same reply. "
+                    "Do not prepend a second greeting."
+                )
+    if (turn.extra or {}).get("awaiting_confirmation"):
+        policy_notes.append("A request is awaiting customer confirmation. Ask to confirm; do not claim it was submitted.")
     context = compose_evidence_context(
         identity=identity,
         plan=plan,
@@ -137,7 +167,7 @@ async def generate_grounded_reply(
             grounding_feedback_text=feedback,
         )
         text = await _ask_model(turn=turn, prompt=prompt, attempt=attempt)
-        reasons = ungrounded_claims(text, bundle, receipts)
+        reasons = ungrounded_claims(text, bundle, receipts, message=message, plan=plan)
         verdicts = verify_claims(text, bundle, receipts=receipts)
         if not reasons and not claims_fail_closed(verdicts):
             return FinalReplyEnvelope(
