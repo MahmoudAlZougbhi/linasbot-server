@@ -59,6 +59,24 @@ _CORRECT = re.compile(
     re.I,
 )
 _COMPARE = re.compile(r"(الفرق|فرق بين|قارن|\bvs\b|versus|compare|difference)", re.I)
+_ANNOTATION_PREFIXES = (
+    "post_media_type=",
+    "post_kind=",
+    "post_visual=",
+    "post_audio_transcript=",
+    "post_media_url=",
+)
+
+
+def planner_customer_text(message: str) -> str:
+    """Drop Brain post-analysis lines so they cannot fake a catalog photo request."""
+    kept: list[str] = []
+    for line in (message or "").splitlines():
+        stripped = line.strip().casefold()
+        if any(stripped.startswith(prefix) for prefix in _ANNOTATION_PREFIXES):
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip() or (message or "").strip()
 
 
 def _has(pattern: re.Pattern[str], text: str, *substrings: str) -> bool:
@@ -78,7 +96,7 @@ def _task(task_id: str, task_type: TaskType, text: str, families: list[SourceFam
 
 
 def plan_message(message: str) -> PlannerPlan:
-    text = (message or "").strip()
+    text = planner_customer_text(message)
     tasks: list[PlannerTask] = []
     if _has(_HUMAN, text, "موظف", "شخص حقيقي", "بدي مسؤول", "شكوى") and not _NEGATE_HUMAN.search(text):
         tasks.append(_task("t_human", "human_request", text, ["none"]))

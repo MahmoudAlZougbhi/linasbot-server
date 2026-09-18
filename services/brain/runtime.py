@@ -35,26 +35,32 @@ def _scrub_instruction_reply(result: TurnResult, reply: str | None) -> tuple[str
     extra["outbound_instruction_blocked"] = True
     extra["blocker"] = str(extra.get("blocker") or "outbound_instruction_blocked")[:200]
     extra["exception_class"] = str(extra.get("exception_class") or "OutboundInstructionBlocked")
-    from services.brain.greeting import is_greeting_only, safe_greeting_text
+    extra["outbound_replacement"] = "silence"
+    extra["customer_silence"] = True
+    _ = (tenant_id, lang, inbound, path)
+    from services.brain.silence import log_customer_generation_failure
 
-    if "identity_greeting" in path or is_greeting_only(inbound):
-        extra["outbound_replacement"] = "safe_greeting"
-        return safe_greeting_text(tenant_id=tenant_id, message=inbound or "hi", language=lang), extra
-    from services.brain.templates import brain_template
-
-    extra["outbound_replacement"] = "no_evidence"
-    return brain_template("no_evidence", lang), extra
+    log_customer_generation_failure(stage="outbound_instruction_blocked", extra=extra)
+    return None, extra
 
 
 def _outcome(result: TurnResult, *, comment_surface: bool = False) -> CustomerReplyOutcome:
+    extra = dict(result.extra or {})
+    safe_messages = []
+    for item in result.envelope.messages:
+        text, extra = _scrub_instruction_reply(result, item.text)
+        if text:
+            safe_messages.append(item.model_copy(update={"text": text}))
     public = result.envelope.public_comment_text
     private = result.envelope.private_dm_text
-    extra = dict(result.extra or {})
+    public, extra = _scrub_instruction_reply(result, public or None)
+    private, extra = _scrub_instruction_reply(result, private or None)
     if comment_surface:
         reply = public or None
         has_out = bool(public or private)
     else:
-        reply, extra = _scrub_instruction_reply(result, result.envelope.reply_text or None)
+        reply = (safe_messages[0].text if safe_messages else None) or (result.envelope.reply_text or None)
+        reply, extra = _scrub_instruction_reply(result, reply)
         has_out = bool(reply)
     stop = result.stop_reason != "ok" or not has_out
     return CustomerReplyOutcome(
@@ -66,9 +72,9 @@ def _outcome(result: TurnResult, *, comment_surface: bool = False) -> CustomerRe
             "ai_called": result.ai_called,
             "cost_status": "none" if not result.ai_called else "tracked",
             "customer_engine": "brain",
-            "outbound_messages": [item.model_dump() for item in result.envelope.messages],
-            "public_comment_text": result.envelope.public_comment_text,
-            "private_dm_text": result.envelope.private_dm_text,
+            "outbound_messages": [item.model_dump() for item in safe_messages],
+            "public_comment_text": public or "",
+            "private_dm_text": private or "",
             **extra,
             "operation_id": extra.get("operation_id") or "",
         },

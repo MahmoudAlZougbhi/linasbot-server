@@ -39,6 +39,16 @@ def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _is_site_permalink(url: str) -> bool:
+    lowered = (url or "").strip().lower()
+    return any(token in lowered for token in ("instagram.com/", "facebook.com/", "fb.com/", "fb.watch"))
+
+
+def _is_video_type(media_type: str) -> bool:
+    label = (media_type or "").strip().upper()
+    return label in {"VIDEO", "REEL", "STORY"} or "VIDEO" in label or "REEL" in label
+
+
 def _caption_from_payload(payload: dict[str, Any]) -> str:
     return str(payload.get("caption") or payload.get("message") or payload.get("story") or "").strip()
 
@@ -49,11 +59,24 @@ def _media_type_from_payload(payload: dict[str, Any]) -> str:
 
 def _image_urls_from_payload(payload: dict[str, Any]) -> list[str]:
     urls: list[str] = []
-    for key in ("media_url", "thumbnail_url", "full_picture", "permalink"):
+    keys = ("thumbnail_url", "full_picture")
+    media_url = str(payload.get("media_url") or "").strip()
+    if media_url and not _is_video_type(_media_type_from_payload(payload)) and not _is_site_permalink(media_url):
+        urls.append(media_url)
+    for key in keys:
         value = str(payload.get(key) or "").strip()
-        if value and value not in urls:
+        if value and value not in urls and not _is_site_permalink(value):
             urls.append(value)
     return urls
+
+
+def _video_url_from_payload(payload: dict[str, Any]) -> str:
+    if not _is_video_type(_media_type_from_payload(payload)):
+        return ""
+    media_url = str(payload.get("media_url") or "").strip()
+    if media_url and not _is_site_permalink(media_url):
+        return media_url
+    return ""
 
 
 def _post_id_from_comment_payload(payload: dict[str, Any], *, channel: str) -> str:
@@ -139,6 +162,7 @@ async def _fetch_post_context(
         "caption": _caption_from_payload(body),
         "media_type": _media_type_from_payload(body),
         "image_urls": _image_urls_from_payload(body),
+        "video_url": _video_url_from_payload(body),
     }
     _cache_put(cache_key, out)
     return out
@@ -163,6 +187,7 @@ async def enrich_comment_event_post(
     parent_id = str(out.get("parent_id") or "").strip()
     media_type = str(out.get("media_type") or "").strip()
     image_urls = [str(item).strip() for item in (out.get("image_urls") or []) if str(item).strip()]
+    video_url = str(out.get("video_url") or "").strip()
     if post_id:
         out["post_id"] = post_id
         out["media_id"] = str(out.get("media_id") or post_id)
@@ -199,9 +224,15 @@ async def enrich_comment_event_post(
             for url in _image_urls_from_payload(media) + _image_urls_from_payload(post_obj):
                 if url not in image_urls:
                     image_urls.append(url)
+            video_url = video_url or _video_url_from_payload(media) or _video_url_from_payload(post_obj)
             if not parent_comment:
                 parent_comment = _parent_text_from_payload(comment_payload)
-        if post_id and (not caption or not media_type or not image_urls):
+        if post_id and (
+            not caption
+            or not media_type
+            or not image_urls
+            or (_is_video_type(media_type) and not video_url)
+        ):
             post_ctx = await _fetch_post_context(
                 graph,
                 binding=binding,
@@ -215,6 +246,7 @@ async def enrich_comment_event_post(
                 value = str(url or "").strip()
                 if value and value not in image_urls:
                     image_urls.append(value)
+            video_url = video_url or str(post_ctx.get("video_url") or "").strip()
     finally:
         if owns_client:
             await graph.aclose()
@@ -229,6 +261,8 @@ async def enrich_comment_event_post(
         out["media_type"] = media_type
     if image_urls:
         out["image_urls"] = image_urls
+    if video_url:
+        out["video_url"] = video_url
     if parent_comment:
         out["parent_comment"] = parent_comment
     return out

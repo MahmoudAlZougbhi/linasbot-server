@@ -85,7 +85,7 @@ def apply_save_chunks(
             generated.append(SECTION_ITEM_ID)
         elif status == "copied":
             copied.append(SECTION_ITEM_ID)
-    if name in {"branches", "prices"}:
+    if name in {"branches", "prices", "comments"}:
         policy_item = {"policy_text": payload.get("policy_text") or "", "notes": payload.get("notes") or ""}
         prev_policy = {"policy_text": prev.get("policy_text") or "", "notes": prev.get("notes") or ""}
         if needs_luna_chunks(name, policy_item):

@@ -12,6 +12,9 @@ from sqlalchemy import create_engine, event
 from _live_cert.bootstrap import ASSETS, TENANT_ID
 from _live_cert.tenant_sections import APPT_SOURCE, ORDER_SOURCE, _att
 
+if TENANT_ID.strip().lower() in {"linas", "production", "prod"}:
+    raise RuntimeError("live_cert must not target a production tenant id")
+
 
 def init_sqlite(db_url: str) -> None:
     from db.models import Base

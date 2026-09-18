@@ -119,18 +119,16 @@ async def generate_verified(
                     **extra,
                 },
             )
-        from services.brain.templates import brain_template
+        from services.brain.silence import log_customer_generation_failure
 
-        lang = str((turn.extra or {}).get("response_language") or "")
+        log_customer_generation_failure(stage="empty_generate")
         return TurnResult(
             stop_reason="failed_closed",
-            envelope=FinalReplyEnvelope(
-                decision="clarify",
-                messages=[OutboundMessage(destination=dest, text=brain_template("no_evidence", lang))],
-            ),
+            envelope=FinalReplyEnvelope(decision="clarify"),
             extra={
                 "phase": "generate",
                 "llm_fail_soft": True,
+                "customer_silence": True,
                 "plan": plan.model_dump(),
                 "receipts": list(resource_receipts),
                 "agent_trace": agent_trace,

@@ -137,19 +137,25 @@ async def unanswered_question_result(
     stop_reason: StopReason = "ok"
     dispositions: dict[str, TaskDisposition]
     if ok:
-        text = brain_template("no_evidence_handoff", lang)
+        text = brain_template("handoff", lang)
         decision = "handoff_ack"
         dispositions = {task.id: "not_found" for task in plan.tasks if task.type in _INFO_TYPES}
         dispositions["handoff"] = "action_succeeded"
+        messages = [OutboundMessage(destination=dest, text=text, protected=True)]
+        stop_reason = "ok"
     else:
-        text = brain_template("no_evidence", lang)
+        from services.brain.silence import log_customer_generation_failure
+
+        log_customer_generation_failure(stage="retrieve_not_found")
         decision = "clarify"
         dispositions = {task.id: "not_found" for task in plan.tasks if task.type in _INFO_TYPES}
+        messages = []
+        stop_reason = "failed_closed"
 
     agent_trace.append({"step": "FINAL", "decision": decision, "reason": "unanswered_not_found"})
     envelope = FinalReplyEnvelope(
         decision=decision,
-        messages=[OutboundMessage(destination=dest, text=text, protected=True)],
+        messages=messages,
         dispositions=dispositions,
     )
     return TurnResult(

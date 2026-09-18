@@ -354,41 +354,34 @@ async def _delayed_process_messages(
                     human_takeover_active = conv_data.get("human_takeover_active", False)
                     operator_id = conv_data.get("operator_id")
                     if human_takeover_active and not operator_id:
+                        from services.owner_copilot.dynamic_messages_service import get_dynamic_message
+
                         user_lang = user_data.get("user_preferred_lang", "ar")
-                        waiting_messages = {
-                            "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏",
-                            "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
-                            "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏",
-                        }
-                        waiting_msg = waiting_messages.get(user_lang, waiting_messages["ar"])
-                        await outbound_send(user_id, waiting_msg)
-                        user_name = config.user_names.get(user_id, "عميل")
-                        await save_conversation_message_to_firestore(
-                            user_id,
-                            "ai",
-                            waiting_msg,
-                            current_conversation_id,
-                            user_name,
-                            user_data.get("phone_number"),
-                        )
-                        print("[_delayed_process_messages] Sent waiting message after error (user in queue)")
-                        sent_error_outbound = True
+                        waiting_msg = (get_dynamic_message("waiting_queue_message", user_lang) or "").strip()
+                        if waiting_msg:
+                            await outbound_send(user_id, waiting_msg)
+                            user_name = config.user_names.get(user_id, "عميل")
+                            await save_conversation_message_to_firestore(
+                                user_id,
+                                "ai",
+                                waiting_msg,
+                                current_conversation_id,
+                                user_name,
+                                user_data.get("phone_number"),
+                            )
+                            print("[_delayed_process_messages] Sent waiting message after error (user in queue)")
+                            sent_error_outbound = True
+                        else:
+                            from services.brain.silence import log_customer_generation_failure
+
+                            log_customer_generation_failure(stage="delayed_error_takeover_queue")
         except Exception as fallback_err:
             print(f"[_delayed_process_messages] Could not send waiting fallback: {fallback_err}")
 
-        if not sent_error_outbound and user_data.get("_dashboard_test_simulation"):
-            try:
-                from services.owner_copilot.dynamic_messages_service import get_dynamic_message
+        if not sent_error_outbound:
+            from services.brain.silence import log_customer_generation_failure
 
-                user_lang = user_data.get("user_preferred_lang", "ar")
-                err_msg = (
-                    get_dynamic_message("generic_error_message", user_lang)
-                    or "عذراً، صار خطأ أثناء المعالجة. جرّب مرة ثانية أو راجع سجلات السيرفر."
-                )
-                await outbound_send(user_id, err_msg)
-                print(f"[_delayed_process_messages] Sent generic error for dashboard test after exception: {e!r}")
-            except Exception as dash_err:
-                print(f"[_delayed_process_messages] Dashboard test error fallback send failed: {dash_err}")
+            log_customer_generation_failure(stage="delayed_process_exception", extra={"exception_class": type(e).__name__})
         user_data.pop("_dashboard_test_turn_sticky", None)
         try:
             from services.brain.ai_reply.ai_reply_turn_runtime import on_ai_failed

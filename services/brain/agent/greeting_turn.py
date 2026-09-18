@@ -95,13 +95,9 @@ async def identity_greeting_result(
     channel: str,
     flow_base: dict | None = None,
 ) -> TurnResult | None:
-    if turn.invocation_kind in {"followup", "comment"} or not is_greeting_only(message):
-        return None
-    try:
-        return await _identity_greeting_llm(turn, message=message, channel=channel, flow_base=flow_base)
-    except Exception as exc:
-        print(f"[identity_greeting] fail-soft {type(exc).__name__}: {str(exc)[:200]}")
-        return _fallback_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
+    """Greeting-only identity shortcut is retired. Hello uses retrieve → Terra."""
+    _ = (turn, message, channel, flow_base)
+    return None
 
 
 def _fallback_greeting_result(

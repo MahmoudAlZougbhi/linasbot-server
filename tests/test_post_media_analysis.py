@@ -149,6 +149,49 @@ def test_inbound_task_text_sends_saved_analysis_with_comment() -> None:
     assert "https://cdn.example/reel.jpg" not in blob
 
 
+def test_comment_what_is_not_catalog_photo_request() -> None:
+    from services.brain.planner.heuristic import plan_message
+
+    turn = CustomerTurn(
+        tenant_id="t1",
+        surface="comment",
+        invocation_kind="comment",
+        extra={
+            "post_caption": "Lina's Laser reel",
+            "post_media_type": "VIDEO",
+            "post_image_urls": ["https://cdn.example/reel.mp4"],
+        },
+    )
+    blob = inbound_task_text(turn, "What")
+    types = {task.type for task in plan_message(blob).tasks}
+    assert "resource_request" not in types
+    assert "information" in types
+
+
+def test_resource_turn_skips_comment_surface() -> None:
+    import asyncio
+
+    from services.brain.actions.resource_turn import resource_request_result
+    from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+
+    turn = CustomerTurn(tenant_id="t1", surface="comment", invocation_kind="comment")
+    plan = PlannerPlan(
+        tasks=[
+            PlannerTask(
+                id="t_media",
+                type="resource_request",
+                span=TaskSpan(text="What", end=4),
+                source_families=["knowledge"],
+            )
+        ]
+    )
+
+    async def _run() -> object:
+        return await resource_request_result(turn, message="What", channel="instagram_comment", plan=plan)
+
+    assert asyncio.run(_run()) is None
+
+
 def test_analyzed_inbound_image_does_not_use_visual_disabled_gate() -> None:
     from services.brain.turn_pipeline import inbound_task_text as _task
 

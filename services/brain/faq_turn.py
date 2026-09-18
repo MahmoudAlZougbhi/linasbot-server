@@ -9,17 +9,12 @@ from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, 
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.faq_exact import find_published_exact_faq
 from services.brain.faq_freshness import faq_static_allowed
-from services.brain.templates import brain_template
 
 
 def _destination(channel: str, turn: object | None = None) -> str:
     from services.brain.outbound_destination import outbound_destination
 
     return outbound_destination(turn, channel)
-
-
-def _response_language(turn: CustomerTurn) -> str:
-    return str((turn.extra or {}).get("response_language") or "").strip()
 
 
 def faq_envelope(
@@ -91,26 +86,8 @@ async def semantic_faq_result(
         bundle = await semantic_faq_bundle(sections, message, tenant_id=turn.tenant_id)
     except Exception:
         return None
-    lang = _response_language(turn)
     if bundle.outcome == "ambiguous" or len(bundle.items) > 1:
-        return TurnResult(
-            stop_reason="ok",
-            envelope=FinalReplyEnvelope(
-                decision="clarify",
-                messages=[
-                    OutboundMessage(
-                        destination=_destination(channel, turn),
-                        text=brain_template("faq_ambiguous", lang),
-                    )
-                ],
-            ),
-            extra={
-                "path": "faq_semantic",
-                "faq_outcome": "ambiguous",
-                "response_class": "operational_notice",
-                "ambiguities": list(bundle.ambiguities),
-            },
-        )
+        return None
     if bundle.outcome != "found" or len(bundle.items) != 1:
         return None
     item = bundle.items[0]
