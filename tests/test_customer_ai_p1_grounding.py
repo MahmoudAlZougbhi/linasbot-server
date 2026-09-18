@@ -166,8 +166,9 @@ async def test_visual_disabled_image_returns_localized_clarify(monkeypatch: pyte
     assert visual.reason == "disabled"
     result = await pipeline.run_dm_after_gates(turn, message="what is this?", channel="web_chat")
     assert result.envelope.decision == "clarify"
-    assert result.envelope.messages
-    assert result.envelope.messages[0].text == brain_template("visual_disabled", "ar")
+    assert not result.envelope.messages
+    assert result.stop_reason == "failed_closed"
+    assert (result.extra or {}).get("customer_silence") is True
 
 
 @pytest.mark.asyncio
