@@ -82,7 +82,14 @@ async def test_knowledge_question_retrieve_then_terra(monkeypatch: pytest.Monkey
     monkeypatch.setattr("services.brain.agent.generate_path.openai_configured", lambda: True)
     monkeypatch.setattr("services.brain.agent.generate_path.load_identity_bundle", lambda _tid: object())
     monkeypatch.setattr("services.brain.agent.generate_path.generate_grounded_reply", terra)
-    monkeypatch.setattr("services.brain.agent.generate_path.verify_answer", AsyncMock(return_value=type("V", (), {"verdict": "PASS", "unsupported_claims": [], "missing_tasks": [], "repair_instruction": ""})()))
+    monkeypatch.setattr(
+        "services.brain.agent.generate_path.verify_answer",
+        AsyncMock(
+            return_value=type(
+                "V", (), {"verdict": "PASS", "unsupported_claims": [], "missing_tasks": [], "repair_instruction": ""}
+            )()
+        ),
+    )
     monkeypatch.setattr("services.brain.agent.generate_path.coverage_ok", lambda *_a, **_k: True)
     monkeypatch.setattr("services.brain.agent.generate_path.apply_greeting", lambda t, m, c, e: e)
     monkeypatch.setattr(

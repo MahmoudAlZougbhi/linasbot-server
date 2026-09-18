@@ -381,7 +381,9 @@ async def _delayed_process_messages(
         if not sent_error_outbound:
             from services.brain.silence import log_customer_generation_failure
 
-            log_customer_generation_failure(stage="delayed_process_exception", extra={"exception_class": type(e).__name__})
+            log_customer_generation_failure(
+                stage="delayed_process_exception", extra={"exception_class": type(e).__name__}
+            )
         user_data.pop("_dashboard_test_turn_sticky", None)
         try:
             from services.brain.ai_reply.ai_reply_turn_runtime import on_ai_failed

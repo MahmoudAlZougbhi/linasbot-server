@@ -228,10 +228,7 @@ async def enrich_comment_event_post(
             if not parent_comment:
                 parent_comment = _parent_text_from_payload(comment_payload)
         if post_id and (
-            not caption
-            or not media_type
-            or not image_urls
-            or (_is_video_type(media_type) and not video_url)
+            not caption or not media_type or not image_urls or (_is_video_type(media_type) and not video_url)
         ):
             post_ctx = await _fetch_post_context(
                 graph,
