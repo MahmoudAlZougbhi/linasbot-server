@@ -8,6 +8,7 @@ action receipts for this turn.
 from __future__ import annotations
 
 from services.brain.contracts.evidence import EvidenceBundle
+from services.brain.contracts.plan import PlannerPlan
 from services.brain.grounding import extract
 
 
@@ -88,7 +89,7 @@ def ungrounded_claims(
     receipts: list[str] | None = None,
     *,
     message: str = "",
-    plan=None,
+    plan: PlannerPlan | None = None,
 ) -> list[str]:
     """Reasons the reply is not supported by evidence. Empty list means grounded."""
     text = (reply_text or "").strip()

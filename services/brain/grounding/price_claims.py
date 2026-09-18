@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.contracts.plan import PlannerPlan
@@ -56,13 +57,16 @@ def _item_amounts(item: EvidenceItem) -> set[str]:
     return numbers
 
 
-def _item_row(item: EvidenceItem) -> dict[str, str]:
+def _item_row(item: EvidenceItem) -> dict[str, Any]:
     extra = item.extra if isinstance(item.extra, dict) else {}
+    aliases = extra.get("aliases") or []
+    if not isinstance(aliases, (list, tuple)):
+        aliases = []
     return {
         "id": str(extra.get("entity_id") or item.source_id),
         "title": item.title,
         "name": item.title,
-        "aliases": extra.get("aliases") or [],
+        "aliases": [str(alias) for alias in aliases],
     }
 
 
