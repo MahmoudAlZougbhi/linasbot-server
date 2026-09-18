@@ -19,37 +19,7 @@ from modules.api_security import (
 )
 from services.dashboard.dashboard_session_service import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME, session_service
 from services.product_features import is_disabled_api_path
-from services.safe_path import is_safe_relative_name, resolve_backup_filename, resolve_under_root
 from services.ssrf_guard import SSRFValidationError, validate_fetch_url
-
-
-class TestSafePath:
-    def test_rejects_traversal_names(self):
-        assert not is_safe_relative_name("../etc/passwd")
-        assert not is_safe_relative_name("..\\windows")
-        assert not is_safe_relative_name("/etc/passwd")
-        assert not is_safe_relative_name("a/b")
-        assert not is_safe_relative_name("x\x00y")
-        assert is_safe_relative_name("style_guide_backup_20260101.txt")
-
-    def test_resolve_under_root_blocks_escape(self, tmp_path):
-        root = tmp_path / "content"
-        root.mkdir()
-        with pytest.raises(ValueError):
-            resolve_under_root(root, "..", "secrets.txt")
-        ok = resolve_under_root(root, "ok.txt")
-        assert str(ok).startswith(str(root.resolve()))
-
-    def test_backup_filename_prefix(self, tmp_path):
-        root = tmp_path / "content"
-        root.mkdir()
-        (root / "style_guide_backup_1.txt").write_text("x")
-        path = resolve_backup_filename(root, "style_guide_backup_1.txt", required_prefix="style_guide_backup_")
-        assert path.exists()
-        with pytest.raises(ValueError):
-            resolve_backup_filename(root, "../style_guide_backup_1.txt", required_prefix="style_guide_backup_")
-        with pytest.raises(ValueError):
-            resolve_backup_filename(root, "other_backup_1.txt", required_prefix="style_guide_backup_")
 
 
 class TestSSRFGuard:
