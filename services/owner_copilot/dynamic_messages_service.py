@@ -221,3 +221,20 @@ def get_dynamic_message(key: str, lang: str = "ar") -> str:
     lang_key = (lang or "ar").lower()
     message = msgs.get(lang_key) or msgs.get("ar") or ""
     return message
+
+
+def get_persisted_dynamic_message(key: str, lang: str = "ar") -> str:
+    """Owner-saved verbatim only. Ignores in-code catalog defaults."""
+    stored = _read_file()
+    item = stored.get(key) or {}
+    if not isinstance(item, dict):
+        return ""
+    msgs = item.get("messages") or {}
+    if not isinstance(msgs, dict):
+        return ""
+    lang_key = (lang or "ar").lower()
+    for candidate in (lang_key, "ar", "en", "fr", "franco"):
+        text = str(msgs.get(candidate) or "").strip()
+        if text:
+            return text
+    return ""

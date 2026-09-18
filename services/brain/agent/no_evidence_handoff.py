@@ -13,7 +13,7 @@ from services.brain.contracts.plan import PlannerPlan
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.stage_timeline import stamp
-from services.brain.templates import brain_template
+from services.brain.templates import owner_protocol_text
 
 _INFO_TYPES = frozenset({"information", "hours", "comparison"})
 _LIVE_KINDS = frozenset({"dm", "followup", "comment"})
@@ -153,11 +153,19 @@ async def unanswered_question_result(
     stop_reason: StopReason = "ok"
     dispositions: dict[str, TaskDisposition]
     if ok:
-        text = brain_template("handoff", lang)
+        from services.brain.outbound_safety import looks_like_instruction_text
+        from services.brain.silence import log_customer_generation_failure
+
+        text = owner_protocol_text("handoff", lang)
+        if text and looks_like_instruction_text(text):
+            text = ""
         decision = "handoff_ack"
         dispositions = {task.id: "not_found" for task in plan.tasks if task.type in _INFO_TYPES}
         dispositions["handoff"] = "action_succeeded"
-        messages = [OutboundMessage(destination=dest, text=text, protected=True)]
+        messages = [OutboundMessage(destination=dest, text=text, protected=True)] if text else []
+        if not text:
+            extra["customer_silence"] = True
+            log_customer_generation_failure(stage="handoff_owner_protocol_empty")
         stop_reason = "ok"
     else:
         from services.brain.silence import log_customer_generation_failure
@@ -166,6 +174,7 @@ async def unanswered_question_result(
         decision = "clarify"
         dispositions = {task.id: "not_found" for task in plan.tasks if task.type in _INFO_TYPES}
         messages = []
+        extra["customer_silence"] = True
         stop_reason = "failed_closed"
 
     agent_trace.append({"step": "FINAL", "decision": decision, "reason": "unanswered_not_found"})

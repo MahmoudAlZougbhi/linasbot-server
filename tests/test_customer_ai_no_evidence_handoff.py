@@ -13,7 +13,7 @@ from services.brain.contracts.actions import ActionReceipt, ActionReceiptSet
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 from services.brain.contracts.turn import CustomerTurn, HistorySnapshot
-from services.brain.templates import brain_template
+from services.brain.templates import brain_template, owner_protocol_text
 
 
 def _plan(*tasks: PlannerTask) -> PlannerPlan:
@@ -74,16 +74,18 @@ def test_should_handoff_only_unanswered_questions() -> None:
     assert should_handoff_unanswered(plan=info, outcome="not_found", message="عنوان") is True
 
 
-def test_polite_copy_does_not_send_customer_away() -> None:
-    sorry = brain_template("no_evidence_handoff", "en").lower()
-    assert "sorry" in sorry
-    assert "team" in sorry
-    assert "reach out" not in sorry
-    assert "ask a teammate" not in sorry
-    ar = brain_template("no_evidence_handoff", "ar")
-    assert "آسف" in ar
-    assert "فريق" in ar
-    assert brain_template("handoff", "en") != brain_template("handoff", "ar")
+def test_owner_protocol_empty_does_not_invent_handoff_copy() -> None:
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "services/brain/templates.py").read_text(encoding="utf-8")
+    assert "_HANDOFF" not in src
+    assert "_NO_EVIDENCE" not in src
+    assert "I'll connect you with someone from the team" not in src
+    assert "آسف، ما عندي معلومات" not in src
+    assert owner_protocol_text("handoff", "en") == ""
+    assert owner_protocol_text("no_evidence_handoff", "ar") == ""
+    assert brain_template("handoff", "en") == ""
+    assert brain_template("confirm_request", "en") == ""
 
 
 @pytest.mark.asyncio
@@ -124,9 +126,8 @@ async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.Monkey
     assert result is not None
     assert result.stop_reason == "ok"
     assert result.envelope.decision == "handoff_ack"
-    text = result.envelope.messages[0].text.lower()
-    assert "team" in text
-    assert "reach out" not in text
+    assert not result.envelope.messages
+    assert (result.extra or {}).get("customer_silence") is True
     execute.assert_awaited_once()
 
 

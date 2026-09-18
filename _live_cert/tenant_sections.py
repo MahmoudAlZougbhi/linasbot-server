@@ -47,13 +47,13 @@ def _att(**kwargs: Any) -> dict[str, Any]:
 
 def v10_store_sections(*, attachments: dict[str, list[dict[str, Any]]] | None = None) -> dict[str, dict[str, Any]]:
     atts = attachments or {}
-    women = list(atts.get("laser_women") or [])
-    service_files = list(atts.get("laser_service") or [])
+    women = list(atts.get("north_photos") or [])
+    service_files = list(atts.get("service_notes") or [])
     cream_files = list(atts.get("cream_files") or [])
     comment_res = list(atts.get("comment_rule") or [])
     sections = _rich_sections()
     sections["ai_basics"] = {
-        "assistant_name": "Lina",
+        "assistant_name": "Store Assistant",
         "clinic_name": "V10 Test Store",
         "ai_role": "customer assistant",
         "identity_summary": "Friendly assistant for V10 Test Store. Never invent price or availability.",
@@ -78,20 +78,20 @@ def v10_store_sections(*, attachments: dict[str, list[dict[str, Any]]] | None = 
                 "available": True,
                 "audience": "women",
                 "aliases": ["full body", "فل بودي"],
-                "notes": "Full Body laser session. Published price 299 USD.",
+                "notes": "Full Body consultation. Published price 299 USD.",
             },
             {
-                "id": "svc_laser_women",
+                "id": "svc_north_consult",
                 "labels": {
-                    "en": "Laser Hair Removal Women",
-                    "ar": "ليزر شعر للنساء",
-                    "fr": "Épilation laser femmes",
+                    "en": "North Consultation",
+                    "ar": "استشارة الشمال",
+                    "fr": "Consultation Nord",
                     "franco": "",
                 },
                 "available": True,
                 "audience": "women",
-                "aliases": ["laser hair removal", "laser hair removal women", "ليزر شعر"],
-                "notes": "Women laser hair removal. Send only the women photo resources on this service.",
+                "aliases": ["north consultation", "consultation"],
+                "notes": "North consultation. Send only the north photo resources on this service.",
                 "attachments": women,
             },
             {
@@ -100,16 +100,16 @@ def v10_store_sections(*, attachments: dict[str, list[dict[str, Any]]] | None = 
                 "available": True,
                 "audience": "women",
                 "aliases": ["underarms", "underarm"],
-                "notes": "Underarms laser session. Published price 49 USD.",
+                "notes": "Underarms session. Published price 49 USD.",
             },
         ]
     }
     sections["branches"] = {
         "items": [
             {
-                "id": "br_beirut",
-                "labels": {"en": "Beirut", "ar": "بيروت", "fr": "Beyrouth", "franco": ""},
-                "address": "Beirut test street",
+                "id": "br_north",
+                "labels": {"en": "North", "ar": "الشمال", "fr": "Nord", "franco": ""},
+                "address": "North test street",
                 "hours": {
                     "monday": "10:00-20:00",
                     "tuesday": "10:00-20:00",
@@ -118,16 +118,16 @@ def v10_store_sections(*, attachments: dict[str, list[dict[str, Any]]] | None = 
                     "friday": "10:00-20:00",
                     "saturday": "10:00-20:00",
                     "sunday": "",
-                    "summary": "Beirut 10:00–20:00",
+                    "summary": "North 10:00–20:00",
                 },
                 "weekly_schedule": _week_hours("10:00", "20:00"),
                 "available": True,
-                "notes": "Beirut closes 20:00.",
+                "notes": "North closes 20:00.",
             },
             {
-                "id": "br_antelias",
-                "labels": {"en": "Antelias", "ar": "أنطلياس", "fr": "Antelias", "franco": ""},
-                "address": "Antelias test road",
+                "id": "br_south",
+                "labels": {"en": "South", "ar": "الجنوب", "fr": "Sud", "franco": ""},
+                "address": "South test road",
                 "hours": {
                     "monday": "11:00-19:00",
                     "tuesday": "11:00-19:00",
@@ -136,29 +136,29 @@ def v10_store_sections(*, attachments: dict[str, list[dict[str, Any]]] | None = 
                     "friday": "11:00-19:00",
                     "saturday": "11:00-19:00",
                     "sunday": "",
-                    "summary": "Antelias 11:00–19:00",
+                    "summary": "South 11:00–19:00",
                 },
                 "weekly_schedule": _week_hours("11:00", "19:00"),
                 "available": True,
-                "notes": "Antelias closes 19:00.",
+                "notes": "South closes 19:00.",
             },
         ],
-        "timezone": "Asia/Beirut",
+        "timezone": "UTC",
         "policy_text": "",
         "specific_off_rules": [],
     }
     sections["opening_hours"] = {
         "items": [
             {
-                "id": "oh_beirut",
-                "title": "Beirut Opening Hours",
-                "notes": "Beirut 10:00–20:00",
+                "id": "oh_north",
+                "title": "North Opening Hours",
+                "notes": "North 10:00–20:00",
                 **_oh_days("10:00", "20:00"),
             },
             {
-                "id": "oh_antelias",
-                "title": "Antelias Opening Hours",
-                "notes": "فرع أنطلياس بيسكر الساعة 19:00.",
+                "id": "oh_south",
+                "title": "South Opening Hours",
+                "notes": "فرع الجنوب بيسكر الساعة 19:00.",
                 **_oh_days("11:00", "19:00"),
             },
         ]
@@ -190,9 +190,9 @@ def v10_store_sections(*, attachments: dict[str, list[dict[str, Any]]] | None = 
     sections["knowledge"] = {
         "items": [
             {
-                "id": "kn_laser_service",
-                "title": "Laser Hair Removal Service",
-                "body": "Laser Hair Removal Service files for staff. Not the women photo set.",
+                "id": "kn_service_file",
+                "title": "North Consultation Service",
+                "body": "North consultation service files for staff. Not the north photo set.",
                 "status": "active",
                 "attachments": service_files,
             },
@@ -217,7 +217,7 @@ def v10_store_sections(*, attachments: dict[str, list[dict[str, Any]]] | None = 
                     {
                         "language": "fr",
                         "question": "Quels sont vos horaires ?",
-                        "answer": "Beyrouth 10:00–20:00. Antelias 11:00–19:00.",
+                        "answer": "Nord 10:00–20:00. Sud 11:00–19:00.",
                     },
                     {"language": "franco", "question": "shu aw2at el dawam?", "answer": FAQ_AR_A},
                 ],
@@ -245,11 +245,11 @@ def v10_store_sections(*, attachments: dict[str, list[dict[str, Any]]] | None = 
                 "id": "rule_post_branch",
                 "enabled": True,
                 "name": "Post-specific ask branch",
-                "keywords": ["سعر", "قدي", "أنطلياس", "انطلياس"],
+                "keywords": ["سعر", "قدي", "price", "hours", "دوام", "جنوب", "شمال"],
                 "action": "reply_comment",
                 "rule_mode": "ai_guidance",
                 "ai_action_mode": "reply_comment",
-                "ai_instructions": "This promo post: mention Antelias branch hours from evidence. Still use real published price.",
+                "ai_instructions": "This promo post: mention South branch hours from evidence. Still use real published price.",
                 "priority": 9,
                 "scope": "specific_post",
                 "post_id": "POST_PROMO",

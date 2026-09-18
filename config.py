@@ -194,7 +194,6 @@ MAX_CONTEXT_MESSAGES = 20  # Max number of messages to keep in conversation cont
 CONTEXT_WINDOW_HOURS = int(os.getenv("CONTEXT_WINDOW_HOURS", "12"))
 MAX_CONTEXT_MESSAGES_IN_WINDOW = int(os.getenv("MAX_CONTEXT_MESSAGES_IN_WINDOW", "0"))
 MAX_RELEVANT_CUSTOM_QA = 3  # Max relevant custom Q&A entries to fetch
-MAX_GENDER_ASK_ATTEMPTS = 3  # Max times bot will ask for gender before suggesting human handover
 
 # Delay for combining rapid messages from a user (e.g., multiple short texts sent quickly)
 # Requirement: wait 3 seconds after the LAST message before responding.
@@ -202,17 +201,16 @@ MESSAGE_COMBINING_DELAY = 3.0  # seconds
 
 
 # --- Bot Welcome Messages (Language-specific) ---
-# Generic WhatsApp boot copy. Published CM welcome / ai_basics override this.
-# Override per language via WELCOME_MESSAGE_<LANG>.
-def _welcome_message(lang: str, default: str) -> str:
-    return (os.getenv(f"WELCOME_MESSAGE_{lang.upper()}") or "").strip() or default
+# Env-only boot copy. Empty means silence; published CM / Terra owns customer greetings.
+def _welcome_message(lang: str) -> str:
+    return (os.getenv(f"WELCOME_MESSAGE_{lang.upper()}") or "").strip()
 
 
 WELCOME_MESSAGES = {
-    "ar": _welcome_message("ar", "مرحباً! كيف يمكنني مساعدتك؟"),
-    "en": _welcome_message("en", "Hello! How can I help you today?"),
-    "fr": _welcome_message("fr", "Bonjour ! Comment puis-je vous aider ?"),
-    "franco": _welcome_message("franco", "مرحباً! كيف يمكنني مساعدتك؟"),
+    "ar": _welcome_message("ar"),
+    "en": _welcome_message("en"),
+    "fr": _welcome_message("fr"),
+    "franco": _welcome_message("franco"),
 }
 
 # --- Bot Knowledge Base (Loaded from files) ---

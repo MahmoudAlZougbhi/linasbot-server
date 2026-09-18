@@ -3963,7 +3963,8 @@ assert_canonical_repo() {
     test "$classification" = "legacy-absent" || \
       die "canonical worker unit is missing and is not a proven legacy workerless state"
   fi
-  if [ -e "$REPO_DIR/linaslaserbot-2.7.22" ] || [ -L "$REPO_DIR/linaslaserbot-2.7.22" ]; then
+  LEGACY_NESTED="${LINASBOT_LEGACY_NESTED_DIR:-linaslaserbot-2.7.22}"
+  if [ -e "$REPO_DIR/$LEGACY_NESTED" ] || [ -L "$REPO_DIR/$LEGACY_NESTED" ]; then
     die "legacy nested runtime still exists"
   fi
   if systemctl is-active --quiet "$VERIFY_API_UNIT" || \
@@ -5240,8 +5241,9 @@ assert_target_object() {
   git -C "$REPO_DIR" grep -Fq "/var/lib/linasbot/meta-ha/maintenance" \
     "$target_sha" -- modules/dashboard_api_health.py || \
     die "authorized target is not aware of the persistent maintenance marker"
-  if git -C "$REPO_DIR" cat-file -e "$target_sha:linaslaserbot-2.7.22" 2>/dev/null; then
-    die "authorized target contains the legacy nested runtime"
+  LEGACY_NESTED="${LINASBOT_LEGACY_NESTED_DIR:-linaslaserbot-2.7.22}"
+  if git -C "$REPO_DIR" cat-file -e "$target_sha:$LEGACY_NESTED" 2>/dev/null; then
+    die "authorized target contains a leftover nested runtime"
   fi
   actual_helper_hash="$(git -C "$REPO_DIR" show "$target_sha:$HELPER_REPO_PATH" | sha256sum | awk '{print $1}')"
   test "$actual_helper_hash" = "$expected_helper_hash" || die "authorized helper blob hash mismatch"
@@ -5260,8 +5262,8 @@ check_canonical_env_security() {
 }
 
 reconcile_model_policy_env() {
-  # G fail-closes startup when leftover Laser-era model env overrides the
-  # Sol/Voyage/Terra policy. Unset those keys; do not restore Laser/Luna.
+  # Fail-closed when leftover model env overrides the Sol/Voyage/Terra policy.
+  # Unset those keys; do not restore retired compiler/runtime overrides.
   check_canonical_env_security || die "canonical .env failed security before model-policy reconcile"
   local removed
   removed="$(run_system_python_control - "$REPO_DIR/.env" <<'PY'
@@ -5546,7 +5548,9 @@ node_preflight() {
     die "nginx dashboard root is noncanonical"
   grep -q 'proxy_pass http://127.0.0.1:8003;' /etc/nginx/sites-available/linasaibot || \
     die "nginx API upstream is noncanonical"
-  if grep -qE 'linaslaserbot-2\.7\.22|127\.0\.0\.1:8000' /etc/nginx/sites-available/linasaibot; then
+  LEGACY_NESTED="${LINASBOT_LEGACY_NESTED_DIR:-linaslaserbot-2.7.22}"
+  if grep -qF "$LEGACY_NESTED" /etc/nginx/sites-available/linasaibot || \
+     grep -qF '127.0.0.1:8000' /etc/nginx/sites-available/linasaibot; then
     die "nginx still references a legacy runtime"
   fi
   assert_path_absent "$MAINTENANCE_FILE" \

@@ -32,12 +32,10 @@ if command -v nginx >/dev/null 2>&1; then
   fi
 fi
 
-APP_DIR="/opt/linasbot"
-if [ -f /opt/linasbot/linaslaserbot-2.7.22/main.py ]; then
-  APP_DIR="/opt/linasbot/linaslaserbot-2.7.22"
-fi
+APP_DIR="${LINASBOT_APP_DIR:-/opt/linasbot}"
 echo "[preflight] app_dir=$APP_DIR"
 export APP_DIR
+export LINASBOT_APP_DIR="$APP_DIR"
 
 python3 - <<'PY'
 from pathlib import Path
@@ -73,9 +71,7 @@ def load_env_file(path: Path) -> None:
             values[k] = v
 
 env_paths = [
-    Path("/opt/linasbot/.env"),
-    Path("/opt/linasbot/linaslaserbot-2.7.22/.env"),
-    Path("/opt/linasbot/linaslaserbot-2.7.22/.env.local"),
+    Path(os.environ.get("LINASBOT_APP_DIR", "/opt/linasbot")) / ".env",
     Path("/etc/linasbot.env"),
     Path("/etc/default/linasbot"),
 ]
@@ -196,8 +192,7 @@ if not voyage_ok:
 
 firebase_json_candidates = []
 for root in (
-    Path("/opt/linasbot"),
-    Path("/opt/linasbot/linaslaserbot-2.7.22"),
+    Path(os.environ.get("LINASBOT_APP_DIR", "/opt/linasbot")),
     Path("/opt/linasbot_data"),
     Path("/var/lib/linasbot"),
 ):
@@ -296,9 +291,7 @@ from pathlib import Path
 import os
 import sys
 
-APP_DIR = "/opt/linasbot"
-if Path("/opt/linasbot/linaslaserbot-2.7.22/main.py").exists():
-    APP_DIR = "/opt/linasbot/linaslaserbot-2.7.22"
+APP_DIR = os.environ.get("LINASBOT_APP_DIR", "/opt/linasbot")
 sys.path.insert(0, APP_DIR)
 os.chdir(APP_DIR)
 

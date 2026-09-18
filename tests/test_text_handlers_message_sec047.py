@@ -57,6 +57,10 @@ async def test_session_greeting_send_has_task_local_semantic_purpose(
     )
     monkeypatch.setattr("services.brain.inbound.text_handlers_message.get_firestore_db", lambda: None)
     monkeypatch.setattr(
+        "services.brain.inbound.text_handlers_message._get_session_greeting_message",
+        lambda *_a, **_k: "Owner session opener",
+    )
+    monkeypatch.setattr(
         "services.brain.inbound.text_handlers_message.sentiment_service.analyze_sentiment",
         lambda **_: {"sentiment": "neutral"},
     )

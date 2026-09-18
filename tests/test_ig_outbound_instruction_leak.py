@@ -11,7 +11,7 @@ from services.ai_setup.schemas import DynamicMessageRecord, DynamicMessagesSecti
 from services.brain.compose.blocks import compose_evidence_context
 from services.brain.contracts.evidence import EvidenceBundle
 from services.brain.contracts.plan import PlannerPlan, PlannerTask
-from services.brain.greeting import evaluate_greeting, safe_greeting_text
+from services.brain.greeting import evaluate_greeting, published_opener_text
 from services.brain.identity import IdentityBundle
 from services.brain.outbound_safety import is_customer_safe_opener, looks_like_instruction_text
 from services.owner_copilot.dynamic_messages_service import get_dynamic_message
@@ -55,7 +55,7 @@ def test_polluted_dynamic_message_is_not_sent_as_hello(monkeypatch: pytest.Monke
         now=datetime.now(UTC),
     )
     assert decision.eligible is False
-    text = safe_greeting_text(tenant_id="linas-polluted", message="Hello", language="en", history=history)
+    text = published_opener_text(tenant_id="linas-polluted", message="Hello", language="en", history=history)
     assert "Use this rule only" not in text
     assert "Arabic-specific rule" not in text
     assert text != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "en")

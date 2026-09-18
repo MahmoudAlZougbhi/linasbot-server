@@ -409,14 +409,13 @@ async def start_command_whatsapp(user_whatsapp_id: str, user_name: str) -> None:
     config.user_data_whatsapp[user_whatsapp_id]["awaiting_human_handover_confirmation"] = False
     config.user_data_whatsapp[user_whatsapp_id]["current_conversation_id"] = None
 
-    initial_message = config.WELCOME_MESSAGES.get(
-        config.user_data_whatsapp[user_whatsapp_id]["user_preferred_lang"], config.WELCOME_MESSAGES["ar"]
-    )
+    lang = config.user_data_whatsapp[user_whatsapp_id]["user_preferred_lang"]
+    initial_message = (config.WELCOME_MESSAGES.get(lang) or config.WELCOME_MESSAGES.get("ar") or "").strip()
 
-    # Use the current Meta Cloud adapter.
-    current_provider = WhatsAppFactory.get_current_provider()
-    adapter = WhatsAppFactory.get_adapter(current_provider)
-    await adapter.send_text_message(user_whatsapp_id, initial_message)
+    if initial_message:
+        current_provider = WhatsAppFactory.get_current_provider()
+        adapter = WhatsAppFactory.get_adapter(current_provider)
+        await adapter.send_text_message(user_whatsapp_id, initial_message)
 
     # NOTE: Removed call to start_command() to prevent:
     # 1. Duplicate welcome messages

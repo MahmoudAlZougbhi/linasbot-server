@@ -14,11 +14,11 @@ def test_wave_o1_no_unused_router_gender_bindings() -> None:
     assert "get_gender_from_message" not in ctx
     assert "def route(" not in router
     assert "ask_gender" not in router
-    from services.brain.conversation_router import GREETING_TEMPLATES, is_human_request
+    from services.brain.conversation_router import is_human_request
 
     assert is_human_request("بدي احكي مع حدا") is True
     assert is_human_request("personal care tips") is False
-    assert "en" in GREETING_TEMPLATES
+    assert "GREETING_TEMPLATES" not in router
 
 
 def test_wave_o2_no_laser_clinic_translator_in_brain() -> None:
