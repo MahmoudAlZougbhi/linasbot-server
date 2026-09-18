@@ -36,9 +36,10 @@ def test_wave_x12_flat_services_are_tiny_keep_facades() -> None:
 
 def test_wave_x12_keep_drawer_portal_and_inventory() -> None:
     app = (ROOT / "dashboard/src/App.jsx").read_text(encoding="utf-8")
+    portal = app + (ROOT / "dashboard/src/owner_portal/OwnerPortalRoutes.jsx").read_text(encoding="utf-8")
     drawer = (ROOT / "mobile/linas-ai/src/features/nav/drawerModules.ts").read_text(encoding="utf-8")
     assert 'path="/"' in app
-    assert "OwnerLayout" in app or 'path="/owner"' in app
+    assert "OwnerLayout" in portal or 'path="/owner"' in portal
     assert drawer.count("id: '") + drawer.count('id: "') >= 9
     assert (ROOT / "services/scale/delivery_ledger.py").is_file()
     assert (ROOT / "deploy/README.md").is_file()

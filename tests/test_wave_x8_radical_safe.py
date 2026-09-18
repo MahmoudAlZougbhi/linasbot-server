@@ -59,11 +59,12 @@ def test_wave_x8_config_has_no_linaslaser_bindings() -> None:
 
 def test_wave_x8_web_and_mobile_crumbs_gone() -> None:
     app = (ROOT / "dashboard/src/App.jsx").read_text(encoding="utf-8")
+    portal = app + (ROOT / "dashboard/src/owner_portal/OwnerPortalRoutes.jsx").read_text(encoding="utf-8")
     drawer = (ROOT / "mobile/linas-ai/src/features/nav/drawerModules.ts").read_text(encoding="utf-8")
     auth = (ROOT / "dashboard/src/contexts/AuthContext.jsx").read_text(encoding="utf-8")
     assets = (ROOT / "dashboard/src/constants/landingDesignAssets.js").read_text(encoding="utf-8")
     assert 'path="/"' in app
-    assert 'path="/owner"' in app or 'path="/owner/*"' in app or "OwnerLayout" in app
+    assert 'path="/owner"' in portal or 'path="/owner/*"' in portal or "OwnerLayout" in portal
     assert "const register" not in auth
     assert "aiLimits" not in assets
     assert not (ROOT / "dashboard/public/brand/landing/app-screens/screens/12-ai-limits-screen.png").exists()

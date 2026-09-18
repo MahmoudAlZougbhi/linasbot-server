@@ -49,7 +49,7 @@ KEEP_PATHS = (
     "services/brain/history_ids.py",
     "services/owner_copilot/creative_policy.py",
     "services/integrations/whatsapp/adapters/whatsapp_factory.py",
-    "dashboard/src/pages/owner/OwnerOverview.jsx",
+    "dashboard/src/owner_portal/pages/OwnerOverview.jsx",
     "dashboard/src/pages/public/Landing.jsx",
     "mobile/linas-ai/src/features/control/OwnerPortalScreen.tsx",
     "mobile/linas-ai/src/features/billing/useBillingData.ts",
@@ -345,7 +345,7 @@ def test_wave_e_hub_tiles_and_prices_sot() -> None:
 def test_wave_f_portal_drawer_no_snapchat() -> None:
     from services.integrations.integration_capabilities import list_tenant_integration_status
 
-    shell = (ROOT / "dashboard/src/pages/owner/OwnerPortalShell.jsx").read_text(encoding="utf-8")
+    shell = (ROOT / "dashboard/src/owner_portal/components/OwnerPortalShell.jsx").read_text(encoding="utf-8")
     app = (ROOT / "dashboard/src/App.jsx").read_text(encoding="utf-8")
     nav = (ROOT / "mobile/linas-ai/src/app/navigation.ts").read_text(encoding="utf-8")
     modules = (ROOT / "mobile/linas-ai/src/features/nav/drawerModules.ts").read_text(encoding="utf-8")

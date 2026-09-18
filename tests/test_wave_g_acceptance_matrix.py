@@ -35,6 +35,7 @@ DOMAIN = (
     "services/team",
     "services/billing",
     "services/owner_copilot",
+    "services/owner_portal",
     "services/brain",
     "services/brain/comments",
     "services/brain/media",
@@ -291,17 +292,21 @@ def test_wave_g_ai_setup_voyage_requests_integrations_billing() -> None:
 
 def test_wave_g_web_marketing_portal_widget() -> None:
     app = _text("dashboard/src/App.jsx")
-    shell = _text("dashboard/src/pages/owner/OwnerPortalShell.jsx")
+    shell = _text("dashboard/src/owner_portal/components/OwnerPortalShell.jsx")
+    routes = _text("dashboard/src/owner_portal/OwnerPortalRoutes.jsx")
     landing = _text("dashboard/src/pages/public/Landing.jsx")
     public_routes = _text("modules/web_chat_public_routes.py")
     assert 'path="/" element={<Landing />}' in app
     assert 'path="/about"' in app or "path='/about'" in app
-    assert "OwnerOverview" in app
-    assert "OwnerUsers" in app
-    assert "OwnerMessages" in app
-    assert "OwnerCatalog" in app
-    assert "OwnerCosts" in app
+    assert "ownerPortalRouteElements" in app
+    assert "OwnerOverview" in routes
+    assert "OwnerUsers" in routes
+    assert "OwnerMessages" in routes
+    assert "OwnerCatalog" in routes
+    assert "OwnerCosts" in routes
+    assert 'path="/owner"' in routes
     assert "/owner/lab" not in app
+    assert "/owner/lab" not in routes
     assert shell.count("{ to: '/owner") == 5
     assert "GuestChatPanel" in landing
     assert "showFab={false}" not in landing

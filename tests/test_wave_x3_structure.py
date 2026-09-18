@@ -27,7 +27,7 @@ KEEP = (
     "services/integrations/omnichannel",
     "services/integrations/whatsapp/cloud_template_service.py",
     "dashboard/src/pages/public/Landing.jsx",
-    "dashboard/src/pages/owner/OwnerOverview.jsx",
+    "dashboard/src/owner_portal/pages/OwnerOverview.jsx",
 )
 
 

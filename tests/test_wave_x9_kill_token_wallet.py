@@ -13,7 +13,7 @@ def test_wave_x9_token_wallet_modules_gone() -> None:
     for rel in (
         "services/billing/membership/message_catalog.py",
         "modules/platform_message_api.py",
-        "dashboard/src/pages/owner/OwnerCatalog.jsx",
+        "dashboard/src/owner_portal/pages/OwnerCatalog.jsx",
         "services/billing/credit_ai_gate.py",
         "services/billing/credit_ledger_service.py",
         "services/billing/iap_product_catalog.py",

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ownerApi } from './ownerApi';
+import { ownerApi } from '../api/ownerApi';
 
 export default function OwnerActivationBanner() {
   const [report, setReport] = useState(/** @type {any} */ (null));

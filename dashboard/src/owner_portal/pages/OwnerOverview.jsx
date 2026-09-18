@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ownerApi } from './ownerApi';
+import { ownerApi } from '../api/ownerApi';
 
 const ranges = [
   ['last_day', 'Last day'],

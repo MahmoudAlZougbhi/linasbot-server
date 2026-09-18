@@ -441,11 +441,12 @@ def test_free_draft_records_owner_values_without_inventing_the_rest() -> None:
 def test_owner_portal_wires_catalog_and_costs() -> None:
     from pathlib import Path
 
-    root = Path("dashboard/src/pages/owner")
-    catalog = (root / "OwnerCatalog.jsx").read_text(encoding="utf-8")
-    costs = (root / "OwnerCosts.jsx").read_text(encoding="utf-8")
-    api = (root / "ownerApi.js").read_text(encoding="utf-8")
-    assert not (root / "OwnerLab.jsx").exists()
+    root = Path("dashboard/src/owner_portal")
+    catalog = (root / "pages/OwnerCatalog.jsx").read_text(encoding="utf-8")
+    costs = (root / "pages/OwnerCosts.jsx").read_text(encoding="utf-8")
+    api = (root / "api/ownerApi.js").read_text(encoding="utf-8")
+    assert not (root / "pages/OwnerLab.jsx").exists()
+    assert not Path("dashboard/src/pages/owner").exists()
     assert "freeDraftFromCatalog" in catalog
     assert "leave empty until decided" in catalog
     assert "patchDailyEdits" in catalog
@@ -453,7 +454,7 @@ def test_owner_portal_wires_catalog_and_costs() -> None:
     assert "daily_edits?.tenants" in costs
     assert "customer-ai-lab" not in api
     assert "/api/platform/daily-edits" in api
-    banner = (root / "OwnerActivationBanner.jsx").read_text(encoding="utf-8")
+    banner = (root / "components/OwnerActivationBanner.jsx").read_text(encoding="utf-8")
     assert "durable_tables" in banner
     assert "Activation stays off" in banner
 
