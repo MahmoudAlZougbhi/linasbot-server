@@ -51,10 +51,10 @@ def _outcome(result: TurnResult, *, comment_surface: bool = False) -> CustomerRe
         text, extra = _scrub_instruction_reply(result, item.text)
         if text:
             safe_messages.append(item.model_copy(update={"text": text}))
-    public = result.envelope.public_comment_text
-    private = result.envelope.private_dm_text
-    public, extra = _scrub_instruction_reply(result, public or None)
-    private, extra = _scrub_instruction_reply(result, private or None)
+    public_raw = result.envelope.public_comment_text
+    private_raw = result.envelope.private_dm_text
+    public, extra = _scrub_instruction_reply(result, public_raw or None)
+    private, extra = _scrub_instruction_reply(result, private_raw or None)
     if comment_surface:
         reply = public or None
         has_out = bool(public or private)
