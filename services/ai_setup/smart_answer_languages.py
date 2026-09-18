@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.ai_setup.faq_integration_helpers import FAQ_SECTION, FaqIntegrationError
+from services.faq.cm_faq_helpers import FAQ_SECTION, FaqIntegrationError
 from services.ai_setup.iso639_languages import (
     iso639_catalog,
     iso639_label,

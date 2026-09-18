@@ -27,7 +27,7 @@ def _plan_faq_limits(plan_id: str) -> tuple[bool, int]:
 
 def count_faq_entries(tenant_id: str) -> int:
     """Count non-archived FAQ groups for the tenant (CM draft is source of truth)."""
-    from services.ai_setup.faq_integration import list_cm_faq
+    from services.faq.cm_faq import list_cm_faq
 
     items = list_cm_faq(tenant_id=tenant_id, include_archived=False)
     return len(items)

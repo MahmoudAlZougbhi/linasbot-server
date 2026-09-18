@@ -37,7 +37,7 @@ def extract_session_markers(text: str) -> set[str]:
 
 def related_faq_group_ids(*, tenant_id: str, section: str, patch: dict[str, Any]) -> list[str]:
     """Find FAQ groups that likely depend on the patched CM section content."""
-    from services.ai_setup.faq_integration import list_cm_faq
+    from services.faq.cm_faq import list_cm_faq
 
     patch_blob = _text_blob(patch).lower()
     section_l = (section or "").strip().lower()
@@ -76,7 +76,7 @@ def mark_faq_groups_stale(
     cm_revision: Any = None,
 ) -> dict[str, Any]:
     """Mark FAQ groups stale and version-link to CM change."""
-    from services.ai_setup.faq_integration import get_cm_faq_group, list_cm_faq
+    from services.faq.cm_faq import get_cm_faq_group, list_cm_faq
     from services.ai_setup.schemas import FaqSection
     from services.ai_setup.storage import get_draft, put_draft
 
@@ -106,7 +106,7 @@ def mark_faq_groups_stale(
             updated_items.append(item)
 
     if marked:
-        from services.ai_setup.faq_integration_helpers import faq_section_payload
+        from services.faq.cm_faq_helpers import faq_section_payload
 
         put_draft(
             "faq",

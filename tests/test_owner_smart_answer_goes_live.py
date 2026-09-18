@@ -51,7 +51,7 @@ async def test_approve_smart_answer_activates_faq_live(
             "content_version_id": "v1",
         }
     )
-    monkeypatch.setattr("services.ai_setup.faq_integration.create_faq_pair", create_faq_pair)
+    monkeypatch.setattr("services.faq.cm_faq.create_faq_pair", create_faq_pair)
     monkeypatch.setattr("services.owner_copilot.cm_approval.activate_cm_after_save", activate)
 
     proposed = await tool_propose_smart_answer(

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from services.ai_setup.faq_integration import (
+from services.faq.cm_faq import (
     create_faq_pair_from_livechat,
     find_duplicate_faq_groups,
     list_cm_faq,
@@ -58,11 +58,11 @@ async def test_livechat_like_writes_canonical_cm_faq_only(monkeypatch: pytest.Mo
         return "السعر عشرين دولار."
 
     monkeypatch.setattr(
-        "services.ai_setup.faq_integration.language_detection_service.translate_training_pair",
+        "services.faq.cm_faq.language_detection_service.translate_training_pair",
         _fake_translate,
     )
     monkeypatch.setattr(
-        "services.ai_setup.faq_integration._translate_to_arabic_script",
+        "services.faq.cm_faq._translate_to_arabic_script",
         _fake_ar,
     )
 

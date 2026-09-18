@@ -6,7 +6,7 @@ Customer replies use **Customer Reply V2**. When a reply comes from published CM
 
 - **Surface:** Linas AI mobile Live Chat (Like on a bot FAQ reply).
 - **API:** `POST /api/cm/faq/from-livechat`
-- **Storage:** canonical CM FAQ (`services/cm/faq_integration.py`). Legacy `/api/faq/*` and `/api/local-qa/*` HTTP writers are gone.
+- **Storage:** canonical CM FAQ (`services/faq/cm_faq.py`). Legacy `/api/faq/*` and `/api/local-qa/*` HTTP writers are gone.
 
 The conversation payload may still include FAQ match metadata on the message (`faq_match`, `reply_source`) from `GET /api/live-chat/conversation/{user_id}/{conversation_id}`.
 

@@ -3,7 +3,7 @@
 Preserves Smart Answer groups with per-tenant ``smart_answer_languages`` (not always 4).
 Franco question stays Franco (Latin) while its answer is always Arabic script, same as the AR answer.
 
-Helpers/ops: faq_integration_helpers, faq_integration_ops (LOC split).
+Helpers/ops: cm_faq_helpers, cm_faq_ops (LOC split).
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from services.ai_setup.faq_integration_helpers import (  # noqa: F401
+from services.faq.cm_faq_helpers import (  # noqa: F401
     FAQ_SECTION,
     FAQ_TARGET_LANGUAGES,
     FaqIntegrationError,
@@ -22,7 +22,7 @@ from services.ai_setup.faq_integration_helpers import (  # noqa: F401
     faq_section_payload,
     load_faq_target_languages,
 )
-from services.ai_setup.faq_integration_ops import (  # noqa: F401
+from services.faq.cm_faq_ops import (  # noqa: F401
     archive_cm_faq_group,
     find_duplicate_faq_groups,
     get_cm_faq_group,
