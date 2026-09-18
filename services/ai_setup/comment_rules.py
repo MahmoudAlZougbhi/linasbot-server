@@ -49,11 +49,32 @@ def load_published_comments_section(tenant_id: str) -> CommentsSection | None:
         return CommentsSection()
 
 
+def published_comment_replies_configured(tenant_id: str) -> bool:
+    """True when the owner saved at least one live reply rule (not ignore-only)."""
+    section = load_published_comments_section(tenant_id)
+    if section is None:
+        return False
+    for rule in section.rules:
+        if not rule.enabled:
+            continue
+        action = str(rule.action or "").strip().lower()
+        if action and action != "ignore":
+            return True
+    return False
+
+
 def _channel_ok(rule: CommentRule, channel: str) -> bool:
     want = (rule.channel or "any").strip().lower()
+    incoming = (channel or "").strip().lower()
     if want in {"", "any"}:
         return True
-    return want == (channel or "").strip().lower()
+    if incoming == want:
+        return True
+    if incoming.removesuffix("_comment") == want:
+        return True
+    if want.removesuffix("_comment") == incoming:
+        return True
+    return False
 
 
 def _wanted_post_ids(rule: CommentRule) -> list[str]:

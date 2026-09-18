@@ -26,8 +26,11 @@ ACTION_PHOTO_ANALYSIS = "photo_analysis"
 
 _CHANNEL_COMMENT_ACTION: dict[str, str] = {
     "facebook": ACTION_FACEBOOK_COMMENTS,
+    "facebook_comment": ACTION_FACEBOOK_COMMENTS,
     "instagram": ACTION_INSTAGRAM_COMMENTS,
+    "instagram_comment": ACTION_INSTAGRAM_COMMENTS,
     "tiktok": ACTION_TIKTOK_COMMENTS,
+    "tiktok_comment": ACTION_TIKTOK_COMMENTS,
 }
 
 
@@ -63,7 +66,8 @@ def published_action_enabled(tenant_id: str, action_id: str) -> bool:
 
 
 def comments_action_id_for_channel(channel: str) -> str | None:
-    return _CHANNEL_COMMENT_ACTION.get((channel or "").strip().lower())
+    raw = (channel or "").strip().lower()
+    return _CHANNEL_COMMENT_ACTION.get(raw) or _CHANNEL_COMMENT_ACTION.get(raw.removesuffix("_comment"))
 
 
 def comments_action_enabled(tenant_id: str, channel: str) -> bool:
@@ -73,6 +77,15 @@ def comments_action_enabled(tenant_id: str, channel: str) -> bool:
     return published_action_enabled(tenant_id, action_id)
 
 
+def comments_runtime_enabled(tenant_id: str, channel: str) -> bool:
+    """Owner Actions toggle, or published Comment Rules that actually reply."""
+    if comments_action_enabled(tenant_id, channel):
+        return True
+    from services.ai_setup.comment_rules import published_comment_replies_configured
+
+    return published_comment_replies_configured(tenant_id)
+
+
 def required_comment_scopes_for_channel(channel: MetaChannel | str) -> frozenset[str]:
     key = cast_channel(channel)
     return META_COMMENT_SCOPES.get(key, frozenset())
@@ -80,7 +93,7 @@ def required_comment_scopes_for_channel(channel: MetaChannel | str) -> frozenset
 
 def cast_channel(channel: MetaChannel | str) -> MetaChannel:
     value = (channel or "").strip().lower()
-    if value == "instagram":
+    if value.startswith("instagram"):
         return "instagram"
     return "facebook"
 
@@ -162,7 +175,7 @@ def comments_enforcement_decision(
 
     uses_cm = tenant_uses_cm_runtime(tenant_id)
     if uses_cm:
-        action_on = comments_action_enabled(tenant_id, channel)
+        action_on = comments_runtime_enabled(tenant_id, channel)
         switch_on = bool(action_on)
     elif tenant_allows_legacy_bridge(tenant_id):
         action_on = True

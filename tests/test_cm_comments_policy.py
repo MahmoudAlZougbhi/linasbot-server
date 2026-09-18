@@ -179,3 +179,40 @@ def test_facebook_compound_post_id_matches_selected_page_post() -> None:
     assert nested.action == "ignore"
     miss = evaluate_comment_rules(section, comment_text="price please", post_id="111_888")
     assert miss.matched is False
+
+
+def test_instagram_comment_channel_matches_instagram_rules() -> None:
+    from services.ai_setup.actions import comments_action_id_for_channel
+
+    assert comments_action_id_for_channel("instagram") == "respond_instagram_comments"
+    assert comments_action_id_for_channel("instagram_comment") == "respond_instagram_comments"
+    section = CommentsSection(
+        rules=[
+            CommentRule(
+                id="ig1",
+                keywords=["price"],
+                action="reply_comment",
+                channel="instagram",
+                reply_template="See the caption.",
+            )
+        ]
+    )
+    hit = evaluate_comment_rules(section, comment_text="price please", channel="instagram_comment", post_id="p1")
+    assert hit.matched is True
+    assert hit.action == "reply_comment"
+
+
+def test_comments_runtime_enabled_when_owner_has_reply_rules(monkeypatch) -> None:
+    from services.ai_setup import actions as actions_mod
+
+    monkeypatch.setattr(actions_mod, "comments_action_enabled", lambda *_a, **_k: False)
+    monkeypatch.setattr(
+        "services.ai_setup.comment_rules.published_comment_replies_configured",
+        lambda _tenant: True,
+    )
+    assert actions_mod.comments_runtime_enabled("linas", "instagram_comment") is True
+    monkeypatch.setattr(
+        "services.ai_setup.comment_rules.published_comment_replies_configured",
+        lambda _tenant: False,
+    )
+    assert actions_mod.comments_runtime_enabled("linas", "instagram_comment") is False
