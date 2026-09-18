@@ -14,6 +14,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
 from db.models.base import Base
+from db.models.id_lengths import COMPOSITE_REF_MAX, PROVIDER_REF_MAX
 
 JsonType = JSON().with_variant(JSONB(), "postgresql")
 
@@ -40,9 +41,9 @@ class CustomerAiMessageReservationRow(Base):
         Index("ix_message_reservations_status_created", "status", "created_at"),
     )
 
-    reservation_id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    reservation_id: Mapped[str] = mapped_column(String(COMPOSITE_REF_MAX), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    operation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    operation_id: Mapped[str] = mapped_column(String(PROVIDER_REF_MAX), nullable=False)
     units: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     lot_id: Mapped[str] = mapped_column(String(64), nullable=False, server_default=text("''"))
@@ -81,7 +82,7 @@ class CustomerAiExpenseEventRow(Base):
     __tablename__ = "customer_ai_expense_events"
     __table_args__ = (Index("ix_expense_events_tenant", "tenant_id"),)
 
-    event_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(COMPOSITE_REF_MAX), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
     category: Mapped[str] = mapped_column(String(32), nullable=False)
     feature: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -91,8 +92,8 @@ class CustomerAiExpenseEventRow(Base):
     quantity: Mapped[Decimal] = mapped_column(Numeric(16, 6), nullable=False, server_default=text("1"))
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     environment: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'test'"))
-    operation_id: Mapped[str] = mapped_column(String(128), nullable=False, server_default=text("''"))
-    parent_event_id: Mapped[str] = mapped_column(String(128), nullable=False, server_default=text("''"))
+    operation_id: Mapped[str] = mapped_column(String(PROVIDER_REF_MAX), nullable=False, server_default=text("''"))
+    parent_event_id: Mapped[str] = mapped_column(String(COMPOSITE_REF_MAX), nullable=False, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     extra: Mapped[dict | None] = mapped_column(JsonType, nullable=True)
 
@@ -101,17 +102,19 @@ class CustomerAiPendingSettlementRow(Base):
     __tablename__ = "customer_ai_pending_settlements"
     __table_args__ = (Index("ix_pending_settlements_state_id", "state", "settlement_id"),)
 
-    settlement_id: Mapped[str] = mapped_column(String(220), primary_key=True)
+    settlement_id: Mapped[str] = mapped_column(String(COMPOSITE_REF_MAX), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    reservation_id: Mapped[str] = mapped_column(String(160), nullable=False, server_default=text("''"))
-    operation_id: Mapped[str] = mapped_column(String(160), nullable=False, server_default=text("''"))
+    reservation_id: Mapped[str] = mapped_column(String(COMPOSITE_REF_MAX), nullable=False, server_default=text("''"))
+    operation_id: Mapped[str] = mapped_column(String(PROVIDER_REF_MAX), nullable=False, server_default=text("''"))
     billing_policy: Mapped[str] = mapped_column(String(32), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     created_at: Mapped[str] = mapped_column(String(64), nullable=False)
     updated_at: Mapped[str] = mapped_column(String(64), nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     send_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("''"))
-    provider_message_id: Mapped[str] = mapped_column(String(160), nullable=False, server_default=text("''"))
+    provider_message_id: Mapped[str] = mapped_column(
+        String(PROVIDER_REF_MAX), nullable=False, server_default=text("''")
+    )
     channel: Mapped[str] = mapped_column(String(64), nullable=False, server_default=text("''"))
     reason: Mapped[str] = mapped_column(String(128), nullable=False, server_default=text("''"))
     extra: Mapped[dict | None] = mapped_column(JsonType, nullable=True)
@@ -121,14 +124,16 @@ class CustomerAiOutboxRow(Base):
     __tablename__ = "customer_ai_outbox"
     __table_args__ = (Index("ix_customer_ai_outbox_state_id", "state", "outbox_id"),)
 
-    outbox_id: Mapped[str] = mapped_column(String(220), primary_key=True)
+    outbox_id: Mapped[str] = mapped_column(String(COMPOSITE_REF_MAX), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    operation_id: Mapped[str] = mapped_column(String(160), nullable=False, server_default=text("''"))
-    reservation_id: Mapped[str] = mapped_column(String(160), nullable=False, server_default=text("''"))
+    operation_id: Mapped[str] = mapped_column(String(PROVIDER_REF_MAX), nullable=False, server_default=text("''"))
+    reservation_id: Mapped[str] = mapped_column(String(COMPOSITE_REF_MAX), nullable=False, server_default=text("''"))
     billing_policy: Mapped[str] = mapped_column(String(32), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     envelope: Mapped[dict] = mapped_column(JsonType, nullable=False)
-    provider_message_id: Mapped[str] = mapped_column(String(160), nullable=False, server_default=text("''"))
+    provider_message_id: Mapped[str] = mapped_column(
+        String(PROVIDER_REF_MAX), nullable=False, server_default=text("''")
+    )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     updated_at: Mapped[str] = mapped_column(String(64), nullable=False)
     extra: Mapped[dict | None] = mapped_column(JsonType, nullable=True)
@@ -162,9 +167,9 @@ class CustomerAiCreditReservationIndexRow(Base):
     __tablename__ = "customer_ai_credit_reservation_index"
     __table_args__ = (Index("ix_credit_reservation_index_tenant_state", "tenant_id", "state"),)
 
-    reservation_id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    reservation_id: Mapped[str] = mapped_column(String(COMPOSITE_REF_MAX), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    request_id: Mapped[str] = mapped_column(String(160), nullable=False, server_default=text("''"))
+    request_id: Mapped[str] = mapped_column(String(PROVIDER_REF_MAX), nullable=False, server_default=text("''"))
     operation_type: Mapped[str] = mapped_column(String(64), nullable=False, server_default=text("''"))
     created_at: Mapped[str] = mapped_column(String(64), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'reserved'"))
