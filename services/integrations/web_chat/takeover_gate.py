@@ -16,7 +16,7 @@ class WebChatTakeoverState:
 
 
 def _waiting_notice(lang: str = "ar") -> str:
-    from services.brain.templates import owner_protocol_text
+    from services.brain.owner_protocol import owner_protocol_text
 
     return owner_protocol_text("waiting_queue", lang)
 

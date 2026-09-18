@@ -113,7 +113,7 @@ def _task(task_id: str, task_type: TaskType, text: str, families: list[SourceFam
 
 def plan_message(message: str) -> PlannerPlan:
     text = planner_customer_text(message)
-    from services.brain.greeting import is_greeting_only
+    from services.brain.greeting_detect import is_greeting_only
 
     if is_greeting_only(text):
         return PlannerPlan(

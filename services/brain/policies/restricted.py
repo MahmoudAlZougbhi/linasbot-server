@@ -43,7 +43,7 @@ def refuse_text(topic: RestrictedTopic, message: str = "") -> str:
     if template:
         return template
     try:
-        from services.brain.greeting import inbound_greeting_language
+        from services.brain.greeting_detect import inbound_greeting_language
 
         lang = inbound_greeting_language(message)
     except Exception:

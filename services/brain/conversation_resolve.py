@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from services.brain.catalog_intent import is_catalog_list
-from services.brain.greeting import is_greeting_only
+from services.brain.greeting_detect import is_greeting_only
 from services.brain.published_labels import match_published_label, published_label_index
 
 _AUDIENCE = re.compile(r"\b(men|women|male|female|للرجال|للنساء)\b", re.I)

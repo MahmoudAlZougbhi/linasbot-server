@@ -6,7 +6,7 @@ import re
 
 from services.ai_setup.version_store import PublishedVersionError, load_published_content
 from services.brain.retrieve.cards import cards_from_sections
-from services.brain.retrieve.expand import expand_hits
+from services.brain.retrieve.hydrate import expand_hits
 from services.brain.retrieve.lexical import LexicalHit
 
 _DYNAMIC = re.compile(

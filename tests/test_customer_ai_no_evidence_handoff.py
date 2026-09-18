@@ -13,7 +13,7 @@ from services.brain.contracts.actions import ActionReceipt, ActionReceiptSet
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 from services.brain.contracts.turn import CustomerTurn, HistorySnapshot
-from services.brain.templates import brain_template
+from services.brain.owner_protocol import owner_protocol_text
 
 
 def _plan(*tasks: PlannerTask) -> PlannerPlan:
@@ -75,9 +75,9 @@ def test_should_handoff_only_unanswered_questions() -> None:
 
 
 def test_protocol_copy_is_owner_authored_not_hardcoded() -> None:
-    assert brain_template("no_evidence_handoff", "en") == ""
-    assert brain_template("handoff", "en") == ""
-    assert brain_template("handoff", "ar") == ""
+    assert owner_protocol_text("no_evidence_handoff", "en") == ""
+    assert owner_protocol_text("handoff", "en") == ""
+    assert owner_protocol_text("handoff", "ar") == ""
 
 
 @pytest.mark.asyncio
@@ -100,7 +100,7 @@ async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.Monkey
     )
     monkeypatch.setattr("services.brain.agent.no_evidence_handoff.execute_actions", execute)
     monkeypatch.setattr(
-        "services.brain.agent.no_evidence_handoff.brain_template",
+        "services.brain.agent.no_evidence_handoff.owner_protocol_text",
         lambda _key, _lang="": "I'll connect you with someone from the team shortly.",
     )
     plan = _plan(_task("t1", "information", span="unpublished policy?"))
@@ -206,6 +206,7 @@ async def test_agentic_not_found_question_hands_off(monkeypatch: pytest.MonkeyPa
     )
     assert result.envelope.decision == "handoff_ack"
     assert result.stop_reason == "ok"
+    assert result.envelope.messages == []
     execute.assert_awaited_once()
 
 

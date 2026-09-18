@@ -13,7 +13,7 @@ from services.brain.contracts.plan import PlannerPlan
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.stage_timeline import stamp
-from services.brain.templates import brain_template
+from services.brain.owner_protocol import owner_protocol_text
 
 _INFO_TYPES = frozenset({"information", "hours", "comparison"})
 _LIVE_KINDS = frozenset({"dm", "followup", "comment"})
@@ -153,7 +153,7 @@ async def unanswered_question_result(
     stop_reason: StopReason = "ok"
     dispositions: dict[str, TaskDisposition]
     if ok:
-        text = (brain_template("handoff", lang) or "").strip()
+        text = (owner_protocol_text("handoff", lang) or "").strip()
         decision = "handoff_ack"
         dispositions = {task.id: "not_found" for task in plan.tasks if task.type in _INFO_TYPES}
         dispositions["handoff"] = "action_succeeded"

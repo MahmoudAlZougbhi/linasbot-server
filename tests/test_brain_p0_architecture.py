@@ -13,7 +13,7 @@ from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, 
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.conversation_resolve import resolve_followup_query
 from services.brain.entity_identity import prefer_standalone, score_label
-from services.brain.greeting import is_greeting_only
+from services.brain.greeting_detect import is_greeting_only
 from services.brain.grounding.facts import ungrounded_claims
 from services.brain.planner.heuristic import plan_message
 from services.brain.retrieve.conflict import apply_authority

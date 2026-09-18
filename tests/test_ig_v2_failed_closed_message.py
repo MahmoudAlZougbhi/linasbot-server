@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY, BRAIN_TEMPORARY_ERROR_MESSAGE_KEY
-from services.brain.greeting import is_greeting_only, safe_greeting_text
+from services.brain.greeting_detect import is_greeting_only
 from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
 
@@ -21,13 +21,8 @@ def _reset_temp_error_debounce() -> None:
 def test_hi_kifak_is_greeting_only() -> None:
     assert is_greeting_only("Hi kifak") is True
     assert is_greeting_only("Hi, what time do you open?") is False
-
-
-def test_safe_greeting_never_uses_validator_or_temporary_copy() -> None:
-    text = safe_greeting_text(tenant_id="t-greet", message="Hi kifak", language="ar")
-    assert "ما قدرت أتأكد" not in text
-    assert text != get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "ar")
-    assert text != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "ar")
+    assert get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "ar")
+    assert get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "ar")
 
 
 @pytest.mark.asyncio

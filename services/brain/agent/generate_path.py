@@ -190,7 +190,7 @@ async def generate_verified(
     agent_trace.append({"step": "FINAL", "decision": envelope.decision})
     greeted = apply_greeting(turn, message, channel, envelope.model_copy(update={"dispositions": dispositions}))
     if extra.get("awaiting_confirmation"):
-        from services.brain.templates import owner_protocol_text
+        from services.brain.owner_protocol import owner_protocol_text
 
         lang = str((turn.extra or {}).get("response_language") or "")
         confirm_text = owner_protocol_text("confirm_request", lang)

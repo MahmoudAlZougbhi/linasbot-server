@@ -1,4 +1,4 @@
-"""Hydrate canonical text for winning IDs only. No media bytes."""
+"""Hydrate published cards into evidence text for winning IDs only. No media bytes."""
 
 from __future__ import annotations
 
@@ -19,8 +19,8 @@ def _rows(sections: dict[str, Any], family: str) -> list[dict[str, Any]]:
         branch_rows = [row for row in branch_items or [] if isinstance(row, dict)]
         off_payload = sections.get("off_days")
         off_rows: list[dict[str, Any]] = [{"id": "off_days", **off_payload}] if isinstance(off_payload, dict) else []
-        # Branch weekly_schedule is the hours SoT. Opening-hours rows must not
-        # hide branch ids like hours:antelias at hydrate time.
+        # Branch weekly_schedule is the hours source of truth. Opening-hours rows
+        # must not hide published branch ids at hydrate time.
         return [*hours, *branch_rows, *off_rows]
     if family in {"prices", "services"}:
         payload = sections.get("prices")
