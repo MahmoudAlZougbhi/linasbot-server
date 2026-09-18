@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
-
 import pytest
 
 from services.brain.compiler.chunks import chunks_from_texts, contextual_groups
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.brain.ingest.multimodal import classify_media, process_knowledge_media
 from services.brain.memory.store import recall_facts, remember_fact, reset_memory_for_tests
 from services.brain.providers.spaces import KNOWLEDGE_DOCUMENT, KNOWLEDGE_MODEL, spaces_snapshot
-from services.brain.relations.graph import load_relations
 from services.brain.retrieve.conflict import apply_authority
 from services.brain.search.store import activate_pointer, query_similar, write_documents
 from services.brain.tools.registry import list_tools
@@ -132,33 +128,6 @@ def test_tool_registry_includes_contact_and_request_state() -> None:
     assert "get_contact" in tools["read"]
     assert "get_request_state" in tools["read"]
     assert "get_availability" in tools["unsupported"]
-
-
-@pytest.mark.asyncio
-async def test_multimodal_pdf_fail_visible_without_library() -> None:
-    assert classify_media("x.pdf", "application/pdf") == "pdf"
-    with patch(
-        "services.brain.ingest.multimodal.extract_pdf_text",
-        new=AsyncMock(
-            return_value={
-                "ok": False,
-                "status": "FAILED",
-                "reason": "pdf_extract_unavailable:ImportError",
-                "text": "",
-                "pages": 0,
-            }
-        ),
-    ):
-        out = await process_knowledge_media(
-            tenant_id="t1", filename="x.pdf", content_type="application/pdf", data=b"%PDF"
-        )
-    assert out["status"] == "FAILED"
-    assert out["ok"] is False
-
-
-def test_relations_loader_handles_unpublished() -> None:
-    out = load_relations("definitely-missing-tenant-xyz")
-    assert "relations" in out
 
 
 def test_probe_pgvector_uses_sqlalchemy_text() -> None:

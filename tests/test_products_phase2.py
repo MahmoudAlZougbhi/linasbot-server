@@ -20,8 +20,8 @@ from services.products.image_fingerprint import compute_average_phash, sha256_he
 from services.products.image_index import find_image_candidates  # noqa: E402
 from services.products.media import store_product_media  # noqa: E402
 from services.products.reply_to_map import record_sent_product_message, resolve_reply_to_product  # noqa: E402
+from services.products.repository import ProductsRepository  # noqa: E402
 from services.products.schemas import ProductWriteBody  # noqa: E402
-from services.products.search import search_product_by_title  # noqa: E402
 from services.products.service import ProductsService  # noqa: E402
 from services.products.xlsx_import import build_xlsx_template_bytes, parse_xlsx_bytes  # noqa: E402
 
@@ -87,9 +87,9 @@ def test_inactive_excluded_from_customer_search(products_env: Path) -> None:
                 description="test product", name="Visible Cream", availability="in_stock", sizes=[], colors=[], links=[]
             ),
         )
-        matches = search_product_by_title(session, tenant_id="tenant-avail", title="cream", limit=5)
-    assert all(m["name"] != "Hidden Serum" for m in matches)
-    assert any(m["name"] == "Visible Cream" for m in matches)
+        matches = ProductsRepository(session).search_by_title_prefix(tenant_id="tenant-avail", query="cream", limit=5)
+        assert all(m.name != "Hidden Serum" for m in matches)
+        assert any(m.name == "Visible Cream" for m in matches)
 
 
 def test_out_of_stock_in_search_and_details(products_env: Path) -> None:
@@ -107,8 +107,8 @@ def test_out_of_stock_in_search_and_details(products_env: Path) -> None:
                 links=[],
             ),
         )
-        matches = search_product_by_title(session, tenant_id="tenant-oos", title="lipstick", limit=3)
-        assert matches[0]["availability"] == "out_of_stock"
+        matches = ProductsRepository(session).search_by_title_prefix(tenant_id="tenant-oos", query="lipstick", limit=3)
+        assert matches[0].availability == "out_of_stock"
         details = svc.get_product(tenant_id="tenant-oos", product_id=created["id"])
         assert details["availability"] == "out_of_stock"
 

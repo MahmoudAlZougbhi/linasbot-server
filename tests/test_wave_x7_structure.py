@@ -44,14 +44,14 @@ def test_wave_x7_live_imports_use_packages() -> None:
     auth_api = (ROOT / "modules/apple_auth_api.py").read_text(encoding="utf-8")
     iap_api = (ROOT / "modules/apple_iap_client_api.py").read_text(encoding="utf-8")
     notify = (ROOT / "services/live_chat/human_takeover_notification_service.py").read_text(encoding="utf-8")
-    sfu = (ROOT / "services/smart_followup/social_schedule.py").read_text(encoding="utf-8")
+    detect_src = (ROOT / "services/integrations/social/social_contact_routing_detect.py").read_text(encoding="utf-8")
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
     assert "services.integrations.meta.meta_app_registry" in connections
     assert "from services.meta_" not in connections
     assert "services.billing.apple.apple_sign_in_service" in auth_api
     assert "services.billing.apple.apple_iap_processor" in iap_api
     assert "services.integrations.whatsapp.cloud_template_service" in notify
-    assert "services.integrations.social.social_contact_routing_detect" in sfu
+    assert "def is_social_channel" in detect_src
     assert "WAVE X7" in keep
     from services.integrations.social.social_contact_routing_detect import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
 

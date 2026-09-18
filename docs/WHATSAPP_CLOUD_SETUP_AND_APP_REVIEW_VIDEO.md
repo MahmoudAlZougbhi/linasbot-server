@@ -20,7 +20,7 @@
 | Test Message | ops API | owner/admin + connected binding |
 | Pilot entitlement | `entitlement.py` + `whatsapp_pilot_entitlements` | required when `PUBLIC_AVAILABILITY=false` |
 | Public gate | `WHATSAPP_CLOUD_PUBLIC_AVAILABILITY` | Phase 2 only; pilot bypasses connect block |
-| Monty isolation | `legacy_isolation.py` + startup | dual-bind fail-closed; Monty send blocked |
+| Monty isolation | `whatsapp_factory.py` unsupported-legacy set | Monty/Qiscus/360dialog are not a runtime transport |
 | Credentials | `crypto.py` | AES-GCM AAD `whatsapp:{tenant}:{connection}` |
 
 Public probe (`verify_whatsapp_cloud_readiness.py`) **cannot** prove Phase 1 flags or pilot rows — only routing, DB presence, and bridge copy.

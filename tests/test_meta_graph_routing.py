@@ -34,7 +34,6 @@ from services.integrations.meta.meta_multi_app_router import (
     registry_auth_flow_for_webhook_object,
     resolve_registry_events,
 )
-from services.integrations.meta.meta_social_publish import publish_instagram_post
 from tests.meta_instagram_login_lifecycle_helpers import force_legacy_binding_active
 
 INSTAGRAM_ID = "17840000999900021"
@@ -169,43 +168,6 @@ async def test_resolve_registry_events_prefers_instagram_login_binding(registry:
     assert len(routed) == 1
     assert routed[0].binding.auth_flow == "instagram_login"
     assert routed[0].settings.graph_base_url == "https://graph.instagram.com"
-
-
-@pytest.mark.asyncio
-async def test_publish_instagram_post_uses_graph_instagram_host(registry: MetaAppRegistry, tmp_path: Path) -> None:
-    _instagram_binding(registry, auth_flow="instagram_login")
-    binding = next(item for item in registry.list_bindings() if item.auth_flow == "instagram_login")
-    media_path = tmp_path / "photo.jpg"
-    media_path.write_bytes(b"fakejpeg")
-    captured: list[str] = []
-    version = get_meta_graph_api_version()
-
-    async def handler(request: httpx.Request) -> httpx.Response:
-        captured.append(str(request.url))
-        if request.url.path.endswith("/media"):
-            return httpx.Response(200, json={"id": "container-1"})
-        if "container-1" in request.url.path:
-            return httpx.Response(200, json={"status_code": "FINISHED"})
-        if request.url.path.endswith("/media_publish"):
-            return httpx.Response(200, json={"id": "published-1"})
-        return httpx.Response(404, json={"error": {"message": "not found"}})
-
-    client = httpx.AsyncClient(
-        transport=httpx.MockTransport(handler), base_url=f"https://graph.instagram.com/{version}"
-    )
-    with patch(
-        "services.integrations.meta.meta_social_publish.public_media_url", return_value="https://example.com/media.jpg"
-    ):
-        result = await publish_instagram_post(
-            binding,
-            tenant_id="tenant-a",
-            caption="hello",
-            media_path=media_path,
-            registry=registry,
-            client=client,
-        )
-    assert result.success is True
-    assert any(url.startswith(f"https://graph.instagram.com/{version}/") for url in captured)
 
 
 @pytest.mark.asyncio

@@ -6,7 +6,6 @@ from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.conversation_resolve import resolve_followup_query
 from services.brain.grounding.claims import claims_fail_closed, verify_claims
 from services.brain.grounding.contradiction import detect_amount_contradictions
-from services.brain.readiness import brain_readiness_report
 from services.brain.security.injection import evidence_has_injection, sanitize_evidence_for_prompt
 from tests.brain_evals.case_bank import build_case_bank, case_bank_snapshot
 from tests.brain_evals.metrics import mrr, ndcg_at_k, recall_at_k
@@ -141,14 +140,6 @@ def test_conversation_resolve_uses_published_labels(monkeypatch) -> None:
     )
     assert "br_antelias" not in shifted.rewritten_query
     assert shifted.carry.get("branch") in {"", None}
-
-
-def test_readiness_report_no_secrets() -> None:
-    report = brain_readiness_report(tenant_id="linas")
-    blob = str(report)
-    assert "sk-" not in blob
-    assert "pa-" not in blob
-    assert report["rollback"]["tag"] == "rollback/pre-brain-2026-09-11"
 
 
 def test_shadow_module_removed() -> None:

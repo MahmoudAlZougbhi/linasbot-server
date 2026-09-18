@@ -144,7 +144,7 @@ Still not deleted (KEEP or import-graph blocked): Smart Follow-Up live backend, 
 ## WAVE C — Voyage-only index; Luna names purged from retrieval
 
 - CM publish builds the Brain Voyage index only (`schedule_tenant_index` + `content_hash` reuse). It does not call OpenAI `semantic_index.build_index`.
-- FAQ/knowledge semantic hits in `runtime_pipeline` go through `services/ai_setup/voyage_search.py` → Brain retrieve.
+- FAQ/knowledge semantic hits go through Brain retrieve (Voyage). The old `runtime_pipeline` / `voyage_search.py` island is gone.
 - `model_policy` customer retrieval = `voyage-4-large`, not an LLM.
 - Deleted `luna_titles.py` and `luna_title_resolver.py`. Product match is deterministic title search. Search-metadata generation uses Sol.
 - Keep #677 media analysis (`brain/media`).
@@ -304,7 +304,7 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 
 ## WAVE X11 — evals out of runtime + domain folds
 
-- `services/brain/evals/**` moved to `tests/brain_evals/` (no runtime shim). Production `brain/readiness.py` does not overlay eval artifacts.
+- `services/brain/evals/**` moved to `tests/brain_evals/` (no runtime shim). Runtime Brain code does not overlay eval artifacts.
 - Folds (no shims): `welcome_pool` → `services/owner_copilot/welcome_pool/`; `local_qa_service*` → `services/faq/`; `request_graphs` + `request_drafts` → `services/requests/`; `search_metadata` → `services/ai_setup/search_metadata/`.
 - **Kept:** Brain reply/media/comments; HA scale core; Owner Catalog; credit ledger; marketing + portal + drawer.
 - Tests: `tests/test_wave_x11_evals_domain_fold.py`.
@@ -331,7 +331,7 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 
 - Inbound ctx no longer binds unused `router_route` / `get_gender_from_message`. `conversation_router` KEEP is `is_human_request` + `GREETING_TEMPLATES`.
 - Translator prompts are generic SaaS; Lebanese dialect / franco rules stay.
-- Classifier has no founder branch ids (`marwa` / `antelias` / `beirut`) as product defaults. Anti-leak `answer_packet` still blocks those names in customer answers.
+- Classifier has no founder branch ids (`marwa` / `antelias` / `beirut`) as product defaults. Dead `answer_packet` anti-leak helper is gone; Brain published-path tests still forbid founder leakage.
 - Dashboard package name is `linas-ai-dashboard`.
 - Durable env key is `CM_DISABLE_LEGACY_BRIDGE` (old `CM_DISABLE_LINAS_LEGACY_BRIDGE` honored on read). Write new key. Fail-closed published CM unchanged.
 - **Skipped:** Redis `luna_*`; `prod_cm_linas_*` archive; hub-hidden CM editors; modules fold; `token_wallets` DROP; HA deploy.

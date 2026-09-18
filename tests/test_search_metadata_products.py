@@ -15,9 +15,6 @@ from services.ai_setup.search_metadata.product_apply import (
     last_product_apply_stats,
     product_content_payload,
 )
-from services.products.details_for_tera import product_details_for_tera
-from services.products.search import _unique_queries
-from services.products.search_scoring import rank_products
 
 
 def setup_function() -> None:
@@ -156,89 +153,3 @@ def test_one_product_save_does_not_touch_others() -> None:
     unchanged = _row(id="unchanged", name="Keep", description="same")
     assert enrich_product_row(unchanged, previous=previous) is False
     assert [c["item_id"] for c in calls] == ["p422"]
-
-
-def test_search_uses_original_and_ai_fields() -> None:
-    row = SimpleNamespace(
-        id="p1",
-        name="Nivea Face Cream",
-        name_normalized="nivea face cream",
-        description="Moisturizing cream for the face.",
-        description_normalized="moisturizing cream for the face",
-        ai_search_title="Nivea Face Moisturizing Cream",
-        ai_search_description="Moisturizing cream for the face.",
-        ai_search_keywords=["nivea", "face", "cream"],
-        note="",
-    )
-    scored = rank_products("nevia creem", [row], limit=3)
-    assert scored and scored[0][1].id == "p1"
-    improved = rank_products("nivea face cream", [row], limit=3)
-    assert improved and improved[0][1].id == "p1"
-    # Arabizi original stays in the query list; Luna-improved wording is searched with it.
-    queries = _unique_queries("cream lal wej", "Nivea face cream")
-    assert queries[0] == "cream lal wej"
-    merged = []
-    for q in queries:
-        merged.extend(rank_products(q, [row], limit=3))
-    assert any(item[1].id == "p1" for item in merged)
-
-
-def test_original_query_wins_when_luna_correction_is_wrong() -> None:
-    nivea = SimpleNamespace(
-        id="nivea",
-        name="nevia creem lal wej",
-        name_normalized="nevia creem lal wej",
-        description="local spelling listing",
-        description_normalized="local spelling listing",
-        ai_search_title="Local Listing",
-        ai_search_description="",
-        ai_search_keywords=[],
-        note="",
-    )
-    other = SimpleNamespace(
-        id="other",
-        name="Unrelated Soap",
-        name_normalized="unrelated soap",
-        description="soap",
-        description_normalized="soap",
-        ai_search_title="Soap",
-        ai_search_description="",
-        ai_search_keywords=[],
-        note="",
-    )
-    original = rank_products("nevia creem lal wej", [nivea, other], limit=3)
-    wrong = rank_products("Dove body wash", [nivea, other], limit=3)
-    assert original[0][1].id == "nivea"
-    assert not wrong or wrong[0][1].id != "nivea" or original[0][1].id == "nivea"
-
-
-def test_unique_queries_keep_original_first() -> None:
-    queries = _unique_queries("nevia creem lal wej", "Nivea face cream", "nevia creem lal wej")
-    assert queries[0] == "nevia creem lal wej"
-    assert "Nivea face cream" in queries
-    assert queries.count("nevia creem lal wej") == 1
-
-
-def test_tera_details_use_owner_description_not_ai_search() -> None:
-    row = SimpleNamespace(
-        id="p1",
-        name="Nivea Soft",
-        description="Face moisturizing cream.",
-        price="10",
-        sizes=[],
-        colors=[],
-        note="internal",
-        availability="in_stock",
-        ai_search_title="Nivea Face Cream",
-        ai_search_description="invented",
-        ai_search_keywords=["laser"],
-        images=[],
-        links=[],
-        created_at=None,
-        updated_at=None,
-        tenant_id="t",
-    )
-    details = product_details_for_tera(row)
-    assert details["description"] == "Face moisturizing cream."
-    assert "ai_search_title" not in details
-    assert "invented" not in str(details)

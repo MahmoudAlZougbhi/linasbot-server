@@ -10,8 +10,8 @@ from sqlalchemy import create_engine, event
 from db.models import Base
 from db.session import reset_engine_for_tests, whatsapp_session
 from services.ai_setup.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
+from services.products.repository import ProductsRepository
 from services.products.schemas import ProductWriteBody
-from services.products.search import search_product_by_title
 from services.products.service import ProductsError, ProductsService
 
 
@@ -79,9 +79,9 @@ def test_new_product_success_is_searchable(products_db: Path) -> None:
         assert created["ai_search_description"]
         product_id = created["id"]
     with whatsapp_session() as session:
-        hit_rows = search_product_by_title(session, tenant_id="t_p_ok", title="nivea cream")
+        hit_rows = ProductsRepository(session).search_by_title_prefix(tenant_id="t_p_ok", query="nivea")
         assert hit_rows
-        assert hit_rows[0]["id"] == product_id
+        assert hit_rows[0].id == product_id
 
 
 def test_new_product_metadata_fail_is_not_created(products_db: Path) -> None:

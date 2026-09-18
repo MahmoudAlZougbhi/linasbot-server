@@ -252,18 +252,17 @@ def test_wave_b_domain_packages_match_drawer() -> None:
 def test_wave_c_voyage_only_and_luna_titles_gone() -> None:
     publish = (ROOT / "services/ai_setup/publish.py").read_text(encoding="utf-8")
     policy = (ROOT / "services/brain/model_policy.py").read_text(encoding="utf-8")
-    pipeline = (ROOT / "services/ai_setup/runtime_pipeline.py").read_text(encoding="utf-8")
     assert "from services.ai_setup.semantic_index import build_index" not in publish
     assert "VOYAGE_PROVIDER" in publish or "voyage" in publish.lower()
     assert "customer_social_retrieval_voyage" in policy
     assert "customer_social_retrieval_luna" not in policy
     assert "gpt-5.6-luna" not in policy
-    assert "voyage_search" in pipeline
+    assert not (ROOT / "services/ai_setup/runtime_pipeline.py").exists()
+    assert not (ROOT / "services/ai_setup/voyage_search.py").exists()
     assert not (ROOT / "services/ai_setup/search_metadata/luna_titles.py").exists()
     assert not (ROOT / "services/products/luna_title_resolver.py").exists()
     assert (ROOT / "services/ai_setup/search_metadata/title_fields.py").is_file()
     assert (ROOT / "services/brain/search/reuse_vectors.py").is_file()
-    assert (ROOT / "services/ai_setup/voyage_search.py").is_file()
 
 
 def test_wave_c_customer_runtime_has_no_luna_engine_names() -> None:
@@ -317,8 +316,6 @@ def test_wave_e_hub_tiles_and_prices_sot() -> None:
 
     hub = (ROOT / "mobile/linas-ai/src/features/cm/cmSections.ts").read_text(encoding="utf-8")
     cards = (ROOT / "services/brain/retrieve/cards.py").read_text(encoding="utf-8")
-    graph = (ROOT / "services/brain/relations/graph.py").read_text(encoding="utf-8")
-    pipeline = (ROOT / "services/ai_setup/runtime_pipeline.py").read_text(encoding="utf-8")
     main = (ROOT / "main.py").read_text(encoding="utf-8")
     assert "id: 'services'" not in hub
     for tile in (
@@ -334,8 +331,8 @@ def test_wave_e_hub_tiles_and_prices_sot() -> None:
     assert "prices" in CM_SECTIONS
     assert "faq" in CM_SECTIONS
     assert 'legacy = sections.get("services")' not in cards
-    assert '_items(sections, "services")' not in graph
-    assert 'sections.get("services")' not in pipeline
+    assert not (ROOT / "services/brain/relations/graph.py").exists()
+    assert not (ROOT / "services/ai_setup/runtime_pipeline.py").exists()
     assert "mobile_services_api" not in main
     assert not (ROOT / "modules/mobile_services_api.py").exists()
     assert not (ROOT / "services/service_catalog").exists()

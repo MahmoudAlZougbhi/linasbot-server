@@ -31,10 +31,7 @@ def test_wave_o3_no_founder_branch_defaults_keep_antileak() -> None:
     assert '"marwa"' not in classifier
     assert '"antelias"' not in classifier
     assert '"beirut"' not in classifier
-    packet = (ROOT / "services/ai_setup/answer_packet.py").read_text(encoding="utf-8")
-    assert "Marwa" in packet
-    assert "Beirut" in packet
-    assert "Antelias" in packet
+    assert not (ROOT / "services/ai_setup/answer_packet.py").exists()
 
 
 def test_wave_o4_dashboard_package_name() -> None:

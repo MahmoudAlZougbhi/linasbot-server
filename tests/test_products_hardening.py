@@ -25,9 +25,8 @@ from services.products.outbound_hook import (  # noqa: E402
     set_pending_product_outbound,
 )
 from services.products.reply_to_map import resolve_reply_to_product  # noqa: E402
-from services.products.resolution import resolve_product_priority  # noqa: E402
+from services.products.repository import ProductsRepository  # noqa: E402
 from services.products.schemas import ProductWriteBody  # noqa: E402
-from services.products.search import search_product_by_title  # noqa: E402
 from services.products.service import ProductsService  # noqa: E402
 
 
@@ -126,44 +125,6 @@ def test_inactive_excluded_from_customer_candidates(products_env: Path) -> None:
     assert "Visible Item" in names
 
 
-def test_name_before_image_priority(products_env: Path) -> None:
-    content = b"\xff\xd8\xff\xd9priority"
-    stored = store_product_media(
-        tenant_id="tenant-priority",
-        user_id="u1",
-        filename="p.jpg",
-        content=content,
-        content_type="image/jpeg",
-    )
-    media_id = str(stored["media_id"])
-    with whatsapp_session(require=True) as session:
-        svc = ProductsService(session)
-        svc.create_product(
-            tenant_id="tenant-priority",
-            body=ProductWriteBody(
-                description="test product",
-                name="Rose Lipstick",
-                sizes=[],
-                colors=[],
-                images=[{"media_id": media_id, "sort_order": 0}],
-                links=[],
-            ),
-        )
-        svc.create_product(
-            tenant_id="tenant-priority",
-            body=ProductWriteBody(description="test product", name="Blue Serum", sizes=[], colors=[], links=[]),
-        )
-        hit = resolve_product_priority(
-            session,
-            tenant_id="tenant-priority",
-            message="Rose Lipstick",
-            channel="instagram_dm",
-            image_bytes=content,
-        )
-    assert hit["resolver"] == "title_search"
-    assert hit["match"]["name"] == "Rose Lipstick"
-
-
 def test_reply_to_outbound_end_to_end(products_env: Path) -> None:
     with whatsapp_session(require=True) as session:
         svc = ProductsService(session)
@@ -223,8 +184,8 @@ def test_out_of_stock_searchable_not_purchasable_hint(products_env: Path) -> Non
                 links=[],
             ),
         )
-        matches = search_product_by_title(session, tenant_id="tenant-oos2", title="hat", limit=3)
-    assert matches[0]["availability"] == "out_of_stock"
+        matches = ProductsRepository(session).search_by_title_prefix(tenant_id="tenant-oos2", query="hat", limit=3)
+        assert matches[0].availability == "out_of_stock"
 
 
 def test_url_name_conflict_ambiguous(products_env: Path) -> None:
@@ -250,11 +211,13 @@ def test_url_name_conflict_ambiguous(products_env: Path) -> None:
                 links=[{"url": "https://shop.example.com/beta", "label": "Buy", "sort_order": 0}],
             ),
         )
-        hit = resolve_product_priority(
-            session,
+        repo = ProductsRepository(session)
+        by_name = repo.search_by_title_prefix(tenant_id="tenant-conflict", query="alpha shoe", limit=5)
+        by_url = repo.find_by_link_url(
             tenant_id="tenant-conflict",
-            message="Alpha Shoe https://shop.example.com/beta",
-            channel="web_chat",
+            normalized_url="shop.example.com/beta",
         )
-    assert hit["resolver"] == "conflict"
-    assert hit["ambiguous"] is True
+        assert by_name and by_name[0].name == "Alpha Shoe"
+        assert by_url is not None
+        assert by_url.name == "Beta Bag"
+        assert by_name[0].id != by_url.id
