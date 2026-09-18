@@ -26,11 +26,9 @@ def test_text_handlers_message_source_excludes_sec047_debug_patterns() -> None:
 
 
 @pytest.mark.asyncio
-async def test_session_greeting_send_has_task_local_semantic_purpose(
+async def test_inbound_does_not_send_session_greeting_copy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from services.integrations.meta.meta_outbound_attempts import current_meta_outbound_send_purpose
-
     user_id = "facebook:semantic-greeting"
     user_data = {
         "phone_number": f"room:{user_id}",
@@ -44,8 +42,8 @@ async def test_session_greeting_send_has_task_local_semantic_purpose(
     }
     observed: list[str] = []
 
-    async def send(*_args: object, **_kwargs: object) -> None:
-        observed.append(current_meta_outbound_send_purpose())
+    async def send(_uid: str, msg: str) -> None:
+        observed.append(msg)
 
     async def noop(*_args: object, **_kwargs: object) -> None:
         return None
@@ -94,8 +92,8 @@ async def test_session_greeting_send_has_task_local_semantic_purpose(
         ):
             mapping.pop(user_id, None)
 
-    assert observed == ["session_greeting"]
-    assert current_meta_outbound_send_purpose() == "primary_reply"
+    assert observed == []
+    assert user_data.get("_greeting_eligible_this_turn") is True
 
 
 @pytest.mark.asyncio

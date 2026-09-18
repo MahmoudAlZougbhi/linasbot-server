@@ -126,7 +126,8 @@ async def generate_grounded_reply(
             f"AI comment mode={comment_mode}. Write customer-facing wording from Comment Rules and Style. "
             "Do not use canned system copy such as 'Sent you a DM.'"
         )
-    from services.brain.greeting import evaluate_greeting, is_greeting_only
+    from services.brain.greeting_detect import is_greeting_only
+    from services.brain.greeting_eligibility import evaluate_greeting
 
     if turn.invocation_kind not in {"followup", "comment"} and not is_greeting_only(message):
         greet = evaluate_greeting(

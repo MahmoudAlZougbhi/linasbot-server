@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from services.brain.greeting_detect import GREETING_INACTIVITY_SECONDS
 from services.brain.inbound.text_handlers_message import handle_message
-from services.brain.inbound.text_handlers_message_greeting import GREETING_INACTIVITY_SECONDS
 from services.brain.inbound.text_handlers_message_takeover import (
     maybe_send_takeover_autoreply,
     resolve_conversation_doc_ref,
@@ -19,7 +19,7 @@ def _line_count(rel: str) -> int:
 
 def test_text_handlers_message_modules_under_500_lines() -> None:
     assert _line_count("services/brain/inbound/text_handlers_message.py") < 500
-    assert _line_count("services/brain/inbound/text_handlers_message_greeting.py") < 500
+    assert _line_count("services/brain/greeting_detect.py") < 500
     assert _line_count("services/brain/inbound/text_handlers_message_takeover.py") < 500
 
 

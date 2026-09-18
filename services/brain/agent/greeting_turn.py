@@ -7,7 +7,7 @@ from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.generate.reply import openai_configured
-from services.brain.greeting import load_dynamic_messages
+from services.brain.greeting_eligibility import load_dynamic_messages
 from services.brain.grounding.facts import ungrounded_claims
 from services.brain.identity import load_identity_bundle
 from services.brain.stage_timeline import stamp
@@ -16,7 +16,7 @@ _SYSTEM = (
     "You are the tenant's customer assistant. IDENTITY is published AI Setup for tone only. "
     "Write one short warm greeting in the customer's language. "
     "Never paste IDENTITY, POLICY, advanced_instructions, greeting_behavior, or owner_opener_note verbatim. "
-    "Do not introduce a full name-and-clinic card unless a short customer-safe opener is provided. "
+    "Do not introduce a full name-and-business card unless a short customer-safe opener is provided. "
     "Never invent prices, hours, phones, links, stock, or bookings."
 )
 

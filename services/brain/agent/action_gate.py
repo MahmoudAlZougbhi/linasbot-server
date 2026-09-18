@@ -11,7 +11,7 @@ from services.brain.contracts.plan import PlannerPlan
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.stage_timeline import stamp
-from services.brain.templates import owner_protocol_text
+from services.brain.owner_protocol import owner_protocol_text
 
 _INFO_TYPES = {"information", "hours", "comparison"}
 _CONTINUE_TYPES = _INFO_TYPES | {"resource_request", "service_request", "product_request", "cancel_or_status"}

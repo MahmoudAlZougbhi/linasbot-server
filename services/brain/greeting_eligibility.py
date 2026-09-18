@@ -1,34 +1,15 @@
-"""One server-owned greeting eligibility policy.
-
-Maps the existing 12-hour inactivity window (`CONTEXT_WINDOW_HOURS`) instead of
-silently inventing a new threshold.
-"""
+"""Published Greeting Behavior eligibility. Owner notes are Terra context, never sent as copy."""
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-import config
 from services.ai_setup.schemas import DynamicMessageRecord, DynamicMessagesSection
 from services.ai_setup.version_store import PublishedVersionError, load_published_content
 from services.brain.contracts.turn import HistorySnapshot
+from services.brain.greeting_detect import inbound_greeting_language, inactivity_threshold
 from services.brain.normalize import normalize_search_text
-
-_GREETING_ONLY_RE = re.compile(
-    r"^\s*(?:"
-    r"hi+|hello|hey+|hola|"
-    r"bonjour|salut|bonsoir|"
-    r"مرحباً?|اهلاً?|أهلاً?|هلا|أهلين|"
-    r"السلام عليكم|"
-    r"صباح الخير|مساء الخير|"
-    r"marhaba|mar7aba|hiya"
-    r")"
-    r"(?:\s+(?:kifak|keefak|كيفك|كيف حالك|how are you|ça va|ca va))?"
-    r"\s*(?:[!?.؟]+)?\s*(?:👋|😊|🌷)?\s*$",
-    re.IGNORECASE | re.UNICODE,
-)
 
 
 @dataclass(frozen=True)
@@ -37,20 +18,6 @@ class GreetingDecision:
     text: str = ""
     rule_id: str = ""
     reason: str = ""
-
-
-def inactivity_threshold() -> timedelta:
-    """Use the existing Meta DM 12-hour constant; do not invent a new window."""
-    try:
-        from services.brain.inbound.text_handlers_message_greeting import GREETING_INACTIVITY_SECONDS
-
-        seconds = int(GREETING_INACTIVITY_SECONDS)
-        if seconds > 0:
-            return timedelta(seconds=seconds)
-    except Exception:
-        pass
-    hours = int(getattr(config, "CONTEXT_WINDOW_HOURS", 12) or 12)
-    return timedelta(hours=max(hours, 0))
 
 
 def load_dynamic_messages(tenant_id: str) -> DynamicMessagesSection | None:
@@ -74,23 +41,6 @@ def _rule_text(rule: DynamicMessageRecord, language: str) -> str:
         if value:
             return value
     return ""
-
-
-def inbound_greeting_language(message: str) -> str:
-    text = (message or "").strip()
-    if not text:
-        return "en"
-    try:
-        from services.owner_copilot.system_knowledge_retrieval import detect_message_language
-
-        code = detect_message_language(text, fallback="en")
-        if code in {"ar", "franco"}:
-            return "ar"
-        if code in {"en", "fr"}:
-            return code
-    except Exception:
-        pass
-    return "en"
 
 
 def _greeting_texts(section: DynamicMessagesSection) -> set[str]:
@@ -190,31 +140,3 @@ def evaluate_greeting(
             continue
         return GreetingDecision(True, text=text, rule_id=rule.id, reason="matched")
     return GreetingDecision(False, reason="no_match")
-
-
-def safe_greeting_text(
-    *,
-    tenant_id: str,
-    message: str,
-    language: str = "",
-    history: HistorySnapshot | None = None,
-) -> str:
-    """Published Identity/Greeting Behavior opener only. Empty when Terra must own the turn."""
-    lang = (language or inbound_greeting_language(message)).strip().lower() or "en"
-    try:
-        decision = evaluate_greeting(
-            tenant_id=tenant_id,
-            message=message,
-            history=history or HistorySnapshot(),
-            language=lang,
-        )
-        if decision.eligible and decision.text.strip():
-            return decision.text.strip()
-    except Exception:
-        pass
-    return ""
-
-
-def is_greeting_only(message: str) -> bool:
-    """True for hello / marhaba kifak with no hours, price, or booking ask."""
-    return bool(_GREETING_ONLY_RE.match((message or "").strip()))

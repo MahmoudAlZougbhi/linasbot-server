@@ -9,17 +9,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_wave_o1_no_unused_router_gender_bindings() -> None:
     ctx = (ROOT / "services/brain/inbound/text_handlers_respond_ctx.py").read_text(encoding="utf-8")
-    router = (ROOT / "services/brain/conversation_router.py").read_text(encoding="utf-8")
+    human = (ROOT / "services/brain/human_request.py").read_text(encoding="utf-8")
     assert "router_route" not in ctx
     assert "get_gender_from_message" not in ctx
-    assert "def route(" not in router
-    assert "ask_gender" not in router
-    from services.brain.conversation_router import is_human_request
+    assert not (ROOT / "services/brain/conversation_router.py").exists()
+    from services.brain.human_request import is_human_request
 
     assert is_human_request("بدي احكي مع حدا") is True
     assert is_human_request("personal care tips") is False
-    router = (ROOT / "services/brain/conversation_router.py").read_text(encoding="utf-8")
-    assert "GREETING_TEMPLATES" not in router
+    assert "GREETING_TEMPLATES" not in human
+    assert "def route(" not in human
+    assert "ask_gender" not in human
 
 
 def test_wave_o2_no_laser_clinic_translator_in_brain() -> None:

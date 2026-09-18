@@ -434,7 +434,7 @@ def test_fixture_eval_runner_has_no_live_spend() -> None:
 
 def test_branch_schedule_hydrates_hours() -> None:
     from services.brain.retrieve.cards import TitleCard
-    from services.brain.retrieve.expand import expand_ranked
+    from services.brain.retrieve.hydrate import expand_ranked
     from services.brain.retrieve.lexical import LexicalHit
 
     card = TitleCard(item_id="hours:main", source_family="hours", title="Main", search_text="hours")

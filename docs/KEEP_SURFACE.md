@@ -329,7 +329,7 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 
 ## WAVE O1–O5 — router/gender, translator, classifier, dashboard name, durable flag
 
-- Inbound ctx no longer binds unused `router_route` / `get_gender_from_message`. `conversation_router` KEEP is `is_human_request` (hardcoded `GREETING_TEMPLATES` removed).
+- Inbound ctx no longer binds unused `router_route` / `get_gender_from_message`. Human-request detect lives in `services/brain/human_request.py`. `conversation_router.py` and hardcoded `GREETING_TEMPLATES` are gone.
 - Translator prompts are generic SaaS; Lebanese dialect / franco rules stay.
 - Classifier has no founder branch ids (`marwa` / `antelias` / `beirut`) as product defaults. Dead `answer_packet` anti-leak helper is gone; Brain published-path tests still forbid founder leakage.
 - Dashboard package name is `linas-ai-dashboard`.

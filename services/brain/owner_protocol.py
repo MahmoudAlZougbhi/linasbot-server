@@ -18,10 +18,6 @@ def owner_protocol_text(key: str, response_language: str = "") -> str:
     mapped = {
         "handoff": "brain_handoff_ack",
         "confirm_request": "brain_confirm_request",
-        "visual_disabled": "brain_visual_disabled",
-        "no_evidence": "brain_no_evidence",
-        "no_evidence_handoff": "brain_no_evidence_handoff",
-        "faq_ambiguous": "brain_faq_ambiguous",
         "waiting_queue": "waiting_queue_message",
     }.get(key)
     if not mapped:
@@ -35,8 +31,3 @@ def owner_protocol_text(key: str, response_language: str = "") -> str:
     except Exception:
         pass
     return ""
-
-
-def brain_template(key: str, response_language: str = "") -> str:
-    """Customer-facing protocol text. Empty means fail-closed: do not invent system copy."""
-    return owner_protocol_text(key, response_language)

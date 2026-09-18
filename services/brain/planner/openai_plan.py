@@ -7,7 +7,7 @@ from datetime import UTC
 
 from services.brain.contracts.plan import PlannerPlan
 from services.brain.generate.reply import openai_configured
-from services.brain.greeting import is_greeting_only
+from services.brain.greeting_detect import is_greeting_only
 from services.brain.planner.heuristic import overlay_plan, planner_customer_text
 from services.brain.providers.config import planner_model
 
