@@ -126,23 +126,14 @@ async def test_identity_llm_sop_echo_falls_back_to_safe_greeting(monkeypatch: py
         extra={"response_language": "ar"},
     )
     out = await identity_greeting_result(turn, message="Hello", channel="instagram_dm")
-    assert out is not None
-    text = out.envelope.messages[0].text
-    assert "Use this rule only" not in text
-    assert "Arabic-specific rule" not in text
-    assert (out.extra or {}).get("path") == "identity_greeting_fail_soft"
-    assert text != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "ar")
+    assert out is None
 
 
-def test_apply_greeting_does_not_prepend_sop(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_apply_greeting_does_not_prepend_sop() -> None:
     from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
     from services.brain.contracts.turn import CustomerTurn
     from services.brain.turn_pipeline import _apply_greeting
 
-    monkeypatch.setattr(
-        "services.brain.turn_pipeline.evaluate_greeting",
-        lambda **_k: type("G", (), {"eligible": True, "text": _SOP})(),
-    )
     turn = CustomerTurn(tenant_id="t1", invocation_kind="dm")
     envelope = FinalReplyEnvelope(
         decision="reply",

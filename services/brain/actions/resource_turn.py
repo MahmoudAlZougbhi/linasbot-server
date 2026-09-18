@@ -126,6 +126,8 @@ async def resource_request_result(
     evidence_source_ids: list[str] | None = None,
 ) -> TurnResult | None:
     """Run send_resource for resource_request tasks. Returns None when no resource task."""
+    if str(getattr(turn, "surface", "") or "") == "comment":
+        return None
     if not any(task.type == "resource_request" for task in plan.tasks):
         return None
     proposals = resource_proposals(

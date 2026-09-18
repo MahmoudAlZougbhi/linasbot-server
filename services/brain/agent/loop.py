@@ -67,6 +67,31 @@ def _stop_from_outcome(outcome: str) -> StopReason:
     return "failed_closed"
 
 
+def _information_plan_for_comment(plan: PlannerPlan, message: str) -> PlannerPlan:
+    """Public comments discuss the post; they are not catalog send_resource turns."""
+    tasks = []
+    for task in plan.tasks:
+        if task.type != "resource_request":
+            tasks.append(task)
+            continue
+        tasks.append(
+            task.model_copy(
+                update={
+                    "type": "information",
+                    "source_families": ["knowledge", "care", "services", "faq"],
+                }
+            )
+        )
+    if not tasks:
+        from services.brain.planner.heuristic import plan_message
+
+        return plan_message(message)
+    read_only = all(
+        task.type in {"information", "comparison", "hours", "acknowledgement", "draft_correction"} for task in tasks
+    )
+    return plan.model_copy(update={"tasks": tasks, "read_only": read_only})
+
+
 def _fast_path_eligible(plan: PlannerPlan) -> bool:
     info = [task for task in plan.tasks if task.type in {"information", "hours", "comparison"}]
     return plan.read_only and len(info) == 1 and all(t.type in {"information", "hours"} for t in info)
@@ -161,6 +186,8 @@ async def run_agentic_turn(
             tenant_id=turn.tenant_id,
             operation_id=operation_id_for_turn(turn),
         )
+    if str(getattr(turn, "surface", "") or "") == "comment":
+        plan = _information_plan_for_comment(plan, message)
     extra = _flow_extra(
         extra,
         ("plan", "Understood the customer request", {"plan_tasks": [{"id": t.id, "type": t.type} for t in plan.tasks]}),
@@ -336,21 +363,17 @@ async def run_agentic_turn(
 
         release_turn_reservation(turn)
         if is_llm_provider_error(exc):
-            from services.brain.contracts.reply import OutboundMessage
             from services.brain.llm_core_service import sanitize_llm_error
-            from services.brain.templates import brain_template
+            from services.brain.silence import log_customer_generation_failure
 
-            print(f"[run_agentic_turn] generate fail-soft {type(exc).__name__}: {sanitize_llm_error(exc)}")
-            lang = str((turn.extra or {}).get("response_language") or "")
+            log_customer_generation_failure(stage="generate", extra={"blocker": sanitize_llm_error(exc)}, exc=exc)
             return TurnResult(
                 stop_reason="failed_closed",
-                envelope=FinalReplyEnvelope(
-                    decision="clarify",
-                    messages=[OutboundMessage(destination=dest, text=brain_template("no_evidence", lang))],
-                ),
+                envelope=FinalReplyEnvelope(decision="clarify"),
                 extra={
                     "phase": "generate",
                     "llm_fail_soft": True,
+                    "customer_silence": True,
                     "exception_class": type(exc).__name__,
                     "blocker": f"{type(exc).__name__}: {str(exc)[:200]}",
                     "agent_trace": agent_trace,

@@ -32,46 +32,13 @@ def test_safe_greeting_never_uses_validator_or_temporary_copy() -> None:
 
 
 @pytest.mark.asyncio
-async def test_identity_greeting_openai_failure_sends_catalog_opener(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_identity_greeting_shortcut_is_retired() -> None:
     from services.brain.agent.greeting_turn import identity_greeting_result
     from services.brain.contracts.turn import CustomerTurn
 
-    async def boom(*_a, **_k):
-        raise RuntimeError("openai timeout")
-
-    monkeypatch.setattr("services.brain.agent.greeting_turn.openai_configured", lambda: True)
-    monkeypatch.setattr(
-        "services.brain.agent.greeting_turn._identity_context",
-        lambda _turn: "IDENTITY\nname=Test",
-    )
-    monkeypatch.setattr(
-        "services.billing.membership.provider_expense.record_pending_provider",
-        lambda **_k: None,
-    )
-    monkeypatch.setattr("services.brain.providers.config.answer_model", lambda: "gpt-test")
-    monkeypatch.setattr("services.brain.billing.operation_id_for_turn", lambda _turn: "op-test")
-    monkeypatch.setattr(
-        "services.brain.llm_core_service.create_chat_completion",
-        boom,
-    )
-    monkeypatch.setattr("services.brain.conversation_store.remember_turn", lambda *_a, **_k: None)
-    turn = CustomerTurn(
-        tenant_id="t-greet-llm",
-        conversation_id="c1",
-        event_ids=["m1"],
-        extra={"response_language": "ar"},
-    )
+    turn = CustomerTurn(tenant_id="t-greet-llm", conversation_id="c1", event_ids=["m1"])
     out = await identity_greeting_result(turn, message="Hi kifak", channel="instagram_dm")
-    assert out is not None
-    assert out.envelope.decision == "reply"
-    text = out.envelope.messages[0].text
-    assert text.strip()
-    assert "ما قدرت أتأكد" not in text
-    assert (out.extra or {}).get("path") == "identity_greeting_fail_soft"
-    assert out.ai_called is False
-    assert text != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "ar")
+    assert out is None
 
 
 @pytest.mark.asyncio
@@ -105,10 +72,10 @@ async def test_greeting_only_handler_fail_soft_is_not_temporary_error() -> None:
             response_language="en",
             conversation_id="conv-hello-1",
         )
-    assert reply.strip()
-    assert "Use this rule only" not in reply
+    assert reply == ""
+    assert "Use this rule only" not in (reply or "")
     assert reply != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "en")
-    assert metadata["greeting_fail_soft"] is True
+    assert metadata["customer_silence"] is True
     assert metadata["exception_class"] == "RuntimeError"
 
 
@@ -165,11 +132,11 @@ async def test_forced_runtime_error_temporary_error_once_then_silence() -> None:
             conversation_id="conv-temp-1",
         )
     expected = get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "en")
-    assert first == expected
+    assert first == ""
+    assert first != expected
     assert meta1["exception_class"] == "RuntimeError"
     assert str(meta1.get("blocker") or "").startswith("RuntimeError:")
-    assert meta1.get("temporary_error_silenced") is False
+    assert meta1.get("customer_silence") is True
     assert second == ""
     assert meta2["exception_class"] == "RuntimeError"
     assert meta2.get("temporary_error_silenced") is True
-    assert first != get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "en")

@@ -7,7 +7,7 @@ from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.generate.reply import openai_configured
-from services.brain.greeting import is_greeting_only, load_dynamic_messages
+from services.brain.greeting import load_dynamic_messages
 from services.brain.grounding.facts import ungrounded_claims
 from services.brain.identity import load_identity_bundle
 from services.brain.stage_timeline import stamp
@@ -95,13 +95,9 @@ async def identity_greeting_result(
     channel: str,
     flow_base: dict | None = None,
 ) -> TurnResult | None:
-    if turn.invocation_kind in {"followup", "comment"} or not is_greeting_only(message):
-        return None
-    try:
-        return await _identity_greeting_llm(turn, message=message, channel=channel, flow_base=flow_base)
-    except Exception as exc:
-        print(f"[identity_greeting] fail-soft {type(exc).__name__}: {str(exc)[:200]}")
-        return _fallback_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
+    """Greeting-only identity shortcut is retired. Hello uses retrieve → Terra."""
+    _ = (turn, message, channel, flow_base)
+    return None
 
 
 def _fallback_greeting_result(

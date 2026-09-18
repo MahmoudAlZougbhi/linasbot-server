@@ -107,6 +107,46 @@ async def test_enrich_loads_instagram_media_and_caption() -> None:
 
 
 @pytest.mark.asyncio
+async def test_enrich_instagram_reel_sets_video_url_not_permalink() -> None:
+    binding = _binding(channel="instagram", asset_id="222", instagram_id="222")
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/igc9"):
+            return httpx.Response(
+                200,
+                json={
+                    "id": "igc9",
+                    "text": "What",
+                    "media": {
+                        "id": "media-reel",
+                        "caption": "New laser reel",
+                        "media_type": "VIDEO",
+                        "media_url": "https://cdn.example/reel.mp4",
+                        "thumbnail_url": "https://cdn.example/reel.jpg",
+                        "permalink": "https://www.instagram.com/p/ABC/",
+                    },
+                },
+            )
+        raise AssertionError(path)
+
+    event = {"channel": "instagram", "comment_id": "igc9", "text": "What"}
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        out = await enrich_comment_event_post(
+            event,
+            binding=binding,
+            token="token",
+            graph_api_version="v24.0",
+            client=client,
+        )
+    assert out["post_id"] == "media-reel"
+    assert out["media_type"] == "VIDEO"
+    assert out["video_url"] == "https://cdn.example/reel.mp4"
+    assert out["image_urls"] == ["https://cdn.example/reel.jpg"]
+    assert "instagram.com" not in " ".join(out["image_urls"])
+
+
+@pytest.mark.asyncio
 async def test_enrich_loads_facebook_post_not_parent_comment() -> None:
     binding = _binding()
 

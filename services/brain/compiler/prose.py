@@ -19,6 +19,7 @@ LARGE_TEXT_SECTIONS = frozenset(
         "dynamic_messages",
         "ai_basics",
         "style",
+        "comments",
     }
 )
 LARGE_TEXT_MIN_CHARS = 280
@@ -94,7 +95,17 @@ def extract_prose(section: str, raw: dict[str, Any] | None) -> str:
         examples = item.get("example_replies")
         extra = " ".join(_text(x) for x in examples) if isinstance(examples, list) else ""
         bits.extend([_text(item.get("style_body")), _text(item.get("notes")), extra])
-    return "\n\n".join(b for b in bits if b)
+    elif name == "comments":
+        bits.extend(
+            [
+                _text(item.get("policy_text")),
+                _text(item.get("notes")),
+                _text(item.get("reply_template")),
+                _text(item.get("dm_template")),
+                _text(item.get("ai_instructions")),
+            ]
+        )
+    return "\n\n".join(b for b in bits if b and "INTERNAL_LEGACY_SYSTEM_PROMPT" not in b)
 
 
 def needs_luna_chunks(section: str, raw: dict[str, Any] | None) -> bool:

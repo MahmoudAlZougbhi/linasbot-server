@@ -223,10 +223,10 @@ async def test_v2_exception_fails_closed_without_classic() -> None:
     from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
     expected = get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "en")
-    assert reply == expected
+    assert reply == ""
+    assert reply != expected
     assert reply != get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "en")
-    assert "confirm that detail" not in reply.lower()
-    assert "ما قدرت أتأكد" not in reply
+    assert metadata.get("customer_silence") is True
 
 
 @pytest.mark.asyncio
@@ -249,7 +249,8 @@ async def test_v2_exception_on_greeting_uses_opener_not_validator_copy() -> None
         )
     mock_gen.assert_not_awaited()
     assert metadata["reason"] == "v2_failed_closed"
-    assert metadata["greeting_fail_soft"] is True
+    assert metadata["greeting_fail_soft"] is False
+    assert metadata["customer_silence"] is True
     assert metadata["exception_class"] == "RuntimeError"
     from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY, BRAIN_TEMPORARY_ERROR_MESSAGE_KEY
     from services.owner_copilot.dynamic_messages_service import get_dynamic_message
@@ -257,4 +258,4 @@ async def test_v2_exception_on_greeting_uses_opener_not_validator_copy() -> None
     assert "ما قدرت أتأكد" not in reply
     assert reply != get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "ar")
     assert reply != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "ar")
-    assert reply
+    assert reply == ""

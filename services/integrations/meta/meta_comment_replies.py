@@ -319,6 +319,7 @@ async def process_meta_comment_event(
                     "parent_comment": str(event.get("parent_comment") or event.get("parent_text") or ""),
                     "media_type": str(event.get("media_type") or ""),
                     "image_urls": list(event.get("image_urls") or []),
+                    "video_url": str(event.get("video_url") or ""),
                 },
                 asset_id=binding.asset_id,
                 provider_sender_id=str(event.get("author_id") or "").strip(),

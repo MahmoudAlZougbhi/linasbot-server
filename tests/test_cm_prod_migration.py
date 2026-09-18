@@ -132,6 +132,12 @@ def test_stage_and_migrate_keeps_topic_content_active(tmp_path: Path) -> None:
     assert "Full prompt body retained" not in instructions
     assert "Never offer tattoo removal" not in instructions
 
+    from services.brain.compiler.prose import extract_prose
+
+    indexed = extract_prose("ai_basics", ai.payload)
+    assert "INTERNAL_LEGACY_SYSTEM_PROMPT" not in indexed
+    assert "Never offer tattoo removal" not in indexed
+
     restricted = get_draft("restricted", tenant_id="cm_prod_mig_test", create_default=True)
     assert list(restricted.payload.get("topics") or []) == []
 

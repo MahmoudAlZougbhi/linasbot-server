@@ -435,3 +435,32 @@ def test_luna_chunk_fail_closed_on_save(tmp_path, monkeypatch) -> None:
             tenant_id="t-luna-fail",
             allow_create=True,
         )
+
+
+def test_long_comment_rules_use_luna_on_save(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    calls: list[dict] = []
+    _chunks_from_request(calls)
+    put_draft(
+        "comments",
+        payload={
+            "policy_text": LONG_NOTE,
+            "rules": [
+                {
+                    "id": "r1",
+                    "enabled": True,
+                    "reply_template": LONG_NOTE,
+                    "ai_instructions": LONG_NOTE,
+                }
+            ],
+        },
+        if_match="*",
+        tenant_id="t-luna-cmt",
+        allow_create=True,
+    )
+    assert chunk_texts("t-luna-cmt", "comments", "r1")
+    from services.brain.compiler.prose import POLICY_ITEM_ID
+
+    assert chunk_texts("t-luna-cmt", "comments", POLICY_ITEM_ID)
+    assert calls

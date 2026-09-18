@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 from services.brain.actions.pending import try_confirm_pending
-from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
 from services.brain.contracts.turn import CustomerTurn
-from services.brain.conversation_store import remember_turn
 from services.brain.faq_turn import exact_faq_result, semantic_faq_result
-from services.brain.greeting import evaluate_greeting, inbound_greeting_language, is_greeting_only, safe_greeting_text
 from services.brain.stage_timeline import stamp
-from services.brain.templates import brain_template
 
 
 def _flow_extra(extra: dict | None, *rows: tuple[str, str, dict | None]) -> dict:
@@ -40,7 +37,7 @@ def inbound_task_text(turn: CustomerTurn, message: str) -> str:
         parts.insert(0, caption)
     media_type = str(turn.extra.get("post_media_type") or "").strip()
     if media_type and turn.surface == "comment":
-        parts.append(f"post_media_type={media_type}")
+        parts.append(f"post_kind={media_type}")
     visual = str(turn.extra.get("post_visual_description") or "").strip()
     if visual:
         parts.append(f"post_visual={visual}")
@@ -59,28 +56,9 @@ def _apply_greeting(
     channel: str,
     envelope: FinalReplyEnvelope,
 ) -> FinalReplyEnvelope:
-    if turn.invocation_kind in {"followup", "comment"} or not envelope.messages:
-        return envelope
-    if is_greeting_only(message):
-        return envelope
-    greet = evaluate_greeting(
-        tenant_id=turn.tenant_id,
-        message=message,
-        history=turn.history,
-        invocation_kind=turn.invocation_kind,
-        already_greeted=turn.state.greeted,
-    )
-    if not (greet.eligible and greet.text):
-        return envelope
-    from services.brain.outbound_safety import is_customer_safe_opener
-
-    if not is_customer_safe_opener(greet.text):
-        return envelope
-    turn.state = turn.state.model_copy(update={"greeted": True})
-    remember_turn(turn)
-    destination = envelope.messages[0].destination or _destination(channel, turn)
-    greeting = OutboundMessage(destination=destination, text=greet.text, protected=True)
-    return envelope.model_copy(update={"messages": [greeting, *list(envelope.messages)]})
+    """Do not prepend catalog/system greetings. Terra owns conversational copy."""
+    _ = (turn, message, channel)
+    return envelope
 
 
 def _exact_faq_result(turn: CustomerTurn, message: str, channel: str) -> TurnResult | None:
@@ -130,49 +108,15 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
         or str((turn.extra or {}).get("post_transcript") or "").strip()
     )
     if visual.reason == "disabled" and turn.media.image_media_id and not analyzed:
-        lang = _response_language(turn)
-        return TurnResult(
-            stop_reason="ok",
-            envelope=FinalReplyEnvelope(
-                decision="clarify",
-                messages=[
-                    OutboundMessage(
-                        destination=_destination(channel, turn),
-                        text=brain_template("visual_disabled", lang),
-                    )
-                ],
-            ),
-            extra=_flow_extra(
-                {"phase": "visual", "visual": visual.reason, **flow_base},
-                ("visual", "Image present but visual reading is disabled", {"reason": visual.reason}),
-            ),
-        )
-    from services.brain.agent.greeting_turn import identity_greeting_result
+        from services.brain.silence import log_customer_generation_failure
 
-    try:
-        greeted = await identity_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
-    except Exception as exc:
-        print(f"[run_dm_after_gates] identity_greeting fail-soft {type(exc).__name__}: {str(exc)[:200]}")
-        greeted = None
-    if greeted is not None:
-        return greeted
-    if is_greeting_only(message):
-        lang = _response_language(turn) or inbound_greeting_language(message)
-        text = safe_greeting_text(
-            tenant_id=turn.tenant_id,
-            message=message,
-            language=lang,
-            history=turn.history,
-        )
+        log_customer_generation_failure(stage="visual_disabled")
         return TurnResult(
-            stop_reason="ok",
-            envelope=FinalReplyEnvelope(
-                decision="reply",
-                messages=[OutboundMessage(destination=_destination(channel, turn), text=text)],
-            ),
+            stop_reason="failed_closed",
+            envelope=FinalReplyEnvelope(decision="clarify"),
             extra=_flow_extra(
-                {"phase": "identity_greeting", "path": "identity_greeting_fail_soft", **flow_base},
-                ("greeting", "Greeting-only fail-soft catalog opener", {"ai_called": False}),
+                {"phase": "visual", "visual": visual.reason, "customer_silence": True, **flow_base},
+                ("visual", "Image present but visual reading is disabled", {"reason": visual.reason}),
             ),
         )
     faq = _exact_faq_result(turn, message, channel) or await _semantic_faq_result(turn, message, channel)

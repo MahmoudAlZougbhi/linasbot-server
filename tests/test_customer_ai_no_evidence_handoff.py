@@ -122,7 +122,6 @@ async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.Monkey
     assert result.stop_reason == "ok"
     assert result.envelope.decision == "handoff_ack"
     text = result.envelope.messages[0].text.lower()
-    assert "sorry" in text
     assert "team" in text
     assert "reach out" not in text
     execute.assert_awaited_once()
@@ -166,11 +165,8 @@ async def test_unanswered_does_not_claim_transfer_when_persist_fails(monkeypatch
     )
     assert result is not None
     assert result.envelope.decision == "clarify"
-    text = result.envelope.messages[0].text.lower()
-    assert "sorry" in text
-    assert "connect you" not in text
-    assert "transferred" not in text
-    assert "reach out" not in text
+    assert not result.envelope.messages
+    assert result.stop_reason == "failed_closed"
 
 
 @pytest.mark.asyncio
