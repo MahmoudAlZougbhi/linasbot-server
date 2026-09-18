@@ -445,7 +445,7 @@ def unbind_app_review_test_number(
             tenant_id=tid,
             reason="app_review_unbind",
         )
-        from services.integrations.whatsapp.smart_followup.hooks import cancel_connection_followups
+        from services.smart_followup.hooks import cancel_connection_followups
 
         followups = cancel_connection_followups(
             session,

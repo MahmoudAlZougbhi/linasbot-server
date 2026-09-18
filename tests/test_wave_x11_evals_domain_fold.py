@@ -38,8 +38,8 @@ def test_wave_x11_domain_folds_no_shims() -> None:
     assert not leftover, leftover
     keep = (
         "services/owner_copilot/welcome_pool/__init__.py",
-        "services/faq/local_qa_service.py",
-        "services/faq/local_qa_service_match.py",
+        "services/brain/faq_exact.py",
+        "services/faq/faq_cm_invalidation.py",
         "services/requests/request_graphs/service.py",
         "services/requests/request_drafts/engine.py",
         "services/ai_setup/search_metadata/generate.py",
@@ -59,11 +59,11 @@ def test_wave_x11_keep_drawer_and_portal() -> None:
     assert "OwnerLayout" in app or 'path="/owner"' in app
     assert drawer.count("id: '") + drawer.count('id: "') >= 9
     from services.ai_setup.search_metadata.generate import SearchMetadata
-    from services.faq.local_qa_service import local_qa_service
+    from services.brain.faq_exact import find_published_exact_faq
     from services.owner_copilot.welcome_pool import pick_welcome
     from services.requests.request_graphs.service import list_active_graphs
 
     assert callable(pick_welcome)
-    assert local_qa_service is not None
+    assert callable(find_published_exact_faq)
     assert callable(list_active_graphs)
     assert SearchMetadata is not None

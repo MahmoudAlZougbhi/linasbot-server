@@ -27,21 +27,20 @@ os.environ["PUBLIC_URL"] = "https://example.test"
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
 from services.integrations.whatsapp.repository import WhatsAppCloudRepository  # noqa: E402
-from services.integrations.whatsapp.smart_followup.eligibility import (  # noqa: E402
-    evaluate_job_eligibility,
-    window_allows_send,
-)
-from services.integrations.whatsapp.smart_followup.hooks import (  # noqa: E402
+from services.smart_followup.eligibility import evaluate_job_eligibility  # noqa: E402
+from services.smart_followup.hooks import (  # noqa: E402
     cancel_conversation_followups,
     schedule_after_ai_reply,
 )
-from services.integrations.whatsapp.smart_followup.opt_out import looks_like_opt_out  # noqa: E402
-from services.integrations.whatsapp.smart_followup.repository import SmartFollowUpRepository  # noqa: E402
-from services.integrations.whatsapp.smart_followup.settings_service import (  # noqa: E402
+from services.smart_followup.opt_out import looks_like_opt_out  # noqa: E402
+from services.smart_followup.repository import SmartFollowUpRepository  # noqa: E402
+from services.smart_followup.settings_service import (  # noqa: E402
     SmartFollowUpSettingsError,
     get_or_create_settings,
     update_settings,
 )
+from services.smart_followup.types import FollowUpConversationView  # noqa: E402
+from services.smart_followup.window_rules import window_allows_send  # noqa: E402
 
 
 @pytest.fixture()
@@ -57,6 +56,21 @@ def wa_db(tmp_path, monkeypatch):
     yield session
     session.close()
     reset_engine_for_tests()
+
+
+def _view(conv) -> FollowUpConversationView:
+    return FollowUpConversationView(
+        channel="whatsapp_cloud",
+        tenant_id=str(conv.tenant_id),
+        conversation_id=str(conv.id),
+        connection_id=str(conv.connection_id),
+        control_epoch=int(conv.control_epoch),
+        control_state=str(conv.control_state),
+        service_window_opens_at=conv.service_window_opens_at,
+        last_inbound_at=conv.last_inbound_at,
+        profile_name=str(conv.customer_profile_name or ""),
+        customer_wa_id=str(conv.customer_wa_id or ""),
+    )
 
 
 def _seed_connected(session, *, tenant_id: str = "tenant_sfu") -> tuple[Any, Any]:
@@ -208,21 +222,21 @@ def test_window_23h_ok_buffer_and_exact_expiry(wa_db):
     conv.service_window_opens_at = opened
     conv.last_inbound_at = opened
 
-    ok, reason = window_allows_send(conv=conv, now=opened + timedelta(hours=23))
+    ok, reason = window_allows_send(conv=_view(conv), now=opened + timedelta(hours=23))
     assert ok is True
     assert reason is None
 
     # Inside safety buffer (12 min) — reject.
-    ok, reason = window_allows_send(conv=conv, now=opened + timedelta(hours=24) - timedelta(minutes=5))
+    ok, reason = window_allows_send(conv=_view(conv), now=opened + timedelta(hours=24) - timedelta(minutes=5))
     assert ok is False
     assert reason == "safety_buffer_insufficient"
 
     # Exact/after 24h — reject.
-    ok, reason = window_allows_send(conv=conv, now=opened + timedelta(hours=24))
+    ok, reason = window_allows_send(conv=_view(conv), now=opened + timedelta(hours=24))
     assert ok is False
     assert reason == "customer_service_window_expired"
 
-    ok, reason = window_allows_send(conv=conv, now=opened + timedelta(hours=24, minutes=1))
+    ok, reason = window_allows_send(conv=_view(conv), now=opened + timedelta(hours=24, minutes=1))
     assert ok is False
 
 
@@ -371,17 +385,16 @@ def test_no_monty_fallback_in_smart_followup_package():
         "..",
         "..",
         "services",
-        "integrations",
-        "whatsapp",
         "smart_followup",
     )
-    for name in os.listdir(root):
-        if not name.endswith(".py"):
-            continue
-        text = open(os.path.join(root, name), encoding="utf-8").read().lower()
-        assert "montymobile" not in text
-        assert "monty_mobile" not in text
-        assert "smart_messaging" not in text
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for name in filenames:
+            if not name.endswith(".py"):
+                continue
+            text = open(os.path.join(dirpath, name), encoding="utf-8").read().lower()
+            assert "montymobile" not in text
+            assert "monty_mobile" not in text
+            assert "smart_messaging" not in text
 
 
 def test_eligibility_epoch_and_pause(wa_db):
@@ -416,24 +429,24 @@ def test_eligibility_epoch_and_pause(wa_db):
 
     with (
         patch(
-            "services.integrations.whatsapp.smart_followup.eligibility.evaluate_ai_eligibility",
+            "services.smart_followup.adapters.whatsapp.evaluate_ai_eligibility",
             return_value=(True, None),
         ),
         patch(
-            "services.integrations.whatsapp.smart_followup.eligibility._tenant_suspend_reason",
+            "services.smart_followup.eligibility._tenant_suspend_reason",
             return_value=None,
         ),
     ):
-        ok, reason = evaluate_job_eligibility(wa_db, job=job, settings=settings, conn=conn, conv=conv)
+        ok, reason = evaluate_job_eligibility(wa_db, job=job, settings=settings, conv=_view(conv))
         assert ok is True
 
         conv.control_state = "HUMAN_PAUSED"
-        ok, reason = evaluate_job_eligibility(wa_db, job=job, settings=settings, conn=conn, conv=conv)
+        ok, reason = evaluate_job_eligibility(wa_db, job=job, settings=settings, conv=_view(conv))
         assert ok is False
         assert reason == "conversation_paused"
 
         conv.control_state = "AI_ACTIVE"
         conv.control_epoch = int(job.control_epoch) + 1
-        ok, reason = evaluate_job_eligibility(wa_db, job=job, settings=settings, conn=conn, conv=conv)
+        ok, reason = evaluate_job_eligibility(wa_db, job=job, settings=settings, conv=_view(conv))
         assert ok is False
         assert reason == "epoch_changed"

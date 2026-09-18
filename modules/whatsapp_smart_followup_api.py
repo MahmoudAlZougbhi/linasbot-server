@@ -12,13 +12,13 @@ from modules.api_security import is_platform_owner, require_permission, require_
 from modules.core import app
 from services.integrations.whatsapp.entitlement import evaluate_ai_eligibility, tenant_has_whatsapp_pilot
 from services.integrations.whatsapp.repository import WhatsAppCloudRepository
-from services.integrations.whatsapp.smart_followup.analytics import (
+from services.smart_followup.analytics import (
     build_smart_followup_analytics,
     resolve_analytics_window,
 )
-from services.integrations.whatsapp.smart_followup.generation import generate_followup_text, preview_prompt_for_goal
-from services.integrations.whatsapp.smart_followup.repository import SmartFollowUpRepository
-from services.integrations.whatsapp.smart_followup.settings_service import (
+from services.smart_followup.generation import generate_followup_text, preview_prompt_for_goal
+from services.smart_followup.repository import SmartFollowUpRepository
+from services.smart_followup.settings_service import (
     SmartFollowUpSettingsError,
     get_or_create_settings,
     update_settings,
@@ -217,10 +217,12 @@ async def smart_followup_preview(request: Request, body: dict[str, Any] = Body(d
     try:
         text = await generate_followup_text(
             tenant_id=session.tenant_id,
+            channel="whatsapp_cloud",
             connection_id=conn.id,
             conversation_id=f"preview:{session.tenant_id}",
-            customer_wa_id="preview_customer",
+            customer_sender_id="preview_customer",
             goal=goal,
+            user_id="whatsapp:preview_customer",
         )
     except Exception as exc:
         return JSONResponse(

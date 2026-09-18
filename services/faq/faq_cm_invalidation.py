@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import time
 from typing import Any
 
 _SESSION_RANGE_RE = re.compile(
@@ -76,11 +75,10 @@ def mark_faq_groups_stale(
     cm_section: str,
     cm_revision: Any = None,
 ) -> dict[str, Any]:
-    """Mark FAQ groups + local QA rows stale and version-link to CM change."""
+    """Mark FAQ groups stale and version-link to CM change."""
     from services.ai_setup.faq_integration import get_cm_faq_group, list_cm_faq
     from services.ai_setup.schemas import FaqSection
     from services.ai_setup.storage import get_draft, put_draft
-    from services.faq.local_qa_service import local_qa_service
 
     if not qa_group_ids:
         return {"stale_groups": [], "stale_rows": 0, "reason": reason}
@@ -122,30 +120,13 @@ def mark_faq_groups_stale(
             updated_by="faq_cm_invalidation",
         )
 
-    stale_rows = 0
-    for pair in local_qa_service.qa_pairs:
-        if str(pair.get("tenant_id") or "").lower() != tenant_id.lower():
-            continue
-        if pair.get("qa_group_id") in stale_set:
-            pair["cm_stale"] = True
-            pair["stale"] = True
-            pair["status"] = "needs_review"
-            pair["stale_reason"] = reason
-            pair["cm_section"] = cm_section
-            pair["cm_revision"] = cm_revision
-            pair["stale_at"] = time.time()
-            stale_rows += 1
-    if stale_rows:
-        local_qa_service.save_to_jsonl()
-
-    # Touch listed groups that may only exist in local qa
     for gid in qa_group_ids:
         if get_cm_faq_group(qa_group_id=gid, tenant_id=tenant_id) is None:
             continue
 
     return {
         "stale_groups": marked,
-        "stale_rows": stale_rows,
+        "stale_rows": 0,
         "reason": reason,
         "cm_section": cm_section,
         "known_groups": [i.get("qa_group_id") for i in list_cm_faq(tenant_id=tenant_id, include_archived=True)],

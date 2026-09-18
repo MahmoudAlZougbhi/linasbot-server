@@ -214,10 +214,24 @@ def update_dynamic_messages_catalog(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_dynamic_message(key: str, lang: str = "ar") -> str:
-    """Get one dynamic message by key/language with safe fallback."""
+    """Get one dynamic message by key/language with catalog defaults (dashboard/preview)."""
     catalog = get_dynamic_messages_catalog()
     item = catalog.get(key) or {}
     msgs = item.get("messages") or {}
     lang_key = (lang or "ar").lower()
     message = msgs.get(lang_key) or msgs.get("ar") or ""
     return message
+
+
+def get_owner_persisted_message(key: str, lang: str = "ar") -> str:
+    """Owner-saved copy only. Catalog defaults never count as configured protocol text."""
+    stored = _read_file()
+    item = stored.get(key) or {}
+    msgs = item.get("messages") if isinstance(item, dict) else {}
+    if not isinstance(msgs, dict):
+        return ""
+    lang_key = (lang or "ar").lower()
+    text = str(msgs.get(lang_key) or "").strip()
+    if text:
+        return text
+    return str(msgs.get("ar") or "").strip()

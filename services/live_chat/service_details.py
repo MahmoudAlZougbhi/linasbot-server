@@ -300,28 +300,24 @@ class LiveChatDetailsMixin:
                     "message": "No FAQ match for this message",
                 }
 
-            faq_id = faq_match.get("faq_id")
+            faq_id = faq_match.get("qa_group_id") or faq_match.get("faq_id")
             current_entry = None
             if faq_id is not None:
                 try:
-                    from modules.local_qa_api import read_qa_pairs
+                    from services.brain.faq_exact import published_faq_entry
+                    from services.live_chat.tenant import normalize_live_chat_tenant_id
 
-                    qa_pairs = read_qa_pairs()
-                    idx = (
-                        (int(faq_id) - 1)
-                        if isinstance(faq_id, int)
-                        else (int(faq_id) - 1 if isinstance(faq_id, str) and faq_id.isdigit() else -1)
+                    workspace = normalize_live_chat_tenant_id(
+                        str(doc_data.get("tenant_id") or faq_match.get("tenant_id") or "")
                     )
-                    if 0 <= idx < len(qa_pairs):
-                        row = qa_pairs[idx]
-                        current_entry = {
-                            "question": row.get("question", ""),
-                            "answer": row.get("answer", ""),
-                            "language": row.get("language", "ar"),
-                            "qa_group_id": row.get("qa_group_id"),
-                        }
+                    if workspace:
+                        current_entry = published_faq_entry(
+                            workspace,
+                            str(faq_id),
+                            language=str(faq_match.get("stored_language") or faq_match.get("language") or ""),
+                        )
                 except Exception as e:
-                    print(f"⚠️ get_faq_match_context read_qa_pairs: {e}")
+                    print(f"⚠️ get_faq_match_context published_faq_entry: {e}")
 
             return {
                 "success": True,

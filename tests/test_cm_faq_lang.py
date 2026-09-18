@@ -14,7 +14,6 @@ from services.ai_setup.faq_integration import (
     create_faq_pair,
     list_cm_faq,
 )
-from services.faq.local_qa_service import local_qa_service
 
 pytestmark = pytest.mark.usefixtures("enable_faq_plan")
 
@@ -118,16 +117,20 @@ async def test_faq_pair_appends_without_clobbering_existing_groups() -> None:
 
 
 @pytest.mark.asyncio
-async def test_faq_pair_written_into_local_qa_jsonl_store() -> None:
+async def test_faq_pair_does_not_write_legacy_jsonl_store() -> None:
+    tenant_id = f"cm_faq_test_no_jsonl_{uuid.uuid4().hex[:8]}"
     result = await create_faq_pair(
         question="unique jsonl question",
         answer="unique jsonl answer",
         language="en",
-        tenant_id="cm_faq_test_jsonl",
+        tenant_id=tenant_id,
     )
-    qa_group_id = result["qa_group_id"]
-    matching = [qa for qa in local_qa_service.qa_pairs if qa.get("qa_group_id") == qa_group_id]
-    assert len(matching) == 4
+    items = list_cm_faq(tenant_id=tenant_id)
+    assert any(item["qa_group_id"] == result["qa_group_id"] for item in items)
+    from pathlib import Path
+
+    assert not Path("modules/local_qa_api.py").exists()
+    assert not Path("services/faq/local_qa_service.py").exists()
 
 
 @pytest.mark.asyncio
@@ -139,17 +142,24 @@ async def test_create_faq_pair_requires_question_and_answer() -> None:
 def test_exact_match_threshold_contract_is_090() -> None:
     """T4/T21 precondition: exact FAQ match must win before semantic; threshold is 0.90."""
     assert FAQ_EXACT_THRESHOLD == 0.90
-    assert local_qa_service.match_threshold == FAQ_EXACT_THRESHOLD
 
 
 @pytest.mark.asyncio
 async def test_exact_match_wins_over_lower_score_before_semantic() -> None:
-    tenant_id = "cm_faq_test_exact"
-    question = "exact match unique probe question"
-    await create_faq_pair(question=question, answer="exact answer", language="en", tenant_id=tenant_id)
-    local_qa_service.qa_pairs = local_qa_service.load_from_jsonl()
+    from services.ai_setup.schemas import FaqRecord, FaqSection, FaqVariant
+    from services.brain.faq_exact import find_exact_faq
 
-    match = await local_qa_service.find_match_with_tier(question, "en")
-    assert match is not None
-    assert match["tier"] == "exact"
-    assert match["match_score"] >= FAQ_EXACT_THRESHOLD
+    question = "exact match unique probe question"
+    section = FaqSection(
+        items=[
+            FaqRecord(
+                qa_group_id="qa_exact",
+                status="active",
+                variants=[FaqVariant(language="en", question=question, answer="exact answer")],
+            )
+        ]
+    )
+    hit = find_exact_faq(section, question)
+    assert hit is not None
+    assert hit.answer == "exact answer"
+    assert hit.faq_id == "qa_exact"

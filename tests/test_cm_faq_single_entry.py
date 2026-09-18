@@ -19,15 +19,11 @@ def test_cm_faq_canonical_can_disable(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cm_faq_canonical() is False
 
 
-@pytest.mark.asyncio
-async def test_legacy_local_qa_create_blocked_when_canonical(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CM_FAQ_CANONICAL", "true")
-    from modules.local_qa_api import create_local_qa_pair
+def test_legacy_local_qa_runtime_removed_when_canonical() -> None:
+    from pathlib import Path
 
-    result = await create_local_qa_pair({"question": "q", "answer": "a", "language": "en"})
-    assert result["success"] is False
-    assert result["error"] == "CM_FAQ_CANONICAL"
-    assert result["redirect"] == "/content-managers/faq"
+    assert not Path("modules/local_qa_api.py").exists()
+    assert not Path("services/faq/local_qa_service.py").exists()
 
 
 @pytest.mark.asyncio

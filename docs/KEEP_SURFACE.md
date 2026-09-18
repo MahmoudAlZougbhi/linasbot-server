@@ -71,7 +71,7 @@ WAVE 1 deleted:
 
 Still not deleted (import-graph blocked or KEEP):
 
-- Smart Follow-Up live backend (`services/smart_followup`, `services/integrations/whatsapp/smart_followup`, `/api/whatsapp/smart-followup/*`)
+- Smart Follow-Up live backend (`services/smart_followup`, `/api/whatsapp/smart-followup/*`)
 - WA Cloud + Live Chat template id aliases live in `services/live_chat/template_ids.py` (WAVE X2)
 - `owner_ai_tools*` (WAVE B git-mv into `services/owner_copilot/`)
 - `owner_copilot/creative_policy.py` KEEP as refusal
@@ -276,7 +276,7 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - Comment Graph poll stubs `modules/meta_social_comment_sync_job.py` and `modules/tiktok_sync_job.py` are deleted. Leftover queue job types still skip webhook-only.
 - `services/moderation_service.py` deleted (zero importers; Laser-context museum).
 - Empty `data/knowledge_base.txt`, `data/style_guide.txt`, and git `phone_to_room_mapping.json` removed. Live Chat still fail-closed if the mapping file is missing.
-- `main.py` no longer mounts `local_qa_api` (helpers stay for FAQ/CM) and has no APK download route.
+- `main.py` no longer mounts `local_qa_api`. Local JSONL FAQ runtime is deleted; published CM FAQ is the only customer matcher.
 - `config.py` has no `LINASLASER_*` bindings. Booking FSM/training keyword museum stripped. `user_booking_state` / `user_in_training_mode` stay as HA session snapshot fields.
 - Retired founder/lab workflows: live-lab, copilot-v2-flags-apply, cm-linas-content-audit, linas-index-ha, prod-brain-linas-smoke.
 - **Kept on purpose:** `prod_cm_linas_*` / bridge scripts still invoked by `cm-production-cutover.yml`. `contentManagers` permission (live CM). `PricesEditor` (reachable from ServicesScreen). `message_catalog` (Owner Catalog).
@@ -329,12 +329,20 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 
 ## WAVE O1–O5 — router/gender, translator, classifier, dashboard name, durable flag
 
-- Inbound ctx no longer binds unused `router_route` / `get_gender_from_message`. `conversation_router` KEEP is `is_human_request` + `GREETING_TEMPLATES`.
+- Inbound ctx no longer binds unused `router_route` / `get_gender_from_message`. `conversation_router` KEEP is `is_human_request` (hardcoded `GREETING_TEMPLATES` removed).
 - Translator prompts are generic SaaS; Lebanese dialect / franco rules stay.
 - Classifier has no founder branch ids (`marwa` / `antelias` / `beirut`) as product defaults. Dead `answer_packet` anti-leak helper is gone; Brain published-path tests still forbid founder leakage.
 - Dashboard package name is `linas-ai-dashboard`.
 - Durable env key is `CM_DISABLE_LEGACY_BRIDGE` (old `CM_DISABLE_LINAS_LEGACY_BRIDGE` honored on read). Write new key. Fail-closed published CM unchanged.
 - **Skipped:** Redis `luna_*`; `prod_cm_linas_*` archive; hub-hidden CM editors; modules fold; `token_wallets` DROP; HA deploy.
 - Tests: `tests/test_wave_o1_o5_scrub.py`.
+
+## A-Z cleanup (Phases 0–6)
+
+- Starting SHA: `2d2c6d835c48e1f970064bb5260e811db3c38fc1`. Phase 0 snapshot: `docs/az_cleanup_baseline.json`.
+- Phase 1: reachability-proven dead runtime islands removed (Wave 1).
+- FAQ: published CM FAQ is the only customer matcher. Local JSONL / `local_qa_*` runtime deleted after callers migrated.
+- Customer text: `brain_template` is owner-persisted protocol copy only. Hardcoded greeting/handoff/no-evidence tables removed. Web Chat uses Customer Brain and silences instruction leaks.
+- Smart Follow-Up: runtime imports go to `services/smart_followup/`. WhatsApp duplicate re-export package deleted.
 
 

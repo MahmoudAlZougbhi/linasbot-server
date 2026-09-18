@@ -137,7 +137,7 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
             )
             repo.pause_conversation(conv, reason="business_app_echo", actor_user_id=None)
             try:
-                from services.integrations.whatsapp.smart_followup.hooks import cancel_conversation_followups
+                from services.smart_followup.hooks import cancel_conversation_followups
 
                 cancel_conversation_followups(
                     session,
@@ -180,8 +180,8 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
             conn.webhook_last_success_at = _utcnow()
             # Customer reply / opt-out cancels remaining Smart Follow-Up jobs.
             try:
-                from services.integrations.whatsapp.smart_followup.hooks import cancel_conversation_followups
-                from services.integrations.whatsapp.smart_followup.opt_out import looks_like_opt_out
+                from services.smart_followup.hooks import cancel_conversation_followups
+                from services.smart_followup.opt_out import looks_like_opt_out
 
                 cancel_reason = "opt_out" if looks_like_opt_out(event.text_body) else "customer_reply"
                 cancel_conversation_followups(

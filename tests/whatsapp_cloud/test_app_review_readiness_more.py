@@ -84,7 +84,7 @@ async def test_outbound_delivery_finalizes_ai_reply_once(wa_db, monkeypatch):
     from db.models.whatsapp_cloud import WhatsAppMessage, WhatsAppOutboundIntent
     from services.integrations.whatsapp import delivery_retry as dr
     from services.integrations.whatsapp import outbound_finalization as finalization
-    from services.integrations.whatsapp.smart_followup import hooks as followup_hooks
+    from services.smart_followup import hooks as followup_hooks
 
     repo = WhatsAppCloudRepository(wa_db)
     conn = repo.create_connection_with_credential(

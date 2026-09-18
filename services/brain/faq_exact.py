@@ -84,3 +84,41 @@ def _item_hit(item: FaqRecord, needle: str) -> FaqExactHit | None:
 
 def find_published_exact_faq(tenant_id: str, message: str) -> FaqExactHit | None:
     return find_exact_faq(load_faq_section(tenant_id), message)
+
+
+def published_faq_entry(tenant_id: str, faq_id: str, language: str = "") -> dict[str, str] | None:
+    """Operator lookup of a published CM FAQ group. Archived groups are returned with status."""
+    section = load_faq_section(tenant_id)
+    needle = str(faq_id or "").strip()
+    if not section or not needle:
+        return None
+    lang = (language or "").strip().lower()
+    for item in section.items:
+        if str(item.qa_group_id) != needle:
+            continue
+        chosen = None
+        for variant in item.variants:
+            if lang and str(variant.language or "").strip().lower() == lang:
+                chosen = variant
+                break
+        if chosen is None:
+            for variant in item.variants:
+                if (variant.question or "").strip() or (variant.answer or "").strip():
+                    chosen = variant
+                    break
+        if chosen is None:
+            return {
+                "question": "",
+                "answer": "",
+                "language": "",
+                "qa_group_id": item.qa_group_id,
+                "status": str(item.status or ""),
+            }
+        return {
+            "question": (chosen.question or "").strip(),
+            "answer": (chosen.answer or "").strip(),
+            "language": str(chosen.language or ""),
+            "qa_group_id": item.qa_group_id,
+            "status": str(item.status or ""),
+        }
+    return None

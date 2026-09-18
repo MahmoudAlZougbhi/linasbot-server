@@ -129,8 +129,9 @@ def run_lab_verification_exercises(*, tenant_id: str = "lab") -> dict[str, Any]:
     exercises = [
         {
             "id": "confirmation_copy",
-            "ok": bool(confirm_en.strip()) and bool(confirm_ar.strip()) and confirm_en != confirm_ar,
-            "detail": {"en": confirm_en, "ar": confirm_ar},
+            "ok": (not confirm_en.strip() and not confirm_ar.strip())
+            or (bool(confirm_en.strip()) and bool(confirm_ar.strip()) and confirm_en != confirm_ar),
+            "detail": {"en": confirm_en, "ar": confirm_ar, "owner_authored_only": True},
         },
         {
             "id": "index_readiness_typed",

@@ -16,7 +16,6 @@ from services.ai_setup.faq_integration_helpers import (
 from services.ai_setup.schemas import FaqRecord, FaqSection, FaqVariant
 from services.ai_setup.storage import get_draft, put_draft
 from services.brain.language_detection_service import language_detection_service
-from services.faq.local_qa_service import local_qa_service
 
 
 def list_cm_faq(
@@ -154,16 +153,7 @@ def archive_cm_faq_group(
         tenant_id=tenant_id,
         updated_by=updated_by,
     )
-    # Soft-deactivate matching local QA rows (preserve history; do not delete).
-    deactivated = 0
-    for pair in local_qa_service.qa_pairs:
-        if pair.get("qa_group_id") == qa_group_id and pair.get("is_active", True):
-            pair["is_active"] = False
-            pair["status"] = "archived"
-            deactivated += 1
-    if deactivated:
-        local_qa_service.save_to_jsonl()
-    return {"success": True, "qa_group_id": qa_group_id, "status": "archived", "deactivated_rows": deactivated}
+    return {"success": True, "qa_group_id": qa_group_id, "status": "archived", "deactivated_rows": 0}
 
 
 async def update_cm_faq_variant(
@@ -232,14 +222,6 @@ async def update_cm_faq_variant(
         tenant_id=tenant_id,
         updated_by=updated_by,
     )
-    # Mirror manual correction into local QA store for runtime exact match.
-    for pair in local_qa_service.qa_pairs:
-        if pair.get("qa_group_id") == qa_group_id and pair.get("language") == lang:
-            if question is not None:
-                pair["question"] = question
-            if answer is not None:
-                pair["answer"] = answer
-    local_qa_service.save_to_jsonl()
     payload = target.model_dump(mode="json")
     required_langs = load_faq_target_languages(tenant_id=tenant_id)
     payload["incomplete"] = not target.is_complete_for_languages(required_langs)
@@ -368,7 +350,6 @@ def purge_smart_answer_language_data(
 
     env = get_draft(FAQ_SECTION, tenant_id=tenant_id, create_default=True)
     section = FaqSection.model_validate(env.payload)
-    tenant_key = str(tenant_id or "").strip().lower()
     groups_touched = 0
     variants_removed = 0
     archived_groups: list[str] = []
@@ -409,19 +390,6 @@ def purge_smart_answer_language_data(
         updated_by=updated_by,
     )
 
-    deleted_rows = 0
-    kept_pairs: list[dict[str, Any]] = []
-    for pair in local_qa_service.qa_pairs:
-        pair_lang = language_detection_service.normalize_training_language(pair.get("language"), default="")
-        pair_tenant = str(pair.get("tenant_id") or "").strip().lower()
-        if pair_lang == lang and (not tenant_key or pair_tenant == tenant_key):
-            deleted_rows += 1
-            continue
-        kept_pairs.append(pair)
-    if deleted_rows:
-        local_qa_service.qa_pairs = kept_pairs
-        local_qa_service.save_to_jsonl()
-
     if remove_from_config:
         lang_save = remove_smart_answer_language(tenant_id=tenant_id, language=lang, updated_by=updated_by)
     else:
@@ -432,7 +400,7 @@ def purge_smart_answer_language_data(
         "groups_touched": groups_touched,
         "variants_removed": variants_removed,
         "archived_groups": archived_groups,
-        "deleted_runtime_rows": deleted_rows,
+        "deleted_runtime_rows": 0,
         "smart_answer_languages": lang_save.get("smart_answer_languages"),
     }
 

@@ -153,11 +153,11 @@ async def unanswered_question_result(
     stop_reason: StopReason = "ok"
     dispositions: dict[str, TaskDisposition]
     if ok:
-        text = brain_template("handoff", lang)
+        text = (brain_template("handoff", lang) or "").strip()
         decision = "handoff_ack"
         dispositions = {task.id: "not_found" for task in plan.tasks if task.type in _INFO_TYPES}
         dispositions["handoff"] = "action_succeeded"
-        messages = [OutboundMessage(destination=dest, text=text, protected=True)]
+        messages = [OutboundMessage(destination=dest, text=text, protected=True)] if text else []
         stop_reason = "ok"
     else:
         from services.brain.silence import log_customer_generation_failure
