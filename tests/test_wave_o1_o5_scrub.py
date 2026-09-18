@@ -67,9 +67,10 @@ def test_wave_o5_durable_bridge_key_and_ai_setup_paths() -> None:
 
 def test_wave_o1_o5_keep_portal_drawer_credits_catalog_ig() -> None:
     app = (ROOT / "dashboard/src/App.jsx").read_text(encoding="utf-8")
+    portal = app + (ROOT / "dashboard/src/owner_portal/OwnerPortalRoutes.jsx").read_text(encoding="utf-8")
     drawer = (ROOT / "mobile/linas-ai/src/features/nav/drawerModules.ts").read_text(encoding="utf-8")
     assert 'path="/"' in app
-    assert "OwnerLayout" in app or 'path="/owner"' in app or 'path="/owner/*"' in app
+    assert "OwnerLayout" in portal or 'path="/owner"' in portal or 'path="/owner/*"' in portal
     assert drawer.count("id: '") + drawer.count('id: "') >= 9
     assert (ROOT / "services/billing/membership/message_catalog.py").is_file()
     assert (ROOT / "services/billing/credit_ledger_service.py").is_file()

@@ -45,10 +45,12 @@ def test_wave_x4_keep_apis_are_not_product_disabled() -> None:
 
 def test_wave_x4_marketing_portal_and_domain_packages() -> None:
     app = (ROOT / "dashboard/src/App.jsx").read_text(encoding="utf-8")
+    portal = app + (ROOT / "dashboard/src/owner_portal/OwnerPortalRoutes.jsx").read_text(encoding="utf-8")
     main = (ROOT / "main.py").read_text(encoding="utf-8")
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
     assert 'path="/" element={<Landing />}' in app
-    assert "OwnerOverview" in app
+    assert "OwnerOverview" in portal
+    assert "ownerPortalRouteElements" in app
     assert 'path="/features"' in app or "path='/features'" in app
     assert "/owner/lab" not in app
     for needle in (
