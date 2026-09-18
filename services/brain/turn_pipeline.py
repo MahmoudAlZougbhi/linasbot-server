@@ -27,6 +27,9 @@ def _response_language(turn: CustomerTurn) -> str:
 
 
 def inbound_task_text(turn: CustomerTurn, message: str) -> str:
+    raw = (message or "").strip()
+    if "post_caption=" in raw or "post_kind=" in raw:
+        return raw
     parts: list[str] = []
     for item in (message, turn.media.transcript, turn.media.extract_preview):
         text = (item or "").strip()
@@ -34,7 +37,7 @@ def inbound_task_text(turn: CustomerTurn, message: str) -> str:
             parts.append(text)
     caption = str(turn.extra.get("post_caption") or "").strip()
     if caption and turn.surface == "comment":
-        parts.insert(0, caption)
+        parts.append("post_caption=" + " ".join(caption.split()))
     media_type = str(turn.extra.get("post_media_type") or "").strip()
     if media_type and turn.surface == "comment":
         parts.append(f"post_kind={media_type}")

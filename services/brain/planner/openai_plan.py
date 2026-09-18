@@ -8,7 +8,7 @@ from datetime import UTC
 from services.brain.contracts.plan import PlannerPlan
 from services.brain.generate.reply import openai_configured
 from services.brain.greeting import is_greeting_only
-from services.brain.planner.heuristic import overlay_plan
+from services.brain.planner.heuristic import overlay_plan, planner_customer_text
 from services.brain.providers.config import planner_model
 
 
@@ -83,9 +83,10 @@ async def plan_turn(
     tenant_id: str = "",
     operation_id: str = "",
 ) -> PlannerPlan:
-    if is_greeting_only(message):
-        return overlay_plan(None, message)
-    planned = await plan_with_openai(message, history, tenant_id=tenant_id)
+    customer = planner_customer_text(message)
+    if is_greeting_only(customer):
+        return overlay_plan(None, customer)
+    planned = await plan_with_openai(customer, history, tenant_id=tenant_id)
     if planned is not None and tenant_id.strip():
         from datetime import datetime
 
@@ -107,4 +108,4 @@ async def plan_turn(
         from services.brain.planner.published_rules import allowed_action_task_types
 
         enabled = allowed_action_task_types(tenant_id)
-    return overlay_plan(planned, message, enabled_action_types=enabled)
+    return overlay_plan(planned, customer, enabled_action_types=enabled)

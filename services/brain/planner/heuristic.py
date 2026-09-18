@@ -65,18 +65,34 @@ _ANNOTATION_PREFIXES = (
     "post_visual=",
     "post_audio_transcript=",
     "post_media_url=",
+    "post_caption=",
+)
+_ANNOTATION_INLINE = re.compile(
+    r"(?:post_media_type|post_kind|post_visual|post_audio_transcript|post_media_url|post_caption)="
+    r".*?(?=(?:\s(?:post_media_type|post_kind|post_visual|post_audio_transcript|post_media_url|post_caption)=)|$)",
+    re.I,
+)
+_ADDRESS = re.compile(
+    r"("
+    r"\b(address|location|where are you|where is your|which branch|what branch)\b"
+    r"|عنوان|العنون|وين فرع|وين موقع|وين محل|موقعكم|فرعنا|فروعكم|الفرع"
+    r")",
+    re.I,
 )
 
 
 def planner_customer_text(message: str) -> str:
-    """Drop Brain post-analysis lines so they cannot fake a catalog photo request."""
+    """Drop Brain post-analysis tokens so they cannot fake a catalog photo request."""
+    cleaned = _ANNOTATION_INLINE.sub(" ", message or "")
     kept: list[str] = []
-    for line in (message or "").splitlines():
-        stripped = line.strip().casefold()
-        if any(stripped.startswith(prefix) for prefix in _ANNOTATION_PREFIXES):
+    for line in cleaned.splitlines():
+        stripped = line.strip()
+        if not stripped:
             continue
-        kept.append(line)
-    return "\n".join(kept).strip() or (message or "").strip()
+        if any(stripped.casefold().startswith(prefix) for prefix in _ANNOTATION_PREFIXES):
+            continue
+        kept.append(stripped)
+    return "\n".join(kept).strip()
 
 
 def _has(pattern: re.Pattern[str], text: str, *substrings: str) -> bool:
@@ -119,6 +135,8 @@ def plan_message(message: str) -> PlannerPlan:
         tasks.append(_task("t_media", "resource_request", text, ["services", "products", "knowledge"]))
     if _has(_HOURS, text, "ساعات", "مفتوح", "مغلق", "الدوام", "دوام", "يفتح", "يسكر", "فاتح"):
         tasks.append(_task("t_hours", "hours", text, ["hours", "branches"]))
+    if _has(_ADDRESS, text, "عنوان", "فرع", "location", "address"):
+        tasks.append(_task("t_addr", "information", text, ["branches", "hours"]))
     if _has(_PRICE, text, "سعر", "كلفة", "غلى") or _has(_PRODUCT, text, "منتج", "سيروم", "كريم"):
         families: list[SourceFamily] = ["services", "prices"]
         if _has(_PRODUCT, text, "منتج", "سيروم", "كريم"):
@@ -241,6 +259,18 @@ def overlay_plan(
                 if "branches" not in families:
                     families.append("branches")
                 task.source_families = families or ["hours", "branches"]
+
+    if _has(_ADDRESS, planner_customer_text(message), "عنوان", "فرع", "location", "address"):
+        for task in tasks:
+            if task.type == "information":
+                families = [fam for fam in task.source_families if fam != "none"]
+                if "branches" not in families:
+                    families.append("branches")
+                task.source_families = families or ["branches", "hours"]
+        if not any(task.type == "information" for task in tasks):
+            addr = next((task for task in heur.tasks if "branches" in (task.source_families or [])), None)
+            if addr is not None:
+                tasks.append(addr.model_copy(deep=True))
 
     for task in heur.tasks:
         if task.type in _ACTION_TYPES and task.type not in llm_types:
