@@ -210,6 +210,14 @@ def expand_hits(
                 text = "\n".join(part for part in [text, *extra_clocks] if str(part).strip())
         if not text:
             continue
+        extra = {
+            "lexical_score": hit.score,
+            "entity_id": source_id,
+            "entity_type": family,
+            "tenant_id": tenant_id,
+            "bundle": "+" in card.title or " and " in card.title.casefold(),
+            "aliases": list(card.aliases),
+        }
         items.append(
             EvidenceItem(
                 evidence_id=card.item_id,
@@ -218,7 +226,7 @@ def expand_hits(
                 revision=revision or card.revision,
                 title=card.title,
                 text=text,
-                extra={"lexical_score": hit.score},
+                extra=extra,
             )
         )
     outcome = "found" if items else "not_found"

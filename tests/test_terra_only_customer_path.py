@@ -28,13 +28,14 @@ def _turn() -> CustomerTurn:
 
 
 @pytest.mark.asyncio
-async def test_hello_goes_to_agentic_terra_path(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_hello_uses_greeting_only_terra_path(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.brain.turn_pipeline import run_dm_after_gates
 
     called: dict[str, str] = {}
 
-    async def agentic(turn, *, message, channel, flow_base, visual_reason):
+    async def greet(turn, *, message, channel, flow_base=None):
         called["message"] = message
+        called["path"] = "greeting"
         return TurnResult(
             stop_reason="ok",
             envelope=FinalReplyEnvelope(
@@ -42,16 +43,19 @@ async def test_hello_goes_to_agentic_terra_path(monkeypatch: pytest.MonkeyPatch)
                 messages=[OutboundMessage(destination="instagram_dm", text="Hello from Terra")],
             ),
             ai_called=True,
-            extra={"path": "agentic"},
+            extra={"path": "greeting_only", "retrieval_skipped": True},
         )
 
-    monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", AsyncMock(return_value=None))
+    async def agentic(*_a, **_k):
+        raise AssertionError("greeting-only must not retrieve via agentic path")
+
+    monkeypatch.setattr("services.brain.agent.greeting_turn.identity_greeting_result", greet)
     monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", agentic)
     out = await run_dm_after_gates(_turn(), message="Hello", channel="instagram_dm")
     assert called["message"] == "Hello"
     assert out.envelope.messages[0].text == "Hello from Terra"
     assert out.ai_called is True
+    assert (out.extra or {}).get("retrieval_skipped") is True
 
 
 @pytest.mark.asyncio

@@ -17,17 +17,6 @@ _PROTECTED = re.compile(
 )
 
 _WORD_MAP: dict[str, str] = {
-    "antelias": "antelias",
-    "antelyas": "antelias",
-    "antalias": "antelias",
-    "antelyaas": "antelias",
-    "3antelias": "antelias",
-    "3ntelias": "antelias",
-    "beirut": "beirut",
-    "bayrut": "beirut",
-    "beyrouth": "beirut",
-    "beirout": "beirut",
-    "beiruut": "beirut",
     "se3er": "سعر",
     "se3r": "سعر",
     "si3er": "سعر",
@@ -39,8 +28,9 @@ _WORD_MAP: dict[str, str] = {
     "howmuch": "price",
     "dawem": "دوام",
     "aw2at": "اوقات",
+    "khadamat": "خدمات",
+    "khadamet": "خدمات",
     "sha3er": "شعر",
-    "fullbody": "full body",
 }
 
 
@@ -86,7 +76,7 @@ def normalize_query(message: str) -> dict[str, Any]:
     arab = normalize_arabic(primary)
     if arab and arab.casefold() != primary.casefold():
         alternates.append(arab)
-    for src, dst in (("se3er", "سعر"), ("antelias", "antelias branch"), ("beirut", "beirut branch"), ("price", "سعر")):
+    for src, dst in (("se3er", "سعر"), ("price", "سعر"), ("dawem", "دوام")):
         if re.search(rf"\b{re.escape(src)}\b", original, re.I):
             alt = f"{primary} {dst}".strip()
             if alt.casefold() != primary.casefold():

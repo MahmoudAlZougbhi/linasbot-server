@@ -6,7 +6,7 @@ from typing import Any
 
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
 from services.brain.contracts.plan import PlannerPlan
-from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 
 
@@ -139,38 +139,44 @@ async def resource_request_result(
     if not proposals.actions:
         return None
     if not any(item.target_id for item in proposals.actions):
+        from services.brain.silence import log_customer_generation_failure
+
+        log_customer_generation_failure(stage="resource_not_found")
         return TurnResult(
-            stop_reason="ok",
+            stop_reason="failed_closed",
             envelope=FinalReplyEnvelope(
-                decision="clarify",
-                messages=[
-                    OutboundMessage(
-                        destination=_destination(channel, turn),
-                        text="I could not find an authorized photo or link for that yet.",
-                        protected=True,
-                    )
-                ],
+                decision="no_reply",
+                messages=[],
                 dispositions={task.id: "not_found" for task in plan.tasks if task.type == "resource_request"},
             ),
-            extra={"phase": "resource", "plan": plan.model_dump(), "receipts": []},
+            extra={"phase": "resource", "plan": plan.model_dump(), "receipts": [], "customer_silence": True},
         )
     receipts = await execute_resource_proposals(turn, proposals, customer_text=message)
     ok = any(item.get("state") in {"pending", "success"} for item in receipts)
-    text = (
-        "I found the authorized media and queued it for delivery."
-        if ok
-        else "I could not send that media from the published catalog."
-    )
+    if not ok:
+        from services.brain.silence import log_customer_generation_failure
+
+        log_customer_generation_failure(stage="resource_send_failed")
+        return TurnResult(
+            stop_reason="failed_closed",
+            envelope=FinalReplyEnvelope(
+                decision="no_reply",
+                messages=[],
+                dispositions={task.id: "not_found" for task in plan.tasks if task.type == "resource_request"},
+            ),
+            extra={
+                "phase": "resource",
+                "plan": plan.model_dump(),
+                "receipts": receipts,
+                "customer_silence": True,
+            },
+        )
     return TurnResult(
         stop_reason="ok",
         envelope=FinalReplyEnvelope(
-            decision="deterministic" if ok else "clarify",
-            messages=[OutboundMessage(destination=_destination(channel, turn), text=text, protected=True)],
-            dispositions={
-                task.id: ("pending_delivery" if ok else "not_found")
-                for task in plan.tasks
-                if task.type == "resource_request"
-            },
+            decision="deterministic",
+            messages=[],
+            dispositions={task.id: "pending_delivery" for task in plan.tasks if task.type == "resource_request"},
         ),
         extra={"phase": "resource", "plan": plan.model_dump(), "receipts": receipts},
     )

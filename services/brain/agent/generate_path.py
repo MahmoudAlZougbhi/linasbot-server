@@ -30,31 +30,9 @@ def _flow_extra(extra: dict | None, *rows: tuple[str, str, dict | None]) -> dict
 
 
 def apply_greeting(turn: CustomerTurn, message: str, channel: str, envelope: FinalReplyEnvelope) -> FinalReplyEnvelope:
-    from services.brain.conversation_store import remember_turn
-    from services.brain.greeting import evaluate_greeting, is_greeting_only
-
-    if turn.invocation_kind in {"followup", "comment"} or not envelope.messages:
-        return envelope
-    if is_greeting_only(message):
-        return envelope
-    greet = evaluate_greeting(
-        tenant_id=turn.tenant_id,
-        message=message,
-        history=turn.history,
-        invocation_kind=turn.invocation_kind,
-        already_greeted=turn.state.greeted,
-    )
-    if not (greet.eligible and greet.text):
-        return envelope
-    from services.brain.outbound_safety import is_customer_safe_opener
-
-    if not is_customer_safe_opener(greet.text):
-        return envelope
-    turn.state = turn.state.model_copy(update={"greeted": True})
-    remember_turn(turn)
-    destination = envelope.messages[0].destination or _destination(channel, turn)
-    greeting = OutboundMessage(destination=destination, text=greet.text, protected=True)
-    return envelope.model_copy(update={"messages": [greeting, *list(envelope.messages)]})
+    """Terra owns conversational copy. Do not concatenate a second greeting after generation."""
+    _ = (turn, message, channel)
+    return envelope
 
 
 async def generate_verified(
@@ -212,11 +190,13 @@ async def generate_verified(
     agent_trace.append({"step": "FINAL", "decision": envelope.decision})
     greeted = apply_greeting(turn, message, channel, envelope.model_copy(update={"dispositions": dispositions}))
     if extra.get("awaiting_confirmation"):
-        from services.brain.templates import brain_template
+        from services.brain.templates import owner_protocol_text
 
         lang = str((turn.extra or {}).get("response_language") or "")
-        confirm = OutboundMessage(destination=dest, text=brain_template("confirm_request", lang))
-        greeted = greeted.model_copy(update={"messages": [*list(greeted.messages), confirm]})
+        confirm_text = owner_protocol_text("confirm_request", lang)
+        if confirm_text:
+            confirm = OutboundMessage(destination=dest, text=confirm_text, protected=True)
+            greeted = greeted.model_copy(update={"messages": [*list(greeted.messages), confirm]})
     from services.brain.agent.action_gate import append_handoff_message
 
     lang = str((turn.extra or {}).get("response_language") or "")

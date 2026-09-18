@@ -32,12 +32,13 @@ def prepare_query_text(query: str) -> str:
     import re
 
     from services.brain.agent.normalize_query import normalize_query
+    from services.brain.retrieve.query_expand import expand_query_text
 
     norm = normalize_query(query)
-    parts = [norm.get("primary") or "", *(norm.get("alternates") or [])[:2], query]
+    parts = [norm.get("primary") or "", *(norm.get("alternates") or [])[:2], query, expand_query_text(query)]
     base = normalize_search_text(" ".join(p for p in parts if p))
     if re.search(r"(دوام|اوقات|أوقات|ساعات|aw2at|dawem|hours|open(?:ing)?)", base, re.I):
-        base = normalize_search_text(f"{base} hours opening clinic hours")
+        base = normalize_search_text(f"{base} hours opening")
     folded = normalize_arabic(base)
     if folded and folded not in base:
         return normalize_search_text(f"{base} {folded}")

@@ -11,7 +11,7 @@ from services.brain.contracts.plan import PlannerPlan
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.stage_timeline import stamp
-from services.brain.templates import brain_template
+from services.brain.templates import owner_protocol_text
 
 _INFO_TYPES = {"information", "hours", "comparison"}
 _CONTINUE_TYPES = _INFO_TYPES | {"resource_request", "service_request", "product_request", "cancel_or_status"}
@@ -40,7 +40,9 @@ def append_handoff_message(
 ) -> FinalReplyEnvelope:
     if not extra.get("handoff_ok"):
         return envelope
-    text = brain_template("handoff", lang)
+    text = owner_protocol_text("handoff", lang)
+    if not text:
+        return envelope
     if any((item.text or "").strip() == text for item in envelope.messages):
         return envelope
     return envelope.model_copy(
@@ -118,9 +120,10 @@ async def apply_action_gate(
         extra["receipts"] = list(extra.get("receipts") or []) + dumped
         if not _should_continue(plan):
             agent_trace.append({"step": "FINAL", "decision": "handoff_ack" if ok else "no_reply"})
+            ack = owner_protocol_text("handoff", lang)
             envelope = FinalReplyEnvelope(
                 decision="handoff_ack" if ok else "no_reply",
-                messages=[OutboundMessage(destination=dest, text=brain_template("handoff", lang))] if ok else [],
+                messages=[OutboundMessage(destination=dest, text=ack, protected=True)] if ok and ack else [],
                 dispositions={"handoff": "action_succeeded" if ok else "failed"},
             )
             return ActionGateResult(
@@ -154,28 +157,30 @@ async def apply_action_gate(
         }
         info_tasks = [task for task in plan.tasks if task.type in _INFO_TYPES]
         if not info_tasks:
-            agent_trace.append({"step": "FINAL", "decision": "clarify", "reason": "awaiting_confirmation"})
-            envelope = FinalReplyEnvelope(
-                decision="clarify",
-                messages=[OutboundMessage(destination=dest, text=brain_template("confirm_request", lang))],
-            )
-            envelope = append_handoff_message(envelope, extra, dest=dest, lang=lang)
-            return ActionGateResult(
-                early=TurnResult(
-                    stop_reason="ok",
-                    envelope=envelope,
-                    extra=_flow_extra(
-                        {
-                            "phase": "actions_pending",
-                            "plan": plan.model_dump(),
-                            "awaiting_confirmation": True,
-                            "pending_actions": [item.model_dump() for item in held.actions],
-                            "agent_trace": agent_trace,
-                            **extra,
-                        },
-                        ("request", "Waiting for customer confirmation before submitting request", None),
+            confirm_text = owner_protocol_text("confirm_request", lang)
+            if confirm_text:
+                agent_trace.append({"step": "FINAL", "decision": "clarify", "reason": "awaiting_confirmation"})
+                envelope = FinalReplyEnvelope(
+                    decision="clarify",
+                    messages=[OutboundMessage(destination=dest, text=confirm_text, protected=True)],
+                )
+                envelope = append_handoff_message(envelope, extra, dest=dest, lang=lang)
+                return ActionGateResult(
+                    early=TurnResult(
+                        stop_reason="ok",
+                        envelope=envelope,
+                        extra=_flow_extra(
+                            {
+                                "phase": "actions_pending",
+                                "plan": plan.model_dump(),
+                                "awaiting_confirmation": True,
+                                "pending_actions": [item.model_dump() for item in held.actions],
+                                "agent_trace": agent_trace,
+                                **extra,
+                            },
+                            ("request", "Waiting for customer confirmation before submitting request", None),
+                        ),
                     ),
-                ),
-                extra=extra,
-            )
+                    extra=extra,
+                )
     return ActionGateResult(early=None, extra=extra)

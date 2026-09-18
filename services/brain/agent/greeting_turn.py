@@ -88,52 +88,42 @@ def _social_ungrounded(text: str) -> list[str]:
     return ungrounded_claims(text, empty, receipts=["identity:greeting"])
 
 
+def _closed_greeting(
+    turn: CustomerTurn,
+    *,
+    channel: str,
+    flow_base: dict | None = None,
+    reason: str,
+) -> TurnResult:
+    extra = dict(flow_base or {})
+    extra = stamp(
+        extra,
+        "greeting",
+        title="Greeting-only turn failed closed",
+        detail={"reason": reason},
+    )
+    return TurnResult(
+        stop_reason="failed_closed",
+        envelope=FinalReplyEnvelope(decision="no_reply", messages=[]),
+        extra={
+            **extra,
+            "phase": "identity_greeting",
+            "path": "greeting_only",
+            "customer_silence": True,
+            "reason": reason,
+        },
+    )
+
+
 async def identity_greeting_result(
     turn: CustomerTurn,
     *,
     message: str,
     channel: str,
     flow_base: dict | None = None,
-) -> TurnResult | None:
-    """Greeting-only identity shortcut is retired. Hello uses retrieve → Terra."""
-    _ = (turn, message, channel, flow_base)
-    return None
-
-
-def _fallback_greeting_result(
-    turn: CustomerTurn,
-    *,
-    message: str,
-    channel: str,
-    flow_base: dict | None = None,
 ) -> TurnResult:
-    from services.brain.greeting import inbound_greeting_language, safe_greeting_text
-
-    lang = _response_language(turn) or inbound_greeting_language(message)
-    text = safe_greeting_text(
-        tenant_id=turn.tenant_id,
-        message=message,
-        language=lang,
-        history=turn.history,
-    )
-    turn.state = turn.state.model_copy(update={"greeted": True})
-    try:
-        from services.brain.conversation_store import remember_turn
-
-        remember_turn(turn)
-    except Exception:
-        pass
-    extra = dict(flow_base or {})
-    extra = stamp(extra, "greeting", title="Greeting fail-soft (no LLM identity line)", detail={"ai_called": False})
-    return TurnResult(
-        stop_reason="ok",
-        envelope=FinalReplyEnvelope(
-            decision="reply",
-            messages=[OutboundMessage(destination=_destination(channel, turn), text=text)],
-        ),
-        ai_called=False,
-        extra={**extra, "phase": "identity_greeting", "path": "identity_greeting_fail_soft"},
-    )
+    """Greeting-only: Identity + Greeting Behavior + Style → Terra once. No catalog retrieve."""
+    return await _identity_greeting_llm(turn, message=message, channel=channel, flow_base=flow_base)
 
 
 async def _identity_greeting_llm(
@@ -144,7 +134,7 @@ async def _identity_greeting_llm(
     flow_base: dict | None = None,
 ) -> TurnResult:
     if not openai_configured():
-        return _fallback_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
+        return _closed_greeting(turn, channel=channel, flow_base=flow_base, reason="provider_not_configured")
     from services.billing.membership.provider_expense import record_pending_provider
     from services.brain.billing import operation_id_for_turn
     from services.brain.llm_core_service import create_chat_completion
@@ -169,24 +159,27 @@ async def _identity_greeting_llm(
         model=answer_model(),
         operation_id=op,
     )
-    response = await create_chat_completion(
-        model=answer_model(),
-        messages=[
-            {"role": "system", "content": _SYSTEM},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=220,
-    )
+    try:
+        response = await create_chat_completion(
+            model=answer_model(),
+            messages=[
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=220,
+        )
+    except Exception:
+        return _closed_greeting(turn, channel=channel, flow_base=flow_base, reason="provider_error")
     try:
         text = str(response.choices[0].message.content or "").strip()
     except Exception:
         text = ""
     if not text or _social_ungrounded(text):
-        return _fallback_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
-    from services.brain.outbound_safety import is_customer_safe_opener, looks_like_instruction_text
+        return _closed_greeting(turn, channel=channel, flow_base=flow_base, reason="ungrounded_or_empty")
+    from services.brain.outbound_safety import looks_like_instruction_text
 
-    if looks_like_instruction_text(text) or not is_customer_safe_opener(text):
-        return _fallback_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
+    if looks_like_instruction_text(text):
+        return _closed_greeting(turn, channel=channel, flow_base=flow_base, reason="outbound_instruction_blocked")
     turn.state = turn.state.model_copy(update={"greeted": True})
     from services.brain.conversation_store import remember_turn
 
@@ -200,5 +193,5 @@ async def _identity_greeting_llm(
             messages=[OutboundMessage(destination=dest, text=text)],
         ),
         ai_called=True,
-        extra={**extra, "phase": "identity_greeting", "path": "identity_greeting"},
+        extra={**extra, "phase": "identity_greeting", "path": "greeting_only", "retrieval_skipped": True},
     )

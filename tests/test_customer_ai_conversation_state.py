@@ -350,7 +350,9 @@ async def test_yes_explains_when_requests_are_not_set_up(monkeypatch: pytest.Mon
     result = await try_confirm_pending(second, "yes", "instagram_dm")
     assert result is not None
     assert result.extra["confirmed"] is False
-    assert "request setup" in result.envelope.messages[0].text.lower()
+    assert result.stop_reason == "failed_closed"
+    assert not result.envelope.messages
+    assert (result.extra or {}).get("customer_silence") is True
     assert load_conversation("t-setup", "c-setup")["pending"]
 
 

@@ -32,13 +32,36 @@ def test_safe_greeting_never_uses_validator_or_temporary_copy() -> None:
 
 
 @pytest.mark.asyncio
-async def test_identity_greeting_shortcut_is_retired() -> None:
+async def test_identity_greeting_is_terra_path_not_catalog_retrieve(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.brain.agent.greeting_turn import identity_greeting_result
     from services.brain.contracts.turn import CustomerTurn
 
+    class _Msg:
+        content = "Hello! How can I help you today?"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+    async def fake_llm(*_a, **_k):
+        return _Resp()
+
+    monkeypatch.setattr("services.brain.agent.greeting_turn.openai_configured", lambda: True)
+    monkeypatch.setattr("services.brain.agent.greeting_turn._identity_context", lambda _turn: "IDENTITY\nname=Marwa")
+    monkeypatch.setattr("services.billing.membership.provider_expense.record_pending_provider", lambda **_k: None)
+    monkeypatch.setattr("services.brain.providers.config.answer_model", lambda: "gpt-test")
+    monkeypatch.setattr("services.brain.billing.operation_id_for_turn", lambda _turn: "op-test")
+    monkeypatch.setattr("services.brain.llm_core_service.create_chat_completion", fake_llm)
+    monkeypatch.setattr("services.brain.conversation_store.remember_turn", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.brain.agent.greeting_turn._social_ungrounded", lambda _text: [])
     turn = CustomerTurn(tenant_id="t-greet-llm", conversation_id="c1", event_ids=["m1"])
     out = await identity_greeting_result(turn, message="Hi kifak", channel="instagram_dm")
-    assert out is None
+    assert out is not None
+    assert out.ai_called is True
+    assert out.envelope.messages[0].text.startswith("Hello")
+    assert (out.extra or {}).get("retrieval_skipped") is True
 
 
 @pytest.mark.asyncio

@@ -183,7 +183,7 @@ async def multi_round_retrieve(
     rounds = max(1, int(max_rounds if max_rounds is not None else DEFAULT_BUDGETS.max_retrieval_rounds))
     history = list(turn.history.messages)
     language = str((turn.extra or {}).get("response_language") or "")
-    rewritten = await rewrite_queries(message, history, language)
+    rewritten = await rewrite_queries(message, history, language, tenant_id=turn.tenant_id)
     normalized = normalize_query(rewritten.get("rewritten") or message)
     variants = list(rewritten.get("variants") or []) + list(normalized.get("alternates") or [])
 
@@ -227,7 +227,7 @@ async def multi_round_retrieve(
         provisional = EvidenceBundle(items=merged, outcome=outcome)  # type: ignore[arg-type]
         from services.brain.retrieve.conflict import apply_authority
 
-        provisional, conflict_meta = apply_authority(provisional)
+        provisional, conflict_meta = apply_authority(provisional, query=message)
         merged = list(provisional.items)
         facts = _structured_facts(provisional)
         coverage = evaluate_task_coverage(plan, provisional, facts)
@@ -247,5 +247,28 @@ async def multi_round_retrieve(
                 {"round": round_idx, "query": "", "families": [], "hit_ids": [], "reason": "early_stop_covered"}
             )
             break
+
+    from services.brain.catalog_intent import is_catalog_list
+
+    list_intent = is_catalog_list(message) or any("catalog_list" in task.entity_mentions for task in plan.tasks)
+    if list_intent:
+        from services.brain.retrieve.catalog_list import catalog_list_items
+
+        families = {fam for task in plan.tasks for fam in (task.source_families or [])} or None
+        extra_items = catalog_list_items(turn.tenant_id, message, families=families)
+        if extra_items:
+            merged = _merge_items(merged, extra_items)
+            outcome = "found"
+            facts = _structured_facts(EvidenceBundle(items=merged, outcome="found"))
+            trace.append(
+                {
+                    "round": rounds,
+                    "query": message,
+                    "families": sorted(families or []),
+                    "hit_ids": [item.evidence_id for item in extra_items],
+                    "reason": "catalog_list",
+                    "outcome": "found",
+                }
+            )
 
     return EvidenceBundle(items=merged, outcome=outcome if merged else outcome), trace, facts  # type: ignore[arg-type]

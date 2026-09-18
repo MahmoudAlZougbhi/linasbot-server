@@ -85,19 +85,32 @@ async def try_confirm_pending(turn: CustomerTurn, message: str, channel: str) ->
         return None
     receipts = await _execute(turn, proposals, message)
     ok = any(item.get("state") == "success" for item in receipts)
-    if ok:
-        remember_turn(turn, [])
-    text = _confirm_reply(ok, receipts)
-    from services.brain.outbound_destination import outbound_destination
+    if not ok:
+        from services.brain.silence import log_customer_generation_failure
 
+        log_customer_generation_failure(
+            stage="request_persist_failed",
+            extra={"receipts": receipts, "tenant_id": turn.tenant_id},
+        )
+        return TurnResult(
+            stop_reason="failed_closed",
+            envelope=FinalReplyEnvelope(decision="no_reply", messages=[]),
+            extra={"phase": "request_confirm", "receipts": receipts, "confirmed": False, "customer_silence": True},
+        )
+    remember_turn(turn, [])
+    from services.brain.outbound_destination import outbound_destination
+    from services.brain.templates import owner_protocol_text
+
+    lang = str((turn.extra or {}).get("response_language") or "")
+    text = owner_protocol_text("confirm_request", lang)
     destination = outbound_destination(turn, channel)
+    messages = []
+    if text:
+        messages = [OutboundMessage(destination=destination, text=text, protected=True)]
     return TurnResult(
         stop_reason="ok",
-        envelope=FinalReplyEnvelope(
-            decision="deterministic" if ok else "clarify",
-            messages=[OutboundMessage(destination=destination, text=text, protected=True)],
-        ),
-        extra={"phase": "request_confirm", "receipts": receipts, "confirmed": ok},
+        envelope=FinalReplyEnvelope(decision="deterministic", messages=messages),
+        extra={"phase": "request_confirm", "receipts": receipts, "confirmed": True},
     )
 
 
@@ -119,16 +132,3 @@ async def _execute(turn: CustomerTurn, proposals: ActionProposalSet, message: st
         return [item.model_dump() for item in receipts.receipts]
     except Exception:
         return [{"action_type": "start_request", "state": "failure", "reason": "submit_failed"}]
-
-
-def _confirm_reply(ok: bool, receipts: list[dict]) -> str:
-    reasons = {str(item.get("reason") or "") for item in receipts}
-    if ok:
-        return "The request is submitted. A teammate will follow up if anything else is needed."
-    if "REQUESTS_SETUP_REQUIRED" in reasons:
-        return "This shop has not finished request setup yet, so I cannot submit that yet."
-    if "confirmation_required" in reasons:
-        return "I still need a clear yes to submit that request."
-    if "invalid_source_channel" in reasons or "INVALID_SOURCE_CHANNEL" in reasons:
-        return "I cannot submit that request from this channel yet."
-    return "I could not submit that request yet. Please try again in a moment."

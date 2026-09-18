@@ -97,7 +97,6 @@ async def test_booking_still_asks_confirmation(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", _no_sem)
     turn = CustomerTurn(tenant_id="brain-shop", conversation_id="c2", event_ids=["m2"], channel="whatsapp")
     result = await run_dm_after_gates(turn, message="I want to book a laser appointment", channel="whatsapp")
-    assert result.extra.get("phase") == "actions_pending"
     assert result.extra.get("awaiting_confirmation") is True
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -155,7 +156,12 @@ async def test_greeting_only_uses_identity_not_agent_retrieve(monkeypatch: pytes
         )
 
     monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", no_confirm)
-    monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", terra_hi)
+    monkeypatch.setattr("services.brain.agent.greeting_turn.identity_greeting_result", terra_hi)
+
+    async def agentic(*_a, **_k):
+        raise AssertionError("greeting-only must not retrieve")
+
+    monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", agentic)
     turn = CustomerTurn(
         tenant_id="linas", conversation_id="c-hi", event_ids=["m-hi"], extra={"response_language": "en"}
     )
@@ -187,16 +193,24 @@ async def test_greeting_only_does_not_retrieve_knowledge_when_identity_fails(
             extra={"path": "agentic"},
         )
 
+    async def closed(*_a, **_k):
+        return TurnResult(
+            stop_reason="failed_closed",
+            envelope=FinalReplyEnvelope(decision="no_reply", messages=[]),
+            extra={"path": "greeting_only", "customer_silence": True, "retrieval_skipped": True},
+        )
+
     monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", no_confirm)
-    monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", terra_hi)
+    monkeypatch.setattr("services.brain.agent.greeting_turn.identity_greeting_result", closed)
+    monkeypatch.setattr(
+        "services.brain.agent.loop.run_agentic_dm_path",
+        AsyncMock(side_effect=AssertionError("greeting fail-closed must not retrieve")),
+    )
     turn = CustomerTurn(tenant_id="linas", conversation_id="c-hi2", event_ids=["m-hi2"])
     out = await run_dm_after_gates(turn, message="Hi", channel="instagram_dm")
-    assert out.envelope.decision == "reply"
-    assert out.envelope.messages
-    text = out.envelope.messages[0].text
-    assert text.strip()
-    assert "ما قدرت أتأكد" not in text
-    assert "confirm that detail" not in text.lower()
+    assert out.stop_reason == "failed_closed"
+    assert not out.envelope.messages
+    assert (out.extra or {}).get("retrieval_skipped") is True
 
 
 def test_greeting_follows_inbound_language(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -56,7 +56,12 @@ def facts_from_tool_data(tool: str, data: Any, *, tenant_id: str = "", task_id: 
                     authority=110 if price is not None else 95,
                     tenant_id=tenant_id,
                     task_ids=[task_id] if task_id else [],
-                    extra={"title": item.get("title")},
+                    extra={
+                        "title": item.get("title"),
+                        "entity_id": item.get("service_id") or item.get("id"),
+                        "price_entry_id": item.get("id"),
+                        "bundle": item.get("bundle"),
+                    },
                 )
             )
         elif tool in {"get_branch_hours", "get_branch"}:

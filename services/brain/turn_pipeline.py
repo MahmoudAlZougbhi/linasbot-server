@@ -119,6 +119,24 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
                 ("visual", "Image present but visual reading is disabled", {"reason": visual.reason}),
             ),
         )
+    from services.brain.greeting import is_greeting_only
+
+    if is_greeting_only(message):
+        from services.brain.agent.greeting_turn import identity_greeting_result
+
+        greeted = await identity_greeting_result(turn, message=message, channel=channel, flow_base=flow_base)
+        return greeted.model_copy(
+            update={
+                "extra": _flow_extra(
+                    {**(greeted.extra or {}), **flow_base},
+                    (
+                        "greeting",
+                        "Greeting-only turn used published Identity / Greeting Behavior / Style",
+                        {"path": (greeted.extra or {}).get("path"), "retrieval_skipped": True},
+                    ),
+                )
+            }
+        )
     faq = _exact_faq_result(turn, message, channel) or await _semantic_faq_result(turn, message, channel)
     if faq:
         return faq.model_copy(

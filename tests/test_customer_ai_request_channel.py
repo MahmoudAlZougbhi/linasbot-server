@@ -6,7 +6,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from services.brain.actions.pending import _confirm_reply, attach_confirmation, try_confirm_pending
+from services.brain.actions.pending import attach_confirmation, try_confirm_pending
 from services.brain.actions.requests import persist_request, request_source_channel
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
 from services.brain.contracts.turn import CustomerTurn
@@ -155,10 +155,8 @@ def test_persist_request_rejects_unknown_tiktok_source(req_db) -> None:
     assert receipt.reason == "invalid_source_channel"
 
 
-def test_confirm_reply_is_honest_for_unknown_channel() -> None:
-    text = _confirm_reply(False, [{"reason": "invalid_source_channel"}])
-    assert "cannot submit" in text.lower()
-    assert "try again" not in text.lower()
+def test_confirm_failure_is_silent_not_english_system_copy() -> None:
+    assert not hasattr(__import__("services.brain.actions.pending", fromlist=["pending"]), "_confirm_reply")
 
 
 @pytest.mark.asyncio
@@ -259,4 +257,5 @@ async def test_yes_from_tiktok_explains_unsupported_channel(monkeypatch: pytest.
     result = await try_confirm_pending(second, "yes", "tiktok")
     assert result is not None
     assert result.extra["confirmed"] is False
-    assert "cannot submit" in result.envelope.messages[0].text.lower()
+    assert result.stop_reason == "failed_closed"
+    assert not result.envelope.messages
