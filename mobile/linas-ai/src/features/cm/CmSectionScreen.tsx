@@ -1,28 +1,26 @@
-import { Text, View } from 'react-native';
-
-import type { CmProposalReview } from './cmProposalReview';
-import { cmFormStyles } from './cmFormStyles';
-import { getCmSection, type CmSectionId } from './cmSections';
-import { AiBasicsScreen } from './aiBasics/AiBasicsScreen';
-import { ArticlesEditor } from './editors/ArticlesEditor';
-import { KnowledgeScreen } from './knowledge/KnowledgeScreen';
-import { LocationHoursSectionScreen } from './LocationHoursSectionScreen';
-import { CommentsScreen } from './comments/CommentsScreen';
-import { RequestRulesScreen } from './requestRules/RequestRulesScreen';
-import { OpeningHoursEditor } from './editors/OpeningHoursEditor';
-import { GreetingsEditor } from './editors/GreetingsEditor';
-import { HandoffEditor } from './editors/HandoffEditor';
-import { OffDaysEditor } from './editors/OffDaysEditor';
-import { AiLimitsEditor } from './editors/AiLimitsEditor';
-import { RestrictedEditor } from './editors/PolicyEditors';
-import { PricesEditor } from './editors/PricesEditor';
-import { useCmDraft } from './useCmDraft';
 import { useState } from 'react';
-import { ScrollView } from 'react-native';
-import { ScreenSkeleton } from '../../components/ScreenSkeleton';
+import { ScrollView, Text, View } from 'react-native';
+
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { ScreenSkeleton } from '../../components/ScreenSkeleton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
+import { ServicesScreen } from '../services/ServicesScreen';
+import { AiBasicsScreen } from './aiBasics/AiBasicsScreen';
+import { CommentsScreen } from './comments/CommentsScreen';
+import { cmFormStyles } from './cmFormStyles';
+import type { CmProposalReview } from './cmProposalReview';
+import { getCmSection, type CmSectionId } from './cmSections';
+import { ArticlesEditor } from './editors/ArticlesEditor';
+import { AiLimitsEditor } from './editors/AiLimitsEditor';
+import { HandoffEditor } from './editors/HandoffEditor';
+import { OffDaysEditor } from './editors/OffDaysEditor';
+import { OpeningHoursEditor } from './editors/OpeningHoursEditor';
+import { RestrictedEditor } from './editors/PolicyEditors';
+import { KnowledgeScreen } from './knowledge/KnowledgeScreen';
+import { LocationHoursSectionScreen } from './LocationHoursSectionScreen';
+import { RequestRulesScreen } from './requestRules/RequestRulesScreen';
+import { useCmDraft } from './useCmDraft';
 
 type Props = {
   section: CmSectionId;
@@ -49,16 +47,10 @@ function SectionBody({
   canSave?: boolean;
 }) {
   switch (section) {
-    case 'prices':
-      return <PricesEditor payload={payload} onChange={onChange} />;
     case 'care':
       return <ArticlesEditor section="care" payload={payload} onChange={onChange} />;
     case 'handoff':
       return <HandoffEditor payload={payload} onChange={onChange} />;
-    case 'dynamic_messages':
-      return <GreetingsEditor payload={payload} onChange={onChange} />;
-    case 'branches':
-      return null;
     case 'opening_hours':
       return <OpeningHoursEditor payload={payload} onChange={onChange} />;
     case 'restricted':
@@ -100,6 +92,9 @@ export function CmSectionScreen({ section, proposalReview, onBack, onOpenLocatio
   if (section === 'ai_basics' || section === 'style' || section === 'dynamic_messages') {
     return <AiBasicsScreen proposalReview={proposalReview} onBack={onBack} />;
   }
+  if (section === 'prices') {
+    return <ServicesScreen proposalReview={proposalReview} onBack={onBack} />;
+  }
   if (section === 'branches') {
     return <LocationHoursSectionScreen proposalReview={proposalReview} onBack={onBack} />;
   }
@@ -115,7 +110,6 @@ function StandardCmSectionScreen({ section, proposalReview, onBack }: Props) {
   const [savedFlash, setSavedFlash] = useState(false);
   const isAiLimits = section === 'ai_limits';
   const isLanguagesRemoved = section === 'languages';
-  const isRequests = section === 'requests_appointments';
 
   async function handleSave() {
     const ok = await draft.save();
@@ -136,11 +130,7 @@ function StandardCmSectionScreen({ section, proposalReview, onBack }: Props) {
   }
 
   const title = isAiLimits ? tr('aiLimitsTitle') : (meta?.title ?? section);
-  const subtitle = isAiLimits
-    ? tr('aiLimitsSubtitle')
-    : isRequests
-      ? tr('aiSetupRequestsSubtitle')
-      : meta?.description;
+  const subtitle = isAiLimits ? tr('aiLimitsSubtitle') : meta?.description;
 
   return (
     <ScreenChrome title={title} subtitle={subtitle} sectionTitle={isAiLimits} onBack={onBack}>

@@ -279,7 +279,7 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - `main.py` no longer mounts `local_qa_api`. Local JSONL FAQ runtime is deleted; published CM FAQ is the only customer matcher.
 - `config.py` has no `LINASLASER_*` bindings. Booking FSM/training keyword museum stripped. `user_booking_state` / `user_in_training_mode` stay as HA session snapshot fields.
 - Retired founder/lab workflows: live-lab, copilot-v2-flags-apply, cm-linas-content-audit, linas-index-ha, prod-brain-linas-smoke.
-- **Kept on purpose:** `prod_cm_linas_*` / bridge scripts still invoked by `cm-production-cutover.yml`. `contentManagers` permission (live CM). `PricesEditor` (reachable from ServicesScreen). `message_catalog` (Owner Catalog).
+- **Kept on purpose:** `prod_cm_linas_*` / bridge scripts still invoked by `cm-production-cutover.yml`. `contentManagers` permission (live CM). `ServicesScreen` (prices/services). `message_catalog` (Owner Catalog).
 - Web: orphan AI-limits screenshot gone; landing demo copy de-clinicked; AuthContext.register removed; museum LiveChat types stripped.
 - Mobile: runtime-unreachable dashboard/billing/CM/nav orphans deleted. Drawer module list unchanged.
 - Tests: `tests/test_wave_x8_radical_safe.py`.

@@ -56,4 +56,20 @@ describe('AI Setup hub opens AI Basics', () => {
     assert.doesNotMatch(exported, /useCmDraft/);
     assert.doesNotMatch(exported, /useCmMultiDraft/);
   });
+
+  it('routes prices to ServicesScreen and greetings to AI Basics, not obsolete editors', () => {
+    const screen = read('features/cm/CmSectionScreen.tsx');
+    const basics = read('features/cm/aiBasics/AiBasicsScreen.tsx');
+    const shell = read('app/AppShell.tsx');
+    assert.match(screen, /if \(section === 'prices'\)/);
+    assert.match(screen, /<ServicesScreen proposalReview=\{proposalReview\} onBack=\{onBack\} \/>/);
+    assert.doesNotMatch(screen, /PricesEditor/);
+    assert.doesNotMatch(screen, /GreetingsEditor/);
+    assert.match(
+      shell,
+      /review\.section === 'prices' \|\| review\.section === 'services'/,
+    );
+    assert.match(shell, /setScreen\(\{ name: 'services', backTo: 'chat', proposalReview: review \}\)/);
+    assert.match(basics, /review\?\.section === 'dynamic_messages'\) return 'greetings'/);
+  });
 });
