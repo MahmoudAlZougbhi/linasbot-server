@@ -9,12 +9,8 @@ source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
 linas_require_production_mutation_guard "scripts/prod_cm_verify_durable_bridge.sh"
 
 VERIFY_RELOAD="${VERIFY_RELOAD:-0}"
-REPO_ROOT="/opt/linasbot"
-CANONICAL_SUBDIR="$REPO_ROOT/linaslaserbot-2.7.22"
+REPO_ROOT="${LINASBOT_APP_DIR:-/opt/linasbot}"
 APP_DIR="$REPO_ROOT"
-if [ -f "$CANONICAL_SUBDIR/main.py" ]; then
-  APP_DIR="$CANONICAL_SUBDIR"
-fi
 
 export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"
 export ENVIRONMENT="${ENVIRONMENT:-production}"

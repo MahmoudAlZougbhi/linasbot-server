@@ -287,8 +287,9 @@ verify_node() {
     return 1
   fi
   test -f "$repo_dir/scripts/ha/verify_meta_release_ha.sh"
-  if [ -e "$repo_dir/linaslaserbot-2.7.22/main.py" ] || \
-     [ -e "$repo_dir/linaslaserbot-2.7.22/venv/bin/python" ]; then
+  LEGACY_NESTED="${LINASBOT_LEGACY_NESTED_DIR:-linaslaserbot-2.7.22}"
+  if [ -e "$repo_dir/$LEGACY_NESTED/main.py" ] || \
+     [ -e "$repo_dir/$LEGACY_NESTED/venv/bin/python" ]; then
     echo "[meta-ha-release] legacy nested runtime still exists" >&2
     return 1
   fi

@@ -85,9 +85,9 @@ def make_assets() -> dict[str, Path]:
         ["V10 TEST STORE", "After Care Cream $19", "NO REAL PERSON"],
     )
     women = _png(
-        ASSETS / "laser_women.png",
+        ASSETS / "north_photos.png",
         (80, 30, 60),
-        ["Women Laser Hair Removal", "Photos for women only", "NO REAL PERSON"],
+        ["North Consultation", "Photos for north branch only", "NO REAL PERSON"],
     )
     burger = _png(ASSETS / "burger.png", (140, 70, 20), ["BURGER TEST IMAGE", "NOT A PERSON"])
     tattoo = _png(ASSETS / "tattoo.png", (30, 30, 30), ["TATTOO TEST IMAGE", "NOT A PERSON"])
@@ -100,9 +100,9 @@ def make_assets() -> dict[str, Path]:
     )
     txt_path = ASSETS / "after_care_notes.txt"
     txt_path.write_text("V10 test file: After Care Cream is in stock. Small/Large. White. $19.\n", encoding="utf-8")
-    service_txt = ASSETS / "laser_service_notes.txt"
+    service_txt = ASSETS / "service_notes.txt"
     service_txt.write_text(
-        "Laser Hair Removal Service file. Staff protocol only. Not women photos.\n", encoding="utf-8"
+        "North consultation service file. Staff protocol only. Not north photos.\n", encoding="utf-8"
     )
     video = _tiny_mp4(ASSETS / "test_card.mp4")
     return {
@@ -152,9 +152,9 @@ def seed_catalog(assets: dict[str, Path]) -> dict[str, Any]:
     cream_vid = _store_product(filename="test_card.mp4", content=assets["video"].read_bytes(), content_type="video/mp4")
     burger_img = _store_product(filename="burger.png", content=assets["burger"].read_bytes(), content_type="image/png")
     tattoo_img = _store_product(filename="tattoo.png", content=assets["tattoo"].read_bytes(), content_type="image/png")
-    women_img = _store_cm(filename="laser_women.png", content=assets["women"].read_bytes(), content_type="image/png")
+    women_img = _store_cm(filename="north_photos.png", content=assets["women"].read_bytes(), content_type="image/png")
     service_file = _store_cm(
-        filename="laser_service_notes.txt", content=assets["service_txt"].read_bytes(), content_type="text/plain"
+        filename="service_notes.txt", content=assets["service_txt"].read_bytes(), content_type="text/plain"
     )
     pdf_media = _store_cm(filename="price_list.pdf", content=assets["pdf"].read_bytes(), content_type="application/pdf")
     txt_media = _store_cm(
@@ -207,25 +207,25 @@ def seed_catalog(assets: dict[str, Path]) -> dict[str, Any]:
         "burger_media_id": burger_img["media_id"],
         "tattoo_media_id": tattoo_img["media_id"],
         "attachments": {
-            "laser_women": [
+            "north_photos": [
                 _att(
                     id=women_img["media_id"],
                     kind="image",
-                    title="Women Laser Hair Removal photos",
-                    description="Before and after photos for women laser hair removal only",
+                    title="North consultation photos",
+                    description="Fixture photos for the north consultation only",
                     mime="image/png",
-                    filename="laser_women.png",
+                    filename="north_photos.png",
                     size=int(women_img.get("size") or 0),
                 )
             ],
-            "laser_service": [
+            "service_notes": [
                 _att(
                     id=service_file["media_id"],
                     kind="file",
-                    title="Laser Hair Removal Service file",
-                    description="Staff protocol file, not customer women photos",
+                    title="North consultation service file",
+                    description="Staff protocol file, not customer north photos",
                     mime="text/plain",
-                    filename="laser_service_notes.txt",
+                    filename="service_notes.txt",
                     size=int(service_file.get("size") or 0),
                 )
             ],

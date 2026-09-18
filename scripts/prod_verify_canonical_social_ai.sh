@@ -3,11 +3,7 @@
 # Never prints OpenAI secrets or full model response text.
 set -euo pipefail
 
-cd /opt/linasbot
-APP_DIR="/opt/linasbot"
-if [ -f /opt/linasbot/linaslaserbot-2.7.22/main.py ]; then
-  APP_DIR="/opt/linasbot/linaslaserbot-2.7.22"
-fi
+APP_DIR="${LINASBOT_APP_DIR:-/opt/linasbot}"
 cd "$APP_DIR"
 # shellcheck disable=SC1091
 source venv/bin/activate
@@ -22,7 +18,7 @@ import re
 from pathlib import Path
 
 # Load EnvironmentFile the same way the service does.
-for env_path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env"), Path(".env")):
+for env_path in (Path(os.environ.get("LINASBOT_APP_DIR", "/opt/linasbot")) / ".env", Path(".env")):
     if not env_path.exists():
         continue
     for line in env_path.read_text().splitlines():

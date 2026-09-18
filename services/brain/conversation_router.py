@@ -1,4 +1,4 @@
-"""Conversation router KEEP: human-request detect + greeting templates."""
+"""Conversation router KEEP: human-request detect only."""
 
 from __future__ import annotations
 
@@ -25,11 +25,3 @@ def is_human_request(message: str) -> bool:
     if HUMAN_REQUEST_RE.search(t):
         return True
     return any(kw in t_lower for kw in HUMAN_REQUEST_KEYWORDS)
-
-
-GREETING_TEMPLATES = {
-    "ar": "مرحباً! 😊 كيف فيني أساعدك اليوم؟",
-    "en": "Hello! 😊 How can I help you today?",
-    "fr": "Bonjour ! 😊 Comment puis-je vous aider aujourd'hui ?",
-    "franco": "مرحباً! 😊 كيف فيني أساعدك اليوم؟",
-}

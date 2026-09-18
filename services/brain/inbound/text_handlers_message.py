@@ -258,17 +258,18 @@ async def handle_message(
         if should_greet_now:
             user_lang = user_data.get("user_preferred_lang", "ar")
             greeting_msg = _get_session_greeting_message(user_lang)
-            with meta_outbound_send_purpose("session_greeting"):
-                await send_message_func(user_id, greeting_msg)
-            await save_conversation_message_to_firestore(
-                user_id,
-                "ai",
-                greeting_msg,
-                current_conversation_id,
-                user_name,
-                user_data.get("phone_number"),
-                metadata={"handled_by": "ai", "source": "session_greeting"},
-            )
+            if greeting_msg:
+                with meta_outbound_send_purpose("session_greeting"):
+                    await send_message_func(user_id, greeting_msg)
+                await save_conversation_message_to_firestore(
+                    user_id,
+                    "ai",
+                    greeting_msg,
+                    current_conversation_id,
+                    user_name,
+                    user_data.get("phone_number"),
+                    metadata={"handled_by": "ai", "source": "session_greeting"},
+                )
             user_data["greeting_sent_for_conversation_id"] = current_conversation_id
 
     # Check if it's the very first message after start

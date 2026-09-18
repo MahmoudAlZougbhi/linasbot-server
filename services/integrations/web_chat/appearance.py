@@ -16,7 +16,7 @@ DEFAULT_APPEARANCE: dict[str, Any] = {
     "identity": {
         "display_name": "Chat with us",
         "logo_url": "",
-        "welcome_message": "Hi! How can I help you today?",
+        "welcome_message": "",
         "subtitle": "We typically reply in minutes",
     },
     "theme": {

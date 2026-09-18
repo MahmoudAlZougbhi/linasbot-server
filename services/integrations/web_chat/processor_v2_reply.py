@@ -12,7 +12,10 @@ from services.integrations.web_chat.store import WebChatWidgetConfig
 
 
 def _fence(runtime: Any, credit: WebChatCreditHandle, conversation_id: str, text: str) -> bool:
-    return fenced_failure_release(runtime, credit, conversation_id=conversation_id, user_text=text)
+    try:
+        return fenced_failure_release(runtime, credit, conversation_id=conversation_id, user_text=text)
+    except Exception:
+        return False
 
 
 async def generate_web_chat_reply_text(
@@ -82,17 +85,10 @@ async def generate_web_chat_reply_text(
         from services.brain.outbound_safety import looks_like_instruction_text
 
         if reply_text and looks_like_instruction_text(reply_text):
-            from services.brain.greeting import is_greeting_only, safe_greeting_text
-            from services.brain.templates import brain_template
+            from services.brain.silence import log_customer_generation_failure
 
-            if is_greeting_only(text):
-                reply_text = safe_greeting_text(
-                    tenant_id=tid,
-                    message=text,
-                    language=str(_lang.get("response_language") or ""),
-                )
-            else:
-                reply_text = brain_template("no_evidence", str(_lang.get("response_language") or ""))
+            log_customer_generation_failure(stage="web_chat_instruction_leak")
+            reply_text = ""
         reason = str(getattr(outcome, "reason", "") or "")
         if reason.endswith("_limit") or reason == "ai_reply_limit":
             _fence(runtime, credit, conversation_id, text)
@@ -113,8 +109,11 @@ async def generate_web_chat_reply_text(
         _fence(runtime, credit, conversation_id, text)
         raise
     except Exception as exc:
+        from services.brain.silence import log_customer_generation_failure
+
+        log_customer_generation_failure(stage="web_chat_generate", exc=exc)
         _fence(runtime, credit, conversation_id, text)
-        raise WebChatError("ai_failed", "Could not generate a reply right now.", status_code=503) from exc
+        return ""
     finally:
         await heartbeat.stop()
 

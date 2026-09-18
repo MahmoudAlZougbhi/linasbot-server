@@ -16,9 +16,9 @@ class WebChatTakeoverState:
 
 
 def _waiting_notice(lang: str = "ar") -> str:
-    from services.owner_copilot.dynamic_messages_service import get_dynamic_message
+    from services.owner_copilot.dynamic_messages_service import get_persisted_dynamic_message
 
-    return get_dynamic_message("waiting_queue_message", lang) or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
+    return str(get_persisted_dynamic_message("waiting_queue_message", lang) or "").strip()
 
 
 async def read_web_chat_takeover_state(*, user_id: str, conversation_id: str) -> WebChatTakeoverState:
@@ -126,12 +126,14 @@ async def maybe_silence_web_chat_for_takeover(
         event="waiting_queue_inbound",
     )
     notice = _waiting_notice()
-    queued = _queue_waiting_notice(
-        visitor_id=visitor_id,
-        conversation_id=conversation_id,
-        inbound_text=inbound_text,
-        notice=notice,
-    )
+    queued = False
+    if notice:
+        queued = _queue_waiting_notice(
+            visitor_id=visitor_id,
+            conversation_id=conversation_id,
+            inbound_text=inbound_text,
+            notice=notice,
+        )
     if queued:
         await _persist_web_projection(
             user_id=user_id,

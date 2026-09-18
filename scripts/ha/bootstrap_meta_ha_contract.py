@@ -1781,13 +1781,14 @@ def _assert_live_units(live: dict[str, dict[str, Any]]) -> None:
 
 
 def _repo_bytecode_manifest() -> list[dict[str, Any]]:
-    excluded_roots = {".git", ".venv", "venv", "linaslaserbot-2.7.22"}
+    nested = os.environ.get("LINASBOT_LEGACY_NESTED_DIR", "linaslaserbot-2.7.22")
+    excluded_roots = {".git", ".venv", "venv", nested}
     manifest: list[dict[str, Any]] = []
     total_size = 0
     for current, dirnames, filenames in os.walk(REPO_DIR, topdown=True, followlinks=False):
         directory = Path(current)
         relative_directory = directory.relative_to(REPO_DIR)
-        if relative_directory.parts[:1] == ("linaslaserbot-2.7.22",):
+        if relative_directory.parts[:1] == (nested,):
             dirnames[:] = []
             filenames.clear()
             continue

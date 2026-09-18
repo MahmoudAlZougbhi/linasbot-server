@@ -113,7 +113,7 @@ async def run_core_scenarios(*, graphs: dict[str, Any]) -> None:
             action={
                 "action": "update_fields",
                 "draft_id": created.get("draft_id"),
-                "field_updates": {"name": "نور", "age": 28, "height": 170, "area": "Antelias", "day": "Thursday"},
+                "field_updates": {"name": "نور", "age": 28, "height": 170, "area": "South", "day": "Thursday"},
             },
         )
         added = apply_draft_action(

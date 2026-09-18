@@ -83,18 +83,19 @@ class WebChatHaRepository:
         )
         session.add(row)
         session.flush()
-        msg = WebChatMessageRow(
-            session_id=session_id,
-            tenant_id=tenant_id,
-            message_id=uuid.uuid4().hex,
-            role="assistant",
-            content=greeting,
-            created_at=now,
-            acked_at=now,
-            meta={"kind": "greeting"},
-        )
-        session.add(msg)
-        session.flush()
+        if (greeting or "").strip():
+            msg = WebChatMessageRow(
+                session_id=session_id,
+                tenant_id=tenant_id,
+                message_id=uuid.uuid4().hex,
+                role="assistant",
+                content=greeting,
+                created_at=now,
+                acked_at=now,
+                meta={"kind": "greeting"},
+            )
+            session.add(msg)
+            session.flush()
         loaded = self._load(session, session_id)
         if loaded is None:
             raise WebChatHaUnavailable("Visitor session could not be loaded after create.")

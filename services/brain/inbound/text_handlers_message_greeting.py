@@ -3,7 +3,8 @@ from __future__ import annotations
 # Greeting + combine-lock helpers for handle_message (LOC split).
 import asyncio
 
-from services.owner_copilot.dynamic_messages_service import get_dynamic_message
+from services.brain.outbound_safety import is_customer_safe_opener
+from services.owner_copilot.dynamic_messages_service import get_persisted_dynamic_message
 
 GREETING_INACTIVITY_SECONDS = 43200  # 12 hours
 
@@ -21,13 +22,8 @@ def _combine_schedule_lock(user_id: str) -> asyncio.Lock:
 
 
 def _get_session_greeting_message(user_lang: str = "ar") -> str:
-    """Greeting from published dynamic messages, then router templates."""
-    dyn = get_dynamic_message("session_greeting_after_inactivity", user_lang)
-    if dyn:
+    """Owner-published session opener only. Empty means silence — no system catalog."""
+    dyn = str(get_persisted_dynamic_message("session_greeting_after_inactivity", user_lang) or "").strip()
+    if dyn and is_customer_safe_opener(dyn):
         return dyn
-    try:
-        from services.brain.conversation_router import GREETING_TEMPLATES
-
-        return GREETING_TEMPLATES.get(user_lang, GREETING_TEMPLATES["ar"])
-    except Exception:
-        return "مرحباً! 😊 كيف فيني ساعدك اليوم؟"
+    return ""

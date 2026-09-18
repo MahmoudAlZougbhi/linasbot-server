@@ -25,7 +25,7 @@ import os
 from pathlib import Path
 
 def _load_env() -> None:
-    for env_path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")):
+    for env_path in (Path(os.environ.get("LINASBOT_APP_DIR", "/opt/linasbot")) / ".env",):
         if not env_path.is_file():
             continue
         for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():

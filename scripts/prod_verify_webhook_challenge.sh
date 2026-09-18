@@ -20,8 +20,7 @@ from pathlib import Path
 def read_env() -> dict[str, str]:
     values: dict[str, str] = {}
     for path in (
-        Path("/opt/linasbot/.env"),
-        Path("/opt/linasbot/linaslaserbot-2.7.22/.env"),
+        Path(os.environ.get("LINASBOT_APP_DIR", "/opt/linasbot")) / ".env",
     ):
         if not path.is_file():
             continue

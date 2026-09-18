@@ -254,14 +254,18 @@ class WebChatFileStore:
                 created_at=now,
                 updated_at=now,
                 authority_hash=(authority_hash or "").strip(),
-                messages=[
-                    WebChatMessage(
-                        id=uuid.uuid4().hex,
-                        role="assistant",
-                        content=greeting,
-                        created_at=now,
-                    )
-                ],
+                messages=(
+                    [
+                        WebChatMessage(
+                            id=uuid.uuid4().hex,
+                            role="assistant",
+                            content=greeting,
+                            created_at=now,
+                        )
+                    ]
+                    if (greeting or "").strip()
+                    else []
+                ),
             )
             self._save_visitor(session)
             return session

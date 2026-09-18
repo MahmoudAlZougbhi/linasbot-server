@@ -110,18 +110,12 @@ def _replay_if_operation_visible(
 
 
 def default_greeting(language: str | None = None, widget: WebChatWidgetConfig | None = None) -> str:
-    if widget is not None:
-        identity = widget.appearance.get("identity") if isinstance(widget.appearance, dict) else {}
-        custom = str((identity or {}).get("welcome_message") or "").strip()
-        if custom:
-            return custom
-    lang = (language or "en").strip().lower()[:2]
-    messages = {
-        "ar": "مرحباً! كيف بقدر ساعدك اليوم؟",
-        "fr": "Bonjour ! Comment puis-je vous aider aujourd'hui ?",
-        "en": "Hi! How can I help you today?",
-    }
-    return messages.get(lang, messages["en"])
+    """Owner widget welcome only. Empty means no system opener."""
+    _ = language
+    if widget is None:
+        return ""
+    identity = widget.appearance.get("identity") if isinstance(widget.appearance, dict) else {}
+    return str((identity or {}).get("welcome_message") or "").strip()
 
 
 async def process_web_chat_message(

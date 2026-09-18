@@ -6,21 +6,20 @@ import json
 import os
 from pathlib import Path
 
-WT = Path("/Users/alzoughbi/linasbot-v10-resources-wt")
-CERT = WT / "_live_cert"
+CERT = Path(__file__).resolve().parent
+REPO = CERT.parent
 DATA = CERT / "data"
 OUT = CERT / "out"
 ASSETS = CERT / "assets"
 TENANT_ID = "v10_live_cert_store"
 FAQ_AR_Q = "شو أوقات الدوام؟"
 FAQ_EN_Q = "What are your opening hours?"
-FAQ_AR_A = "بيروت من 10:00 إلى 20:00. أنطلياس من 11:00 إلى 19:00."
-FAQ_EN_A = "Beirut 10:00–20:00. Antelias 11:00–19:00."
+FAQ_AR_A = "الشمال من 10:00 إلى 20:00. الجنوب من 11:00 إلى 19:00."
+FAQ_EN_A = "North 10:00–20:00. South 11:00–19:00."
 
 _KEY_CANDIDATES = (
-    Path("/Users/alzoughbi/linasbot-v10-live-cert-wt/.secrets/openai_api_key"),
-    WT / ".secrets" / "openai_api_key",
-    Path("/Users/alzoughbi/linasbot-server/.secrets/openai_api_key"),
+    CERT / ".secrets" / "openai_api_key",
+    REPO / ".secrets" / "openai_api_key",
 )
 
 
@@ -101,8 +100,8 @@ def configure() -> dict[str, Path]:
             "MAX_CUSTOMER_RETRIEVAL_ROUNDS": "2",
             "CUSTOMER_DM_CONTEXT_WINDOW_HOURS": "1.5",
             "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY": "false",
-            "PYTHONPATH": str(WT),
+            "PYTHONPATH": str(REPO),
         }
     )
     os.environ.pop("PYTEST_CURRENT_TEST", None)
-    return {"wt": WT, "data": DATA, "out": OUT, "assets": ASSETS, "db": db_path, "qa": qa_file}
+    return {"wt": REPO, "data": DATA, "out": OUT, "assets": ASSETS, "db": db_path, "qa": qa_file}

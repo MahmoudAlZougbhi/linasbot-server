@@ -192,14 +192,14 @@ def evaluate_greeting(
     return GreetingDecision(False, reason="no_match")
 
 
-def safe_greeting_text(
+def published_opener_text(
     *,
     tenant_id: str,
     message: str,
     language: str = "",
     history: HistorySnapshot | None = None,
 ) -> str:
-    """Published opener, then catalog greetings. Never validator or temporary-error copy."""
+    """Published owner opener only. Empty when none is safe — never invent copy."""
     lang = (language or inbound_greeting_language(message)).strip().lower() or "en"
     try:
         decision = evaluate_greeting(
@@ -212,17 +212,14 @@ def safe_greeting_text(
             return decision.text.strip()
     except Exception:
         pass
-    from services.owner_copilot.dynamic_messages_service import get_dynamic_message
+    from services.brain.outbound_safety import is_customer_safe_opener
+    from services.owner_copilot.dynamic_messages_service import get_persisted_dynamic_message
 
     for key in ("session_greeting_after_inactivity", "router_greeting"):
-        text = str(get_dynamic_message(key, lang) or "").strip()
-        if text:
+        text = str(get_persisted_dynamic_message(key, lang) or "").strip()
+        if text and is_customer_safe_opener(text):
             return text
-    if lang in {"ar", "franco"}:
-        return "مرحباً! كيف يمكنني مساعدتك؟"
-    if lang == "fr":
-        return "Bonjour ! Comment puis-je vous aider ?"
-    return "Hello! How can I help you today?"
+    return ""
 
 
 def is_greeting_only(message: str) -> bool:
