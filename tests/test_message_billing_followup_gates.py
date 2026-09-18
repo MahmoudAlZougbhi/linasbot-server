@@ -253,7 +253,8 @@ def test_delayed_text_settles_leftover_credits() -> None:
 
     src = getsource(text_handlers_delayed._delayed_process_messages)
     assert "try_reserve_for_ai" in src
-    assert src.count("settle_reserved_credits") >= 2
+    assert "settle_after_outbound" in src
+    assert "on_ai_failed" in src
     assert 'if not user_data.get("_credit_captured_for_turn")' in src
 
 

@@ -167,10 +167,11 @@ async def _delayed_process_messages(
                 from services.brain.ai_reply.ai_reply_turn_runtime import (
                     ensure_turn_started,
                     finalize_delivery,
+                    on_ai_failed,
                     pending_delivery_for_claim,
                     reset_turn_runtime_state,
                     retry_saved_reply_delivery,
-                    settle_reserved_credits,
+                    settle_after_outbound,
                     try_reserve_for_ai,
                 )
                 from services.scale.outbound_turn_idempotency import _claim_key_basis
@@ -268,7 +269,9 @@ async def _delayed_process_messages(
                         await complete_ai_turn_claim(key_basis)
                 finally:
                     if not user_data.get("_credit_captured_for_turn"):
-                        settle_reserved_credits(user_data)
+                        settle_after_outbound(user_data)
+                        if not user_data.get("_credit_captured_for_turn") and not user_data.get("_reply_ready"):
+                            on_ai_failed({"user_data": user_data})
             finally:
                 user_data.pop("_dashboard_test_turn_sticky", None)
             config.user_last_bot_response_time[user_id] = datetime.datetime.now()

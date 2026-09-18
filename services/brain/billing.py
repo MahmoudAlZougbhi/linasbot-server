@@ -173,9 +173,24 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
             if extra["message_units"]:
                 return TurnResult(stop_reason="failed_closed", extra=extra)
     billed = result.model_copy(update={"extra": extra})
-    from services.brain.outbox import persist_turn_result
+    from services.brain.outbox import OutboxPersistError
+    from services.brain.outbox_turn import persist_turn_result
 
-    persist_turn_result(turn, billed)
+    try:
+        persist_turn_result(turn, billed)
+    except OutboxPersistError as exc:
+        _release_message_hold(turn.tenant_id, op, reason="outbox_persist_failed")
+        extra["billing"] = {"error": "outbox_persist_failed"}
+        extra["customer_silence"] = True
+        extra["exception_class"] = type(exc).__name__
+        extra["blocker"] = str(exc)[:200]
+        from services.brain.contracts.reply import FinalReplyEnvelope
+
+        return TurnResult(
+            stop_reason="failed_closed",
+            envelope=FinalReplyEnvelope(decision="clarify"),
+            extra=extra,
+        )
     return billed
 
 
