@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.faq.cm_faq_helpers import FAQ_SECTION, FaqIntegrationError
 from services.ai_setup.iso639_languages import (
     iso639_catalog,
     iso639_label,
@@ -13,6 +12,7 @@ from services.ai_setup.iso639_languages import (
 )
 from services.ai_setup.schemas import FaqSection
 from services.ai_setup.storage import get_draft, put_draft
+from services.faq.cm_faq_helpers import FAQ_SECTION, FaqIntegrationError
 
 DEFAULT_SMART_ANSWER_LANGUAGES: tuple[str, ...] = ("ar", "en", "fr", "franco")
 

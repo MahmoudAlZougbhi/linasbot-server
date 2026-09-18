@@ -11,6 +11,9 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from services.ai_setup.schemas import FaqRecord, FaqSection, FaqVariant
+from services.ai_setup.storage import get_draft, put_draft
+from services.brain.language_detection_service import language_detection_service
 from services.faq.cm_faq_helpers import (  # noqa: F401
     FAQ_SECTION,
     FAQ_TARGET_LANGUAGES,
@@ -33,9 +36,6 @@ from services.faq.cm_faq_ops import (  # noqa: F401
     translate_existing_faq_groups_to_language,
     update_cm_faq_variant,
 )
-from services.ai_setup.schemas import FaqRecord, FaqSection, FaqVariant
-from services.ai_setup.storage import get_draft, put_draft
-from services.brain.language_detection_service import language_detection_service
 
 
 async def create_faq_pair(

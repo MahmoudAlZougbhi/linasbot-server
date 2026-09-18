@@ -76,9 +76,9 @@ def mark_faq_groups_stale(
     cm_revision: Any = None,
 ) -> dict[str, Any]:
     """Mark FAQ groups stale and version-link to CM change."""
-    from services.faq.cm_faq import get_cm_faq_group, list_cm_faq
     from services.ai_setup.schemas import FaqSection
     from services.ai_setup.storage import get_draft, put_draft
+    from services.faq.cm_faq import get_cm_faq_group, list_cm_faq
 
     if not qa_group_ids:
         return {"stale_groups": [], "stale_rows": 0, "reason": reason}

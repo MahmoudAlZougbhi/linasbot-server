@@ -246,8 +246,8 @@ async def approve_diagnosis_fix(
     applied: dict[str, Any] = {"type": corr.get("type")}
 
     if corr.get("type") == "faq_update":
-        from services.faq.cm_faq import create_faq_pair, update_cm_faq_variant
         from services.billing.membership.edit_http import guarded_edit
+        from services.faq.cm_faq import create_faq_pair, update_cm_faq_variant
 
         qa_group_id = corr.get("qa_group_id")
         answer = str((corr.get("patch") or corr.get("patch_hint") or {}).get("answer") or "").strip()
