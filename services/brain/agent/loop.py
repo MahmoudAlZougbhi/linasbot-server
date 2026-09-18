@@ -407,7 +407,9 @@ async def run_agentic_dm_path(
     from services.brain.turn_pipeline import inbound_task_text
 
     task_text = inbound_task_text(turn, message)
-    rewritten = await rewrite_queries(task_text, list(turn.history.messages), _response_language(turn), tenant_id=turn.tenant_id)
+    rewritten = await rewrite_queries(
+        task_text, list(turn.history.messages), _response_language(turn), tenant_id=turn.tenant_id
+    )
     if rewritten.get("rewritten") and rewritten["rewritten"].strip() != task_text.strip():
         task_text = rewritten["rewritten"]
         flow_base = _flow_extra(

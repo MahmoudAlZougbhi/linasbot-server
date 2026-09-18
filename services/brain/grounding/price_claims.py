@@ -18,7 +18,9 @@ def is_price_context(message: str, plan: PlannerPlan | None = None) -> bool:
     if plan is not None and any(task.type == "information" for task in plan.tasks):
         families = {fam for task in plan.tasks for fam in (task.source_families or [])}
         if "prices" in families or "services" in families or "products" in families:
-            if _PRICE_INTENT.search(message or "") or any("price" in (task.span.text or "").casefold() for task in plan.tasks):
+            if _PRICE_INTENT.search(message or "") or any(
+                "price" in (task.span.text or "").casefold() for task in plan.tasks
+            ):
                 return True
     return bool(_PRICE_INTENT.search(message or ""))
 
@@ -104,8 +106,7 @@ def ungrounded_price_claims(
     if preferred is not None:
         preferred_amounts = _item_amounts(preferred)
         reply_mentions_other = any(
-            score_label(reply_text, item.title) >= 70 and item.source_id != preferred.source_id
-            for item in bundle.items
+            score_label(reply_text, item.title) >= 70 and item.source_id != preferred.source_id for item in bundle.items
         )
         if preferred_amounts and not reply_mentions_other:
             allowed = preferred_amounts

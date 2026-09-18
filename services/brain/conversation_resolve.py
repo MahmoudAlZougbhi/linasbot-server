@@ -72,7 +72,9 @@ def resolve_followup_query(
     prior_intent = _intent(prior) if prior else ""
     same_intent = bool(prior_intent and current_intent == prior_intent and current_intent not in {"greeting", "other"})
     followup = bool(_FOLLOWUP.match(text) or _PRONOUN.search(text) or (text.endswith("?") and len(text.split()) <= 6))
-    new_topic = current_intent in {"greeting", "catalog"} or (prior_intent and current_intent != prior_intent and current_intent != "other")
+    new_topic = current_intent in {"greeting", "catalog"} or (
+        prior_intent and current_intent != prior_intent and current_intent != "other"
+    )
     carry: dict[str, str] = {}
     scan = [prior, text] if (followup and not new_topic) or same_intent else [text]
     for body in scan:

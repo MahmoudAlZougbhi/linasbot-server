@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.conversation_resolve import resolve_followup_query
 from services.brain.grounding.claims import claims_fail_closed, verify_claims

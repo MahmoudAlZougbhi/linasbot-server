@@ -146,7 +146,9 @@ async def generate_grounded_reply(
                     "Do not prepend a second greeting."
                 )
     if (turn.extra or {}).get("awaiting_confirmation"):
-        policy_notes.append("A request is awaiting customer confirmation. Ask to confirm; do not claim it was submitted.")
+        policy_notes.append(
+            "A request is awaiting customer confirmation. Ask to confirm; do not claim it was submitted."
+        )
     context = compose_evidence_context(
         identity=identity,
         plan=plan,

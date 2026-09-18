@@ -50,7 +50,12 @@ def detect_entity_amount_conflicts(items: list[EvidenceItem]) -> list[dict[str, 
         key = _entity_key(item)
         by_entity.setdefault(key, set()).update(amounts)
     return [
-        {"type": "amount", "entity_id": entity_id, "values": sorted(values), "reason": "conflicting_amounts_same_entity"}
+        {
+            "type": "amount",
+            "entity_id": entity_id,
+            "values": sorted(values),
+            "reason": "conflicting_amounts_same_entity",
+        }
         for entity_id, values in by_entity.items()
         if len(values) > 1
     ]

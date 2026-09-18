@@ -6,7 +6,7 @@ from typing import Any
 
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
 from services.brain.contracts.plan import PlannerPlan
-from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 
 

@@ -98,8 +98,8 @@ async def try_confirm_pending(turn: CustomerTurn, message: str, channel: str) ->
             extra={"phase": "request_confirm", "receipts": receipts, "confirmed": False, "customer_silence": True},
         )
     remember_turn(turn, [])
-    from services.brain.templates import owner_protocol_text
     from services.brain.outbound_destination import outbound_destination
+    from services.brain.templates import owner_protocol_text
 
     lang = str((turn.extra or {}).get("response_language") or "")
     text = owner_protocol_text("confirm_request", lang)

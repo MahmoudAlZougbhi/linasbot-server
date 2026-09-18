@@ -32,7 +32,6 @@ def prepare_query_text(query: str) -> str:
     import re
 
     from services.brain.agent.normalize_query import normalize_query
-
     from services.brain.retrieve.query_expand import expand_query_text
 
     norm = normalize_query(query)

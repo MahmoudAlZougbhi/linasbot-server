@@ -10,7 +10,7 @@ from services.brain.catalog_intent import is_catalog_list
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
-from services.brain.contracts.turn import CustomerTurn, HistorySnapshot
+from services.brain.contracts.turn import CustomerTurn
 from services.brain.conversation_resolve import resolve_followup_query
 from services.brain.entity_identity import prefer_standalone, score_label
 from services.brain.greeting import is_greeting_only
@@ -105,7 +105,10 @@ def test_authority_keeps_distinct_entities() -> None:
     resolved, meta = apply_authority(bundle, query="How much is underarm laser hair removal?")
     ids = {item.source_id for item in resolved.items}
     assert "underarms" in ids
-    assert not any(row.get("reason") == "lower_authority_amount_conflict" and row.get("entity_id") == "underarms" for row in meta.get("decisions") or [])
+    assert not any(
+        row.get("reason") == "lower_authority_amount_conflict" and row.get("entity_id") == "underarms"
+        for row in meta.get("decisions") or []
+    )
 
 
 def test_price_match_rejects_generic_tokens() -> None:
