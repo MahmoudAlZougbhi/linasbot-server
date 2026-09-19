@@ -68,7 +68,8 @@ def pack_owner_turn_context(
     )
     identity = load_sol_identity(tenant_id)
     configured = bool(identity.get("configured"))
-    payload = identity.get("payload") if isinstance(identity.get("payload"), dict) else {}
+    raw_payload = identity.get("payload")
+    payload: dict[str, Any] = dict(raw_payload) if isinstance(raw_payload, dict) else {}
     sol_system = compose_sol_system(payload) if configured else ""
     knowledge_items = retrieve_sol_app_knowledge(tenant_id, user_text) if configured else []
     recent = []

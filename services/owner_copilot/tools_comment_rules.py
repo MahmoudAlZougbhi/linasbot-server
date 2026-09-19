@@ -105,7 +105,8 @@ async def tool_propose_comment_rule(
 
     env = get_draft("comments", tenant_id=tenant_id, create_default=True)
     payload = dict(env.payload) if isinstance(env.payload, dict) else {}
-    rules = [dict(r) for r in (payload.get("rules") or []) if isinstance(r, dict)]
+    raw_rules = payload.get("rules")
+    rules = [dict(r) for r in raw_rules if isinstance(r, dict)] if isinstance(raw_rules, list) else []
     action = _ACTIONS[str(args.get("action") or args.get("mode") or "").strip()]
     rule_mode = str(args.get("rule_mode") or "deterministic").strip() or "deterministic"
     if action.endswith("_static"):

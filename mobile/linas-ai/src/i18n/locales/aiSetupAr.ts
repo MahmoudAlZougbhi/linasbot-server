@@ -44,6 +44,8 @@ export const aiSetupAr = {
   aiSetupSec_comments: 'التعليقات',
   aiSetupSec_off_days: 'أيام الإغلاق',
   aiSetupSec_requests_appointments: 'الطلبات',
+  aiSetupSec_sol_basics: 'Sol',
+  aiSetupSec_sol_app_knowledge: 'معرفة Sol',
   aiSetupSec_ai_limits: 'حدود الذكاء الاصطناعي للزبائن',
   aiLimitsTitle: 'حدود الذكاء الاصطناعي للزبائن',
   aiLimitsSubtitle: 'احمِ الرسائل بتحديد استخدام كل زبون للذكاء الاصطناعي.',

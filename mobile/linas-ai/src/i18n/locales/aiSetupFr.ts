@@ -45,6 +45,8 @@ export const aiSetupFr = {
   aiSetupSec_comments: 'Commentaires',
   aiSetupSec_off_days: 'Jours fermés',
   aiSetupSec_requests_appointments: 'Demandes',
+  aiSetupSec_sol_basics: 'Sol',
+  aiSetupSec_sol_app_knowledge: 'Connaissances Sol',
   aiSetupSec_ai_limits: 'Limites IA clients',
   aiLimitsTitle: 'Limites IA clients',
   aiLimitsSubtitle: 'Protégez les messages en limitant l’usage IA de chaque client.',

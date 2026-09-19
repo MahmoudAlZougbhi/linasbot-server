@@ -57,8 +57,10 @@ def format_sol_identity_block(payload: dict[str, Any]) -> str:
         if value:
             label = key.replace("_", " ").title()
             lines.append(f"{label}:\n{value}")
-    do_list = [str(x).strip() for x in (payload.get("do_list") or []) if str(x).strip()]
-    dont_list = [str(x).strip() for x in (payload.get("dont_list") or []) if str(x).strip()]
+    raw_do = payload.get("do_list")
+    raw_dont = payload.get("dont_list")
+    do_list = [str(x).strip() for x in raw_do if str(x).strip()] if isinstance(raw_do, list) else []
+    dont_list = [str(x).strip() for x in raw_dont if str(x).strip()] if isinstance(raw_dont, list) else []
     if do_list:
         lines.append("Do:\n- " + "\n- ".join(do_list[:16]))
     if dont_list:

@@ -56,16 +56,20 @@ async def tool_dig_tenant_cm(*, tenant_id: str, role: str, user_id: str) -> Tool
     for section in ("knowledge", "care", "faq"):
         dupes.extend(_duplicate_rows(_load_items(tenant_id, section), section=section))
     actions = get_draft("actions", tenant_id=tenant_id, create_default=False)
-    action_items = []
-    if isinstance(actions.payload, dict) and isinstance(actions.payload.get("items"), list):
-        action_items = list(actions.payload["items"])
+    action_items: list[Any] = []
+    if isinstance(actions.payload, dict):
+        raw_items = actions.payload.get("items")
+        if isinstance(raw_items, list):
+            action_items = list(raw_items)
     traces: list[dict[str, Any]] = []
     try:
         from services.owner_copilot.tools_diagnosis import tool_get_recent_customer_interactions
 
         recent = await tool_get_recent_customer_interactions(tenant_id=tenant_id, role=role, limit=8)
         if recent.ok and isinstance(recent.data, dict):
-            traces = list(recent.data.get("items") or recent.data.get("interactions") or [])[:8]
+            raw_traces = recent.data.get("items") or recent.data.get("interactions")
+            if isinstance(raw_traces, list):
+                traces = [row for row in raw_traces if isinstance(row, dict)][:8]
     except Exception:
         traces = []
     return ToolResult(
