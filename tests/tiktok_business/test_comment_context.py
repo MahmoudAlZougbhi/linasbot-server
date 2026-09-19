@@ -39,7 +39,16 @@ async def test_tiktok_context_uses_caption_without_inventing_video(monkeypatch: 
 
 
 @pytest.mark.asyncio
-async def test_tiktok_official_mp4_sets_video_url() -> None:
+async def test_tiktok_official_mp4_sets_video_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _analyze(**_k: object) -> dict[str, object]:
+        return {
+            "post_transcript": "laser offer voiceover",
+            "post_visual_description": "clinic laser device on screen",
+            "post_media_frame_count": 4,
+            "post_media_analysis_status": "ok",
+        }
+
+    monkeypatch.setattr("services.brain.media.comment_attach.analysis_fields_for_comment", _analyze)
     out = await build_tiktok_comment_context(
         tenant_id="linas",
         comment_text="what is this",
@@ -51,3 +60,6 @@ async def test_tiktok_official_mp4_sets_video_url() -> None:
     assert out["tiktok_raw_video"] is True
     assert out["video_url"] == "https://example.com/v.mp4"
     assert "video_raw_unavailable" not in out
+    assert out["video_transcript"] == "laser offer voiceover"
+    assert out["visual_description"] == "clinic laser device on screen"
+    assert out["frame_count"] == 4

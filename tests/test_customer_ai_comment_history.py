@@ -48,7 +48,7 @@ async def test_comment_ai_loads_history_and_parent(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("services.brain.runtime.run_dm_after_gates", fake_run)
     monkeypatch.setattr(
         "services.brain.comments.pipeline.apply_ai_comment_destinations",
-        lambda result, _mode: result,
+        lambda result, _mode, **_k: result,
     )
     monkeypatch.setattr("services.brain.runtime.apply_message_billing", lambda _turn, result: result)
 
@@ -103,7 +103,7 @@ async def test_two_authors_same_post_use_separate_histories(monkeypatch: pytest.
     monkeypatch.setattr("services.brain.runtime.run_dm_after_gates", fake_run)
     monkeypatch.setattr(
         "services.brain.comments.pipeline.apply_ai_comment_destinations",
-        lambda result, _mode: result,
+        lambda result, _mode, **_k: result,
     )
     monkeypatch.setattr("services.brain.runtime.apply_message_billing", lambda _turn, result: result)
 

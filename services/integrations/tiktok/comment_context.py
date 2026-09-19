@@ -28,7 +28,7 @@ async def build_tiktok_comment_context(
     thumbnail_url: str = "",
     video_url: str = "",
 ) -> dict[str, Any]:
-    _ = tenant_id
+    _ = (comment_text, comment_id)
     image_inputs: list[dict[str, str]] = []
     media_status = "missing"
     if thumbnail_url:
@@ -61,6 +61,40 @@ async def build_tiktok_comment_context(
     }
     if official_url:
         out["video_url"] = official_url
+        analysis = await _tiktok_video_analysis(
+            tenant_id=tenant_id,
+            video_id=video_id,
+            video_url=official_url,
+            caption=caption,
+            thumbnail_url=thumbnail_url,
+        )
+        out["video_transcript"] = str(analysis.get("post_transcript") or "")
+        out["visual_description"] = str(analysis.get("post_visual_description") or "")
+        out["frame_count"] = int(analysis.get("post_media_frame_count") or 0)
+        out["post_media_analysis_status"] = str(analysis.get("post_media_analysis_status") or "")
     if not tiktok_raw_video:
         out["video_raw_unavailable"] = "tiktok_official_mp4_missing"
     return out
+
+
+async def _tiktok_video_analysis(
+    *,
+    tenant_id: str,
+    video_id: str,
+    video_url: str,
+    caption: str,
+    thumbnail_url: str,
+) -> dict[str, Any]:
+    try:
+        from services.brain.media.comment_attach import analysis_fields_for_comment
+
+        return await analysis_fields_for_comment(
+            tenant_id=tenant_id,
+            post_id=video_id,
+            media_type="VIDEO",
+            urls=[thumbnail_url] if thumbnail_url else None,
+            video_url=video_url,
+            caption=caption,
+        )
+    except Exception:
+        return {}

@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Any
 
+from services.brain.actions.human_handoff_policy import allow_policy_only_generate, commit_pending_human_escalate
 from services.brain.agent.action_gate import append_handoff_message, apply_action_gate
 from services.brain.agent.generate_path import generate_verified
 from services.brain.agent.multi_retrieve import multi_round_retrieve
 from services.brain.agent.rewrite import rewrite_queries
 from services.brain.agent.task_coverage import evaluate_task_coverage, missing_tasks
+from services.brain.agent.tool_calls import maybe_tool_calls as _maybe_tool_calls
+from services.brain.agent.tool_calls import skip_tools_for_turn
 from services.brain.billing import operation_id_for_turn, reserve_generative
 from services.brain.budgets import DEFAULT_BUDGETS
+from services.brain.comments.public_request_policy import information_plan_for_comment
 from services.brain.contracts.enums import StopReason
 from services.brain.contracts.plan import PlannerPlan
 from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
@@ -20,7 +23,6 @@ from services.brain.memory.store import recall_facts
 from services.brain.memory.summary import rolling_summary
 from services.brain.planner.openai_plan import plan_turn
 from services.brain.stage_timeline import StageTimer, evidence_preview, stamp
-from services.brain.tools.registry import execute_tool
 
 
 def _destination(channel: str, turn: object | None = None) -> str:
@@ -67,31 +69,6 @@ def _stop_from_outcome(outcome: str) -> StopReason:
     return "failed_closed"
 
 
-def _information_plan_for_comment(plan: PlannerPlan, message: str) -> PlannerPlan:
-    """Public comments discuss the post; they are not catalog send_resource turns."""
-    tasks = []
-    for task in plan.tasks:
-        if task.type != "resource_request":
-            tasks.append(task)
-            continue
-        tasks.append(
-            task.model_copy(
-                update={
-                    "type": "information",
-                    "source_families": ["knowledge", "care", "services", "faq", "branches", "prices"],
-                }
-            )
-        )
-    if not tasks:
-        from services.brain.planner.heuristic import fail_soft_plan
-
-        return fail_soft_plan(message)
-    read_only = all(
-        task.type in {"information", "comparison", "hours", "acknowledgement", "draft_correction"} for task in tasks
-    )
-    return plan.model_copy(update={"tasks": tasks, "read_only": read_only})
-
-
 def _fast_path_eligible(plan: PlannerPlan) -> bool:
     info = [task for task in plan.tasks if task.type in {"information", "hours", "comparison"}]
     return plan.read_only and len(info) == 1 and all(t.type in {"information", "hours"} for t in info)
@@ -99,64 +76,6 @@ def _fast_path_eligible(plan: PlannerPlan) -> bool:
 
 def _keep_generate_hold(result: TurnResult) -> bool:
     return result.stop_reason == "ok" and any((item.text or "").strip() for item in result.envelope.messages)
-
-
-async def _maybe_tool_calls(
-    turn: CustomerTurn,
-    plan: PlannerPlan,
-    message: str,
-    *,
-    budget: int,
-    trace: list[dict[str, Any]],
-    coverage: Mapping[str, str] | None = None,
-) -> tuple[list[dict[str, Any]], list[str], int]:
-    from services.brain.agent.tool_decide import propose_tools_dynamic
-    from services.brain.facts.structured import facts_from_tool_data
-
-    receipts: list[str] = []
-    tool_rows: list[dict[str, Any]] = []
-    used = 0
-    proposals = await propose_tools_dynamic(plan, message, coverage=coverage)
-    for proposal in proposals:
-        if used >= budget:
-            trace.append({"step": "TOOL", "reason": "budget_exhausted", "tool_calls": used})
-            break
-        name = str(proposal.get("tool") or "")
-        args = dict(proposal.get("args") or {})
-        if not name:
-            continue
-        used += 1
-        result = await execute_tool(name, args, turn)
-        tool_rows.append(
-            {
-                "tool": name,
-                "ok": result.get("ok"),
-                "error": result.get("error"),
-                "task_id": proposal.get("task_id"),
-                "source": proposal.get("source"),
-            }
-        )
-        trace.append(
-            {
-                "step": "TOOL",
-                "tool": name,
-                "ok": result.get("ok"),
-                "task_id": proposal.get("task_id"),
-                "source": proposal.get("source"),
-            }
-        )
-        if result.get("receipt"):
-            receipt = result["receipt"]
-            receipts.append(
-                f"{receipt.get('action_type')}:{receipt.get('state')}:{receipt.get('backend_id') or receipt.get('reason')}"
-            )
-        elif result.get("ok") and result.get("data") is not None:
-            receipts.append(f"tool:{name}:ok")
-            for fact in facts_from_tool_data(
-                name, result.get("data"), tenant_id=turn.tenant_id, task_id=str(proposal.get("task_id") or "")
-            ):
-                receipts.append(f"fact:{fact.kind}:{fact.entity_id}:{fact.value}")
-    return tool_rows, receipts, used
 
 
 async def run_agentic_turn(
@@ -189,7 +108,7 @@ async def run_agentic_turn(
     if str(getattr(turn, "surface", "") or "") == "comment":
         from services.brain.planner.heuristic import planner_customer_text
 
-        plan = _information_plan_for_comment(plan, planner_customer_text(message))
+        plan = information_plan_for_comment(plan, planner_customer_text(message))
     extra = _flow_extra(
         extra,
         ("plan", "Understood the customer request", {"plan_tasks": [{"id": t.id, "type": t.type} for t in plan.tasks]}),
@@ -237,6 +156,7 @@ async def run_agentic_turn(
         budget=tool_budget,
         trace=agent_trace,
         coverage=evaluate_task_coverage(plan, bundle, structured_facts),
+        skip_tools=skip_tools_for_turn(turn, extra),
     )
     from services.brain.facts.receipt_align import align_fact_receipts
 
@@ -274,7 +194,7 @@ async def run_agentic_turn(
         if resource_result is not None:
             resource_receipts = list((resource_result.extra or {}).get("receipts") or [])
 
-    if bundle.outcome != "found":
+    if bundle.outcome != "found" and not allow_policy_only_generate(extra):
         if resource_result is not None:
             return resource_result.model_copy(
                 update={
@@ -330,7 +250,7 @@ async def run_agentic_turn(
             ),
         )
 
-    if missing_tasks(plan, coverage) and steps >= max_steps:
+    if missing_tasks(plan, coverage) and steps >= max_steps and not allow_policy_only_generate(extra):
         agent_trace.append({"step": "FINAL", "decision": "clarify", "reason": "budget_exhausted_uncovered"})
         return TurnResult(
             stop_reason="failed_closed",
@@ -366,7 +286,6 @@ async def run_agentic_turn(
             extra=extra,
             evidence=evidence,
         )
-        return result
     except Exception as exc:
         from services.brain.billing import release_turn_reservation
         from services.brain.outbound_safety import is_llm_provider_error
@@ -377,7 +296,7 @@ async def run_agentic_turn(
             from services.brain.silence import log_customer_generation_failure
 
             log_customer_generation_failure(stage="generate", extra={"blocker": sanitize_llm_error(exc)}, exc=exc)
-            return TurnResult(
+            result = TurnResult(
                 stop_reason="failed_closed",
                 envelope=FinalReplyEnvelope(decision="clarify"),
                 extra={
@@ -390,12 +309,14 @@ async def run_agentic_turn(
                     **extra,
                 },
             )
-        raise
+        else:
+            raise
     finally:
         if result is not None and not _keep_generate_hold(result):
             from services.brain.billing import release_turn_reservation
 
             release_turn_reservation(turn)
+    return await commit_pending_human_escalate(turn=turn, plan=plan, extra=extra, result=result, message=message)
 
 
 async def run_agentic_dm_path(

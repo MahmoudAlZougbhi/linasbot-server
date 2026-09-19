@@ -29,6 +29,10 @@ def _payload(tenant_id: str) -> dict[str, Any]:
     return cleaned if isinstance(cleaned, dict) else {}
 
 
+def published_requests_payload(tenant_id: str) -> dict[str, Any]:
+    return _payload(tenant_id)
+
+
 def enabled_request_types(tenant_id: str) -> set[str]:
     payload = _payload(tenant_id)
     raw_types = payload.get("enabled_types")
