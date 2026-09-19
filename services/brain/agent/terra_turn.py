@@ -77,7 +77,13 @@ def _closed(*, extra: dict[str, Any], agent_trace: list[dict[str, Any]], reason:
     return TurnResult(
         stop_reason="failed_closed",
         envelope=FinalReplyEnvelope(decision="clarify"),
-        extra={"phase": "generate", "llm_fail_soft": True, "customer_silence": True, "agent_trace": agent_trace, **extra},
+        extra={
+            "phase": "generate",
+            "llm_fail_soft": True,
+            "customer_silence": True,
+            "agent_trace": agent_trace,
+            **extra,
+        },
     )
 
 
@@ -103,7 +109,12 @@ async def run_terra_turn(
         return TurnResult(
             stop_reason="provider_not_configured",
             envelope=FinalReplyEnvelope(decision="no_reply", used_evidence_ids=_used_ids(bundle)),
-            extra={"phase": "awaiting_generate", "retrieval_outcome": bundle.outcome, "plan": plan.model_dump(), **extra},
+            extra={
+                "phase": "awaiting_generate",
+                "retrieval_outcome": bundle.outcome,
+                "plan": plan.model_dump(),
+                **extra,
+            },
         )
     identity = load_identity_bundle(turn.tenant_id)
     skip = skip_tools_for_turn(turn, extra)
@@ -149,7 +160,11 @@ async def run_terra_turn(
     from services.brain.outbound_safety import looks_like_instruction_text
 
     if greet and looks_like_instruction_text(text):
-        return _closed(extra={**extra, "phase": "identity_greeting"}, agent_trace=agent_trace, reason="outbound_instruction_blocked")
+        return _closed(
+            extra={**extra, "phase": "identity_greeting"},
+            agent_trace=agent_trace,
+            reason="outbound_instruction_blocked",
+        )
     repairs = max(0, DEFAULT_BUDGETS.repair_attempts)
     verdict = await verify_answer(
         reply_text=text,

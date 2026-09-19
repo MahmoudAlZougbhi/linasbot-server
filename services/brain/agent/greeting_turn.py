@@ -76,7 +76,13 @@ def _closed_greeting(
     return TurnResult(
         stop_reason="failed_closed",
         envelope=FinalReplyEnvelope(decision="no_reply", messages=[]),
-        extra={**extra, "phase": "identity_greeting", "path": "greeting_only", "customer_silence": True, "reason": reason},
+        extra={
+            **extra,
+            "phase": "identity_greeting",
+            "path": "greeting_only",
+            "customer_silence": True,
+            "reason": reason,
+        },
     )
 
 

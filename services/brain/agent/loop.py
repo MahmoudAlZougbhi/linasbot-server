@@ -88,7 +88,9 @@ async def _retrieve(
             {"ms": retrieve_timer.ms(), "retrieval_outcome": bundle.outcome, "evidence": evidence},
         ),
     )
-    extra["evidence_source_ids"] = [item.source_id for item in bundle.items] + [item.evidence_id for item in bundle.items]
+    extra["evidence_source_ids"] = [item.source_id for item in bundle.items] + [
+        item.evidence_id for item in bundle.items
+    ]
     turn.extra["evidence_source_ids"] = extra["evidence_source_ids"]
     return bundle, extra, evidence, structured_facts, steps
 

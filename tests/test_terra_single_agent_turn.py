@@ -146,7 +146,9 @@ async def test_one_terra_session_can_call_request_tool_then_reply(monkeypatch: p
     result = await run_dm_after_gates(turn, message="I want to order the kit", channel="whatsapp")
     assert calls["n"] <= 2
     assert result.envelope.decision == "reply"
-    assert "order" in (result.envelope.reply_text or "").lower() or "draft" in (result.envelope.reply_text or "").lower()
+    assert (
+        "order" in (result.envelope.reply_text or "").lower() or "draft" in (result.envelope.reply_text or "").lower()
+    )
     assert result.extra.get("awaiting_confirmation") is True
     assert (result.extra or {}).get("terra_llm_calls", 0) <= 2
 
@@ -172,7 +174,10 @@ async def test_comment_invite_does_not_start_request(monkeypatch: pytest.MonkeyP
     async def fake_retrieve(*_a: Any, **_k: Any):
         return EvidenceBundle(outcome="not_found"), [], {}
 
-    monkeypatch.setattr("services.brain.actions.requests.persist_request", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("no persist")))
+    monkeypatch.setattr(
+        "services.brain.actions.requests.persist_request",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("no persist")),
+    )
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", fake_retrieve)
     monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", fake_terra)
     monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
@@ -189,7 +194,12 @@ async def test_comment_invite_does_not_start_request(monkeypatch: pytest.MonkeyP
     from services.brain.agent.loop import run_agentic_turn
     from tests.plan_builders import explicit_plan
 
-    result = await run_agentic_turn(turn, "I want to order this", "instagram_comment", plan=explicit_plan("I want to order this", ("product_request", ["products"])))
+    result = await run_agentic_turn(
+        turn,
+        "I want to order this",
+        "instagram_comment",
+        plan=explicit_plan("I want to order this", ("product_request", ["products"])),
+    )
     assert "dm" in " ".join(item.text for item in result.envelope.messages).lower()
     assert result.extra.get("comment_invite_dm") is True
     assert not any(item.get("action_type") == "start_request" for item in result.extra.get("receipts") or [])

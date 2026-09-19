@@ -103,7 +103,7 @@ def parse_tool_calls(message: Any) -> list[dict[str, Any]]:
             continue
         if name not in READ_TOOLS and name not in ACTION_TOOLS:
             continue
-        rows.append({"id": call_id or f"call_{len(rows)+1}", "tool": name, "args": args})
+        rows.append({"id": call_id or f"call_{len(rows) + 1}", "tool": name, "args": args})
     return rows
 
 

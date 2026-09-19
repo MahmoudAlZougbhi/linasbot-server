@@ -178,7 +178,9 @@ async def test_terra_round_sees_hint_then_escalates(monkeypatch: pytest.MonkeyPa
         agent_trace=[],
     )
     assert seen["hints"][0]["hint"] == _OWNER_HINT
-    assert any(row.get("tool") == "escalate_to_human" and row.get("ok") for row in (result.extra or {}).get("tool_calls") or [])
+    assert any(
+        row.get("tool") == "escalate_to_human" and row.get("ok") for row in (result.extra or {}).get("tool_calls") or []
+    )
     assert any(
         item and item.get("action_type") == "escalate_to_human" and item.get("state") == "success"
         for item in (result.extra or {}).get("receipts") or []
@@ -285,7 +287,9 @@ async def test_dm_path_terra_authors_then_runtime_handoff(monkeypatch: pytest.Mo
 
     async def fake_terra(turn: CustomerTurn, **kwargs: Any) -> TurnResult:
         extra = dict(kwargs.get("extra") or turn.extra or {})
-        result = await execute_tool("escalate_to_human", {"task_id": "human", "customer_text": kwargs.get("message") or ""}, turn)
+        result = await execute_tool(
+            "escalate_to_human", {"task_id": "human", "customer_text": kwargs.get("message") or ""}, turn
+        )
         extra["request_state"] = {**build_request_snapshot(turn), "module_enabled": True}
         extra["receipts"] = [result.get("receipt")] if result.get("receipt") else []
         turn.extra = {**dict(turn.extra or {}), **extra}
