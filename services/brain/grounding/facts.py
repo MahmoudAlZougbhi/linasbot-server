@@ -94,6 +94,7 @@ def ungrounded_claims(
         return ["evidence:empty"]
     receipt_lines = [line for line in (receipts or []) if str(line).strip()]
     corpus = "\n".join([_evidence_text(bundle), *receipt_lines])
+    from services.brain.grounding.handoff_claims import ungrounded_handoff_claims
     from services.brain.grounding.price_claims import ungrounded_price_claims
 
     reasons = [
@@ -103,6 +104,7 @@ def ungrounded_claims(
         *_url_reasons(text, corpus),
         *_stock_reasons(text, corpus),
         *_booking_reasons(text, receipt_lines),
+        *ungrounded_handoff_claims(text, receipt_lines),
     ]
     return list(dict.fromkeys(reasons))
 

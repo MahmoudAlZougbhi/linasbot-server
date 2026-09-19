@@ -114,15 +114,15 @@ async def generate_grounded_reply(
         )
     policy_notes: list[str] = []
     if turn.tenant_id.strip():
+        fallback: list[str] | None = None
         state = (turn.extra or {}).get("request_state")
-        if isinstance(state, dict) and state.get("module_enabled"):
-            from services.brain.agent.request_snapshot import request_policy_notes
-
-            policy_notes = request_policy_notes(state)
-        else:
+        if not (isinstance(state, dict) and state.get("module_enabled")):
             from services.brain.planner.published_rules import request_rule_notes
 
-            policy_notes = request_rule_notes(turn.tenant_id)
+            fallback = request_rule_notes(turn.tenant_id)
+        from services.brain.agent.request_policy import policy_notes_for_turn
+
+        policy_notes = policy_notes_for_turn(turn, fallback_tenant_notes=fallback)
     comment_rule = str((turn.extra or {}).get("comment_rule_text") or "").strip()
     if comment_rule:
         policy_notes.append(f"comment_rule:{comment_rule[:1200]}")
@@ -151,10 +151,6 @@ async def generate_grounded_reply(
                     "If this starts a session, weave at most one short greeting into the same reply. "
                     "Do not prepend a second greeting."
                 )
-    if (turn.extra or {}).get("awaiting_confirmation"):
-        policy_notes.append(
-            "A request is awaiting customer confirmation. Ask to confirm; do not claim it was submitted."
-        )
     context = compose_evidence_context(
         identity=identity,
         plan=plan,

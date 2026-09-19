@@ -6,6 +6,7 @@ from typing import Any
 
 from services.brain.actions.execute import execute_actions
 from services.brain.actions.pending import attach_confirmation
+from services.brain.actions.pending_merge import resume_pending_or_keep
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.profile.store import remember_profile
@@ -56,8 +57,23 @@ async def run_action(name: str, args: dict[str, Any], turn: CustomerTurn) -> dic
     for key in ("request_type", "title", "resource_id", "draft_id", "request_id"):
         if key in args and key not in fields:
             fields[key] = args[key]
+    if "collected_fields" in args and "collected_fields" not in fields:
+        fields["collected_fields"] = args["collected_fields"]
     if name == "start_request" and str(fields.get("request_type") or "").upper() == "HUMAN":
         return {"ok": False, "error": "human_use_escalate_to_human", "data": None}
+    if name in {"start_request", "update_request_draft"} and not args.get("confirmed"):
+        resumed = resume_pending_or_keep(turn, fields)
+        if resumed is not None:
+            _persist_profile(turn, args)
+            return {
+                "ok": True,
+                "data": {
+                    "awaiting_confirmation": True,
+                    "pending_actions": [item.model_dump() for item in resumed.actions],
+                    "resumed": True,
+                },
+                "receipt": None,
+            }
     proposal = ActionProposal(task_id=task_id, action_type=action_type, fields=fields)  # type: ignore[arg-type]
     proposals = ActionProposalSet(actions=[proposal])
     if action_type in {"start_request", "submit_request"} and not args.get("confirmed"):

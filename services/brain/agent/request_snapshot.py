@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.brain.agent.request_policy import request_policy_notes
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.profile.store import confirm_candidates, recall_profile
 from services.requests.config_loader import requests_capture_active
+
+__all__ = ["build_request_snapshot", "request_policy_notes", "required_fields_for_type"]
 
 _CLOSED = {"cancelled", "submitted", "replaced", "definition_deleted", "expired", "completed"}
 _OPEN = {"collecting", "paused", "ready", "awaiting_confirmation"}
@@ -20,6 +23,17 @@ def _pending_rows(turn: CustomerTurn) -> list[dict[str, Any]]:
             rows.append(row)
         elif hasattr(row, "model_dump"):
             rows.append(row.model_dump())
+    if rows:
+        return rows
+    try:
+        from services.brain.conversation_store import load_conversation
+
+        stored = load_conversation(turn.tenant_id, turn.conversation_id) or {}
+    except Exception:
+        return rows
+    for row in list(stored.get("pending") or []):
+        if isinstance(row, dict):
+            rows.append(row)
     return rows
 
 
@@ -39,11 +53,13 @@ def _rule_rows(tenant_id: str) -> tuple[list[dict[str, Any]], str]:
     for raw in payload.get("rules") or []:
         if not isinstance(raw, dict) or raw.get("enabled") is False:
             continue
+        notes = str(raw.get("notes") or "").strip()
         rules.append(
             {
                 "id": str(raw.get("id") or ""),
                 "type": str(raw.get("type") or "").upper(),
                 "name": str(raw.get("name") or ""),
+                "notes": notes,
                 "required_fields": [str(x).strip() for x in (raw.get("required_fields") or []) if str(x).strip()],
             }
         )
@@ -119,6 +135,13 @@ def build_request_snapshot(turn: CustomerTurn) -> dict[str, Any]:
     for row in pending:
         active_kind = str(row.get("request_type") or active_kind)
         required = required_fields_for_type(turn.tenant_id, active_kind, rules)
+        raw_collected = row.get("collected")
+        filled = dict(raw_collected) if isinstance(raw_collected, dict) else {}
+        missing = [key for key in required if not str(filled.get(key) or "").strip()]
+        for key in row.get("missing_fields") or []:
+            if key not in missing:
+                missing.append(key)
+        row["missing_fields"] = missing
         row["kind"] = "resume_active"
     for row in active:
         dest = str(row.get("destination") or "")
@@ -132,6 +155,11 @@ def build_request_snapshot(turn: CustomerTurn) -> dict[str, Any]:
         row["kind"] = "expired_or_completed"
     profile = recall_profile(turn.tenant_id, turn.customer_id or "", conversation_id=turn.conversation_id)
     confirm = confirm_candidates(profile, set(required))
+    human_hints = [
+        {"id": row.get("id") or "", "name": row.get("name") or "", "hint": row.get("notes") or ""}
+        for row in rules
+        if str(row.get("type") or "").upper() == "HUMAN" and str(row.get("notes") or "").strip()
+    ]
     return {
         "module_enabled": bool(enabled),
         "published_rules": rules,
@@ -142,47 +170,7 @@ def build_request_snapshot(turn: CustomerTurn) -> dict[str, Any]:
         "active_kind": active_kind,
         "required_fields": required,
         "profile_confirm": confirm,
+        "human_hints": human_hints,
         "nag_policy": "answer_other_topics_first",
         "distinction": "new_ORDER vs new_APPOINTMENT vs resume_active vs expired_or_completed",
     }
-
-
-def request_policy_notes(state: dict[str, Any]) -> list[str]:
-    if not state.get("module_enabled"):
-        return []
-    notes = [
-        "REQUEST_NAG_POLICY: If a draft is open and this inbound is a different question, answer "
-        "that question first. Do not re-ask missing fields this turn. When the customer returns to "
-        "the booking/order topic, summarize collected vs remaining and allow corrections.",
-        "REQUEST_DISTINCTION: new ORDER vs new APPOINTMENT vs resume active draft vs "
-        "expired/completed past appointment — do not conflate them.",
-        "HUMAN: You may speak the owner-configured hint, then call escalate_to_human. "
-        "Do not paste a canned protocol. HUMAN never creates a Requests board card.",
-        "PROFILE: Confirm stored required fields with the customer instead of blank re-collect. "
-        "If the active request graph does not require a field, do not ask and do not store it.",
-    ]
-    block = str(state.get("published_rules_block") or "").strip()
-    if block:
-        notes.append(block)
-    compact = {
-        "active_kind": state.get("active_kind") or "",
-        "pending": state.get("pending_confirmation") or [],
-        "active_drafts": [
-            {
-                "draft_id": row.get("draft_id"),
-                "status": row.get("status"),
-                "kind": row.get("kind"),
-                "request_type": row.get("request_type"),
-                "collected": row.get("collected") or row.get("values"),
-                "missing_fields": row.get("missing_fields"),
-            }
-            for row in (state.get("active_drafts") or [])
-            if isinstance(row, dict)
-        ],
-        "past": [{"status": row.get("status"), "kind": row.get("kind")} for row in (state.get("past_requests") or [])],
-        "required_fields": state.get("required_fields") or [],
-        "profile_confirm": state.get("profile_confirm") or {},
-        "distinction": state.get("distinction"),
-    }
-    notes.append(f"REQUEST_STATE:{compact}")
-    return notes

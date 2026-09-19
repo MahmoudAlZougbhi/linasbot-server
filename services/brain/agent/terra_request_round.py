@@ -45,7 +45,8 @@ def openai_request_tools() -> list[dict[str, Any]]:
         _schema("get_request_state", "Refresh collected vs remaining vs active/expired request state."),
         _schema(
             "start_request",
-            "Start a new ORDER or APPOINTMENT draft. Do not use for HUMAN.",
+            "Start a new ORDER or APPOINTMENT only when no pending/active draft of that type exists. "
+            "If one exists, call update_request_draft. Do not use for HUMAN.",
             {
                 "request_type": {"type": "string", "enum": ["ORDER", "APPOINTMENT", "OTHER"]},
                 "title": {"type": "string"},
@@ -53,18 +54,19 @@ def openai_request_tools() -> list[dict[str, Any]]:
         ),
         _schema(
             "update_request_draft",
-            "Correct or fill collected_fields on the active draft.",
+            "Fill or correct collected_fields on the same pending draft. Never start a second draft.",
             {"fields": {"type": "object"}, "draft_id": {"type": "string"}},
         ),
         _schema("submit_request", "Submit the active ORDER/APPOINTMENT after the customer confirms."),
         _schema("cancel_request", "Cancel the active draft."),
         _schema(
             "escalate_to_human",
-            "Live Chat handoff after you may speak the owner HUMAN hint. Never a Requests board card.",
+            "Runtime Live Chat handoff after you author customer wording from owner HUMAN hints. "
+            "Do not paste the hint as a canned script. Never a Requests board card.",
         ),
         _schema(
             "no_request_action",
-            "Call when this inbound is not a new/resume ORDER, APPOINTMENT, or HUMAN handoff.",
+            "Call when this inbound is another topic. Keep the pending draft. Do not chase missing fields.",
         ),
     ]
 
@@ -121,6 +123,7 @@ async def _llm_round(turn: CustomerTurn, message: str, snapshot: dict[str, Any])
                 "profile_confirm",
                 "distinction",
                 "nag_policy",
+                "human_hints",
             )
         },
         "published_rules": snapshot.get("published_rules_block") or "",

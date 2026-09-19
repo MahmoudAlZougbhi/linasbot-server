@@ -68,6 +68,9 @@ def test_snapshot_distinguishes_new_resume_and_expired() -> None:
 
 @pytest.mark.asyncio
 async def test_correction_updates_collected_fields() -> None:
+    from services.brain.conversation_store import reset_conversation_store_for_tests
+
+    reset_conversation_store_for_tests()
     turn = CustomerTurn(tenant_id="t1", conversation_id="c-fix", customer_id="u1", event_ids=["m1"])
     await execute_tool(
         "start_request",
@@ -85,8 +88,8 @@ async def test_correction_updates_collected_fields() -> None:
     )
     snap = build_request_snapshot(turn)
     pending = snap["pending_confirmation"]
-    if pending:
-        assert pending[0]["collected"].get("name") in {"Ali", "Ibrahim"}
+    assert pending
+    assert pending[0]["collected"].get("name") == "Ali"
 
 
 def test_optional_fields_are_not_force_stored() -> None:
