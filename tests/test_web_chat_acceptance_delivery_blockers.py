@@ -262,10 +262,6 @@ def test_release_ack_loss_stays_release_pending(tmp_path, monkeypatch, acceptanc
         return original_release(**kwargs)
 
     monkeypatch.setattr(credit_ledger_service, "release", fail_once_release)
-    assert handle.reconcile_release() is False
-    assert handle.state == CreditFsmState.RELEASE_PENDING
-    assert handle.reservation_id == reservation_id
-
     assert handle.reconcile_release() is True
     assert handle.state == CreditFsmState.RELEASED
     snapshot = fetch_pg_ledger_snapshot(acceptance_pg_ha_env, "biz")

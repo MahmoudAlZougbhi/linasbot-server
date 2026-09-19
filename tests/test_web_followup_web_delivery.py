@@ -19,18 +19,16 @@ from tests.web_chat_acceptance_support import patch_acceptance_eligibility, seed
 
 
 def _reserve_followup_credit(*, tenant_id: str, idem: str) -> str:
-    from services.billing.credit_ledger_service import credit_ledger_service
-    from services.smart_followup.constants import OPERATION_TYPE
+    from services.billing.membership.message_ledger import reserve
     from services.smart_followup.idempotency import canonical_sfu_credit_request_id
 
     seed_acceptance_credit_ledger(tenant_id=tenant_id)
-    return credit_ledger_service.reserve(
+    held = reserve(
         tenant_id=tenant_id,
-        user_id=None,
-        credits=1,
-        operation_type=OPERATION_TYPE,
-        request_id=canonical_sfu_credit_request_id(idem),
+        operation_id=canonical_sfu_credit_request_id(idem),
+        response_class="followup_sent",
     )
+    return held.reservation_id
 
 
 def _web_followup_fixtures(store, *, visitor_id: str = "visitor-2", idem: str = "idem-1"):

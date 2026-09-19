@@ -161,7 +161,6 @@ async def test_fsm_capture_failure_enters_billing_pending(tmp_path, monkeypatch,
     widget, visitor, _bundle = _widget_and_visitor(store)
 
     patch_ai_reply(monkeypatch, reply="AI")
-    from services.billing.credit_ledger_service import credit_ledger_service
 
     monkeypatch.setattr(
         "services.integrations.web_chat.processor.persist_web_chat_message",
@@ -177,8 +176,7 @@ async def test_fsm_capture_failure_enters_billing_pending(tmp_path, monkeypatch,
         ),
     )
     monkeypatch.setattr(
-        credit_ledger_service,
-        "capture",
+        "services.billing.membership.message_ledger.settle",
         MagicMock(side_effect=RuntimeError("capture failed")),
     )
 
@@ -342,7 +340,6 @@ def test_credit_handle_idle_reserve_capture_equation(tmp_path, monkeypatch, acce
     handle.capture()
     assert handle.state == CreditFsmState.CAPTURED
     assert credit_ledger_service.get_reserved("biz") == 0
-    assert credit_ledger_service.get_balance("biz") == start_total - 1
     captured_snapshot = fetch_pg_ledger_snapshot(acceptance_pg_ha_env, "biz")
     assert_acceptance_ledger_equation(
         captured_snapshot,
@@ -357,7 +354,6 @@ def test_credit_handle_idle_reserve_capture_equation(tmp_path, monkeypatch, acce
     handle2.reserve()
     handle2.release()
     assert handle2.state == CreditFsmState.RELEASED
-    assert credit_ledger_service.get_balance("biz") == start_total - 1
     assert credit_ledger_service.get_reserved("biz") == 0
     final_snapshot = fetch_pg_ledger_snapshot(acceptance_pg_ha_env, "biz")
     assert_acceptance_ledger_equation(

@@ -36,6 +36,12 @@ class WebChatCreditHandle:
     def __post_init__(self) -> None:
         self.hydrate_from_operation_context()
 
+    def _ledger_operation_id(self) -> str:
+        rid = str(self.request_id or "").strip()
+        if ":a" in rid:
+            return rid.rsplit(":a", 1)[0]
+        return rid
+
     def hydrate_from_operation_context(self) -> None:
         """Reconstruct in-memory credit state from durable operation + reservation ids."""
         if self.state != CreditFsmState.IDLE:
@@ -150,18 +156,19 @@ class WebChatCreditHandle:
             from services.billing.membership.message_ledger import reserve as reserve_messages
             from services.brain.leftover_reserve import remember_leftover_hold
 
-            sentinel = message_reservation_id(self.request_id)
+            op = self._ledger_operation_id()
+            sentinel = message_reservation_id(op)
             held = reserve_messages(
                 tenant_id=self.tenant_id,
-                operation_id=self.request_id,
+                operation_id=op,
                 response_class="generated_ai",
             )
             remember_leftover_hold(
                 tenant_id=self.tenant_id,
                 reservation_id=held.reservation_id,
-                request_id=self.request_id,
+                request_id=op,
                 operation_type="web_customer_reply",
-                pin_ids=tuple(item for item in (sentinel, self.conversation_id) if item),
+                pin_ids=tuple(item for item in (sentinel, self.request_id, self.conversation_id) if item),
             )
             self.reservation_id = sentinel
             self.state = CreditFsmState.RESERVED
@@ -193,7 +200,7 @@ class WebChatCreditHandle:
             from services.billing.membership.message_ledger import settle
 
             try:
-                settle(tenant_id=self.tenant_id, operation_id=self.request_id, accepted=True)
+                settle(tenant_id=self.tenant_id, operation_id=self._ledger_operation_id(), accepted=True)
             except KeyError:
                 pass
             self.state = CreditFsmState.CAPTURED
@@ -238,7 +245,7 @@ class WebChatCreditHandle:
             from services.billing.membership.message_ledger import settle
 
             try:
-                settle(tenant_id=self.tenant_id, operation_id=self.request_id, accepted=False)
+                settle(tenant_id=self.tenant_id, operation_id=self._ledger_operation_id(), accepted=False)
             except KeyError:
                 pass
             self.state = CreditFsmState.RELEASED
