@@ -6,12 +6,9 @@ import json
 import re
 
 from services.brain.inbound.text_handlers_respond_keywords import (
-    _GREETING_PREFIX_RE,
-    _LEADING_ADDRESS_RE,
     ALLOWED_GENERAL_QUERIES,
     BUSINESS_SCOPE_KEYWORDS,
     GENERAL_QUESTION_PREFIX_RE,
-    GREETING_OPENERS,
     OFF_TOPIC_KEYWORDS,
     PRICE_INTENT_KEYWORDS,
 )
@@ -76,24 +73,3 @@ def _clean_reply_text(text: str) -> str:
     value = re.sub(r"\n{2,}", "\n", value)
     value = re.sub(r"[ \t]+", " ", value)
     return value.strip()
-
-
-def _looks_like_greeting_unit(unit: str) -> bool:
-    probe = _clean_reply_text(unit).lower()
-    if not probe:
-        return False
-    return probe.startswith(GREETING_OPENERS)
-
-
-def _strip_leading_greeting_phrase(text: str) -> str:
-    cleaned = _clean_reply_text(text)
-    if not cleaned:
-        return cleaned
-
-    without_greeting = _GREETING_PREFIX_RE.sub("", cleaned, count=1).strip()
-    if without_greeting == cleaned:
-        return cleaned
-
-    without_address = _LEADING_ADDRESS_RE.sub("", without_greeting, count=1).strip()
-    without_address = re.sub(r"^[،,:;!\-–—]+\s*", "", without_address).strip()
-    return without_address or cleaned

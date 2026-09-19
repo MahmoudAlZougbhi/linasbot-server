@@ -329,7 +329,7 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 
 ## WAVE O1–O5 — router/gender, translator, classifier, dashboard name, durable flag
 
-- Inbound ctx no longer binds unused `router_route` / `get_gender_from_message`. `conversation_router` KEEP is `is_human_request` (hardcoded `GREETING_TEMPLATES` removed).
+- Inbound ctx no longer binds unused `router_route` / `get_gender_from_message`. Keyword `human_detect.py` is deleted; live human intent is Brain planner `human_request` plus Requests `HUMAN` → Live Chat. Hardcoded `GREETING_TEMPLATES` stay gone.
 - Translator prompts are generic SaaS; Lebanese dialect / franco rules stay.
 - Classifier has no founder branch ids (`marwa` / `antelias` / `beirut`) as product defaults. Dead `answer_packet` anti-leak helper is gone; Brain published-path tests still forbid founder leakage.
 - Dashboard package name is `linas-ai-dashboard`.
@@ -344,5 +344,11 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 - FAQ: published CM FAQ is the only customer matcher. Local JSONL / `local_qa_*` runtime deleted after callers migrated.
 - Customer text: `brain_template` is owner-persisted protocol copy only. Hardcoded greeting/handoff/no-evidence tables removed. Web Chat uses Customer Brain and silences instruction leaks.
 - Smart Follow-Up: runtime imports go to `services/smart_followup/`. WhatsApp duplicate re-export package deleted.
+
+## WAVE residual remnants (post #743)
+
+- `services/requests/human_detect.py` deleted. No live `services/` / `modules/` callers after `status_ui` removal. Human request stays on `services/brain/planner/heuristic.py` (`human_request`) and Requests type `HUMAN` → Live Chat.
+- `services/live_chat/service_details.py` is Active conversation-details (not Legacy). No `local_qa` / `read_qa_pairs`. Cursor debug log removed. Canonical FAQ remains `services/faq/cm_faq.py` + `services/brain/faq_exact.py`.
+- `services/ai_setup/durable_flags.py` is **KEEP — deployment / verification infrastructure**. Quality Gates and HA pin the file and `scripts/prod_cm_preserve_durable_flags.sh`. Not Dead product code. Do not rewrite HA.
 
 

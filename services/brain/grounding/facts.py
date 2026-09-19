@@ -21,11 +21,6 @@ def ungrounded_amounts(reply_text: str, bundle: EvidenceBundle) -> list[str]:
     return sorted(extract.amounts(reply_text) - allowed)
 
 
-def _amount_reasons(reply_text: str, corpus: str) -> list[str]:
-    allowed = extract.amounts(corpus)
-    return [f"amount:{claim}" for claim in sorted(extract.amounts(reply_text) - allowed)]
-
-
 def _hours_reasons(reply_text: str, corpus: str) -> list[str]:
     reasons: list[str] = []
     allowed = extract.clock_surfaces(corpus)

@@ -24,6 +24,7 @@ GONE_DEAD = (
     "services/brain/conversation_router_patterns.py",
     "services/integrations/meta/meta_comment_rule_dm.py",
     "services/requests/status_ui.py",
+    "services/requests/human_detect.py",
 )
 
 GONE_LEGACY = (
@@ -41,7 +42,6 @@ KEEP = (
     "services/brain/agent/handoff_policy.py",
     "services/brain/retrieve/hydrate.py",
     "services/integrations/web_chat/processor_reply.py",
-    "services/requests/human_detect.py",
     "services/live_chat/service_details.py",
     "services/faq/cm_faq.py",
 )
@@ -64,6 +64,7 @@ FORBIDDEN_IMPORTS = (
     "from services.brain.retrieve.expand import",
     "from services.integrations.meta.meta_comment_rule_dm",
     "from services.requests.status_ui",
+    "from services.requests.human_detect",
     "from services.scale.isolated_replica_pool",
     "from services.scale.self_heal import",
     "from services.integrations.web_chat.processor_v2_reply",
@@ -127,9 +128,41 @@ def test_live_chat_details_has_no_local_qa_branch() -> None:
     blob = (ROOT / "services/live_chat/service_details.py").read_text(encoding="utf-8")
     assert "local_qa" not in blob
     assert "read_qa_pairs" not in blob
+    assert "debug-420609" not in blob
+    assert "get_faq_match_context" not in blob
+    assert "def get_conversation_details" in blob
 
 
 def test_faq_owner_verbatim_module_remains() -> None:
     src = (ROOT / "services/brain/faq_exact.py").read_text(encoding="utf-8")
     assert "find_exact_faq" in src
     assert (ROOT / "services/faq/cm_faq.py").is_file()
+
+
+def test_human_detect_gone_live_human_path_remains() -> None:
+    assert not (ROOT / "services/requests/human_detect.py").exists()
+    from services.brain.planner.heuristic import plan_message
+    from services.requests.constants import PERSISTABLE_REQUEST_TYPES, REQUEST_TYPES
+    from services.requests.request_graphs.compiler import destination_from_type
+
+    assert "HUMAN" in REQUEST_TYPES
+    assert "HUMAN" not in PERSISTABLE_REQUEST_TYPES
+    assert destination_from_type("HUMAN") == "live_chat"
+    types = {task.type for task in plan_message("بدي احكي مع حدا").tasks}
+    assert "human_request" in types
+    types = {task.type for task in plan_message("personal care tips").tasks}
+    assert "human_request" not in types
+
+
+def test_durable_flags_are_quality_gate_and_ha_infrastructure() -> None:
+    qg = (ROOT / ".github/workflows/quality-gates.yml").read_text(encoding="utf-8")
+    helper = (ROOT / "scripts/ha/deploy_meta_release_ha.sh").read_text(encoding="utf-8")
+    preserve = (ROOT / "scripts/prod_cm_preserve_durable_flags.sh").read_text(encoding="utf-8")
+    flags = (ROOT / "services/ai_setup/durable_flags.py").read_text(encoding="utf-8")
+    assert "services/ai_setup/durable_flags.py" in qg
+    assert "prod_cm_preserve_durable_flags.sh" in qg
+    assert "prod_cm_preserve_durable_flags.sh" in helper
+    assert "from services.ai_setup.durable_flags import" in preserve
+    assert "KEEP — deployment / verification infrastructure" in flags
+    facts = (ROOT / "services/brain/grounding/facts.py").read_text(encoding="utf-8")
+    assert "def _amount_reasons" not in facts

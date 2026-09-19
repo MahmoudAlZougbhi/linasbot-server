@@ -180,33 +180,3 @@ INTERROGATIVE_PREFIXES = (
     "who",
     "how",
 )
-
-GREETING_OPENERS = (
-    "مرحبا",
-    "مرحباً",
-    "اهلا",
-    "أهلا",
-    "أهلاً",
-    "هلا",
-    "السلام عليكم",
-    "صباح الخير",
-    "مساء الخير",
-    "hello",
-    "hi",
-    "good morning",
-    "good evening",
-    "bonjour",
-    "salut",
-    "bonsoir",
-)
-
-_GREETING_PREFIX_RE = re.compile(
-    r"^\s*(?:"
-    + "|".join(re.escape(opener) for opener in sorted(GREETING_OPENERS, key=len, reverse=True))
-    + r")\b[\s،,:;!.\-–—]*",
-    re.IGNORECASE,
-)
-
-_LEADING_ADDRESS_RE = re.compile(
-    r"^\s*(?:أستاذ|استاذ|عزيزتي|حضرتك)\s+[^\s،,:;!?-]+(?:\s+[^\s،,:;!?-]+){0,2}\s*[،,:;!\-–—]*"
-)

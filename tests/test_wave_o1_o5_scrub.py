@@ -9,17 +9,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_wave_o1_no_unused_router_gender_bindings() -> None:
     ctx = (ROOT / "services/brain/inbound/text_handlers_respond_ctx.py").read_text(encoding="utf-8")
-    router = (ROOT / "services/requests/human_detect.py").read_text(encoding="utf-8")
     assert "router_route" not in ctx
     assert "get_gender_from_message" not in ctx
-    assert "def route(" not in router
-    assert "ask_gender" not in router
-    from services.requests.human_detect import is_human_request
+    assert not (ROOT / "services/requests/human_detect.py").exists()
+    assert not (ROOT / "services/brain/conversation_router.py").exists()
+    from services.brain.planner.heuristic import plan_message
 
-    assert is_human_request("بدي احكي مع حدا") is True
-    assert is_human_request("personal care tips") is False
-    router = (ROOT / "services/requests/human_detect.py").read_text(encoding="utf-8")
-    assert "GREETING_TEMPLATES" not in router
+    assert "human_request" in {task.type for task in plan_message("بدي احكي مع حدا").tasks}
+    assert "human_request" not in {task.type for task in plan_message("personal care tips").tasks}
+    inbound = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "services/brain/inbound").rglob("*.py"))
+    assert "GREETING_TEMPLATES" not in inbound
 
 
 def test_wave_o2_no_laser_clinic_translator_in_brain() -> None:
