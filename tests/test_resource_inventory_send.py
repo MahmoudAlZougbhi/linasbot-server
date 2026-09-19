@@ -147,8 +147,11 @@ async def test_resource_request_checks_does_not_auto_send(monkeypatch: pytest.Mo
             ],
         )
 
-    async def fake_generate(*_a, **kwargs):
-        extra = dict(kwargs.get("extra") or {})
+    async def fake_terra(turn: CustomerTurn, **kwargs: Any):
+        extra = dict(kwargs.get("extra") or turn.extra or {})
+        result = await execute_tool("check_setup_resources", {"query": "photos"}, turn)
+        extra["tool_calls"] = [{"tool": "check_setup_resources", "ok": result.get("ok")}]
+        extra.update(dict(turn.extra or {}))
         return TurnResult(
             stop_reason="ok",
             envelope=FinalReplyEnvelope(
@@ -163,13 +166,8 @@ async def test_resource_request_checks_does_not_auto_send(monkeypatch: pytest.Mo
 
     _patch_index(monkeypatch, {k: v for k, v in _INDEX.items() if k != "img-1"})
     monkeypatch.setattr("services.brain.agent.loop.default_agentic_plan", fake_plan)
-
-    async def _no_terra(*_a, **_k):
-        return [], [], 0, {}
-
-    monkeypatch.setattr("services.brain.agent.loop.run_terra_request_round", _no_terra)
     monkeypatch.setattr("services.brain.agent.multi_retrieve.retrieve_published", fake_retrieve)
-    monkeypatch.setattr("services.brain.agent.loop.generate_verified", fake_generate)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", fake_terra)
     monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
     monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", _no_confirm)
     monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)

@@ -10,7 +10,7 @@ import pytest
 from services.brain.actions.handoff import escalate_to_human
 from services.brain.agent.request_policy import request_policy_notes
 from services.brain.agent.request_snapshot import build_request_snapshot
-from services.brain.agent.terra_request_round import openai_request_tools, run_terra_request_round
+from services.brain.agent.terra_request_round import openai_request_tools
 from services.brain.compose.blocks import RULES_BLOCK, compose_evidence_context
 from services.brain.contracts.actions import ActionProposal
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
@@ -99,6 +99,7 @@ def test_human_policy_has_no_anger_keyword_gate() -> None:
     roots = [
         Path("services/brain/agent/request_policy.py"),
         Path("services/brain/agent/request_snapshot.py"),
+        Path("services/brain/agent/terra_turn.py"),
         Path("services/brain/agent/terra_request_round.py"),
         Path("services/brain/actions/handoff.py"),
         Path("services/brain/grounding/handoff_claims.py"),
@@ -111,31 +112,81 @@ def test_human_policy_has_no_anger_keyword_gate() -> None:
 
 @pytest.mark.asyncio
 async def test_terra_round_sees_hint_then_escalates(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: dict[str, Any] = {}
+    from types import SimpleNamespace
 
-    async def fake_llm(_turn: CustomerTurn, _message: str, snapshot: dict[str, Any]) -> list[dict[str, Any]]:
-        seen["hints"] = list(snapshot.get("human_hints") or [])
-        return [{"tool": "escalate_to_human", "args": {"task_id": "human"}}]
+    from services.brain.agent.terra_turn import run_terra_turn
+
+    seen: dict[str, Any] = {}
+    calls = {"n": 0}
+
+    async def fake_llm(*, messages, **_k: Any):
+        calls["n"] += 1
+        blob = str(messages)
+        if _OWNER_HINT in blob:
+            seen["hints"] = [{"hint": _OWNER_HINT}]
+        if calls["n"] == 1:
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content=None,
+                            tool_calls=[
+                                SimpleNamespace(
+                                    id="call_1",
+                                    function=SimpleNamespace(
+                                        name="escalate_to_human",
+                                        arguments='{"task_id":"human"}',
+                                    ),
+                                )
+                            ],
+                        )
+                    )
+                ]
+            )
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="راوق يا باشا، دقيقة.", tool_calls=None))]
+        )
 
     async def fake_takeover(*_a: Any, **_k: Any) -> dict[str, Any]:
         seen["takeover"] = True
         return {"ok": True, "status": "waiting_human"}
 
-    monkeypatch.setattr("services.brain.agent.terra_request_round.openai_configured", lambda: True)
-    monkeypatch.setattr("services.brain.agent.terra_request_round._llm_round", fake_llm)
+    async def pass_verify(**_k: Any):
+        return SimpleNamespace(verdict="PASS", unsupported_claims=[], missing_tasks=[], repair_instruction="")
+
+    monkeypatch.setattr("services.brain.agent.terra_turn.openai_configured", lambda: True)
+    monkeypatch.setattr("services.brain.llm_core_service.create_chat_completion", fake_llm)
+    monkeypatch.setattr("services.billing.membership.provider_expense.record_pending_provider", lambda **_k: None)
+    monkeypatch.setattr("services.brain.providers.config.answer_model", lambda: "gpt-test")
+    monkeypatch.setattr("services.brain.billing.operation_id_for_turn", lambda _t: "op-h")
+    monkeypatch.setattr("services.brain.identity.load_identity_bundle", lambda _tid: None)
+    monkeypatch.setattr("services.brain.agent.terra_turn.verify_answer", pass_verify)
+    monkeypatch.setattr("services.brain.agent.generate_path.coverage_ok", lambda *_a, **_k: True)
     monkeypatch.setattr("utils.utils_takeover.set_human_takeover_status", fake_takeover)
-    rows, receipts, used, extra = await run_terra_request_round(
-        _turn(),
-        "زعلان كتير من الخدمة",
-        budget=4,
-        trace=[],
+    turn = _turn()
+    result = await run_terra_turn(
+        turn,
+        message="زعلان كتير من الخدمة",
+        channel="whatsapp",
+        dest="dm",
+        plan=PlannerPlan(tasks=[], read_only=True),
+        bundle=_bundle(),
+        structured_facts={},
+        visual_reason="",
+        extra={},
+        evidence=[],
+        agent_trace=[],
     )
     assert seen["hints"][0]["hint"] == _OWNER_HINT
-    assert used >= 1
-    assert any(row.get("tool") == "escalate_to_human" and row.get("ok") for row in rows)
-    assert any(str(item).startswith("escalate_to_human:success") for item in receipts)
-    assert extra.get("receipts")
+    assert any(
+        row.get("tool") == "escalate_to_human" and row.get("ok") for row in (result.extra or {}).get("tool_calls") or []
+    )
+    assert any(
+        item and item.get("action_type") == "escalate_to_human" and item.get("state") == "success"
+        for item in (result.extra or {}).get("receipts") or []
+    )
     assert seen.get("takeover") is True
+    assert result.envelope.decision == "reply"
 
 
 @pytest.mark.asyncio
@@ -234,26 +285,19 @@ async def test_dm_path_terra_authors_then_runtime_handoff(monkeypatch: pytest.Mo
     async def fake_retrieve(*_a: Any, **_k: Any):
         return _bundle(), [], {}
 
-    async def fake_round(turn: CustomerTurn, message: str, **_k: Any):
-        result = await execute_tool("escalate_to_human", {"task_id": "human", "customer_text": message}, turn)
-        extra = {
-            "request_state": {**build_request_snapshot(turn), "module_enabled": True},
-            "receipts": [result.get("receipt")] if result.get("receipt") else [],
-        }
+    async def fake_terra(turn: CustomerTurn, **kwargs: Any) -> TurnResult:
+        extra = dict(kwargs.get("extra") or turn.extra or {})
+        result = await execute_tool(
+            "escalate_to_human", {"task_id": "human", "customer_text": kwargs.get("message") or ""}, turn
+        )
+        extra["request_state"] = {**build_request_snapshot(turn), "module_enabled": True}
+        extra["receipts"] = [result.get("receipt")] if result.get("receipt") else []
         turn.extra = {**dict(turn.extra or {}), **extra}
         captured["hints"] = extra["request_state"].get("human_hints")
-        return (
-            [{"tool": "escalate_to_human", "ok": True, "source": "terra"}],
-            ["escalate_to_human:success:c-live"],
-            1,
-            extra,
-        )
-
-    async def fake_generate(turn: CustomerTurn, **kwargs: Any) -> TurnResult:
-        extra = dict(kwargs.get("extra") or turn.extra or {})
-        hints = (extra.get("request_state") or {}).get("human_hints") or []
+        hints = extra["request_state"].get("human_hints") or []
         text = "راوق يا باشا، دقيقة وبحوّلك." if hints else "One moment."
         captured["terra_text"] = text
+        extra.update(dict(turn.extra or {}))
         return TurnResult(
             stop_reason="ok",
             envelope=FinalReplyEnvelope(
@@ -279,8 +323,7 @@ async def test_dm_path_terra_authors_then_runtime_handoff(monkeypatch: pytest.Mo
     monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", no_sem)
     monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", fake_retrieve)
-    monkeypatch.setattr("services.brain.agent.loop.run_terra_request_round", fake_round)
-    monkeypatch.setattr("services.brain.agent.loop.generate_verified", fake_generate)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", fake_terra)
     monkeypatch.setattr("utils.utils_takeover.set_human_takeover_status", fake_takeover)
     result = await run_dm_after_gates(
         _turn("c-live"),

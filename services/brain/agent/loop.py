@@ -1,4 +1,4 @@
-"""Bounded agentic Customer Brain turn: RETRIEVE/TOOLS → OBSERVE → DECIDE → FINAL."""
+"""Bounded agentic Customer Brain turn: RETRIEVE → one Terra session (tools + reply)."""
 
 from __future__ import annotations
 
@@ -7,16 +7,14 @@ from typing import Any
 from services.brain.actions.human_handoff_policy import allow_policy_only_generate, commit_pending_human_escalate
 from services.brain.agent.action_gate import apply_action_gate
 from services.brain.agent.default_plan import default_agentic_plan, information_plan_for_comment
-from services.brain.agent.generate_path import generate_verified
 from services.brain.agent.multi_retrieve import multi_round_retrieve
 from services.brain.agent.rewrite import rewrite_queries
 from services.brain.agent.task_coverage import evaluate_task_coverage, missing_tasks
-from services.brain.agent.terra_request_round import run_terra_request_round
-from services.brain.agent.tool_calls import maybe_tool_calls as _maybe_tool_calls
-from services.brain.agent.tool_calls import skip_tools_for_turn
+from services.brain.agent.terra_turn import run_terra_turn
 from services.brain.billing import reserve_generative
 from services.brain.budgets import DEFAULT_BUDGETS
 from services.brain.contracts.enums import StopReason
+from services.brain.contracts.evidence import EvidenceBundle
 from services.brain.contracts.plan import PlannerPlan
 from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
 from services.brain.contracts.turn import CustomerTurn
@@ -63,6 +61,40 @@ def _keep_generate_hold(result: TurnResult) -> bool:
     return result.stop_reason == "ok" and any((item.text or "").strip() for item in result.envelope.messages)
 
 
+def _ack_only(plan: PlannerPlan) -> bool:
+    return bool(plan.tasks) and all(task.type == "acknowledgement" for task in plan.tasks)
+
+
+async def _retrieve(
+    turn: CustomerTurn,
+    plan: PlannerPlan,
+    message: str,
+    extra: dict[str, Any],
+    agent_trace: list[dict[str, Any]],
+    steps: int,
+) -> tuple[EvidenceBundle, dict[str, Any], list[dict[str, str]], dict[str, Any], int]:
+    steps += 1
+    retrieve_timer = StageTimer()
+    max_rounds = 1 if _fast_path_eligible(plan) else DEFAULT_BUDGETS.max_retrieval_rounds
+    agent_trace.append({"step": "RETRIEVE", "n": steps, "max_rounds": max_rounds, "fast_path": max_rounds == 1})
+    bundle, retrieve_trace, structured_facts = await multi_round_retrieve(turn, plan, message, max_rounds=max_rounds)
+    agent_trace.extend({"step": "OBSERVE", **row} for row in retrieve_trace)
+    evidence = evidence_preview(bundle)
+    extra = _flow_extra(
+        extra,
+        (
+            "search",
+            "Searched published Knowledge / Services / Products / FAQ",
+            {"ms": retrieve_timer.ms(), "retrieval_outcome": bundle.outcome, "evidence": evidence},
+        ),
+    )
+    extra["evidence_source_ids"] = [item.source_id for item in bundle.items] + [
+        item.evidence_id for item in bundle.items
+    ]
+    turn.extra["evidence_source_ids"] = extra["evidence_source_ids"]
+    return bundle, extra, evidence, structured_facts, steps
+
+
 async def run_agentic_turn(
     turn: CustomerTurn,
     message: str,
@@ -79,7 +111,6 @@ async def run_agentic_turn(
     extra = dict(flow_extra or {})
     steps = 0
     max_steps = DEFAULT_BUDGETS.max_agent_steps
-    tool_budget = DEFAULT_BUDGETS.max_tool_calls
 
     steps += 1
     agent_trace.append({"step": "PLAN", "n": steps})
@@ -107,66 +138,22 @@ async def run_agentic_turn(
     if gated.early is not None:
         return gated.early
 
-    if plan.tasks and all(task.type == "acknowledgement" for task in plan.tasks):
-        from services.brain.agent.greeting_turn import identity_greeting_result
+    greeting_turn = _ack_only(plan)
+    if greeting_turn:
+        extra["identity_ok"] = True
+        extra["retrieval_skipped"] = True
+        bundle = EvidenceBundle(outcome="not_found")
+        structured_facts: dict[str, Any] = {}
+        evidence = evidence_preview(bundle)
+    else:
+        from services.brain.inbound.ack_then_reply import maybe_send_heavy_turn_ack
 
-        return await identity_greeting_result(turn, message=message, channel=channel, flow_base=extra)
+        await maybe_send_heavy_turn_ack(turn, message=message, channel=channel)
+        bundle, extra, evidence, structured_facts, steps = await _retrieve(
+            turn, plan, message, extra, agent_trace, steps
+        )
 
-    from services.brain.inbound.ack_then_reply import maybe_send_heavy_turn_ack
-
-    await maybe_send_heavy_turn_ack(turn, message=message, channel=channel)
-
-    steps += 1
-    retrieve_timer = StageTimer()
-    max_rounds = 1 if _fast_path_eligible(plan) else DEFAULT_BUDGETS.max_retrieval_rounds
-    agent_trace.append({"step": "RETRIEVE", "n": steps, "max_rounds": max_rounds, "fast_path": max_rounds == 1})
-    bundle, retrieve_trace, structured_facts = await multi_round_retrieve(turn, plan, message, max_rounds=max_rounds)
-    agent_trace.extend({"step": "OBSERVE", **row} for row in retrieve_trace)
-    evidence = evidence_preview(bundle)
-    extra = _flow_extra(
-        extra,
-        (
-            "search",
-            "Searched published Knowledge / Services / Products / FAQ",
-            {"ms": retrieve_timer.ms(), "retrieval_outcome": bundle.outcome, "evidence": evidence},
-        ),
-    )
-    extra["evidence_source_ids"] = [item.source_id for item in bundle.items] + [
-        item.evidence_id for item in bundle.items
-    ]
-    turn.extra["evidence_source_ids"] = extra["evidence_source_ids"]
-
-    steps += 1
-    terra_rows, terra_receipts, terra_used, terra_extra = await run_terra_request_round(
-        turn, message, budget=tool_budget, trace=agent_trace
-    )
-    extra = {**extra, **terra_extra}
-    remain = max(0, tool_budget - terra_used)
-    tool_rows, tool_receipts, tools_used = await _maybe_tool_calls(
-        turn,
-        plan,
-        message,
-        budget=remain,
-        trace=agent_trace,
-        coverage=evaluate_task_coverage(plan, bundle, structured_facts),
-        skip_tools=skip_tools_for_turn(turn, extra),
-    )
-    tool_rows = terra_rows + tool_rows
-    tool_receipts = terra_receipts + tool_receipts
-    tools_used += terra_used
-    from services.brain.facts.receipt_align import align_fact_receipts
-
-    tool_receipts = align_fact_receipts(tool_receipts, bundle)
-    coverage = evaluate_task_coverage(plan, bundle, structured_facts, receipts=tool_receipts)
-    agent_trace.append({"step": "DECIDE", "n": steps, "tools_used": tools_used, "coverage": coverage})
-    extra["tool_calls"] = tool_rows
-    from services.brain.tools.resource_delivery import apply_resource_tool_side_effects
-
-    bundle, extra, evidence, resource_receipts = apply_resource_tool_side_effects(
-        turn, bundle, extra, evidence_preview=evidence_preview
-    )
-
-    if bundle.outcome != "found" and not allow_policy_only_generate(extra):
+    if bundle.outcome != "found" and not allow_policy_only_generate(extra) and not extra.get("identity_ok"):
         from services.brain.agent.handoff_policy import unanswered_question_result
 
         handed = await unanswered_question_result(
@@ -180,9 +167,9 @@ async def run_agentic_turn(
             outcome=str(bundle.outcome),
             evidence=evidence,
             structured_facts=structured_facts,
-            resource_receipts=resource_receipts,
+            resource_receipts=[],
             visual_reason=visual_reason,
-            tool_rows=tool_rows,
+            tool_rows=[],
         )
         if handed is not None:
             return handed
@@ -196,11 +183,10 @@ async def run_agentic_turn(
                     "retrieval_outcome": bundle.outcome,
                     "plan": plan.model_dump(),
                     "visual": visual_reason,
-                    "receipts": resource_receipts,
+                    "receipts": [],
                     "evidence_preview": evidence,
                     "agent_trace": agent_trace,
                     "structured_facts": structured_facts,
-                    "tool_calls": tool_rows,
                     **extra,
                 },
                 (
@@ -211,6 +197,7 @@ async def run_agentic_turn(
             ),
         )
 
+    coverage = evaluate_task_coverage(plan, bundle, structured_facts)
     if missing_tasks(plan, coverage) and steps >= max_steps and not allow_policy_only_generate(extra):
         agent_trace.append({"step": "FINAL", "decision": "clarify", "reason": "budget_exhausted_uncovered"})
         return TurnResult(
@@ -234,7 +221,7 @@ async def run_agentic_turn(
 
     result: TurnResult | None = None
     try:
-        result = await generate_verified(
+        result = await run_terra_turn(
             turn,
             message=message,
             channel=channel,
@@ -243,11 +230,10 @@ async def run_agentic_turn(
             bundle=bundle,
             structured_facts=structured_facts,
             visual_reason=visual_reason,
-            resource_receipts=resource_receipts,
-            tool_receipts=tool_receipts,
-            agent_trace=agent_trace,
             extra=extra,
             evidence=evidence,
+            agent_trace=agent_trace,
+            greeting_turn=greeting_turn,
         )
     except Exception as exc:
         from services.brain.billing import release_turn_reservation
@@ -278,6 +264,8 @@ async def run_agentic_turn(
             from services.brain.billing import release_turn_reservation
 
             release_turn_reservation(turn)
+    if result is not None:
+        extra = {**extra, **dict(result.extra or {})}
     return await commit_pending_human_escalate(turn=turn, plan=plan, extra=extra, result=result, message=message)
 
 

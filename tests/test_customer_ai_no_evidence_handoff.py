@@ -187,7 +187,6 @@ async def test_agentic_not_found_question_hands_off(monkeypatch: pytest.MonkeyPa
     )
     monkeypatch.setattr("services.brain.agent.loop.apply_action_gate", _gate)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
-    monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
     monkeypatch.setattr(
         "services.brain.agent.handoff_policy.human_handoff_enabled",
         lambda _tid: True,
@@ -234,8 +233,7 @@ async def test_agentic_found_hours_does_not_auto_handoff(monkeypatch: pytest.Mon
 
     monkeypatch.setattr("services.brain.agent.loop.apply_action_gate", _gate)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
-    monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
-    monkeypatch.setattr("services.brain.agent.loop.generate_verified", _generate)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", _generate)
     monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
     monkeypatch.setattr("services.brain.agent.handoff_policy.execute_actions", execute)
     result = await run_agentic_turn(
@@ -260,7 +258,6 @@ async def test_index_not_ready_does_not_auto_handoff(monkeypatch: pytest.MonkeyP
     execute = AsyncMock()
     monkeypatch.setattr("services.brain.agent.loop.apply_action_gate", _gate)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
-    monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
     monkeypatch.setattr("services.brain.agent.handoff_policy.execute_actions", execute)
     result = await run_agentic_turn(
         _turn(),
@@ -287,7 +284,7 @@ async def test_comment_ack_replies_when_retrieve_is_empty(monkeypatch: pytest.Mo
     async def _retrieve(*_a, **_k):
         return EvidenceBundle(items=[], outcome="not_found"), [], {}
 
-    async def _greet(turn, *, message, channel, flow_base=None):
+    async def _greet(*_a, **_k):
         from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 
         return TurnResult(
@@ -299,9 +296,8 @@ async def test_comment_ack_replies_when_retrieve_is_empty(monkeypatch: pytest.Mo
         )
 
     monkeypatch.setattr("services.brain.agent.loop.apply_action_gate", _gate)
-    monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
-    monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
-    monkeypatch.setattr("services.brain.agent.greeting_turn.identity_greeting_result", _greet)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", _greet)
+    monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
     result = await run_agentic_turn(
         _turn(kind="comment"),
         "nice",
@@ -335,7 +331,6 @@ async def test_comment_question_hands_off_instead_of_silence(monkeypatch: pytest
     )
     monkeypatch.setattr("services.brain.agent.loop.apply_action_gate", _gate)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
-    monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
     monkeypatch.setattr("services.brain.agent.handoff_policy.human_handoff_enabled", lambda _tid: True)
     monkeypatch.setattr("services.brain.agent.handoff_policy.execute_actions", execute)
     result = await run_agentic_turn(

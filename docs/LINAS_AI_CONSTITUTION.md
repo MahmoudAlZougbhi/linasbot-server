@@ -31,6 +31,7 @@ It must NEVER:
 FORBIDDEN forever to add keyword/regex gates that decide for Terra or Sol.
 If you need new behavior: put it in the model prompt, tenant CM, or an AI tool — not a token list that halts the pipeline.
 Comment surface replies are public-thread authored by Terra; system never authors comment copy; no keyword gates.
+Customer inbound: one Terra agent session per turn. System retrieves evidence and executes allowlisted tools only. No separate planner / request-round / tool-picker / greeting LLM. No feature flag.
 
 ## KEEP (do not misuse)
 

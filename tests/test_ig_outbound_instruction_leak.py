@@ -107,6 +107,7 @@ async def test_identity_llm_sop_echo_falls_back_to_safe_greeting(monkeypatch: py
         return _Resp()
 
     monkeypatch.setattr("services.brain.agent.greeting_turn.openai_configured", lambda: True)
+    monkeypatch.setattr("services.brain.agent.terra_turn.openai_configured", lambda: True)
     monkeypatch.setattr(
         "services.brain.agent.greeting_turn._identity_context",
         lambda _turn: "IDENTITY\nname=Marwa",

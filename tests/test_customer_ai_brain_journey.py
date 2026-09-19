@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
@@ -59,40 +57,56 @@ async def _fake_generate(turn, **kwargs):
     )
 
 
-async def _terra_start(turn, message, **_k):
+async def _terra_start_turn(turn, **kwargs):
+    message = str(kwargs.get("message") or "")
+    extra = dict(kwargs.get("extra") or turn.extra or {})
     result = await execute_tool(
         "start_request",
         {"request_type": "APPOINTMENT", "title": message, "task_id": "book", "customer_text": message},
         turn,
     )
-    extra: dict[str, Any] = {"request_state": {"module_enabled": True}}
+    extra["request_state"] = {"module_enabled": True}
     data = result.get("data") if isinstance(result.get("data"), dict) else {}
     if data.get("awaiting_confirmation"):
         extra["awaiting_confirmation"] = True
         extra["pending_actions"] = list(data.get("pending_actions") or [])
         turn.extra = {**dict(turn.extra or {}), **extra}
-    return [{"tool": "start_request", "ok": True, "source": "terra"}], ["tool:start_request:ok"], 1, extra
+    extra.update(dict(turn.extra or {}))
+    return TurnResult(
+        stop_reason="ok",
+        envelope=FinalReplyEnvelope(
+            decision="reply",
+            messages=[OutboundMessage(destination="dm", text="Terra reply from evidence.")],
+        ),
+        extra=extra,
+    )
 
 
-async def _terra_escalate(turn, message, **_k):
+async def _terra_escalate_turn(turn, **kwargs):
+    message = str(kwargs.get("message") or "")
+    extra = dict(kwargs.get("extra") or turn.extra or {})
     result = await execute_tool("escalate_to_human", {"task_id": "human", "customer_text": message}, turn)
-    extra: dict[str, Any] = {"request_state": {"module_enabled": True}, "receipts": []}
+    extra["request_state"] = {"module_enabled": True}
+    extra["receipts"] = []
     if result.get("receipt"):
         extra["receipts"] = [result["receipt"]]
     turn.extra = {**dict(turn.extra or {}), **extra}
-    return [{"tool": "escalate_to_human", "ok": True, "source": "terra"}], ["escalate_to_human:success"], 1, extra
-
-
-async def _terra_idle(_turn, _message, **_k):
-    return [], [], 0, {"request_state": {"module_enabled": False}}
+    extra.update(dict(turn.extra or {}))
+    return TurnResult(
+        stop_reason="ok",
+        envelope=FinalReplyEnvelope(
+            decision="reply",
+            messages=[OutboundMessage(destination="dm", text="Terra reply from evidence.")],
+        ),
+        extra=extra,
+    )
 
 
 @pytest.mark.asyncio
 async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytest.MonkeyPatch) -> None:
     _skip_faq(monkeypatch)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _found_retrieve)
-    monkeypatch.setattr("services.brain.agent.loop.run_terra_request_round", _terra_idle)
-    monkeypatch.setattr("services.brain.agent.loop.generate_verified", _fake_generate)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", _fake_generate)
     turn = CustomerTurn(tenant_id="brain-shop", conversation_id="c1", event_ids=["m1"], channel="instagram_dm")
     result = await run_dm_after_gates(turn, message="send me the before photo please", channel="instagram_dm")
     assert result.extra.get("awaiting_confirmation") is not True
@@ -104,8 +118,7 @@ async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytes
 async def test_booking_still_asks_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
     _skip_faq(monkeypatch)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _found_retrieve)
-    monkeypatch.setattr("services.brain.agent.loop.run_terra_request_round", _terra_start)
-    monkeypatch.setattr("services.brain.agent.loop.generate_verified", _fake_generate)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", _terra_start_turn)
     turn = CustomerTurn(tenant_id="brain-shop", conversation_id="c2", event_ids=["m2"], channel="whatsapp")
     result = await run_dm_after_gates(turn, message="I want to book a laser appointment", channel="whatsapp")
     assert result.extra.get("awaiting_confirmation") is True
@@ -142,8 +155,7 @@ async def test_handoff_executes_receipt(monkeypatch: pytest.MonkeyPatch) -> None
 
     monkeypatch.setattr("services.brain.actions.execute.escalate_to_human", fake_escalate)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _found_retrieve)
-    monkeypatch.setattr("services.brain.agent.loop.run_terra_request_round", _terra_escalate)
-    monkeypatch.setattr("services.brain.agent.loop.generate_verified", _fake_generate)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", _terra_escalate_turn)
     turn = CustomerTurn(tenant_id="brain-shop", customer_id="u1", conversation_id="c3", event_ids=["m3"])
     result = await run_dm_after_gates(turn, message="I want a human please", channel="instagram_dm")
     receipts = list(result.extra.get("receipts") or [])

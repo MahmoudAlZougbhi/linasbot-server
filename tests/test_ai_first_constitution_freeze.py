@@ -55,6 +55,8 @@ def test_constitution_files_exist() -> None:
     assert "ONLY allowed reason to withhold a message from the AI model" in law
     assert "FORBIDDEN forever to add keyword/regex gates" in law
     assert "Comment surface replies are public-thread authored by Terra" in law
+    assert "one Terra agent session per turn" in law
+    assert "No separate planner / request-round / tool-picker / greeting LLM" in law
 
 
 def test_gating_lexicons_stay_gone() -> None:
