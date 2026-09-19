@@ -133,13 +133,37 @@ def assert_pg_reservation_terminal(
     engine = create_engine(url, pool_pre_ping=True)
     mapped = {"capture": "settled", "release": "released"}
     wanted = mapped.get(terminal, terminal)
+    from services.integrations.web_chat.followup_message_ledger import (
+        is_message_reservation,
+        message_reservation_id,
+    )
+
     with engine.connect() as conn:
         rows = conn.execute(
             text(
-                "SELECT status FROM customer_ai_message_reservations "
+                "SELECT status, reservation_id, operation_id FROM customer_ai_message_reservations "
                 "WHERE tenant_id = :tid AND (reservation_id = :rid OR operation_id = :rid)"
             ),
             {"tid": tenant_id, "rid": reservation_id},
         ).fetchall()
+        if not rows and is_message_reservation(reservation_id):
+            all_rows = conn.execute(
+                text(
+                    "SELECT status, reservation_id, operation_id FROM customer_ai_message_reservations "
+                    "WHERE tenant_id = :tid"
+                ),
+                {"tid": tenant_id},
+            ).fetchall()
+            rows = [
+                row
+                for row in all_rows
+                if reservation_id
+                in {
+                    str(row[1] or ""),
+                    str(row[2] or ""),
+                    message_reservation_id(str(row[1] or "")),
+                    message_reservation_id(str(row[2] or "")),
+                }
+            ]
     statuses = {str(row[0]) for row in rows}
     assert wanted in statuses, f"expected terminal {wanted!r}, got {statuses}"

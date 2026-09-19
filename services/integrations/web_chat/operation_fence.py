@@ -35,12 +35,13 @@ def release_web_chat_message_hold(
     cid = str(conversation_id or "").strip()
     text = str(user_text or "").strip()
     web_mid = web_inbound_message_id(cid, text) if cid and text else ""
+    session_id = str(operation_key or "").split(":", 1)[0]
     settle_after_send(
         tenant_id=tenant_id,
         operation_id=web_mid or operation_key,
         accepted=False,
         channel="web_chat",
-        extra_ids=(operation_key, web_mid, *extra_ids),
+        extra_ids=(operation_key, f"web:{session_id}:{operation_key}", web_mid, *extra_ids),
     )
 
 

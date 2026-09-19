@@ -106,6 +106,7 @@ def complete_captured_turn(
         channel="web_chat",
         extra_ids=(
             operation_key,
+            f"web:{visitor_id}:{operation_key}",
             str(getattr(runtime.record, "inbound_event_id", "") or ""),
             web_mid,
             conversation_id,

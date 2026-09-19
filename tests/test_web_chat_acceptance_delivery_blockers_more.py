@@ -34,20 +34,21 @@ async def test_unresolved_release_failure_blocks_second_reserve_until_confirmed(
     patch_web_chat_store(monkeypatch, store)
     widget, visitor, _bundle = _widget_and_visitor(store)
     tenant_id = widget.tenant_id
-    from services.billing.credit_ledger_service import credit_ledger_service
+    from services.billing.membership import message_ledger
     from tests.test_web_chat_operation_lease_fence import _operation_snapshot
 
     release_calls = 0
-    original_release = credit_ledger_service.release
+    original_settle = message_ledger.settle
 
-    def fail_once_release(**kwargs):
+    def fail_once_release(*args, **kwargs):
         nonlocal release_calls
-        release_calls += 1
-        if release_calls == 1:
-            raise RuntimeError("release ack lost")
-        return original_release(**kwargs)
+        if not kwargs.get("accepted", True):
+            release_calls += 1
+            if release_calls == 1:
+                raise RuntimeError("release ack lost")
+        return original_settle(*args, **kwargs)
 
-    monkeypatch.setattr(credit_ledger_service, "release", fail_once_release)
+    monkeypatch.setattr(message_ledger, "settle", fail_once_release)
     monkeypatch.setattr(
         "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
@@ -143,18 +144,20 @@ async def test_release_ack_loss_after_commit_converges_before_ai(tmp_path, monke
     patch_web_chat_store(monkeypatch, store)
     widget, visitor, _bundle = _widget_and_visitor(store)
     tenant_id = widget.tenant_id
-    from services.billing.credit_ledger_service import credit_ledger_service
+    from services.billing.membership import message_ledger
     from services.integrations.web_chat.operation_credit_reconcile import list_release_pending_operations
     from tests.test_web_chat_operation_lease_fence import _expire_operation_lease, _operation_snapshot
 
-    original_release = credit_ledger_service.release
+    original_settle = message_ledger.settle
     ai_calls = 0
     persist_calls = 0
     first_attempt = True
 
-    def commit_then_throw_release(**kwargs):
-        original_release(**kwargs)
-        raise RuntimeError("release ack lost after commit")
+    def commit_then_throw_release(*args, **kwargs):
+        result = original_settle(*args, **kwargs)
+        if not kwargs.get("accepted", True):
+            raise RuntimeError("release ack lost after commit")
+        return result
 
     async def ai_fail_first_then_success_after_reconcile(**_kwargs):
         nonlocal ai_calls, first_attempt
@@ -177,7 +180,7 @@ async def test_release_ack_loss_after_commit_converges_before_ai(tmp_path, monke
         persist_calls += 1
         return PersistResult(outcome=PersistOutcome.CREATED, conversation_id="conv")
 
-    monkeypatch.setattr(credit_ledger_service, "release", commit_then_throw_release)
+    monkeypatch.setattr(message_ledger, "settle", commit_then_throw_release)
     monkeypatch.setattr(
         "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),

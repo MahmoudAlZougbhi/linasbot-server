@@ -33,15 +33,17 @@ async def test_reply_ready_persist_failure_commit_throw_stays_pending_without_vi
     patch_web_chat_store(monkeypatch, store)
     widget, visitor, _bundle = _widget_and_visitor(store)
     tenant_id = widget.tenant_id
-    from services.billing.credit_ledger_service import credit_ledger_service
+    from services.billing.membership import message_ledger
 
-    original_release = credit_ledger_service.release
+    original_settle = message_ledger.settle
 
-    def commit_then_throw_release(**kwargs):
-        original_release(**kwargs)
-        raise RuntimeError("release ack lost after persist failure")
+    def commit_then_throw_release(*args, **kwargs):
+        result = original_settle(*args, **kwargs)
+        if not kwargs.get("accepted", True):
+            raise RuntimeError("release ack lost after persist failure")
+        return result
 
-    monkeypatch.setattr(credit_ledger_service, "release", commit_then_throw_release)
+    monkeypatch.setattr(message_ledger, "settle", commit_then_throw_release)
     monkeypatch.setattr(
         "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
@@ -89,13 +91,12 @@ async def test_claimed_without_reservation_returns_402_not_fsm_error(
         "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),
     )
-    from services.billing.credit_ledger_service import credit_ledger_service
+    from services.billing.membership.message_ledger import InsufficientMessages
 
-    monkeypatch.setattr(
-        credit_ledger_service,
-        "reserve",
-        lambda **_kwargs: (_ for _ in ()).throw(PermissionError("insufficient")),
-    )
+    def _no_messages(**_kwargs):
+        raise InsufficientMessages(widget.tenant_id, 0)
+
+    monkeypatch.setattr("services.billing.membership.message_ledger.reserve", _no_messages)
 
     with pytest.raises(WebChatError) as exc_info:
         await process_web_chat_message(
@@ -119,15 +120,17 @@ async def test_sweeper_converges_committed_ack_loss_without_customer_retry(
     patch_web_chat_store(monkeypatch, store)
     widget, visitor, _bundle = _widget_and_visitor(store)
     tenant_id = widget.tenant_id
-    from services.billing.credit_ledger_service import credit_ledger_service
+    from services.billing.membership import message_ledger
 
-    original_release = credit_ledger_service.release
+    original_settle = message_ledger.settle
 
-    def commit_then_throw_release(**kwargs):
-        original_release(**kwargs)
-        raise RuntimeError("release ack lost after persist failure")
+    def commit_then_throw_release(*args, **kwargs):
+        result = original_settle(*args, **kwargs)
+        if not kwargs.get("accepted", True):
+            raise RuntimeError("release ack lost after persist failure")
+        return result
 
-    monkeypatch.setattr(credit_ledger_service, "release", commit_then_throw_release)
+    monkeypatch.setattr(message_ledger, "settle", commit_then_throw_release)
     monkeypatch.setattr(
         "services.integrations.web_chat.processor.evaluate_web_ai_eligibility",
         lambda *_a, **_k: (True, None),

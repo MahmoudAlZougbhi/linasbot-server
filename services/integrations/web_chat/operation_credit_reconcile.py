@@ -62,8 +62,6 @@ def _converge_terminal_release(runtime: OperationRuntime, credit: Any, *, record
 
 def reconcile_credit_before_side_effects(runtime: OperationRuntime, credit: Any) -> OperationRecord | None:
     """Fail closed until release-pending/terminal release is reconciled; never run AI first."""
-    from services.billing.credit_ledger_service import credit_ledger_service
-
     refresh_operation_runtime(runtime)
     record = runtime.record
     if record is None:
@@ -75,7 +73,7 @@ def reconcile_credit_before_side_effects(runtime: OperationRuntime, credit: Any)
         credit.reservation_id = record.reservation_id
         credit.operation_state = record.state
         credit.hydrate_from_operation_context()
-        terminal = credit_ledger_service.reservation_terminal(record.tenant_id, record.reservation_id)
+        terminal = credit.reservation_terminal()
         if terminal == "release":
             return _converge_terminal_release(runtime, credit, record=record)
         if terminal == "capture":
@@ -91,7 +89,9 @@ def reconcile_credit_before_side_effects(runtime: OperationRuntime, credit: Any)
         OperationState.CLAIMED,
         OperationState.REPLY_READY,
     }:
-        terminal = credit_ledger_service.reservation_terminal(record.tenant_id, record.reservation_id)
+        credit.reservation_id = record.reservation_id
+        credit.operation_state = record.state
+        terminal = credit.reservation_terminal()
         if terminal == "release":
             credit.reservation_id = record.reservation_id
             credit.operation_state = record.state

@@ -208,7 +208,7 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
 
 def reserve_generative(turn: CustomerTurn, *, mixed: bool = False) -> TurnResult | None:
     op = operation_id_for_turn(turn)
-    if owner_preview_turn(turn) or lab_turn(turn) or _pinned_policy(turn, op) == "legacy_credits":
+    if owner_preview_turn(turn) or lab_turn(turn) or _pinned_policy(turn, op):
         return None
     ensure_included_grant(turn.tenant_id)
     if turn.invocation_kind == "followup":
@@ -282,7 +282,7 @@ def settle_after_send(
                 return
             from services.brain.leftover_reserve import leftover_policy_for
 
-            if leftover_policy_for(tenant_id, *candidates) == "legacy_credits":
+            if leftover_policy_for(tenant_id, *candidates):
                 from services.brain.outbox import acknowledge_sent
 
                 acknowledge_sent(

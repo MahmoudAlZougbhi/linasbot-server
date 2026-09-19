@@ -54,8 +54,6 @@ def reconcile_release_pending_operation(
     lease_owner: str,
 ) -> str:
     """Reconcile one RELEASE_PENDING row; never run AI or visible side effects."""
-    from services.billing.credit_ledger_service import credit_ledger_service
-
     claimed = _claim_release_pending_row(
         tenant_id=record.tenant_id,
         operation_key=record.operation_key,
@@ -75,13 +73,14 @@ def reconcile_release_pending_operation(
         lease_generation=int(claimed.lease_generation or 1),
         record=claimed,
     )
+    session_id = str(claimed.operation_key or "").split(":", 1)[0]
     credit = WebChatCreditHandle(
         tenant_id=claimed.tenant_id,
         reservation_id=claimed.reservation_id,
-        request_id=f"web:sweep:{claimed.operation_key}",
+        request_id=f"web:{session_id}:{claimed.operation_key}",
         operation_state=OperationState.RELEASE_PENDING,
     )
-    terminal = credit_ledger_service.reservation_terminal(claimed.tenant_id, claimed.reservation_id)
+    terminal = credit.reservation_terminal()
     if terminal == "capture":
         return "failed"
     if terminal == "release":

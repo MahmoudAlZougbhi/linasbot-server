@@ -105,7 +105,9 @@ async def test_ack_before_capture_does_not_complete_billing(tmp_path, monkeypatc
     )
 
     capture_calls = 0
-    from services.billing.membership.message_ledger import settle as original_settle
+    from services.smart_followup import billing_ids
+
+    original_settle = billing_ids.settle_followup_from_snapshot
 
     def flaky_settle(*args, **kwargs):
         nonlocal capture_calls
@@ -114,7 +116,7 @@ async def test_ack_before_capture_does_not_complete_billing(tmp_path, monkeypatc
             raise RuntimeError("capture commit lost")
         return original_settle(*args, **kwargs)
 
-    monkeypatch.setattr("services.billing.membership.message_ledger.settle", flaky_settle)
+    monkeypatch.setattr(billing_ids, "settle_followup_from_snapshot", flaky_settle)
 
     delivered = await deliver_web_followup_message(
         tenant_id=tenant_id,
