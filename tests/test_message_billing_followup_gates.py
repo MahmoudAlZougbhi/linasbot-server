@@ -74,8 +74,17 @@ def test_meta_comment_forwards_caption_when_present() -> None:
 
 
 def test_web_live_handle_uses_message_sentinel(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.billing.membership.message_ledger import grant_lot
     from services.integrations.web_chat.credit_fsm import WebChatCreditHandle
 
+    grant_lot(
+        tenant_id="biz",
+        lot_id="biz:web-live",
+        kind="purchased",
+        period_id="web-live",
+        amount=5,
+        expires=False,
+    )
     handle = WebChatCreditHandle(tenant_id="biz", reservation_id=None, request_id="web:live:1")
     handle.reserve()
     assert str(handle.reservation_id).startswith("msg:")

@@ -127,6 +127,14 @@ def test_outbox_failure_silences_and_does_not_keep_memory_row(sql_store: Path, m
 
 
 def test_apply_billing_outbox_failure_is_failed_closed(sql_store: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    grant_lot(
+        tenant_id="linas",
+        lot_id="linas:outbox-fail",
+        kind="purchased",
+        period_id="outbox-fail",
+        amount=5,
+        expires=False,
+    )
     monkeypatch.setattr(
         "services.brain.outbox._persist",
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("pg down")),

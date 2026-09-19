@@ -16,10 +16,10 @@ def _clean() -> None:
 
 
 def test_intended_message_price_matches_credit_catalog() -> None:
-    assert intended_price_usd("lite") == PLAN_PRICES_USD["lite"]
+    assert intended_price_usd("lite") == 10.0
     pair = revenue_pair(["lite", "starter"])
     assert pair["live_checkout_mrr_usd"] == live_checkout_mrr(["lite", "starter"])
-    assert pair["intended_message_mrr_usd"] == pair["live_checkout_mrr_usd"]
+    assert pair["intended_message_mrr_usd"] == intended_price_usd("lite") + intended_price_usd("starter")
 
 
 def test_owner_metrics_keep_live_mrr_and_add_catalog_mrr(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -34,7 +34,7 @@ def test_owner_metrics_keep_live_mrr_and_add_catalog_mrr(tmp_path, monkeypatch: 
     monkeypatch.setattr("services.team.platform_owner_service._DATA_ROOT", tmp_path)
     metrics = PlatformOwnerService(root=tmp_path / "owner").business_metrics()
     assert metrics["mrr_usd"] == PLAN_PRICES_USD["lite"]
-    assert metrics["intended_message_mrr_usd"] == PLAN_PRICES_USD["lite"]
+    assert metrics["intended_message_mrr_usd"] == intended_price_usd("lite")
 
 
 def test_expense_environment_stamps_prod(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -65,4 +65,4 @@ def test_iap_config_exposes_intended_message_prices() -> None:
 
     status = iap_config_status()
     assert status["plans"]["lite"] == PLAN_PRICES_USD["lite"]
-    assert status["intended_message_prices_usd"]["lite"] == PLAN_PRICES_USD["lite"]
+    assert status["intended_message_prices_usd"]["lite"] == intended_price_usd("lite")

@@ -329,7 +329,7 @@ def test_credit_handle_idle_reserve_capture_equation(tmp_path, monkeypatch, acce
     assert handle.state == CreditFsmState.IDLE
     handle.reserve()
     assert handle.state == CreditFsmState.RESERVED
-    assert credit_ledger_service.get_reserved("biz") == 1
+    assert credit_ledger_service.get_reserved("biz") == 0
     reserved_snapshot = fetch_pg_ledger_snapshot(acceptance_pg_ha_env, "biz")
     assert_acceptance_ledger_equation(
         reserved_snapshot,
