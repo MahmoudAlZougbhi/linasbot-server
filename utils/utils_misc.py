@@ -171,7 +171,7 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
             "The response **MUST be in strict JSON format** (a single {{question, answer, language}} object)."
             "**Required Example:**\n"
             "```json\n"
-            '{{"question": "Sho sa3at 3amal al markaz?", "answer": "ساعات عمل مركز لينا ليزر هي من 10 صباحاً لـ 6 مساءً يومياً ما عدا الأحد.", "language": "franco"}}\n'
+            '{{"question": "Sho al khadamat?", "answer": "نقدم خدمات إزالة الشعر بالليزر.", "language": "franco"}}\n'
             "```\n"
             "Return only the JSON. Do not add any other text outside the JSON."
         )

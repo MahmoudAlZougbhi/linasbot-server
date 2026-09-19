@@ -25,6 +25,9 @@ GONE_DEAD = (
     "services/integrations/meta/meta_comment_rule_dm.py",
     "services/requests/status_ui.py",
     "services/requests/human_detect.py",
+    "services/brain/implementation_log.md",
+    "services/brain/CURRENT_STATE.md",
+    "services/brain/QUALITY_REPORT.md",
 )
 
 GONE_LEGACY = (
@@ -44,6 +47,7 @@ KEEP = (
     "services/integrations/web_chat/processor_reply.py",
     "services/live_chat/service_details.py",
     "services/faq/cm_faq.py",
+    "services/brain/outbox_test.py",
 )
 
 FORBIDDEN_IMPORTS = (
@@ -166,3 +170,11 @@ def test_durable_flags_are_quality_gate_and_ha_infrastructure() -> None:
     assert "KEEP — deployment / verification infrastructure" in flags
     facts = (ROOT / "services/brain/grounding/facts.py").read_text(encoding="utf-8")
     assert "def _amount_reasons" not in facts
+    hybrid = (ROOT / "services/brain/retrieve/hybrid.py").read_text(encoding="utf-8")
+    assert "def _cosine" not in hybrid
+    intent = (ROOT / "services/brain/inbound/text_handlers_respond_intent.py").read_text(encoding="utf-8")
+    assert "def _is_price_intent" not in intent
+    economics = (ROOT / "services/billing/plan_economics.py").read_text(encoding="utf-8")
+    assert "def _cost_for_mix" not in economics
+    detect = (ROOT / "services/integrations/social/social_contact_routing_detect.py").read_text(encoding="utf-8")
+    assert "def _tenant_id_from_user_data" not in detect

@@ -10,13 +10,7 @@ from services.brain.inbound.text_handlers_respond_keywords import (
     BUSINESS_SCOPE_KEYWORDS,
     GENERAL_QUESTION_PREFIX_RE,
     OFF_TOPIC_KEYWORDS,
-    PRICE_INTENT_KEYWORDS,
 )
-
-
-def _is_price_intent(text: str) -> bool:
-    normalized = str(text or "").lower()
-    return any(keyword in normalized for keyword in PRICE_INTENT_KEYWORDS)
 
 
 def _is_out_of_business_scope_query(text: str) -> bool:
