@@ -54,7 +54,11 @@ def destinations_from_outcome(outcome: Any) -> CommentDestinations:
     # destination=dm. Without an explicit private-comment rule that must
     # become a public comment, not a Graph private_replies call.
     explicit_private = mode in {"ai_dm", "static_dm", "ai_both", "static_both"}
-    if not public and private and not explicit_private and not depends:
+    if mode == "ai_comment":
+        if not public:
+            public = private
+        private = ""
+    elif not public and private and not explicit_private and not depends:
         public, private = private, ""
     return CommentDestinations(
         public_text=public[:900],
