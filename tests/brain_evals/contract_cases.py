@@ -164,7 +164,8 @@ def _tiktok_comment_settles_after_send() -> bool:
     return (
         "_settle_comment_send" in src
         and "retrying" in src
-        and "accepted=True" in src
+        and "billable" in src
+        and "settle_units" in src
         and "bind_dm_ids" in dm
         and "accepted=False" in dm
     )
@@ -195,7 +196,9 @@ def _meta_public_comment_settles() -> bool:
     return (
         dest.index("accepted=False") < dest.index("comment_send_client_missing")
         and "_settle_generated_comment" in public
-        and "accepted=True" in public
+        and "send_comment_destinations" in public
+        and "billable" in dest
+        and "comment_outcome_units" in dest
     )
 
 
@@ -224,9 +227,10 @@ def _meta_ai_dm_reaches_brain() -> bool:
 
     src = getsource(process_meta_comment_event)
     return (
-        "is_static_comment_dm" in src
+        "_generate_comment_reply_text" in src
+        and "send_comment_destinations" in src
         and "allows_private_after_public_reply" in src
-        and "comment_rule_dm_template_required" not in src
+        and "maybe_handle_static_dm" not in src
     )
 
 

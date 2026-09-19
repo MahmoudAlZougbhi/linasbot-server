@@ -163,6 +163,25 @@ def action_units(
     return int(costs["ai_dm_reply"])
 
 
+def comment_outcome_units(*, comment_mode: str, public_ok: bool, dm_ok: bool) -> int:
+    """Charge only destinations that actually delivered. Static/non-AI is zero."""
+    mode = (comment_mode or "").strip().lower()
+    if not mode.startswith("ai_"):
+        return 0
+    costs = load_economy()["action_costs"]
+    public_cost = int(costs["ai_public_comment"]) if public_ok else 0
+    dm_cost = int(costs["ai_comment_dm"]) if dm_ok else 0
+    if mode == "ai_comment":
+        return public_cost
+    if mode == "ai_dm":
+        return dm_cost
+    if mode == "ai_both" and costs["ai_both_mode"] == "once":
+        if public_ok and dm_ok:
+            return max(int(costs["ai_public_comment"]), int(costs["ai_comment_dm"]))
+        return public_cost or dm_cost
+    return public_cost + dm_cost
+
+
 def copilot_units_for_cost(estimated_usd: float | None) -> int:
     economy = load_economy()
     bands = economy["copilot"]["bands"]

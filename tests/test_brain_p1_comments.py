@@ -88,3 +88,37 @@ async def test_comment_runtime_evaluates_gates_before_static(monkeypatch: pytest
     assert called.get("gates") == "yes"
     assert called.get("mode") != "too-late"
     assert out.reply == "Restricted."
+
+
+@pytest.mark.asyncio
+async def test_static_comment_ignores_empty_message_balance(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.brain import runtime
+
+    def fake_gates(_turn, **_k):
+        return GateDecision(True, "ok")
+
+    def fake_mode(**_k):
+        return "static_comment", SimpleNamespace(reply_text="Hello from static", dm_text="", rule_id="r")
+
+    def boom(_tid):
+        raise AssertionError("static comments must not require message balance")
+
+    monkeypatch.setattr("services.brain.tenant_gate.evaluate_brain_tenant_gate", lambda _t: {"allow": True})
+    monkeypatch.setattr("services.brain.channel_plan.assert_channel_plan_allowed", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "services.billing.membership.comment_gate.assert_comment_automation_allowed",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(runtime, "evaluate_gates", fake_gates)
+    monkeypatch.setattr(runtime, "winning_comment_mode", fake_mode)
+    monkeypatch.setattr(runtime, "record_turn_history", lambda *_a, **_k: None)
+    monkeypatch.setattr(runtime, "apply_live_control", lambda turn: turn)
+    monkeypatch.setattr(runtime, "apply_message_billing", lambda _turn, result: result)
+    monkeypatch.setattr("services.billing.membership.generative_gate.generative_block_reason", boom)
+    out = await runtime.run_customer_ai_comment(
+        tenant_id="t1",
+        comment_text="nice post",
+        channel="instagram_comment",
+        comment_id="c2",
+    )
+    assert out.reply == "Hello from static"

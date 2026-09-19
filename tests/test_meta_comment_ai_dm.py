@@ -92,7 +92,7 @@ async def test_ai_dm_calls_generate(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_static_dm_uses_template_not_brain(monkeypatch) -> None:
+async def test_static_dm_goes_through_brain_destinations(monkeypatch) -> None:
     from services.integrations.meta.meta_comment_replies import process_meta_comment_event
 
     helper = MetaCommentProcessorTests()
@@ -117,7 +117,9 @@ async def test_static_dm_uses_template_not_brain(monkeypatch) -> None:
                 dm_text="Message us to book.",
             ),
         )
-        generate = mock.AsyncMock(return_value="should-not-run")
+        generate = mock.AsyncMock(
+            return_value=CommentDestinations(private_text="Message us to book.", comment_mode="static_dm")
+        )
         monkeypatch.setattr("services.integrations.meta.meta_comment_replies._generate_comment_reply_text", generate)
         monkeypatch.setattr(
             "services.integrations.meta.meta_comment_replies._comment_has_page_reply",
@@ -130,20 +132,22 @@ async def test_static_dm_uses_template_not_brain(monkeypatch) -> None:
             simulation=True,
             capture_send=sent,
         )
-        generate.assert_not_called()
-        assert result.status == "simulated"
+        generate.assert_awaited_once()
+        assert result.status in {"simulated", "simulated_dm", "simulated_both"}
         assert sent[0]["message"] == "Message us to book."
+        assert sent[0]["delivery"] == "private_reply"
     finally:
         helper.tearDown()
 
 
-def test_meta_ingress_source_routes_ai_dm() -> None:
+def test_meta_ingress_source_routes_all_modes_through_brain() -> None:
     from inspect import getsource
 
     from services.integrations.meta.meta_comment_replies import process_meta_comment_event
 
     src = getsource(process_meta_comment_event)
-    assert "is_static_comment_dm" in src
+    assert "_generate_comment_reply_text" in src
+    assert "send_comment_destinations" in src
     assert "allows_private_after_public_reply" in src
-    assert "comment_rule_dm_template_required" not in src
-    assert "is_static_public_comment" in src
+    assert "maybe_handle_static_dm" not in src
+    assert "maybe_handle_comment_and_dm" not in src
