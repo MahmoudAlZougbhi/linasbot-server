@@ -111,6 +111,18 @@ async def handle_customer_ai_index(job: QueueJob) -> dict[str, Any]:
 
     revision = str(job.payload.get("revision") or "")
     reason = str(job.payload.get("reason") or "queued")
+    product_id = str(job.payload.get("product_id") or "").strip()
+    if product_id:
+        from services.products.reindex import run_product_reindex_job
+
+        result = await run_product_reindex_job(
+            job.tenant_id,
+            product_id,
+            deleted=bool(job.payload.get("deleted")),
+        )
+        if result.get("ok"):
+            return result
+        raise RuntimeError(str(result.get("reason") or "product_reindex_failed"))
     result = await run_tenant_index_job(job.tenant_id, revision=revision, reason=reason)
     if result.get("ready"):
         return result

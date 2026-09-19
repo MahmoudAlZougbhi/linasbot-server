@@ -32,8 +32,23 @@ def mark_products_stale(session: Any | None, tenant_id: str) -> dict[str, Any]:
         return {"ok": True, "reason": "source_changed", "backend": "best_effort"}
 
 
-def notify_product_change(session: Any | None, tenant_id: str) -> None:
+def notify_product_change(
+    session: Any | None,
+    tenant_id: str,
+    product_id: str = "",
+    *,
+    deleted: bool = False,
+) -> None:
     tid = (tenant_id or "").strip()
+    pid = str(product_id or "").strip()
+    if pid:
+        try:
+            from services.products.reindex import schedule_product_reindex
+
+            schedule_product_reindex(tid, pid, deleted=deleted, session=session)
+            return
+        except Exception:
+            pass
     try:
         mark_products_stale(session, tid)
     except Exception:

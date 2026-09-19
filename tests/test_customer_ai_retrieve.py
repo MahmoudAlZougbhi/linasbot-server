@@ -221,8 +221,8 @@ def test_product_expand_hydrates_from_repository(monkeypatch: pytest.MonkeyPatch
         updated_at="2026-03-01T00:00:00+00:00",
     )
     monkeypatch.setattr(
-        "services.brain.retrieve.products.load_product_evidence",
-        lambda tenant_id, product_id: evidence_from_product(row) if product_id == "serum-1" else None,
+        "services.brain.retrieve.products_hydrate.load_product_evidence_map",
+        lambda _tenant_id, product_ids: {"serum-1": evidence_from_product(row)} if "serum-1" in product_ids else {},
     )
     card = TitleCard(
         item_id="products:serum-1",

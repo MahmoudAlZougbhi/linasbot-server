@@ -275,4 +275,10 @@ async def multi_round_retrieve(
                 }
             )
 
-    return EvidenceBundle(items=merged, outcome=outcome if merged else outcome), trace, facts  # type: ignore[arg-type]
+    bundle = EvidenceBundle(items=merged, outcome=outcome if merged else outcome)  # type: ignore[arg-type]
+    from services.brain.media.product_image_match import merge_product_image_evidence
+
+    bundle = merge_product_image_evidence(turn, bundle)
+    if bundle.items:
+        facts = _structured_facts(bundle)
+    return bundle, trace, facts

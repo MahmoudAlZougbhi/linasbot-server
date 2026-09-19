@@ -157,6 +157,10 @@ async def _turn_from_dm(
         tenant_id=tenant_id,
         channel=channel,
     )
+    extra = _language_extra(detected_language=detected_language, response_language=response_language)
+    matches = media.get("product_image_matches")
+    if isinstance(matches, list) and matches:
+        extra["product_image_matches"] = matches
     return hydrate_turn_state(
         CustomerTurn(
             tenant_id=tenant_id,
@@ -168,7 +172,7 @@ async def _turn_from_dm(
             event_ids=[message_id] if message_id else [],
             history=history,
             followup_goal=followup_goal,
-            extra=_language_extra(detected_language=detected_language, response_language=response_language),
+            extra=extra,
             media=MediaView(
                 attachment_types=[str(t) for t in (media.get("attachment_types") or [])],
                 transcript=str(media.get("transcript") or ""),

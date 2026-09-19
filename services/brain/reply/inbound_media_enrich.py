@@ -9,6 +9,10 @@ from services.brain.reply.inbound_stt_chunks import transcribe_full_wav
 
 
 async def enrich_inbound_image(*, tenant_id: str, blob: bytes, result: Any, text_parts: list[str]) -> None:
+    from services.brain.media.product_image_match import attach_inbound_product_image_match
+
+    if attach_inbound_product_image_match(tenant_id, blob, result):
+        return
     visual = await describe_stills([blob], tenant_id=tenant_id, kind="image") if blob else ""
     if visual:
         result.extract = visual

@@ -109,6 +109,7 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
         or (turn.media.transcript or "").strip()
         or str((turn.extra or {}).get("post_visual_description") or "").strip()
         or str((turn.extra or {}).get("post_transcript") or "").strip()
+        or bool((turn.extra or {}).get("product_image_matches"))
     )
     if visual.reason == "disabled" and turn.media.image_media_id and not analyzed:
         from services.brain.silence import log_customer_generation_failure

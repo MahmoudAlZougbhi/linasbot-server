@@ -47,6 +47,24 @@ def _rrf(*rank_lists: list[str], k: int = 60) -> dict[str, float]:
     return scores
 
 
+def _product_card_from_hit(hit: object) -> TitleCard | None:
+    family = str(getattr(hit, "source_family", "") or "")
+    if family != "products":
+        return None
+    source_id = str(getattr(hit, "source_id", "") or "").strip()
+    if not source_id:
+        return None
+    title = str(getattr(hit, "title", "") or source_id)
+    text = str(getattr(hit, "search_text", "") or title)
+    return TitleCard(
+        item_id=f"products:{source_id}",
+        source_family="products",
+        title=title,
+        search_text=text,
+        body=text,
+    )
+
+
 def _card_with_chunk(card: TitleCard, search_text: str) -> TitleCard:
     chunk = (search_text or "").strip()
     if not chunk or card.source_family != "knowledge":
@@ -90,6 +108,7 @@ async def _semantic_from_store(
                 by_id.get(hit.doc_id)
                 or by_id.get(f"{hit.source_family}:{hit.source_id}")
                 or by_source.get(hit.source_id)
+                or _product_card_from_hit(hit)
             )
             if card is None:
                 continue
@@ -189,10 +208,18 @@ async def search_hybrid(
         raise RuntimeError("entity_space_mismatch")
     cap = limit if limit is not None else DEFAULT_BUDGETS.lexical_candidates_per_source
     scoped = [c for c in cards if families is None or c.source_family in families]
-    lexical = search_cards(scoped, query, families=families, limit=DEFAULT_BUDGETS.lexical_candidates_per_source)
-    texts = [card.search_text for card in scoped]
-    if not texts:
+    need_products = families is None or "products" in set(families or [])
+    if need_products and tenant_id.strip():
+        from services.products.search_cards import search_product_cards
+
+        seen_ids = {card.item_id for card in scoped}
+        for card in search_product_cards(tenant_id, query, limit=cap):
+            if card.item_id not in seen_ids:
+                scoped.append(card)
+                seen_ids.add(card.item_id)
+    if not scoped and not tenant_id.strip():
         return []
+    lexical = search_cards(scoped, query, families=families, limit=DEFAULT_BUDGETS.lexical_candidates_per_source)
     stored = await _semantic_from_store(
         tenant_id,
         query,
