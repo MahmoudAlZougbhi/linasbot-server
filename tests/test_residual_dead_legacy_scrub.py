@@ -28,6 +28,7 @@ GONE_DEAD = (
     "services/brain/implementation_log.md",
     "services/brain/CURRENT_STATE.md",
     "services/brain/QUALITY_REPORT.md",
+    "services/brain/outbox_test.py",
 )
 
 GONE_LEGACY = (
@@ -47,7 +48,7 @@ KEEP = (
     "services/integrations/web_chat/processor_reply.py",
     "services/live_chat/service_details.py",
     "services/faq/cm_faq.py",
-    "services/brain/outbox_test.py",
+    "tests/brain/outbox_test_helpers.py",
 )
 
 FORBIDDEN_IMPORTS = (
@@ -69,6 +70,7 @@ FORBIDDEN_IMPORTS = (
     "from services.integrations.meta.meta_comment_rule_dm",
     "from services.requests.status_ui",
     "from services.requests.human_detect",
+    "from services.brain.outbox_test",
     "from services.scale.isolated_replica_pool",
     "from services.scale.self_heal import",
     "from services.integrations.web_chat.processor_v2_reply",
@@ -97,6 +99,13 @@ def _iter_py(*roots: str) -> list[Path]:
 def test_dead_and_legacy_paths_are_gone() -> None:
     leftover = [rel for rel in (*GONE_DEAD, *GONE_LEGACY) if (ROOT / rel).exists()]
     assert leftover == []
+    offenders = [
+        str(path.relative_to(ROOT))
+        for path in _iter_py("tests")
+        if path.name != "test_residual_dead_legacy_scrub.py"
+        and "from services.brain.outbox_test" in path.read_text(encoding="utf-8")
+    ]
+    assert offenders == []
 
 
 def test_durable_flags_and_terra_paths_remain() -> None:
@@ -168,6 +177,7 @@ def test_durable_flags_are_quality_gate_and_ha_infrastructure() -> None:
     assert "prod_cm_preserve_durable_flags.sh" in helper
     assert "from services.ai_setup.durable_flags import" in preserve
     assert "KEEP — deployment / verification infrastructure" in flags
+    assert "Infra/HA durable-flag bridge" in flags
     facts = (ROOT / "services/brain/grounding/facts.py").read_text(encoding="utf-8")
     assert "def _amount_reasons" not in facts
     hybrid = (ROOT / "services/brain/retrieve/hybrid.py").read_text(encoding="utf-8")
@@ -178,3 +188,36 @@ def test_durable_flags_are_quality_gate_and_ha_infrastructure() -> None:
     assert "def _cost_for_mix" not in economics
     detect = (ROOT / "services/integrations/social/social_contact_routing_detect.py").read_text(encoding="utf-8")
     assert "def _tenant_id_from_user_data" not in detect
+    misc = (ROOT / "utils/utils_misc.py").read_text(encoding="utf-8")
+    assert "beauty/laser center" not in misc.lower()
+    assert "laser hair removal" not in misc.lower()
+    assert "لينا ليزر" not in misc
+    provision = (ROOT / "services/team/provisioning_service.py").read_text(encoding="utf-8")
+    assert "linaslaser" not in provision
+    hydrate = (ROOT / "services/brain/retrieve/hydrate.py").read_text(encoding="utf-8")
+    assert "antelias" not in hydrate.lower()
+    health = (ROOT / "modules/dashboard_api_health.py").read_text(encoding="utf-8")
+    assert "linas laser" not in health.lower()
+
+
+def test_runtime_product_trees_have_no_founder_clinic_brand() -> None:
+    needles = ("linaslaser", "linas laser", "antelias", "أنطلياس", "لينا ليزر")
+    skip_parts = {"node_modules", "__pycache__", "build", "dist", ".expo"}
+    suffixes = {".py", ".ts", ".tsx", ".js", ".jsx", ".mjs"}
+    offenders: list[str] = []
+    for rel in ("services", "modules", "utils", "mobile/linas-ai/src", "dashboard", "public"):
+        root = ROOT / rel
+        if not root.exists():
+            continue
+        files = [root] if root.is_file() else root.rglob("*")
+        for path in files:
+            if not path.is_file() or path.suffix.lower() not in suffixes:
+                continue
+            if any(part in skip_parts for part in path.parts):
+                continue
+            blob = path.read_text(encoding="utf-8")
+            lowered = blob.lower()
+            for needle in needles:
+                if needle.lower() in lowered or needle in blob:
+                    offenders.append(f"{path.relative_to(ROOT)}:{needle}")
+    assert offenders == []

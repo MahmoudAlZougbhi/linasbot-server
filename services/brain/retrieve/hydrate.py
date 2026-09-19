@@ -20,7 +20,7 @@ def _rows(sections: dict[str, Any], family: str) -> list[dict[str, Any]]:
         off_payload = sections.get("off_days")
         off_rows: list[dict[str, Any]] = [{"id": "off_days", **off_payload}] if isinstance(off_payload, dict) else []
         # Branch weekly_schedule is the hours SoT. Opening-hours rows must not
-        # hide branch ids like hours:antelias at hydrate time.
+        # hide branch ids like hours:branch_id at hydrate time.
         return [*hours, *branch_rows, *off_rows]
     if family in {"prices", "services"}:
         payload = sections.get("prices")

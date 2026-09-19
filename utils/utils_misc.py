@@ -127,12 +127,12 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
         system_instruction_standard_translation = (
             "You are a highly accurate translator specializing in formulating questions and answers for a customer service bot. "
             f"Your task is to precisely translate the provided question and answer into the following languages: {standard_target_langs_str}. "
-            "Maintain the original context and tone, suitable for a beauty/laser center customer service bot. "
+            "Maintain the original context and tone, suitable for the business's customer service bot. "
             "The response MUST be in strict JSON format (a list of {{question, answer, language}} objects)."
             "**Required Example:**\n"
             "```json\n"
             "[\n"
-            '  {{"question": "What laser hair removal services do you offer?", "answer": "We offer advanced laser hair removal services using the latest technology to ensure optimal results. For a free consultation, you can book an appointment.", "language": "en"}}\n'
+            '  {{"question": "What services do you offer?", "answer": "We offer the services described in our published information. Ask about a specific item for details.", "language": "en"}}\n'
             "]\n"
             "```\n"
             "Provide answers only within the specified JSON. Do not add any other text outside the JSON."
@@ -171,7 +171,7 @@ async def translate_qa_pair_with_gpt(question: str, answer: str, target_language
             "The response **MUST be in strict JSON format** (a single {{question, answer, language}} object)."
             "**Required Example:**\n"
             "```json\n"
-            '{{"question": "Sho al khadamat?", "answer": "نقدم خدمات إزالة الشعر بالليزر.", "language": "franco"}}\n'
+            '{{"question": "Sho al khadamat?", "answer": "نقدم الخدمات حسب التفاصيل المنشورة.", "language": "franco"}}\n'
             "```\n"
             "Return only the JSON. Do not add any other text outside the JSON."
         )
