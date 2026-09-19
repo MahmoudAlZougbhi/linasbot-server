@@ -34,7 +34,7 @@ def _safe_user(user_key: str) -> str:
     return "".join(c if c.isalnum() or c in "-_.:/" else "_" for c in user_key)[:200]
 
 
-def _keys(user_key: str) -> tuple[str, str, str, str, str]:
+def _keys(user_key: str) -> tuple[str, str, str, str, str, str]:
     safe = _safe_user(user_key)
     return (
         f"{_PREFIX}:pending:{safe}",
@@ -42,6 +42,7 @@ def _keys(user_key: str) -> tuple[str, str, str, str, str]:
         f"{_PREFIX}:gen:{safe}",
         f"{_PREFIX}:due:{safe}",
         f"{_PREFIX}:ctx:{safe}",
+        f"{_PREFIX}:started:{safe}",
     )
 
 
@@ -71,7 +72,8 @@ def append_chunk(
     """
     client = _client()
     ts = time.time() if now is None else float(now)
-    due_at = ts + max(0.0, float(delay_seconds))
+    delay = max(0.0, float(delay_seconds))
+    due_at = ts + delay
     if _TEST_CLIENT is None:
         from services.scale.message_combine_policy import distributed_combine_enabled
 
@@ -87,7 +89,7 @@ def append_chunk(
     }
     if client is None:
         return {"accepted": True, "generation": 0, "due_at": due_at, "duplicate": False, "redis": False}
-    pending, seen_key, gen_key, due_key, _ctx = _keys(user_key)
+    pending, seen_key, gen_key, due_key, _ctx, started_key = _keys(user_key)
     try:
         added = int(client.sadd(seen_key, seen) or 0)
         client.expire(seen_key, _TTL_SEC)
@@ -99,14 +101,20 @@ def append_chunk(
                 "duplicate": True,
                 "redis": True,
             }
+        raw_started = client.get(started_key)
+        started = float(raw_started) if raw_started else ts
+        from services.scale.message_combine_policy import combine_max_wait_seconds
+
+        due_at = min(ts + delay, started + combine_max_wait_seconds())
         pipe = client.pipeline(True)
+        pipe.set(started_key, str(started), ex=_TTL_SEC)
         pipe.rpush(pending, json.dumps(chunk, separators=(",", ":")))
         pipe.expire(pending, _TTL_SEC)
         pipe.incr(gen_key)
         pipe.expire(gen_key, _TTL_SEC)
         pipe.set(due_key, str(due_at), ex=_TTL_SEC)
         results = pipe.execute()
-        generation = int(results[2] or 0)
+        generation = int(results[3] or 0)
     except Exception as exc:
         raise RuntimeError("combine_append_failed") from exc
     return {
@@ -150,12 +158,16 @@ def drain_if_due(user_key: str, *, now: float | None = None, force: bool = False
     ts = time.time() if now is None else float(now)
     if client is None:
         return []
-    pending, _seen, _gen, due_key, _ctx = _keys(user_key)
+    pending, _seen, _gen, due_key, _ctx, started_key = _keys(user_key)
     due = float(client.get(due_key) or 0)
-    if not force and due > ts:
+    started = float(client.get(started_key) or 0)
+    from services.scale.message_combine_policy import combine_max_wait_seconds
+
+    max_wait_hit = bool(started and (ts - started) >= combine_max_wait_seconds())
+    if not force and due > ts and not max_wait_hit:
         return None
     items = list(client.lrange(pending, 0, -1) or [])
-    client.delete(pending)
+    client.delete(pending, started_key, due_key)
     out: list[dict[str, Any]] = []
     for item in items or []:
         try:

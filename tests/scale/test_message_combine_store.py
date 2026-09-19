@@ -85,3 +85,14 @@ def test_tenants_do_not_share_buffers() -> None:
     right = drain_if_due("linas:ig:u1", now=2.0)
     assert [row["text"] for row in left or []] == ["a"]
     assert [row["text"] for row in right or []] == ["b"]
+
+
+def test_due_at_caps_at_max_wait(monkeypatch) -> None:
+    monkeypatch.setenv("LINAS_COMBINE_MAX_WAIT_SEC", "4")
+    first = append_chunk("t:ig:u-max", text="one", event_id="m1", delay_seconds=3, now=100.0)
+    second = append_chunk("t:ig:u-max", text="two", event_id="m2", delay_seconds=3, now=103.0)
+    assert first["due_at"] == 103.0
+    assert second["due_at"] == 104.0
+    assert drain_if_due("t:ig:u-max", now=103.5) is None
+    drained = drain_if_due("t:ig:u-max", now=104.0)
+    assert [row["text"] for row in drained or []] == ["one", "two"]

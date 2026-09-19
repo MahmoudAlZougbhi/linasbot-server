@@ -266,7 +266,7 @@ def test_delayed_text_settles_leftover_credits() -> None:
 
     from services.brain.inbound import text_handlers_delayed
 
-    src = getsource(text_handlers_delayed._delayed_process_messages)
+    src = getsource(text_handlers_delayed._run_combined_turn)
     assert "try_reserve_for_ai" in src
     assert "settle_after_outbound" in src
     assert "on_ai_failed" in src

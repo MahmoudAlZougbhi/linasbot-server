@@ -196,9 +196,10 @@ MAX_CONTEXT_MESSAGES_IN_WINDOW = int(os.getenv("MAX_CONTEXT_MESSAGES_IN_WINDOW",
 MAX_RELEVANT_CUSTOM_QA = 3  # Max relevant custom Q&A entries to fetch
 MAX_GENDER_ASK_ATTEMPTS = 3  # Max times bot will ask for gender before suggesting human handover
 
-# Delay for combining rapid messages from a user (e.g., multiple short texts sent quickly)
-# Requirement: wait 3 seconds after the LAST message before responding.
-MESSAGE_COMBINING_DELAY = 3.0  # seconds
+# Quiet window after the LAST inbound before one Terra turn (burst debounce).
+# Override: LINAS_COMBINE_QUIET_SEC / MESSAGE_COMBINING_DELAY. Cap: LINAS_COMBINE_MAX_WAIT_SEC (default 10).
+_raw_combine_delay = (os.getenv("MESSAGE_COMBINING_DELAY") or os.getenv("LINAS_COMBINE_QUIET_SEC") or "3.0").strip()
+MESSAGE_COMBINING_DELAY = float(_raw_combine_delay or "3.0")
 
 
 # --- Bot Welcome Messages (Language-specific) ---

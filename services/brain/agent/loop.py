@@ -112,6 +112,10 @@ async def run_agentic_turn(
 
         return await identity_greeting_result(turn, message=message, channel=channel, flow_base=extra)
 
+    from services.brain.inbound.ack_then_reply import maybe_send_heavy_turn_ack
+
+    await maybe_send_heavy_turn_ack(turn, message=message, channel=channel)
+
     steps += 1
     retrieve_timer = StageTimer()
     max_rounds = 1 if _fast_path_eligible(plan) else DEFAULT_BUDGETS.max_retrieval_rounds

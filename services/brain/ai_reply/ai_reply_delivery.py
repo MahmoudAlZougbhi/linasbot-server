@@ -86,6 +86,13 @@ def wrap_tracked_send(raw_send: SendFunc, user_data: dict[str, Any]) -> SendFunc
         image_url: str | None = None,
         audio_url: str | None = None,
     ) -> Any:
+        if user_data.get("_dm_ack_in_flight"):
+            return await raw_send(
+                to_number,
+                message_text=message_text,
+                image_url=image_url,
+                audio_url=audio_url,
+            )
         delivery_key = str(user_data.get("_logical_reply_id") or user_data.get("_inbound_event_id") or "")
         action = "send"
         if delivery_key:
