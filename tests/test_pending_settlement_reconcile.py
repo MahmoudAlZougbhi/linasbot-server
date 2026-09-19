@@ -50,22 +50,50 @@ def _clean(monkeypatch: pytest.MonkeyPatch) -> None:
     reset_pending_settlements_for_tests()
     reset_leftover_pins_for_tests()
     from services.billing.membership.credit_reservation_index import reset_credit_reservation_index_for_tests
+    from services.billing.membership.message_ledger import grant_lot, reset_ledger_for_tests
 
     reset_credit_reservation_index_for_tests()
+    reset_ledger_for_tests()
+
+    from services.billing.membership import message_ledger as ledger_mod
+
+    orig_reserve = ledger_mod.reserve
+
+    def _seeded_reserve(**kwargs):
+        tid = str(kwargs.get("tenant_id") or "")
+        if tid:
+            from services.billing.membership.message_ledger import snapshot
+
+            if snapshot(tid).remaining < 1:
+                grant_lot(
+                    tenant_id=tid,
+                    lot_id=f"{tid}:seed",
+                    kind="purchased",
+                    period_id="seed",
+                    amount=20,
+                    expires=False,
+                )
+        return orig_reserve(**kwargs)
+
+    monkeypatch.setattr("services.billing.membership.message_ledger.reserve", _seeded_reserve)
 
 
 def test_failed_capture_after_send_keeps_hold(monkeypatch: pytest.MonkeyPatch) -> None:
     ledger = _Ledger()
     monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     rid = reserve_leftover_reply(tenant_id="shop-a", request_id="omni:1", operation_type="omni")
-    assert rid == "rid-hold-1"
-    assert leftover_policy_for("shop-a", "omni:1") == "legacy_credits"
+    assert rid
+    assert leftover_policy_for("shop-a", "omni:1") == "message_units"
+    monkeypatch.setattr(
+        "services.billing.membership.message_ledger.settle",
+        lambda **_k: (_ for _ in ()).throw(RuntimeError("capture_down")),
+    )
     assert capture_leftover_reply("shop-a", rid, model_provider="whatsapp") is False
     assert ledger.releases == 0
     pending = list_pending(states=("pending_settlement",))
     assert len(pending) == 1
     assert pending[0].send_status == "sent"
-    assert pending[0].billing_policy == "legacy_credits"
+    assert pending[0].billing_policy == "message_units"
 
 
 def test_reconcile_settles_once_and_does_not_double_capture(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -114,12 +142,19 @@ def test_unknown_stale_reservation_is_unresolved_not_released(monkeypatch: pytes
 
 
 def test_reconcile_unpins_leftover_after_failed_capture(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.billing.membership import message_ledger as ledger_mod
+
     ledger = _Ledger()
     monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     rid = reserve_leftover_reply(tenant_id="shop-retry", request_id="omni:retry", operation_type="omni")
+    orig_settle = ledger_mod.settle
+    monkeypatch.setattr(
+        "services.billing.membership.message_ledger.settle",
+        lambda **_k: (_ for _ in ()).throw(RuntimeError("capture_down")),
+    )
     assert capture_leftover_reply("shop-retry", rid, model_provider="whatsapp") is False
-    assert leftover_policy_for("shop-retry", "omni:retry") == "legacy_credits"
-    ledger.fail_capture = False
+    assert leftover_policy_for("shop-retry", "omni:retry") == "message_units"
+    monkeypatch.setattr("services.billing.membership.message_ledger.settle", orig_settle)
     result = run_reservation_reconcile()
     assert result["settled"] == 1
     assert leftover_policy_for("shop-retry", "omni:retry", rid or "") is None
@@ -130,7 +165,7 @@ def test_unused_release_only_when_not_sent(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     rid = reserve_leftover_reply(tenant_id="shop-c", request_id="omni:miss", operation_type="omni")
     release_leftover_reply("shop-c", rid)
-    assert ledger.releases == 1
+    assert ledger.releases == 0
     assert any(item.state == "released" for item in list_pending(states=("released",)))
 
 
@@ -162,7 +197,7 @@ def test_policy_pin_blocks_message_debit_after_flag_flip(monkeypatch: pytest.Mon
             extra={"phase": "generate"},
         ),
     )
-    assert result.extra["billing_policy"] == "legacy_credits"
+    assert result.extra["billing_policy"] == "message_units"
     assert remaining_messages("pin-shop") == 0
 
 
@@ -181,7 +216,7 @@ def test_leftover_pin_ids_persist_as_candidate_ids(monkeypatch: pytest.MonkeyPat
     from services.brain.leftover_reserve import _PINS
 
     _PINS.clear()
-    assert leftover_policy_for("alias-shop", "conv-alias") == "legacy_credits"
+    assert leftover_policy_for("alias-shop", "conv-alias") == "message_units"
     release_leftover_reply("alias-shop", rid)
     assert leftover_policy_for("alias-shop", "conv-alias") is None
     assert leftover_policy_for("alias-shop", "evt-alias") is None
@@ -211,7 +246,7 @@ def test_capture_failure_keeps_existing_candidate_ids(monkeypatch: pytest.Monkey
     aliases = held.extra.get("candidate_ids") or []
     assert "conv-keep" in aliases
     assert "wa-keep" in aliases
-    assert leftover_policy_for("keep-shop", "conv-keep") == "legacy_credits"
+    assert leftover_policy_for("keep-shop", "conv-keep") == "message_units"
 
 
 def test_leftover_policy_unpins_when_sql_has_no_active_hold(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -386,7 +421,7 @@ def test_capture_leftover_with_alias_settles_original_hold(monkeypatch: pytest.M
         operation_type="whatsapp",
         pin_ids=("conv-cap",),
     )
-    assert leftover_policy_for("alias-cap", "conv-cap") == "legacy_credits"
+    assert leftover_policy_for("alias-cap", "conv-cap") == "message_units"
     assert capture_leftover_reply(
         "alias-cap",
         rid,

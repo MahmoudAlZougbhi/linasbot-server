@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from services.billing.membership.message_flags import message_billing_enabled
 from services.billing.membership.message_ledger import InsufficientMessages, reserve, settle
-from services.billing.membership.message_policy import ResponseClass, classify_turn, message_units_for
+from services.billing.membership.message_policy import ResponseClass, classify_turn
 from services.billing.membership.period_grants import ensure_included_grant
 from services.brain.contracts.reply import TurnResult
 from services.brain.contracts.turn import CustomerTurn
@@ -131,9 +131,15 @@ def _release_message_hold(tenant_id: str, op: str, *, reason: str) -> None:
 def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
     response_class = classify_result(turn, result)
     op = operation_id_for_turn(turn)
+    from services.billing.membership.economy_policy import action_units
+
     extra = dict(result.extra)
     extra["response_class"] = response_class
-    extra["message_units"] = message_units_for(response_class)
+    extra["message_units"] = action_units(
+        response_class=response_class,
+        invocation_kind=turn.invocation_kind,
+        comment_mode=str(extra.get("comment_mode") or extra.get("rule_mode") or ""),
+    )
     extra["operation_id"] = op
     extra["legacy_comment_uncharged"] = turn.invocation_kind == "comment" and not message_billing_enabled()
     pinned = _pinned_policy(turn, op)
@@ -154,13 +160,20 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
     )
     if owner_preview_turn(turn) or lab_turn(turn):
         return result.model_copy(update={"extra": extra})
-    if extra["billing_policy"] != "legacy_credits":
+    if pinned:
+        extra["billing_pending_send"] = True
+    elif extra["billing_policy"] != "legacy_credits":
         ensure_included_grant(turn.tenant_id)
         accepted = accepted_for_delivery(result) and extra["message_units"] > 0
         try:
             try:
                 if accepted:
-                    reserve(tenant_id=turn.tenant_id, operation_id=op, response_class=response_class)
+                    reserve(
+                        tenant_id=turn.tenant_id,
+                        operation_id=op,
+                        response_class=response_class,
+                        units=int(extra["message_units"]),
+                    )
                     _record_message_hold(turn, op)
                     extra["billing_pending_send"] = True
                 else:

@@ -1,4 +1,4 @@
-"""Credit-ledger reserve for outbound/AI holds. Not a second billing meter."""
+"""Message-ledger reserve for outbound/AI holds. Not a second billing meter."""
 
 from __future__ import annotations
 
@@ -10,6 +10,18 @@ def reset_leftover_pins_for_tests() -> None:
     from services.billing.membership.credit_reservation_index import reset_credit_reservation_index_for_tests
 
     reset_credit_reservation_index_for_tests()
+
+
+def _operation_id(tenant_id: str, reservation_id: str) -> str:
+    from services.billing.membership.pending_settlement import get_pending
+
+    try:
+        held = get_pending(tenant_id, reservation_id)
+    except Exception:
+        held = None
+    if held is not None and str(held.operation_id or "").strip():
+        return str(held.operation_id).strip()
+    return reservation_id
 
 
 def leftover_policy_for(tenant_id: str, *operation_ids: str) -> str | None:
@@ -35,7 +47,7 @@ def _pin(tenant_id: str, *operation_ids: str) -> None:
     for item in operation_ids:
         text = str(item or "").strip()
         if text:
-            _PINS[f"{tenant_id}:{text}"] = "legacy_credits"
+            _PINS[f"{tenant_id}:{text}"] = "message_units"
 
 
 def _unpin(tenant_id: str, *operation_ids: str) -> None:
@@ -54,23 +66,24 @@ def reserve_leftover_reply(
 ) -> str | None:
     if not tenant_id or not request_id:
         return None
-    from services.billing.credit_ledger_service import credit_ledger_service
+    from services.billing.membership.message_ledger import InsufficientMessages, reserve
 
-    reservation_id = credit_ledger_service.reserve(
-        tenant_id=tenant_id,
-        user_id=None,
-        credits=1,
-        operation_type=operation_type,
-        request_id=request_id,
-    )
+    try:
+        reservation = reserve(
+            tenant_id=tenant_id,
+            operation_id=request_id,
+            response_class="generated_ai",
+        )
+    except InsufficientMessages as exc:
+        raise PermissionError("insufficient_messages") from exc
     remember_leftover_hold(
         tenant_id=tenant_id,
-        reservation_id=reservation_id,
+        reservation_id=reservation.reservation_id,
         request_id=request_id,
         operation_type=operation_type,
         pin_ids=pin_ids,
     )
-    return reservation_id
+    return reservation.reservation_id
 
 
 def remember_leftover_hold(
@@ -93,7 +106,7 @@ def remember_leftover_hold(
         tenant_id=tenant_id,
         reservation_id=reservation_id,
         operation_id=request_id,
-        billing_policy="legacy_credits",
+        billing_policy="message_units",
         channel=operation_type,
         extra={"operation_type": operation_type, "candidate_ids": aliases},
     )
@@ -132,7 +145,7 @@ def complete_leftover_release(
         tenant_id=tenant_id,
         reservation_id=reservation_id,
         operation_id=held.operation_id if held is not None else reservation_id,
-        billing_policy="legacy_credits",
+        billing_policy="message_units",
         state="released",
         reason="unused_or_failed_before_send",
     )
@@ -145,9 +158,10 @@ def release_leftover_reply(tenant_id: str, reservation_id: str | None) -> None:
     if not tenant_id or not reservation_id:
         return
     try:
-        from services.billing.credit_ledger_service import credit_ledger_service
+        from services.billing.membership.message_ledger import settle
 
-        credit_ledger_service.release(tenant_id=tenant_id, reservation_id=reservation_id)
+        op = _operation_id(tenant_id, reservation_id)
+        settle(tenant_id=tenant_id, operation_id=op, accepted=False)
         complete_leftover_release(tenant_id, reservation_id)
     except Exception:
         return
@@ -179,7 +193,7 @@ def complete_leftover_capture(
         tenant_id=tenant_id,
         reservation_id=reservation_id,
         operation_id=held.operation_id if held is not None else op,
-        billing_policy="legacy_credits",
+        billing_policy="message_units",
         state="settled",
         send_status="sent",
         provider_message_id=provider_message_id,
@@ -208,21 +222,20 @@ def capture_leftover_reply(
 ) -> bool:
     if not tenant_id or not reservation_id:
         return False
-    op = operation_id or reservation_id
+    held_op = _operation_id(tenant_id, reservation_id)
+    alias = (operation_id or "").strip()
+    op = held_op
     try:
-        from services.billing.credit_ledger_service import credit_ledger_service
+        from services.billing.membership.message_ledger import settle
 
-        credit_ledger_service.capture(
-            tenant_id=tenant_id,
-            reservation_id=reservation_id,
-            provider_cost_usd=None,
-            model_provider=model_provider,
-        )
+        settle(tenant_id=tenant_id, operation_id=held_op, accepted=True)
+        extra_ids = (alias,) if alias and alias != held_op else ()
         complete_leftover_capture(
             tenant_id,
             reservation_id,
-            operation_id=op,
+            operation_id=held_op,
             provider_message_id=provider_message_id,
+            extra_ids=extra_ids,
         )
         return True
     except Exception:
@@ -232,7 +245,7 @@ def capture_leftover_reply(
             tenant_id=tenant_id,
             reservation_id=reservation_id,
             operation_id=op,
-            billing_policy="legacy_credits",
+            billing_policy="message_units",
             provider_message_id=provider_message_id,
             channel=model_provider,
         )

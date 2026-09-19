@@ -176,7 +176,6 @@ export function BillingScreen({ openChoosePlan = false }: Props) {
           locale={locale}
           tr={tr}
           onBuyCredits={() => {
-            if (entitlement.messageBillingActive) return;
             setCreditsOpen(true);
           }}
           onUpgrade={() => {
@@ -232,7 +231,7 @@ export function BillingScreen({ openChoosePlan = false }: Props) {
       )}
 
       <BuyCreditsSheet
-        visible={creditsOpen && !entitlement.messageBillingActive}
+        visible={creditsOpen}
         prices={store.creditPrices}
         purchasing={purchasing}
         locale={locale}

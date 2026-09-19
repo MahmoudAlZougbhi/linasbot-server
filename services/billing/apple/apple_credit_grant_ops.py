@@ -41,8 +41,27 @@ def _duplicate_reversed(row: AppleCreditGrantRow, *, transaction_id: str) -> dic
     }
 
 
-def _result(
+def _also_grant_messages(
     *,
+    tenant_id: str,
+    product_id: str,
+    transaction_id: str,
+    quantity: int,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    if result.get("skipped") or int(quantity or 0) <= 0:
+        return result
+    from services.billing.membership.iap_message_grant import grant_from_mapped_pack
+
+    result["message_grant"] = grant_from_mapped_pack(
+        tenant_id=tenant_id,
+        transaction_id=transaction_id,
+        pack={"pack_id": product_id, "quantity": quantity, "product_id": product_id},
+    )
+    return result
+
+
+def _result(
     grant_credits: int,
     transaction_id: str,
     ledger: dict[str, Any],
@@ -169,29 +188,37 @@ def grant_consumable_credits(
                 allow_regrant_after_reverse=allow_regrant_after_reverse,
             )
             if isinstance(claimed, dict):
-                return claimed
-            ledger = grant_pack_on_session(
-                session,
-                tenant_id=tenant_id,
-                credits=grant_credits,
-                request_id=ledger_request_id,
-                source="apple",
-                meta={"product_id": product_id, "transaction_id": transaction_id},
-                bump_entitlement=True,
-            )
-            _mark_granted(
-                claimed,
-                grant_credits=grant_credits,
-                ledger=ledger,
-                ledger_request_id=ledger_request_id,
-                allow_regrant_after_reverse=allow_regrant_after_reverse,
-            )
-            return _result(
-                grant_credits=grant_credits,
-                transaction_id=transaction_id,
-                ledger=ledger,
-                allow_regrant_after_reverse=allow_regrant_after_reverse,
-            )
+                result = claimed
+            else:
+                ledger = grant_pack_on_session(
+                    session,
+                    tenant_id=tenant_id,
+                    credits=grant_credits,
+                    request_id=ledger_request_id,
+                    source="apple",
+                    meta={"product_id": product_id, "transaction_id": transaction_id},
+                    bump_entitlement=True,
+                )
+                _mark_granted(
+                    claimed,
+                    grant_credits=grant_credits,
+                    ledger=ledger,
+                    ledger_request_id=ledger_request_id,
+                    allow_regrant_after_reverse=allow_regrant_after_reverse,
+                )
+                result = _result(
+                    grant_credits=grant_credits,
+                    transaction_id=transaction_id,
+                    ledger=ledger,
+                    allow_regrant_after_reverse=allow_regrant_after_reverse,
+                )
+        return _also_grant_messages(
+            tenant_id=tenant_id,
+            product_id=product_id,
+            transaction_id=transaction_id,
+            quantity=grant_credits,
+            result=result,
+        )
 
     # File ledger saga: claim PG grant row first, then file ledger, then mark granted.
     with whatsapp_session(require=True) as session:
@@ -207,7 +234,13 @@ def grant_consumable_credits(
             allow_regrant_after_reverse=allow_regrant_after_reverse,
         )
         if isinstance(claimed, dict):
-            return claimed
+            return _also_grant_messages(
+                tenant_id=tenant_id,
+                product_id=product_id,
+                transaction_id=transaction_id,
+                quantity=grant_credits,
+                result=claimed,
+            )
 
     ledger = credit_ledger_service.grant_pack(
         tenant_id=tenant_id,
@@ -221,7 +254,13 @@ def grant_consumable_credits(
         if row is None:
             raise RuntimeError("Apple credit grant claim missing after ledger write")
         if row.status == "granted":
-            return _duplicate_granted(row, transaction_id=transaction_id)
+            return _also_grant_messages(
+                tenant_id=tenant_id,
+                product_id=product_id,
+                transaction_id=transaction_id,
+                quantity=grant_credits,
+                result=_duplicate_granted(row, transaction_id=transaction_id),
+            )
         _mark_granted(
             row,
             grant_credits=grant_credits,
@@ -229,11 +268,17 @@ def grant_consumable_credits(
             ledger_request_id=ledger_request_id,
             allow_regrant_after_reverse=allow_regrant_after_reverse,
         )
-    return _result(
-        grant_credits=grant_credits,
+    return _also_grant_messages(
+        tenant_id=tenant_id,
+        product_id=product_id,
         transaction_id=transaction_id,
-        ledger=ledger,
-        allow_regrant_after_reverse=allow_regrant_after_reverse,
+        quantity=grant_credits,
+        result=_result(
+            grant_credits=grant_credits,
+            transaction_id=transaction_id,
+            ledger=ledger,
+            allow_regrant_after_reverse=allow_regrant_after_reverse,
+        ),
     )
 
 
@@ -276,6 +321,10 @@ def reverse_consumable_credits(
 
     if grant_tenant != tenant_id:
         raise PermissionError("cross-tenant credit reverse denied")
+
+    from services.billing.membership.iap_message_grant import maybe_revoke_purchased_from_verified_txn
+
+    maybe_revoke_purchased_from_verified_txn(tenant_id=tenant_id, transaction_id=transaction_id)
 
     if billing_uses_postgres():
         from services.billing.credit_ledger_pg_ops import reverse_pack_on_session

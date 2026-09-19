@@ -48,8 +48,8 @@ def test_web_chat_reserve_capture_indexes_leftover(monkeypatch) -> None:
     handle.reserve()
     assert handle.state == CreditFsmState.RESERVED
     assert open_counts(tenant_id="shop")["open"] == 1
-    assert leftover_policy_for("shop", "web:idx:1") == "legacy_credits"
-    assert leftover_policy_for("shop", "web:shop:visitor-1") == "legacy_credits"
+    assert leftover_policy_for("shop", "web:idx:1") == "message_units"
+    assert leftover_policy_for("shop", "web:shop:visitor-1") == "message_units"
     handle.capture()
     assert handle.state == CreditFsmState.CAPTURED
     assert open_counts(tenant_id="shop")["open"] == 0
@@ -66,7 +66,7 @@ def test_web_chat_release_closes_index(monkeypatch) -> None:
     monkeypatch.setattr("services.integrations.web_chat.credit_fsm.followup_uses_message_ledger", lambda: False)
     handle = WebChatCreditHandle(tenant_id="shop", reservation_id=None, request_id="web:idx:2")
     handle.reserve()
-    assert leftover_policy_for("shop", "web:idx:2") == "legacy_credits"
+    assert leftover_policy_for("shop", "web:idx:2") == "message_units"
     assert handle.release() is True
     assert handle.state == CreditFsmState.RELEASED
     assert open_counts(tenant_id="shop")["open"] == 0

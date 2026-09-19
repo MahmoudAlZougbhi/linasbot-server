@@ -14,6 +14,7 @@ StreamEventType = Literal[
     "title_updated",
     "error",
     "credits_paused",
+    "billing_confirm",
     "done",
     "cancelled",
 ]

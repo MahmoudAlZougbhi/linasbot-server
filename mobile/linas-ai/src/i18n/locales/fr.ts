@@ -51,10 +51,13 @@ export const fr = {
   chatCreditsPausedTitle: 'Messages insuffisants',
   chatCreditsPausedBody:
     'Le Copilot propriétaire est en pause jusqu’à l’ajout de messages. Les réponses IA des canaux sont aussi en pause.',
-  chatLeftoverCreditsPausedTitle: 'Crédits restants insuffisants',
+  chatLeftoverCreditsPausedTitle: 'Messages insuffisants',
   chatLeftoverCreditsPausedBody:
-    'Le Copilot propriétaire est en pause jusqu’à l’ajout de crédits restants. Les réponses IA des canaux sont aussi en pause.',
-  chatAddLeftoverCredits: 'Ajouter des crédits restants',
+    'Le Copilot propriétaire est en pause jusqu’à l’ajout de messages. Les réponses IA des canaux sont aussi en pause.',
+  chatAddLeftoverCredits: 'Acheter des messages',
+  chatBillingConfirmTitle: 'Cette action utilise des messages',
+  chatBillingConfirmBody: 'Cette action utilisera {n} messages.',
+  chatBillingConfirmCta: 'Utiliser les messages et continuer',
   chatYouLabel: 'Vous',
   chatLinasLabel: 'Linas',
   guestChatEmptyTitle: 'Bienvenue sur Linas AI',

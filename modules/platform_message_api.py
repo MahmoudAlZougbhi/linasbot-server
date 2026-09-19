@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field
 from modules.api_security import require_platform_owner
 from modules.core import app
 from services.billing.membership.catalog_admin import CatalogPublishBlocked, current_catalog, publish, update_draft
-from services.billing.membership.conversion_dry_run import dry_run_credit_inventory
 from services.billing.membership.cost_dashboard import global_dashboard, period_bounds, tenant_dashboard
 from services.billing.membership.daily_edits import decision_payload, set_platform_baseline, set_tenant_override, status
 
@@ -20,6 +19,7 @@ class CatalogDraftBody(BaseModel):
     free: dict[str, Any] | None = None
     plans: dict[str, Any] | None = None
     topup_packs: dict[str, Any] | list[dict[str, Any]] | None = None
+    economy: dict[str, Any] | None = None
     reason: str = ""
 
 
@@ -48,6 +48,8 @@ async def platform_message_catalog_draft(body: CatalogDraftBody, request: Reques
         changes["plans"] = body.plans
     if body.topup_packs is not None:
         changes["topup_packs"] = body.topup_packs
+    if body.economy is not None:
+        changes["economy"] = body.economy
     try:
         catalog = update_draft(
             actor=session.user_id or session.email or "platform",
@@ -157,7 +159,20 @@ async def platform_daily_edits_policy(body: DailyEditPolicyBody, request: Reques
 @app.get("/api/platform/credit-conversion/dry-run")
 async def platform_credit_conversion_dry_run(request: Request) -> Any:
     require_platform_owner(request)
-    return {"success": True, "dry_run": dry_run_credit_inventory()}
+    from services.billing.membership.conversion_dry_run import apply_credit_conversion
+
+    return {"success": True, "dry_run": apply_credit_conversion(dry_run=True)}
+
+
+@app.post("/api/platform/credit-conversion/apply")
+async def platform_credit_conversion_apply(request: Request) -> Any:
+    require_platform_owner(request)
+    from services.billing.membership.conversion_dry_run import apply_credit_conversion
+
+    result = apply_credit_conversion(dry_run=False)
+    if result.get("blocked"):
+        raise HTTPException(status_code=409, detail=result)
+    return {"success": True, "conversion": result}
 
 
 @app.get("/api/platform/activation-readiness")

@@ -57,7 +57,7 @@ export default function Pricing() {
             </p>
             {checkoutReady ? null : (
               <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">
-                Intended catalog — live checkout still uses leftover credits until message cutover.
+                Intended catalog — live App Store checkout still waits on message-catalog cutover.
               </p>
             )}
           </div>

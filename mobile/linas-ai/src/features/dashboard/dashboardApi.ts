@@ -70,6 +70,7 @@ export function resolveDashboardAction(code: string | null | undefined): Dashboa
     case 'upgrade_plan':
       return 'choose_plan';
     case 'buy_credits':
+    case 'buy_messages':
       return 'buy_credits';
     case 'review_faq':
       return 'faq';

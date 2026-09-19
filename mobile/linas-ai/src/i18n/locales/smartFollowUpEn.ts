@@ -48,7 +48,7 @@ export const smartFollowUpEn = {
   sfuPreview: 'Preview message',
   sfuPreviewTitle: 'Preview follow-up',
   sfuPreviewDisclose:
-    'Preview never sends a WhatsApp message and does not use leftover credits or AI messages. Continue?',
+    'Preview never sends a WhatsApp message and does not use AI messages. Continue?',
   sfuPreviewRun: 'Generate preview',
   sfuPreviewEmpty: 'Preview generated (empty text).',
   sfuPreviewError: 'Could not generate preview.',

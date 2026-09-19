@@ -113,6 +113,7 @@ export const TenantDashboardSchema = z.object({
           manage_subscription: z.boolean().optional(),
           upgrade_plan: z.boolean().optional(),
           buy_credits: z.boolean().optional(),
+          buy_messages: z.boolean().optional(),
         })
         .optional(),
     })
@@ -299,4 +300,5 @@ export type DashboardNavigateTarget =
   | 'users'
   | 'subscription'
   | 'choose_plan'
-  | 'buy_credits';
+  | 'buy_credits'
+  | 'buy_messages';

@@ -1,7 +1,7 @@
-"""Canonical remaining-credit gate for Owner Copilot and channel AI.
+"""Canonical remaining-message gate for Owner Copilot and channel AI.
 
-Dashboard remaining and every AI generation gate must use ``remaining_credits``.
-This is the credit ledger spend wallet.
+Historical function names stay for import compatibility. The live meter is
+the message ledger. Credit-ledger rows are not consulted for new turns.
 """
 
 from __future__ import annotations
@@ -11,25 +11,30 @@ from typing import Any
 from services.billing.membership.plan_catalog import is_highest_catalog_plan
 
 
-def remaining_credits(tenant_id: str | None) -> int:
-    """Available ledger credits — same number Dashboard shows as remaining."""
+def remaining_messages(tenant_id: str | None) -> int:
     tid = (tenant_id or "").strip().lower()
     if not tid:
         return 0
     try:
-        from services.billing.credit_ledger_service import credit_ledger_service
+        from services.billing.membership.message_ledger import remaining_messages as ledger_remaining
+        from services.billing.membership.period_grants import ensure_included_grant
 
-        credit_ledger_service.ensure_period_grant(tid)
-        return max(0, int(credit_ledger_service.get_balance(tid)))
+        ensure_included_grant(tid)
+        return max(0, int(ledger_remaining(tid)))
     except Exception:
         return 0
 
 
-def _reserved_credits(tenant_id: str) -> int:
-    try:
-        from services.billing.credit_ledger_service import credit_ledger_service
+def remaining_credits(tenant_id: str | None) -> int:
+    """Compatibility alias. Returns remaining message units."""
+    return remaining_messages(tenant_id)
 
-        return max(0, int(credit_ledger_service.get_reserved(tenant_id)))
+
+def _reserved_messages(tenant_id: str) -> int:
+    try:
+        from services.billing.membership.message_ledger import snapshot
+
+        return max(0, int(snapshot(tenant_id).reserved))
     except Exception:
         return 0
 
@@ -40,49 +45,39 @@ def ai_generation_blocked(
     need: int = 1,
     honor_inflight_reserved: bool = False,
 ) -> bool:
-    """True when the next AI turn cannot be funded from the credit ledger.
-
-    Default is strict: only ``remaining_credits`` (available balance) counts.
-    Pass ``honor_inflight_reserved=True`` only for callers invoked *after* this
-    same turn already reserved on the ledger (e.g. Customer Reply V2 under WA/web
-    reserve). Owner Copilot and pre-reserve gates must stay strict.
-    """
     tid = (tenant_id or "").strip().lower()
     if not tid:
         return True
-    if remaining_credits(tid) >= need:
+    if remaining_messages(tid) >= need:
         return False
-    if honor_inflight_reserved and _reserved_credits(tid) >= need:
+    if honor_inflight_reserved and _reserved_messages(tid) >= need:
         return False
     return True
 
 
 def upgrade_plan_allowed(plan_id: str | None) -> bool:
-    """Upgrade CTA only when the tenant is not already on the highest catalog plan (Max)."""
     return not is_highest_catalog_plan(plan_id)
 
 
 def owner_credits_paused_payload(tenant_id: str | None) -> dict[str, Any]:
-    """Structured Copilot pause payload. Copilot still spends leftover credits."""
     from services.billing.entitlements_service import entitlements_store
 
     tid = (tenant_id or "").strip().lower()
-    remaining = remaining_credits(tid) if tid else 0
+    remaining = remaining_messages(tid) if tid else 0
     plan_id = entitlements_store.get(tid).plan_id if tid else "none"
     show_upgrade = upgrade_plan_allowed(plan_id)
     return {
-        "code": "insufficient_credits",
-        "message": ("Not enough leftover credits. Owner Copilot is paused until you add leftover credits or upgrade."),
+        "code": "insufficient_messages",
+        "message": "Not enough messages. Owner Copilot is paused until you buy messages or upgrade.",
         "remaining": remaining,
         "plan_id": plan_id,
         "show_upgrade": show_upgrade,
-        "actions": {"buy_credits": True, "upgrade_plan": show_upgrade},
+        "actions": {"buy_messages": True, "upgrade_plan": show_upgrade},
     }
 
 
 def owner_credits_public(tenant_id: str | None) -> dict[str, Any]:
-    """Copilot/account snapshot. Live meter is leftover credits only."""
     tid = (tenant_id or "").strip().lower()
     if not tid:
-        return {"unit": "credits", "remaining": 0, "available": False}
-    return {"unit": "credits", "remaining": remaining_credits(tid), "available": True}
+        return {"unit": "messages", "remaining": 0, "available": False}
+    return {"unit": "messages", "remaining": remaining_messages(tid), "available": True}

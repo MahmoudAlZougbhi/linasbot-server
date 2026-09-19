@@ -148,8 +148,9 @@ def pg_reserve(
     tenant_id: str,
     operation_id: str,
     response_class: ResponseClass,
+    units: int | None = None,
 ) -> MessageReservation:
-    units = message_units_for(response_class)
+    charged = message_units_for(response_class) if units is None else max(0, int(units))
     key = f"{tenant_id}:{operation_id}"
     existing = (
         session.execute(
@@ -167,7 +168,7 @@ def pg_reserve(
         if existing["response_class"] and existing["response_class"] != response_class:
             raise ReservationConflict(f"operation {operation_id} already classified")
         return MessageReservation(**dict(existing))
-    if units == 0:
+    if charged == 0:
         reservation = MessageReservation(
             reservation_id=key,
             tenant_id=tenant_id,
@@ -180,14 +181,14 @@ def pg_reserve(
         _insert_reservation(session, reservation)
         return reservation
     snap = pg_snapshot(session, tenant_id)
-    if snap.remaining < units:
+    if snap.remaining < charged:
         raise InsufficientMessages(tenant_id, snap.remaining)
     lot = _pick_lot(session, tenant_id)
     reservation = MessageReservation(
         reservation_id=key,
         tenant_id=tenant_id,
         operation_id=operation_id,
-        units=units,
+        units=charged,
         status="reserved",
         lot_id=lot.lot_id if lot else "",
         period_id=lot.period_id if lot else "",

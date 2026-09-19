@@ -47,7 +47,9 @@ def turn_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_capture_once_not_on_delivery_failure(ledger_env: CreditLedgerService, turn_store: None) -> None:
     ledger_env.ensure_period_grant("t1")
-    before = ledger_env.get_balance("t1")
+    from services.billing.membership.message_ledger import remaining_messages
+
+    before = remaining_messages("t1")
     turn = begin_turn(tenant_id="t1", channel="instagram", external_inbound_id="mid-1", claim_key_basis="k1")
     rid = reserve_before_ai(turn)
     assert rid
@@ -56,14 +58,14 @@ def test_capture_once_not_on_delivery_failure(ledger_env: CreditLedgerService, t
     second = capture_after_reply_persisted(turn.logical_reply_id)
     assert first.get("duplicate") is not True
     assert second.get("duplicate") is True
-    assert ledger_env.get_balance("t1") == before - 1
+    assert remaining_messages("t1") == before - 1
 
     record_delivery_outcome(turn.logical_reply_id, classify_send_result({"success": False, "error": "timeout"}))
     updated = get_turn(turn.logical_reply_id)
     assert updated is not None
     assert updated.state == "OUTBOUND_RETRY"
     assert updated.credit_captured is True
-    assert ledger_env.get_balance("t1") == before - 1
+    assert remaining_messages("t1") == before - 1
 
 
 def test_release_on_ai_failure_no_capture(ledger_env: CreditLedgerService, turn_store: None) -> None:
@@ -99,7 +101,7 @@ def test_capture_after_reply_persisted_settles_leftover_hold(ledger_env: CreditL
     ledger_env.ensure_period_grant("t1")
     turn = begin_turn(tenant_id="t1", channel="whatsapp", external_inbound_id="mid-settle")
     rid = reserve_before_ai(turn)
-    assert leftover_policy_for("t1", "mid-settle") == "legacy_credits"
+    assert leftover_policy_for("t1", "mid-settle") == "message_units"
     persist_generated_reply(turn.logical_reply_id, reply_text="Hello customer")
     capture_after_reply_persisted(turn.logical_reply_id)
     held = get_pending("t1", rid or "", turn.logical_reply_id)
@@ -123,7 +125,7 @@ def test_reserve_before_ai_persists_candidate_ids(ledger_env: CreditLedgerServic
     held = get_pending("t1", rid or "", "")
     assert held is not None
     assert "mid-pin" in (held.extra.get("candidate_ids") or [])
-    assert leftover_policy_for("t1", "mid-pin") == "legacy_credits"
+    assert leftover_policy_for("t1", "mid-pin") == "message_units"
 
 
 def test_pending_delivery_blocks_duplicate_generation(turn_store: None) -> None:

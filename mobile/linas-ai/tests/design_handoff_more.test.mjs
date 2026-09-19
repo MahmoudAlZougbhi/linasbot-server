@@ -319,13 +319,12 @@ test('Buy credits sheet matches design handoff', () => {
   assert.match(sheet, /accessibilityRole="radio"/);
   assert.match(sheet, /DEFAULT_CREDIT_PACK/);
   assert.match(sheet, /subBuyCreditsCta/);
-  assert.match(sheet, /subLeftoverNoExpire/);
-  assert.doesNotMatch(sheet, /subPurchasedNoExpire/);
+  assert.match(sheet, /subPurchasedNoExpire/);
   assert.match(sheet, /subFooterStore/);
   assert.match(sheet, /subCancel/);
-  assert.match(en, /Add \{n\} leftover credits • \{price\}/);
+  assert.match(en, /Add \{n\} messages • \{price\}/);
   assert.match(en, /Payment is completed securely through the App Store or Google Play/);
-  assert.match(en, /Purchased leftover credits do not expire/);
+  assert.match(en, /Purchased messages do not expire/);
 });
 
 test('Dashboard sections match design handoff', () => {

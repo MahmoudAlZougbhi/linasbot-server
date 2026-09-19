@@ -87,24 +87,26 @@ def test_mixed_faq_and_ai_comment_is_one_message() -> None:
     assert message_units_for(klass) == 1
 
 
-def test_legacy_comments_stay_uncharged_when_billing_off() -> None:
+def test_ai_comments_charge_message_units() -> None:
+    grant_lot(tenant_id="cmt-shop", lot_id="inc", kind="included", period_id=current_period_id(), amount=5)
     result = apply_message_billing(
         _turn(),
         _result(text="Hello", extra={"comment_mode": "ai_comment", "phase": "generate"}, ai_called=True),
     )
-    assert result.extra["legacy_comment_uncharged"] is True
-    assert result.extra["billing_policy"] == "legacy_credits"
-    assert remaining_messages("cmt-shop") == 0
+    assert result.extra["legacy_comment_uncharged"] is False
+    assert result.extra["billing_policy"] == "message_units"
+    assert result.extra.get("billing_pending_send") is True
+    assert remaining_messages("cmt-shop") == 4
 
 
-def test_new_policy_debits_one_ai_comment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
-    monkeypatch.setattr("services.brain.billing.ensure_included_grant", lambda _tid: None)
-    grant_lot(tenant_id="cmt-shop", lot_id="inc", kind="included", period_id=current_period_id(), amount=5)
+def test_new_policy_debits_ai_both_each() -> None:
+    grant_lot(tenant_id="cmt-both", lot_id="inc-both", kind="included", period_id=current_period_id(), amount=5)
     result = apply_message_billing(
-        _turn(),
+        _turn(tenant_id="cmt-both", event_ids=["cmt-both"]),
         _result(text="Hello", extra={"comment_mode": "ai_both", "phase": "generate"}, ai_called=True),
     )
-    assert result.extra["legacy_comment_uncharged"] is True
-    assert result.extra["billing_policy"] == "legacy_credits"
-    assert remaining_messages("cmt-shop") == 5
+    assert result.extra["legacy_comment_uncharged"] is False
+    assert result.extra["billing_policy"] == "message_units"
+    assert result.extra.get("message_units") == 2
+    assert result.extra.get("billing_pending_send") is True
+    assert remaining_messages("cmt-both") == 3

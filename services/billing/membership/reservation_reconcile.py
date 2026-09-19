@@ -122,6 +122,15 @@ def _retry_message(item: PendingSettlement) -> str:
         reason="reconcile_settle",
         extra={"candidate_ids": _item_candidates(item)},
     )
+    from services.brain.leftover_reserve import complete_leftover_capture
+
+    complete_leftover_capture(
+        item.tenant_id,
+        item.reservation_id,
+        operation_id=item.operation_id,
+        provider_message_id=item.provider_message_id,
+        extra_ids=_item_candidates(item),
+    )
     from services.brain.outbox import acknowledge_sent
 
     acknowledge_sent(

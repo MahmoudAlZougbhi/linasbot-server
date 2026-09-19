@@ -192,6 +192,10 @@ def test_last_month_dashboard_survives_corrupt_owner_chat_meta(
 
 
 def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.billing.membership.message_ledger import reset_ledger_for_tests
+
+    reset_ledger_for_tests()
+    monkeypatch.setattr("services.billing.membership.period_grants.ensure_included_grant", lambda *_a, **_k: None)
     ledger_env.set_plan(tenant_id="t_zero", plan_id="starter", status="active", source="admin")
     from services.billing.credit_ledger_service import credit_ledger_service
 
@@ -253,11 +257,11 @@ def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monk
     assert payload["plan_and_credits"]["available_credits"] == 0
     assert payload["plan_and_credits"]["actions"]["upgrade_plan"] is True
     assert payload["plan_and_credits"]["ai_setup_edits"]["limit"] == 30
-    assert payload["workspace_status"]["state"] != "credits_depleted"
-    assert payload["workspace_status"]["state"] == "leftover_credits_depleted"
-    assert "Add messages" not in json.dumps(payload)
-    assert payload["plan_and_credits"]["available_messages"] is None
-    assert payload["plan_and_credits"]["message_billing_active"] is False
+    assert payload["workspace_status"]["state"] != "leftover_credits_depleted"
+    assert payload["workspace_status"]["state"] == "credits_depleted"
+    assert payload["plan_and_credits"]["available_messages"] == 0
+    assert payload["plan_and_credits"]["message_billing_active"] is True
+    assert payload["plan_and_credits"]["actions"]["buy_messages"] is True
     blob = json.dumps(payload).lower()
     assert "cost_usd" not in blob
     assert "provider_cost" not in blob
@@ -274,7 +278,8 @@ def test_max_plan_hides_upgrade_action(ledger_env: EntitlementsStore) -> None:
     assert section["availability"] == "ok"
     assert section["plan_id"] == "max"
     assert section["actions"]["upgrade_plan"] is False
-    assert section["actions"]["buy_credits"] is True
+    assert section["actions"]["buy_credits"] is False
+    assert section["actions"]["buy_messages"] is True
     assert "membership_credits_remaining" in section
     assert "purchased_credits_remaining" in section
 
@@ -488,7 +493,7 @@ def test_workspace_status_suspended_and_active() -> None:
         dm_ok=True,
     )
     assert messages_gone["state"] == "credits_depleted"
-    assert messages_gone["primary_action"]["code"] == "upgrade_plan"
+    assert messages_gone["primary_action"]["code"] == "buy_messages"
     assert "Add messages" not in json.dumps(messages_gone)
     assert "leftover" not in json.dumps(messages_gone).lower()
 
@@ -509,9 +514,9 @@ def test_workspace_status_suspended_and_active() -> None:
         dm_ok=True,
     )
     assert leftover_gone["state"] == "leftover_credits_depleted"
-    assert leftover_gone["primary_action"]["code"] == "buy_credits"
-    assert leftover_gone["primary_action"]["label"] == "Add leftover credits"
-    assert "Add messages" not in json.dumps(leftover_gone)
+    assert leftover_gone["primary_action"]["code"] == "buy_messages"
+    assert leftover_gone["primary_action"]["label"] == "Buy messages"
+    assert "leftover credits" not in json.dumps(leftover_gone).lower()
 
 
 def test_mobile_dashboard_api_auth_and_tenant_scope(monkeypatch: pytest.MonkeyPatch) -> None:

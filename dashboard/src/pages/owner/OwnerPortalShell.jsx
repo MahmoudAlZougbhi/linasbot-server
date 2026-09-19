@@ -7,6 +7,7 @@ const links = [
   { to: '/owner/users', label: 'Users' },
   { to: '/owner/messages', label: 'Message flow' },
   { to: '/owner/catalog', label: 'Message catalog' },
+  { to: '/owner/economy', label: 'Message economy' },
   { to: '/owner/costs', label: 'Costs' },
 ];
 

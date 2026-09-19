@@ -21,6 +21,7 @@ async def iter_owner_turn_v2_events(
     conversation_id: str,
     user_text: str,
     confirm_tool: str | None = None,
+    confirm_billing: bool = False,
     messages: list[dict[str, Any]] | None = None,
     tool_args: dict[str, Any] | None = None,
     choice_id: str | None = None,
@@ -37,14 +38,30 @@ async def iter_owner_turn_v2_events(
 
     from services.billing.credit_ai_gate import owner_credits_paused_payload
     from services.owner_copilot.credit import (
+        estimate_copilot_cost_usd,
         owner_turn_credit_abort,
         owner_turn_credit_begin,
         owner_turn_credit_on_event,
     )
 
-    turn_credit = owner_turn_credit_begin(tenant_id, conversation_id=conversation_id)
+    turn_credit = owner_turn_credit_begin(
+        tenant_id,
+        conversation_id=conversation_id,
+        estimated_usd=estimate_copilot_cost_usd(user_text=user_text),
+        confirm_billing=confirm_billing,
+    )
     if turn_credit.blocked:
         yield StreamEvent(type="credits_paused", payload=owner_credits_paused_payload(tenant_id))
+        return
+    if turn_credit.confirm_required:
+        yield StreamEvent(
+            type="billing_confirm",
+            payload={
+                "code": "confirm_messages",
+                "units": turn_credit.units,
+                "message": f"This action will use {turn_credit.units} messages.",
+            },
+        )
         return
 
     try:

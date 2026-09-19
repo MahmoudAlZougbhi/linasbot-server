@@ -19,6 +19,7 @@ import OwnerPortalShell from './pages/owner/OwnerPortalShell';
 import OwnerOverview from './pages/owner/OwnerOverview';
 import OwnerUsers from './pages/owner/OwnerUsers';
 import OwnerCatalog from './pages/owner/OwnerCatalog';
+import OwnerEconomy from './pages/owner/OwnerEconomy';
 import OwnerCosts from './pages/owner/OwnerCosts';
 import OwnerMessages from './pages/owner/OwnerMessages';
 
@@ -73,6 +74,7 @@ function App() {
             <Route path="users" element={<OwnerUsers />} />
             <Route path="messages" element={<OwnerMessages />} />
             <Route path="catalog" element={<OwnerCatalog />} />
+            <Route path="economy" element={<OwnerEconomy />} />
             <Route path="costs" element={<OwnerCosts />} />
           </Route>
           {OBSOLETE_OPERATOR_PATHS.map((path) => (

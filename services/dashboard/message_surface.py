@@ -1,4 +1,4 @@
-"""Tenant-visible Subscription overlay. Live meter is credits only."""
+"""Tenant-visible Subscription overlay. Live meter is message units."""
 
 from __future__ import annotations
 
@@ -16,45 +16,50 @@ def _included_credits(plan_id: str) -> int | None:
 
 
 def workspace_message_balance(plan: dict[str, Any]) -> tuple[int | None, int, bool]:
-    """Message remaining is not a live meter. Credits are the Subscription unit."""
-    _ = plan
-    return None, 0, False
-
-
-def _wallet_honesty() -> dict[str, Any]:
-    return {
-        "wallet_unit": "credits",
-        "speak_as": (
-            "Wallet quantities are leftover credits, not Messages remaining. "
-            "Use included_credits as the catalog allowance. Message remaining is not billed."
-        ),
-    }
+    snap = plan if isinstance(plan, dict) else {}
+    remaining = snap.get("available_messages")
+    included = int(snap.get("included_messages") or snap.get("granted_messages") or 0)
+    return (None if remaining is None else int(remaining), included, True)
 
 
 def overlay_message_fields(tenant_id: str, plan_id: str) -> dict[str, Any]:
-    """Fields for entitlements/me and /api/mobile/usage (mobile Subscription SoT)."""
+    from services.billing.membership.catalog_admin import effective_included_messages
+    from services.billing.membership.message_ledger import snapshot
+    from services.billing.membership.period_grants import ensure_included_grant
 
-    _ = tenant_id
-    intended_credits = _included_credits(plan_id)
+    tid = (tenant_id or "").strip()
+    intended = effective_included_messages(plan_id)
+    if tid:
+        ensure_included_grant(tid)
+        snap = snapshot(tid)
+        remaining = int(snap.remaining)
+        included = int(snap.included)
+        purchased = int(snap.purchased)
+        reserved = int(snap.reserved)
+        granted = included + purchased
+        used = max(0, granted - remaining - reserved)
+    else:
+        remaining = included = purchased = reserved = granted = used = 0
+    ratio = None
+    if granted:
+        ratio = min(1.0, max(0.0, used / float(granted)))
     return {
-        "message_billing_active": False,
-        "included_messages": None,
-        "purchased_messages": None,
-        "reserved_messages": None,
-        "available_messages": None,
-        "included_remaining": None,
-        "granted_messages": None,
-        "used_messages": None,
-        "intended_included_messages": None,
-        "included_credits": intended_credits,
-        "usage_progress_ratio": None,
-        "message_usage_note": (
-            "Subscription bills credits (plan allowance + IAP credit packs). Message ledger remaining is not live."
-        ),
-        **_wallet_honesty(),
+        "message_billing_active": True,
+        "included_messages": intended,
+        "purchased_messages": purchased,
+        "reserved_messages": reserved,
+        "available_messages": remaining,
+        "included_remaining": included,
+        "granted_messages": granted,
+        "used_messages": used,
+        "intended_included_messages": intended,
+        "included_credits": _included_credits(plan_id),
+        "usage_progress_ratio": ratio,
+        "wallet_unit": "messages",
+        "speak_as": "Wallet quantities are messages remaining.",
+        "message_usage_note": "Subscription bills messages (plan allowance + extra message packs).",
     }
 
 
 def copilot_usage_overlay(tenant_id: str, plan_id: str) -> dict[str, Any]:
-    """Owner Copilot view. Credits stay labeled credits."""
     return overlay_message_fields(tenant_id, plan_id)

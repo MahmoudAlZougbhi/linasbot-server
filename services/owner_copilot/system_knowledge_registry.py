@@ -122,14 +122,14 @@ CAPABILITIES: tuple[Capability, ...] = (
         tags=("integrations",),
     ),
     Capability(
-        feature="usage_credits",
-        description="Inspect included usage balance and credit wallet.",
+        feature="usage_messages",
+        description="Inspect included message allowance and remaining messages.",
         route="usage",
         entitlement=None,
         status="available",
-        help_steps=("Open Usage & Credits from Control Center.", "Ask the copilot for a usage snapshot."),
+        help_steps=("Open Billing from Control Center.", "Ask the copilot for a usage snapshot."),
         tools=("read_usage",),
-        keywords=("usage", "credits", "wallet", "how much"),
+        keywords=("usage", "messages", "wallet", "how much", "credits"),
         tags=("billing",),
     ),
     Capability(
@@ -203,7 +203,7 @@ CAPABILITIES: tuple[Capability, ...] = (
         description=(
             "Smart Q&A / FAQ — ready-made multilingual Q&A. When a customer asks the same "
             "question or same meaning, the bot answers from FAQ (automated reply) instead of a full "
-            "AI generation, saving AI credits. Entries auto-translate to Arabic, English, French, "
+            "AI generation, saving messages. Entries auto-translate to Arabic, English, French, "
             "and Franco (code: franco). Plan entitlements cap how many FAQ groups you can store."
         ),
         route="cm",

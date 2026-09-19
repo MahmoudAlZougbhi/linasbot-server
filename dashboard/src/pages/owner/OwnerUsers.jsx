@@ -79,7 +79,7 @@ export default function OwnerUsers() {
       <div className="overflow-x-auto rounded-xl border border-slate-800">
         <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
           <thead className="bg-slate-900 text-slate-400">
-            <tr>{['Subscriber', 'Plan', 'Seats / roles', 'Catalog / credits', 'Actions'].map((label) => <th key={label} className="px-4 py-3">{label}</th>)}</tr>
+            <tr>{['Subscriber', 'Plan', 'Seats / roles', 'Messages', 'Actions'].map((label) => <th key={label} className="px-4 py-3">{label}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-slate-800 bg-slate-950">
             {subscribers.map((subscriber) => (
@@ -98,7 +98,10 @@ export default function OwnerUsers() {
                       : `${Number(subscriber.intended_included_messages).toLocaleString()} included / month`}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {subscriber.credits_used} leftover credits used · {subscriber.credits_remaining} leftover
+                    {subscriber.message_remaining ?? subscriber.credits_remaining} messages remaining
+                    {subscriber.historical_credit_remaining != null
+                      ? ` · ${subscriber.historical_credit_remaining} historical credits`
+                      : ''}
                   </p>
                 </td>
                 <td className="px-4 py-4">

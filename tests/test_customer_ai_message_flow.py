@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from services.billing.membership.expense_journal import reset_expenses_for_tests
-from services.billing.membership.message_ledger import reset_ledger_for_tests
+from services.billing.membership.message_ledger import grant_lot, reset_ledger_for_tests
 from services.brain.billing import apply_message_billing
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn, HistorySnapshot, VisibleMessage
@@ -54,6 +54,14 @@ def test_message_flow_exposes_human_stages_and_cost() -> None:
                 {"id": "knowledge:laser", "family": "knowledge", "title": "Laser", "preview": "price"}
             ],
         },
+    )
+    grant_lot(
+        tenant_id="flow-shop",
+        lot_id="flow-shop:seed",
+        kind="purchased",
+        period_id="seed",
+        amount=5,
+        expires=False,
     )
     billed = apply_message_billing(turn, result)
     assert billed.extra.get("stage_timeline")

@@ -17,7 +17,7 @@ type OwnerTurnSend = (
     confirm_tool?: string | null;
     owner_mode?: 'chat' | 'work';
   },
-) => Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped' | 'credits_paused'>;
+) => Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped' | 'credits_paused' | 'billing_confirm'>;
 
 type Args = {
   isAuthenticated: boolean;
@@ -169,7 +169,7 @@ export async function sendChatMessage(args: Args): Promise<void> {
     setOffline(false);
     return;
   }
-  if (result === 'credits_paused') {
+  if (result === 'credits_paused' || result === 'billing_confirm') {
     setOffline(false);
     setSendError(null);
     return;

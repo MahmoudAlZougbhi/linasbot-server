@@ -109,10 +109,15 @@ def list_subscribers(users: list[dict[str, Any]] | None = None) -> list[dict[str
     rows: list[dict[str, Any]] = []
     for tenant_id, members in grouped.items():
         bill = billing.get(tenant_id, {})
-        total_credits = int(bill.get("included_credits") or 0) + int(bill.get("extra_credits") or 0)
         remaining = int(bill.get("credits_remaining") or 0)
         primary = next((u for u in members if u.get("role") in {"owner", "admin"}), members[0])
         plan_id = str(bill.get("plan_id") or "none")
+        from services.billing.credit_ai_gate import remaining_messages
+        from services.billing.membership.message_ledger import snapshot
+
+        snap = snapshot(tenant_id)
+        msg_remaining = remaining_messages(tenant_id)
+        granted = int(snap.included) + int(snap.purchased)
         rows.append(
             {
                 "tenant_id": tenant_id,
@@ -123,9 +128,11 @@ def list_subscribers(users: list[dict[str, Any]] | None = None) -> list[dict[str
                 "seats_created": len(members),
                 "roles": sorted({str(u.get("role") or "viewer") for u in members}),
                 "status": primary.get("status") or "unknown",
-                "credits_total": total_credits,
-                "credits_used": max(0, total_credits - remaining),
-                "credits_remaining": remaining,
+                "credits_total": granted,
+                "credits_used": max(0, granted - msg_remaining),
+                "credits_remaining": msg_remaining,
+                "message_remaining": msg_remaining,
+                "historical_credit_remaining": remaining,
                 **_catalog_offer(plan_id),
                 "users": members,
             }
@@ -180,7 +187,7 @@ def analytics(range_key: str) -> dict[str, Any]:
         **_catalog_revenue([str(row["subscription"] or "") for row in active_subscribers]),
         "coverage": {
             "users": "Firestore dashboard users",
-            "billing": "tenant entitlements + credit balances",
+            "billing": "tenant entitlements + message ledger remaining",
             "messages": "bounded Interaction Logs (latest 500 rows); not a full historical aggregate",
             "tiktok": "stored TikTok comments/DMs + interaction logs when connected",
             "revenue": "live_checkout_mrr_usd and intended_message_mrr_usd both use the credit plan catalog.",
