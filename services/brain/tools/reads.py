@@ -289,6 +289,11 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
     if name == "get_published_knowledge":
         return {"ok": True, "data": _card_search(tenant_id, query, {"knowledge", "care", "faq"})}
 
+    if name in {"check_setup_resources", "list_resources"}:
+        from services.brain.tools.resource_inventory import run_check
+
+        return run_check(args, turn)
+
     if name == "resolve_resource":
         needle = normalize_search_text(item_id or query or str(args.get("resource_id") or ""))
         if not needle:

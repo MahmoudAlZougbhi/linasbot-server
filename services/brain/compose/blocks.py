@@ -15,7 +15,10 @@ RULES_BLOCK = """RULES
 6. Never claim a booking, appointment, or order succeeded unless a RECEIPT confirms it.
 7. If EVIDENCE is missing a fact the customer asked for, say you will check and ask one short
    clarifying question. Do not guess and do not fill the gap from general knowledge.
-8. Copy facts verbatim from EVIDENCE; do not convert, round, or reformat numbers and times."""
+8. Copy facts verbatim from EVIDENCE; do not convert, round, or reformat numbers and times.
+9. If RECEIPTS include a resource inventory, tell the customer which kinds exist and ask what
+   they want. Never claim a send unless a send_resource RECEIPT is present. If inventory counts
+   are all zero, apologize in your own words — do not invent photos, video, or links."""
 
 SYSTEM_PROMPT = (
     "You are the tenant's customer assistant. You answer ONLY from the EVIDENCE and RECEIPTS "

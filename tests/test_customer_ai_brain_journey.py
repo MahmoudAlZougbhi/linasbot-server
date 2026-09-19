@@ -6,6 +6,7 @@ import pytest
 
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.turn_pipeline import run_dm_after_gates
 from tests.plan_builders import explicit_plan
@@ -34,10 +35,23 @@ async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytes
             ],
         )
 
+    async def fake_generate(*_a, **kwargs):
+        extra = dict(kwargs.get("extra") or {})
+        return TurnResult(
+            stop_reason="ok",
+            envelope=FinalReplyEnvelope(
+                decision="reply",
+                messages=[OutboundMessage(destination="dm", text="في صورة before — بدي ابعتلك ياه؟")],
+            ),
+            extra={**extra, "phase": "generate"},
+        )
+
     monkeypatch.setattr("services.brain.agent.loop.plan_turn", fake_plan)
     monkeypatch.setattr("services.brain.agent.multi_retrieve.retrieve_published", fake_retrieve)
+    monkeypatch.setattr("services.brain.agent.loop.generate_verified", fake_generate)
+    monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
     monkeypatch.setattr(
-        "services.ai_setup.setup_resources.index_published_resources",
+        "services.brain.tools.resource_inventory.index_published_resources",
         lambda _tid: {
             "res_before": {
                 "resource_ref": "res_before",
@@ -69,11 +83,11 @@ async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytes
 
     turn = CustomerTurn(tenant_id="brain-shop", conversation_id="c1", event_ids=["m1"], channel="instagram_dm")
     result = await run_dm_after_gates(turn, message="send me the before photo please", channel="instagram_dm")
-    assert result.extra.get("phase") == "resource"
     assert result.extra.get("awaiting_confirmation") is not True
-    assert result.envelope.decision == "deterministic"
-    assert any(item.get("action_type") == "send_resource" for item in result.extra.get("receipts") or [])
     assert "confirm the details" not in (result.envelope.reply_text or "").lower()
+    tools = [row.get("tool") for row in (result.extra.get("tool_calls") or [])]
+    assert "check_setup_resources" in tools
+    assert not any(item.get("action_type") == "send_resource" for item in result.extra.get("receipts") or [])
 
 
 @pytest.mark.asyncio

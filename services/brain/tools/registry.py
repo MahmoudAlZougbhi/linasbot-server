@@ -20,6 +20,8 @@ READ_TOOLS = frozenset(
         "get_faq",
         "get_published_knowledge",
         "resolve_resource",
+        "check_setup_resources",
+        "list_resources",
         "get_contact",
         "get_request_state",
     }
@@ -49,6 +51,8 @@ def list_tools() -> dict[str, list[str]]:
 
 async def execute_tool(name: str, args: dict[str, Any] | None, turn: CustomerTurn) -> dict[str, Any]:
     tool = (name or "").strip()
+    if tool == "list_resources":
+        tool = "check_setup_resources"
     payload = dict(args or {})
     if tool in UNSUPPORTED_TOOLS:
         return {"ok": False, "error": "unsupported_tool", "unsupported": True, "data": None}

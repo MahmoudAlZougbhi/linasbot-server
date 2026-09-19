@@ -253,6 +253,7 @@ async def _handle_published_cm_runtime(
     reply = (v2_outcome.reply or "").strip()
     meta_in = dict(v2_outcome.metadata or {})
     reason = (v2_outcome.reason or "").strip()
+    has_queued_media = bool((meta_in.get("resource_delivery") or {}).get("items"))
     fail_closed_reasons = {
         "insufficient_credits",
         "insufficient_messages",
@@ -273,12 +274,12 @@ async def _handle_published_cm_runtime(
         "context_overflow",
         "comments_toggle_off",
     }
-    brain_stopped = bool(v2_outcome.stop) or not reply or reason in fail_closed_reasons
+    brain_stopped = bool(v2_outcome.stop) or (not reply and not has_queued_media) or reason in fail_closed_reasons
     if brain_stopped:
         # Preserve Brain stop/empty honestly — never invent validation-failed success.
         ai_called = bool(meta_in.get("ai_called")) and bool(reply)
-        decision = reason or ("brain_no_reply" if not reply else "brain_stopped")
-        if not reply:
+        decision = reason or ("brain_no_reply" if not reply and not has_queued_media else "brain_stopped")
+        if not reply and not has_queued_media:
             decision = "brain_no_reply"
         return reply, {
             "reason": reason or "brain_no_reply",

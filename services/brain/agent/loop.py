@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Any
 
-from services.brain.agent.action_gate import append_handoff_message, apply_action_gate
+from services.brain.agent.action_gate import apply_action_gate
 from services.brain.agent.generate_path import generate_verified
 from services.brain.agent.multi_retrieve import multi_round_retrieve
 from services.brain.agent.rewrite import rewrite_queries
 from services.brain.agent.task_coverage import evaluate_task_coverage, missing_tasks
+from services.brain.agent.tool_calls import maybe_tool_calls as _maybe_tool_calls
 from services.brain.billing import operation_id_for_turn, reserve_generative
 from services.brain.budgets import DEFAULT_BUDGETS
 from services.brain.contracts.enums import StopReason
@@ -20,7 +20,6 @@ from services.brain.memory.store import recall_facts
 from services.brain.memory.summary import rolling_summary
 from services.brain.planner.openai_plan import plan_turn
 from services.brain.stage_timeline import StageTimer, evidence_preview, stamp
-from services.brain.tools.registry import execute_tool
 
 
 def _destination(channel: str, turn: object | None = None) -> str:
@@ -101,64 +100,6 @@ def _keep_generate_hold(result: TurnResult) -> bool:
     return result.stop_reason == "ok" and any((item.text or "").strip() for item in result.envelope.messages)
 
 
-async def _maybe_tool_calls(
-    turn: CustomerTurn,
-    plan: PlannerPlan,
-    message: str,
-    *,
-    budget: int,
-    trace: list[dict[str, Any]],
-    coverage: Mapping[str, str] | None = None,
-) -> tuple[list[dict[str, Any]], list[str], int]:
-    from services.brain.agent.tool_decide import propose_tools_dynamic
-    from services.brain.facts.structured import facts_from_tool_data
-
-    receipts: list[str] = []
-    tool_rows: list[dict[str, Any]] = []
-    used = 0
-    proposals = await propose_tools_dynamic(plan, message, coverage=coverage)
-    for proposal in proposals:
-        if used >= budget:
-            trace.append({"step": "TOOL", "reason": "budget_exhausted", "tool_calls": used})
-            break
-        name = str(proposal.get("tool") or "")
-        args = dict(proposal.get("args") or {})
-        if not name:
-            continue
-        used += 1
-        result = await execute_tool(name, args, turn)
-        tool_rows.append(
-            {
-                "tool": name,
-                "ok": result.get("ok"),
-                "error": result.get("error"),
-                "task_id": proposal.get("task_id"),
-                "source": proposal.get("source"),
-            }
-        )
-        trace.append(
-            {
-                "step": "TOOL",
-                "tool": name,
-                "ok": result.get("ok"),
-                "task_id": proposal.get("task_id"),
-                "source": proposal.get("source"),
-            }
-        )
-        if result.get("receipt"):
-            receipt = result["receipt"]
-            receipts.append(
-                f"{receipt.get('action_type')}:{receipt.get('state')}:{receipt.get('backend_id') or receipt.get('reason')}"
-            )
-        elif result.get("ok") and result.get("data") is not None:
-            receipts.append(f"tool:{name}:ok")
-            for fact in facts_from_tool_data(
-                name, result.get("data"), tenant_id=turn.tenant_id, task_id=str(proposal.get("task_id") or "")
-            ):
-                receipts.append(f"fact:{fact.kind}:{fact.entity_id}:{fact.value}")
-    return tool_rows, receipts, used
-
-
 async def run_agentic_turn(
     turn: CustomerTurn,
     message: str,
@@ -228,6 +169,10 @@ async def run_agentic_turn(
             {"ms": retrieve_timer.ms(), "retrieval_outcome": bundle.outcome, "evidence": evidence},
         ),
     )
+    extra["evidence_source_ids"] = [item.source_id for item in bundle.items] + [
+        item.evidence_id for item in bundle.items
+    ]
+    turn.extra["evidence_source_ids"] = extra["evidence_source_ids"]
 
     steps += 1
     tool_rows, tool_receipts, tools_used = await _maybe_tool_calls(
@@ -239,53 +184,17 @@ async def run_agentic_turn(
         coverage=evaluate_task_coverage(plan, bundle, structured_facts),
     )
     from services.brain.facts.receipt_align import align_fact_receipts
+    from services.brain.tools.resource_delivery import apply_resource_tool_side_effects
 
     tool_receipts = align_fact_receipts(tool_receipts, bundle)
     coverage = evaluate_task_coverage(plan, bundle, structured_facts, receipts=tool_receipts)
     agent_trace.append({"step": "DECIDE", "n": steps, "tools_used": tools_used, "coverage": coverage})
-
-    resource_receipts: list[dict] = []
-    resource_result = None
-    if any(task.type == "resource_request" for task in plan.tasks):
-        from services.brain.actions.resource_turn import resource_request_result
-
-        evidence_ids = [item.source_id for item in bundle.items] + [item.evidence_id for item in bundle.items]
-        resource_result = await resource_request_result(
-            turn, message=message, channel=channel, plan=plan, evidence_source_ids=evidence_ids
-        )
-        info_tasks = [task for task in plan.tasks if task.type in {"information", "hours", "comparison"}]
-        if resource_result is not None and not info_tasks:
-            agent_trace.append({"step": "FINAL", "decision": "resource"})
-            envelope = append_handoff_message(resource_result.envelope, extra, dest=dest, lang=lang)
-            return resource_result.model_copy(
-                update={
-                    "envelope": envelope,
-                    "extra": _flow_extra(
-                        {
-                            **(resource_result.extra or {}),
-                            **extra,
-                            "evidence_preview": evidence,
-                            "agent_trace": agent_trace,
-                        },
-                        ("resource", "Prepared authorized resource to send", None),
-                    ),
-                }
-            )
-        if resource_result is not None:
-            resource_receipts = list((resource_result.extra or {}).get("receipts") or [])
+    extra["tool_calls"] = tool_rows
+    bundle, extra, evidence, resource_receipts = apply_resource_tool_side_effects(
+        turn, bundle, extra, evidence_preview=evidence_preview
+    )
 
     if bundle.outcome != "found":
-        if resource_result is not None:
-            return resource_result.model_copy(
-                update={
-                    "extra": {
-                        **(resource_result.extra or {}),
-                        **extra,
-                        "evidence_preview": evidence,
-                        "agent_trace": agent_trace,
-                    }
-                }
-            )
         from services.brain.agent.handoff_policy import unanswered_question_result
 
         handed = await unanswered_question_result(
@@ -347,6 +256,8 @@ async def run_agentic_turn(
 
     held = reserve_generative(turn, mixed=any(item.source_family == "faq" for item in bundle.items))
     if held is not None:
+        if extra.get("resource_delivery") or extra.get("resource_inventory"):
+            held = held.model_copy(update={"extra": {**(held.extra or {}), **extra}})
         return held
 
     result: TurnResult | None = None

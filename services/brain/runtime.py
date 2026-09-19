@@ -62,6 +62,9 @@ def _outcome(result: TurnResult, *, comment_surface: bool = False) -> CustomerRe
         reply = (safe_messages[0].text if safe_messages else None) or (result.envelope.reply_text or None)
         reply, extra = _scrub_instruction_reply(result, reply)
         has_out = bool(reply)
+    delivery = extra.get("resource_delivery") if isinstance(extra.get("resource_delivery"), dict) else {}
+    has_media = bool(delivery.get("ok") and delivery.get("items"))
+    has_out = bool(has_out or has_media)
     stop = result.stop_reason != "ok" or not has_out
     return CustomerReplyOutcome(
         stop=stop,

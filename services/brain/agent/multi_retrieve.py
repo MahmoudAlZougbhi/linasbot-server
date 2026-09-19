@@ -275,4 +275,30 @@ async def multi_round_retrieve(
                 }
             )
 
-    return EvidenceBundle(items=merged, outcome=outcome if merged else outcome), trace, facts  # type: ignore[arg-type]
+    bundle = EvidenceBundle(items=merged, outcome=outcome if merged else outcome)  # type: ignore[arg-type]
+    try:
+        from services.brain.retrieve.url_knowledge_bind import apply_url_knowledge_bind
+
+        bundle, bind_meta = await apply_url_knowledge_bind(
+            tenant_id=turn.tenant_id,
+            message=message,
+            full_bundle=bundle,
+        )
+        if bind_meta.get("url_bind") or bind_meta.get("reason") == "unknown_url":
+            trace.append(
+                {
+                    "round": rounds,
+                    "query": message,
+                    "families": [],
+                    "hit_ids": list(bind_meta.get("pinned") or []),
+                    "reason": "url_knowledge_bind",
+                    "outcome": bundle.outcome,
+                    "scoped_retrieve": bind_meta.get("scoped_retrieve"),
+                    "full_retrieve": bind_meta.get("full_retrieve"),
+                    "auto_send": False,
+                }
+            )
+            facts = _structured_facts(bundle)
+    except Exception:
+        pass
+    return bundle, trace, facts

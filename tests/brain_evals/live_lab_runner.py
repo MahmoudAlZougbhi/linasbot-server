@@ -216,6 +216,8 @@ async def tool_registry_probe() -> dict[str, Any]:
         "get_faq",
         "get_published_knowledge",
         "resolve_resource",
+        "check_setup_resources",
+        "list_resources",
         "get_request_state",
         "escalate_to_human",
         "start_request",
