@@ -7,6 +7,7 @@ from typing import Any
 
 from services.brain.contracts.plan import PlannerPlan
 from services.brain.contracts.turn import CustomerTurn
+from services.brain.facts.structured import facts_from_tool_data
 from services.brain.tools.registry import execute_tool
 
 
@@ -21,7 +22,6 @@ async def maybe_tool_calls(
     skip_tools: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str], int]:
     from services.brain.agent.tool_decide import propose_tools_dynamic
-    from services.brain.facts.structured import facts_from_tool_data
 
     blocked = skip_tools or set()
     receipts: list[str] = []

@@ -116,6 +116,16 @@ class RequestsAppointmentsSection(CmBaseModel):
     prohibited: list[str] = Field(default_factory=list)
     notes: str | None = None
 
+    @field_validator("rules")
+    @classmethod
+    def _cap_rules_per_type(cls, value: list[RequestRule]) -> list[RequestRule]:
+        from services.ai_setup.request_rule_limits import count_rules_by_type, request_rule_limit_error
+
+        err = request_rule_limit_error(count_rules_by_type(value))
+        if err is not None:
+            raise ValueError(str(err))
+        return value
+
     @field_validator("enabled_types")
     @classmethod
     def _unique_enabled_types(cls, value: list[RequestTypeCode]) -> list[RequestTypeCode]:

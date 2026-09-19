@@ -226,6 +226,11 @@ def format_request_rules_for_ai(
                 line += f" | handoff_guidance: {guidance}"
             if hint:
                 line += f" | pre_handoff_message_hint: {hint}"
+        raw_required = raw.get("required_fields")
+        required = raw_required if isinstance(raw_required, list) else []
+        req_ids = [str(item).strip() for item in required if str(item).strip()]
+        if req_ids:
+            line += f" (required: {', '.join(req_ids)})"
         lines.append(line)
     if wanted is not None and not lines:
         return (

@@ -53,7 +53,12 @@ def attach_confirmation(turn: CustomerTurn, proposals: ActionProposalSet) -> Act
             "missing_fields": list(dict.fromkeys(missing)),
         }
     )
-    remember_turn(turn, [item.model_dump() for item in actions])
+    dumped = [item.model_dump() for item in actions]
+    remember_turn(turn, dumped)
+    extra = dict(turn.extra or {})
+    extra["pending_actions"] = dumped
+    extra["awaiting_confirmation"] = True
+    turn.extra = extra
     return ActionProposalSet(actions=actions)
 
 

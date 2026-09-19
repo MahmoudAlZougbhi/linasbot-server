@@ -24,6 +24,7 @@ READ_TOOLS = frozenset(
         "list_resources",
         "get_contact",
         "get_request_state",
+        "no_request_action",
     }
 )
 
