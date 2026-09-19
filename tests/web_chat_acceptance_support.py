@@ -161,7 +161,7 @@ def patch_whatsapp_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def patch_acceptance_eligibility(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, tenant_id: str = "biz") -> int:
-    """Wire PG credit ledger (via acceptance_pg_ha_env) and seed starter credits."""
+    """Wire PG billing stores and seed starter message lots."""
     patch_ai_eligible(monkeypatch)
     from tests.web_chat_acceptance_billing import seed_acceptance_credit_ledger, wire_pg_billing_stores
 

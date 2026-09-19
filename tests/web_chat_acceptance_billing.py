@@ -1,4 +1,4 @@
-"""PostgreSQL credit-ledger helpers for Website Chat acceptance tests."""
+"""PostgreSQL message-ledger helpers for Website Chat acceptance tests."""
 
 from __future__ import annotations
 
@@ -21,7 +21,8 @@ def truncate_billing_pg_tables(url: str) -> None:
         conn.execute(
             text(
                 "TRUNCATE credit_ledger_entries, credit_balances, "
-                "entitlement_processed_events, tenant_entitlements "
+                "entitlement_processed_events, tenant_entitlements, "
+                "customer_ai_message_reservations, customer_ai_message_lots "
                 "RESTART IDENTITY CASCADE"
             )
         )
@@ -42,10 +43,13 @@ def wire_pg_billing_stores(monkeypatch: pytest.MonkeyPatch) -> None:
 def seed_acceptance_credit_ledger(*, tenant_id: str = "biz", plan_id: str = "starter") -> int:
     from services.billing.credit_ledger_service import credit_ledger_service
     from services.billing.entitlements_service import entitlements_store
+    from services.billing.membership.message_ledger import remaining_messages
+    from services.billing.membership.period_grants import ensure_included_grant
 
     entitlements_store.set_plan(tenant_id=tenant_id, plan_id=plan_id, status="active", source="admin")
     credit_ledger_service.ensure_period_grant(tenant_id)
-    return int(credit_ledger_service.get_balance(tenant_id))
+    ensure_included_grant(tenant_id)
+    return int(remaining_messages(tenant_id))
 
 
 @dataclass(frozen=True)
@@ -62,18 +66,42 @@ class PgLedgerSnapshot:
 def fetch_pg_ledger_snapshot(url: str, tenant_id: str) -> PgLedgerSnapshot:
     engine = create_engine(url, pool_pre_ping=True)
     with engine.connect() as conn:
-        balance = conn.execute(
-            text("SELECT available, reserved FROM credit_balances WHERE tenant_id = :tid"),
+        lot_sum = conn.execute(
+            text("SELECT COALESCE(SUM(remaining), 0) FROM customer_ai_message_lots WHERE tenant_id = :tid"),
             {"tid": tenant_id},
-        ).fetchone()
-        rows = conn.execute(
-            text("SELECT op, COUNT(*) AS n FROM credit_ledger_entries WHERE tenant_id = :tid GROUP BY op ORDER BY op"),
+        ).scalar()
+        reserved = conn.execute(
+            text(
+                "SELECT COALESCE(SUM(units), 0) FROM customer_ai_message_reservations "
+                "WHERE tenant_id = :tid AND status = 'reserved'"
+            ),
+            {"tid": tenant_id},
+        ).scalar()
+        statuses = conn.execute(
+            text(
+                "SELECT status, COUNT(*) AS n FROM customer_ai_message_reservations "
+                "WHERE tenant_id = :tid GROUP BY status"
+            ),
             {"tid": tenant_id},
         ).fetchall()
-    available = int(balance[0]) if balance is not None else 0
-    reserved = int(balance[1]) if balance is not None else 0
-    ops = {str(op): int(count) for op, count in rows}
-    return PgLedgerSnapshot(available=available, reserved=reserved, ops=ops)
+        included = conn.execute(
+            text("SELECT COUNT(*) FROM customer_ai_message_lots WHERE tenant_id = :tid AND kind = 'included'"),
+            {"tid": tenant_id},
+        ).scalar()
+    reserved_n = int(reserved or 0)
+    available = max(0, int(lot_sum or 0) - reserved_n)
+    counts = {str(status): int(count) for status, count in statuses}
+    ops: dict[str, int] = {}
+    if int(included or 0):
+        ops["grant_included"] = int(included)
+    reserved_rows = sum(counts.values())
+    if reserved_rows:
+        ops["reserve"] = reserved_rows
+    if counts.get("settled"):
+        ops["capture"] = counts["settled"]
+    if counts.get("released"):
+        ops["release"] = counts["released"]
+    return PgLedgerSnapshot(available=available, reserved=reserved_n, ops=ops)
 
 
 def assert_acceptance_ledger_equation(
@@ -103,13 +131,15 @@ def assert_pg_reservation_terminal(
     terminal: str,
 ) -> None:
     engine = create_engine(url, pool_pre_ping=True)
+    mapped = {"capture": "settled", "release": "released"}
+    wanted = mapped.get(terminal, terminal)
     with engine.connect() as conn:
         rows = conn.execute(
             text(
-                "SELECT op FROM credit_ledger_entries "
-                "WHERE tenant_id = :tid AND request_id = :rid AND op IN ('capture', 'release')"
+                "SELECT status FROM customer_ai_message_reservations "
+                "WHERE tenant_id = :tid AND (reservation_id = :rid OR operation_id = :rid)"
             ),
             {"tid": tenant_id, "rid": reservation_id},
         ).fetchall()
-    terminals = {str(row[0]) for row in rows}
-    assert terminal in terminals, f"expected terminal {terminal!r}, got {terminals}"
+    statuses = {str(row[0]) for row in rows}
+    assert wanted in statuses, f"expected terminal {wanted!r}, got {statuses}"

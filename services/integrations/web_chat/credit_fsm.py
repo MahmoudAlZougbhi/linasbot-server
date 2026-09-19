@@ -147,11 +147,18 @@ class WebChatCreditHandle:
         if self.state not in {CreditFsmState.IDLE, CreditFsmState.BILLING_PENDING}:
             return
         if followup_uses_message_ledger():
-            from services.brain.leftover_reserve import reserve_leftover_reply
+            from services.billing.membership.message_ledger import reserve as reserve_messages
+            from services.brain.leftover_reserve import remember_leftover_hold
 
             sentinel = message_reservation_id(self.request_id)
-            reserve_leftover_reply(
+            held = reserve_messages(
                 tenant_id=self.tenant_id,
+                operation_id=self.request_id,
+                response_class="generated_ai",
+            )
+            remember_leftover_hold(
+                tenant_id=self.tenant_id,
+                reservation_id=held.reservation_id,
                 request_id=self.request_id,
                 operation_type="web_customer_reply",
                 pin_ids=tuple(item for item in (sentinel, self.conversation_id) if item),
@@ -183,15 +190,12 @@ class WebChatCreditHandle:
         if self.state not in {CreditFsmState.RESERVED, CreditFsmState.BILLING_PENDING} or not self.reservation_id:
             return
         if is_message_reservation(self.reservation_id):
-            from services.brain.leftover_reserve import capture_leftover_reply
+            from services.billing.membership.message_ledger import settle
 
-            capture_leftover_reply(
-                self.tenant_id,
-                self.request_id,
-                model_provider=model_provider,
-                operation_id=self.request_id,
-                provider_message_id="",
-            )
+            try:
+                settle(tenant_id=self.tenant_id, operation_id=self.request_id, accepted=True)
+            except KeyError:
+                pass
             self.state = CreditFsmState.CAPTURED
             self.reservation_id = None
             return
@@ -231,9 +235,12 @@ class WebChatCreditHandle:
         if not self.reservation_id:
             return False
         if is_message_reservation(self.reservation_id):
-            from services.brain.leftover_reserve import release_leftover_reply
+            from services.billing.membership.message_ledger import settle
 
-            release_leftover_reply(self.tenant_id, self.request_id)
+            try:
+                settle(tenant_id=self.tenant_id, operation_id=self.request_id, accepted=False)
+            except KeyError:
+                pass
             self.state = CreditFsmState.RELEASED
             self.reservation_id = None
             self._released_once = True
