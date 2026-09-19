@@ -20,7 +20,12 @@ from services.brain.runtime_outcome import gate_result as _gate_result
 from services.brain.runtime_outcome import language_extra as _language_extra
 from services.brain.runtime_outcome import outcome_from_result as _outcome
 from services.brain.runtime_outcome import run_billed as _run_billed
+from services.brain.runtime_outcome import scrub_instruction_reply
 from services.brain.turn_pipeline import run_dm_after_gates
+
+
+def _scrub_instruction_reply(result: TurnResult, reply: str | None) -> tuple[str | None, dict[str, Any]]:
+    return scrub_instruction_reply(result, reply)
 
 
 async def _turn_from_dm(
