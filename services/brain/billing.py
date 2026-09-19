@@ -138,6 +138,7 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
         response_class=response_class,
         invocation_kind=turn.invocation_kind,
         comment_mode=str(extra.get("comment_mode") or extra.get("rule_mode") or ""),
+        channel=str(turn.channel or extra.get("channel") or ""),
     )
     extra["operation_id"] = op
     extra["legacy_comment_uncharged"] = False

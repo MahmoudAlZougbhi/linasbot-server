@@ -14,6 +14,9 @@ POLICY_VERSION = "message-economy-v1"
 
 DEFAULT_ACTION_COSTS: dict[str, Any] = {
     "ai_dm_reply": 1,
+    "ai_web_chat": 1,
+    "ai_whatsapp": 1,
+    "ai_tiktok": 1,
     "ai_public_comment": 1,
     "ai_comment_dm": 1,
     "ai_both_mode": "each",
@@ -124,7 +127,13 @@ def validate_economy(raw: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def action_units(*, response_class: str, invocation_kind: str = "", comment_mode: str = "") -> int:
+def action_units(
+    *,
+    response_class: str,
+    invocation_kind: str = "",
+    comment_mode: str = "",
+    channel: str = "",
+) -> int:
     from services.billing.membership.message_policy import ZERO_DEBIT
 
     if response_class in ZERO_DEBIT:
@@ -132,6 +141,7 @@ def action_units(*, response_class: str, invocation_kind: str = "", comment_mode
     costs = load_economy()["action_costs"]
     kind = (invocation_kind or "").strip().lower()
     mode = (comment_mode or "").strip().lower()
+    ch = (channel or "").strip().lower()
     if kind == "followup" or response_class == "followup_sent":
         return int(costs["followup_sent"])
     if kind == "comment" or mode.startswith("ai_"):
@@ -144,6 +154,12 @@ def action_units(*, response_class: str, invocation_kind: str = "", comment_mode
         if mode == "ai_dm":
             return int(costs["ai_comment_dm"])
         return int(costs["ai_public_comment"])
+    if "whatsapp" in ch:
+        return int(costs["ai_whatsapp"])
+    if "tiktok" in ch:
+        return int(costs["ai_tiktok"])
+    if ch in {"web", "web_chat", "website"} or ch.startswith("web"):
+        return int(costs["ai_web_chat"])
     return int(costs["ai_dm_reply"])
 
 

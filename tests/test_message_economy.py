@@ -150,3 +150,29 @@ def test_purchased_lot_does_not_expire() -> None:
         expires=False,
     )
     assert remaining_messages("econ-pack") == 100
+
+
+def test_channel_action_costs_are_separate() -> None:
+    from services.billing.membership.economy_policy import action_units
+
+    update_draft(
+        actor="test",
+        changes={
+            "economy": validate_economy(
+                {
+                    "action_costs": {
+                        "ai_dm_reply": 1,
+                        "ai_web_chat": 2,
+                        "ai_whatsapp": 3,
+                        "ai_tiktok": 4,
+                    }
+                }
+            )
+        },
+        reason="test",
+    )
+    assert action_units(response_class="generated_ai", channel="instagram") == 1
+    assert action_units(response_class="generated_ai", channel="web") == 2
+    assert action_units(response_class="generated_ai", channel="whatsapp_cloud") == 3
+    assert action_units(response_class="generated_ai", channel="tiktok") == 4
+    assert action_units(response_class="static", channel="web") == 0

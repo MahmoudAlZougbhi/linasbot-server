@@ -112,13 +112,7 @@ def _settle_confirmed_send(
     request_id = f"wa:{inbound_mid or intent_mid}" if (inbound_mid or intent_mid) else ""
     reservation_id = ""
     if request_id:
-        try:
-            from services.billing.credit_ledger_service import credit_ledger_service
-
-            reservation_id = credit_ledger_service.find_open_reservation_by_request(tenant_id, request_id) or ""
-        except Exception:
-            reservation_id = ""
-    if reservation_id:
+        reservation_id = request_id
         from services.brain.leftover_reserve import capture_leftover_reply
 
         capture_leftover_reply(
@@ -160,12 +154,7 @@ def release_unsent_ai_outbound(
     rid = str(reservation_id or "")
     mid = inbound_mid or intent_mid
     if not rid and mid:
-        try:
-            from services.billing.credit_ledger_service import credit_ledger_service
-
-            rid = credit_ledger_service.find_open_reservation_by_request(tenant_id, f"wa:{mid}") or ""
-        except Exception:
-            rid = ""
+        rid = f"wa:{mid}"
     if rid:
         try:
             from services.brain.leftover_reserve import release_leftover_reply

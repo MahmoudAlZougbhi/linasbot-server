@@ -252,3 +252,45 @@ def test_estimate_uses_shared_model_pricing() -> None:
     with_file = estimate_copilot_cost_usd(user_text="hello", history_tokens=100, attachment_count=1)
     chat_only = estimate_copilot_cost_usd(user_text="hello", history_tokens=100, attachment_count=0)
     assert with_file > chat_only > 0
+
+
+def test_actual_cost_releases_unused_reservation() -> None:
+    from services.billing.membership.catalog_admin import update_draft
+    from services.billing.membership.economy_policy import validate_economy
+    from services.owner_copilot.message_billing import owner_turn_hold_begin, owner_turn_hold_finalize
+
+    grant_lot(
+        tenant_id="actual-shop",
+        lot_id="actual-shop:seed",
+        kind="purchased",
+        period_id="seed",
+        amount=20,
+        expires=False,
+    )
+    update_draft(
+        actor="test",
+        changes={
+            "economy": validate_economy(
+                {
+                    "copilot": {
+                        "confirm_threshold_messages": 10,
+                        "bands": [
+                            {"min_usd": 0, "max_usd": 0.01, "message_units": 1},
+                            {"min_usd": 0.011, "max_usd": 10, "message_units": 5},
+                        ],
+                    }
+                }
+            )
+        },
+        reason="test",
+    )
+    held = owner_turn_hold_begin(
+        "actual-shop",
+        estimated_usd=1.0,
+        confirm_billing=True,
+        user_text="ingest",
+    )
+    assert held.units == 5
+    assert remaining_messages("actual-shop") == 15
+    owner_turn_hold_finalize(held, actual_usd=0.001)
+    assert remaining_messages("actual-shop") == 19

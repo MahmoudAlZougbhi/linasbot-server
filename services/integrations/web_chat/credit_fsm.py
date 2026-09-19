@@ -177,6 +177,7 @@ class WebChatCreditHandle:
         if self.state not in {CreditFsmState.IDLE, CreditFsmState.BILLING_PENDING}:
             return
         if followup_uses_message_ledger():
+            from services.billing.membership.economy_policy import action_units
             from services.billing.membership.message_ledger import InsufficientMessages
             from services.billing.membership.message_ledger import reserve as reserve_messages
             from services.brain.leftover_reserve import remember_leftover_hold
@@ -188,6 +189,7 @@ class WebChatCreditHandle:
                     tenant_id=self.tenant_id,
                     operation_id=op,
                     response_class="generated_ai",
+                    units=action_units(response_class="generated_ai", channel="web"),
                 )
             except InsufficientMessages as exc:
                 raise PermissionError("insufficient_messages") from exc
@@ -207,17 +209,7 @@ class WebChatCreditHandle:
             self.state = CreditFsmState.RESERVED
             self._index_open()
             return
-        from services.billing.credit_ledger_service import credit_ledger_service
-
-        self.reservation_id = credit_ledger_service.reserve(
-            tenant_id=self.tenant_id,
-            user_id=None,
-            credits=1,
-            operation_type="web_customer_reply",
-            request_id=self.request_id,
-        )
-        self.state = CreditFsmState.RESERVED
-        self._index_open()
+        raise PermissionError("insufficient_messages")
 
     def capture(self, *, model_provider: str = "web_chat") -> None:
         if self.state == CreditFsmState.CAPTURED:
@@ -226,11 +218,20 @@ class WebChatCreditHandle:
             return
         if followup_uses_message_ledger() or is_message_reservation(self.reservation_id):
             from services.billing.membership.message_ledger import settle
+            from services.brain.leftover_reserve import complete_leftover_capture
 
+            op = self._ledger_operation_id()
+            ledger_rid = f"{self.tenant_id}:{op}"
             try:
-                settle(tenant_id=self.tenant_id, operation_id=self._ledger_operation_id(), accepted=True)
+                settle(tenant_id=self.tenant_id, operation_id=op, accepted=True)
             except KeyError:
                 pass
+            complete_leftover_capture(
+                self.tenant_id,
+                ledger_rid,
+                operation_id=op,
+                extra_ids=(self.reservation_id, op) if self.reservation_id else (op,),
+            )
             self.state = CreditFsmState.CAPTURED
             self.reservation_id = None
             return
@@ -271,14 +272,24 @@ class WebChatCreditHandle:
             return False
         if followup_uses_message_ledger() or is_message_reservation(self.reservation_id):
             from services.billing.membership.message_ledger import settle
+            from services.brain.leftover_reserve import complete_leftover_release
 
+            op = self._ledger_operation_id()
+            ledger_rid = f"{self.tenant_id}:{op}"
             try:
-                settle(tenant_id=self.tenant_id, operation_id=self._ledger_operation_id(), accepted=False)
+                settle(tenant_id=self.tenant_id, operation_id=op, accepted=False)
             except KeyError:
                 pass
             except Exception:
                 self.state = CreditFsmState.RELEASE_PENDING
                 return False
+            complete_leftover_release(
+                self.tenant_id,
+                ledger_rid,
+                extra_ids=tuple(
+                    item for item in (self.reservation_id, self.request_id, self.conversation_id, op) if item
+                ),
+            )
             self.state = CreditFsmState.RELEASED
             self.reservation_id = None
             self._released_once = True

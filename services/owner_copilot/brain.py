@@ -95,7 +95,15 @@ async def iter_owner_turn_v2_events(
             revise_proposal_id=revise_proposal_id,
             is_cancelled=is_cancelled,
         ):
-            owner_turn_hold_on_event(turn_hold, _ev.type)
+            actual_usd = None
+            if _ev.type == "done":
+                from services.brain.model_pricing import compute_cost_from_usage
+                from services.owner_copilot.flags import owner_model_name
+
+                prompt = int(_ev.payload.get("context_tokens") or 0)
+                completion = max(1, len(str(_ev.payload.get("reply_text") or "")) // 4)
+                actual_usd = float(compute_cost_from_usage(owner_model_name(), prompt, completion)["cost_usd"])
+            owner_turn_hold_on_event(turn_hold, _ev.type, actual_usd=actual_usd)
             yield _ev
     finally:
         owner_turn_hold_abort(turn_hold)
