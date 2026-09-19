@@ -13,7 +13,7 @@ from services.brain.actions.request_fields import (
     prior_collected_fields,
 )
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
-from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.conversation_store import load_conversation, remember_turn
 
@@ -98,19 +98,10 @@ async def try_confirm_pending(turn: CustomerTurn, message: str, channel: str) ->
             extra={"phase": "request_confirm", "receipts": receipts, "confirmed": False, "customer_silence": True},
         )
     remember_turn(turn, [])
-    from services.brain.outbound_destination import outbound_destination
-    from services.brain.templates import owner_protocol_text
-
-    lang = str((turn.extra or {}).get("response_language") or "")
-    text = owner_protocol_text("confirm_request", lang)
-    destination = outbound_destination(turn, channel)
-    messages = []
-    if text:
-        messages = [OutboundMessage(destination=destination, text=text, protected=True)]
     return TurnResult(
         stop_reason="ok",
-        envelope=FinalReplyEnvelope(decision="deterministic", messages=messages),
-        extra={"phase": "request_confirm", "receipts": receipts, "confirmed": True},
+        envelope=FinalReplyEnvelope(decision="deterministic", messages=[]),
+        extra={"phase": "request_confirm", "receipts": receipts, "confirmed": True, "customer_silence": True},
     )
 
 

@@ -12,8 +12,8 @@ from typing import Any
 from services.queues.models import QueueJob
 from services.queues.redis_backend import RedisQueueBackend
 from services.scale.replica_controller import mark_worker_draining, record_event, worker_is_draining
-from services.scale.self_heal import decide_restart
 from services.scale.worker_registry import heartbeat, mark_dead
+from tests.scale.harness_self_heal import decide_restart
 
 Handler = Callable[[QueueJob], Awaitable[None]]
 

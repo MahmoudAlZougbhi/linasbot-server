@@ -10,23 +10,28 @@ from typing import Any
 
 import config
 from services.brain.inbound.text_handlers_delayed import _delayed_process_messages  # noqa: F401 — patched by tests
-from services.brain.inbound.text_handlers_message_greeting import (
-    GREETING_INACTIVITY_SECONDS,
-    _combine_schedule_lock,
-    _get_session_greeting_message,
-)
 from services.brain.inbound.text_handlers_message_takeover import (
     maybe_send_takeover_autoreply,
     resolve_conversation_doc_ref,
 )
 from services.brain.sentiment_escalation_service import sentiment_service
-from services.integrations.meta.meta_outbound_attempts import meta_outbound_send_purpose
 from services.scale.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
 from utils.utils import (
     get_canonical_user_id_and_phone,
     get_firestore_db,
     save_conversation_message_to_firestore,
 )
+
+_combine_schedule_locks: dict[str, asyncio.Lock] = {}
+GREETING_INACTIVITY_SECONDS = 43200  # 12 hours; Brain owns greeting copy.
+
+
+def _combine_schedule_lock(user_id: str) -> asyncio.Lock:
+    lock = _combine_schedule_locks.get(user_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _combine_schedule_locks[user_id] = lock
+    return lock
 
 
 async def handle_message(
@@ -239,38 +244,7 @@ async def handle_message(
     ):
         return
 
-    ai_primary_mode = bool(getattr(config, "AI_PRIMARY_ORCHESTRATION", True))
-
-    # Greeting policy (code-driven) runs only in non AI-primary mode.
-    # In AI-primary / Brain mode, greeting timing/wording is delegated to Brain.
-    if not ai_primary_mode:
-        # Greeting policy:
-        # - New conversation => send greeting first
-        # - Existing conversation but user inactive >= threshold => send greeting first
-        greeting_sent_for_conv = user_data.get("greeting_sent_for_conversation_id")
-        should_greet_now = False
-        if current_conversation_id and greeting_sent_for_conv != current_conversation_id:
-            if was_new_conversation:
-                should_greet_now = True
-            elif inactivity_seconds is not None and inactivity_seconds >= GREETING_INACTIVITY_SECONDS:
-                should_greet_now = True
-
-        if should_greet_now:
-            user_lang = user_data.get("user_preferred_lang", "ar")
-            greeting_msg = _get_session_greeting_message(user_lang)
-            if greeting_msg:
-                with meta_outbound_send_purpose("session_greeting"):
-                    await send_message_func(user_id, greeting_msg)
-                await save_conversation_message_to_firestore(
-                    user_id,
-                    "ai",
-                    greeting_msg,
-                    current_conversation_id,
-                    user_name,
-                    user_data.get("phone_number"),
-                    metadata={"handled_by": "ai", "source": "session_greeting"},
-                )
-                user_data["greeting_sent_for_conversation_id"] = current_conversation_id
+    # Greeting wording is Terra Identity only. Do not send catalog/session templates here.
 
     # Check if it's the very first message after start
     if config.user_greeting_stage[user_id] == 1 and not config.user_gender.get(user_id):

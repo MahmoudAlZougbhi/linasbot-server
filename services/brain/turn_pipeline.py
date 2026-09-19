@@ -122,7 +122,7 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
                 ("visual", "Image present but visual reading is disabled", {"reason": visual.reason}),
             ),
         )
-    from services.brain.greeting import is_greeting_only
+    from services.brain.greeting_policy import is_greeting_only
 
     if is_greeting_only(message):
         from services.brain.agent.greeting_turn import identity_greeting_result

@@ -14,11 +14,13 @@ GONE_PATHS = (
     "services/scale/ha_peer_file_replicate.py",
     "services/scale/financial_invariants.py",
     "services/safe_path.py",
+    "services/scale/isolated_replica_pool.py",
+    "services/scale/self_heal.py",
 )
 
 KEEP_PATHS = (
-    "services/scale/isolated_replica_pool.py",
-    "services/scale/self_heal.py",
+    "tests/scale/harness_replica_pool.py",
+    "tests/scale/harness_self_heal.py",
     "services/scale/ha_cm_peer_replicate.py",
     "services/scale/ha_tenant_config_peer_sync.py",
     "services/scale/replica_controller.py",
@@ -49,8 +51,16 @@ def test_repo_has_no_imports_of_deleted_runtime_modules() -> None:
         "from services.scale.ai_stage_timing import",
         "from services.scale.ha_peer_file_replicate import",
         "from services.scale.financial_invariants import",
+        "from services.scale.isolated_replica_pool import",
+        "from services.scale.self_heal import",
     )
-    skip_parts = ("/node_modules/", "/.git/", "/evals/artifacts/", "tests/test_runtime_dead_gone.py")
+    skip_parts = (
+        "/node_modules/",
+        "/.git/",
+        "/evals/artifacts/",
+        "tests/test_runtime_dead_gone.py",
+        "tests/test_residual_dead_legacy_scrub.py",
+    )
     for path in ROOT.rglob("*.py"):
         text = str(path)
         if any(part in text for part in skip_parts):

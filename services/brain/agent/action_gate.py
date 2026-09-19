@@ -8,10 +8,9 @@ from typing import Any
 from services.brain.actions.pending import attach_confirmation
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
 from services.brain.contracts.plan import PlannerPlan
-from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.stage_timeline import stamp
-from services.brain.templates import owner_protocol_text
 
 _INFO_TYPES = {"information", "hours", "comparison"}
 _CONTINUE_TYPES = _INFO_TYPES | {"resource_request", "service_request", "product_request", "cancel_or_status"}
@@ -38,16 +37,9 @@ def append_handoff_message(
     dest: str,
     lang: str,
 ) -> FinalReplyEnvelope:
-    if not extra.get("handoff_ok"):
-        return envelope
-    text = owner_protocol_text("handoff", lang)
-    if not text:
-        return envelope
-    if any((item.text or "").strip() == text for item in envelope.messages):
-        return envelope
-    return envelope.model_copy(
-        update={"messages": [*list(envelope.messages), OutboundMessage(destination=dest, text=text, protected=True)]}
-    )
+    """Handoff is Live Chat only. Terra/silence owns customer copy — never append protocol text."""
+    _ = (extra, dest, lang)
+    return envelope
 
 
 def human_proposals(plan: PlannerPlan, *, tenant_id: str = "") -> ActionProposalSet:
@@ -107,6 +99,7 @@ async def apply_action_gate(
     extra: dict[str, Any],
     agent_trace: list[dict[str, Any]],
 ) -> ActionGateResult:
+    _ = (dest, lang)
     extra = dict(extra)
     human = human_proposals(plan, tenant_id=turn.tenant_id)
     if human.actions:
@@ -120,10 +113,9 @@ async def apply_action_gate(
         extra["receipts"] = list(extra.get("receipts") or []) + dumped
         if not _should_continue(plan):
             agent_trace.append({"step": "FINAL", "decision": "handoff_ack" if ok else "no_reply"})
-            ack = owner_protocol_text("handoff", lang)
             envelope = FinalReplyEnvelope(
                 decision="handoff_ack" if ok else "no_reply",
-                messages=[OutboundMessage(destination=dest, text=ack, protected=True)] if ok and ack else [],
+                messages=[],
                 dispositions={"handoff": "action_succeeded" if ok else "failed"},
             )
             return ActionGateResult(
@@ -155,32 +147,4 @@ async def apply_action_gate(
             "awaiting_confirmation": True,
             "pending_actions": [item.model_dump() for item in held.actions],
         }
-        info_tasks = [task for task in plan.tasks if task.type in _INFO_TYPES]
-        if not info_tasks:
-            confirm_text = owner_protocol_text("confirm_request", lang)
-            if confirm_text:
-                agent_trace.append({"step": "FINAL", "decision": "clarify", "reason": "awaiting_confirmation"})
-                envelope = FinalReplyEnvelope(
-                    decision="clarify",
-                    messages=[OutboundMessage(destination=dest, text=confirm_text, protected=True)],
-                )
-                envelope = append_handoff_message(envelope, extra, dest=dest, lang=lang)
-                return ActionGateResult(
-                    early=TurnResult(
-                        stop_reason="ok",
-                        envelope=envelope,
-                        extra=_flow_extra(
-                            {
-                                "phase": "actions_pending",
-                                "plan": plan.model_dump(),
-                                "awaiting_confirmation": True,
-                                "pending_actions": [item.model_dump() for item in held.actions],
-                                "agent_trace": agent_trace,
-                                **extra,
-                            },
-                            ("request", "Waiting for customer confirmation before submitting request", None),
-                        ),
-                    ),
-                    extra=extra,
-                )
     return ActionGateResult(early=None, extra=extra)

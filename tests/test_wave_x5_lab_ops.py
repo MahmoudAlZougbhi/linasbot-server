@@ -27,26 +27,9 @@ def test_wave_x5_workflows_do_not_write_lab_true() -> None:
     assert not (WORKFLOWS / "customer-brain-live-lab-ha.yml").exists()
 
 
-def test_wave_x5_prod_migration_has_no_laser_seed() -> None:
-    text = (ROOT / "services/ai_setup/prod_migration.py").read_text(encoding="utf-8")
-    assert "laser_hair_removal" not in text
-    assert "care_shave_before_laser" not in text
-    assert "SHAVE_CARE_BODY" not in text
-    assert "Ramlet" not in text
-    assert "antelias" not in text.lower()
-
-
-def test_wave_x5_classifier_has_no_laser_service_specs() -> None:
-    from services.ai_setup.section_classifier import _SERVICE_SPECS
-
-    ids = {row[1] for row in _SERVICE_SPECS}
-    assert "laser_hair_removal" not in ids
-    assert "tattoo_removal" not in ids
-    assert "co2_laser" not in ids
-    assert "dpl_whitening" not in ids
-    blob = (ROOT / "services/ai_setup/section_classifier.py").read_text(encoding="utf-8")
-    assert "laser_hair_removal" not in blob
-    assert "tattoo_removal" not in blob
+def test_wave_x5_prod_migration_museum_is_gone() -> None:
+    assert not (ROOT / "services/ai_setup/prod_migration.py").exists()
+    assert not (ROOT / "services/ai_setup/section_classifier.py").exists()
 
 
 def test_wave_x5_linaslaser_api_is_alias_of_external() -> None:

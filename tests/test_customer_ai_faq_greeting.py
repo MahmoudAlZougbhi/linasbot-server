@@ -9,7 +9,7 @@ import pytest
 
 from services.ai_setup.schemas import DynamicMessageRecord, DynamicMessagesSection, FaqRecord, FaqSection, FaqVariant
 from services.brain.faq_exact import faq_fast_path_safe, find_exact_faq
-from services.brain.greeting import evaluate_greeting, inactivity_threshold
+from services.brain.greeting_policy import evaluate_greeting, inactivity_threshold
 from services.brain.history import build_history_snapshot
 
 
@@ -50,7 +50,7 @@ def test_draft_faq_is_not_served() -> None:
 
 def test_greeting_uses_existing_12h_window(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.brain.inbound.text_handlers_message_greeting.GREETING_INACTIVITY_SECONDS",
+        "services.brain.inbound.text_handlers_message.GREETING_INACTIVITY_SECONDS",
         43200,
     )
     assert inactivity_threshold() == timedelta(hours=12)
@@ -58,7 +58,7 @@ def test_greeting_uses_existing_12h_window(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_greeting_session_start(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.brain.greeting.load_dynamic_messages",
+        "services.brain.greeting_policy.load_dynamic_messages",
         lambda _tid: DynamicMessagesSection(
             items=[
                 DynamicMessageRecord(
@@ -119,7 +119,7 @@ def test_generated_dm_does_not_prepend_catalog_greeting() -> None:
 def test_greeting_only_does_not_prepend_canned_line(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
     from services.brain.contracts.turn import CustomerTurn
-    from services.brain.greeting import is_greeting_only
+    from services.brain.greeting_policy import is_greeting_only
     from services.brain.turn_pipeline import _apply_greeting
 
     assert is_greeting_only("Hi") is True
@@ -215,7 +215,7 @@ async def test_greeting_only_does_not_retrieve_knowledge_when_identity_fails(
 
 def test_greeting_follows_inbound_language(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.brain.greeting.load_dynamic_messages",
+        "services.brain.greeting_policy.load_dynamic_messages",
         lambda _tid: DynamicMessagesSection(
             items=[
                 DynamicMessageRecord(
@@ -250,7 +250,7 @@ def test_greeting_follows_inbound_language(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_greeting_not_repeated_after_history_hit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.brain.greeting.load_dynamic_messages",
+        "services.brain.greeting_policy.load_dynamic_messages",
         lambda _tid: DynamicMessagesSection(
             items=[
                 DynamicMessageRecord(

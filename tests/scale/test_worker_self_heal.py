@@ -10,9 +10,9 @@ import pytest
 
 from services.queues.models import QueueJob
 from services.queues.redis_backend import RedisQueueBackend
-from services.scale.isolated_replica_pool import IsolatedReplicaPool
+from tests.scale.harness_replica_pool import IsolatedReplicaPool
 from services.scale.replica_controller import set_controller_redis_for_tests
-from services.scale.self_heal import decide_restart
+from tests.scale.harness_self_heal import decide_restart
 from services.scale.worker_registry import set_registry_redis_for_tests, snapshot
 
 

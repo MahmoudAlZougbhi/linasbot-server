@@ -7,7 +7,7 @@ from typing import Any
 
 from services.brain.planner.heuristic import plan_message
 from services.brain.retrieve.cards import cards_from_sections
-from services.brain.retrieve.expand import expand_ranked
+from services.brain.retrieve.hydrate import expand_ranked
 from services.brain.retrieve.lexical import LexicalHit, search_cards
 from tests.brain_evals.contract_cases import run_contract_cases
 from tests.brain_evals.fixtures import (

@@ -1,11 +1,10 @@
-"""LOC split: text_handlers_message greeting/takeover under 500 lines; public exports preserved."""
+"""LOC split: text_handlers_message / takeover under 500 lines; public exports preserved."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from services.brain.inbound.text_handlers_message import handle_message
-from services.brain.inbound.text_handlers_message_greeting import GREETING_INACTIVITY_SECONDS
+from services.brain.inbound.text_handlers_message import GREETING_INACTIVITY_SECONDS, handle_message
 from services.brain.inbound.text_handlers_message_takeover import (
     maybe_send_takeover_autoreply,
     resolve_conversation_doc_ref,
@@ -19,7 +18,6 @@ def _line_count(rel: str) -> int:
 
 def test_text_handlers_message_modules_under_500_lines() -> None:
     assert _line_count("services/brain/inbound/text_handlers_message.py") < 500
-    assert _line_count("services/brain/inbound/text_handlers_message_greeting.py") < 500
     assert _line_count("services/brain/inbound/text_handlers_message_takeover.py") < 500
 
 

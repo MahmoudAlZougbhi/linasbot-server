@@ -151,9 +151,9 @@ async def test_terra_failure_is_silence(monkeypatch: pytest.MonkeyPatch) -> None
 
 @pytest.mark.asyncio
 async def test_retrieve_miss_without_handoff_is_silence(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.brain.agent.no_evidence_handoff import unanswered_question_result
+    from services.brain.agent.handoff_policy import unanswered_question_result
 
-    monkeypatch.setattr("services.brain.agent.no_evidence_handoff._handoff_allowed", lambda _tid: False)
+    monkeypatch.setattr("services.brain.agent.handoff_policy._handoff_allowed", lambda _tid: False)
     plan = PlannerPlan(tasks=[PlannerTask(id="t1", type="information")], read_only=True)
     out = await unanswered_question_result(
         _turn(),

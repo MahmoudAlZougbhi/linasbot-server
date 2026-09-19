@@ -1,4 +1,4 @@
-"""Conversation router pattern catalogs — human-request detect only."""
+"""Human-request detect for Live Chat handoff. No customer-facing copy."""
 
 from __future__ import annotations
 
@@ -102,3 +102,22 @@ HUMAN_REQUEST_KEYWORDS = [
     "human agent",
     "real person",
 ]
+
+
+def _normalize(text: str) -> str:
+    return (text or "").strip()
+
+
+def is_human_request(message: str) -> bool:
+    """Detect if the customer wants a human teammate (Live Chat), not a Requests card."""
+    t = _normalize(message)
+    if len(t) < 3:
+        return False
+    t_lower = t.lower()
+    if re.search(r"\bpersonal\b", t_lower) and not re.search(
+        r"\b(?:real\s+person|speak|talk|human\s+agent)\b", t_lower
+    ):
+        return False
+    if HUMAN_REQUEST_RE.search(t):
+        return True
+    return any(kw in t_lower for kw in HUMAN_REQUEST_KEYWORDS)

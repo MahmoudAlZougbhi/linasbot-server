@@ -443,7 +443,7 @@ def test_omni_conversation_id_prefers_payload() -> None:
     assert message_id_for_brain({"provider_message_id": "wamid.abc", "message_id": "local-1"}) == "wamid.abc"
     assert message_id_for_brain({"provider_event_id": "evt-row-1"}) == "evt-row-1"
     assert web_inbound_message_id("web:t:v", "hi").startswith("user:web:t:v:")
-    from services.integrations.web_chat.processor_v2_reply import generate_web_chat_reply_text
+    from services.integrations.web_chat.processor_reply import generate_web_chat_reply_text
 
     assert "web_inbound_message_id(conversation_id, text)" in getsource(generate_web_chat_reply_text)
 

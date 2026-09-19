@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from services.ai_setup.pricing.migration import seed_example_discount_rule_subtotal
 from services.ai_setup.pricing.schemas import (
     CatalogCategory,
     CatalogItem,
     DiscountRule,
+    EffectiveWindow,
     ItemVariant,
     PriceEntry,
     RuleAction,
@@ -14,6 +14,32 @@ from services.ai_setup.pricing.schemas import (
     RuleConditionGroup,
 )
 from services.ai_setup.schemas import LocalizedLabels
+
+
+def seed_example_discount_rule_subtotal(
+    *,
+    rule_id: str,
+    threshold: float,
+    percent: float,
+    currency: str = "USD",
+) -> DiscountRule:
+    """Declarative example builder for tests/fixtures — not Lina-specific."""
+    return DiscountRule(
+        id=rule_id,
+        labels=LocalizedLabels(en=f"{percent}% off at {threshold}+"),
+        priority=10,
+        exclusive=True,
+        stacking="exclusive",
+        when=RuleConditionGroup(
+            op="and",
+            conditions=[RuleCondition(kind="subtotal_at_least", amount=threshold)],
+        ),
+        then=RuleAction(kind="percent_off", percent=percent),
+        currency=currency,
+        active=True,
+        effective=EffectiveWindow(),
+        provenance="fixture",
+    )
 
 
 def _labels(en: str, **extra: str) -> LocalizedLabels:

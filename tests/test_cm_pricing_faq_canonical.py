@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 
@@ -228,65 +226,3 @@ def test_no_body_part_engine_symbols_in_pricing_package() -> None:
     for mod in (pricing_pkg, engine, schemas):
         assert not hasattr(mod, "BodyPartPricingEngine")
         assert not hasattr(mod, "body_part_id")
-
-
-def test_empty_price_import_does_not_wipe_existing_catalog(tmp_path: Path) -> None:
-    from services.ai_setup.pricing.migration import migrate_staged_price_files_to_catalog
-    from services.ai_setup.storage import get_draft, put_draft
-
-    tenant = "tenant_empty_guard"
-    env = get_draft("prices", tenant_id=tenant, create_default=True)
-    put_draft(
-        "prices",
-        payload=PricesSection(
-            catalog=[{"id": "keep_me", "item_type": "custom", "labels": {"en": "Keep"}, "base_price": 10}],
-            price_entries=[{"id": "pe", "catalog_item_id": "keep_me", "amount": 10}],
-        ).model_dump(mode="json"),
-        if_match=env.etag,
-        tenant_id=tenant,
-        updated_by="test",
-    )
-    stage = tmp_path / "stage"
-    (stage / "legacy" / "price_files").mkdir(parents=True)
-    (stage / "legacy" / "price_files" / "empty.json").write_text("{}", encoding="utf-8")
-    result = migrate_staged_price_files_to_catalog(staging_root=stage, tenant_id=tenant)
-    assert result["preserved_existing"] is True
-    assert result["catalog_count"] == 1
-    after = get_draft("prices", tenant_id=tenant)
-    assert after.payload["catalog"][0]["id"] == "keep_me"
-
-
-def test_content_price_file_import_populates_catalog(tmp_path: Path) -> None:
-    from services.ai_setup.pricing.migration import migrate_staged_price_files_to_catalog
-    from services.ai_setup.storage import get_draft
-
-    tenant = "tenant_price_content_import"
-    stage = tmp_path / "stage"
-    pf = stage / "legacy" / "price_files"
-    pf.mkdir(parents=True)
-    (pf / "women.json").write_text(
-        json.dumps(
-            {
-                "id": "women",
-                "title": "Women prices",
-                "content": "Underarms: 40\nBikini: 55 USD\nSessions: 8",
-                "tags": ["price"],
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    result = migrate_staged_price_files_to_catalog(
-        staging_root=stage,
-        tenant_id=tenant,
-        category_id="body_area",
-        category_label="Body areas",
-        item_type="body_area",
-    )
-    assert result["rows_imported"] >= 2
-    assert result["invented_amounts"] == 0
-    assert result["preserved_existing"] is False
-    draft = get_draft("prices", tenant_id=tenant)
-    names = {item["labels"]["en"] for item in draft.payload["catalog"]}
-    assert "Underarms" in names
-    assert "Bikini" in names

@@ -38,7 +38,7 @@ class WebChatError(Exception):
 
 
 async def _generate_reply_text(**kwargs: Any) -> str:
-    from services.integrations.web_chat.processor_v2_reply import generate_web_chat_reply_text
+    from services.integrations.web_chat.processor_reply import generate_web_chat_reply_text
 
     return await generate_web_chat_reply_text(**kwargs)
 

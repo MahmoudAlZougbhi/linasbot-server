@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY, BRAIN_TEMPORARY_ERROR_MESSAGE_KEY
-from services.brain.greeting import is_greeting_only, safe_greeting_text
+from services.brain.greeting_policy import is_greeting_only
 from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
 
@@ -23,11 +23,21 @@ def test_hi_kifak_is_greeting_only() -> None:
     assert is_greeting_only("Hi, what time do you open?") is False
 
 
-def test_safe_greeting_never_uses_validator_or_temporary_copy() -> None:
-    text = safe_greeting_text(tenant_id="t-greet", message="Hi kifak", language="ar")
-    assert "ما قدرت أتأكد" not in text
-    assert text != get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "ar")
-    assert text != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "ar")
+def test_greeting_without_owner_opener_does_not_emit_canned_copy() -> None:
+    from services.brain.contracts.turn import HistorySnapshot
+    from services.brain.greeting_policy import evaluate_greeting
+
+    decision = evaluate_greeting(
+        tenant_id="t-greet",
+        message="Hi kifak",
+        history=HistorySnapshot(),
+        language="ar",
+    )
+    assert decision.eligible is False
+    assert decision.text == ""
+    assert "ما قدرت أتأكد" not in decision.text
+    assert decision.text != get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "ar")
+    assert decision.text != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "ar")
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,7 @@ from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 from services.brain.planner.heuristic import overlay_plan, plan_message
 from services.brain.retrieve.cards import cards_from_sections
-from services.brain.retrieve.expand import expand_hits
+from services.brain.retrieve.hydrate import expand_hits
 from services.brain.retrieve.lexical import LexicalHit
 
 

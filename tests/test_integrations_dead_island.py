@@ -20,6 +20,8 @@ GONE = (
     "services/integrations/whatsapp/smart_followup/eligibility.py",
     "services/integrations/whatsapp/smart_followup/constants.py",
     "services/integrations/whatsapp/smart_followup/business_hours.py",
+    "services/integrations/meta/meta_comment_rule_dm.py",
+    "services/integrations/web_chat/processor_v2_reply.py",
 )
 
 KEEP = (
@@ -27,7 +29,7 @@ KEEP = (
     "services/integrations/tiktok/capability_probe.py",
     "services/integrations/tiktok/health.py",
     "services/smart_followup/worker.py",
-    "services/integrations/web_chat/processor_v2_reply.py",
+    "services/integrations/web_chat/processor_reply.py",
     "services/integrations/meta/meta_comment_replies.py",
     "services/integrations/meta/meta_comment_brain_send.py",
 )

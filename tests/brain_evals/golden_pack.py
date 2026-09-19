@@ -8,7 +8,7 @@ from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.grounding.facts import evidence_supports_text, ungrounded_claims
 from services.brain.planner.heuristic import plan_message
 from services.brain.retrieve.cards import cards_from_sections
-from services.brain.retrieve.expand import expand_ranked
+from services.brain.retrieve.hydrate import expand_ranked
 from services.brain.retrieve.lexical import LexicalHit, search_cards
 from tests.brain_evals.fixtures import hospitality_corpus, service_appointment_corpus
 

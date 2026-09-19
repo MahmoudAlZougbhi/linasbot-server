@@ -6,7 +6,7 @@ from services.ai_setup.language_policy import resolve_customer_response_language
 from services.ai_setup.progress_quality import assess_section_fill
 from services.ai_setup.request_rules import normalize_request_rule_item
 from services.ai_setup.setup_chat import SETUP_SECTION_ORDER
-from services.brain.conversation_router import is_human_request
+from services.requests.human_detect import is_human_request
 from services.owner_copilot.setup_flow import SETUP_SECTIONS
 from services.requests.constants import PERSISTABLE_REQUEST_TYPES, REQUEST_TYPES
 from services.requests.request_graphs.compiler import destination_from_type
