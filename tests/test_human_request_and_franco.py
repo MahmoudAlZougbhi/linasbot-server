@@ -8,12 +8,13 @@ from services.ai_setup.request_rules import normalize_request_rule_item
 from services.ai_setup.setup_chat import SETUP_SECTION_ORDER
 from services.brain.conversation_router import is_human_request
 from services.owner_copilot.setup_flow import SETUP_SECTIONS
-from services.requests.constants import REQUEST_TYPES
+from services.requests.constants import PERSISTABLE_REQUEST_TYPES, REQUEST_TYPES
 from services.requests.request_graphs.compiler import destination_from_type
 
 
 def test_human_is_a_request_type() -> None:
     assert "HUMAN" in REQUEST_TYPES
+    assert "HUMAN" not in PERSISTABLE_REQUEST_TYPES
     row = normalize_request_rule_item({"id": "h1", "type": "human", "name": "Staff"})
     assert row["type"] == "HUMAN"
     assert destination_from_type("HUMAN") == "live_chat"

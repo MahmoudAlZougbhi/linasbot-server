@@ -125,7 +125,7 @@ def get_request(request_id: str, request: Request) -> dict[str, Any]:
 
 @app.post("/api/requests")
 def create_request(body: RequestCreateBody, request: Request) -> dict[str, Any]:
-    """Internal/operator-assisted create path (AI tool uses the same service)."""
+    """Operator-assisted create. HUMAN must not be created as a board row."""
     session = require_requests_manage(request)
     tenant_id = _tenant(session)
     with _db_cm() as db:
