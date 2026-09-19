@@ -40,17 +40,18 @@ def snapshot_economy(raw: Any) -> dict[str, Any]:
     base = _defaults()
     if not isinstance(raw, dict):
         return base
-    costs = raw.get("action_costs") if isinstance(raw.get("action_costs"), dict) else {}
-    copilot = raw.get("copilot") if isinstance(raw.get("copilot"), dict) else {}
+    costs_raw = raw.get("action_costs")
+    costs: dict[str, Any] = costs_raw if isinstance(costs_raw, dict) else {}
+    copilot_raw = raw.get("copilot")
+    copilot: dict[str, Any] = copilot_raw if isinstance(copilot_raw, dict) else {}
     base["action_costs"].update({k: costs[k] for k in DEFAULT_ACTION_COSTS if k in costs})
     if "confirm_threshold_messages" in copilot:
         base["copilot"]["confirm_threshold_messages"] = int(copilot["confirm_threshold_messages"])
     if isinstance(copilot.get("bands"), list):
         base["copilot"]["bands"] = [dict(row) for row in copilot["bands"] if isinstance(row, dict)]
-    if isinstance(raw.get("iap_message_quantities"), dict):
-        base["iap_message_quantities"] = {
-            str(k): int(v) for k, v in raw["iap_message_quantities"].items() if int(v) > 0
-        }
+    iap_raw = raw.get("iap_message_quantities")
+    if isinstance(iap_raw, dict):
+        base["iap_message_quantities"] = {str(k): int(v) for k, v in iap_raw.items() if int(v) > 0}
     if raw.get("conversion_rate") is not None:
         try:
             base["conversion_rate"] = float(raw["conversion_rate"])
@@ -68,7 +69,8 @@ def load_economy() -> dict[str, Any]:
 
 def validate_economy(raw: dict[str, Any]) -> dict[str, Any]:
     out = _defaults()
-    costs = raw.get("action_costs") if isinstance(raw.get("action_costs"), dict) else {}
+    costs_raw = raw.get("action_costs")
+    costs: dict[str, Any] = costs_raw if isinstance(costs_raw, dict) else {}
     for key in DEFAULT_ACTION_COSTS:
         if key == "ai_both_mode":
             mode = str(costs.get(key) or out["action_costs"][key]).strip().lower()
@@ -81,20 +83,27 @@ def validate_economy(raw: dict[str, Any]) -> dict[str, Any]:
             if units < 0 or units > 100:
                 raise ValueError(f"{key} must be 0..100")
             out["action_costs"][key] = units
-    copilot = raw.get("copilot") if isinstance(raw.get("copilot"), dict) else {}
+    copilot_raw = raw.get("copilot")
+    copilot: dict[str, Any] = copilot_raw if isinstance(copilot_raw, dict) else {}
     if "confirm_threshold_messages" in copilot:
         threshold = int(copilot["confirm_threshold_messages"])
         if threshold < 1 or threshold > 10_000:
             raise ValueError("confirm_threshold_messages must be 1..10000")
         out["copilot"]["confirm_threshold_messages"] = threshold
-    bands = copilot.get("bands") if isinstance(copilot.get("bands"), list) else []
+    bands_raw = copilot.get("bands")
+    bands: list[Any] = bands_raw if isinstance(bands_raw, list) else []
     parsed: list[dict[str, Any]] = []
     last_max = -1.0
     for index, row in enumerate(bands):
         if not isinstance(row, dict) or row.get("enabled") is False:
             continue
-        lo = float(row.get("min_usd") if row.get("min_usd") is not None else row.get("minimum_cost") or 0)
-        hi_raw = row.get("max_usd") if row.get("max_usd") is not None else row.get("maximum_cost")
+        lo_raw = row.get("min_usd")
+        if lo_raw is None:
+            lo_raw = row.get("minimum_cost") or 0
+        lo = float(lo_raw)
+        hi_raw = row.get("max_usd")
+        if hi_raw is None:
+            hi_raw = row.get("maximum_cost")
         hi = float(hi_raw) if hi_raw is not None else 10**9
         units = int(row.get("message_units") or row.get("messages") or 0)
         if lo < 0 or hi < lo or units < 1:
@@ -104,7 +113,8 @@ def validate_economy(raw: dict[str, Any]) -> dict[str, Any]:
         last_max = hi
         parsed.append({"min_usd": lo, "max_usd": hi, "message_units": units, "enabled": True})
     out["copilot"]["bands"] = parsed
-    iap = raw.get("iap_message_quantities") if isinstance(raw.get("iap_message_quantities"), dict) else {}
+    iap_raw = raw.get("iap_message_quantities")
+    iap: dict[str, Any] = iap_raw if isinstance(iap_raw, dict) else {}
     out["iap_message_quantities"] = {str(k).strip(): int(v) for k, v in iap.items() if str(k).strip() and int(v) > 0}
     if raw.get("conversion_rate") not in (None, ""):
         rate = float(raw["conversion_rate"])
