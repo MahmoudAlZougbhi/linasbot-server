@@ -251,7 +251,7 @@ async def test_dm_path_terra_authors_then_runtime_handoff(monkeypatch: pytest.Mo
 
     async def fake_generate(turn: CustomerTurn, **kwargs: Any) -> TurnResult:
         extra = dict(kwargs.get("extra") or turn.extra or {})
-        hints = ((extra.get("request_state") or {}).get("human_hints") or [])
+        hints = (extra.get("request_state") or {}).get("human_hints") or []
         text = "راوق يا باشا، دقيقة وبحوّلك." if hints else "One moment."
         captured["terra_text"] = text
         return TurnResult(
@@ -292,7 +292,9 @@ async def test_dm_path_terra_authors_then_runtime_handoff(monkeypatch: pytest.Mo
     assert result.envelope.decision == "reply"
     assert result.envelope.messages[0].text == captured["terra_text"]
     receipts = list(result.extra.get("receipts") or [])
-    assert any(item and item.get("action_type") == "escalate_to_human" and item.get("state") == "success" for item in receipts)
+    assert any(
+        item and item.get("action_type") == "escalate_to_human" and item.get("state") == "success" for item in receipts
+    )
     assert captured.get("live_chat") == "waiting_human"
     assert "I'll connect you" not in (result.envelope.reply_text or "")
 
