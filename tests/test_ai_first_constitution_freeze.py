@@ -54,6 +54,7 @@ def test_constitution_files_exist() -> None:
     law = (ROOT / ".cursor/rules/linas-ai-constitution.mdc").read_text(encoding="utf-8")
     assert "ONLY allowed reason to withhold a message from the AI model" in law
     assert "FORBIDDEN forever to add keyword/regex gates" in law
+    assert "Comment surface replies are public-thread authored by Terra" in law
 
 
 def test_gating_lexicons_stay_gone() -> None:

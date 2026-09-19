@@ -74,6 +74,23 @@ def test_dm_labeled_comment_reply_becomes_public() -> None:
     assert plan.private_text == ""
 
 
+def test_ai_comment_unlabeled_dm_generate_posts_as_comment() -> None:
+    result = TurnResult(
+        stop_reason="ok",
+        envelope=FinalReplyEnvelope(
+            decision="reply",
+            messages=[OutboundMessage(destination="dm", text="We open at 10.")],
+        ),
+        extra={"comment_mode": "ai_comment"},
+    )
+    rewritten = apply_ai_comment_destinations(result, "ai_comment")
+    assert [item.destination for item in rewritten.envelope.messages] == ["comment"]
+    plan = destinations_from_outcome(_outcome(rewritten, comment_surface=True))
+    assert plan.public_text == "We open at 10."
+    assert plan.private_text == ""
+    assert plan.comment_mode == "ai_comment"
+
+
 def test_explicit_ai_dm_mode_stays_private() -> None:
     result = TurnResult(
         stop_reason="ok",

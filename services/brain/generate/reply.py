@@ -74,7 +74,13 @@ async def _ask_model(*, turn: CustomerTurn, prompt: str, attempt: int) -> str:
         response = await create_chat_completion(
             model=answer_model(),
             messages=[
-                {"role": "system", "content": system_prompt()},
+                {
+                    "role": "system",
+                    "content": system_prompt(
+                        surface=str(getattr(turn, "surface", "") or ""),
+                        invocation_kind=str(getattr(turn, "invocation_kind", "") or ""),
+                    ),
+                },
                 {"role": "user", "content": prompt},
             ],
             max_tokens=700,
@@ -127,23 +133,22 @@ async def generate_grounded_reply(
 
         policy_notes = policy_notes_for_turn(turn, fallback_tenant_notes=fallback)
     comment_rule = str((turn.extra or {}).get("comment_rule_text") or "").strip()
-    if comment_rule:
-        policy_notes.append(f"comment_rule:{comment_rule[:1200]}")
-    comment_mode = str((turn.extra or {}).get("comment_mode") or "").strip()
-    if comment_mode.startswith("ai"):
-        policy_notes.append(
-            f"AI comment mode={comment_mode}. Write customer-facing wording from Comment Rules and Style. "
-            "Do not use canned system copy such as 'Sent you a DM.'"
-        )
     from services.brain.actions.human_handoff_policy import human_policy_notes
     from services.brain.comments.public_request_policy import comment_request_policy_notes
+    from services.brain.comments.surface_prompt import (
+        comment_surface_policy_notes,
+        extra_policy_notes,
+        merge_policy_notes,
+    )
 
-    policy_notes.extend(human_policy_notes(turn, plan, extra))
-    policy_notes.extend(comment_request_policy_notes(turn, plan))
-    for note in list((turn.extra or {}).get("policy_notes") or []):
-        text = str(note or "").strip()
-        if text and text not in policy_notes:
-            policy_notes.append(text[:1200])
+    policy_notes = merge_policy_notes(
+        policy_notes,
+        [f"comment_rule:{comment_rule[:1200]}"] if comment_rule else [],
+        comment_surface_policy_notes(turn),
+        human_policy_notes(turn, plan, extra),
+        comment_request_policy_notes(turn, plan),
+        extra_policy_notes(turn),
+    )
     from services.brain.greeting_policy import evaluate_greeting
 
     if turn.invocation_kind not in {"followup", "comment"}:
@@ -170,8 +175,12 @@ async def generate_grounded_reply(
         policy_notes=policy_notes or None,
         receipts=receipts,
         followup_goal=turn.followup_goal,
+        surface=str(getattr(turn, "surface", "") or ""),
+        invocation_kind=str(getattr(turn, "invocation_kind", "") or ""),
     )
-    history_lines = [f"{item.role}: {item.text}" for item in turn.history.messages]
+    from services.brain.comments.surface_prompt import history_lines_for_prompt
+
+    history_lines = history_lines_for_prompt(turn)
     attempts = max(1, DEFAULT_BUDGETS.repair_attempts + 1)
     feedback = ""
     for attempt in range(attempts):

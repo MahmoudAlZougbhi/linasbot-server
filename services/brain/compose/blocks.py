@@ -42,6 +42,8 @@ def compose_evidence_context(
     receipts: list[str] | None = None,
     followup_goal: str = "",
     greeting_turn: bool = False,
+    surface: str = "",
+    invocation_kind: str = "",
 ) -> str:
     parts: list[str] = []
     if identity:
@@ -73,6 +75,12 @@ def compose_evidence_context(
         if instruction:
             block += f"\ninstruction={instruction}"
         parts.append(block)
+    if not greeting_turn:
+        from services.brain.comments.surface_prompt import comment_surface_block
+
+        surface_block = comment_surface_block(surface=surface, invocation_kind=invocation_kind)
+        if surface_block:
+            parts.append(surface_block)
     if policy_notes:
         parts.append("POLICY\n" + "\n".join(policy_notes))
     task_lines = [f"{task.id}:{task.type}:{','.join(task.source_families)}" for task in plan.tasks]
@@ -92,8 +100,13 @@ def compose_evidence_context(
     return "\n\n".join(parts)
 
 
-def system_prompt() -> str:
-    return SYSTEM_PROMPT
+def system_prompt(*, surface: str = "", invocation_kind: str = "") -> str:
+    from services.brain.comments.surface_prompt import comment_system_addon
+
+    addon = comment_system_addon(surface=surface, invocation_kind=invocation_kind)
+    if not addon:
+        return SYSTEM_PROMPT
+    return f"{SYSTEM_PROMPT}\n{addon}"
 
 
 def compose_user_prompt(

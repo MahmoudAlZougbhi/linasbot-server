@@ -349,6 +349,7 @@ async def run_customer_ai_comment(
             detected_language=str(_kwargs.get("detected_language") or ""),
             response_language=str(_kwargs.get("response_language") or ""),
         ),
+        "parent_is_page": parent_is_page,
     }
     if policy_notes:
         extra["policy_notes"] = policy_notes
