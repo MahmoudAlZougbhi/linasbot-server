@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from services.billing.membership.catalog_admin import reset_catalog_admin_for_tests, update_draft
 from services.billing.membership.conversion_dry_run import apply_credit_conversion
 from services.billing.membership.economy_policy import (
@@ -17,6 +21,10 @@ from services.billing.membership.period_grants import ensure_included_grant
 
 def setup_function() -> None:
     reset_ledger_for_tests()
+    reset_catalog_admin_for_tests()
+
+
+def teardown_function() -> None:
     reset_catalog_admin_for_tests()
 
 
@@ -176,3 +184,21 @@ def test_channel_action_costs_are_separate() -> None:
     assert action_units(response_class="generated_ai", channel="whatsapp_cloud") == 3
     assert action_units(response_class="generated_ai", channel="tiktok") == 4
     assert action_units(response_class="static", channel="web") == 0
+
+
+def test_default_channel_action_costs_are_one() -> None:
+    assert action_units(response_class="generated_ai", channel="web") == 1
+    assert action_units(response_class="generated_ai", channel="whatsapp_dm") == 1
+    assert action_units(response_class="generated_ai", channel="tiktok") == 1
+
+
+def test_catalog_reset_unlinks_admin_disk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.billing.membership.catalog_admin_store import catalog_admin_path, reset_admin_state_for_tests
+
+    monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
+    path = catalog_admin_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}", encoding="utf-8")
+    assert path.is_file()
+    reset_admin_state_for_tests()
+    assert path.exists() is False
