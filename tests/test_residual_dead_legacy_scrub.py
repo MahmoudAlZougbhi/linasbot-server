@@ -149,7 +149,7 @@ def test_human_detect_gone_live_human_path_remains() -> None:
     assert "HUMAN" not in PERSISTABLE_REQUEST_TYPES
     assert destination_from_type("HUMAN") == "live_chat"
     types = {task.type for task in plan_message("بدي احكي مع حدا").tasks}
-    assert "human_request" in types
+    assert types == {"information"}
     types = {task.type for task in plan_message("personal care tips").tasks}
     assert "human_request" not in types
 

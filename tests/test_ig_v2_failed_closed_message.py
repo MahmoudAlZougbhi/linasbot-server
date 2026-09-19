@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY, BRAIN_TEMPORARY_ERROR_MESSAGE_KEY
-from services.brain.greeting_policy import is_greeting_only
 from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
 
@@ -18,9 +17,17 @@ def _reset_temp_error_debounce() -> None:
     reset_temporary_error_debounce_for_tests()
 
 
-def test_hi_kifak_is_greeting_only() -> None:
-    assert is_greeting_only("Hi kifak") is True
-    assert is_greeting_only("Hi, what time do you open?") is False
+def test_hi_kifak_still_evaluates_greeting_policy() -> None:
+    from services.brain.contracts.turn import HistorySnapshot
+    from services.brain.greeting_policy import evaluate_greeting
+
+    decision = evaluate_greeting(
+        tenant_id="t-greet",
+        message="Hi kifak",
+        history=HistorySnapshot(),
+        language="ar",
+    )
+    assert decision.text != get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "ar")
 
 
 def test_greeting_without_owner_opener_does_not_emit_canned_copy() -> None:

@@ -20,21 +20,25 @@ def _week(open_t: str, close_t: str, *, sunday_off: bool = True) -> dict:
 
 
 def test_branch_comparison_uses_hours_families() -> None:
-    plan = plan_message("شو الفرق بين فرع بيروت وأنطلياس؟")
+    from tests.plan_builders import explicit_plan
+
+    plan = explicit_plan("شو الفرق بين فرع بيروت وأنطلياس؟", ("comparison", ["hours", "branches"]))
     cmp_tasks = [task for task in plan.tasks if task.type == "comparison"]
     assert cmp_tasks
     assert set(cmp_tasks[0].source_families) == {"hours", "branches"}
 
 
 def test_antelias_hours_question_is_hours_task() -> None:
-    plan = plan_message("شو ساعات أنطلياس؟")
+    from tests.plan_builders import explicit_plan
+
+    plan = explicit_plan("شو ساعات أنطلياس؟", ("hours", ["hours", "branches"]))
     assert any(task.type == "hours" for task in plan.tasks)
     families = {fam for task in plan.tasks if task.type == "hours" for fam in task.source_families}
     assert families == {"hours", "branches"}
     assert "knowledge" not in families
 
 
-def test_overlay_converts_knowledge_information_to_hours() -> None:
+def test_overlay_does_not_convert_knowledge_information_to_hours() -> None:
     llm = PlannerPlan(
         tasks=[
             PlannerTask(
@@ -47,18 +51,13 @@ def test_overlay_converts_knowledge_information_to_hours() -> None:
         read_only=True,
     )
     out = overlay_plan(llm, "شو ساعات أنطلياس؟")
-    hours = [task for task in out.tasks if task.type == "hours"]
-    assert hours
-    assert "hours" in hours[0].source_families
-    assert "branches" in hours[0].source_families
-    assert "knowledge" not in hours[0].source_families
+    assert all(task.type != "hours" for task in out.tasks)
+    assert out.tasks[0].source_families == ["knowledge", "care", "faq"]
 
 
-def test_multi_question_keeps_hours_family() -> None:
+def test_multi_question_heuristic_is_fail_soft() -> None:
     plan = plan_message("What is the price? What are the hours?")
-    types = {task.type for task in plan.tasks}
-    assert "hours" in types
-    assert any(task.type == "information" for task in plan.tasks)
+    assert {task.type for task in plan.tasks} == {"information"}
 
 
 def test_weekly_schedule_is_indexed_and_hydrated() -> None:
@@ -201,7 +200,7 @@ def test_no_day_off_is_not_invented() -> None:
     assert "no weekly off day" in hours.search_text
     assert not any(card.item_id == "hours:off_days" for card in cards)
     plan = plan_message("عندكن يوم عطلة؟")
-    assert any(task.type == "hours" for task in plan.tasks)
+    assert {task.type for task in plan.tasks} == {"information"}
 
 
 def test_published_off_day_is_indexed() -> None:

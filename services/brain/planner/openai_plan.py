@@ -7,7 +7,6 @@ from datetime import UTC
 
 from services.brain.contracts.plan import PlannerPlan
 from services.brain.generate.reply import openai_configured
-from services.brain.greeting_policy import is_greeting_only
 from services.brain.planner.heuristic import overlay_plan, planner_customer_text
 from services.brain.providers.config import planner_model
 
@@ -84,8 +83,6 @@ async def plan_turn(
     operation_id: str = "",
 ) -> PlannerPlan:
     customer = planner_customer_text(message)
-    if is_greeting_only(customer):
-        return overlay_plan(None, customer)
     planned = await plan_with_openai(customer, history, tenant_id=tenant_id)
     if planned is not None and tenant_id.strip():
         from datetime import datetime

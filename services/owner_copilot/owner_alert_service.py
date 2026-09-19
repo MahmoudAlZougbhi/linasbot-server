@@ -12,10 +12,6 @@ TYPE_HUMAN_REQUEST = "human_request"
 TYPE_CUSTOMER_ANGRY = "customer_angry"
 TYPE_OFFENSIVE_LANGUAGE = "offensive_language"
 
-# Sentiment analyzer issues that should create owner alerts (existing keyword path).
-_ANGER_ISSUES = frozenset({"anger_detected"})
-_OFFENSE_ISSUES = frozenset({"offensive_language"})
-
 _CHANNEL_LABELS = {
     "instagram": {"en": "Instagram", "ar": "إنستغرام"},
     "facebook": {"en": "Facebook", "ar": "فيسبوك"},
@@ -76,15 +72,6 @@ def alert_type_from_escalation_reason(reason: str | None) -> str:
     if key in {"customer_angry", "anger_detected", "customer_frustrated", "negative_sentiment_detected"}:
         return TYPE_CUSTOMER_ANGRY
     return TYPE_HUMAN_REQUEST
-
-
-def alert_type_from_sentiment_issues(detected_issues: list[str] | None) -> str | None:
-    issues = {str(i) for i in (detected_issues or [])}
-    if issues & _OFFENSE_ISSUES:
-        return TYPE_OFFENSIVE_LANGUAGE
-    if issues & _ANGER_ISSUES:
-        return TYPE_CUSTOMER_ANGRY
-    return None
 
 
 class OwnerAlertService:
@@ -176,27 +163,17 @@ class OwnerAlertService:
         sentiment_analysis: dict[str, Any] | None = None,
         last_message: str | None = None,
     ) -> dict[str, Any] | None:
-        """Owner alert from existing keyword sentiment analyzer (no ML invention).
-
-        Only anger / offensive_language issues — not confusion/urgency alone.
-        """
-        analysis = sentiment_analysis or {}
-        if not analysis.get("should_escalate"):
-            return None
-        atype = alert_type_from_sentiment_issues(analysis.get("detected_issues"))
-        if not atype:
-            return None
-        return self.emit(
-            tenant_id=tenant_id,
-            alert_type=atype,
-            customer_name=customer_name,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            channel=channel,
-            escalation_reason=analysis.get("escalation_reason"),
-            last_message=last_message,
-            trigger_source="sentiment_keyword_analyzer",
+        """Keyword sentiment never creates owner alerts. GPT/Terra handoff remains the signal."""
+        _ = (
+            tenant_id,
+            customer_name,
+            user_id,
+            conversation_id,
+            channel,
+            sentiment_analysis,
+            last_message,
         )
+        return None
 
     def emit_social_human_request(
         self,

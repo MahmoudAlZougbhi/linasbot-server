@@ -192,26 +192,10 @@ async def handle_message(
     db = get_firestore_db()
 
     # AI-primary: GPT decides when to transfer to human (handover_degree, human_handover action).
-    # Sentiment is still logged for dashboard; escalation decision is delegated to GPT.
-    # Owner alerts for anger/offensive use this same keyword analyzer (no new ML).
+    # Sentiment is dashboard telemetry only; it must not keyword-escalate or skip Terra.
     sentiment_analysis = sentiment_service.analyze_sentiment(
         user_id=user_id, message=raw_msg, language=user_data.get("user_preferred_lang", "ar")
     )
-
-    try:
-        from services.owner_copilot.owner_alert_service import owner_alert_service
-
-        owner_alert_service.emit_sentiment_signal(
-            tenant_id=user_data.get("tenant_id") or user_data.get("tenantId"),
-            customer_name=user_name,
-            user_id=user_id,
-            conversation_id=user_data.get("current_conversation_id"),
-            channel=user_data.get("channel"),
-            sentiment_analysis=sentiment_analysis,
-            last_message=raw_msg,
-        )
-    except Exception as alert_err:
-        print(f"⚠️ Failed to persist sentiment owner alert: {alert_err}")
 
     # Update conversation sentiment in Firebase (for dashboard/analytics only)
     if db and user_data.get("current_conversation_id"):
@@ -246,35 +230,9 @@ async def handle_message(
 
     # Greeting wording is Terra Identity only. Do not send catalog/session templates here.
 
-    # Check if it's the very first message after start
     if config.user_greeting_stage[user_id] == 1 and not config.user_gender.get(user_id):
-        common_greetings_only = [
-            "hi",
-            "hello",
-            "مرحبا",
-            "سلام",
-            "اهلين",
-            "صباح الخير",
-            "مساء الخير",
-            "كيفك",
-            "كيف الحال",
-            "kifak",
-            "shu",
-            "bonjour",
-            "salut",
-            "bade",
-            "sheel",
-            "shil",
-            "ana",
-            "ta3ite",
-        ]
-        is_only_greeting = any(g == raw_msg.lower().strip() for g in common_greetings_only)
-
-        if not is_only_greeting:
-            if user_data["initial_user_query_to_process"] is None:
-                user_data["initial_user_query_to_process"] = raw_msg
-        else:
-            user_data["initial_user_query_to_process"] = None
+        if user_data["initial_user_query_to_process"] is None:
+            user_data["initial_user_query_to_process"] = raw_msg
 
     # Language detection is now handled BEFORE GPT call by language_detection_service
     # The LanguageResolver detects language on each message using heuristics (Arabic script, Franco-Arabic, French/English markers)

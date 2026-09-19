@@ -74,19 +74,13 @@ def test_hours_cards_expand_weekday_lines() -> None:
     assert "sunday: closed" in bundle.items[0].text
 
 
-def test_heuristic_negation_reference_and_correction() -> None:
+def test_heuristic_fail_soft_does_not_keyword_route() -> None:
     asking = plan_message("Don't book, just asking the hours")
-    assert "service_request" not in {task.type for task in asking.tasks}
-    assert any(task.type == "hours" for task in asking.tasks)
+    assert {task.type for task in asking.tasks} == {"information"}
     no_human = plan_message("I do not want a human, what is the serum price?")
     assert "human_request" not in {task.type for task in no_human.tasks}
-    ref = plan_message("how much is the first one?")
-    assert any("anaphor" in task.entity_mentions for task in ref.tasks)
-    fix = plan_message("I meant the facial not the laser")
-    assert any(task.type == "draft_correction" for task in fix.tasks)
     multi = plan_message("What is the price? What are the hours?")
-    assert any(task.type == "hours" for task in multi.tasks)
-    assert any(task.type == "information" for task in multi.tasks)
+    assert {task.type for task in multi.tasks} == {"information"}
 
 
 def test_branch_weekly_hours_hydrate() -> None:
@@ -116,11 +110,10 @@ def test_heuristic_plan_does_not_hard_route_one_source() -> None:
     plan = plan_message("بدي سعر الليزر وساعات الفرع")
     families = {fam for task in plan.tasks for fam in task.source_families}
     assert "services" in families
-    assert "hours" in families
     assert plan.read_only is True
     action = plan_message("I want to book laser and talk to a human")
-    assert action.read_only is False
-    assert {t.type for t in action.tasks} >= {"service_request", "human_request"}
+    assert action.read_only is True
+    assert {t.type for t in action.tasks} == {"information"}
 
 
 def test_grounding_rejects_invented_price() -> None:

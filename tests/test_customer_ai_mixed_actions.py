@@ -7,13 +7,14 @@ import pytest
 from services.brain.agent.action_gate import apply_action_gate
 from services.brain.contracts.actions import ActionReceipt
 from services.brain.contracts.turn import CustomerTurn
-from services.brain.planner.heuristic import overlay_plan, plan_message
+from services.brain.planner.heuristic import overlay_plan
+from tests.plan_builders import explicit_plan
 
 
 @pytest.mark.asyncio
 async def test_mixed_human_and_hours_continues_to_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     message = "شو ساعات أنطلياس وبدي احكي مع حدا"
-    plan = plan_message(message)
+    plan = explicit_plan(message, ("hours", ["hours", "branches"]), ("human_request", ["none"]))
     types = {task.type for task in plan.tasks}
     assert "hours" in types
     assert "human_request" in types
@@ -39,7 +40,8 @@ async def test_mixed_human_and_hours_continues_to_answer(monkeypatch: pytest.Mon
 
 @pytest.mark.asyncio
 async def test_human_only_still_stops_at_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
-    plan = plan_message("بدي احكي مع حدا")
+    message = "بدي احكي مع حدا"
+    plan = explicit_plan(message, ("human_request", ["none"]))
     assert {task.type for task in plan.tasks} == {"human_request"}
 
     async def fake_escalate(**_k):
@@ -50,7 +52,7 @@ async def test_human_only_still_stops_at_handoff(monkeypatch: pytest.MonkeyPatch
     gated = await apply_action_gate(
         turn,
         plan,
-        message="بدي احكي مع حدا",
+        message=message,
         dest="instagram_dm:u1",
         lang="ar",
         extra={},
@@ -64,19 +66,11 @@ async def test_human_only_still_stops_at_handoff(monkeypatch: pytest.MonkeyPatch
 
 def test_shop_b_rules_block_appointment_actions() -> None:
     message = "بدي موعد ليزر بكرا"
-    blocked = overlay_plan(None, message, enabled_action_types={"product_request"})
+    llm = explicit_plan(message, ("service_request", ["services", "branches"]))
+    blocked = overlay_plan(llm, message, enabled_action_types={"product_request"})
     types = {task.type for task in blocked.tasks}
     assert "service_request" not in types
-    allowed = overlay_plan(None, message, enabled_action_types={"service_request", "product_request", "human_request"})
+    allowed = overlay_plan(
+        llm, message, enabled_action_types={"service_request", "product_request", "human_request"}
+    )
     assert any(task.type == "service_request" for task in allowed.tasks)
-
-
-def test_link_and_video_paraphrases_are_resource_requests() -> None:
-    for message in (
-        "ابعتلي رابط الحجز",
-        "send me the booking link",
-        "فرجيني فيديو الجلسة",
-        "send the laser video please",
-    ):
-        types = {task.type for task in plan_message(message).tasks}
-        assert "resource_request" in types, message

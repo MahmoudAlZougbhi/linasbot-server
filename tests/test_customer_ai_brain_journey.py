@@ -7,13 +7,13 @@ import pytest
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 from services.brain.contracts.turn import CustomerTurn
-from services.brain.planner.heuristic import plan_message
 from services.brain.turn_pipeline import run_dm_after_gates
+from tests.plan_builders import explicit_plan
 
 
 @pytest.mark.asyncio
 async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytest.MonkeyPatch) -> None:
-    plan = plan_message("send me the before photo please")
+    plan = explicit_plan("send me the before photo please", ("resource_request", ["services", "products", "knowledge"]))
     assert any(task.type == "resource_request" for task in plan.tasks)
     assert plan.read_only is False
 
@@ -78,7 +78,7 @@ async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytes
 
 @pytest.mark.asyncio
 async def test_booking_still_asks_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
-    plan = plan_message("I want to book a laser appointment")
+    plan = explicit_plan("I want to book a laser appointment", ("service_request", ["services", "branches", "hours"]))
     assert any(task.type == "service_request" for task in plan.tasks)
 
     async def fake_plan(_message, _history, **_kwargs):
@@ -102,16 +102,21 @@ async def test_booking_still_asks_confirmation(monkeypatch: pytest.MonkeyPatch) 
 
 def test_scenario_planner_slices_match_contract_intents() -> None:
     cases = [
-        ("How much is laser?", {"information"}),
-        ("What are Saturday hours?", {"hours"}),
-        ("How much is laser and what are the hours?", {"information", "hours"}),
-        ("how much is the first one?", {"information"}),
-        ("What is the price? What are the hours? I meant facial not laser", {"information", "draft_correction"}),
-        ("send the product photo", {"resource_request"}),
-        ("I want to book and talk to a human", {"service_request", "human_request"}),
+        ("How much is laser?", (("information", ["services", "prices"]),)),
+        ("What are Saturday hours?", (("hours", ["hours", "branches"]),)),
+        (
+            "How much is laser and what are the hours?",
+            (("information", ["services", "prices"]), ("hours", ["hours", "branches"])),
+        ),
+        ("send the product photo", (("resource_request", ["products"]),)),
+        (
+            "I want to book and talk to a human",
+            (("service_request", ["services"]), ("human_request", ["none"])),
+        ),
     ]
-    for message, expected in cases:
-        types = {task.type for task in plan_message(message).tasks}
+    for message, typed in cases:
+        types = {task.type for task in explicit_plan(message, *typed).tasks}
+        expected = {item[0] for item in typed}
         assert expected <= types, (message, types)
 
 

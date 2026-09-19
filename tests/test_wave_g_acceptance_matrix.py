@@ -308,16 +308,16 @@ def test_wave_g_web_marketing_portal_widget() -> None:
     assert '@app.get("/web-chat/widget.js")' in public_routes
 
 
-def test_wave_g_copilot_sol_creative_refused() -> None:
-    from services.owner_copilot.creative_policy import looks_like_creative_request
+def test_wave_g_copilot_sol_creative_tools_disabled() -> None:
+    from services.owner_copilot.creative_policy import CANCELLED_CREATIVE_TOOLS
     from services.owner_copilot.flags import owner_model_name
     from services.owner_copilot.tool_schemas import tool_names
 
     assert owner_model_name() == "gpt-5.6-sol"
-    assert looks_like_creative_request("create a post please") is True
+    assert "create_creative_draft" in CANCELLED_CREATIVE_TOOLS
     assert "create_creative_draft" not in tool_names()
     stream = _text("services/owner_copilot/brain_stream_body.py")
-    assert "creative_cancelled" in stream
+    assert "looks_like_creative_request" not in stream
     assert (ROOT / "modules/owner_copilot_api.py").is_file()
     assert not (ROOT / "modules/owner_ai_api.py").exists()
 

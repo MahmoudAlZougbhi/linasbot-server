@@ -6,9 +6,7 @@ from pathlib import Path
 
 from services.owner_copilot import owner_alert_service as mod
 from services.owner_copilot.owner_alert_service import (
-    TYPE_CUSTOMER_ANGRY,
     TYPE_HUMAN_REQUEST,
-    TYPE_OFFENSIVE_LANGUAGE,
     OwnerAlertService,
     build_titles,
 )
@@ -89,8 +87,7 @@ def test_sentiment_only_anger_or_offensive(tmp_path: Path) -> None:
             },
             last_message="3asab",
         )
-        assert angry is not None
-        assert angry["type"] == TYPE_CUSTOMER_ANGRY
+        assert angry is None
         offense = svc.emit_sentiment_signal(
             tenant_id="t1",
             customer_name="A",
@@ -103,7 +100,6 @@ def test_sentiment_only_anger_or_offensive(tmp_path: Path) -> None:
             },
             last_message="fuck",
         )
-        assert offense is not None
-        assert offense["type"] == TYPE_OFFENSIVE_LANGUAGE
+        assert offense is None
     finally:
         mod.owner_alert_store = original

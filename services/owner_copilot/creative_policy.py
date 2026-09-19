@@ -1,4 +1,8 @@
-"""Creative product is cancelled for System Copilot V2 — dormant paths only."""
+"""Creative product is cancelled for System Copilot V2 — tool registry only.
+
+Sol still receives the owner message. Cancelled tools stay hard-disabled; refusal
+copy is returned only after Sol (or a caller) invokes a cancelled tool.
+"""
 
 from __future__ import annotations
 
@@ -11,31 +15,6 @@ CANCELLED_CREATIVE_TOOLS = frozenset(
         "read_scheduled_posts",
     }
 )
-
-CREATIVE_KEYWORDS = (
-    "create post",
-    "create a post",
-    "make a post",
-    "make post",
-    "create a story",
-    "create story",
-    "reel",
-    "reels",
-    "caption",
-    "creative studio",
-    "schedule post",
-    "generate image",
-    "generate video",
-    "بوست",
-    "منشور",
-    "ستوري",
-    "ريلز",
-)
-
-
-def looks_like_creative_request(text: str) -> bool:
-    t = (text or "").lower()
-    return any(k in t for k in CREATIVE_KEYWORDS)
 
 
 def creative_refusal_message(*, language: str = "en") -> str:

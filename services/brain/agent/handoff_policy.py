@@ -1,8 +1,10 @@
-"""Auto Live Chat handoff only when retrieval found no published answer."""
+"""Auto Live Chat handoff only when retrieval found no published answer.
+
+Skip is planner acknowledgement-only — not an ack regex lexicon.
+"""
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from services.ai_setup.capability_gates import human_handoff_enabled
@@ -17,41 +19,6 @@ from services.brain.stage_timeline import stamp
 _INFO_TYPES = frozenset({"information", "hours", "comparison"})
 _LIVE_KINDS = frozenset({"dm", "followup", "comment"})
 _PRICED_FAMS = frozenset({"prices", "products", "services", "hours"})
-_ACK_RE = re.compile(
-    r"^\s*(?:"
-    r"ok+|okay|k+|thanks|thank you|thx|ty|"
-    r"hey+|hi+|hello|yo|"
-    r"شكراً?|يسلمو|تمام|ماشي|اوك|أوك|حسناً?|"
-    r"good|great|cool|nice|done|"
-    r"wow+|waw+|wao+|whats|"
-    r"love|loved|beautiful|amazing|perfect|cute|pretty|gorgeous|"
-    r"mashallah|masha'? ?allah|"
-    r"واو+|حلوة?|خطير|يجنن|روعه|روعة|تحفه|تحفة|حبيت|"
-    r"👍|❤️|🙏|😊|🔥|😍|💕|✨"
-    r")(?:\s+(?:thanks|thank you|شكراً?|يسلمو))*\s*[!.؟]*\s*$",
-    re.IGNORECASE | re.UNICODE,
-)
-_QUESTION_RE = re.compile(
-    r"("
-    r"[?؟]"
-    r"|\b(what|when|where|which|who|why|how|how much|tell me|do you|does this|"
-    r"is there|are there|can you|could you|looking for)\b"
-    r"|شو|وين|امتى|متى|كم|هل|ليش|كيف|عندكم|عندكن|بدي اعرف|خبرني|قلي"
-    r"|سعر|دوام|غلى|كلفة|عنوان|العنون"
-    r")",
-    re.IGNORECASE | re.UNICODE,
-)
-
-
-def is_comment_ack(message: str) -> bool:
-    text = (message or "").strip()
-    if not text:
-        return False
-    if _ACK_RE.match(text):
-        return True
-    if len(text) <= 8 and not _QUESTION_RE.search(text) and not any(ch.isalnum() for ch in text):
-        return True
-    return False
 
 
 def should_handoff_unanswered(
@@ -61,21 +28,22 @@ def should_handoff_unanswered(
     invocation_kind: str = "dm",
     message: str = "",
 ) -> bool:
-    """True only for a real unanswered question, never small-talk or operational misses."""
+    """True for unanswered planner questions. Acknowledgement-only plans do not hand off."""
+    _ = message
     if str(invocation_kind or "dm") not in _LIVE_KINDS:
         return False
     if outcome != "not_found":
         return False
     types = {task.type for task in plan.tasks}
-    if not types.intersection(_INFO_TYPES):
+    if types and types <= {"acknowledgement"}:
         return False
-    if _ACK_RE.match((message or "").strip()):
+    if not types.intersection(_INFO_TYPES):
         return False
     if types.intersection({"hours", "comparison"}):
         return True
     if _priced_or_named_info(plan):
         return True
-    return "information" in types and bool(_QUESTION_RE.search(message or ""))
+    return "information" in types
 
 
 def _priced_or_named_info(plan: PlannerPlan) -> bool:
@@ -120,6 +88,7 @@ async def unanswered_question_result(
     visual_reason: str,
     tool_rows: list[dict[str, Any]],
 ) -> TurnResult | None:
+    _ = (dest, lang)
     if not should_handoff_unanswered(
         plan=plan,
         outcome=outcome,

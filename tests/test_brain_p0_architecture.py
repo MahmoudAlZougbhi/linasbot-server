@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
-
 import pytest
 
-from services.brain.catalog_intent import is_catalog_list
+from services.brain.catalog_intent import catalog_filter_tokens
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.conversation_resolve import resolve_followup_query
 from services.brain.entity_identity import prefer_standalone, score_label
-from services.brain.greeting_policy import is_greeting_only
 from services.brain.grounding.facts import ungrounded_claims
 from services.brain.planner.heuristic import plan_message
 from services.brain.retrieve.conflict import apply_authority
@@ -33,24 +30,22 @@ def _item(**kwargs) -> EvidenceItem:
     return EvidenceItem(**payload)
 
 
-def test_greeting_only_phrases() -> None:
+def test_greeting_phrases_reach_fail_soft_information() -> None:
     for text in ("Hello", "Hi", "مرحبا", "Bonjour"):
-        assert is_greeting_only(text)
         plan = plan_message(text)
-        assert [task.type for task in plan.tasks] == ["acknowledgement"]
+        assert [task.type for task in plan.tasks] == ["information"]
 
 
 def test_greeting_only_does_not_plan_price_retrieve() -> None:
     plan = plan_message("Hello")
-    assert all(task.type != "information" for task in plan.tasks)
-    assert not any("prices" in (task.source_families or []) for task in plan.tasks)
+    assert all(task.type == "information" for task in plan.tasks)
 
 
 @pytest.mark.asyncio
-async def test_greeting_route_skips_faq_and_agentic(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_greeting_route_reaches_agentic(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.brain.turn_pipeline import run_dm_after_gates
 
-    async def greet(*_a, **k):
+    async def agentic(*_a, **k):
         return TurnResult(
             stop_reason="ok",
             envelope=FinalReplyEnvelope(
@@ -58,19 +53,25 @@ async def test_greeting_route_skips_faq_and_agentic(monkeypatch: pytest.MonkeyPa
                 messages=[OutboundMessage(destination="instagram_dm", text="Hi there")],
             ),
             ai_called=True,
-            extra={"path": "greeting_only", "retrieval_skipped": True},
+            extra={"path": "agentic"},
         )
 
-    monkeypatch.setattr("services.brain.agent.greeting_turn.identity_greeting_result", greet)
-    monkeypatch.setattr(
-        "services.brain.agent.loop.run_agentic_dm_path",
-        AsyncMock(side_effect=AssertionError("no agentic")),
-    )
+    async def no_confirm(*_a, **_k):
+        return None
+
+    monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", no_confirm)
+    monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
+
+    async def no_sem(*_a, **_k):
+        return None
+
+    monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", no_sem)
+    monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", agentic)
     turn = CustomerTurn(tenant_id="t1", conversation_id="c1", extra={"response_language": "en"})
     for text in ("Hello", "Hi", "مرحبا", "Bonjour"):
         out = await run_dm_after_gates(turn, message=text, channel="instagram_dm")
         assert out.envelope.messages[0].text == "Hi there"
-        assert (out.extra or {}).get("retrieval_skipped") is True
+        assert (out.extra or {}).get("retrieval_skipped") is not True
 
 
 def test_standalone_beats_overlapping_bundle() -> None:
@@ -161,13 +162,11 @@ def test_hours_critic_ignores_conversational_mention() -> None:
     assert any(item.startswith("hours:") for item in claimed)
 
 
-def test_catalog_list_intent_is_generic() -> None:
-    assert is_catalog_list("What services do you offer?")
-    assert is_catalog_list("شو خدمات الليزر اللي عندكن؟")
-    assert is_catalog_list("What products do you sell?")
+def test_catalog_filter_tokens_are_customer_words() -> None:
+    tokens = catalog_filter_tokens("What vegan mains do you offer?")
+    assert "vegan" in tokens
     plan = plan_message("What services do you offer?")
-    assert any("catalog_list" in task.entity_mentions for task in plan.tasks)
-    assert "laser" not in str(plan.model_dump())
+    assert all("catalog_list" not in task.entity_mentions for task in plan.tasks)
 
 
 def test_restaurant_followup_does_not_inherit_clinic_hardcodes() -> None:
@@ -177,6 +176,7 @@ def test_restaurant_followup_does_not_inherit_clinic_hardcodes() -> None:
         tenant_id="bistro",
     )
     blob = f"{resolved.rewritten_query} {resolved.carry}".lower()
+    assert resolved.rewritten_query == "What vegan mains do you have?"
     assert "laser" not in blob
     assert "antelias" not in blob
     assert "hamra" not in blob

@@ -28,8 +28,9 @@ def test_is_social_channel():
 def test_personal_care_not_human():
     types = {task.type for task in plan_message("personal care tips").tasks}
     assert "human_request" not in types
+    assert types == {"information"}
 
 
-def test_arabic_human_detected():
+def test_heuristic_does_not_keyword_detect_human():
     types = {task.type for task in plan_message("بدي احكي مع حدا").tasks}
-    assert "human_request" in types
+    assert types == {"information"}

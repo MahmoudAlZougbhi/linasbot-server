@@ -112,38 +112,6 @@ def _apply_turn_by_turn_policy(action: str, bot_reply: str, lang: str) -> str:
     return cleaned
 
 
-def _user_explicitly_requests_human_agent(text: str) -> bool:
-    """True if the current user message clearly asks to speak with a person (not inferred from history)."""
-    if not text or not str(text).strip():
-        return False
-    m = str(text).lower()
-    needles = (
-        "human",
-        "agent",
-        "person",
-        "staff",
-        "representative",
-        "operator",
-        "speak to",
-        "talk to someone",
-        "real person",
-        "live agent",
-        "customer service",
-        "advisor",
-        "supervisor",
-        "موظف",
-        "شخص",
-        "بشري",
-        "حد بشري",
-        "خدمة العملاء",
-        "بدي حدا",
-        "بدي موظف",
-        "بدي اتكلم",
-        "مدير",
-    )
-    return any(n in m for n in needles)
-
-
 def _reply_offers_handover_confirmation(text: str) -> bool:
     """True when the AI reply asks permission before connecting the user to staff."""
     if not text or not str(text).strip():

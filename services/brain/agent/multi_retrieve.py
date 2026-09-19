@@ -254,9 +254,7 @@ async def multi_round_retrieve(
             )
             break
 
-    from services.brain.catalog_intent import is_catalog_list
-
-    list_intent = is_catalog_list(message) or any("catalog_list" in task.entity_mentions for task in plan.tasks)
+    list_intent = any("catalog_list" in task.entity_mentions for task in plan.tasks)
     if list_intent:
         from services.brain.retrieve.catalog_list import catalog_list_items
 

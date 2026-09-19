@@ -1,6 +1,7 @@
 """
 Language Detection Service - Wraps services.brain.language_resolver
-Detects language BEFORE GPT call on each message
+
+Detects reply language BEFORE the GPT call. Marker lists never block or divert Terra/Sol.
 """
 
 from __future__ import annotations
@@ -27,9 +28,6 @@ FRENCH_MARKERS = (
     "tarif",
     "rendez-vous",
     "rdv",
-    "épilation",
-    "epilation",
-    "tatouage",
     "je veux",
     "je suis",
 )

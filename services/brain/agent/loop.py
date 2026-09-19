@@ -83,9 +83,9 @@ def _information_plan_for_comment(plan: PlannerPlan, message: str) -> PlannerPla
             )
         )
     if not tasks:
-        from services.brain.planner.heuristic import plan_message
+        from services.brain.planner.heuristic import fail_soft_plan
 
-        return plan_message(message)
+        return fail_soft_plan(message)
     read_only = all(
         task.type in {"information", "comparison", "hours", "acknowledgement", "draft_correction"} for task in tasks
     )
@@ -286,7 +286,7 @@ async def run_agentic_turn(
                     }
                 }
             )
-        from services.brain.agent.handoff_policy import is_comment_ack, unanswered_question_result
+        from services.brain.agent.handoff_policy import unanswered_question_result
 
         handed = await unanswered_question_result(
             turn,
@@ -305,13 +305,6 @@ async def run_agentic_turn(
         )
         if handed is not None:
             return handed
-        if turn.invocation_kind == "comment":
-            from services.brain.agent.greeting_turn import identity_greeting_result
-
-            if is_comment_ack(message):
-                greeted = await identity_greeting_result(turn, message=message, channel=channel, flow_base=extra)
-                if greeted.stop_reason == "ok" and any((item.text or "").strip() for item in greeted.envelope.messages):
-                    return greeted
         agent_trace.append({"step": "FINAL", "decision": "no_reply", "reason": bundle.outcome})
         return TurnResult(
             stop_reason=_stop_from_outcome(bundle.outcome),

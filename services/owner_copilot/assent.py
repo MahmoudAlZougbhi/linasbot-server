@@ -1,39 +1,15 @@
-"""Natural owner assent for pending high-impact confirmations (CM draft approve, etc.).
+"""Pending high-impact confirmations (CM draft approve, etc.).
 
-Short allowlist only — not an NLP stack. Grounded in booking FSM affirmatives +
-owner product language (ok / موافق / approve). Assent confirms Approve, which saves
-Draft then publishes Live for customer replies (same path as the Approve button).
+Confirm via the Approve UI button and/or an explicit `confirm_tool` call — never
+via ok/موافق keyword auto-confirm.
 """
 
 from __future__ import annotations
 
-import re
 import time
 from typing import Any
 
-# Same spirit as services/booking/booking_fsm.py _AFFIRM_RE, plus owner approve words.
-_AFFIRM_RE = re.compile(
-    r"(?i)^\s*("
-    r"ok|okay|okey|yes|yeah|yep|yup|sure|deal|done|confirm|approve|agreed?|"
-    r"go\s*ahead|do\s*it|save|"
-    r"agree(\s+to\s+save)?|"
-    r"approve(\s+(and\s+)?apply)?(\s+to\s+draft)?|"
-    r"تمام|اوكي|أوكي|اوك|أوك|ايه|نعم|اه|آه|تم|ماشي|حاضر|يلا|موافق|"
-    r"احفظ|نفذ|"
-    r"👍|✅"
-    r")\s*[.!؟]*\s*$",
-    re.UNICODE,
-)
-
 _PENDING_MAX_AGE_SEC = 6 * 3600
-
-
-def looks_like_owner_assent(text: str) -> bool:
-    """True for short natural affirmatives (ok, موافق, yes, …)."""
-    t = (text or "").strip()
-    if not t or len(t) > 80:
-        return False
-    return bool(_AFFIRM_RE.match(t))
 
 
 def _token_from_tool_call(tc: dict[str, Any]) -> str | None:

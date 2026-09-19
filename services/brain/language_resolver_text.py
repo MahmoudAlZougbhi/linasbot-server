@@ -81,7 +81,7 @@ NAME_EXCLUSIONS = {
     "shab",
     "chab",
     "sabieh",
-    "sabiye",  # gender words
+    "sabiye",  # common Franco words (language/name exclusions only)
     "bade",
     "badde",
     "badi",  # "I want"

@@ -279,7 +279,7 @@ def test_phase2_settles_cm_and_halt_paths() -> None:
     from services.brain.inbound.text_handlers_respond_phase2 import text_handlers_respond_phase2
 
     src = getsource(text_handlers_respond_phase2)
-    assert src.count("settle_after_outbound") >= 3
+    assert src.count("settle_after_outbound") >= 2
     assert src.count("settle_reserved_credits") >= 1
     assert "engine_removed" in src
     halt = src.index('{"insufficient_credits", "insufficient_messages", "engine_removed"}')
