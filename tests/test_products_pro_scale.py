@@ -31,6 +31,8 @@ LAYOUT_FILES = (
     "services/products/search_cards.py",
     "services/products/image_match.py",
     "services/products/reindex.py",
+    "services/products/media_descriptors.py",
+    "services/products/authorized_media.py",
     "services/brain/retrieve/products_hydrate.py",
     "services/brain/media/product_image_match.py",
     "services/brain/retrieve/hybrid.py",

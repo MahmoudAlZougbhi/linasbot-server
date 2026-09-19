@@ -71,10 +71,8 @@ def evidence_from_product(row: Any) -> EvidenceItem | None:
         parts.append(f"listed_price {price}")
     parts.append(f"availability {_attr(row, 'availability')}")
     from services.ai_setup.resource_attachment import customer_resource_descriptors
-    from services.brain.retrieve.attachment_evidence import (
-        format_resource_ref_block,
-        product_attachment_dicts,
-    )
+    from services.brain.retrieve.attachment_evidence import format_resource_ref_block
+    from services.products.media_descriptors import product_attachment_dicts
 
     source_item_id = f"products:{item_id}"
     attachments = product_attachment_dicts(row)

@@ -87,6 +87,7 @@ def list_published_inventory(
     tenant_id: str,
     query: str = "",
     source_ids: list[str] | None = None,
+    product_ids: list[str] | None = None,
     limit: int = 20,
 ) -> dict[str, Any]:
     out = empty_inventory()
@@ -95,33 +96,45 @@ def list_published_inventory(
     try:
         index = index_published_resources(tenant_id)
     except PublishedVersionError:
-        return out
+        index = {}
     except Exception:
-        return out
+        index = {}
     wanted = {str(item).strip() for item in (source_ids or []) if str(item).strip()}
     needle = (query or "").strip().casefold()
     scored: list[tuple[int, dict[str, Any]]] = []
-    for ref, record in index.items():
-        if not _source_hit(str(record.get("source_item_id") or ""), wanted):
-            continue
-        title = str(record.get("title") or "")
-        blob = f"{title} {record.get('description') or ''}".casefold()
-        score = 2 if wanted else 0
-        if needle:
-            score += sum(1 for token in needle.split() if len(token) > 2 and token in blob)
-        if wanted or score > 0 or not needle:
-            kind = str(record.get("resource_type") or "file")
-            scored.append(
-                (
-                    score,
-                    {
-                        "id": ref,
-                        "kind": kind,
-                        "title": title or ref,
-                        "source_item_id": str(record.get("source_item_id") or ""),
-                    },
+    include_published = bool(wanted) or not product_ids
+    if include_published:
+        for ref, record in index.items():
+            if not _source_hit(str(record.get("source_item_id") or ""), wanted):
+                continue
+            title = str(record.get("title") or "")
+            blob = f"{title} {record.get('description') or ''}".casefold()
+            score = 2 if wanted else 0
+            if needle:
+                score += sum(1 for token in needle.split() if len(token) > 2 and token in blob)
+            if wanted or score > 0 or not needle:
+                kind = str(record.get("resource_type") or "file")
+                scored.append(
+                    (
+                        score,
+                        {
+                            "id": ref,
+                            "kind": kind,
+                            "title": title or ref,
+                            "source_item_id": str(record.get("source_item_id") or ""),
+                        },
+                    )
                 )
-            )
+    if product_ids:
+        from services.products.authorized_media import list_product_inventory_items
+
+        for row in list_product_inventory_items(tenant_id=tenant_id, product_ids=product_ids):
+            title = str(row.get("title") or "")
+            blob = title.casefold()
+            score = 3
+            if needle:
+                score += sum(1 for token in needle.split() if len(token) > 2 and token in blob)
+            scored.append((score, row))
     scored.sort(key=lambda row: (-row[0], str(row[1].get("id") or "")))
     items = [row for _score, row in scored[: max(1, limit)]]
     counts = empty_inventory()
@@ -137,10 +150,14 @@ def run_check(args: dict[str, Any], turn: CustomerTurn) -> dict[str, Any]:
     if not isinstance(source_ids, list):
         source_ids = []
     query = str(args.get("query") or args.get("q") or args.get("text") or "").strip()
+    from services.products.authorized_media import product_ids_for_inventory
+
+    product_ids = product_ids_for_inventory(args, [str(item) for item in source_ids])
     inventory = list_published_inventory(
         tenant_id=turn.tenant_id,
         query=query,
         source_ids=[str(item) for item in source_ids],
+        product_ids=product_ids,
     )
     persist_inventory(turn, inventory)
     return {"ok": True, "data": inventory, "error": None}

@@ -26,3 +26,12 @@ Runtime is a tool executor around Terra. Terra authors customer text from EVIDEN
 2. Else GPT vision `describe_stills` → text → same RAG. Never invent a product.
 3. Voyage multimodal image search is `LINAS_PRODUCT_MULTIMODAL_SEARCH` (default OFF).
 4. Fingerprint lookup is **not** million-row HNSW. It uses exact sha256 plus an 8-bit pHash prefix bucket, capped by `LINAS_PRODUCT_IMAGE_SCAN_CAP` (default 4000). Catalog text search still uses Voyage pgvector HNSW.
+
+## AI-first executor
+
+Terra decides which product matters and whether to offer/send media. The runtime only:
+
+- `search_products` / `get_product` — hybrid top-K then hydrate **by id** (never `list_all_for_tenant` on a customer turn)
+- `check_setup_resources` — inventory counts/ids for published CM **and** `products:{id}`
+- `send_resource` — explicit ids/kinds; product media uses the same `queued_for_channel` → `_pending_product_media` bridge
+- inbound pHash — candidate product ids as EVIDENCE only; no auto-send

@@ -78,6 +78,27 @@ def evidence_for_product_ids(
     return items
 
 
+def product_tool_payload(item: EvidenceItem, *, body_limit: int = 0) -> dict[str, Any]:
+    """Executor JSON for get_product / search_products. Keeps ATTACHMENTS when truncating."""
+    text = str(item.text or "")
+    marker = "\nATTACHMENTS "
+    if body_limit > 0 and len(text) > body_limit and marker in text:
+        body, attach = text.split(marker, 1)
+        text = body[:body_limit].rstrip() + marker + attach
+    elif body_limit > 0 and len(text) > body_limit:
+        text = text[:body_limit]
+    extra = item.extra or {}
+    return {
+        "id": item.source_id,
+        "family": "products",
+        "title": item.title,
+        "text": text,
+        "resource_refs": list(extra.get("resource_refs") or []),
+        "availability": extra.get("availability"),
+        "listed_price": extra.get("listed_price"),
+    }
+
+
 def _source_id(item_id: str) -> str:
     _, _, source_id = (item_id or "").partition(":")
     return source_id or item_id

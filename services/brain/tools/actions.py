@@ -84,6 +84,10 @@ async def run_action(name: str, args: dict[str, Any], turn: CustomerTurn) -> dic
                 },
                 "receipt": None,
             }
+    if name == "send_resource" and "allowed_source_ids" not in fields:
+        extra_ids = turn.extra.get("evidence_source_ids")
+        if isinstance(extra_ids, list) and extra_ids:
+            fields["allowed_source_ids"] = extra_ids
     target_id = str(
         args.get("target_id")
         or args.get("resource_id")

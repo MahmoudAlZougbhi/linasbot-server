@@ -25,9 +25,9 @@ async def send_meta_social_outbound(
     user_data: dict[str, Any],
 ) -> Any:
     _ = image_url, audio_url
-    from services.brain.tools.resource_delivery import has_queued_setup_resources
+    from services.brain.tools.resource_delivery import has_queued_channel_resources
 
-    pending_resources = has_queued_setup_resources(user_data)
+    pending_resources = has_queued_channel_resources(user_data)
     if capture_send is not None:
         if message_text:
             await capture_send(namespaced_id, message_text, image_url, audio_url)
