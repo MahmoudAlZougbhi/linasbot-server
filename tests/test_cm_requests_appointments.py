@@ -25,7 +25,6 @@ from services.requests.constants import CM_SECTION_REQUESTS_APPOINTMENTS
 def test_section_registered_end_to_end() -> None:
     assert CM_SECTION_REQUESTS_APPOINTMENTS == "requests_appointments"
     assert "requests_appointments" in CM_SECTIONS
-    assert CM_SECTIONS[-1] == "requests_appointments"
     assert "requests_appointments" in SECTION_MODELS
     guide = guide_for_section("requests_appointments")
     assert guide is not None

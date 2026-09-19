@@ -88,8 +88,6 @@ def test_pack_owner_turn_follows_user_message(monkeypatch) -> None:
             },
         },
     )
-    monkeypatch.setattr("services.owner_copilot.context.retrieve_capabilities", lambda *_a, **_k: [])
-    # Free Arabic typing with English app locale → Arabic
     ctx = pack_owner_turn_context(
         tenant_id="t1",
         user_id="u1",
@@ -126,7 +124,6 @@ def test_pack_owner_turn_welcome_chip_uses_app_locale(monkeypatch) -> None:
             },
         },
     )
-    monkeypatch.setattr("services.owner_copilot.context.retrieve_capabilities", lambda *_a, **_k: [])
     chip = next(c for c in welcome_chips(setup_stage="new", language="ar") if c["id"] == "learn_app")
     ctx = pack_owner_turn_context(
         tenant_id="t1",

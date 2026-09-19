@@ -111,6 +111,9 @@ export function ProposalCard({
         <View style={styles.badges}>
           <Badge label={status.replace(/_/g, ' ')} tone="muted" />
           {isDelete ? <Badge label={tr('proposalDeleteBadge')} tone="danger" /> : null}
+          {!isDelete && str(preview.change_kind) ? (
+            <Badge label={str(preview.change_kind)} tone="muted" />
+          ) : null}
           <Badge label={tr('proposalDraftBadge')} tone="accent" />
         </View>
       </View>

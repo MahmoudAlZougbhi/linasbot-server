@@ -9,7 +9,6 @@ from services.owner_copilot.creative_policy import CANCELLED_CREATIVE_TOOLS, cre
 from services.owner_copilot.flags import (
     owner_copilot_meta_actions_enabled,
     owner_copilot_shadow_planning,
-    owner_copilot_writes_enabled,
 )
 from services.owner_copilot.tools import HIGH_IMPACT_TOOLS, dispatch_tool
 from services.owner_copilot.tools_base import ToolResult
@@ -21,12 +20,15 @@ WRITE_TOOLS = frozenset(
         "propose_cm_faq_upsert",
         "propose_cm_delete",
         "approve_cm_patch",
+        "approve_cm_batch",
         "publish_cm",
         "propose_diagnosis_fix",
         "approve_diagnosis_fix",
         "propose_smart_answer",
         "approve_smart_answer",
         "update_profile",
+        "propose_comment_rule",
+        "propose_channel_flags",
     }
 )
 
@@ -104,20 +106,21 @@ async def dispatch_v2_tool(
     # but block approve/publish/profile writes when writes disabled.
     mutating = name in {
         "approve_cm_patch",
+        "approve_cm_batch",
         "publish_cm",
         "approve_diagnosis_fix",
         "approve_smart_answer",
         "update_profile",
     }
-    if mutating and (not owner_copilot_writes_enabled() or owner_copilot_shadow_planning()):
+    if mutating and owner_copilot_shadow_planning():
         return ToolResult(
             ok=False,
             name=name,
-            data={"shadow": True, "writes_enabled": False},
+            data={"shadow": True, "writes_enabled": True},
             error=(
-                "AI Setup Draft writes are disabled on the server "
-                "(OWNER_COPILOT_WRITES / shadow mode). Proposals can be reviewed, "
-                "but Approve cannot save until writes are enabled."
+                "AI Setup writes are in explicit shadow mode "
+                "(OWNER_COPILOT_SHADOW_PLANNING). Proposals can be reviewed, "
+                "but Approve cannot save until shadow planning is off."
             ),
         )
 
@@ -125,6 +128,19 @@ async def dispatch_v2_tool(
     if name in HIGH_IMPACT_TOOLS and name.startswith("approve_") and not confirmed:
         # Let underlying tool return requires_confirmation
         pass
+
+    from services.owner_copilot.tools_sol_extra import dispatch_sol_extra_tool
+
+    extra = await dispatch_sol_extra_tool(
+        name,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        role=role,
+        args=a,
+        confirmed=confirmed,
+    )
+    if extra is not None:
+        return extra
 
     return await dispatch_tool(
         name,

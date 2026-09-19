@@ -15,6 +15,8 @@ export type CmSectionId =
   | 'comments'
   | 'off_days'
   | 'requests_appointments'
+  | 'sol_basics'
+  | 'sol_app_knowledge'
   /** Settings-hosted (not listed in CM hub). */
   | 'ai_limits';
 
@@ -120,6 +122,18 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     id: 'requests_appointments',
     title: 'Requests',
     description: 'Request rules with type, title, and custom note.',
+    mobileSupported: true,
+  },
+  {
+    id: 'sol_basics',
+    title: 'Sol',
+    description: 'Owner AI identity, tone, and operating instructions.',
+    mobileSupported: true,
+  },
+  {
+    id: 'sol_app_knowledge',
+    title: 'Sol knowledge',
+    description: 'How the Linas app works for owners (retrieved into Sol, not customers).',
     mobileSupported: true,
   },
   {

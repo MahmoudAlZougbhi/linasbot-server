@@ -21,10 +21,11 @@ ITEMS_SECTIONS = frozenset(
         "opening_hours",
         "dynamic_messages",
         "actions",
+        "sol_app_knowledge",
     }
 )
 # Soft-archive via ``status`` when present.
-STATUS_ARCHIVE_SECTIONS = frozenset({"faq", "knowledge", "care"})
+STATUS_ARCHIVE_SECTIONS = frozenset({"faq", "knowledge", "care", "sol_app_knowledge"})
 # Soft-hide via ``available=False``.
 AVAILABLE_SECTIONS = frozenset({"branches"})
 
@@ -38,6 +39,7 @@ FIELD_SECTIONS = frozenset(
         "comments",
         "ai_limits",
         "off_days",
+        "sol_basics",
     }
 )
 

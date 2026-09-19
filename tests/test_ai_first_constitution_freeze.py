@@ -57,6 +57,8 @@ def test_constitution_files_exist() -> None:
     assert "Comment surface replies are public-thread authored by Terra" in law
     assert "one Terra agent session per turn" in law
     assert "No separate planner / request-round / tool-picker / greeting LLM" in law
+    assert "one composed system block per turn from published portal CM" in law
+    assert "No concatenated SYSTEM_V2 + SYSTEM_PROMPT" in law
 
 
 def test_gating_lexicons_stay_gone() -> None:

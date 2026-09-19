@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from services.guest.guest_ai_service import build_guest_system_prompt
-from services.owner_copilot.brain_support import SYSTEM_V2
-from services.owner_copilot.context import SYSTEM_PROMPT
 from services.owner_copilot.response_formatting import RESPONSE_FORMATTING_RULES
+from services.owner_copilot.sol_seed import SOL_SEED_ADVANCED
 
 
 def test_response_formatting_rules_are_scannable_and_bilingual_safe() -> None:
@@ -20,5 +19,4 @@ def test_response_formatting_rules_are_scannable_and_bilingual_safe() -> None:
 def test_guest_owner_and_customer_prompts_reuse_shared_formatting() -> None:
     guest = build_guest_system_prompt(language="en", knowledge_block="")
     assert RESPONSE_FORMATTING_RULES in guest
-    assert RESPONSE_FORMATTING_RULES in SYSTEM_PROMPT
-    assert RESPONSE_FORMATTING_RULES in SYSTEM_V2
+    assert RESPONSE_FORMATTING_RULES in SOL_SEED_ADVANCED

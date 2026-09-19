@@ -37,15 +37,21 @@ import {
 import { useKnowledgeMedia } from './useKnowledgeMedia';
 
 type Props = {
+  section?: 'knowledge' | 'sol_app_knowledge';
   proposalReview?: CmProposalReview | null;
   onBack?: () => void;
   onOpenLocations?: () => void;
 };
 
-export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Props) {
+export function KnowledgeScreen({
+  section = 'knowledge',
+  proposalReview,
+  onBack,
+  onOpenLocations,
+}: Props) {
   const { tr } = useI18n();
   const insets = useSafeAreaInsets();
-  const draft = useCmDraft('knowledge', proposalReview);
+  const draft = useCmDraft(section, proposalReview);
   const [mode, setMode] = useState<'list' | 'edit'>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -55,7 +61,10 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
     [draft.payload.items],
   );
   const selected = items.find((item) => item.id === selectedId) || null;
-  const rows = useMemo(() => buildKnowledgeList(items, query), [items, query]);
+  const rows = useMemo(
+    () => buildKnowledgeList(items, query, { includeLocations: section === 'knowledge' }),
+    [items, query, section],
+  );
 
   function setItems(next: KnowledgeItem[]) {
     draft.setPayload({ ...draft.payload, items: next.map(itemToRecord) });
@@ -109,8 +118,14 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
 
   return (
     <ScreenChrome
-      title={tr('aiSetupSec_knowledge')}
-      subtitle={mode === 'list' ? tr('knowledgeSubtitle') : undefined}
+      title={section === 'sol_app_knowledge' ? 'Sol knowledge' : tr('aiSetupSec_knowledge')}
+      subtitle={
+        mode === 'list'
+          ? section === 'sol_app_knowledge'
+            ? 'Articles Sol retrieves about how the owner app works.'
+            : tr('knowledgeSubtitle')
+          : undefined
+      }
       onBack={mode === 'edit' ? goList : onBack}
       canvasColor={KN_CANVAS}
     >

@@ -9,10 +9,10 @@ import pytest
 
 def _stub_context(**_: Any) -> dict[str, Any]:
     return {
-        "system_prompt": "x",
+        "sol_system": "stub + identity",
+        "sol_unconfigured": False,
         "account_summary": {"setup_stage": "ready", "profile": {"preferred_language": "en"}},
         "knowledge_block": "",
-        "capabilities": ["system_copilot"],
         "recent_messages": [],
         "conversation_summary": None,
         "reply_language": "en",
@@ -41,6 +41,7 @@ async def test_v2_creative_request_reaches_sol_no_pre_refuse(monkeypatch: pytest
     monkeypatch.setattr("services.owner_copilot.message_billing.owner_turn_hold_finalize", lambda *_a, **_k: None)
     monkeypatch.setattr("services.owner_copilot.message_billing.owner_turn_hold_abort", lambda *_a, **_k: None)
     monkeypatch.setattr("services.owner_copilot.context.pack_owner_turn_context", _stub_context)
+    monkeypatch.setattr("services.owner_copilot.brain_stream_body.pack_owner_turn_context", _stub_context)
     called = {"sol": False}
 
     async def fake_round(**_k):

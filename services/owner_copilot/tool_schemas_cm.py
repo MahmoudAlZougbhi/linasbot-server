@@ -61,7 +61,10 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "section": {"type": "string", "enum": ["knowledge", "care"]},
+                    "section": {
+                        "type": "string",
+                        "enum": ["knowledge", "care", "sol_app_knowledge"],
+                    },
                     "status": {"type": "string"},
                     "offset": {"type": "integer"},
                     "limit": {"type": "integer"},
@@ -81,7 +84,10 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "section": {"type": "string", "enum": ["knowledge", "care"]},
+                    "section": {
+                        "type": "string",
+                        "enum": ["knowledge", "care", "sol_app_knowledge"],
+                    },
                     "article_id": {"type": "string"},
                     "body_offset": {"type": "integer"},
                     "body_limit": {"type": "integer"},
@@ -180,7 +186,10 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "section": {"type": "string", "enum": ["knowledge", "care"]},
+                    "section": {
+                        "type": "string",
+                        "enum": ["knowledge", "care", "sol_app_knowledge"],
+                    },
                     "article": {
                         "type": "object",
                         "properties": {

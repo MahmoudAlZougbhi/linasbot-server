@@ -132,6 +132,14 @@ def assess_section_fill(
     """Return fill level + gaps for one CM section (never invents sections)."""
     name = section.strip().replace("-", "_")
 
+    if name in {"sol_basics", "sol_app_knowledge"}:
+        return {
+            "fill": "filled",
+            "is_done": True,
+            "gaps": [],
+            "summary": "Owner Sol brain — edit in AI Setup → Sol. Skipped in customer fill walks.",
+        }
+
     # Comments policy is optional advanced control — empty defaults are intentional.
     if name == "comments":
         if is_default or not isinstance(payload, dict):

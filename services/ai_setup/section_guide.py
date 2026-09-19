@@ -179,6 +179,27 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "useful": "Leave empty until ready; unpublished or no rules keeps AI capture inactive.",
         "app_path": "AI Setup → Requests",
     },
+    "sol_basics": {
+        "title": "Sol (Owner AI)",
+        "purpose": "Identity, tone, do/don't, and operating instructions for the owner copilot.",
+        "why": "Sol reads this published section as its only persona source.",
+        "what_to_fill": [
+            "assistant_name",
+            "ai_role / tone / reply_style",
+            "do_list / dont_list",
+            "advanced_instructions",
+        ],
+        "useful": "Save to publish. Empty published Sol fails soft until configured.",
+        "app_path": "AI Setup → Sol",
+    },
+    "sol_app_knowledge": {
+        "title": "Sol app knowledge",
+        "purpose": "How the Linas owner app works (AI Setup, Comments, Requests, Billing, Integrations).",
+        "why": "Targeted retrieve into Sol EVIDENCE — not dumped into customer Terra.",
+        "what_to_fill": ["items[] articles with title and body"],
+        "useful": "Reuse Knowledge editor; publish/activate like other CM articles.",
+        "app_path": "AI Setup → Sol knowledge",
+    },
 }
 
 

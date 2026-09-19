@@ -54,6 +54,7 @@ from services.ai_setup.schemas_requests import (  # noqa: F401
     RequestRule,
     RequestsAppointmentsSection,
 )
+from services.ai_setup.schemas_sol import SolBasics  # noqa: F401
 
 
 class AiLimitsSection(CmBaseModel):
@@ -383,28 +384,6 @@ def initial_restricted_policy(*, active: bool = False) -> RestrictedPolicy:
 
 def default_section_payload(section: str) -> dict[str, object]:
     """Empty-but-valid draft payload for a CM section."""
-    builders: dict[str, CmBaseModel] = {
-        "ai_basics": AiBasics(),
-        "languages": LanguagePolicy(),
-        "style": StylePolicy(),
-        "dynamic_messages": DynamicMessagesSection(),
-        "services": ServicesSection(),
-        "branches": BranchesSection(),
-        "prices": PricesSection(),
-        "care": CareSection(),
-        "knowledge": KnowledgeSection(),
-        "faq": FaqSection(),
-        "handoff": HandoffPolicy(),
-        # Empty by default — Restricted Topics are owner-configured, not auto-seeded.
-        "restricted": RestrictedPolicy(),
-        "actions": ActionsSection(),
-        "comments": CommentsSection(),
-        "ai_limits": AiLimitsSection(),
-        "off_days": OffDaysSection(),
-        "opening_hours": OpeningHoursSection(),
-        "requests_appointments": RequestsAppointmentsSection(),
-    }
-    model = builders.get(section)
-    if model is None:
-        return {}
-    return model.model_dump(mode="json")
+    from services.ai_setup.section_defaults import default_section_payload as _default
+
+    return _default(section)

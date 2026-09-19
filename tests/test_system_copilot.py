@@ -210,14 +210,14 @@ def test_greeting_stages(monkeypatch: pytest.MonkeyPatch) -> None:
     assert g["gender"] == "unset"
 
 
-def test_owner_and_guest_prompts_share_friendly_emoji_voice() -> None:
+def test_guest_and_sol_seed_share_friendly_emoji_voice() -> None:
     from services.guest.guest_ai_service import build_guest_greeting, build_guest_system_prompt
-    from services.owner_copilot.context import SYSTEM_PROMPT
     from services.owner_copilot.response_formatting import RESPONSE_FORMATTING_RULES
+    from services.owner_copilot.sol_seed import SOL_SEED_ADVANCED, SOL_SEED_TONE
 
-    assert "tasteful emojis" in SYSTEM_PROMPT
-    assert "warm, friendly" in SYSTEM_PROMPT
-    assert RESPONSE_FORMATTING_RULES in SYSTEM_PROMPT
+    assert "tasteful emojis" in SOL_SEED_TONE
+    assert "warm, friendly" in SOL_SEED_TONE
+    assert RESPONSE_FORMATTING_RULES in SOL_SEED_ADVANCED
     guest = build_guest_system_prompt(language="ar", knowledge_block="")
     assert "tasteful emojis" in guest
     assert "warm, friendly" in guest

@@ -150,7 +150,7 @@ def _proposal_body(preview: dict[str, Any]) -> str:
         return f"Proposed {section} · {field}"
     if section:
         return f"Proposed change in {section}"
-    return "Review the change on the bar — Approve, Cancel, or Edit. Assent (ok / موافق) also Approves."
+    return "Review the change on the bar — Approve, Cancel, or Edit."
 
 
 def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | None:
@@ -168,8 +168,12 @@ def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | N
         preview = payload.get("preview") if isinstance(payload.get("preview"), dict) else {}
         assert isinstance(preview, dict)
         is_delete = name == "propose_cm_delete" or str(preview.get("kind") or "") == "cm_delete"
+        kind = str(preview.get("change_kind") or ("delete" if is_delete else "edit"))
+        section = str(preview.get("section") or "").strip()
+        title_bit = str(preview.get("item_title") or preview.get("field") or section or "AI Setup")
+        title = "Delete from AI Setup" if is_delete else f"{title_bit} ({kind})"
         return proposal_card(
-            title="Delete from AI Setup" if is_delete else "AI Setup change",
+            title=title,
             body=_delete_body(preview) if is_delete else _proposal_body(preview),
             proposal_id=str(payload["proposal_id"]),
             preview=preview,
@@ -216,3 +220,25 @@ def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | N
             error=err or name,
         )
     return None
+
+
+def cards_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> list[ChatCard]:
+    payload = data if isinstance(data, dict) else {}
+    if name == "ingest_business_dump" and ok:
+        out: list[ChatCard] = []
+        rows = payload.get("proposals")
+        if not isinstance(rows, list) or not rows:
+            first = payload.get("first_proposal")
+            rows = [first] if isinstance(first, dict) else []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            inner = row.get("data") if isinstance(row.get("data"), dict) else row
+            if not isinstance(inner, dict):
+                continue
+            card = card_from_tool("propose_cm_patch", inner, ok=True)
+            if card:
+                out.append(card)
+        return out
+    card = card_from_tool(name, payload, ok=ok)
+    return [card] if card else []

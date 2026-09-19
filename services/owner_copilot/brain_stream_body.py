@@ -13,7 +13,7 @@ from services.owner_copilot.brain_support import (
     done_payload,
     status_label,
 )
-from services.owner_copilot.cards import card_from_tool
+from services.owner_copilot.cards import cards_from_tool
 from services.owner_copilot.choices import choices_from_tool_result, make_choice_set
 from services.owner_copilot.confirm_path import run_confirm_path
 from services.owner_copilot.context import pack_owner_turn_context
@@ -122,6 +122,26 @@ async def _iter_owner_turn_v2_events_body(
             policy=policy,
         ):
             yield ev
+        return
+
+    if context.get("sol_unconfigured"):
+        from services.owner_copilot.sol_runtime_stub import sol_unconfigured_message
+
+        msg = sol_unconfigured_message(language=reply_lang)
+        yield StreamEvent(type="delta", payload={"text": msg})
+        yield StreamEvent(
+            type="done",
+            payload=done_payload(
+                reply_text=msg,
+                tool_calls=[],
+                cards=[],
+                choices=[],
+                model=model,
+                ctx_tokens=ctx_tokens,
+                stage=stage,
+                reason="sol_unconfigured",
+            ),
+        )
         return
 
     if not text and not (attachment_ids or []):
@@ -266,8 +286,9 @@ async def _iter_owner_turn_v2_events_body(
                 )
                 tool_calls_acc.append(result.to_dict())
                 chat_messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result_for_model(result)})
-                card = card_from_tool(result.name, result.data if isinstance(result.data, dict) else {}, ok=result.ok)
-                if card:
+                for card in cards_from_tool(
+                    result.name, result.data if isinstance(result.data, dict) else {}, ok=result.ok
+                ):
                     cards_acc.append(card.to_dict())
                     yield StreamEvent(type="card", payload={"card": card.to_dict()})
                 for ch in choices_from_tool_result(result.name, result.data if isinstance(result.data, dict) else {}):

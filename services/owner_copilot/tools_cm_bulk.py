@@ -142,24 +142,30 @@ async def tool_ingest_business_dump(
     )
     fill = fp.start_fill_plan(tenant_id=tenant_id, user_id=user_id)
 
-    proposed: dict[str, Any] | None = None
+    proposed: list[dict[str, Any]] = []
     propose_error: str | None = None
-    first = bf.peek_next_pending(plan)
-    if propose_first and first:
-        prop = await tool_propose_cm_patch(
-            tenant_id=tenant_id,
-            role=role,
-            user_id=user_id,
-            section=str(first["section"]),
-            patch=dict(first.get("patch") or {}),
-        )
-        if prop.ok:
-            proposed = prop.to_dict()
-            plan = bf.mark_section_status(plan, str(first["section"]), "proposed")
-            bf.save_bulk_plan(tenant_id, user_id, plan)
-        else:
-            propose_error = prop.error
+    max_batch = 12
+    if propose_first:
+        remaining = [
+            row for row in (plan.get("queue") or []) if isinstance(row, dict) and row.get("status") == "pending"
+        ]
+        for first in remaining[:max_batch]:
+            prop = await tool_propose_cm_patch(
+                tenant_id=tenant_id,
+                role=role,
+                user_id=user_id,
+                section=str(first["section"]),
+                patch=dict(first.get("patch") or {}),
+            )
+            if prop.ok:
+                proposed.append(prop.to_dict())
+                plan = bf.mark_section_status(plan, str(first["section"]), "proposed")
+                bf.save_bulk_plan(tenant_id, user_id, plan)
+            else:
+                propose_error = prop.error
+                break
 
+    first_proposed = proposed[0] if proposed else None
     pending_n = sum(1 for r in plan.get("queue") or [] if isinstance(r, dict) and r.get("status") == "pending")
     return ToolResult(
         ok=True,
@@ -179,22 +185,26 @@ async def tool_ingest_business_dump(
                 "remaining": fill.get("remaining"),
                 "done": fill.get("done"),
             },
-            "first_proposal": proposed,
+            "proposals": proposed,
+            "first_proposal": first_proposed,
             "propose_error": propose_error,
             "ai_directive": (
                 "Announce which sections you filled from the dump. "
-                "Show the first proposal card and wait for Approve / ok. "
-                "After each approve the system auto-continues remaining dump sections. "
-                "At the end, list still-empty sections and ask fill or skip."
+                "If missing_notes is non-empty, ASK those gap questions before treating those slices as complete. "
+                "Show every proposal card; the owner may Approve one, selected, or all. "
+                "Approving one card must not discard sibling pending cards. "
+                "Never invent phones, prices, hours, or comment wording."
             ),
         },
-        requires_confirmation=bool(proposed and proposed.get("requires_confirmation")),
+        requires_confirmation=bool(first_proposed and first_proposed.get("requires_confirmation")),
         confirmation_token=(
-            str(proposed.get("confirmation_token")) if proposed and proposed.get("confirmation_token") else None
+            str(first_proposed.get("confirmation_token"))
+            if first_proposed and first_proposed.get("confirmation_token")
+            else None
         ),
         error=(
-            "Owner confirmation required before CM draft is saved (Approve button or short assent)"
-            if proposed and proposed.get("requires_confirmation")
+            "Owner confirmation required before CM draft is saved (Approve button)"
+            if first_proposed and first_proposed.get("requires_confirmation")
             else None
         ),
     )

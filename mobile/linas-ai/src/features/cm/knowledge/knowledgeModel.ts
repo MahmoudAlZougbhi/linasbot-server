@@ -276,14 +276,18 @@ export function locationsRowMatches(query: string): boolean {
   return LOCATIONS_KNOWLEDGE_TITLE.toLowerCase().includes(q) || 'opening hours'.includes(q);
 }
 
-export function buildKnowledgeList(items: KnowledgeItem[], query: string): KnowledgeListRow[] {
+export function buildKnowledgeList(
+  items: KnowledgeItem[],
+  query: string,
+  opts?: { includeLocations?: boolean },
+): KnowledgeListRow[] {
   const articles = items
     .filter((item) => !isLocationsKnowledgeTitle(item.title))
     .filter((item) => item.status !== 'archived')
     .filter((item) => matchesQuery(item, query))
     .map((item) => ({ type: 'article' as const, item }));
   const rows: KnowledgeListRow[] = [...articles];
-  if (locationsRowMatches(query)) {
+  if ((opts?.includeLocations ?? true) && locationsRowMatches(query)) {
     rows.push({ type: 'locations' });
   }
   return rows;
