@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from services.brain.actions.human_handoff_policy import allow_policy_only_generate, commit_pending_human_escalate
-from services.brain.agent.action_gate import append_handoff_message, apply_action_gate
+from services.brain.agent.action_gate import apply_action_gate
 from services.brain.agent.default_plan import default_agentic_plan, information_plan_for_comment
 from services.brain.agent.generate_path import generate_verified
 from services.brain.agent.multi_retrieve import multi_round_retrieve
@@ -158,54 +158,11 @@ async def run_agentic_turn(
     extra["tool_calls"] = tool_rows
     from services.brain.tools.resource_delivery import apply_resource_tool_side_effects
 
-    bundle, extra, evidence, delivered_receipts = apply_resource_tool_side_effects(
+    bundle, extra, evidence, resource_receipts = apply_resource_tool_side_effects(
         turn, bundle, extra, evidence_preview=evidence_preview
     )
 
-    resource_receipts: list[dict] = []
-    resource_result = None
-    if any(task.type == "resource_request" for task in plan.tasks):
-        from services.brain.actions.resource_turn import resource_request_result
-
-        evidence_ids = [item.source_id for item in bundle.items] + [item.evidence_id for item in bundle.items]
-        resource_result = await resource_request_result(
-            turn, message=message, channel=channel, plan=plan, evidence_source_ids=evidence_ids
-        )
-        info_tasks = [task for task in plan.tasks if task.type in {"information", "hours", "comparison"}]
-        if resource_result is not None and not info_tasks:
-            agent_trace.append({"step": "FINAL", "decision": "resource"})
-            envelope = append_handoff_message(resource_result.envelope, extra, dest=dest, lang=lang)
-            return resource_result.model_copy(
-                update={
-                    "envelope": envelope,
-                    "extra": _flow_extra(
-                        {
-                            **(resource_result.extra or {}),
-                            **extra,
-                            "evidence_preview": evidence,
-                            "agent_trace": agent_trace,
-                        },
-                        ("resource", "Prepared authorized resource to send", None),
-                    ),
-                }
-            )
-        if resource_result is not None:
-            resource_receipts = list((resource_result.extra or {}).get("receipts") or [])
-    if delivered_receipts:
-        resource_receipts = list(resource_receipts) + list(delivered_receipts)
-
     if bundle.outcome != "found" and not allow_policy_only_generate(extra):
-        if resource_result is not None:
-            return resource_result.model_copy(
-                update={
-                    "extra": {
-                        **(resource_result.extra or {}),
-                        **extra,
-                        "evidence_preview": evidence,
-                        "agent_trace": agent_trace,
-                    }
-                }
-            )
         from services.brain.agent.handoff_policy import unanswered_question_result
 
         handed = await unanswered_question_result(

@@ -16,6 +16,11 @@ import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  bulkToAuditV2,
+  fetchBulkAdvisories,
+  productionVersionsFromLock,
+} from "./npm_audit_bulk.mjs";
 
 const ADVISORY_ID = "GHSA-qwww-vcr4-c8h2";
 const PATCHED_FLOOR_7 = "7.18.2";
@@ -69,31 +74,46 @@ function appIsDeclarativeNonRsc() {
   return usesBrowserRouter && !usesRsc;
 }
 
-let report;
-try {
-  report = JSON.parse(
-    execSync("npm audit --omit=dev --json", { cwd: root, encoding: "utf8" })
-  );
-} catch (e) {
-  const out = e.stdout?.toString?.() || e.output?.toString?.() || "";
+function completeAuditReport(report) {
+  const auditMeta = report?.metadata?.vulnerabilities;
+  const completeSeverityCounts =
+    auditMeta &&
+    ["info", "low", "moderate", "high", "critical", "total"].every(
+      (severity) => Number.isInteger(auditMeta[severity]) && auditMeta[severity] >= 0
+    );
+  return Boolean(report) && !report.error && report.auditReportVersion === 2 && completeSeverityCounts;
+}
+
+function loadNpmCliAudit() {
   try {
-    report = JSON.parse(out);
-  } catch {
-    console.error("npm audit failed without JSON");
-    process.exit(1);
+    return JSON.parse(execSync("npm audit --omit=dev --json", { cwd: root, encoding: "utf8" }));
+  } catch (e) {
+    const out = e.stdout?.toString?.() || e.output?.toString?.() || "";
+    try {
+      return JSON.parse(out);
+    } catch {
+      return { error: "npm_audit_no_json" };
+    }
   }
 }
 
-const auditMeta = report?.metadata?.vulnerabilities;
-const completeSeverityCounts =
-  auditMeta &&
-  ["info", "low", "moderate", "high", "critical", "total"].every(
-    (severity) => Number.isInteger(auditMeta[severity]) && auditMeta[severity] >= 0
-  );
-if (report?.error || report?.auditReportVersion !== 2 || !completeSeverityCounts) {
+let report = loadNpmCliAudit();
+if (!completeAuditReport(report)) {
+  console.error("npm CLI audit incomplete; querying registry bulk advisory endpoint");
+  try {
+    const bulk = await fetchBulkAdvisories(productionVersionsFromLock(join(root, "package-lock.json")));
+    report = bulkToAuditV2(bulk);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+}
+if (!completeAuditReport(report)) {
   console.error("npm audit returned an incomplete or error report; refusing to pass");
   process.exit(1);
 }
+
+const auditMeta = report.metadata.vulnerabilities;
 
 const vulns = report.vulnerabilities || {};
 const allow = [];
