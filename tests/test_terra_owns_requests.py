@@ -20,7 +20,8 @@ def test_loop_source_has_no_plan_turn() -> None:
     text = Path(agent_loop.__file__).read_text(encoding="utf-8")
     assert "plan_turn" not in text
     assert "openai_plan" not in text
-    assert "run_terra_request_round" in text
+    assert "run_terra_request_round" not in text
+    assert "run_terra_turn" in text
     assert "default_agentic_plan" in getsource(agent_loop.run_agentic_dm_path)
 
 
@@ -68,14 +69,10 @@ async def test_agentic_dm_does_not_call_plan_turn(monkeypatch: pytest.MonkeyPatc
             extra=dict(turn.extra or {}),
         )
 
-    async def idle_terra(*_a, **_k):
-        return [], [], 0, {"request_state": {"module_enabled": False}}
-
     monkeypatch.setattr("services.brain.planner.openai_plan.plan_turn", boom)
     monkeypatch.setattr("services.brain.planner.openai_plan.plan_with_openai", boom)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", found_retrieve)
-    monkeypatch.setattr("services.brain.agent.loop.generate_verified", fake_generate)
-    monkeypatch.setattr("services.brain.agent.loop.run_terra_request_round", idle_terra)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", fake_generate)
     monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
     monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
 

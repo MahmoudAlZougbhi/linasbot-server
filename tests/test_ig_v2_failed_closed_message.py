@@ -65,13 +65,14 @@ async def test_identity_greeting_is_terra_path_not_catalog_retrieve(monkeypatch:
         return _Resp()
 
     monkeypatch.setattr("services.brain.agent.greeting_turn.openai_configured", lambda: True)
+    monkeypatch.setattr("services.brain.agent.terra_turn.openai_configured", lambda: True)
     monkeypatch.setattr("services.brain.agent.greeting_turn._identity_context", lambda _turn: "IDENTITY\nname=Marwa")
     monkeypatch.setattr("services.billing.membership.provider_expense.record_pending_provider", lambda **_k: None)
     monkeypatch.setattr("services.brain.providers.config.answer_model", lambda: "gpt-test")
     monkeypatch.setattr("services.brain.billing.operation_id_for_turn", lambda _turn: "op-test")
     monkeypatch.setattr("services.brain.llm_core_service.create_chat_completion", fake_llm)
     monkeypatch.setattr("services.brain.conversation_store.remember_turn", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.brain.agent.greeting_turn._social_ungrounded", lambda _text: [])
+    monkeypatch.setattr("services.brain.agent.generate_path.coverage_ok", lambda *_a, **_k: True)
     turn = CustomerTurn(tenant_id="t-greet-llm", conversation_id="c1", event_ids=["m1"])
     out = await identity_greeting_result(turn, message="Hi kifak", channel="instagram_dm")
     assert out is not None

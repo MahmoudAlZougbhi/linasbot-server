@@ -1,8 +1,7 @@
-"""Propose allowlisted Customer Brain tools from plan + optional LLM choice."""
+"""Propose allowlisted Customer Brain tools from the retrieve plan map. No LLM."""
 
 from __future__ import annotations
 
-import os
 from collections.abc import Mapping
 from typing import Any
 
@@ -42,48 +41,6 @@ def propose_tools_from_plan(plan: PlannerPlan, message: str) -> list[dict[str, A
 async def propose_tools_dynamic(
     plan: PlannerPlan, message: str, *, coverage: Mapping[str, str] | None = None
 ) -> list[dict[str, Any]]:
-    """Bounded dynamic tool proposals. Falls back to plan map if LLM unavailable."""
-    base = propose_tools_from_plan(plan, message)
-    missing = [tid for tid, state in (coverage or {}).items() if state in {"missing", "partial"}]
-    if not missing or not (os.getenv("OPENAI_API_KEY") or "").strip():
-        return base
-    try:
-        from services.brain.llm_core_service import create_chat_completion
-        from services.brain.providers.config import answer_model
-
-        allowed = sorted(READ_TOOLS | ACTION_TOOLS)
-        response = await create_chat_completion(
-            model=answer_model(),
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Pick up to 2 tools from this allowlist only. Reply as tool_name per line.\n"
-                        f"Allowlist: {', '.join(allowed)}\n"
-                        f"Missing tasks: {', '.join(missing)}\n"
-                        f"Message: {message}"
-                    ),
-                }
-            ],
-            max_tokens=40,
-        )
-        text = str(response.choices[0].message.content or "")
-        chosen: list[dict[str, Any]] = []
-        for line in text.splitlines():
-            name = line.strip().split()[0] if line.strip() else ""
-            name = name.strip(",.`\"'")
-            if name in UNSUPPORTED_TOOLS or (name not in READ_TOOLS and name not in ACTION_TOOLS):
-                continue
-            chosen.append(
-                {
-                    "tool": name,
-                    "args": {"query": message, "task_id": missing[0] if missing else "dyn", "customer_text": message},
-                    "task_id": missing[0] if missing else "dyn",
-                    "source": "llm",
-                }
-            )
-            if len(chosen) >= 2:
-                break
-        return base + chosen
-    except Exception:
-        return base
+    """Plan-map only. Terra chooses tools in the single agent session."""
+    _ = coverage
+    return propose_tools_from_plan(plan, message)

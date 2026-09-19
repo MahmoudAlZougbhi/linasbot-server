@@ -179,6 +179,41 @@ async def generate_verified(
             )
         reply_text = "\n".join(item.text for item in envelope.messages if (item.text or "").strip())
 
+    return wrap_verified_reply(
+        turn,
+        message=message,
+        channel=channel,
+        dest=dest,
+        plan=plan,
+        bundle=bundle,
+        structured_facts=structured_facts,
+        visual_reason=visual_reason,
+        resource_receipts=resource_receipts,
+        extra=extra,
+        evidence=evidence,
+        agent_trace=agent_trace,
+        envelope=envelope,
+        reply_text=reply_text,
+    )
+
+
+def wrap_verified_reply(
+    turn: CustomerTurn,
+    *,
+    message: str,
+    channel: str,
+    dest: str,
+    plan: PlannerPlan,
+    bundle: EvidenceBundle,
+    structured_facts: dict[str, Any],
+    visual_reason: str,
+    resource_receipts: list[dict],
+    extra: dict[str, Any],
+    evidence: list[dict[str, str]],
+    agent_trace: list[dict[str, Any]],
+    envelope: FinalReplyEnvelope,
+    reply_text: str,
+) -> TurnResult:
     if not coverage_ok(message, plan, envelope.dispositions, reply_text=reply_text, decision=envelope.decision):
         return TurnResult(
             stop_reason="failed_closed",

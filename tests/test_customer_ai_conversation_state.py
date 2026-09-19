@@ -211,33 +211,31 @@ async def test_request_confirm_survives_next_turn(monkeypatch: pytest.MonkeyPatc
             {},
         )
 
-    async def fake_generate(turn, **_k):
+    async def terra_start(turn, **kwargs):
+        message = str(kwargs.get("message") or "")
+        extra = dict(kwargs.get("extra") or turn.extra or {})
+        result = await execute_tool(
+            "start_request",
+            {"request_type": "APPOINTMENT", "title": message, "task_id": "book", "customer_text": message},
+            turn,
+        )
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        if data.get("awaiting_confirmation"):
+            extra["awaiting_confirmation"] = True
+            extra["pending_actions"] = list(data.get("pending_actions") or [])
+            turn.extra = {**dict(turn.extra or {}), **extra}
+        extra.update(dict(turn.extra or {}))
         return TurnResult(
             stop_reason="ok",
             envelope=FinalReplyEnvelope(
                 decision="reply",
                 messages=[OutboundMessage(destination="dm", text="ok")],
             ),
-            extra=dict(turn.extra or {}),
+            extra=extra,
         )
-
-    async def terra_start(turn, message, **_k):
-        result = await execute_tool(
-            "start_request",
-            {"request_type": "APPOINTMENT", "title": message, "task_id": "book", "customer_text": message},
-            turn,
-        )
-        extra = {}
-        data = result.get("data") if isinstance(result.get("data"), dict) else {}
-        if data.get("awaiting_confirmation"):
-            extra["awaiting_confirmation"] = True
-            extra["pending_actions"] = list(data.get("pending_actions") or [])
-            turn.extra = {**dict(turn.extra or {}), **extra}
-        return [{"tool": "start_request", "ok": True}], ["tool:start_request:ok"], 1, extra
 
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", found_retrieve)
-    monkeypatch.setattr("services.brain.agent.loop.generate_verified", fake_generate)
-    monkeypatch.setattr("services.brain.agent.loop.run_terra_request_round", terra_start)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", terra_start)
 
     first = CustomerTurn(tenant_id="t1", conversation_id="c-book", event_ids=["m1"])
     staged = await run_dm_after_gates(first, message="book laser", channel="instagram_dm")

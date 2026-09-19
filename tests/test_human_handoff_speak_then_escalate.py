@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock
 
 import pytest
 
 from services.brain.agent.loop import run_agentic_turn
 from services.brain.contracts.actions import ActionReceipt
 from services.brain.contracts.evidence import EvidenceBundle
-from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
+from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn
-from services.brain.verify.critic import VerifierResult
 from tests.plan_builders import explicit_plan
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,17 +44,20 @@ async def test_human_hint_terra_then_live_chat_no_board_card(monkeypatch: pytest
         escalated["n"] += 1
         return ActionReceipt(action_id="handoff:t1", action_type="escalate_to_human", state="success")
 
-    async def fake_generate(**_k):
-        return FinalReplyEnvelope(
-            decision="reply",
-            messages=[
-                OutboundMessage(destination="instagram_dm:u1", text="One moment — connecting you with the team.")
-            ],
-            dispositions={"t1": "awaiting_customer"},
+    async def fake_terra(_turn, **_k):
+        extra = dict(_k.get("extra") or {})
+        extra.setdefault("handoff_ok", False)
+        return TurnResult(
+            stop_reason="ok",
+            envelope=FinalReplyEnvelope(
+                decision="reply",
+                messages=[
+                    OutboundMessage(destination="instagram_dm:u1", text="One moment — connecting you with the team.")
+                ],
+                dispositions={"t1": "awaiting_customer"},
+            ),
+            extra=extra,
         )
-
-    async def fake_verify(**_k):
-        return VerifierResult(verdict="PASS")
 
     async def fake_retrieve(*_a, **_k):
         return EvidenceBundle(outcome="not_found"), [], {}
@@ -70,13 +71,9 @@ async def test_human_hint_terra_then_live_chat_no_board_card(monkeypatch: pytest
     )
     monkeypatch.setattr("services.brain.actions.execute.escalate_to_human", fake_escalate)
     monkeypatch.setattr("services.brain.actions.requests.persist_request", boom_persist)
-    monkeypatch.setattr("services.brain.agent.generate_path.openai_configured", lambda: True)
-    monkeypatch.setattr("services.brain.agent.generate_path.generate_grounded_reply", fake_generate)
-    monkeypatch.setattr("services.brain.agent.generate_path.verify_answer", fake_verify)
-    monkeypatch.setattr("services.brain.agent.generate_path.load_identity_bundle", lambda _tid: None)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", fake_retrieve)
     monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", fake_terra)
 
     turn = CustomerTurn(
         tenant_id="brain-shop",
