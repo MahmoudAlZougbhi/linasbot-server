@@ -294,7 +294,7 @@ def reserve(
         return reservation
 
 
-def settle(*, tenant_id: str, operation_id: str, accepted: bool) -> MessageReservation:
+def settle(*, tenant_id: str, operation_id: str, accepted: bool, units: int | None = None) -> MessageReservation:
     tid = tenant_id.strip()
     key = _res_key(tid, operation_id)
     with _pg_session() as session:
@@ -302,7 +302,7 @@ def settle(*, tenant_id: str, operation_id: str, accepted: bool) -> MessageReser
             from services.billing.membership.message_ledger_pg import pg_settle
 
             try:
-                return pg_settle(session, tenant_id=tid, operation_id=operation_id, accepted=accepted)
+                return pg_settle(session, tenant_id=tid, operation_id=operation_id, accepted=accepted, units=units)
             except KeyError:
                 pass
     with _LOCK:
@@ -311,16 +311,18 @@ def settle(*, tenant_id: str, operation_id: str, accepted: bool) -> MessageReser
             raise KeyError(operation_id)
         if reservation.status in {"settled", "released", "reversed", "not_required"}:
             return reservation
-        if not accepted:
+        charge = reservation.units if units is None else min(reservation.units, max(0, int(units)))
+        if not accepted or charge <= 0:
             reservation.status = "released"
             return reservation
-        if reservation.units:
+        if charge:
             lot = next((item for item in _LOTS.get(tid, []) if item.lot_id == reservation.lot_id), None)
-            if lot is None or _live_remaining(lot) < reservation.units:
+            if lot is None or _live_remaining(lot) < charge:
                 lot = _pick_lot(_LOTS.get(tid, []))
-            if lot is None or _live_remaining(lot) < reservation.units:
+            if lot is None or _live_remaining(lot) < charge:
                 raise InsufficientMessages(tid, lot.remaining if lot else 0)
-            lot.remaining -= reservation.units
+            lot.remaining -= charge
+        reservation.units = charge
         reservation.status = "settled"
         return reservation
 

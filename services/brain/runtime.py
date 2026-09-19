@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from services.brain.billing import apply_message_billing, operation_id_for_turn
 from services.brain.channel_plan import assert_channel_plan_allowed, denied_code
@@ -316,7 +316,7 @@ async def run_customer_ai_comment(
             event_ids=[comment_id] if comment_id else [],
         )
     )
-    gate = evaluate_gates(stub, message=comment_text)
+    gate = evaluate_gates(stub, apply_credits=False, message=comment_text)
     if not gate.allow:
         gated = _gate_result(stub, gate, channel)
         record_turn_history(
@@ -353,6 +353,22 @@ async def run_customer_ai_comment(
                 comment_surface=True,
             )
             return _outcome(billed, comment_surface=True)
+    from services.billing.membership.generative_gate import generative_block_reason
+
+    blocked = generative_block_reason(tenant_id)
+    if blocked:
+        stop_reason: Literal["unpublished", "insufficient_messages"] = (
+            "unpublished" if blocked == "unpublished" else "insufficient_messages"
+        )
+        gated = TurnResult(stop_reason=stop_reason, extra={"gate": blocked})
+        record_turn_history(
+            stub,
+            inbound_id=comment_id,
+            inbound_text=comment_text,
+            result=gated,
+            comment_surface=True,
+        )
+        return _outcome(gated, comment_surface=True)
     from services.brain.history import build_history_snapshot
 
     parent = str(_kwargs.get("parent_comment") or "").strip()

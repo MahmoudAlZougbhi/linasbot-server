@@ -110,3 +110,30 @@ def test_new_policy_debits_ai_both_each() -> None:
     assert result.extra.get("message_units") == 2
     assert result.extra.get("billing_pending_send") is True
     assert remaining_messages("cmt-both") == 3
+
+
+def test_partial_both_settles_only_delivered_units() -> None:
+    from services.billing.membership.economy_policy import comment_outcome_units
+    from services.billing.membership.message_ledger import settle
+
+    grant_lot(tenant_id="cmt-part", lot_id="inc-part", kind="included", period_id=current_period_id(), amount=5)
+    result = apply_message_billing(
+        _turn(tenant_id="cmt-part", event_ids=["cmt-part"]),
+        _result(text="Hello", extra={"comment_mode": "ai_both", "phase": "generate"}, ai_called=True),
+    )
+    assert result.extra.get("message_units") == 2
+    assert remaining_messages("cmt-part") == 3
+    assert comment_outcome_units(comment_mode="ai_both", public_ok=True, dm_ok=False) == 1
+    assert comment_outcome_units(comment_mode="static_both", public_ok=True, dm_ok=True) == 0
+    settle(tenant_id="cmt-part", operation_id="cmt-part", accepted=True, units=1)
+    assert remaining_messages("cmt-part") == 4
+
+
+def test_static_comments_do_not_hold_messages() -> None:
+    grant_lot(tenant_id="cmt-static", lot_id="inc-st", kind="included", period_id=current_period_id(), amount=5)
+    result = apply_message_billing(
+        _turn(tenant_id="cmt-static", event_ids=["cmt-st"]),
+        _result(text="Thanks", extra={"path": "comment_rule", "comment_mode": "static_comment"}),
+    )
+    assert result.extra.get("message_units") == 0
+    assert remaining_messages("cmt-static") == 5

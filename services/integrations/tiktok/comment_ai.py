@@ -34,16 +34,19 @@ def _settle_comment_send(
     accepted: bool,
     provider_message_id: str = "",
     extra_ids: tuple[str, ...] | list[str] = (),
+    billable: bool = True,
+    units: int | None = None,
 ) -> None:
     from services.brain.billing import settle_after_send
 
     settle_after_send(
         tenant_id=tenant_id,
         operation_id=comment_id,
-        accepted=accepted,
+        accepted=bool(accepted and billable),
         channel="tiktok_comment",
         provider_message_id=provider_message_id,
         extra_ids=extra_ids,
+        units=0 if not billable else units,
     )
 
 
@@ -114,15 +117,6 @@ async def process_tiktok_comment_ai(
             content.mark_comment_ai_processed(tenant_id=tenant_id, comment_id=comment_id)
             session.commit()
             return {"skipped": True, "reason": "permission_required"}
-        if ai_generation_blocked(tenant_id):
-            from services.billing.membership.generative_gate import generative_block_reason
-
-            blocked = generative_block_reason(tenant_id) or "insufficient_credits"
-            job.delivery_status = "failed"
-            job.last_error = blocked
-            session.commit()
-            _log_usage(tenant_id=tenant_id, comment_id=comment_id, outcome=blocked)
-            return {"skipped": True, "reason": blocked}
         text = comment.text
         video_id = item_id or comment.video_item_id
         author = str(comment.author_user_id or comment.author_username or "")
@@ -140,18 +134,49 @@ async def process_tiktok_comment_ai(
         open_id = connection.open_id
         session.commit()
 
-    resolved = await resolve_tiktok_post_context(
+    from services.brain.comments.pipeline import winning_comment_mode
+
+    mode, _decision = winning_comment_mode(
         tenant_id=tenant_id,
-        connection_id=connection_id,
         comment_text=text,
-        comment_id=comment_id,
-        video_id=video_id,
-        account_token=token,
-        open_id=open_id,
-        stored_caption=stored_caption,
-        stored_thumbnail=stored_thumb,
-        stored_video_url=stored_video,
+        post_id=video_id,
+        channel="tiktok_comment",
     )
+    static_rule = bool(mode and str(mode).startswith("static"))
+    if not static_rule and ai_generation_blocked(tenant_id):
+        from services.billing.membership.generative_gate import generative_block_reason
+
+        blocked = generative_block_reason(tenant_id) or "insufficient_messages"
+        with whatsapp_session() as session:
+            content = TikTokContentRepository(session)
+            job, _ = content.get_or_create_reply_job(
+                tenant_id=tenant_id, connection_id=connection_id, comment_id=comment_id
+            )
+            job.delivery_status = "failed"
+            job.last_error = blocked
+            session.commit()
+        _log_usage(tenant_id=tenant_id, comment_id=comment_id, outcome=blocked)
+        return {"skipped": True, "reason": blocked}
+    if static_rule:
+        resolved: dict[str, Any] = {
+            "caption": stored_caption,
+            "comment_context": {},
+            "diagnostics": {},
+            "context_level": "caption_only",
+        }
+    else:
+        resolved = await resolve_tiktok_post_context(
+            tenant_id=tenant_id,
+            connection_id=connection_id,
+            comment_text=text,
+            comment_id=comment_id,
+            video_id=video_id,
+            account_token=token,
+            open_id=open_id,
+            stored_caption=stored_caption,
+            stored_thumbnail=stored_thumb,
+            stored_video_url=stored_video,
+        )
     comment_ctx = dict(resolved.get("comment_context") or {})
     comment_ctx.setdefault("conversation_id", f"comment:{tenant_id}:tiktok_comment:{video_id or comment_id}")
     thread_id = str(comment_ctx.get("conversation_id") or "")
@@ -180,6 +205,14 @@ async def process_tiktok_comment_ai(
 
     plan = destinations_from_outcome(outcome)
     reply_text = public_text_for_channel(plan, private_send_possible=False)
+    billable = str(plan.comment_mode or "").startswith("ai")
+    from services.billing.membership.economy_policy import comment_outcome_units
+
+    settle_units = comment_outcome_units(
+        comment_mode=plan.comment_mode,
+        public_ok=bool(reply_text),
+        dm_ok=False,
+    )
     model = str((getattr(outcome, "metadata", None) or {}).get("model") or "")
     tokens = int((getattr(outcome, "metadata", None) or {}).get("tokens") or 0)
     cost = float((getattr(outcome, "metadata", None) or {}).get("cost_usd") or 0)
@@ -207,7 +240,13 @@ async def process_tiktok_comment_ai(
             cost=cost,
             diagnostics=ctx_diag,
         )
-        _settle_comment_send(tenant_id=tenant_id, comment_id=comment_id, accepted=False, extra_ids=(thread_id,))
+        _settle_comment_send(
+            tenant_id=tenant_id,
+            comment_id=comment_id,
+            accepted=False,
+            extra_ids=(thread_id,),
+            billable=False,
+        )
         return {"skipped": True, "reason": reason or "ai_no_reply"}
 
     with whatsapp_session() as session:
@@ -215,7 +254,13 @@ async def process_tiktok_comment_ai(
         content = TikTokContentRepository(session)
         connection = repo.get_connection(connection_id, tenant_id=tenant_id)
         if connection is None:
-            _settle_comment_send(tenant_id=tenant_id, comment_id=comment_id, accepted=False, extra_ids=(thread_id,))
+            _settle_comment_send(
+                tenant_id=tenant_id,
+                comment_id=comment_id,
+                accepted=False,
+                extra_ids=(thread_id,),
+                billable=False,
+            )
             return {"skipped": True, "reason": "missing_connection"}
         token = await ensure_fresh_token(repo, connection)
         job, _ = content.get_or_create_reply_job(
@@ -266,7 +311,14 @@ async def process_tiktok_comment_ai(
         )
         if retrying:
             raise
-        _settle_comment_send(tenant_id=tenant_id, comment_id=comment_id, accepted=False, extra_ids=(thread_id,))
+        _settle_comment_send(
+            tenant_id=tenant_id,
+            comment_id=comment_id,
+            accepted=False,
+            extra_ids=(thread_id,),
+            billable=billable,
+            units=0,
+        )
         return {"ok": False, "reason": "publish_failed", "request_id": exc.request_id}
 
     with whatsapp_session() as session:
@@ -282,9 +334,11 @@ async def process_tiktok_comment_ai(
     _settle_comment_send(
         tenant_id=tenant_id,
         comment_id=comment_id,
-        accepted=True,
+        accepted=billable and settle_units > 0,
         provider_message_id=str(published.get("comment_id") or published.get("reply_id") or ""),
         extra_ids=(thread_id,),
+        billable=billable,
+        units=settle_units,
     )
     _log_usage(
         tenant_id=tenant_id,

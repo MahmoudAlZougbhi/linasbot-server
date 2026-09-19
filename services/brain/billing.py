@@ -261,21 +261,23 @@ def settle_after_send(
     provider_message_id: str = "",
     response_class: ResponseClass = "generated_ai",
     extra_ids: tuple[str, ...] | list[str] = (),
+    units: int | None = None,
 ) -> None:
     candidates = _candidate_ops(operation_id, extra_ids)
     if not tenant_id or not candidates:
         return
+    charge = None if units is None else max(0, int(units))
     settled_op = ""
     try:
         for op in candidates:
             try:
-                settle(tenant_id=tenant_id, operation_id=op, accepted=accepted)
+                settle(tenant_id=tenant_id, operation_id=op, accepted=accepted, units=charge)
                 settled_op = op
                 break
             except KeyError:
                 continue
         if not settled_op:
-            if not accepted:
+            if not accepted or (charge is not None and charge <= 0):
                 from services.brain.outbox import acknowledge_failed
 
                 acknowledge_failed(tenant_id=tenant_id, operation_id=candidates[0], extra_ids=candidates[1:])
@@ -293,8 +295,8 @@ def settle_after_send(
                 )
                 return
             settled_op = candidates[0]
-            reserve(tenant_id=tenant_id, operation_id=settled_op, response_class=response_class)
-            settle(tenant_id=tenant_id, operation_id=settled_op, accepted=True)
+            reserve(tenant_id=tenant_id, operation_id=settled_op, response_class=response_class, units=charge)
+            settle(tenant_id=tenant_id, operation_id=settled_op, accepted=True, units=charge)
         from services.billing.membership.pending_settlement import upsert
 
         upsert(

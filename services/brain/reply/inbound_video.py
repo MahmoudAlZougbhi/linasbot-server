@@ -1,4 +1,4 @@
-"""Inbound video: adaptive stills (5/10/15s) plus full-length audio for STT."""
+"""Inbound video: adaptive stills (5/10/15/20s) plus full-length audio for STT."""
 
 from __future__ import annotations
 
@@ -31,13 +31,15 @@ def cap_analyze_duration_s(duration_s: float) -> tuple[float, bool]:
 
 
 def frame_interval_s(duration_s: float) -> float:
-    """Small clips: 5s. Medium: 10s. Long: 15s. Duration should already be capped."""
+    """Short 5s, medium-short 10s, medium-long 15s, long 20s. Duration should already be capped."""
     duration = max(0.0, float(duration_s or 0.0))
     if duration <= 60:
         return 5.0
     if duration <= 180:
         return 10.0
-    return 15.0
+    if duration <= 360:
+        return 15.0
+    return 20.0
 
 
 def frame_offsets_s(duration_s: float) -> list[float]:

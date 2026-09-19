@@ -160,7 +160,7 @@ async def test_comment_ai_credits_and_success(tt_db, monkeypatch) -> None:
             stop=True,
             reply="thanks",
             reason="v2_comment_generated",
-            metadata={"model": "m", "tokens": 3, "cost_usd": 0.0},
+            metadata={"model": "m", "tokens": 3, "cost_usd": 0.0, "comment_mode": "ai_comment"},
         )
 
     async def _publish(**_k):
@@ -193,6 +193,8 @@ async def test_comment_ai_credits_and_success(tt_db, monkeypatch) -> None:
             "accepted": True,
             "provider_message_id": "reply-9",
             "extra_ids": ("comment:linas:tiktok_comment:v1",),
+            "billable": True,
+            "units": 1,
         }
     ]
 
@@ -215,7 +217,12 @@ async def test_comment_ai_publish_failure(tt_db, monkeypatch) -> None:
     monkeypatch.setattr("services.integrations.tiktok.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
 
     async def _reply(**_k):
-        return SimpleNamespace(stop=True, reply="thanks", reason="v2_comment_generated", metadata={})
+        return SimpleNamespace(
+            stop=True,
+            reply="thanks",
+            reason="v2_comment_generated",
+            metadata={"comment_mode": "ai_comment"},
+        )
 
     async def _publish(**_k):
         raise TikTokApiError("denied", tiktok_code=40001, request_id="req-fail", retryable=False)
@@ -248,6 +255,8 @@ async def test_comment_ai_publish_failure(tt_db, monkeypatch) -> None:
             "comment_id": "c-fail",
             "accepted": False,
             "extra_ids": ("comment:linas:tiktok_comment:v2",),
+            "billable": True,
+            "units": 0,
         }
     ]
 
@@ -306,5 +315,6 @@ async def test_comment_ai_skips_when_v2_has_no_reply(tt_db, monkeypatch) -> None
             "comment_id": "c-empty",
             "accepted": False,
             "extra_ids": ("comment:linas:tiktok_comment:v3",),
+            "billable": False,
         }
     ]

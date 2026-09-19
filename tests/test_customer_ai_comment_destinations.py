@@ -288,5 +288,6 @@ async def test_empty_destinations_release_hold(monkeypatch: pytest.MonkeyPatch) 
             "inbound_event_id": "evt-1",
             "reply_id": "",
             "accepted": False,
+            "billable": False,
         }
     ]
