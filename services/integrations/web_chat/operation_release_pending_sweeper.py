@@ -74,10 +74,11 @@ def reconcile_release_pending_operation(
         record=claimed,
     )
     session_id = str(claimed.operation_key or "").split(":", 1)[0]
+    attempt = max(1, int(claimed.attempt or 1))
     credit = WebChatCreditHandle(
         tenant_id=claimed.tenant_id,
         reservation_id=claimed.reservation_id,
-        request_id=f"web:{session_id}:{claimed.operation_key}",
+        request_id=f"web:{session_id}:{claimed.operation_key}:a{attempt}",
         operation_state=OperationState.RELEASE_PENDING,
     )
     terminal = credit.reservation_terminal()

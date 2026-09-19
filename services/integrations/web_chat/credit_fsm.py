@@ -37,13 +37,10 @@ class WebChatCreditHandle:
         self.hydrate_from_operation_context()
 
     def _ledger_operation_id(self) -> str:
-        rid = str(self.request_id or "").strip()
-        if ":a" in rid:
-            return rid.rsplit(":a", 1)[0]
-        return rid
+        return str(self.request_id or "").strip()
 
     def reservation_terminal(self) -> str | None:
-        if is_message_reservation(self.reservation_id):
+        if followup_uses_message_ledger() or is_message_reservation(self.reservation_id):
             from services.billing.membership.message_ledger import list_reservations
 
             op = self._ledger_operation_id()
@@ -227,7 +224,7 @@ class WebChatCreditHandle:
             return
         if self.state not in {CreditFsmState.RESERVED, CreditFsmState.BILLING_PENDING} or not self.reservation_id:
             return
-        if is_message_reservation(self.reservation_id):
+        if followup_uses_message_ledger() or is_message_reservation(self.reservation_id):
             from services.billing.membership.message_ledger import settle
 
             try:
@@ -272,7 +269,7 @@ class WebChatCreditHandle:
             return True
         if not self.reservation_id:
             return False
-        if is_message_reservation(self.reservation_id):
+        if followup_uses_message_ledger() or is_message_reservation(self.reservation_id):
             from services.billing.membership.message_ledger import settle
 
             try:
@@ -342,7 +339,7 @@ class WebChatCreditHandle:
             return False
         if not self.reservation_id:
             return False
-        if is_message_reservation(self.reservation_id):
+        if followup_uses_message_ledger() or is_message_reservation(self.reservation_id):
             try:
                 self.capture(model_provider=model_provider)
                 return self.state == CreditFsmState.CAPTURED

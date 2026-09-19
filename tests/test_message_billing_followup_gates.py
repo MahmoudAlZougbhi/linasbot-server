@@ -291,14 +291,19 @@ def test_reserve_generative_skips_leftover_conversation_pin(monkeypatch: pytest.
     from services.billing.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests
     from services.brain.billing import reserve_generative
     from services.brain.contracts.turn import CustomerTurn
-    from services.brain.leftover_reserve import _pin, reset_leftover_pins_for_tests
+    from services.brain.leftover_reserve import reserve_leftover_reply, reset_leftover_pins_for_tests
 
     reset_ledger_for_tests()
     reset_leftover_pins_for_tests()
     monkeypatch.setenv("LINAS_MESSAGE_STORE", "memory")
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     grant_lot(tenant_id="pin-shop", lot_id="inc", kind="included", period_id=current_period_id(), amount=2)
-    _pin("pin-shop", "conv-leftover")
+    reserve_leftover_reply(
+        tenant_id="pin-shop",
+        request_id="leftover-op",
+        operation_type="omni",
+        pin_ids=("conv-leftover",),
+    )
     turn = CustomerTurn(tenant_id="pin-shop", conversation_id="conv-leftover", event_ids=["evt-new"])
     assert reserve_generative(turn) is None
     assert remaining_messages("pin-shop") == 1
@@ -310,14 +315,19 @@ def test_settle_after_send_does_not_mint_when_leftover_owns_turn(
     from services.billing.membership.lot_window import current_period_id
     from services.billing.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests
     from services.brain.billing import settle_after_send
-    from services.brain.leftover_reserve import _pin, reset_leftover_pins_for_tests
+    from services.brain.leftover_reserve import reserve_leftover_reply, reset_leftover_pins_for_tests
 
     reset_ledger_for_tests()
     reset_leftover_pins_for_tests()
     monkeypatch.setenv("LINAS_MESSAGE_STORE", "memory")
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     grant_lot(tenant_id="pin-shop", lot_id="inc", kind="included", period_id=current_period_id(), amount=2)
-    _pin("pin-shop", "mid-leftover")
+    reserve_leftover_reply(
+        tenant_id="pin-shop",
+        request_id="mid-leftover",
+        operation_type="omni",
+        pin_ids=("mid-leftover",),
+    )
     settle_after_send(tenant_id="pin-shop", operation_id="mid-leftover", accepted=True, channel="web_chat")
     assert remaining_messages("pin-shop") == 1
 

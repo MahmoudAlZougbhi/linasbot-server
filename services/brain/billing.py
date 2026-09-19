@@ -282,7 +282,7 @@ def settle_after_send(
                 return
             from services.brain.leftover_reserve import leftover_policy_for
 
-            if leftover_policy_for(tenant_id, *candidates):
+            if leftover_policy_for(tenant_id, *candidates) == "legacy_credits":
                 from services.brain.outbox import acknowledge_sent
 
                 acknowledge_sent(
