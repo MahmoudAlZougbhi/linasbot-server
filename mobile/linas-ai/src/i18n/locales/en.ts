@@ -49,6 +49,7 @@ export const en = {
   chatThinking: 'Thinking…',
   chatCreditsPausedTitle: 'Not enough messages',
   chatCreditsPausedBody: 'Owner Copilot is paused until you add messages. Channel AI replies are paused too.',
+  chatCreditsPausedNeed: 'This action needs {required} messages. You have {remaining} remaining.',
   chatLeftoverCreditsPausedTitle: 'Not enough messages',
   chatLeftoverCreditsPausedBody:
     'Owner Copilot is paused until you add messages. Channel AI replies are paused too.',

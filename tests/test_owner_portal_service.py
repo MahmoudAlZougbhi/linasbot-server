@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 import services.owner_copilot.interaction_flow_logger as flow_logger
-import services.owner_copilot.owner_portal_service as portal
+import services.owner_portal.owner_portal_service as portal
 from services.billing.membership.catalog_revenue import intended_price_usd
 from services.billing.plan_economics import PLAN_PRICES_USD
 
@@ -51,6 +51,7 @@ def test_list_subscribers_groups_users_and_batches_billing(monkeypatch):
     assert rows[0]["roles"] == ["owner", "viewer"]
     assert rows[0]["historical_credit_remaining"] == 75
     assert rows[0]["credits_remaining"] == rows[0]["message_remaining"]
+    assert rows[0]["messages_remaining"] == rows[0]["message_remaining"]
     assert rows[0]["intended_included_messages"] == 3000
     assert rows[0]["intended_price_usd"] == 59.0
 
@@ -93,6 +94,7 @@ def test_analytics_keeps_legacy_credits_and_adds_catalog_mrr(monkeypatch):
     )
     data = portal.analytics("last_7_days")
     assert data["credits_total"] == 7000
+    assert data["messages_total"] == 7000
     assert data["intended_message_mrr_usd"] == intended_price_usd("lite")
     assert data["live_checkout_mrr_usd"] == PLAN_PRICES_USD["lite"]
 

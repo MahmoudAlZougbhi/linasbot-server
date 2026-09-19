@@ -51,6 +51,7 @@ export const fr = {
   chatCreditsPausedTitle: 'Messages insuffisants',
   chatCreditsPausedBody:
     'Le Copilot propriétaire est en pause jusqu’à l’ajout de messages. Les réponses IA des canaux sont aussi en pause.',
+  chatCreditsPausedNeed: 'Cette action nécessite {required} messages. Il vous en reste {remaining}.',
   chatLeftoverCreditsPausedTitle: 'Messages insuffisants',
   chatLeftoverCreditsPausedBody:
     'Le Copilot propriétaire est en pause jusqu’à l’ajout de messages. Les réponses IA des canaux sont aussi en pause.',

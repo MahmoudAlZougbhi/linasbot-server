@@ -5,19 +5,34 @@ import { fonts, radii, spacing, useTheme } from '../../theme';
 
 type Props = {
   showUpgrade: boolean;
+  required?: number;
+  remaining?: number;
   onBuyCredits: () => void;
   onUpgrade: () => void;
 };
 
-export function CreditsPausedBanner({ showUpgrade, onBuyCredits, onUpgrade }: Props) {
+export function CreditsPausedBanner({
+  showUpgrade,
+  required,
+  remaining,
+  onBuyCredits,
+  onUpgrade,
+}: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
+  const needLine =
+    required != null && remaining != null
+      ? tr('chatCreditsPausedNeed').replace('{required}', String(required)).replace('{remaining}', String(remaining))
+      : null;
   return (
     <View
       style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
       accessibilityRole="alert"
     >
       <Text style={[styles.title, { color: colors.text }]}>{tr('chatCreditsPausedTitle')}</Text>
+      {needLine ? (
+        <Text style={[styles.body, { color: colors.textMuted }]}>{needLine}</Text>
+      ) : null}
       <Text style={[styles.body, { color: colors.textMuted }]}>{tr('chatCreditsPausedBody')}</Text>
       <View style={styles.row}>
         {showUpgrade ? (

@@ -99,7 +99,7 @@ def test_copilot_bands_convert_cost_to_units() -> None:
 
 
 def test_copilot_begin_confirms_then_reserves() -> None:
-    from services.owner_copilot.credit import owner_turn_credit_begin
+    from services.owner_copilot.message_billing import owner_turn_hold_begin
 
     grant_lot(
         tenant_id="econ-copilot",
@@ -123,10 +123,10 @@ def test_copilot_begin_confirms_then_reserves() -> None:
         },
         reason="test",
     )
-    pending = owner_turn_credit_begin("econ-copilot", estimated_usd=0.2)
+    pending = owner_turn_hold_begin("econ-copilot", estimated_usd=0.2)
     assert pending.confirm_required is True
     assert pending.reservation_id is None
-    held = owner_turn_credit_begin("econ-copilot", estimated_usd=0.2, confirm_billing=True)
+    held = owner_turn_hold_begin("econ-copilot", estimated_usd=0.2, confirm_billing=True)
     assert held.confirm_required is False
     assert held.reservation_id
     assert remaining_messages("econ-copilot") == 15

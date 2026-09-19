@@ -89,7 +89,7 @@ def build_account_summary(*, tenant_id: str, user_id: str) -> dict[str, Any]:
     stage = resolve_setup_stage(tenant_id)
     profile = read_owner_profile(user_id)
     plan: dict[str, Any] = {}
-    credits: dict[str, Any] = {}
+    messages: dict[str, Any] = {}
     try:
         from services.billing.entitlements_service import get_tenant_entitlement_public
 
@@ -99,9 +99,9 @@ def build_account_summary(*, tenant_id: str, user_id: str) -> dict[str, Any]:
     try:
         from services.billing.credit_ai_gate import owner_credits_public
 
-        credits = owner_credits_public(tenant_id)
+        messages = owner_credits_public(tenant_id)
     except Exception:
-        credits = {"available": False}
+        messages = {"available": False}
 
     fill_plan_brief: dict[str, Any] | None = None
     try:
@@ -138,6 +138,6 @@ def build_account_summary(*, tenant_id: str, user_id: str) -> dict[str, Any]:
             "meta_dm_live_verified": integ.get("meta_dm_live_verified"),
         },
         "plan": plan,
-        "credits": credits,
+        "messages": messages,
         "profile": profile,
     }

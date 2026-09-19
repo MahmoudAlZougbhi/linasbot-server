@@ -31,7 +31,11 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
   const [cards, setCards] = useState<StreamCard[]>([]);
   const [choices, setChoices] = useState<StreamChoice[]>([]);
   const [choiceSetId, setChoiceSetId] = useState<string | null>(null);
-  const [creditsPaused, setCreditsPaused] = useState<{ showUpgrade: boolean } | null>(null);
+  const [creditsPaused, setCreditsPaused] = useState<{
+    showUpgrade: boolean;
+    required?: number;
+    remaining?: number;
+  } | null>(null);
   const [billingConfirm, setBillingConfirm] = useState<{ units: number; message: string } | null>(
     null,
   );
@@ -136,6 +140,8 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
             const actions = (payload.actions as Record<string, unknown> | undefined) || {};
             setCreditsPaused({
               showUpgrade: payload.show_upgrade === true || actions.upgrade_plan === true,
+              required: Number(payload.required || 0) || undefined,
+              remaining: payload.remaining == null ? undefined : Number(payload.remaining),
             });
             resetUi();
             void hooksRef.current.onTerminal();
