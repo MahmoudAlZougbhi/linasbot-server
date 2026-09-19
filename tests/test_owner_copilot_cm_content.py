@@ -360,17 +360,17 @@ def test_v2_schemas_include_cm_content_tools() -> None:
 
 def test_system_v2_smart_audit_vs_explicit_full_dump() -> None:
     from services.owner_copilot.brain import MAX_TOOL_ROUNDS
-    from services.owner_copilot.brain_support import SYSTEM_V2
     from services.owner_copilot.flags import owner_max_output_tokens
+    from services.owner_copilot.sol_seed import SOL_SEED_ADVANCED
     from services.owner_copilot.tool_schemas import OWNER_V2_TOOL_SCHEMAS
 
-    assert "must NOT dump all CM" in SYSTEM_V2
-    assert "concise overview" in SYSTEM_V2 or "concise" in SYSTEM_V2
-    assert "explicit full dump" in SYSTEM_V2
-    assert "items_offset" in SYSTEM_V2
-    assert "quality_pass" in SYSTEM_V2
-    assert "halwse" in SYSTEM_V2
-    assert "duplicates" in SYSTEM_V2
+    assert "must NOT dump all CM" in SOL_SEED_ADVANCED
+    assert "concise overview" in SOL_SEED_ADVANCED or "concise" in SOL_SEED_ADVANCED
+    assert "explicit full dump" in SOL_SEED_ADVANCED
+    assert "items_offset" in SOL_SEED_ADVANCED
+    assert "quality_pass" in SOL_SEED_ADVANCED
+    assert "halwse" in SOL_SEED_ADVANCED
+    assert "duplicates" in SOL_SEED_ADVANCED
     assert MAX_TOOL_ROUNDS >= 10
     # High Work replies need headroom so reviews do not die mid-sentence.
     assert owner_max_output_tokens(reasoning_effort="high") >= 4096

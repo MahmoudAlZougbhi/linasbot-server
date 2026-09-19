@@ -31,11 +31,16 @@ async def continue_after_cm_approve(
             bf.save_bulk_plan(tenant_id, user_id, plan)
 
     fill = fp.advance_fill_plan(tenant_id=tenant_id, user_id=user_id)
-    next_prop: ToolResult | None = await propose_next_from_bulk_plan(
-        tenant_id=tenant_id,
-        role=role,
-        user_id=user_id,
-    )
+    from services.owner_copilot.cm_multi_approve import list_pending_cm_proposals
+
+    siblings = list_pending_cm_proposals(tenant_id=tenant_id, user_id=user_id)
+    next_prop: ToolResult | None = None
+    if not siblings:
+        next_prop = await propose_next_from_bulk_plan(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+        )
 
     remaining = list(fill.get("remaining") or [])
     focus = fill.get("current_section")
@@ -54,7 +59,7 @@ async def continue_after_cm_approve(
     if next_prop and next_prop.ok:
         directive = (
             f"{live_prefix}Continuing from the owner's dump — next section proposal is ready. "
-            "Explain which section you are updating and wait for Approve / ok again."
+            "Explain which section you are updating and wait for Approve on the bar."
         )
     elif remaining:
         listed = ", ".join(remaining[:10])

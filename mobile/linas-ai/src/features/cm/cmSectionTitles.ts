@@ -16,6 +16,8 @@ const TITLE_KEYS: Record<CmSectionId, StringKey> = {
   comments: 'aiSetupSec_comments',
   off_days: 'aiSetupSec_off_days',
   requests_appointments: 'aiSetupSec_requests_appointments',
+  sol_basics: 'aiSetupSec_sol_basics',
+  sol_app_knowledge: 'aiSetupSec_sol_app_knowledge',
   ai_limits: 'aiSetupSec_ai_limits',
 };
 

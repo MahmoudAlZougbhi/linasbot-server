@@ -111,7 +111,12 @@ CM_SECTIONS: Final[tuple[str, ...]] = (
     "ai_limits",
     "off_days",
     "requests_appointments",
+    "sol_basics",
+    "sol_app_knowledge",
 )
+
+# Owner-copilot portal brain. Customer Terra retrieve must never index these.
+OWNER_ONLY_CM_SECTIONS: Final[frozenset[str]] = frozenset({"sol_basics", "sol_app_knowledge"})
 
 
 def tenant_has_published_cm(tenant_id: str | None) -> bool:

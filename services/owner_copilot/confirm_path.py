@@ -49,6 +49,9 @@ async def run_confirm_path(
     elif confirm_tool.startswith("approve_smart_answer:"):
         intent = "approve_smart_answer"
         args["proposal_id"] = confirm_tool.split(":", 1)[1]
+    elif confirm_tool.startswith("approve_cm_batch:"):
+        intent = "approve_cm_batch"
+        args["proposal_ids"] = [p for p in confirm_tool.split(":", 1)[1].split(",") if p.strip()]
 
     turn_policy: ModelPolicyDecision
     if isinstance(policy, ModelPolicyDecision):

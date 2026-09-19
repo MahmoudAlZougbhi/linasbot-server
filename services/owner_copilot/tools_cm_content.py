@@ -15,7 +15,7 @@ from typing import Any
 from modules.api_security import resolve_permissions
 from services.owner_copilot.tools_base import ToolResult
 
-ARTICLE_SECTIONS = frozenset({"knowledge", "care"})
+ARTICLE_SECTIONS = frozenset({"knowledge", "care", "sol_app_knowledge"})
 # Keep one body chunk comfortably under the model tool-result budget (24k envelope).
 DEFAULT_BODY_CHUNK = 12000
 MAX_BODY_CHUNK = 20000

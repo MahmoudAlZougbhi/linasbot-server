@@ -20,6 +20,7 @@ import { RestrictedEditor } from './editors/PolicyEditors';
 import { KnowledgeScreen } from './knowledge/KnowledgeScreen';
 import { LocationHoursSectionScreen } from './LocationHoursSectionScreen';
 import { RequestRulesScreen } from './requestRules/RequestRulesScreen';
+import { SolBasicsScreen } from './sol/SolBasicsScreen';
 import { useCmDraft } from './useCmDraft';
 
 type Props = {
@@ -82,6 +83,18 @@ export function CmSectionScreen({ section, proposalReview, onBack, onOpenLocatio
         onOpenLocations={onOpenLocations}
       />
     );
+  }
+  if (section === 'sol_app_knowledge') {
+    return (
+      <KnowledgeScreen
+        section="sol_app_knowledge"
+        proposalReview={proposalReview}
+        onBack={onBack}
+      />
+    );
+  }
+  if (section === 'sol_basics') {
+    return <SolBasicsScreen proposalReview={proposalReview} onBack={onBack} />;
   }
   if (section === 'comments') {
     return <CommentsScreen proposalReview={proposalReview} onBack={onBack} />;

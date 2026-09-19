@@ -93,21 +93,26 @@ class CmPatchProposalStore:
         self._write(prop)
         return prop
 
-    def latest_pending(self, *, tenant_id: str, user_id: str) -> ProposedCmPatch | None:
-        """Most recent pending proposal for this owner (for natural assent → approve)."""
-        best: ProposedCmPatch | None = None
+    def list_pending(self, *, tenant_id: str, user_id: str) -> list[ProposedCmPatch]:
+        """All pending proposals for this owner, newest first. Approving one does not drop siblings."""
         d = self._root / tenant_id
         if not d.is_dir():
-            return None
+            return []
         with self._lock:
             paths = list(d.glob("*.json"))
+        found: list[ProposedCmPatch] = []
         for path in paths:
             prop = self.get(tenant_id=tenant_id, proposal_id=path.stem)
             if prop is None or prop.user_id != user_id or prop.status != "pending":
                 continue
-            if best is None or prop.created_at >= best.created_at:
-                best = prop
-        return best
+            found.append(prop)
+        found.sort(key=lambda item: item.created_at, reverse=True)
+        return found
+
+    def latest_pending(self, *, tenant_id: str, user_id: str) -> ProposedCmPatch | None:
+        """Most recent pending proposal for this owner (UI bar / confirm_tool)."""
+        pending = self.list_pending(tenant_id=tenant_id, user_id=user_id)
+        return pending[0] if pending else None
 
 
 cm_patch_proposal_store = CmPatchProposalStore()
@@ -171,15 +176,27 @@ def build_patch_preview(*, tenant_id: str, section: str, patch: dict[str, Any]) 
     current_sample = {k: current.get(k) for k in changed_keys[:12]}
     proposed_sample = {k: merged.get(k) for k in changed_keys[:12]}
     field = ", ".join(changed_keys[:8]) if changed_keys else ""
+    current_value = format_sample_map(current_sample)
+    proposed_value = format_sample_map(proposed_sample)
+    if not current_sample:
+        change_kind = "add"
+    elif not proposed_sample:
+        change_kind = "delete"
+    else:
+        change_kind = "edit"
+    item_title = field or name
     return {
         "section": name,
         "field": field,
+        "item_title": item_title,
+        "change_kind": change_kind,
         "changed_keys": changed_keys,
         "current_sample": current_sample,
         "proposed_sample": proposed_sample,
-        # Card UI reads these string fields (not proposed_sample objects).
-        "current_value": format_sample_map(current_sample),
-        "proposed_value": format_sample_map(proposed_sample),
+        "current_value": current_value,
+        "proposed_value": proposed_value,
+        "before": current_value,
+        "after": proposed_value,
         "patch": patch,
         "revision": getattr(env, "revision", None),
     }

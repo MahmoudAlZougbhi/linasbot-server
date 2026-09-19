@@ -17,7 +17,7 @@ type Props = {
   onAdd: () => void;
   onSelect: (id: string) => void;
   onRequestDelete: (id: string) => void;
-  onOpenLocations: () => void;
+  onOpenLocations?: () => void;
   tr: (key: StringKey) => string;
 };
 
@@ -49,7 +49,7 @@ export function KnowledgeListView({
       {rows.length === 0 ? <Text style={styles.empty}>{tr('knowledgeEmpty')}</Text> : null}
       {rows.map((row) =>
         row.type === 'locations' ? (
-          <KnowledgeLocationsCard key="locations" onPress={onOpenLocations} tr={tr} />
+          <KnowledgeLocationsCard key="locations" onPress={() => onOpenLocations?.()} tr={tr} />
         ) : (
           <AiSetupDeletableRow
             key={row.item.id}

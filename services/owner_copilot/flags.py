@@ -18,8 +18,8 @@ def owner_copilot_v2_enabled() -> bool:
 
 
 def owner_copilot_writes_enabled() -> bool:
-    """When false (shadow mode), write tools only propose / require confirmation and never mutate."""
-    return _truthy("OWNER_COPILOT_WRITES", "false")
+    """Always-on propose→Approve→Live. Env OWNER_COPILOT_WRITES is ignored."""
+    return True
 
 
 def owner_copilot_meta_actions_enabled() -> bool:
@@ -28,9 +28,7 @@ def owner_copilot_meta_actions_enabled() -> bool:
 
 
 def owner_copilot_shadow_planning() -> bool:
-    """Plans and diagnoses execute read-only; no tenant writes."""
-    if not owner_copilot_writes_enabled():
-        return True
+    """Explicit opt-in read-only planning. Not the default; does not follow WRITES env."""
     return _truthy("OWNER_COPILOT_SHADOW_PLANNING", "false")
 
 

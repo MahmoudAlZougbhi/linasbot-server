@@ -32,6 +32,7 @@ FORBIDDEN forever to add keyword/regex gates that decide for Terra or Sol.
 If you need new behavior: put it in the model prompt, tenant CM, or an AI tool — not a token list that halts the pipeline.
 Comment surface replies are public-thread authored by Terra; system never authors comment copy; no keyword gates.
 Customer inbound: one Terra agent session per turn. System retrieves evidence and executes allowlisted tools only. No separate planner / request-round / tool-picker / greeting LLM. No feature flag.
+Owner Sol: one composed system block per turn from published portal CM (`sol_basics` + retrieved `sol_app_knowledge`). No concatenated SYSTEM_V2 + SYSTEM_PROMPT. Writes are always-on propose→Approve→Live (Approve bar is safety UX, not a feature flag). Empty published Sol fails soft — never silently fall back to hardcoded novels.
 
 ## KEEP (do not misuse)
 

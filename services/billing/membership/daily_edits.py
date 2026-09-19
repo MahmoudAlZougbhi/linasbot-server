@@ -34,6 +34,8 @@ COUNTED_CM_SECTIONS = frozenset(
         "ai_limits",
         "off_days",
         "requests_appointments",
+        "sol_basics",
+        "sol_app_knowledge",
     }
 )
 

@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import type { CmProposalReview } from '../cm/cmProposalReview';
 import { ChatBubble } from './ChatBubble';
@@ -40,6 +40,11 @@ export function ChatStreamFooter({
   // Same live turn slot: typing dots until first delta, then one accumulating bubble.
   const showThinking = thinking && !liveText;
 
+  const pendingProposalIds = cards
+    .filter((c) => c.kind === 'proposal')
+    .map((c) => String((c.data || {}).proposal_id || ''))
+    .filter(Boolean);
+
   return (
     <View>
       {statusRows.map((s) => (
@@ -58,6 +63,14 @@ export function ChatStreamFooter({
           }}
           showActions={false}
         />
+      ) : null}
+      {pendingProposalIds.length > 1 ? (
+        <Pressable
+          onPress={() => onApproveDraft(`approve_cm_batch:${pendingProposalIds.join(',')}`)}
+          accessibilityLabel="Approve all pending proposals"
+        >
+          <Text style={styles.gate}>Approve all ({pendingProposalIds.length})</Text>
+        </Pressable>
       ) : null}
       {cards.map((c) => (
         <ActivityCard

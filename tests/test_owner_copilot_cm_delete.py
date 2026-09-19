@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 
 from services.ai_setup.storage import ensure_defaults, get_draft, put_draft
-from services.owner_copilot.brain_support import SYSTEM_V2
 from services.owner_copilot.cards import card_from_tool
 from services.owner_copilot.cm_approval import CmPatchProposalStore, approve_cm_patch
+from services.owner_copilot.sol_seed import SOL_SEED_ADVANCED
 from services.owner_copilot.tool_schemas import tool_names
 from services.owner_copilot.tools_cm_delete import tool_propose_cm_delete
 
@@ -181,7 +181,7 @@ async def test_propose_cm_delete_ai_basics_clears_fields(
 
 
 def test_system_v2_teaches_immediate_bar_and_delete() -> None:
-    assert "propose_cm_delete" in SYSTEM_V2
-    assert "Do NOT ask" in SYSTEM_V2
-    assert "Approve | Cancel | Edit" in SYSTEM_V2
+    assert "propose_cm_delete" in SOL_SEED_ADVANCED
+    assert "Do NOT ask" in SOL_SEED_ADVANCED
+    assert "Approve | Cancel | Edit" in SOL_SEED_ADVANCED
     assert "propose_cm_delete" in tool_names()

@@ -72,7 +72,7 @@ def test_progress_summary_and_fill_plan(tenant: str) -> None:
     summary = progress_summary(tenant, create_missing=False)
     assert summary["total"] == len(CM_SECTIONS)
     # System/optional: languages (global), comments, and requests defaults count as filled.
-    optional_done = {"languages", "comments", "requests_appointments"}
+    optional_done = {"languages", "comments", "requests_appointments", "sol_basics", "sol_app_knowledge"}
     assert summary["complete"] == len(optional_done)
     assert set(summary["remaining_sections"]) == set(CM_SECTIONS) - optional_done
     assert "cm_fill_plan" in summary["fill_missing_prompt"] or "inspect_cm_guide" in summary["fill_missing_prompt"]

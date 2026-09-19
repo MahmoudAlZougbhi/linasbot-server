@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from services.owner_copilot.tool_schemas_cm import OWNER_V2_CM_TOOL_SCHEMAS
+from services.owner_copilot.tool_schemas_sol import OWNER_V2_SOL_TOOL_SCHEMAS
 
 OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
@@ -152,7 +153,7 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "Use when the owner asks to add a ready-made answer for repeated customer questions. "
                 "On Approve the pair auto-translates to ar/en/fr/franco and goes Live (same as CM Approve→Live). "
                 "Explain savings: matching customer questions skip a full AI generation. "
-                "Does not write until the owner Approves or assents (ok / موافق)."
+                "Does not write until the owner Approves on the bar (confirm_tool)."
             ),
             "parameters": {
                 "type": "object",
@@ -193,6 +194,7 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
 OWNER_V2_TOOL_SCHEMAS: list[dict[str, Any]] = [
     *OWNER_V2_CORE_TOOL_SCHEMAS,
     *OWNER_V2_CM_TOOL_SCHEMAS,
+    *OWNER_V2_SOL_TOOL_SCHEMAS,
 ]
 
 

@@ -17,5 +17,7 @@ export const CM_SECTION_ICONS: Record<CmSectionId, AppIconName> = {
   comments: feather('message-circle'),
   off_days: feather('calendar'),
   requests_appointments: mci('calendar-check'),
+  sol_basics: mci('robot-outline'),
+  sol_app_knowledge: feather('book'),
   ai_limits: feather('sliders'),
 };

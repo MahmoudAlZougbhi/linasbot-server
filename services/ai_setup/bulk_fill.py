@@ -153,8 +153,10 @@ async def extract_sections_from_dump(*, text: str, reply_style: str = "") -> dic
             "handoff",
             "restricted",
             "actions",
+            "comments",
             "ai_limits",
             "off_days",
+            "requests_appointments",
         )
         if sec in SECTION_MODELS
     }
@@ -164,7 +166,9 @@ async def extract_sections_from_dump(*, text: str, reply_style: str = "") -> dic
         '"missing_notes":["..."]}. '
         "Only include sections you can fill from the dump. Never invent phones, prices, URLs, "
         "medical claims, or hours that were not provided. Prefer professional structure. "
-        "For style/reply voice, honor reply_style when present. Patches are partial field updates."
+        "For style/reply voice, honor reply_style when present. Patches are partial field updates. "
+        "If a slice is missing required fields, put a question in missing_notes and omit that section. "
+        "Comment rules belong in comments when the dump describes post/comment/DM behavior."
     )
     user = (
         f"reply_style={reply_style[:2000]}\n"

@@ -100,6 +100,9 @@ HIGH_IMPACT_TOOLS: frozenset[str] = frozenset(
         "propose_smart_answer",
         "approve_smart_answer",
         "ingest_business_dump",
+        "approve_cm_batch",
+        "propose_comment_rule",
+        "propose_channel_flags",
     }
 )
 

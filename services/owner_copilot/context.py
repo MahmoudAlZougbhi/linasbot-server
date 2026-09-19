@@ -7,48 +7,8 @@ from typing import Any
 from services.owner_copilot.account_state import build_account_summary
 from services.owner_copilot.onboarding import is_welcome_chip_prompt
 from services.owner_copilot.profile import normalize_language, resolve_owner_reply_language
-from services.owner_copilot.response_formatting import RESPONSE_FORMATTING_RULES
-from services.owner_copilot.system_knowledge_retrieval import (
-    capabilities_as_prompt_block,
-    retrieve_capabilities,
-)
-
-SYSTEM_PROMPT = (
-    "You are Linas AI System Copilot — the brain of the Linas AI app for business owners. "
-    "Customer automation scope: Instagram/Facebook DMs and comments only. "
-    "AI Setup is ONE capability, not the whole product. "
-    "Creative Studio / Create Post / images / videos / scheduling are cancelled. "
-    "Be truthful about gated features (comments live_verified, IAP purchase_ready). "
-    "Never invent prices, routes, or successful actions. "
-    "Never re-enable the Linas legacy CM bridge. "
-    "High-impact actions (publish, delete, disconnect, spend) require confirmation via the in-chat bar. "
-    "CM writes only via proposed patch → bar (Approve | Cancel | Edit) → approval → validate → save → Live. "
-    "When the owner asks to add/edit/delete, call propose_* immediately so the bar appears — never ask "
-    "them to type a magic word just to show the bar. "
-    "Owner approval is the Approve button (or an explicit confirm_tool from the UI). "
-    "Do not treat short chat replies such as ok/موافق as auto-confirm. "
-    "Approve applies the change Live for customer replies when activation succeeds; "
-    "if activation fails, say so from the tool result and do not claim customers already see it. "
-    "Live Chat is read-only for operators. "
-    "There is no owner Languages tile or reply-language setting. "
-    "Customer DMs/comments: auto-detect the customer's language and reply in that language. "
-    "Franco/Arabizi is understood as Arabic and answered in Arabic script. "
-    "Do not ask the owner to enable Arabic/English/French. "
-    "Do not propose_cm_patch for the languages section. "
-    "Neither the owner nor end customers can override customer reply language via Settings, "
-    "profile preferred_language, or chat. "
-    "App Settings language is UI-only for the owner app chrome/welcome; it does not change DM/comment replies. "
-    "Do not propose update_profile preferred_language to change how customers are answered. "
-    "Reply in reply_language for this turn (detected from the owner's latest message; "
-    "app locale only for welcome-chip/UI prompts or when detection is unclear). "
-    "If the owner writes Arabic, answer in Arabic even when the app UI is English. "
-    "If they write English or French, answer in that language. Franco/Arabizi → Arabic script. "
-    "Never infer gender from email or name; use unset/neutral address if gender is unset. "
-    "Voice: warm, friendly, and approachable — like a helpful colleague who still respects business/CM setup. "
-    "Use tasteful emojis naturally (especially in Arabic / Lebanese-friendly tone); never spam or clown. "
-    "Stay clear and professional for setup/ops; friendly ≠ silly. Match reply_language and energy. "
-    f"{RESPONSE_FORMATTING_RULES}"
-)
+from services.owner_copilot.sol_app_knowledge import retrieve_sol_app_knowledge, sol_knowledge_prompt_block
+from services.owner_copilot.sol_identity import compose_sol_system, load_sol_identity
 
 MAX_RECENT_MESSAGES = 8
 MAX_MESSAGE_CHARS = 600
@@ -92,6 +52,7 @@ def pack_owner_turn_context(
 
     Reply language follows the owner's latest message. App / preferred locale is only used
     for welcome-chip UI prompts (English tool text) and when detection is unclear.
+    Sol persona is published portal CM only (sol_system). Empty portal → sol_unconfigured.
     """
     msgs = list(messages or [])
     account = build_account_summary(tenant_id=tenant_id, user_id=user_id)
@@ -105,7 +66,12 @@ def pack_owner_turn_context(
         preferred_language=preferred,
         treat_as_ui_prompt=is_welcome_chip_prompt(user_text),
     )
-    caps = retrieve_capabilities(user_text, limit=4)
+    identity = load_sol_identity(tenant_id)
+    configured = bool(identity.get("configured"))
+    raw_payload = identity.get("payload")
+    payload: dict[str, Any] = dict(raw_payload) if isinstance(raw_payload, dict) else {}
+    sol_system = compose_sol_system(payload) if configured else ""
+    knowledge_items = retrieve_sol_app_knowledge(tenant_id, user_text) if configured else []
     recent = []
     for m in msgs[-MAX_RECENT_MESSAGES:]:
         recent.append(
@@ -115,9 +81,9 @@ def pack_owner_turn_context(
             }
         )
     summary = summarize_conversation(msgs)
-    knowledge_block = capabilities_as_prompt_block(caps)
     return {
-        "system_prompt": SYSTEM_PROMPT,
+        "sol_system": sol_system,
+        "sol_unconfigured": not configured,
         "account_summary": {
             "setup_stage": account.get("setup_stage"),
             "cm": account.get("cm"),
@@ -131,13 +97,11 @@ def pack_owner_turn_context(
                 "form_of_address": (account.get("profile") or {}).get("form_of_address"),
             },
         },
-        "knowledge_block": knowledge_block,
-        "capabilities": [c.feature for c in caps],
+        "knowledge_block": sol_knowledge_prompt_block(knowledge_items),
         "recent_messages": recent,
         "conversation_summary": summary,
         "reply_language": reply_lang,
         "preferred_language": preferred,
-        # Explicit: never attach full CM drafts here.
         "cm_full_dump": False,
         "full_history": False,
     }

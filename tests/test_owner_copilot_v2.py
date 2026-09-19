@@ -30,7 +30,7 @@ def test_owner_model_is_sol() -> None:
     assert owner_model_name() == "gpt-5.6-sol"
     snap = flags_snapshot()
     assert snap["OWNER_COPILOT_V2"] is True
-    assert snap["OWNER_COPILOT_WRITES"] is False
+    assert snap["OWNER_COPILOT_WRITES"] is True
     assert snap["OWNER_COPILOT_META_ACTIONS"] is False
     assert snap["LINAS_OWNER_RECENT_HISTORY_TOKENS"] == 4000
 
@@ -195,21 +195,20 @@ async def test_stream_events_thinking_then_deltas(monkeypatch: pytest.MonkeyPatc
     from services.owner_copilot.brain import iter_owner_turn_v2_events
 
     monkeypatch.setenv("OWNER_COPILOT_V2", "true")
-    monkeypatch.setattr(
-        "services.owner_copilot.context.pack_owner_turn_context",
-        lambda **_: {
-            "system_prompt": "x",
-            "account_summary": {"setup_stage": "new", "profile": {"preferred_language": "en"}},
-            "knowledge_block": "",
-            "capabilities": [],
-            "recent_messages": [],
-            "conversation_summary": None,
-            "reply_language": "en",
-            "preferred_language": "en",
-            "cm_full_dump": False,
-            "full_history": False,
-        },
-    )
+    packed = {
+        "sol_system": "stub + identity",
+        "sol_unconfigured": False,
+        "account_summary": {"setup_stage": "new", "profile": {"preferred_language": "en"}},
+        "knowledge_block": "",
+        "recent_messages": [],
+        "conversation_summary": None,
+        "reply_language": "en",
+        "preferred_language": "en",
+        "cm_full_dump": False,
+        "full_history": False,
+    }
+    monkeypatch.setattr("services.owner_copilot.context.pack_owner_turn_context", lambda **_: packed)
+    monkeypatch.setattr("services.owner_copilot.brain_stream_body.pack_owner_turn_context", lambda **_: packed)
 
     async def _fake_tool_round(**kwargs: Any):
         yield ("delta", "Hello ")
@@ -311,7 +310,7 @@ def test_brain_lazy_exports_run_owner_turn_v2() -> None:
 async def test_shadow_mode_blocks_approve_writes(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.owner_copilot.tool_dispatch import dispatch_v2_tool
 
-    monkeypatch.setenv("OWNER_COPILOT_WRITES", "false")
+    monkeypatch.setenv("OWNER_COPILOT_SHADOW_PLANNING", "true")
     result = await dispatch_v2_tool(
         "publish_cm",
         tenant_id="t1",
@@ -322,7 +321,8 @@ async def test_shadow_mode_blocks_approve_writes(monkeypatch: pytest.MonkeyPatch
     )
     assert result.ok is False
     assert result.error is not None
-    assert "OWNER_COPILOT_WRITES" in result.error or "writes" in result.error.lower()
+    assert "shadow" in result.error.lower()
+    assert "WRITES disabled" not in result.error
 
 
 @pytest.mark.asyncio
@@ -411,13 +411,14 @@ def test_capability_manifest_freshness() -> None:
 
 
 def test_system_v2_voice_is_warm_with_tasteful_emojis() -> None:
-    from services.owner_copilot.brain_support import FINAL_ANSWER_NUDGE, SYSTEM_V2
+    from services.owner_copilot.brain_support import FINAL_ANSWER_NUDGE
     from services.owner_copilot.response_formatting import RESPONSE_FORMATTING_RULES
+    from services.owner_copilot.sol_seed import SOL_SEED_ADVANCED, SOL_SEED_TONE
 
-    assert "warm, friendly" in SYSTEM_V2
-    assert "tasteful emojis" in SYSTEM_V2
-    assert "friendly ≠ silly" in SYSTEM_V2
-    assert "never spam" in SYSTEM_V2
-    assert RESPONSE_FORMATTING_RULES in SYSTEM_V2
+    assert "warm, friendly" in SOL_SEED_TONE
+    assert "tasteful emojis" in SOL_SEED_TONE
+    assert "friendly ≠ silly" in SOL_SEED_TONE
+    assert "never spam" in SOL_SEED_TONE
+    assert RESPONSE_FORMATTING_RULES in SOL_SEED_ADVANCED
     assert "OUTPUT FORMAT" in FINAL_ANSWER_NUDGE
     assert "no dense walls" in FINAL_ANSWER_NUDGE

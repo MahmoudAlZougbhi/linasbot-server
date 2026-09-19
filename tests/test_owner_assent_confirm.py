@@ -59,10 +59,11 @@ def test_resolve_pending_confirm_from_cm_store(tmp_path: Path, monkeypatch: pyte
     assert token == f"approve_cm_patch:{prop.id}"
 
 
-def test_system_prompt_mentions_natural_assent() -> None:
-    from services.owner_copilot.brain_support import SYSTEM_V2
+def test_system_prompt_forbids_keyword_assent() -> None:
+    from services.owner_copilot.sol_seed import SOL_SEED_ADVANCED, SOL_SEED_DONT
 
-    assert "ok" in SYSTEM_V2
-    assert "موافق" in SYSTEM_V2
-    assert "magic word" in SYSTEM_V2
-    assert "message" in SYSTEM_V2.lower()
+    blob = SOL_SEED_ADVANCED + "\n".join(SOL_SEED_DONT)
+    assert "ok" in blob
+    assert "موافق" in blob
+    assert "magic word" in blob
+    assert "Approve" in blob
