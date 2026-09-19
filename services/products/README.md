@@ -25,3 +25,4 @@ Runtime is a tool executor around Terra. Terra authors customer text from EVIDEN
 1. High-confidence fingerprint match → product evidence cards injected; Terra writes the reply.
 2. Else GPT vision `describe_stills` → text → same RAG. Never invent a product.
 3. Voyage multimodal image search is `LINAS_PRODUCT_MULTIMODAL_SEARCH` (default OFF).
+4. Fingerprint lookup is **not** million-row HNSW. It uses exact sha256 plus an 8-bit pHash prefix bucket, capped by `LINAS_PRODUCT_IMAGE_SCAN_CAP` (default 4000). Catalog text search still uses Voyage pgvector HNSW.

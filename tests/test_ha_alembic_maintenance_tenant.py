@@ -34,4 +34,4 @@ def test_ha_maintenance_tenant_id_empty_fails_closed() -> None:
 def test_ha_maintenance_tenant_id_set_proceeds() -> None:
     assert ha_maintenance_tenant_id({HA_MAINTENANCE_TENANT_ENV: "ops-tenant"}) == "ops-tenant"
     src = inspect.getsource(ha_maintenance_tenant_id)
-    assert "tenant env for HA maintenance only — not Linas Laser product" in src
+    assert "tenant env for HA maintenance only — not a product clinic restore" in src

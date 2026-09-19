@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from db.models.products import ProductImageFingerprint
@@ -18,8 +19,11 @@ from services.products.image_fingerprint import (
 )
 from services.products.media import load_media_bytes
 
+_log = logging.getLogger(__name__)
 TOP_K_DEFAULT = 8
 SIMILARITY_THRESHOLD = float(os.getenv("LINAS_PRODUCT_IMAGE_SIMILARITY_THRESHOLD", "0.85"))
+SCAN_CAP_DEFAULT = 4000
+PHASH_PREFIX_LEN = 2
 
 
 def _uuid() -> str:
@@ -97,6 +101,18 @@ def _row_to_entry(row: ProductImageFingerprint) -> dict[str, Any]:
     }
 
 
+def _scan_cap() -> int:
+    try:
+        return max(32, int(os.getenv("LINAS_PRODUCT_IMAGE_SCAN_CAP", str(SCAN_CAP_DEFAULT))))
+    except ValueError:
+        return SCAN_CAP_DEFAULT
+
+
+def _phash_prefix(phash: str) -> str:
+    raw = str(phash or "").strip()
+    return raw[:PHASH_PREFIX_LEN] if len(raw) >= PHASH_PREFIX_LEN else ""
+
+
 def find_image_candidates(
     session: Session,
     *,
@@ -108,16 +124,30 @@ def find_image_candidates(
     threshold = similarity_threshold if similarity_threshold is not None else SIMILARITY_THRESHOLD
     fp = compute_fingerprint(query_bytes)
     hist = compute_color_histogram(query_bytes)
+    sha = str(fp.get("sha256") or "")
+    prefix = _phash_prefix(str(fp.get("phash") or ""))
+    cap = _scan_cap()
+    clauses = []
+    if sha:
+        clauses.append(ProductImageFingerprint.sha256 == sha)
+    if prefix:
+        clauses.append(ProductImageFingerprint.phash.like(f"{prefix}%"))
     stmt = select(ProductImageFingerprint).where(ProductImageFingerprint.tenant_id == tenant_id)
+    if clauses:
+        stmt = stmt.where(or_(*clauses))
+    stmt = stmt.limit(cap)
+    rows = list(session.execute(stmt).scalars().all())
+    if len(rows) >= cap:
+        _log.warning("product image candidate scan hit cap=%s tenant=%s", cap, tenant_id)
     scored: list[tuple[float, dict[str, Any]]] = []
-    for row in session.execute(stmt).scalars().all():
+    for row in rows:
         entry = _row_to_entry(row)
         sim = combined_image_similarity(query_fp=fp, query_hist=hist, entry=entry)
         if sim >= threshold:
             scored.append((sim, {**entry, "similarity": sim}))
     scored.sort(key=lambda item: item[0], reverse=True)
-    cap = min(max(int(top_k), 3), 8)
-    return [item[1] for item in scored[:cap]]
+    cap_k = min(max(int(top_k), 3), 8)
+    return [item[1] for item in scored[:cap_k]]
 
 
 def build_index_from_media(
