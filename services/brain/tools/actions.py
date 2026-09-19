@@ -25,10 +25,33 @@ async def run_action(name: str, args: dict[str, Any], turn: CustomerTurn) -> dic
         return {"ok": False, "error": "unknown_tool", "data": None}
     task_id = str(args.get("task_id") or "tool")
     fields = dict(args.get("fields") or {})
-    for key in ("request_type", "title", "resource_id", "draft_id", "request_id"):
+    for key in (
+        "request_type",
+        "title",
+        "resource_id",
+        "resource_ref",
+        "resource_ids",
+        "kind",
+        "allowed_source_ids",
+        "draft_id",
+        "request_id",
+    ):
         if key in args and key not in fields:
             fields[key] = args[key]
-    proposal = ActionProposal(task_id=task_id, action_type=action_type, fields=fields)  # type: ignore[arg-type]
+    target_id = str(
+        args.get("target_id")
+        or args.get("resource_id")
+        or args.get("resource_ref")
+        or fields.get("resource_id")
+        or fields.get("resource_ref")
+        or ""
+    )
+    proposal = ActionProposal(
+        task_id=task_id,
+        action_type=action_type,  # type: ignore[arg-type]
+        target_id=target_id,
+        fields=fields,
+    )
     proposals = ActionProposalSet(actions=[proposal])
     if action_type in {"start_request", "submit_request"} and not args.get("confirmed"):
         pending = attach_confirmation(turn, proposals)
@@ -44,11 +67,17 @@ async def run_action(name: str, args: dict[str, Any], turn: CustomerTurn) -> dic
         session=args.get("session"),
     )
     receipt = receipts.receipts[0] if receipts.receipts else None
-    ok = bool(receipt and receipt.state == "success")
+    ok = bool(receipt and receipt.state in {"success", "pending"})
+    data: dict[str, Any] | None = receipt.model_dump() if receipt else None
+    if action_type == "send_resource" and receipt is not None:
+        from services.brain.tools.resource_delivery import attach_send_to_turn
+
+        data = attach_send_to_turn(turn, receipt, session=args.get("session"))
+        ok = bool(data.get("queued") or receipt.state in {"success", "pending"})
     return {
         "ok": ok,
-        "data": receipt.model_dump() if receipt else None,
-        "receipt": receipt.model_dump() if receipt else None,
+        "data": data,
+        "receipt": data,
         "error": None if ok else (receipt.reason if receipt else "action_failed"),
     }
 

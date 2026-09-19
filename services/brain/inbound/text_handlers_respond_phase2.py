@@ -119,7 +119,9 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
                 "event_type": "response_sent",
             },
         ]
-        if not str(cm_reply or "").strip():
+        from services.brain.tools.resource_delivery import has_queued_setup_resources
+
+        if not str(cm_reply or "").strip() and not has_queued_setup_resources(user_data):
             print(
                 f"[_process_and_respond] INFO: Brain produced no outbound text "
                 f"reason={cm_metadata.get('reason')} — skip empty channel send"

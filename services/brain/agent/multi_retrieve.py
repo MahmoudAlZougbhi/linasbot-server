@@ -279,6 +279,30 @@ async def multi_round_retrieve(
     from services.brain.media.product_image_match import merge_product_image_evidence
 
     bundle = merge_product_image_evidence(turn, bundle)
+    try:
+        from services.brain.retrieve.url_knowledge_bind import apply_url_knowledge_bind
+
+        bundle, bind_meta = await apply_url_knowledge_bind(
+            tenant_id=turn.tenant_id,
+            message=message,
+            full_bundle=bundle,
+        )
+        if bind_meta.get("url_bind") or bind_meta.get("reason") == "unknown_url":
+            trace.append(
+                {
+                    "round": rounds,
+                    "query": message,
+                    "families": [],
+                    "hit_ids": list(bind_meta.get("pinned") or []),
+                    "reason": "url_knowledge_bind",
+                    "outcome": bundle.outcome,
+                    "scoped_retrieve": bind_meta.get("scoped_retrieve"),
+                    "full_retrieve": bind_meta.get("full_retrieve"),
+                    "auto_send": False,
+                }
+            )
+    except Exception:
+        pass
     if bundle.items:
         facts = _structured_facts(bundle)
     return bundle, trace, facts

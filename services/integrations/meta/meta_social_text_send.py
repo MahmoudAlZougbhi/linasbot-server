@@ -25,9 +25,13 @@ async def send_meta_social_outbound(
     user_data: dict[str, Any],
 ) -> Any:
     _ = image_url, audio_url
+    from services.brain.tools.resource_delivery import has_queued_setup_resources
+
+    pending_resources = has_queued_setup_resources(user_data)
     if capture_send is not None:
-        await capture_send(namespaced_id, message_text, image_url, audio_url)
         if message_text:
+            await capture_send(namespaced_id, message_text, image_url, audio_url)
+        if message_text or pending_resources:
             from services.brain.reply.product_media_outbound import send_pending_product_media
 
             await send_pending_product_media(
@@ -56,25 +60,27 @@ async def send_meta_social_outbound(
     if adapter is None:
         return {"success": False, "error": "Meta adapter unavailable"}
     outbound_text = str(message_text or "").strip()
-    if not outbound_text:
+    if not outbound_text and not pending_resources:
         return {"success": False, "skipped": True, "error": "empty_text"}
 
-    if inbound_event_id:
-        from services.integrations.meta.meta_controlled_evidence import meta_evidence_surface
-        from services.integrations.meta.meta_outbound_attempts import (
-            current_meta_outbound_send_purpose,
-            execute_guarded_meta_send,
-        )
+    text_result: Any = {"success": True, "skipped": True, "error": "empty_text"}
+    if outbound_text:
+        if inbound_event_id:
+            from services.integrations.meta.meta_controlled_evidence import meta_evidence_surface
+            from services.integrations.meta.meta_outbound_attempts import (
+                current_meta_outbound_send_purpose,
+                execute_guarded_meta_send,
+            )
 
-        text_result = await execute_guarded_meta_send(
-            event_id=inbound_event_id,
-            surface=meta_evidence_surface(kind="meta_dm", channel=channel),
-            binding_id=binding_id,
-            purpose=current_meta_outbound_send_purpose(),
-            send=lambda: adapter.send_text_message(sender_id, outbound_text),
-        )
-    else:
-        text_result = await adapter.send_text_message(sender_id, outbound_text)
+            text_result = await execute_guarded_meta_send(
+                event_id=inbound_event_id,
+                surface=meta_evidence_surface(kind="meta_dm", channel=channel),
+                binding_id=binding_id,
+                purpose=current_meta_outbound_send_purpose(),
+                send=lambda: adapter.send_text_message(sender_id, outbound_text),
+            )
+        else:
+            text_result = await adapter.send_text_message(sender_id, outbound_text)
 
     from services.brain.reply.product_media_outbound import send_pending_product_media
 

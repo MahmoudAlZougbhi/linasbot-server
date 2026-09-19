@@ -36,6 +36,10 @@ async def maybe_tool_calls(
         args = dict(proposal.get("args") or {})
         if not name or name in blocked:
             continue
+        if name in {"check_setup_resources", "list_resources"}:
+            extra_ids = list(turn.extra.get("evidence_source_ids") or [])
+            if extra_ids and "source_ids" not in args:
+                args["source_ids"] = extra_ids
         used += 1
         result = await execute_tool(name, args, turn)
         tool_rows.append(
