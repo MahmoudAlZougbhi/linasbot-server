@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -415,16 +414,3 @@ class TestSSRFAndPathTraversal:
         )
         # Live Chat media is enabled; SSRF guard must still reject loopback.
         assert response.status_code == 400
-
-    def test_training_backup_path_traversal_blocked(self, tmp_path: Path) -> None:
-        from services.safe_path import resolve_backup_filename
-
-        root = tmp_path / "content"
-        root.mkdir()
-        (root / "style_guide_backup_1.txt").write_text("x")
-        with pytest.raises(ValueError):
-            resolve_backup_filename(
-                root,
-                "../style_guide_backup_1.txt",
-                required_prefix="style_guide_backup_",
-            )

@@ -312,7 +312,7 @@ Scale job-progress still uses historical Redis stage labels (`luna_started`). Th
 ## WAVE X12 — handlers + remaining flat services fold
 
 - Inbound webhook handlers live under `services/brain/inbound/` (no `handlers/` package). HTTP `modules/*` stay thin adapters.
-- Flat `services/*.py` is only KEEP facades: `product_features.py`, `saas_no_boc.py`, `safe_path.py`, `ssrf_guard.py` (+ `__init__.py`).
+- Flat `services/*.py` is only KEEP facades: `product_features.py`, `saas_no_boc.py`, `ssrf_guard.py` (+ `__init__.py`). Unreachable `safe_path.py` is gone.
 - Named clusters folded without shims: `ai_reply_*` → `brain/ai_reply/`; `credit_*` + IAP/Stripe meter → `billing/`; `social_*` → `integrations/social/`; `guest_*` → `guest/`; `ha_*` → `scale/`; email/auth/tenant_runtime packages; remaining flats into dashboard/live_chat/team/owner_copilot/ai_setup/queues.
 - **Kept:** Brain reply/media/comments; HA scale core; Owner Catalog; credit ledger; marketing + portal + drawer.
 - Tests: `tests/test_wave_x12_handlers_flat_fold.py`.
