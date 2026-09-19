@@ -12,7 +12,7 @@ from services.requests.config_loader import (
     published_configuration_version,
     requests_capture_active,
 )
-from services.requests.constants import SOURCE_CHANNELS
+from services.requests.constants import PERSISTABLE_REQUEST_TYPES, SOURCE_CHANNELS
 from services.requests.repository import CustomerRequestsRepository
 from services.requests.schemas import RequestCreateBody
 from services.requests.serialize import (
@@ -66,6 +66,14 @@ class CustomerRequestsService:
                 "CUSTOMER_CONFIRMATION_REQUIRED",
                 "Request create requires customer confirmation",
             )
+        request_type = body.request_type.strip().upper()
+        if request_type == "HUMAN":
+            raise CustomerRequestsError(
+                "HUMAN_ROUTES_TO_LIVE_CHAT",
+                "HUMAN handoff goes to Live Chat, not the Requests board",
+            )
+        if request_type not in PERSISTABLE_REQUEST_TYPES:
+            raise CustomerRequestsError("INVALID_REQUEST_TYPE", f"Bad type: {request_type}")
         if not requests_capture_active(tenant_id):
             raise CustomerRequestsError(
                 "REQUESTS_SETUP_REQUIRED",
@@ -88,7 +96,7 @@ class CustomerRequestsService:
         row = self.repo.create_request(
             tenant_id=tenant_id,
             request_number=number,
-            request_type=body.request_type.strip().upper(),
+            request_type=request_type,
             status="NEW",
             source_channel=source_channel,
             source_account_id=body.source_account_id,

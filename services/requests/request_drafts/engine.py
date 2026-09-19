@@ -390,6 +390,14 @@ def _submit(session: Any, row: Any, action: dict[str, Any], create_request_fn: A
     if missing:
         row.status = "collecting"
         return {"ok": False, "error": "incomplete_submission", "missing_fields": missing, "status": "collecting"}
+    if str(row.destination) == "live_chat":
+        row.status = "submitted"
+        payload = serialize_draft(row)
+        payload["ok"] = True
+        payload["request_type"] = "HUMAN"
+        payload["persisted"] = False
+        payload["route"] = "live_chat"
+        return payload
     if bool(graph.get("confirmation_required", True)) and not bool(action.get("confirmed")):
         row.status = "ready"
         return {"ok": False, "error": "confirmation_required", "status": "ready", "ready_to_submit": True}
