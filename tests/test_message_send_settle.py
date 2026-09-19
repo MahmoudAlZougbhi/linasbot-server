@@ -111,8 +111,9 @@ def test_whatsapp_bridge_does_not_capture_before_send() -> None:
     from services.integrations.whatsapp import ai_bridge, outbound_finalization
 
     src = getsource(ai_bridge.maybe_generate_and_send_ai_reply)
-    assert "reserve_leftover_reply" in src
+    assert "run_customer_reply_v2_dm" in src
     assert "credit_ledger_service.capture" not in src
+    assert "credit_ledger_service.reserve" not in src
     assert src.index("send_text_message") < src.index("finalize_ai_outbound_sent")
     assert "_settle_confirmed_send" in getsource(outbound_finalization.finalize_ai_outbound_sent)
     settle = getsource(outbound_finalization._settle_confirmed_send)
@@ -159,7 +160,7 @@ def test_comment_and_omni_settle_after_delivery() -> None:
     from services.integrations.omnichannel.deliver import _release_credits_if_never_submitted
 
     release = getsource(_release_credits_if_never_submitted)
-    assert "release_leftover_reply" in release
+    assert "settle_after_send" in release
     assert "accepted=False" in release
     assert "message_operation_id" in release
     assert "credit_ledger_service.release" not in release

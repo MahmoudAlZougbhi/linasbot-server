@@ -185,22 +185,15 @@ def _message_totals(tenant_ids: list[str]) -> dict[str, int]:
 
 
 def _message_report(tenant_ids: list[str]) -> dict[str, Any]:
-    from services.billing.membership.message_flags import message_billing_enabled
     from services.billing.membership.period_grants import ensure_included_grant
 
-    active = message_billing_enabled()
-    if active:
-        for tenant_id in tenant_ids:
-            ensure_included_grant(tenant_id)
+    for tenant_id in tenant_ids:
+        ensure_included_grant(tenant_id)
     return {
-        "message_billing_active": active,
+        "message_billing_active": True,
         "note": (
             "Customer message units are separate from provider expense. "
-            + (
-                "Remaining is the live ledger after included grants."
-                if active
-                else "These figures are ledger rows only. Tenants do not see remaining until message billing is on."
-            )
+            "Remaining is the live ledger after included grants."
         ),
         **_message_totals(tenant_ids),
     }

@@ -137,13 +137,7 @@ async def process_web_chat_message(
     tid = widget.tenant_id
     eligible, reason = evaluate_web_ai_eligibility(tid, widget)
     if not eligible:
-        from services.billing.membership.message_flags import message_billing_enabled
-
-        credit_paused = (
-            "AI replies are paused until leftover credits are available."
-            if not message_billing_enabled()
-            else "AI replies are paused until messages are available."
-        )
+        credit_paused = "AI replies are paused until messages are available."
         blocked = {
             "web_plan_denied": "Web Chat is not included on your plan. Upgrade to enable website chat.",
             "insufficient_credits": credit_paused,
@@ -333,15 +327,9 @@ async def process_web_chat_message(
     except PermissionError as exc:
         if runtime.record and (runtime.record.reservation_id or credit.reservation_id):
             fenced_failure_release(runtime, credit, conversation_id=conversation_id, user_text=text)
-        from services.billing.membership.message_flags import message_billing_enabled
-
         raise WebChatError(
             "insufficient_credits",
-            (
-                "AI replies are paused until leftover credits are available."
-                if not message_billing_enabled()
-                else "AI replies are paused until messages are available."
-            ),
+            "AI replies are paused until messages are available.",
             status_code=402,
         ) from exc
 

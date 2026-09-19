@@ -39,9 +39,9 @@ def test_web_adapter_and_delivery_honor_message_ledger() -> None:
     assert "followup_uses_message_ledger" in getsource(followup_delivery._finalize_followup_billing)
     assert "settle_followup_from_snapshot" in getsource(followup_delivery._finalize_followup_billing)
     src = getsource(ai_bridge.maybe_generate_and_send_ai_reply)
-    assert "message_billing_enabled" in src
-    assert src.index("if not message_billing_enabled()") < src.index("reserve_leftover_reply")
+    assert "settle_after_send" in src or "run_customer_reply_v2_dm" in src
     assert "credit_ledger_service.capture" not in src
+    assert "credit_ledger_service.reserve" not in src
 
 
 def test_reservation_insert_writes_created_at() -> None:
@@ -164,10 +164,10 @@ def test_omni_and_request_persist_stay_honest() -> None:
     wa_src = getsource(generate_whatsapp_reply)
     assert "reserve_leftover_reply" in wa_src
     web_src = getsource(generate_web_chat_reply)
-    assert "message_billing_enabled" in web_src
+    assert "process_web_chat_message" in web_src
     deliver_src = getsource(deliver._finish_success)
-    assert "message_billing_enabled" in deliver_src
-    assert deliver_src.index("if not message_billing_enabled()") < deliver_src.index("capture_leftover_reply")
+    assert "settle_after_send" in deliver_src
+    assert "credit_ledger_service.capture" not in deliver_src
 
 
 def test_live_and_preview_gates_are_wired() -> None:

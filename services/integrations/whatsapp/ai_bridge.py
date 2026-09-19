@@ -121,26 +121,7 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
         emit_wa_event("ai_reply_limit", reason=reply_precheck.reason)
         return
 
-    # Credits stay the live gate until message billing replaces them.
     reservation_id: str | None = None
-    from services.billing.membership.message_flags import message_billing_enabled
-
-    if not message_billing_enabled():
-        try:
-            from services.brain.leftover_reserve import reserve_leftover_reply
-
-            reservation_id = reserve_leftover_reply(
-                tenant_id=tenant_id,
-                request_id=f"wa:{provider_mid}",
-                operation_type="whatsapp_customer_reply",
-                pin_ids=(provider_mid, inbound_id, conversation_id),
-            )
-        except PermissionError:
-            emit_wa_event("insufficient_credits", tenant_id=tenant_id)
-            return
-        except Exception as exc:
-            emit_wa_event("credit_reserve_failed", error=type(exc).__name__)
-            return
 
     from services.brain.history_ids import message_id_for_brain
 

@@ -19,12 +19,12 @@ def activation_flags_report(values: dict[str, str] | None = None) -> dict[str, A
 
 
 def message_billing_enabled() -> bool:
-    """Customer AI, Copilot, and IAP extra packs meter message units."""
+    """Canonical live meter is the message ledger. Always on."""
     return True
 
 
 def message_billing_cutover() -> bool:
-    """Store checkout sale_ready still waits on catalog publish."""
+    """Store checkout sale_ready still waits on catalog publish. Temporary cutover."""
     return False
 
 

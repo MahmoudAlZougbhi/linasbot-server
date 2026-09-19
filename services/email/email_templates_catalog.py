@@ -287,9 +287,9 @@ for _bid, _en_subject, _en_heading, _en_line in (
     ),
     (
         "billing_credits_purchased",
-        "Linas AI credits purchased",
-        "Credits added",
-        "Token credits were added to your account.",
+        "Linas AI messages purchased",
+        "Messages added",
+        "Messages were added to your account.",
     ),
     (
         "billing_refund",

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from services.billing.membership.message_flags import message_billing_enabled
 from services.billing.membership.message_ledger import InsufficientMessages, reserve, settle
 from services.billing.membership.message_policy import ResponseClass, classify_turn
 from services.billing.membership.period_grants import ensure_included_grant
@@ -141,9 +140,9 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
         comment_mode=str(extra.get("comment_mode") or extra.get("rule_mode") or ""),
     )
     extra["operation_id"] = op
-    extra["legacy_comment_uncharged"] = turn.invocation_kind == "comment" and not message_billing_enabled()
+    extra["legacy_comment_uncharged"] = False
     pinned = _pinned_policy(turn, op)
-    extra["billing_policy"] = pinned or ("message_units" if message_billing_enabled() else "legacy_credits")
+    extra["billing_policy"] = pinned or "message_units"
     if result.ai_called:
         _record_pending_llm(turn, op)
     from services.brain.stage_timeline import stamp
@@ -209,12 +208,7 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
 
 def reserve_generative(turn: CustomerTurn, *, mixed: bool = False) -> TurnResult | None:
     op = operation_id_for_turn(turn)
-    if (
-        not message_billing_enabled()
-        or owner_preview_turn(turn)
-        or lab_turn(turn)
-        or _pinned_policy(turn, op) == "legacy_credits"
-    ):
+    if owner_preview_turn(turn) or lab_turn(turn) or _pinned_policy(turn, op) == "legacy_credits":
         return None
     ensure_included_grant(turn.tenant_id)
     if turn.invocation_kind == "followup":
@@ -270,21 +264,6 @@ def settle_after_send(
 ) -> None:
     candidates = _candidate_ops(operation_id, extra_ids)
     if not tenant_id or not candidates:
-        return
-    if not message_billing_enabled():
-        if accepted:
-            from services.brain.outbox import acknowledge_sent
-
-            acknowledge_sent(
-                tenant_id=tenant_id,
-                operation_id=candidates[0],
-                provider_message_id=provider_message_id,
-                extra_ids=candidates[1:],
-            )
-        else:
-            from services.brain.outbox import acknowledge_failed
-
-            acknowledge_failed(tenant_id=tenant_id, operation_id=candidates[0], extra_ids=candidates[1:])
         return
     settled_op = ""
     try:
@@ -379,6 +358,4 @@ def settle_followup_send(
 
 
 def release_turn_reservation(turn: CustomerTurn) -> None:
-    if not message_billing_enabled():
-        return
     _release_message_hold(turn.tenant_id, operation_id_for_turn(turn), reason="generate_failed")

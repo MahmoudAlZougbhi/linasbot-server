@@ -215,7 +215,7 @@ def test_whatsapp_photo_and_voice_stamp_inbound_media() -> None:
     assert 'inbound_media["image_media_id"]' in wa
     assert 'snapshot.get("transcript")' in wa
     assert "extract=extract" in wa
-    assert "reserve_leftover_reply" in wa
+    assert "run_customer_reply_v2_dm" in wa
     assert "credit_ledger_service.capture" not in wa
     from services.integrations.whatsapp import webhook_processor
 

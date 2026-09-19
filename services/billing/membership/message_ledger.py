@@ -88,11 +88,9 @@ def _res_key(tenant_id: str, operation_id: str) -> str:
 
 
 def _pg_session() -> AbstractContextManager[Any]:
-    from services.billing.membership.message_flags import message_billing_enabled
     from services.billing.membership.pg_store import optional_message_session, postgres_requested
 
-    require = message_billing_enabled() and postgres_requested()
-    return optional_message_session(require=require)
+    return optional_message_session(require=postgres_requested())
 
 
 def grant_lot(
