@@ -1,4 +1,6 @@
-"""Durable CM ops flags that must survive normal production deploys/restarts.
+"""Infra/HA durable-flag bridge — not customer product path.
+
+Durable CM ops flags that must survive normal production deploys/restarts.
 
 KEEP — deployment / verification infrastructure. Quality Gates and HA pin this
 module plus ``scripts/prod_cm_preserve_durable_flags.sh``. It is not a customer

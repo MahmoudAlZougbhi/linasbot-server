@@ -234,7 +234,6 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup, onOpenLiveChat }: Pr
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   centerPad: { flex: 1, justifyContent: 'center', padding: spacing.xl, gap: spacing.md },
   summaryLine: { fontFamily: fonts.body, fontSize: 13, marginBottom: spacing.sm },
   list: { paddingBottom: spacing.xl, flexGrow: 1 },

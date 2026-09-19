@@ -4,34 +4,6 @@ from __future__ import annotations
 
 import re
 
-PRICE_INTENT_KEYWORDS = [
-    "price",
-    "prices",
-    "cost",
-    "how much",
-    "pricing",
-    "rate",
-    "سعر",
-    "اسعار",
-    "الاسعار",
-    "كم",
-    "قديش",
-    "أديش",
-    "تكلفة",
-    "prix",
-    "coût",
-    "combien",
-    "tarif",
-    "adesh",
-    "adde",
-    "2adde",
-    "2adesh",
-    "kam",
-    "sa3er",
-    "as3ar",
-    "price list",
-]
-
 BUSINESS_SCOPE_KEYWORDS = [
     "ليزر",
     "laser",

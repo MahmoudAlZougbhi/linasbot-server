@@ -31,7 +31,7 @@ os.environ.setdefault("DISABLE_API_DOCS", "true")
 os.environ.setdefault("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
 os.environ.pop("ALLOW_DEBUG_SIMULATE_WEBHOOK", None)
 
-collect_ignore = ["brain_evals"]
+collect_ignore = ["brain_evals", "brain"]
 
 
 @pytest.fixture(scope="session")

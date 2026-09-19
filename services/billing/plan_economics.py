@@ -22,7 +22,6 @@ from services.billing.membership.plan_catalog import (
     require_plan,
     topup_pack_matrix,
 )
-from services.brain.model_pricing import MODEL_PRICING
 
 # Fixed list prices (USD / month) — frozen membership-v1 matrix.
 PLAN_PRICES_USD: Final[dict[str, float]] = {pid: plan_price_usd(pid) for pid in PUBLIC_PLAN_IDS}
@@ -60,10 +59,6 @@ DM_MODEL: Final[str] = "gpt-5.6-terra"
 OWNER_MODEL: Final[str] = "gpt-5.6-sol"
 SETUP_MODEL: Final[str] = "gpt-5.6-sol"
 
-TOKENS_PER_DM: Final[tuple[int, int]] = (800, 250)
-TOKENS_PER_OWNER_MSG: Final[tuple[int, int]] = (2500, 800)
-TOKENS_PER_SETUP_TURN: Final[tuple[int, int]] = (3000, 1000)
-
 
 @dataclass(frozen=True)
 class PlanAllowanceRecommendation:
@@ -81,33 +76,6 @@ class PlanAllowanceRecommendation:
     gross_margin_at_100pct: float
     margin_ok: bool
     notes: str
-
-
-def _text_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    pricing = MODEL_PRICING.get(model)
-    if pricing is None:
-        raise RuntimeError(f"unknown_model_pricing:{model}")
-    return (input_tokens / 1_000_000) * float(pricing["input"]) + (output_tokens / 1_000_000) * float(pricing["output"])
-
-
-def _cost_for_mix(
-    *,
-    dm: int,
-    owner: int,
-    setup: int,
-    images: int,
-    videos: int,
-) -> float:
-    di, do = TOKENS_PER_DM
-    oi, oo = TOKENS_PER_OWNER_MSG
-    si, so = TOKENS_PER_SETUP_TURN
-    return (
-        dm * _text_cost(DM_MODEL, di, do)
-        + owner * _text_cost(OWNER_MODEL, oi, oo)
-        + setup * _text_cost(SETUP_MODEL, si, so)
-        + images * DEFAULT_IMAGE_COST_USD
-        + videos * DEFAULT_VIDEO_COST_USD
-    )
 
 
 def recommend_allowance(plan_id: str) -> PlanAllowanceRecommendation:

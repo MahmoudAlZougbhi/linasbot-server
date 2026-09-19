@@ -232,7 +232,6 @@ export function LiveChatThread({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   messages: { flexGrow: 1, paddingVertical: spacing.sm },
   olderSpinner: { marginVertical: 12 },
   olderHint: {

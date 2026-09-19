@@ -315,7 +315,7 @@ def _stamped_versions() -> set[str]:
 def ha_maintenance_tenant_id(mapping: dict[str, str]) -> str:
     """Read the ops tenant for leftover HA maintenance CLIs.
 
-    tenant env for HA maintenance only — not Linas Laser product
+    tenant env for HA maintenance only — not a single-tenant founder product
     """
     tenant_id = str(mapping.get(HA_MAINTENANCE_TENANT_ENV) or "").strip()
     if not tenant_id:

@@ -28,17 +28,6 @@ class HybridHit:
     fused_rank: int
 
 
-def _cosine(left: list[float], right: list[float]) -> float:
-    if len(left) != len(right) or not left:
-        return 0.0
-    dot = sum(a * b for a, b in zip(left, right, strict=True))
-    n1 = sum(a * a for a in left) ** 0.5
-    n2 = sum(b * b for b in right) ** 0.5
-    if n1 == 0 or n2 == 0:
-        return 0.0
-    return float(dot / (n1 * n2))
-
-
 def _rrf(*rank_lists: list[str], k: int = 60) -> dict[str, float]:
     scores: dict[str, float] = {}
     for ranks in rank_lists:
