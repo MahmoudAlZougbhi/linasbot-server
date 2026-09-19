@@ -126,6 +126,27 @@ async def process_tiktok_comment_ai(
             parent = content.get_comment(tenant_id=tenant_id, comment_id=parent_id)
             if parent is not None:
                 parent_text = str(parent.text or "")
+                parent_from = str(parent.author_user_id or "")
+            else:
+                parent_from = ""
+        else:
+            parent_from = ""
+        from services.brain.comments.thread_parent import classify_comment_parent, skip_third_party_join
+
+        parent_kind = classify_comment_parent(
+            parent_id=parent_id,
+            post_id=video_id,
+            parent_from_id=parent_from,
+            owner_ids={str(connection.open_id or "")},
+            parent_is_page_reply=content.page_replied_as(tenant_id=tenant_id, tiktok_reply_id=parent_id),
+            current_author_id=author,
+        )
+        if skip_third_party_join(parent_kind, tenant_id=tenant_id, channel="tiktok_comment", post_id=video_id):
+            job.delivery_status = "skipped"
+            job.last_error = "reply_to_human"
+            content.mark_comment_ai_processed(tenant_id=tenant_id, comment_id=comment_id)
+            session.commit()
+            return {"skipped": True, "reason": "reply_to_human"}
         media = content.get_media(tenant_id=tenant_id, item_id=video_id)
         stored_caption = str(getattr(media, "caption", "") or "") if media else ""
         stored_thumb = str(getattr(media, "thumbnail_url", "") or "") if media else ""
@@ -179,6 +200,7 @@ async def process_tiktok_comment_ai(
         )
     comment_ctx = dict(resolved.get("comment_context") or {})
     comment_ctx.setdefault("conversation_id", f"comment:{tenant_id}:tiktok_comment:{video_id or comment_id}")
+    comment_ctx["parent_is_page"] = parent_kind == "page"
     thread_id = str(comment_ctx.get("conversation_id") or "")
     caption = str(resolved.get("caption") or stored_caption or "")
     ctx_diag = {

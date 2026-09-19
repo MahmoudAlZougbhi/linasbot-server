@@ -105,3 +105,7 @@ def record_turn_history(
                 }
             )
     append_visible_history(turn.tenant_id, turn.conversation_id, rows)
+    if comment_surface:
+        from services.brain.comments.dm_bridge import remember_comment_thread
+
+        remember_comment_thread(turn)

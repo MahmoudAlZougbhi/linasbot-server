@@ -18,14 +18,6 @@ COMMENT_EVENTS = frozenset({"comment.update", "comment.create"})
 _SKIP_ACTIONS = frozenset({"delete", "deleted", "hide", "hidden", "remove", "removed"})
 
 
-def _is_top_level_comment(content: dict[str, Any]) -> bool:
-    parent = str(content.get("parent_comment_id") or "").strip()
-    if parent and parent not in {"0", "0.0"}:
-        return False
-    kind = str(content.get("comment_type") or "comment").strip().lower()
-    return kind in {"", "comment"}
-
-
 async def _fetch_public_comment(
     *, access_token: str, open_id: str, video_id: str, comment_id: str
 ) -> dict[str, Any] | None:
@@ -55,8 +47,6 @@ async def handle_comment_webhook(
     action = str(content.get("comment_action") or "").strip().lower()
     if action in _SKIP_ACTIONS:
         return {"accepted": 1, "skipped": True, "reason": "not_insert"}
-    if not _is_top_level_comment(content):
-        return {"accepted": 1, "skipped": True, "reason": "reply"}
     open_id = str(payload.get("user_openid") or payload.get("open_id") or "").strip()
     comment_id = str(content.get("comment_id") or "").strip()
     video_id = str(content.get("video_id") or content.get("item_id") or "").strip()

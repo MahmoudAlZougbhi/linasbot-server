@@ -83,6 +83,27 @@ def test_duplicate_comments_and_ai_claim(tt_db) -> None:
     assert reclaimed is not None
 
 
+def test_claim_comment_for_ai_allows_replies(tt_db) -> None:
+    connection = seed_connection(tt_db)
+    content = TikTokContentRepository(tt_db)
+    media = content.upsert_media(tenant_id="linas", connection_id=connection.id, item_id="video-1")
+    content.upsert_comment(
+        tenant_id="linas",
+        connection_id=connection.id,
+        media=media,
+        payload={
+            "comment_id": "reply-1",
+            "parent_comment_id": "cmt-1",
+            "text": "and color?",
+            "user": {"open_id": "must"},
+        },
+    )
+    tt_db.commit()
+    claimed = content.claim_comment_for_ai(tenant_id="linas", comment_id="reply-1")
+    assert claimed is not None
+    assert claimed.is_reply is True
+
+
 def test_duplicate_messages(tt_db) -> None:
     connection = seed_connection(tt_db)
     content = TikTokContentRepository(tt_db)

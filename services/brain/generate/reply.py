@@ -134,6 +134,10 @@ async def generate_grounded_reply(
 
     policy_notes.extend(human_policy_notes(turn, plan, extra))
     policy_notes.extend(comment_request_policy_notes(turn, plan))
+    for note in list((turn.extra or {}).get("policy_notes") or []):
+        text = str(note or "").strip()
+        if text and text not in policy_notes:
+            policy_notes.append(text[:1200])
     from services.brain.greeting_policy import evaluate_greeting
 
     if turn.invocation_kind not in {"followup", "comment"}:

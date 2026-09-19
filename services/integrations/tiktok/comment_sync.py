@@ -38,8 +38,9 @@ def should_enqueue_comment_ai(
     create_time: datetime | None,
     connected_at: datetime | None,
 ) -> bool:
-    if not created or is_reply or is_video_owner_comment(payload):
+    if not created or is_video_owner_comment(payload):
         return False
+    _ = is_reply
     comment_at = _aware(create_time)
     connected = _aware(connected_at)
     if comment_at is None or connected is None:

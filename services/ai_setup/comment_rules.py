@@ -307,6 +307,23 @@ def evaluate_published_comment_rules(
     )
 
 
+def published_replies_to_any_comments(tenant_id: str, *, channel: str = "", post_id: str = "") -> bool:
+    """True when a live all_comments rule covers this post (owner opted into reply-to-any)."""
+    section = load_published_comments_section(tenant_id)
+    if section is None:
+        return False
+    for rule in section.rules:
+        if not rule_is_matchable(rule):
+            continue
+        if not _channel_ok(rule, channel):
+            continue
+        if not _post_ok(rule, post_id):
+            continue
+        if _trigger_all_comments(rule) and _destination_action(rule) != "ignore":
+            return True
+    return False
+
+
 def decision_to_dict(decision: CommentRuleDecision) -> dict[str, Any]:
     return {
         "action": decision.action,
