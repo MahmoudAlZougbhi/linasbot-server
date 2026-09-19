@@ -91,7 +91,9 @@ def test_persist_request_source_has_no_message_charge() -> None:
 def test_hours_question_is_not_an_order() -> None:
     from tests.plan_builders import explicit_plan
 
-    types = {task.type for task in explicit_plan("what are your opening hours?", ("hours", ["hours", "branches"])).tasks}
+    types = {
+        task.type for task in explicit_plan("what are your opening hours?", ("hours", ["hours", "branches"])).tasks
+    }
     assert "hours" in types
     assert "product_request" not in types
     assert "service_request" not in types

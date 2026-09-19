@@ -19,7 +19,10 @@ def test_coverage_does_not_overlay_heuristic_hours() -> None:
     plan = PlannerPlan(tasks=[PlannerTask(id="t1", type="information", source_families=["services"])])
     missing = omitted_task_types("بدي سعر الليزر وساعات الفرع", plan)
     assert missing == []
-    assert coverage_ok("بدي سعر الليزر وساعات الفرع", plan, {"t1": "answered"}, reply_text="99 USD", decision="reply") is True
+    assert (
+        coverage_ok("بدي سعر الليزر وساعات الفرع", plan, {"t1": "answered"}, reply_text="99 USD", decision="reply")
+        is True
+    )
 
 
 def _answered_plan() -> tuple[str, PlannerPlan, dict[str, str]]:

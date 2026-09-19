@@ -46,7 +46,10 @@ async def test_v2_creative_request_reaches_sol_no_pre_refuse(monkeypatch: pytest
     async def fake_round(**_k):
         called["sol"] = True
         yield "delta", "Creative Studio is cancelled. I can help with AI Setup."
-        yield "result", SimpleNamespace(tool_calls=[], content="Creative Studio is cancelled. I can help with AI Setup.")
+        yield (
+            "result",
+            SimpleNamespace(tool_calls=[], content="Creative Studio is cancelled. I can help with AI Setup."),
+        )
 
     monkeypatch.setattr("services.owner_copilot.brain_stream_body.iter_sol_tool_round", fake_round)
 

@@ -70,7 +70,5 @@ def test_shop_b_rules_block_appointment_actions() -> None:
     blocked = overlay_plan(llm, message, enabled_action_types={"product_request"})
     types = {task.type for task in blocked.tasks}
     assert "service_request" not in types
-    allowed = overlay_plan(
-        llm, message, enabled_action_types={"service_request", "product_request", "human_request"}
-    )
+    allowed = overlay_plan(llm, message, enabled_action_types={"service_request", "product_request", "human_request"})
     assert any(task.type == "service_request" for task in allowed.tasks)
