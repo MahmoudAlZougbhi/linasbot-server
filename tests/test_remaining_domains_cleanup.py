@@ -54,6 +54,4 @@ def test_live_chat_has_no_local_qa_or_orphan_faq_helper() -> None:
     assert "local_qa" not in details
     assert "read_qa_pairs" not in details
     assert "get_faq_match_context" not in details
-    assert "def create_faq_pair_from_livechat" in (ROOT / "services/ai_setup/faq_integration.py").read_text(
-        encoding="utf-8"
-    )
+    assert "def create_faq_pair_from_livechat" in (ROOT / "services/faq/cm_faq.py").read_text(encoding="utf-8")

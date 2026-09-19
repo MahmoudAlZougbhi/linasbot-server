@@ -59,7 +59,7 @@ def test_like_faq_writes_canonical_cm_faq() -> None:
     from inspect import getsource
 
     from modules import cm_faq_api
-    from services.ai_setup.faq_integration import create_faq_pair_from_livechat
+    from services.faq.cm_faq import create_faq_pair_from_livechat
 
     src = getsource(cm_faq_api.cm_faq_from_livechat)
     assert "/api/cm/faq/from-livechat" in Path("modules/cm_faq_api.py").read_text(encoding="utf-8")

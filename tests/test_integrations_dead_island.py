@@ -28,7 +28,8 @@ KEEP = (
     "services/integrations/tiktok/health.py",
     "services/smart_followup/worker.py",
     "services/integrations/web_chat/processor_v2_reply.py",
-    "services/integrations/meta/meta_comment_reply_generate.py",
+    "services/integrations/meta/meta_comment_replies.py",
+    "services/integrations/meta/meta_comment_brain_send.py",
 )
 
 
