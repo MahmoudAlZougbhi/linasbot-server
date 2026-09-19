@@ -283,8 +283,8 @@ async def approve_diagnosis_fix(
             raise ValueError("FAQ correction requires answer (and qa_group_id or question)")
     else:
         from services.ai_setup.constants import tenant_has_published_cm
+        from services.ai_setup.faq_invalidation import invalidate_faq_for_cm_patch
         from services.ai_setup.setup_chat import apply_section_patch
-        from services.faq.faq_cm_invalidation import invalidate_faq_for_cm_patch
         from services.owner_copilot.cm_approval import activate_cm_after_save
 
         section = str(corr.get("section") or "prices")

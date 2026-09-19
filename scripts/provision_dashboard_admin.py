@@ -72,7 +72,7 @@ def main() -> int:
         print(str(e), file=sys.stderr)
         return 2
 
-    from services.team.admin_provisioning_service import audit_line, provision_first_admin
+    from services.team.provisioning_service import audit_line, provision_first_admin
 
     try:
         result = provision_first_admin(

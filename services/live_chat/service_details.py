@@ -15,7 +15,7 @@ from utils.utils import (
 
 
 class LiveChatDetailsMixin:
-    """Conversation details, FAQ match context, message edits, metrics."""
+    """Conversation details, message edits, metrics."""
 
     ENABLE_INDEX_BACKFILL_ON_READ: Any
     INDEX_READ_TIMEOUT_SECONDS: Any
@@ -242,90 +242,6 @@ class LiveChatDetailsMixin:
 
         except Exception as e:
             print(f"❌ Error getting conversation details: {e}")
-            import traceback
-
-            traceback.print_exc()
-            return {"success": False, "error": str(e)}
-
-    async def get_faq_match_context(self, user_id: str, conversation_id: str, message_id: str) -> dict[str, Any]:
-        """
-        Get faq_match metadata and current FAQ entry for a message (for FAQ correction modal).
-        Returns faq_match from message metadata and current_entry (question, answer) if faq_id exists.
-        """
-        try:
-            db = get_firestore_db()
-            if not db:
-                return {"success": False, "error": "Firestore not initialized"}
-
-            app_id = "linas-ai-bot-backend"
-            conv_ref = (
-                db.collection("artifacts")
-                .document(app_id)
-                .collection("users")
-                .document(user_id)
-                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
-                .document(conversation_id)
-            )
-
-            conv_doc = await asyncio.to_thread(conv_ref.get)
-            if not conv_doc.exists:
-                return {"success": False, "error": "Conversation not found"}
-
-            doc_data = conv_doc.to_dict() or {}
-            messages = doc_data.get("messages", [])
-            message_id_str = str(message_id).strip()
-
-            def _msg_id(m: dict[str, Any]) -> str:
-                mid = m.get("message_id")
-                if mid:
-                    return str(mid).strip()
-                meta = m.get("metadata") or {}
-                for key in ("message_id", "source_message_id"):
-                    if meta.get(key):
-                        return str(meta[key]).strip()
-                return ""
-
-            faq_match = None
-            for msg in messages:
-                if _msg_id(msg) == message_id_str:
-                    meta = msg.get("metadata") or {}
-                    faq_match = meta.get("faq_match")
-                    break
-
-            if not faq_match:
-                return {
-                    "success": True,
-                    "faq_match": None,
-                    "current_entry": None,
-                    "message": "No FAQ match for this message",
-                }
-
-            faq_id = faq_match.get("qa_group_id") or faq_match.get("faq_id")
-            current_entry = None
-            if faq_id is not None:
-                try:
-                    from services.brain.faq_exact import published_faq_entry
-                    from services.live_chat.tenant import normalize_live_chat_tenant_id
-
-                    workspace = normalize_live_chat_tenant_id(
-                        str(doc_data.get("tenant_id") or faq_match.get("tenant_id") or "")
-                    )
-                    if workspace:
-                        current_entry = published_faq_entry(
-                            workspace,
-                            str(faq_id),
-                            language=str(faq_match.get("stored_language") or faq_match.get("language") or ""),
-                        )
-                except Exception as e:
-                    print(f"⚠️ get_faq_match_context published_faq_entry: {e}")
-
-            return {
-                "success": True,
-                "faq_match": faq_match,
-                "current_entry": current_entry,
-            }
-        except Exception as e:
-            print(f"❌ Error in get_faq_match_context: {e}")
             import traceback
 
             traceback.print_exc()

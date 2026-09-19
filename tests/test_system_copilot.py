@@ -133,7 +133,7 @@ async def test_cm_approval_flow(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) 
         lambda **_: {"errors": [], "warnings": []},
     )
     monkeypatch.setattr(
-        "services.faq.faq_cm_invalidation.invalidate_faq_for_cm_patch",
+        "services.ai_setup.faq_invalidation.invalidate_faq_for_cm_patch",
         lambda **_: {"stale_groups": [], "stale_rows": 0, "reason": "cm_patch:style"},
     )
 
