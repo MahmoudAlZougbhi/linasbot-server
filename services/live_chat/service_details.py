@@ -28,7 +28,6 @@ class LiveChatDetailsMixin:
     _refresh_index_for_conversation: Any
     _should_schedule_read_path_refresh: Any
     _visible_chat_messages: Any
-    invalidate_cache: Any
     thread_visible_to_tenant: Any
 
     async def get_conversation_details(
@@ -207,37 +206,6 @@ class LiveChatDetailsMixin:
                 and self._should_schedule_read_path_refresh(conversation_id)
             ):
                 asyncio.create_task(self._refresh_index_for_conversation(effective_user_id, conversation_id))
-            # #region agent log
-            try:
-                import json
-                import os
-
-                _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                _logpath = os.path.join(_root, ".cursor", "debug-420609.log")
-                os.makedirs(os.path.dirname(_logpath), exist_ok=True)
-                first_ts = formatted_messages[0]["timestamp"] if formatted_messages else None
-                last_ts = formatted_messages[-1]["timestamp"] if formatted_messages else None
-                with open(_logpath, "a") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "420609",
-                                "location": "live_chat_service:get_conversation_details",
-                                "message": "service return",
-                                "data": {
-                                    "msg_count": len(formatted_messages),
-                                    "first_ts": first_ts,
-                                    "last_ts": last_ts,
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                                "hypothesisId": "H1,H9",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             return out
 
         except Exception as e:

@@ -6,9 +6,9 @@ from services.ai_setup.language_policy import resolve_customer_response_language
 from services.ai_setup.progress_quality import assess_section_fill
 from services.ai_setup.request_rules import normalize_request_rule_item
 from services.ai_setup.setup_chat import SETUP_SECTION_ORDER
+from services.brain.planner.heuristic import plan_message
 from services.owner_copilot.setup_flow import SETUP_SECTIONS
 from services.requests.constants import PERSISTABLE_REQUEST_TYPES, REQUEST_TYPES
-from services.requests.human_detect import is_human_request
 from services.requests.request_graphs.compiler import destination_from_type
 
 
@@ -21,11 +21,14 @@ def test_human_is_a_request_type() -> None:
 
 
 def test_human_intent_matches_owner_examples() -> None:
-    assert is_human_request("human")
-    assert is_human_request("I want to speak with an agent")
-    assert is_human_request("بدي موظف")
-    assert is_human_request("أريد موظف")
-    assert not is_human_request("what is the price")
+    def types(message: str) -> set[str]:
+        return {task.type for task in plan_message(message).tasks}
+
+    assert "human_request" in types("human")
+    assert "human_request" in types("I want to speak with an agent")
+    assert "human_request" in types("بدي موظف")
+    assert "human_request" in types("أريد موظف")
+    assert "human_request" not in types("what is the price")
 
 
 def test_franco_reply_language_is_arabic_script() -> None:

@@ -1,4 +1,4 @@
-"""Wave 2: founder WhatsApp matrix gone; human detect stays on requests.human_detect."""
+"""Wave 2: founder WhatsApp matrix gone; human intent stays on Brain planner."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ os.environ.setdefault("EXTERNAL_API_BASE_URL", "https://example.com")
 os.environ.setdefault("EXTERNAL_API_TOKEN", "test-token")
 os.environ.setdefault("DASHBOARD_AUTH_SECRET", "wave2-test-secret")
 
+from services.brain.planner.heuristic import plan_message
 from services.integrations.social.social_contact_routing import (
     DEFAULT_SOCIAL_WHATSAPP_CONTACTS,
     is_social_channel,
 )
-from services.requests.human_detect import is_human_request
 
 
 def test_contact_matrix_empty():
@@ -26,8 +26,10 @@ def test_is_social_channel():
 
 
 def test_personal_care_not_human():
-    assert is_human_request("personal care tips") is False
+    types = {task.type for task in plan_message("personal care tips").tasks}
+    assert "human_request" not in types
 
 
 def test_arabic_human_detected():
-    assert is_human_request("بدي احكي مع حدا") is True
+    types = {task.type for task in plan_message("بدي احكي مع حدا").tasks}
+    assert "human_request" in types

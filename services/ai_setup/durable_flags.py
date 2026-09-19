@@ -1,5 +1,9 @@
 """Durable CM ops flags that must survive normal production deploys/restarts.
 
+KEEP — deployment / verification infrastructure. Quality Gates and HA pin this
+module plus ``scripts/prod_cm_preserve_durable_flags.sh``. It is not a customer
+product path and must not be classified Dead.
+
 ``CM_DISABLE_LEGACY_BRIDGE`` lives in the systemd ``EnvironmentFile`` ``.env``
 (not in git). Deploy rewrites the unit file but must not lose this key.
 The previous name ``CM_DISABLE_LINAS_LEGACY_BRIDGE`` is still honored on read.
