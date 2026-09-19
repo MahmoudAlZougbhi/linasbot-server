@@ -17,12 +17,12 @@ from services.brain.contracts.turn import ConversationState, CustomerTurn, Media
 from services.brain.faq_freshness import faq_static_allowed, looks_like_dynamic_fact
 from services.brain.followup.revalidate import revalidate_followup_send
 from services.brain.gates import evaluate_gates
-from services.brain.outbox_test import reset_saved_outbox, save_envelope_for_test, saved_outbox
 from services.brain.policies.privacy import public_comment_safe
 from services.brain.search.invalidate import mark_products_stale
 from services.brain.search.store import query_similar, reset_memory_store, write_documents
 from services.brain.turn_pipeline import inbound_task_text
 from services.brain.visual import visual_retrieval_decision
+from tests.brain.outbox_test_helpers import reset_saved_outbox, save_envelope_for_test, saved_outbox
 
 
 def test_restricted_gate_runs_before_faq(monkeypatch: pytest.MonkeyPatch) -> None:

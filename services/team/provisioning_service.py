@@ -28,7 +28,6 @@ _KNOWN_BAD_PASSWORDS = frozenset(
         "admin",
         "administrator",
         "linas",
-        "linaslaser",
         "welcome",
         "welcome123",
         "test",

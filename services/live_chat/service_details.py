@@ -1,3 +1,10 @@
+"""Active Live Chat operator details mixin imported by service.py.
+
+Residual scrub skips folding this into service.py — Live Chat already splits
+by mixin (history, operator, phone, …) and a fold would be a behavior-risk
+move, not a dead-island delete.
+"""
+
 from __future__ import annotations
 
 import asyncio

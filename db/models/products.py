@@ -142,6 +142,7 @@ class ProductImageFingerprint(Base):
   __tablename__ = "product_image_fingerprints"
   __table_args__ = (
       Index("ix_product_img_fp_tenant_sha256", "tenant_id", "sha256"),
+      Index("ix_product_img_fp_tenant_phash", "tenant_id", "phash"),
       Index("ix_product_img_fp_tenant_product", "tenant_id", "product_id"),
       Index("ix_product_img_fp_tenant_media", "tenant_id", "media_id", unique=True),
   )

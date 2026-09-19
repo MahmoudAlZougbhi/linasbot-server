@@ -11,7 +11,7 @@ from typing import Any
 from services.billing.membership.message_policy import message_units_for
 from services.brain.billing import operation_id_for_turn
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
-from services.brain.outbox_test import save_envelope_for_test
+from tests.brain.outbox_test_helpers import save_envelope_for_test
 
 
 def lab_enabled() -> bool:

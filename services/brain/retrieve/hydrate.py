@@ -20,7 +20,7 @@ def _rows(sections: dict[str, Any], family: str) -> list[dict[str, Any]]:
         off_payload = sections.get("off_days")
         off_rows: list[dict[str, Any]] = [{"id": "off_days", **off_payload}] if isinstance(off_payload, dict) else []
         # Branch weekly_schedule is the hours SoT. Opening-hours rows must not
-        # hide branch ids like hours:antelias at hydrate time.
+        # hide branch ids like hours:branch_id at hydrate time.
         return [*hours, *branch_rows, *off_rows]
     if family in {"prices", "services"}:
         payload = sections.get("prices")
@@ -165,6 +165,12 @@ def expand_hits(
     revision: str = "",
     tenant_id: str = "",
 ) -> EvidenceBundle:
+    from services.ai_setup.resource_attachment import customer_resource_descriptors
+    from services.brain.retrieve.attachment_evidence import (
+        format_resource_ref_block,
+        merge_body_with_attachments,
+    )
+
     items: list[EvidenceItem] = []
     product_hits = [hit for hit in hits if hit.card.source_family == "products"]
     if product_hits:
@@ -191,6 +197,9 @@ def expand_hits(
             text = chunk if (not full or len(chunk) <= len(full)) else full
         else:
             text = _text_card(family, match, sections=sections, tenant_id=tenant_id)
+        source_item_id = f"{family}:{source_id}"
+        attach_block = format_resource_ref_block(match.get("attachments"), source_item_id=source_item_id)
+        text = merge_body_with_attachments(text, attach_block)
         if family in {"hours", "branches"} and not _schedule_lines(match):
             sibling = _select_hours_row(sections, source_id)
             extra_clocks = _schedule_lines(sibling) if sibling is not None else []
@@ -205,6 +214,11 @@ def expand_hits(
             "tenant_id": tenant_id,
             "bundle": "+" in card.title or " and " in card.title.casefold(),
             "aliases": list(card.aliases),
+            "resource_refs": [
+                str(row.get("resource_ref") or "")
+                for row in customer_resource_descriptors(match.get("attachments"), source_item_id=source_item_id)
+                if str(row.get("resource_ref") or "").strip()
+            ],
         }
         items.append(
             EvidenceItem(

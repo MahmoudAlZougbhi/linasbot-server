@@ -70,17 +70,36 @@ def evidence_from_product(row: Any) -> EvidenceItem | None:
     if price:
         parts.append(f"listed_price {price}")
     parts.append(f"availability {_attr(row, 'availability')}")
+    from services.ai_setup.resource_attachment import customer_resource_descriptors
+    from services.brain.retrieve.attachment_evidence import (
+        format_resource_ref_block,
+        product_attachment_dicts,
+    )
+
+    source_item_id = f"products:{item_id}"
+    attachments = product_attachment_dicts(row)
+    attach_block = format_resource_ref_block(attachments, source_item_id=source_item_id)
+    if attach_block:
+        parts.append(attach_block)
     text = "\n".join(p.strip() for p in parts if str(p).strip())
     if not text:
         return None
     return EvidenceItem(
-        evidence_id=f"products:{item_id}",
+        evidence_id=source_item_id,
         source_family="products",
         source_id=item_id,
         revision=product_revision(row),
         title=title or item_id,
         text=text,
-        extra={"availability": str(_attr(row, "availability") or ""), "listed_price": str(price or "")},
+        extra={
+            "availability": str(_attr(row, "availability") or ""),
+            "listed_price": str(price or ""),
+            "resource_refs": [
+                str(desc.get("resource_ref") or "")
+                for desc in customer_resource_descriptors(attachments, source_item_id=source_item_id)
+                if str(desc.get("resource_ref") or "").strip()
+            ],
+        },
     )
 
 

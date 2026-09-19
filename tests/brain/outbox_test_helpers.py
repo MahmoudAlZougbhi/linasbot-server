@@ -1,4 +1,7 @@
-"""Test adapter: persist an approved envelope without channel send."""
+"""Test adapter: persist an approved envelope without channel send.
+
+Lives under tests/ so services/brain stays a production package.
+"""
 
 from __future__ import annotations
 

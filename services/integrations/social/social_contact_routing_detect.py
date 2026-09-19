@@ -35,11 +35,6 @@ def _require_tenant_id(tenant_id: str | None, *, context: str = "social contact 
     return value
 
 
-def _tenant_id_from_user_data(user_data: dict) -> str:
-    raw = user_data.get("tenant_id") or user_data.get("tenantId") or user_data.get("workspace_id")
-    return _require_tenant_id(str(raw) if raw is not None else None)
-
-
 def is_social_channel(channel: str | None) -> bool:
     return str(channel or "").strip().lower() in SOCIAL_CHANNELS
 
