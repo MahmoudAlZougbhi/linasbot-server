@@ -24,7 +24,8 @@ def attach_inbound_product_image_match(tenant_id: str, blob: bytes, result: Any)
 def merge_product_image_evidence(turn: CustomerTurn, bundle: EvidenceBundle) -> EvidenceBundle:
     """Prepend hydrated product cards from inbound image match. Never authors reply text."""
     extra = turn.extra if isinstance(turn.extra, dict) else {}
-    rows = extra.get("product_image_matches") if isinstance(extra.get("product_image_matches"), list) else []
+    raw = extra.get("product_image_matches")
+    rows: list[Any] = raw if isinstance(raw, list) else []
     ids = [str(row.get("product_id") or "").strip() for row in rows if isinstance(row, dict)]
     ids = [pid for pid in ids if pid]
     if not ids:

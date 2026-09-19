@@ -167,13 +167,13 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
         from services.brain.retrieve.orchestrate import RetrieveContext, retrieve_published
 
         bundle = await retrieve_published(RetrieveContext(tenant_id=tenant_id, query=query, families={"products"}))
-        data = [
+        found = [
             {"id": item.source_id, "family": "products", "title": item.title, "text": item.text[:500]}
             for item in bundle.items
         ]
         if bundle.outcome == "product_index_stale":
             return {"ok": False, "data": None, "error": "product_index_stale"}
-        return {"ok": True, "data": data}
+        return {"ok": True, "data": found}
 
     if name == "get_price":
         prices_raw = sections.get("prices")

@@ -243,12 +243,14 @@ async def search_hybrid(
     ordered = sorted(fused.items(), key=lambda row: (-row[1], row[0]))[:cap]
     out: list[HybridHit] = []
     for rank, (item_id, _score) in enumerate(ordered):
-        card = sem_cards.get(item_id) or by_id.get(item_id)
-        if card is None:
-            continue
+        picked = sem_cards.get(item_id)
+        if picked is None:
+            picked = by_id.get(item_id)
+            if picked is None:
+                continue
         out.append(
             HybridHit(
-                card=card,
+                card=picked,
                 lexical_score=lex_map.get(item_id, 0.0),
                 semantic_score=sem_map.get(item_id, 0.0),
                 fused_rank=rank,
