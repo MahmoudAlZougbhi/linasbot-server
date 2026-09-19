@@ -11,11 +11,10 @@ import pytest
 from services.brain.actions.requests import persist_request
 from services.brain.contracts.actions import ActionProposal
 from services.brain.planner.heuristic import plan_message
-from services.requests.constants import PERSISTABLE_REQUEST_TYPES, REQUEST_TYPES
+from services.requests.constants import PERSISTABLE_REQUEST_TYPES, REQUEST_TYPES, status_bucket, status_label
 from services.requests.schemas import RequestCreateBody
 from services.requests.service import CustomerRequestsError, CustomerRequestsService
 from services.requests.state_machine import can_transition
-from services.requests.status_ui import status_bucket, status_label
 
 ROOT = Path(__file__).resolve().parents[1]
 DEAD_CAPTURE = (

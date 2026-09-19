@@ -59,6 +59,7 @@ async def test_human_only_still_stops_at_handoff(monkeypatch: pytest.MonkeyPatch
     assert gated.early is not None
     assert gated.early.extra.get("phase") == "handoff"
     assert gated.early.envelope.decision == "handoff_ack"
+    assert gated.early.envelope.messages == []
 
 
 def test_shop_b_rules_block_appointment_actions() -> None:

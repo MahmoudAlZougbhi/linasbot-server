@@ -11,8 +11,8 @@ from services.brain.grounding.facts import evidence_supports_text, ungrounded_am
 from services.brain.planner.heuristic import plan_message
 from services.brain.providers.voyage_client import VoyageVectors
 from services.brain.retrieve.cards import cards_from_sections
-from services.brain.retrieve.expand import expand_hits
 from services.brain.retrieve.hybrid import search_hybrid
+from services.brain.retrieve.hydrate import expand_hits
 from services.brain.retrieve.lexical import LexicalHit
 from services.brain.retrieve.orchestrate import retrieve_cards
 from services.brain.retrieve.products import cards_from_products, evidence_from_product
@@ -215,7 +215,7 @@ async def test_hybrid_uses_stored_index_without_document_embeds(monkeypatch: pyt
 
 def test_product_expand_hydrates_from_repository(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.brain.retrieve.cards import TitleCard
-    from services.brain.retrieve.expand import expand_hits
+    from services.brain.retrieve.hydrate import expand_hits
     from services.brain.retrieve.lexical import LexicalHit
 
     row = SimpleNamespace(
@@ -307,7 +307,7 @@ async def test_hybrid_prefers_pg_session_when_available(monkeypatch: pytest.Monk
 
 def test_knowledge_expand_prefers_winning_chunk() -> None:
     from services.brain.retrieve.cards import TitleCard
-    from services.brain.retrieve.expand import expand_hits
+    from services.brain.retrieve.hydrate import expand_hits
     from services.brain.retrieve.lexical import LexicalHit
 
     sections = {

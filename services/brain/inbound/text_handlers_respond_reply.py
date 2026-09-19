@@ -7,40 +7,12 @@ from typing import Any
 
 from services.brain.inbound.text_handlers_respond_intent import (
     _clean_reply_text,
-    _looks_like_greeting_unit,
-    _strip_leading_greeting_phrase,
 )
 from services.brain.inbound.text_handlers_respond_keywords import (
     ASK_ONE_BY_ONE_ACTIONS,
     BRIEF_REPLY_ACTIONS,
     INTERROGATIVE_PREFIXES,
 )
-
-
-def _strip_redundant_greeting_prefix(reply_text: str) -> str:
-    """
-    Remove a leading greeting sentence when the turn is not eligible for greeting.
-    Keeps original order and only strips the first greeting-like unit when there is
-    enough remaining content.
-    """
-    cleaned = _clean_reply_text(reply_text)
-    units = _split_reply_units(cleaned)
-    if units and _looks_like_greeting_unit(units[0]):
-        first_unit_wo_greeting = _strip_leading_greeting_phrase(units[0])
-        if first_unit_wo_greeting and first_unit_wo_greeting != units[0]:
-            rebuilt = " ".join([first_unit_wo_greeting] + units[1:]).strip()
-            if len(rebuilt) >= 20:
-                return rebuilt
-
-        if len(units) >= 2:
-            remaining = " ".join(units[1:]).strip()
-            if len(remaining) >= 20:
-                return remaining
-
-    fallback = _strip_leading_greeting_phrase(cleaned)
-    if fallback != cleaned and len(fallback) >= 20:
-        return fallback
-    return cleaned
 
 
 def _split_reply_units(text: str) -> list:

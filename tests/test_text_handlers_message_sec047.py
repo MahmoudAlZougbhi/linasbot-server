@@ -26,7 +26,7 @@ def test_text_handlers_message_source_excludes_sec047_debug_patterns() -> None:
 
 
 @pytest.mark.asyncio
-async def test_session_greeting_send_has_task_local_semantic_purpose(
+async def test_handle_message_does_not_send_canned_session_greeting(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from services.integrations.meta.meta_outbound_attempts import current_meta_outbound_send_purpose
@@ -94,7 +94,7 @@ async def test_session_greeting_send_has_task_local_semantic_purpose(
         ):
             mapping.pop(user_id, None)
 
-    assert observed == ["session_greeting"]
+    assert observed == []
     assert current_meta_outbound_send_purpose() == "primary_reply"
 
 

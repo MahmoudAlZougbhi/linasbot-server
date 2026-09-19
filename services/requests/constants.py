@@ -56,6 +56,33 @@ PERM_REQUESTS_NOTIFY: Final[str] = "requestsNotify"
 PERM_REQUESTS_MANUAL_CHAT: Final[str] = "requestsManualChat"
 PERM_REQUESTS_SENSITIVE: Final[str] = "requestsSensitive"
 
+# Product UI buckets used by Mobile Requests. Internal statuses remain the SoT.
+STATUS_BUCKET: Final[dict[str, str]] = {
+    "NEW": "new",
+    "IN_REVIEW": "in_progress",
+    "WAITING_FOR_CUSTOMER": "in_progress",
+    "CONFIRMED": "in_progress",
+    "READY": "in_progress",
+    "COMPLETED": "done",
+    "CANCELLED": "cancelled",
+}
+
+BUCKET_LABEL: Final[dict[str, str]] = {
+    "new": "New",
+    "in_progress": "In Progress",
+    "done": "Done",
+    "cancelled": "Cancelled",
+}
+
+
+def status_bucket(status: str) -> str:
+    return STATUS_BUCKET.get((status or "").strip().upper(), "in_progress")
+
+
+def status_label(status: str) -> str:
+    return BUCKET_LABEL[status_bucket(status)]
+
+
 REQUEST_PERMISSION_KEYS: Final[tuple[str, ...]] = (
     PERM_REQUESTS,
     PERM_REQUESTS_MANAGE,

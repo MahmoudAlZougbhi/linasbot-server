@@ -7,7 +7,7 @@ from typing import Any
 from services.brain.budgets import DEFAULT_BUDGETS
 from services.brain.contracts.evidence import EvidenceBundle
 from services.brain.contracts.plan import PlannerPlan
-from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.coverage import coverage_ok
 from services.brain.generate.reply import generate_grounded_reply, openai_configured
@@ -189,14 +189,6 @@ async def generate_verified(
             dispositions[task.id] = "pending_delivery" if resource_receipts else "not_found"
     agent_trace.append({"step": "FINAL", "decision": envelope.decision})
     greeted = apply_greeting(turn, message, channel, envelope.model_copy(update={"dispositions": dispositions}))
-    if extra.get("awaiting_confirmation"):
-        from services.brain.templates import owner_protocol_text
-
-        lang = str((turn.extra or {}).get("response_language") or "")
-        confirm_text = owner_protocol_text("confirm_request", lang)
-        if confirm_text:
-            confirm = OutboundMessage(destination=dest, text=confirm_text, protected=True)
-            greeted = greeted.model_copy(update={"messages": [*list(greeted.messages), confirm]})
     from services.brain.agent.action_gate import append_handoff_message
 
     lang = str((turn.extra or {}).get("response_language") or "")

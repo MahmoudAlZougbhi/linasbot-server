@@ -41,14 +41,6 @@ class GreetingDecision:
 
 def inactivity_threshold() -> timedelta:
     """Use the existing Meta DM 12-hour constant; do not invent a new window."""
-    try:
-        from services.brain.inbound.text_handlers_message_greeting import GREETING_INACTIVITY_SECONDS
-
-        seconds = int(GREETING_INACTIVITY_SECONDS)
-        if seconds > 0:
-            return timedelta(seconds=seconds)
-    except Exception:
-        pass
     hours = int(getattr(config, "CONTEXT_WINDOW_HOURS", 12) or 12)
     return timedelta(hours=max(hours, 0))
 
@@ -190,29 +182,6 @@ def evaluate_greeting(
             continue
         return GreetingDecision(True, text=text, rule_id=rule.id, reason="matched")
     return GreetingDecision(False, reason="no_match")
-
-
-def safe_greeting_text(
-    *,
-    tenant_id: str,
-    message: str,
-    language: str = "",
-    history: HistorySnapshot | None = None,
-) -> str:
-    """Published Identity/Greeting Behavior opener only. Empty when Terra must own the turn."""
-    lang = (language or inbound_greeting_language(message)).strip().lower() or "en"
-    try:
-        decision = evaluate_greeting(
-            tenant_id=tenant_id,
-            message=message,
-            history=history or HistorySnapshot(),
-            language=lang,
-        )
-        if decision.eligible and decision.text.strip():
-            return decision.text.strip()
-    except Exception:
-        pass
-    return ""
 
 
 def is_greeting_only(message: str) -> bool:

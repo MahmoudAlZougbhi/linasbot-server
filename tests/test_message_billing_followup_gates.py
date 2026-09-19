@@ -185,7 +185,7 @@ def test_live_and_preview_gates_are_wired() -> None:
     from modules import whatsapp_smart_followup_api
     from services.brain.ai_reply.ai_reply_credit_gate import reserve_before_ai
     from services.integrations.web_chat.credit_fsm import WebChatCreditHandle
-    from services.integrations.web_chat.processor_v2_reply import generate_web_chat_reply_text
+    from services.integrations.web_chat.processor_reply import generate_web_chat_reply_text
 
     reserve_src = getsource(reserve_before_ai)
     assert "reserve_leftover_reply" in reserve_src

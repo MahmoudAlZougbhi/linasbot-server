@@ -10,10 +10,10 @@ import pytest
 
 from services.queues.models import QueueJob
 from services.queues.redis_backend import RedisQueueBackend
-from services.scale.isolated_replica_pool import IsolatedReplicaPool
 from services.scale.replica_controller import set_controller_redis_for_tests
 from services.scale.shutdown import ShutdownCoordinator
 from services.scale.worker_registry import set_registry_redis_for_tests
+from tests.scale.harness_replica_pool import IsolatedReplicaPool
 
 
 def _pct(values: list[float], p: float) -> float:

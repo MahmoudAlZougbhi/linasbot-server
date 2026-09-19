@@ -16,9 +16,9 @@ class WebChatTakeoverState:
 
 
 def _waiting_notice(lang: str = "ar") -> str:
-    from services.brain.templates import owner_protocol_text
-
-    return owner_protocol_text("waiting_queue", lang)
+    """Takeover waiting copy is Terra/silence only — never catalog protocol text."""
+    _ = lang
+    return ""
 
 
 async def read_web_chat_takeover_state(*, user_id: str, conversation_id: str) -> WebChatTakeoverState:

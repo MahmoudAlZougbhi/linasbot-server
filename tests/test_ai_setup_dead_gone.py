@@ -21,28 +21,6 @@ GONE_PATHS = (
     "services/ai_setup/faq_integration.py",
     "services/ai_setup/faq_integration_ops.py",
     "services/ai_setup/faq_integration_helpers.py",
-)
-
-KEEP_PATHS = (
-    "services/ai_setup/storage.py",
-    "services/ai_setup/save_live.py",
-    "services/ai_setup/publish.py",
-    "services/brain/compiler/chunk_apply.py",
-    "services/brain/compiler/luna_chunker.py",
-    "services/brain/search/index_schedule.py",
-    "services/faq/cm_faq.py",
-    "services/faq/cm_faq_ops.py",
-    "services/faq/cm_faq_helpers.py",
-    "modules/cm_api.py",
-    "modules/cm_faq_api.py",
-    "modules/cm_media_api.py",
-    "modules/cm_setup_api.py",
-    "modules/flow_api.py",
-)
-
-# Cutover/deploy scripts still import these. Not live Save/Publish/Brain.
-CUTOVER_ONLY_PATHS = (
-    "services/ai_setup/durable_flags.py",
     "services/ai_setup/embeddings.py",
     "services/ai_setup/migration.py",
     "services/ai_setup/prices_catalog_merge.py",
@@ -54,6 +32,24 @@ CUTOVER_ONLY_PATHS = (
     "services/ai_setup/redistribution.py",
     "services/ai_setup/scrub_restore.py",
     "services/ai_setup/section_classifier.py",
+)
+
+KEEP_PATHS = (
+    "services/ai_setup/storage.py",
+    "services/ai_setup/save_live.py",
+    "services/ai_setup/publish.py",
+    "services/ai_setup/durable_flags.py",
+    "services/brain/compiler/chunk_apply.py",
+    "services/brain/compiler/luna_chunker.py",
+    "services/brain/search/index_schedule.py",
+    "services/faq/cm_faq.py",
+    "services/faq/cm_faq_ops.py",
+    "services/faq/cm_faq_helpers.py",
+    "modules/cm_api.py",
+    "modules/cm_faq_api.py",
+    "modules/cm_media_api.py",
+    "modules/cm_setup_api.py",
+    "modules/flow_api.py",
 )
 
 
@@ -102,8 +98,6 @@ def test_cutover_only_ai_setup_tools_are_not_imported_by_live_core() -> None:
         blob = path.read_text(encoding="utf-8")
         for needle in forbidden:
             assert needle not in blob, f"{path}: {needle}"
-    for rel in CUTOVER_ONLY_PATHS:
-        assert (ROOT / rel).is_file(), rel
 
 
 def test_put_draft_still_applies_luna_chunks() -> None:

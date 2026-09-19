@@ -10,10 +10,9 @@ from services.brain.actions.execute import execute_actions
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
 from services.brain.contracts.enums import ReplyDecision, StopReason, TaskDisposition
 from services.brain.contracts.plan import PlannerPlan
-from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.stage_timeline import stamp
-from services.brain.templates import brain_template
 
 _INFO_TYPES = frozenset({"information", "hours", "comparison"})
 _LIVE_KINDS = frozenset({"dm", "followup", "comment"})
@@ -153,11 +152,10 @@ async def unanswered_question_result(
     stop_reason: StopReason = "ok"
     dispositions: dict[str, TaskDisposition]
     if ok:
-        text = (brain_template("handoff", lang) or "").strip()
         decision = "handoff_ack"
         dispositions = {task.id: "not_found" for task in plan.tasks if task.type in _INFO_TYPES}
         dispositions["handoff"] = "action_succeeded"
-        messages = [OutboundMessage(destination=dest, text=text, protected=True)] if text else []
+        messages: list = []
         stop_reason = "ok"
     else:
         from services.brain.silence import log_customer_generation_failure

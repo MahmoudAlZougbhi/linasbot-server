@@ -7,13 +7,7 @@ from pathlib import Path
 import pytest
 
 from services.ai_setup.paths import indexes_dir, tenant_cm_root
-from services.ai_setup.pricing.catalog_resolve import disambiguate_matches, resolve_catalog_item_ids
 from services.ai_setup.pricing.engine import compute_quote
-from services.ai_setup.pricing.migration import (
-    build_prices_section_from_rows,
-    extract_price_rows_from_json_obj,
-    seed_example_discount_rule_subtotal,
-)
 from services.ai_setup.pricing.schemas import (
     CatalogCategory,
     CatalogItem,
@@ -26,9 +20,16 @@ from services.ai_setup.pricing.schemas import (
     RuleConditionGroup,
 )
 from services.ai_setup.pricing.validation import validate_pricing_section
+from services.ai_setup.schemas import PricesSection
 from services.ai_setup.storage import get_draft, put_draft
 from services.ai_setup.version_store import version_dir
-from tests.cm_pricing_engine_helpers import _fixture_linas_style, _fixture_retail, _fixture_salon, _labels
+from tests.cm_pricing_engine_helpers import (
+    _fixture_linas_style,
+    _fixture_retail,
+    _fixture_salon,
+    _labels,
+    seed_example_discount_rule_subtotal,
+)
 
 
 def test_one_engine_serves_three_business_fixtures() -> None:
@@ -85,10 +86,18 @@ def test_tenant_isolation_storage_paths(tmp_path: Path, monkeypatch: pytest.Monk
     a = get_draft("prices", tenant_id="tenant_a", create_default=True)
     put_draft(
         "prices",
-        payload=build_prices_section_from_rows(
-            [{"id": "a_only", "name": "A Item", "amount": 11, "currency": "USD"}],
-            category_id="cat_a",
-            item_type="product",
+        payload=PricesSection(
+            catalog=[
+                {
+                    "id": "a_only",
+                    "item_type": "product",
+                    "category_ids": ["cat_a"],
+                    "labels": {"en": "A Item"},
+                    "base_price": 11,
+                    "currency": "USD",
+                }
+            ],
+            price_entries=[{"id": "pe_a_only", "catalog_item_id": "a_only", "amount": 11, "currency": "USD"}],
         ).model_dump(mode="json"),
         if_match=a.etag,
         tenant_id="tenant_a",
@@ -97,10 +106,18 @@ def test_tenant_isolation_storage_paths(tmp_path: Path, monkeypatch: pytest.Monk
     b = get_draft("prices", tenant_id="tenant_b", create_default=True)
     put_draft(
         "prices",
-        payload=build_prices_section_from_rows(
-            [{"id": "b_only", "name": "B Item", "amount": 22, "currency": "EUR"}],
-            category_id="cat_b",
-            item_type="service",
+        payload=PricesSection(
+            catalog=[
+                {
+                    "id": "b_only",
+                    "item_type": "service",
+                    "category_ids": ["cat_b"],
+                    "labels": {"en": "B Item"},
+                    "base_price": 22,
+                    "currency": "EUR",
+                }
+            ],
+            price_entries=[{"id": "pe_b_only", "catalog_item_id": "b_only", "amount": 22, "currency": "EUR"}],
         ).model_dump(mode="json"),
         if_match=b.etag,
         tenant_id="tenant_b",
@@ -228,23 +245,6 @@ def test_effective_dates_and_rounding() -> None:
         )
 
 
-def test_alias_resolution_multilingual_and_ambiguous() -> None:
-    catalog, *_rest = _fixture_linas_style()
-    matches = resolve_catalog_item_ids("رجلين", catalog)
-    single, ambiguous = disambiguate_matches(matches)
-    assert single == "full_legs"
-    assert ambiguous == []
-    # Ambiguous: craft two items sharing alias overlap
-    twin = [
-        CatalogItem(id="a1", labels=_labels("Face"), aliases=["face"], base_price=1, currency="USD"),
-        CatalogItem(id="a2", labels=_labels("Full Face"), aliases=["face"], base_price=2, currency="USD"),
-    ]
-    _single, amb = disambiguate_matches(resolve_catalog_item_ids("face", twin))
-    assert _single is None
-    assert set(amb) == {"a1", "a2"}
-    assert resolve_catalog_item_ids("unknown_widget_xyz", catalog) == []
-
-
 def test_validation_blocks_ambiguous_exclusive_rules() -> None:
     catalog, entries, _rules, categories = _fixture_linas_style()
     twin_rules = [
@@ -287,61 +287,6 @@ def test_notes_cannot_override_structured_amounts() -> None:
         context=PricingContext(tenant_id="t"),
     )
     assert quote.final_total == 50.0
-
-
-def test_migration_extract_does_not_invent() -> None:
-    rows = extract_price_rows_from_json_obj(
-        {"items": [{"name": "Arms", "amount": 35}, {"name": "No price here"}]},
-        source="fixture.json",
-    )
-    assert len(rows) == 1
-    assert rows[0]["amount"] == 35.0
-    section = build_prices_section_from_rows(rows, category_id="body_area", item_type="body_area")
-    assert len(section.catalog) == 1
-    assert section.catalog[0]["item_type"] == "body_area"
-
-
-def test_migration_extract_content_file_and_map() -> None:
-    from services.ai_setup.pricing.migration import extract_price_rows_from_text
-
-    content_obj = {
-        "id": "pf1",
-        "title": "Women body areas",
-        "content": "Underarms: 40 USD\nFull legs - 120\nSessions: 6\nAmbiguous only digits 99 somewhere",
-        "tags": ["price"],
-    }
-    rows = extract_price_rows_from_json_obj(content_obj, source="price_files/pf1.json", allow_space_amounts=True)
-    names = {r["name"] for r in rows}
-    assert "Underarms" in names
-    assert "Full legs" in names
-    assert all(r["amount"] > 0 for r in rows)
-    # Session line skipped
-    assert not any("session" in r["name"].lower() for r in rows)
-
-    space_rows = extract_price_rows_from_json_obj(
-        {
-            "title": "Men",
-            "content": "Chest 80$\nBack 90 USD\nSessions 8\nArms: $55 (6 sessions)\n**Face**: $40",
-        },
-        source="price_files/men.json",
-        allow_space_amounts=True,
-    )
-    space_names = {r["name"] for r in space_rows}
-    assert "Chest" in space_names
-    assert "Back" in space_names
-    assert "Arms" in space_names
-    assert "Face" in space_names
-
-    map_rows = extract_price_rows_from_json_obj({"Underarms": 40, "Full legs": 120}, source="map.json")
-    assert len(map_rows) == 2
-
-    text_rows, ambiguous = extract_price_rows_from_text(
-        "Arms: 35\nWeird line with 7 numbers but no separator structure here maybe",
-        source="t.txt",
-    )
-    assert len(text_rows) == 1
-    assert text_rows[0]["amount"] == 35.0
-    assert ambiguous  # second line archived, not invented into catalog
 
 
 def test_audit_no_linas_pricing_engine_in_code() -> None:

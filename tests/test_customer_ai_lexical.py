@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from services.brain.retrieve.cards import TitleCard, cards_from_sections
-from services.brain.retrieve.expand import expand_hits
+from services.brain.retrieve.hydrate import expand_hits
 from services.brain.retrieve.lexical import BM25_K1, bm25_scores, search_cards, tokenize
 
 

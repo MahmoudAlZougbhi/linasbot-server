@@ -9,16 +9,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_wave_o1_no_unused_router_gender_bindings() -> None:
     ctx = (ROOT / "services/brain/inbound/text_handlers_respond_ctx.py").read_text(encoding="utf-8")
-    router = (ROOT / "services/brain/conversation_router.py").read_text(encoding="utf-8")
+    router = (ROOT / "services/requests/human_detect.py").read_text(encoding="utf-8")
     assert "router_route" not in ctx
     assert "get_gender_from_message" not in ctx
     assert "def route(" not in router
     assert "ask_gender" not in router
-    from services.brain.conversation_router import is_human_request
+    from services.requests.human_detect import is_human_request
 
     assert is_human_request("بدي احكي مع حدا") is True
     assert is_human_request("personal care tips") is False
-    router = (ROOT / "services/brain/conversation_router.py").read_text(encoding="utf-8")
+    router = (ROOT / "services/requests/human_detect.py").read_text(encoding="utf-8")
     assert "GREETING_TEMPLATES" not in router
 
 
@@ -28,10 +28,7 @@ def test_wave_o2_no_laser_clinic_translator_in_brain() -> None:
 
 
 def test_wave_o3_no_founder_branch_defaults_keep_antileak() -> None:
-    classifier = (ROOT / "services/ai_setup/section_classifier.py").read_text(encoding="utf-8")
-    assert '"marwa"' not in classifier
-    assert '"antelias"' not in classifier
-    assert '"beirut"' not in classifier
+    assert not (ROOT / "services/ai_setup/section_classifier.py").exists()
     assert not (ROOT / "services/ai_setup/answer_packet.py").exists()
 
 

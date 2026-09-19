@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from services.brain.retrieve.cards import cards_from_sections
-from services.brain.retrieve.expand import expand_hits
+from services.brain.retrieve.hydrate import expand_hits
 from services.brain.retrieve.lexical import LexicalHit, search_cards
 from tests.brain_evals.qa_tenants import shop_a_qa_sections
 

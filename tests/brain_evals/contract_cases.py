@@ -21,7 +21,7 @@ from services.brain.contracts.turn import CustomerTurn, MediaView
 from services.brain.conversation_history import append_visible_history, load_stored_history_rows
 from services.brain.conversation_store import reset_conversation_store_for_tests
 from services.brain.gates import evaluate_gates
-from services.brain.greeting import evaluate_greeting
+from services.brain.greeting_policy import evaluate_greeting
 from services.brain.history import build_history_snapshot
 from services.brain.history_ids import (
     conversation_id_for_brain,

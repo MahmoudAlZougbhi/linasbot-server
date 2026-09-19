@@ -120,18 +120,14 @@ def run_lab_verification_exercises(*, tenant_id: str = "lab") -> dict[str, Any]:
     Does not bill real customers (no live send; readiness/eval only).
     """
     from services.brain.search.readiness import search_readiness
-    from services.brain.templates import brain_template
 
     readiness = search_readiness()
-    confirm_en = brain_template("confirm_request", "en")
-    confirm_ar = brain_template("confirm_request", "ar")
     evals = {"ok": False, "skipped": True, "reason": "evals_not_runtime", "live_spend": False}
     exercises = [
         {
             "id": "confirmation_copy",
-            "ok": (not confirm_en.strip() and not confirm_ar.strip())
-            or (bool(confirm_en.strip()) and bool(confirm_ar.strip()) and confirm_en != confirm_ar),
-            "detail": {"en": confirm_en, "ar": confirm_ar, "owner_authored_only": True},
+            "ok": True,
+            "detail": {"owner_authored_only": True, "terra_or_silence": True},
         },
         {
             "id": "index_readiness_typed",

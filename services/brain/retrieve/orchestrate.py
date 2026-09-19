@@ -11,8 +11,8 @@ from services.brain.contracts.evidence import EvidenceBundle
 from services.brain.flags import voyage_configured
 from services.brain.providers.voyage_client import VoyageContractError, VoyageNotConfiguredError
 from services.brain.retrieve.cards import TitleCard, load_published_cards
-from services.brain.retrieve.expand import expand_ranked
 from services.brain.retrieve.hybrid import HybridHit, search_hybrid
+from services.brain.retrieve.hydrate import expand_ranked
 from services.brain.retrieve.lexical import search_cards
 from services.brain.retrieve.products import cards_from_products, load_product_cards
 from services.brain.retrieve.rerank import rerank_hits

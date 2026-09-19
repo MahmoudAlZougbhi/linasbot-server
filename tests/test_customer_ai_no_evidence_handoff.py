@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 
 from services.brain.agent.action_gate import ActionGateResult
+from services.brain.agent.handoff_policy import should_handoff_unanswered, unanswered_question_result
 from services.brain.agent.loop import run_agentic_turn
-from services.brain.agent.no_evidence_handoff import should_handoff_unanswered, unanswered_question_result
 from services.brain.contracts.actions import ActionReceipt, ActionReceiptSet
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 from services.brain.contracts.turn import CustomerTurn, HistorySnapshot
-from services.brain.templates import brain_template
 
 
 def _plan(*tasks: PlannerTask) -> PlannerPlan:
@@ -74,16 +74,17 @@ def test_should_handoff_only_unanswered_questions() -> None:
     assert should_handoff_unanswered(plan=info, outcome="not_found", message="عنوان") is True
 
 
-def test_protocol_copy_is_owner_authored_not_hardcoded() -> None:
-    assert brain_template("no_evidence_handoff", "en") == ""
-    assert brain_template("handoff", "en") == ""
-    assert brain_template("handoff", "ar") == ""
+def test_unanswered_handoff_is_silence_not_canned() -> None:
+    src = Path("services/brain/agent/handoff_policy.py").read_text(encoding="utf-8")
+    assert "brain_template" not in src
+    assert "owner_protocol_text" not in src
+    assert "messages=[]" in src or "messages: list = []" in src
 
 
 @pytest.mark.asyncio
 async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.brain.agent.no_evidence_handoff.human_handoff_enabled",
+        "services.brain.agent.handoff_policy.human_handoff_enabled",
         lambda _tid: True,
     )
     execute = AsyncMock(
@@ -98,11 +99,7 @@ async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.Monkey
             ]
         )
     )
-    monkeypatch.setattr("services.brain.agent.no_evidence_handoff.execute_actions", execute)
-    monkeypatch.setattr(
-        "services.brain.agent.no_evidence_handoff.brain_template",
-        lambda _key, _lang="": "I'll connect you with someone from the team shortly.",
-    )
+    monkeypatch.setattr("services.brain.agent.handoff_policy.execute_actions", execute)
     plan = _plan(_task("t1", "information", span="unpublished policy?"))
     result = await unanswered_question_result(
         _turn(),
@@ -122,20 +119,18 @@ async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.Monkey
     assert result is not None
     assert result.stop_reason == "ok"
     assert result.envelope.decision == "handoff_ack"
-    text = result.envelope.messages[0].text.lower()
-    assert "team" in text
-    assert "reach out" not in text
+    assert result.envelope.messages == []
     execute.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_unanswered_does_not_claim_transfer_when_persist_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "services.brain.agent.no_evidence_handoff.human_handoff_enabled",
+        "services.brain.agent.handoff_policy.human_handoff_enabled",
         lambda _tid: True,
     )
     monkeypatch.setattr(
-        "services.brain.agent.no_evidence_handoff.execute_actions",
+        "services.brain.agent.handoff_policy.execute_actions",
         AsyncMock(
             return_value=ActionReceiptSet(
                 receipts=[
@@ -194,10 +189,10 @@ async def test_agentic_not_found_question_hands_off(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
     monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
     monkeypatch.setattr(
-        "services.brain.agent.no_evidence_handoff.human_handoff_enabled",
+        "services.brain.agent.handoff_policy.human_handoff_enabled",
         lambda _tid: True,
     )
-    monkeypatch.setattr("services.brain.agent.no_evidence_handoff.execute_actions", execute)
+    monkeypatch.setattr("services.brain.agent.handoff_policy.execute_actions", execute)
     result = await run_agentic_turn(
         _turn(),
         "What is your unpublished refund policy?",
@@ -205,7 +200,7 @@ async def test_agentic_not_found_question_hands_off(monkeypatch: pytest.MonkeyPa
         plan=_plan(_task("t1", "information", span="unpublished refund?")),
     )
     assert result.envelope.decision == "handoff_ack"
-    assert result.stop_reason == "ok"
+    assert not result.envelope.messages
     execute.assert_awaited_once()
 
 
@@ -242,7 +237,7 @@ async def test_agentic_found_hours_does_not_auto_handoff(monkeypatch: pytest.Mon
     monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
     monkeypatch.setattr("services.brain.agent.loop.generate_verified", _generate)
     monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.brain.agent.no_evidence_handoff.execute_actions", execute)
+    monkeypatch.setattr("services.brain.agent.handoff_policy.execute_actions", execute)
     result = await run_agentic_turn(
         _turn(),
         "شو ساعات أنطلياس؟",
@@ -266,7 +261,7 @@ async def test_index_not_ready_does_not_auto_handoff(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr("services.brain.agent.loop.apply_action_gate", _gate)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
     monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
-    monkeypatch.setattr("services.brain.agent.no_evidence_handoff.execute_actions", execute)
+    monkeypatch.setattr("services.brain.agent.handoff_policy.execute_actions", execute)
     result = await run_agentic_turn(
         _turn(),
         "What is your unpublished refund policy?",
@@ -279,7 +274,7 @@ async def test_index_not_ready_does_not_auto_handoff(monkeypatch: pytest.MonkeyP
 
 
 def test_comment_ack_and_emoji_are_small_talk() -> None:
-    from services.brain.agent.no_evidence_handoff import is_comment_ack
+    from services.brain.agent.handoff_policy import is_comment_ack
 
     assert is_comment_ack("nice") is True
     assert is_comment_ack("🔥") is True
@@ -347,8 +342,8 @@ async def test_comment_question_hands_off_instead_of_silence(monkeypatch: pytest
     monkeypatch.setattr("services.brain.agent.loop.apply_action_gate", _gate)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _retrieve)
     monkeypatch.setattr("services.brain.agent.loop._maybe_tool_calls", AsyncMock(return_value=([], [], 0)))
-    monkeypatch.setattr("services.brain.agent.no_evidence_handoff.human_handoff_enabled", lambda _tid: True)
-    monkeypatch.setattr("services.brain.agent.no_evidence_handoff.execute_actions", execute)
+    monkeypatch.setattr("services.brain.agent.handoff_policy.human_handoff_enabled", lambda _tid: True)
+    monkeypatch.setattr("services.brain.agent.handoff_policy.execute_actions", execute)
     result = await run_agentic_turn(
         _turn(kind="comment"),
         "What is the underarm price?",
@@ -357,4 +352,5 @@ async def test_comment_question_hands_off_instead_of_silence(monkeypatch: pytest
     )
     assert result.stop_reason == "ok"
     assert result.envelope.decision == "handoff_ack"
+    assert not result.envelope.messages
     execute.assert_awaited_once()
