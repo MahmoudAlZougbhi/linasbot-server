@@ -114,9 +114,15 @@ async def generate_grounded_reply(
         )
     policy_notes: list[str] = []
     if turn.tenant_id.strip():
-        from services.brain.planner.published_rules import request_rule_notes
+        state = (turn.extra or {}).get("request_state")
+        if isinstance(state, dict) and state.get("module_enabled"):
+            from services.brain.agent.request_snapshot import request_policy_notes
 
-        policy_notes = request_rule_notes(turn.tenant_id)
+            policy_notes = request_policy_notes(state)
+        else:
+            from services.brain.planner.published_rules import request_rule_notes
+
+            policy_notes = request_rule_notes(turn.tenant_id)
     comment_rule = str((turn.extra or {}).get("comment_rule_text") or "").strip()
     if comment_rule:
         policy_notes.append(f"comment_rule:{comment_rule[:1200]}")

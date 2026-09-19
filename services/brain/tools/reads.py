@@ -320,25 +320,21 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
         }
 
     if name == "get_request_state":
-        draft_id = str(args.get("draft_id") or args.get("request_id") or item_id or "").strip()
-        pending = list((turn.state.pending_actions if hasattr(turn.state, "pending_actions") else []) or [])
-        # ConversationState may store pending differently — expose typed snapshot only.
+        from services.brain.agent.request_snapshot import build_request_snapshot
         from services.brain.conversation_store import hydrate_turn_state
 
         try:
             hydrate_turn_state(turn)
         except Exception:
             pass
-        pending_rows = []
-        extra_pending = (turn.extra or {}).get("pending_actions") if isinstance(turn.extra, dict) else None
-        for row in list(pending) + list(extra_pending or []):
-            if isinstance(row, dict):
-                pending_rows.append(row)
-            elif hasattr(row, "model_dump"):
-                pending_rows.append(row.model_dump())
+        data = build_request_snapshot(turn)
+        draft_id = str(args.get("draft_id") or args.get("request_id") or item_id or "").strip()
         if draft_id:
-            pending_rows = [row for row in pending_rows if draft_id in str(row)]
-        return {"ok": True, "data": {"pending": pending_rows, "draft_id": draft_id}}
+            data = {**data, "draft_id": draft_id}
+        return {"ok": True, "data": data}
+
+    if name == "no_request_action":
+        return {"ok": True, "data": {"no_request_action": True}}
 
     return {"ok": False, "error": "unknown_tool", "data": None}
 

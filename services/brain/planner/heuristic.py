@@ -62,7 +62,7 @@ def fail_soft_plan(message: str) -> PlannerPlan:
 
 
 def plan_message(message: str) -> PlannerPlan:
-    """Fail-soft information plan. Live task types come from OpenAI `plan_turn` only."""
+    """Fail-soft information plan. Live request actions come from Terra tools, not this fallback."""
     return fail_soft_plan(message)
 
 

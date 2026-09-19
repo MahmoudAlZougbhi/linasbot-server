@@ -45,4 +45,6 @@ export const requestSetupFr: Record<keyof typeof requestSetupEn, string> = {
   requestRulesGraphDbUnavailable: 'Base client indisponible pour les graphes de demande.',
   requestRulesDeleteGraphFailed:
     'Règle retirée du brouillon, mais le graphe publié n’a pas pu être supprimé.',
+  requestRulesLimitTitle: 'Limite de règles',
+  requestRulesLimitBody: 'Vous pouvez garder au plus 10 règles {type}.',
 };

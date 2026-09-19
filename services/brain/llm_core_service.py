@@ -123,6 +123,8 @@ async def create_chat_completion(
     max_tokens: int,
     temperature: float | None = None,
     reasoning_effort: str | None = None,
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: str | dict[str, Any] | None = None,
 ) -> Any:
     """Thin wrapper so guest/owner paths share GPT-5-safe parameter shaping."""
     kwargs = build_chat_completion_kwargs(
@@ -131,7 +133,12 @@ async def create_chat_completion(
         max_tokens=max_tokens,
         temperature=temperature,
         reasoning_effort=reasoning_effort,
+        has_function_tools=bool(tools),
     )
+    if tools:
+        kwargs["tools"] = tools
+    if tool_choice is not None:
+        kwargs["tool_choice"] = tool_choice
     return await client.chat.completions.create(**kwargs)
 
 

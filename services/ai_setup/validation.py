@@ -96,6 +96,14 @@ def validate_cm(
             else:
                 errors.append(item)
 
+    requests_payload = drafts.get("requests_appointments") or {}
+    run_requests = section is None or section.strip().replace("-", "_") == "requests_appointments"
+    if run_requests and isinstance(requests_payload, dict):
+        from services.ai_setup.request_rule_limits import request_rule_limit_failures
+
+        for issue in request_rule_limit_failures(requests_payload):
+            errors.append(issue)
+
     prices_payload = drafts.get("prices") or {}
     run_pricing = section is None or section.strip().replace("-", "_") == "prices"
     if (

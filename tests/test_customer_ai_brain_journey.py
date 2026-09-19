@@ -1,27 +1,35 @@
-"""Brain journey: resource path wiring + isolated scenario slices (mocked providers)."""
+"""Brain journey: Terra tools own requests; no silent media send; FAQ path unchanged."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import pytest
 
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import CustomerTurn
+from services.brain.tools.registry import execute_tool
 from services.brain.turn_pipeline import run_dm_after_gates
 from tests.plan_builders import explicit_plan
 
 
-@pytest.mark.asyncio
-async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytest.MonkeyPatch) -> None:
-    plan = explicit_plan("send me the before photo please", ("resource_request", ["services", "products", "knowledge"]))
-    assert any(task.type == "resource_request" for task in plan.tasks)
-    assert plan.read_only is False
+def _skip_faq(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _no_confirm(*_a, **_k):
+        return None
 
-    async def fake_plan(_message, _history, **_kwargs):
-        return plan
+    async def _no_sem(*_a, **_k):
+        return None
 
-    async def fake_retrieve(ctx):
-        return EvidenceBundle(
+    monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", _no_confirm)
+    monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", _no_sem)
+    monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
+
+
+async def _found_retrieve(*_a, **_k):
+    return (
+        EvidenceBundle(
             outcome="found",
             items=[
                 EvidenceItem(
@@ -32,69 +40,72 @@ async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytes
                     text="Refunds section",
                 )
             ],
-        )
-
-    monkeypatch.setattr("services.brain.agent.loop.plan_turn", fake_plan)
-    monkeypatch.setattr("services.brain.agent.multi_retrieve.retrieve_published", fake_retrieve)
-    monkeypatch.setattr(
-        "services.ai_setup.setup_resources.index_published_resources",
-        lambda _tid: {
-            "res_before": {
-                "resource_ref": "res_before",
-                "title": "Before photo",
-                "description": "before treatment photo",
-                "resource_type": "image",
-                "source_item_id": "knowledge:policy",
-            }
-        },
-    )
-    monkeypatch.setattr(
-        "services.brain.actions.resources.resolve_published_resource",
-        lambda **_k: {
-            "ok": True,
-            "resource": {"resource_ref": "res_before", "title": "Before photo"},
-        },
+        ),
+        [],
+        {},
     )
 
-    async def _no_confirm(*_a, **_k):
-        return None
 
-    monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", _no_confirm)
-    monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
+async def _fake_generate(turn, **kwargs):
+    extra = dict(kwargs.get("extra") or turn.extra or {})
+    extra.update(dict(turn.extra or {}))
+    return TurnResult(
+        stop_reason="ok",
+        envelope=FinalReplyEnvelope(
+            decision="reply",
+            messages=[OutboundMessage(destination="dm", text="Terra reply from evidence.")],
+        ),
+        extra=extra,
+    )
 
-    async def _no_sem(*_a, **_k):
-        return None
 
-    monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", _no_sem)
+async def _terra_start(turn, message, **_k):
+    result = await execute_tool(
+        "start_request",
+        {"request_type": "APPOINTMENT", "title": message, "task_id": "book", "customer_text": message},
+        turn,
+    )
+    extra: dict[str, Any] = {"request_state": {"module_enabled": True}}
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    if data.get("awaiting_confirmation"):
+        extra["awaiting_confirmation"] = True
+        extra["pending_actions"] = list(data.get("pending_actions") or [])
+        turn.extra = {**dict(turn.extra or {}), **extra}
+    return [{"tool": "start_request", "ok": True, "source": "terra"}], ["tool:start_request:ok"], 1, extra
 
+
+async def _terra_escalate(turn, message, **_k):
+    result = await execute_tool("escalate_to_human", {"task_id": "human", "customer_text": message}, turn)
+    extra: dict[str, Any] = {"request_state": {"module_enabled": True}, "receipts": []}
+    if result.get("receipt"):
+        extra["receipts"] = [result["receipt"]]
+    turn.extra = {**dict(turn.extra or {}), **extra}
+    return [{"tool": "escalate_to_human", "ok": True, "source": "terra"}], ["escalate_to_human:success"], 1, extra
+
+
+async def _terra_idle(_turn, _message, **_k):
+    return [], [], 0, {"request_state": {"module_enabled": False}}
+
+
+@pytest.mark.asyncio
+async def test_resource_request_does_not_fake_booking_confirm(monkeypatch: pytest.MonkeyPatch) -> None:
+    _skip_faq(monkeypatch)
+    monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _found_retrieve)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_request_round", _terra_idle)
+    monkeypatch.setattr("services.brain.agent.loop.generate_verified", _fake_generate)
     turn = CustomerTurn(tenant_id="brain-shop", conversation_id="c1", event_ids=["m1"], channel="instagram_dm")
     result = await run_dm_after_gates(turn, message="send me the before photo please", channel="instagram_dm")
-    assert result.extra.get("phase") == "resource"
     assert result.extra.get("awaiting_confirmation") is not True
-    assert result.envelope.decision == "deterministic"
-    assert any(item.get("action_type") == "send_resource" for item in result.extra.get("receipts") or [])
+    assert not any(item.get("action_type") == "send_resource" for item in result.extra.get("receipts") or [])
     assert "confirm the details" not in (result.envelope.reply_text or "").lower()
 
 
 @pytest.mark.asyncio
 async def test_booking_still_asks_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
-    plan = explicit_plan("I want to book a laser appointment", ("service_request", ["services", "branches", "hours"]))
-    assert any(task.type == "service_request" for task in plan.tasks)
-
-    async def fake_plan(_message, _history, **_kwargs):
-        return plan
-
-    async def _no_confirm(*_a, **_k):
-        return None
-
-    monkeypatch.setattr("services.brain.agent.loop.plan_turn", fake_plan)
-    monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", _no_confirm)
-    monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
-
-    async def _no_sem(*_a, **_k):
-        return None
-
-    monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", _no_sem)
+    _skip_faq(monkeypatch)
+    monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _found_retrieve)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_request_round", _terra_start)
+    monkeypatch.setattr("services.brain.agent.loop.generate_verified", _fake_generate)
     turn = CustomerTurn(tenant_id="brain-shop", conversation_id="c2", event_ids=["m2"], channel="whatsapp")
     result = await run_dm_after_gates(turn, message="I want to book a laser appointment", channel="whatsapp")
     assert result.extra.get("awaiting_confirmation") is True
@@ -122,36 +133,21 @@ def test_scenario_planner_slices_match_contract_intents() -> None:
 
 @pytest.mark.asyncio
 async def test_handoff_executes_receipt(monkeypatch: pytest.MonkeyPatch) -> None:
-    plan = PlannerPlan(
-        tasks=[PlannerTask(id="t_human", type="human_request", span=TaskSpan(text="human"), source_families=["none"])],
-        read_only=False,
-    )
-
-    async def fake_plan(_message, _history, **_kwargs):
-        return plan
+    _skip_faq(monkeypatch)
 
     async def fake_escalate(**_k):
         from services.brain.contracts.actions import ActionReceipt
 
         return ActionReceipt(action_id="handoff:t_human", action_type="escalate_to_human", state="success")
 
-    async def _no_confirm(*_a, **_k):
-        return None
-
-    monkeypatch.setattr("services.brain.agent.loop.plan_turn", fake_plan)
-    monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", _no_confirm)
-    monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
-
-    async def _no_sem(*_a, **_k):
-        return None
-
-    monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", _no_sem)
     monkeypatch.setattr("services.brain.actions.execute.escalate_to_human", fake_escalate)
+    monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _found_retrieve)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_request_round", _terra_escalate)
+    monkeypatch.setattr("services.brain.agent.loop.generate_verified", _fake_generate)
     turn = CustomerTurn(tenant_id="brain-shop", customer_id="u1", conversation_id="c3", event_ids=["m3"])
     result = await run_dm_after_gates(turn, message="I want a human please", channel="instagram_dm")
-    assert result.extra.get("phase") == "handoff"
-    assert result.envelope.decision == "handoff_ack"
-    assert any(item.get("state") == "success" for item in result.extra.get("receipts") or [])
+    receipts = list(result.extra.get("receipts") or [])
+    assert any(item.get("action_type") == "escalate_to_human" and item.get("state") == "success" for item in receipts)
 
 
 def test_deep_knowledge_chunk_is_indexed_separately() -> None:

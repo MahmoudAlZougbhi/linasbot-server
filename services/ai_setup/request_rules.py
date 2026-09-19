@@ -217,6 +217,10 @@ def format_request_rules_for_ai(
         line = f"- [{type_code}] {title}"
         if note:
             line += f": {note}"
+        required = raw.get("required_fields") if isinstance(raw.get("required_fields"), list) else []
+        req_ids = [str(item).strip() for item in required if str(item).strip()]
+        if req_ids:
+            line += f" (required: {', '.join(req_ids)})"
         lines.append(line)
     if wanted is not None and not lines:
         return (

@@ -22,6 +22,7 @@ READ_TOOLS = frozenset(
         "resolve_resource",
         "get_contact",
         "get_request_state",
+        "no_request_action",
     }
 )
 
