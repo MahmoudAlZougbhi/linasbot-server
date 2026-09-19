@@ -50,14 +50,14 @@ async def test_livechat_like_still_writes_cm_faq_only(monkeypatch: pytest.Monkey
         return "السعر عشرين دولار."
 
     monkeypatch.setattr(
-        "services.ai_setup.faq_integration.language_detection_service.translate_training_pair",
+        "services.faq.cm_faq.language_detection_service.translate_training_pair",
         _fake_translate,
     )
     monkeypatch.setattr(
-        "services.ai_setup.faq_integration._translate_to_arabic_script",
+        "services.faq.cm_faq._translate_to_arabic_script",
         _fake_ar,
     )
-    from services.ai_setup.faq_integration import create_faq_pair_from_livechat, list_cm_faq
+    from services.faq.cm_faq import create_faq_pair_from_livechat, list_cm_faq
 
     result = await create_faq_pair_from_livechat(
         question="shu se3r el laser?",

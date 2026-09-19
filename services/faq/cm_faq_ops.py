@@ -1,10 +1,13 @@
-"""CM FAQ draft list/get/update/regenerate ops (LOC split from faq_integration)."""
+"""CM FAQ draft list/get/update/regenerate ops (LOC split from cm_faq)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from services.ai_setup.faq_integration_helpers import (
+from services.ai_setup.schemas import FaqRecord, FaqSection, FaqVariant
+from services.ai_setup.storage import get_draft, put_draft
+from services.brain.language_detection_service import language_detection_service
+from services.faq.cm_faq_helpers import (
     FAQ_SECTION,
     FaqIntegrationError,
     _answer_in_arabic_script,
@@ -13,9 +16,6 @@ from services.ai_setup.faq_integration_helpers import (
     faq_section_payload,
     load_faq_target_languages,
 )
-from services.ai_setup.schemas import FaqRecord, FaqSection, FaqVariant
-from services.ai_setup.storage import get_draft, put_draft
-from services.brain.language_detection_service import language_detection_service
 
 
 def list_cm_faq(

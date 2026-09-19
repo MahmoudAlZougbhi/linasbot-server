@@ -186,7 +186,7 @@ async def tool_approve_smart_answer(
             confirmation_token=f"approve_smart_answer:{proposal_id}",
             error="Confirmation required",
         )
-    from services.ai_setup.faq_integration import create_faq_pair
+    from services.faq.cm_faq import create_faq_pair
     from services.faq.faq_entitlements import FaqEntitlementError, assert_can_create_faq
 
     prop = smart_answer_proposal_store.get(tenant_id=tenant_id, proposal_id=proposal_id)
