@@ -17,9 +17,12 @@ from services.brain.outbox import outbox_counts, recover_unsent, reset_outbox_fo
 
 @pytest.fixture(autouse=True)
 def _memory(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.billing.membership.catalog_admin import reset_catalog_admin_for_tests
+
     monkeypatch.setenv("LINAS_MESSAGE_STORE", "memory")
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     reset_ledger_for_tests()
+    reset_catalog_admin_for_tests()
     reset_pending_settlements_for_tests()
     reset_outbox_for_tests()
     grant_lot(
@@ -139,11 +142,13 @@ def test_comment_and_omni_settle_after_delivery() -> None:
 
     comment = getsource(send_comment_destinations)
     assert "_settle_comment_send" in comment
+    assert "comment_outcome_units" in comment
+    assert "billable" in comment
     from services.integrations.meta.meta_comment_replies import process_meta_comment_event
 
     public = getsource(process_meta_comment_event)
     assert "_settle_generated_comment" in public
-    assert "accepted=True" in public
+    assert "send_comment_destinations" in public
     assert "accepted=False" in public
     deliver = getsource(_finish_success)
     assert "settle_after_send" in deliver
@@ -155,7 +160,8 @@ def test_comment_and_omni_settle_after_delivery() -> None:
     assert "extra_ids" in web
     tiktok = getsource(process_tiktok_comment_ai)
     assert "_settle_comment_send" in tiktok
-    assert "accepted=True" in tiktok
+    assert "billable" in tiktok
+    assert "settle_units" in tiktok
     assert "accepted=False" in tiktok
     from services.integrations.omnichannel.deliver import _release_credits_if_never_submitted
 

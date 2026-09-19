@@ -23,7 +23,6 @@ def test_wave_x12_flat_services_are_tiny_keep_facades() -> None:
         "__init__.py",
         "product_features.py",
         "saas_no_boc.py",
-        "safe_path.py",
         "ssrf_guard.py",
     ]
     assert not (ROOT / "services/credit_ai_gate.py").exists()

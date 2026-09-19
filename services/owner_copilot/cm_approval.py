@@ -245,9 +245,9 @@ def approve_cm_patch(
     if prop.status != "pending":
         raise ValueError(f"Proposal is not pending ({prop.status})")
 
+    from services.ai_setup.faq_invalidation import invalidate_faq_for_cm_patch
     from services.ai_setup.setup_chat import apply_section_patch
     from services.ai_setup.validation import validate_cm
-    from services.faq.faq_cm_invalidation import invalidate_faq_for_cm_patch
 
     patch = prop.patch
     # Per-item X on delete bar: only apply remaining ids.

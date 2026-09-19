@@ -146,7 +146,7 @@ async def test_propose_cm_article_upsert_then_approve(
         lambda **_: {"errors": [], "warnings": []},
     )
     monkeypatch.setattr(
-        "services.faq.faq_cm_invalidation.invalidate_faq_for_cm_patch",
+        "services.ai_setup.faq_invalidation.invalidate_faq_for_cm_patch",
         lambda **_: {"stale_groups": [], "stale_rows": 0, "reason": "cm_patch:knowledge"},
     )
 
@@ -219,7 +219,7 @@ async def test_faq_list_read_and_upsert(tenant_root: Path, monkeypatch: pytest.M
         lambda **_: {"errors": [], "warnings": []},
     )
     monkeypatch.setattr(
-        "services.faq.faq_cm_invalidation.invalidate_faq_for_cm_patch",
+        "services.ai_setup.faq_invalidation.invalidate_faq_for_cm_patch",
         lambda **_: {"stale_groups": [], "stale_rows": 0, "reason": "cm_patch:faq"},
     )
 

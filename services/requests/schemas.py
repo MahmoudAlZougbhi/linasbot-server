@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 
 class RequestCreateBody(BaseModel):
-    """AI-tool / internal create after customer confirmation."""
+    """Internal create after customer confirmation. HUMAN is not persistable."""
 
     request_type: str
     source_channel: str

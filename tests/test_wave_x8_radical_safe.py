@@ -75,11 +75,13 @@ def test_wave_x8_web_and_mobile_crumbs_gone() -> None:
         "mobile/linas-ai/src/features/billing/PlanCardView.tsx",
         "mobile/linas-ai/src/features/nav/DrawerFooter.tsx",
         "mobile/linas-ai/src/features/cm/editors/BranchesEditor.tsx",
+        "mobile/linas-ai/src/features/cm/editors/PricesEditor.tsx",
+        "mobile/linas-ai/src/features/cm/editors/GreetingsEditor.tsx",
         "mobile/linas-ai/src/hooks/useScreenLoadGate.ts",
         "mobile/linas-ai/src/components/BrandMark.tsx",
     )
     leftover = [rel for rel in orphans if (ROOT / rel).exists()]
     assert not leftover, leftover
-    assert (ROOT / "mobile/linas-ai/src/features/cm/editors/PricesEditor.tsx").is_file()
+    assert (ROOT / "mobile/linas-ai/src/features/services/ServicesScreen.tsx").is_file()
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
     assert "WAVE X8" in keep

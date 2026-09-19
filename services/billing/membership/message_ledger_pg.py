@@ -210,7 +210,14 @@ def _insert_reservation(session: Any, reservation: MessageReservation) -> None:
     )
 
 
-def pg_settle(session: Any, *, tenant_id: str, operation_id: str, accepted: bool) -> MessageReservation:
+def pg_settle(
+    session: Any,
+    *,
+    tenant_id: str,
+    operation_id: str,
+    accepted: bool,
+    units: int | None = None,
+) -> MessageReservation:
     key = f"{tenant_id}:{operation_id}"
     row = (
         session.execute(
@@ -229,34 +236,38 @@ def pg_settle(session: Any, *, tenant_id: str, operation_id: str, accepted: bool
     reservation = MessageReservation(**dict(row))
     if reservation.status in {"settled", "released", "reversed", "not_required"}:
         return reservation
-    if not accepted:
+    capture = reservation.units
+    if units is not None:
+        capture = min(reservation.units, max(0, int(units)))
+    if not accepted or capture <= 0:
         session.execute(
             text("UPDATE customer_ai_message_reservations SET status = 'released' WHERE reservation_id = :rid"),
             {"rid": key},
         )
         reservation.status = "released"
         return reservation
-    if reservation.units:
+    if capture:
         lot = session.execute(
             text("SELECT remaining FROM customer_ai_message_lots WHERE lot_id = :lot" + _row_lock(session)),
             {"lot": reservation.lot_id},
         ).first()
         remaining = int(lot[0]) if lot else 0
         target = reservation.lot_id
-        if lot is None or remaining < reservation.units:
+        if lot is None or remaining < capture:
             fallback = _pick_lot(session, tenant_id)
-            if fallback is None or fallback.remaining < reservation.units:
+            if fallback is None or fallback.remaining < capture:
                 raise InsufficientMessages(tenant_id, remaining)
             target = fallback.lot_id
             reservation.lot_id = target
         session.execute(
             text("UPDATE customer_ai_message_lots SET remaining = remaining - :u WHERE lot_id = :lot"),
-            {"u": reservation.units, "lot": target},
+            {"u": capture, "lot": target},
         )
     session.execute(
-        text("UPDATE customer_ai_message_reservations SET status = 'settled' WHERE reservation_id = :rid"),
-        {"rid": key},
+        text("UPDATE customer_ai_message_reservations SET status = 'settled', units = :u WHERE reservation_id = :rid"),
+        {"rid": key, "u": capture},
     )
+    reservation.units = capture
     reservation.status = "settled"
     return reservation
 

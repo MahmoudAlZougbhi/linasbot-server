@@ -8,11 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from services.ai_setup.faq_integration import (
-    create_faq_pair_from_livechat,
-    find_duplicate_faq_groups,
-    list_cm_faq,
-)
 from services.ai_setup.pricing.engine import compute_quote
 from services.ai_setup.pricing.money import as_money, quantize_money
 from services.ai_setup.pricing.schemas import (
@@ -29,6 +24,11 @@ from services.ai_setup.pricing.schemas import (
 )
 from services.ai_setup.pricing.section import normalize_prices_section
 from services.ai_setup.schemas import LocalizedLabels, PricesSection
+from services.faq.cm_faq import (
+    create_faq_pair_from_livechat,
+    find_duplicate_faq_groups,
+    list_cm_faq,
+)
 
 pytestmark = pytest.mark.usefixtures("enable_faq_plan")
 
@@ -58,11 +58,11 @@ async def test_livechat_like_writes_canonical_cm_faq_only(monkeypatch: pytest.Mo
         return "السعر عشرين دولار."
 
     monkeypatch.setattr(
-        "services.ai_setup.faq_integration.language_detection_service.translate_training_pair",
+        "services.faq.cm_faq.language_detection_service.translate_training_pair",
         _fake_translate,
     )
     monkeypatch.setattr(
-        "services.ai_setup.faq_integration._translate_to_arabic_script",
+        "services.faq.cm_faq._translate_to_arabic_script",
         _fake_ar,
     )
 

@@ -39,7 +39,7 @@ def test_wave_x11_domain_folds_no_shims() -> None:
     keep = (
         "services/owner_copilot/welcome_pool/__init__.py",
         "services/brain/faq_exact.py",
-        "services/faq/faq_cm_invalidation.py",
+        "services/ai_setup/faq_invalidation.py",
         "services/requests/request_graphs/service.py",
         "services/requests/request_drafts/engine.py",
         "services/ai_setup/search_metadata/generate.py",

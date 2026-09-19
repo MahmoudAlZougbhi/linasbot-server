@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from services.ai_setup.faq_invalidation import extract_session_markers
 from services.billing.plan_economics import PLAN_FAQ_MAX_ENTRIES, PLAN_FEATURES
 from services.brain.customer_response_trace import (
     CustomerResponseTraceStore,
@@ -13,7 +14,6 @@ from services.brain.customer_response_trace import (
     get_interaction_trace,
     get_recent_customer_interactions,
 )
-from services.faq.faq_cm_invalidation import extract_session_markers
 from services.faq.faq_entitlements import FaqEntitlementError, assert_can_create_faq, get_faq_entitlement
 from services.faq.faq_metrics import FaqMetricsStore
 from services.owner_copilot.cm_approval import CmPatchProposalStore, approve_cm_patch, propose_cm_patch
@@ -146,7 +146,7 @@ async def test_cm_approve_no_publish_prompt(tmp_path: Any, monkeypatch: pytest.M
         lambda **_: {"errors": [], "warnings": []},
     )
     monkeypatch.setattr(
-        "services.faq.faq_cm_invalidation.invalidate_faq_for_cm_patch",
+        "services.ai_setup.faq_invalidation.invalidate_faq_for_cm_patch",
         lambda **_: {"stale_groups": ["qa_x"], "stale_rows": 1, "reason": "session_markers_changed:7-10"},
     )
 

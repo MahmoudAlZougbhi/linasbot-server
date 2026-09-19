@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Final
 
 REQUEST_TYPES: Final[tuple[str, ...]] = ("ORDER", "APPOINTMENT", "OTHER", "HUMAN")
+# Board/persist path. HUMAN is a Live Chat handoff, never a Requests card.
+PERSISTABLE_REQUEST_TYPES: Final[tuple[str, ...]] = ("ORDER", "APPOINTMENT", "OTHER")
 
 STATUSES: Final[tuple[str, ...]] = (
     "NEW",

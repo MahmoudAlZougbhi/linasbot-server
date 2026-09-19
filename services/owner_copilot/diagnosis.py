@@ -246,8 +246,8 @@ async def approve_diagnosis_fix(
     applied: dict[str, Any] = {"type": corr.get("type")}
 
     if corr.get("type") == "faq_update":
-        from services.ai_setup.faq_integration import create_faq_pair, update_cm_faq_variant
         from services.billing.membership.edit_http import guarded_edit
+        from services.faq.cm_faq import create_faq_pair, update_cm_faq_variant
 
         qa_group_id = corr.get("qa_group_id")
         answer = str((corr.get("patch") or corr.get("patch_hint") or {}).get("answer") or "").strip()
@@ -283,8 +283,8 @@ async def approve_diagnosis_fix(
             raise ValueError("FAQ correction requires answer (and qa_group_id or question)")
     else:
         from services.ai_setup.constants import tenant_has_published_cm
+        from services.ai_setup.faq_invalidation import invalidate_faq_for_cm_patch
         from services.ai_setup.setup_chat import apply_section_patch
-        from services.faq.faq_cm_invalidation import invalidate_faq_for_cm_patch
         from services.owner_copilot.cm_approval import activate_cm_after_save
 
         section = str(corr.get("section") or "prices")

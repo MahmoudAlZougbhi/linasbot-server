@@ -175,7 +175,7 @@ class UserServiceAuthMixin:
 
     def set_password_with_reset(self, user_id: str, new_password: str) -> bool:
         """Set password after a validated reset token (bumps passwordEpoch)."""
-        from services.team.admin_provisioning_service import validate_provision_password
+        from services.team.provisioning_service import validate_provision_password
 
         validate_provision_password(new_password)
         user = self.get_user_by_id(user_id)

@@ -48,6 +48,7 @@ _TRANSITIONS: dict[str, frozenset[tuple[str, str]]] = {
             ("WAITING_FOR_CUSTOMER", "CANCELLED"),
         }
     ),
+    "HUMAN": frozenset(),
 }
 
 # Final owner actions → target status
@@ -55,6 +56,7 @@ FINAL_ACTIONS: dict[str, dict[str, str]] = {
     "APPOINTMENT": {"confirm_appointment": "CONFIRMED"},
     "ORDER": {"mark_ready": "READY"},
     "OTHER": {"complete_request": "COMPLETED"},
+    "HUMAN": {},
 }
 
 

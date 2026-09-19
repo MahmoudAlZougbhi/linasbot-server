@@ -9,6 +9,7 @@ from services.brain.actions.request_fields import merge_fields_for_persist
 from services.brain.contracts.actions import ActionProposal, ActionReceipt
 from services.requests.capture import normalize_source_channel
 from services.requests.config_loader import published_configuration_version
+from services.requests.constants import PERSISTABLE_REQUEST_TYPES
 from services.requests.schemas import RequestCreateBody
 from services.requests.service import CustomerRequestsError, CustomerRequestsService
 
@@ -44,12 +45,12 @@ def persist_request(
             reason="confirmation_required",
         )
     request_type = str(fields.get("request_type") or "APPOINTMENT").upper()
-    if request_type not in {"ORDER", "APPOINTMENT", "OTHER"}:
+    if request_type not in PERSISTABLE_REQUEST_TYPES:
         return ActionReceipt(
             action_id=f"req:{proposal.task_id}",
             action_type=proposal.action_type,
             state="rejected",
-            reason="invalid_request_type",
+            reason="human_routes_to_live_chat" if request_type == "HUMAN" else "invalid_request_type",
         )
     source = request_source_channel(channel)
     if not source:

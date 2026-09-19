@@ -35,5 +35,7 @@ def test_live_chat_service_preserves_public_api() -> None:
         "get_active_conversations",
         "get_metrics",
         "send_operator_message",
+        "get_conversation_details",
     ):
         assert callable(getattr(live_chat_service, name))
+    assert not hasattr(live_chat_service, "get_faq_match_context")

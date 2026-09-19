@@ -8,7 +8,8 @@ from fastapi import Body, HTTPException, Query, Request
 
 from modules.api_security import require_permission
 from modules.core import app
-from services.ai_setup.faq_integration import (
+from services.dashboard.dashboard_session_service import SessionRecord
+from services.faq.cm_faq import (
     FaqIntegrationError,
     archive_cm_faq_group,
     create_faq_pair,
@@ -20,7 +21,6 @@ from services.ai_setup.faq_integration import (
     replace_cm_faq_attachments,
     update_cm_faq_variant,
 )
-from services.dashboard.dashboard_session_service import SessionRecord
 
 
 def _actor(session: Any) -> str:
@@ -286,10 +286,10 @@ async def cm_put_smart_answer_languages(request: Request, body: dict[str, Any] =
     if not isinstance(raw, list):
         raise HTTPException(status_code=400, detail="smart_answer_languages array is required")
     translate_existing = bool(body.get("translate_existing"))
-    from services.ai_setup.faq_integration import FaqIntegrationError, translate_existing_faq_groups_to_language
     from services.ai_setup.smart_answer_languages import save_smart_answer_languages
     from services.billing.membership.daily_edits import DailyEditLimitError
     from services.billing.membership.edit_http import guarded_edit, limit_response
+    from services.faq.cm_faq import FaqIntegrationError, translate_existing_faq_groups_to_language
 
     try:
         with guarded_edit(
@@ -302,7 +302,7 @@ async def cm_put_smart_answer_languages(request: Request, body: dict[str, Any] =
                 languages=[str(x) for x in raw],
                 updated_by=_actor(session),
             )
-            from services.ai_setup.faq_integration import purge_smart_answer_language_data
+            from services.faq.cm_faq import purge_smart_answer_language_data
 
             for lang in list(saved.get("removed") or []):
                 purge_smart_answer_language_data(
@@ -336,9 +336,9 @@ async def cm_delete_smart_answer_language(request: Request, language: str) -> An
     """Remove a Smart Q&A language and permanently delete all saved Q&A for that language."""
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
-    from services.ai_setup.faq_integration import FaqIntegrationError, purge_smart_answer_language_data
     from services.billing.membership.daily_edits import DailyEditLimitError
     from services.billing.membership.edit_http import guarded_edit, limit_response
+    from services.faq.cm_faq import FaqIntegrationError, purge_smart_answer_language_data
 
     try:
         with guarded_edit(tenant_id=tenant_id, kind="faq:language-delete", payload={"language": language}):
@@ -365,7 +365,7 @@ async def cm_translate_existing_smart_answers(request: Request, body: dict[str, 
     from services.billing.membership.edit_http import guarded_edit, limit_response
 
     try:
-        from services.ai_setup.faq_integration import FaqIntegrationError, translate_existing_faq_groups_to_language
+        from services.faq.cm_faq import FaqIntegrationError, translate_existing_faq_groups_to_language
 
         with guarded_edit(tenant_id=tenant_id, kind="faq:translate", payload={"language": language}):
             result = await translate_existing_faq_groups_to_language(

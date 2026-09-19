@@ -1,4 +1,4 @@
-"""Adaptive comment stills: 5s / 10s / 15s across the whole video, no 3-minute cut."""
+"""Adaptive comment stills: 5s / 10s / 15s / 20s across the whole video, no 3-minute cut."""
 
 from __future__ import annotations
 
@@ -35,12 +35,32 @@ def test_medium_video_uses_ten_second_interval() -> None:
     assert offsets[-1] >= 110.0
 
 
-def test_long_video_uses_fifteen_second_interval() -> None:
+def test_medium_long_video_uses_fifteen_second_interval() -> None:
     assert frame_interval_s(181.0) == 15.0
+    assert frame_interval_s(360.0) == 15.0
     offsets = frame_offsets_s(240.0)
     assert offsets[0] == 0.0
     assert offsets[1] == 15.0
     assert offsets[-1] >= 220.0
+    assert len(offsets) == len(set(offsets))
+
+
+def test_long_video_uses_twenty_second_interval() -> None:
+    assert frame_interval_s(361.0) == 20.0
+    assert frame_interval_s(600.0) == 20.0
+    offsets = frame_offsets_s(400.0)
+    assert offsets[0] == 0.0
+    assert offsets[1] == 20.0
+    assert offsets[-1] >= 380.0
+    assert len(offsets) == len(set(offsets))
+    assert len(offsets) <= MAX_FRAMES
+
+
+def test_video_shorter_than_interval_still_has_representative_frame() -> None:
+    offsets = frame_offsets_s(3.0)
+    assert offsets[0] == 0.0
+    assert len(offsets) >= 1
+    assert len(offsets) == len(set(offsets))
 
 
 def test_ten_minute_cap_uses_first_ten_minutes_only() -> None:

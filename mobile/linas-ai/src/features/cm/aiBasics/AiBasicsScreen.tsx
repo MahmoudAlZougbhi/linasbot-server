@@ -45,11 +45,17 @@ type Props = {
   onBack?: () => void;
 };
 
+function initialTab(review?: CmProposalReview | null): AiBasicsTab {
+  if (review?.section === 'style') return 'style';
+  if (review?.section === 'dynamic_messages') return 'greetings';
+  return 'identity';
+}
+
 export function AiBasicsScreen({ proposalReview, onBack }: Props) {
   const { tr } = useI18n();
   const insets = useSafeAreaInsets();
   const multi = useCmMultiDraft(AI_BASICS_COMPOSITE_SECTIONS, proposalReview);
-  const [tab, setTab] = useState<AiBasicsTab>('identity');
+  const [tab, setTab] = useState<AiBasicsTab>(() => initialTab(proposalReview));
   const [mode, setMode] = useState<'hub' | 'greeting'>('hub');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isNewGreeting, setIsNewGreeting] = useState(false);

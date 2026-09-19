@@ -22,7 +22,8 @@ def truncate_billing_pg_tables(url: str) -> None:
             text(
                 "TRUNCATE credit_ledger_entries, credit_balances, "
                 "entitlement_processed_events, tenant_entitlements, "
-                "customer_ai_message_reservations, customer_ai_message_lots "
+                "customer_ai_message_reservations, customer_ai_message_lots, "
+                "customer_ai_catalog_admin "
                 "RESTART IDENTITY CASCADE"
             )
         )
@@ -43,9 +44,11 @@ def wire_pg_billing_stores(monkeypatch: pytest.MonkeyPatch) -> None:
 def seed_acceptance_credit_ledger(*, tenant_id: str = "biz", plan_id: str = "starter") -> int:
     from services.billing.credit_ledger_service import credit_ledger_service
     from services.billing.entitlements_service import entitlements_store
+    from services.billing.membership.catalog_admin import reset_catalog_admin_for_tests
     from services.billing.membership.message_ledger import remaining_messages
     from services.billing.membership.period_grants import ensure_included_grant
 
+    reset_catalog_admin_for_tests()
     entitlements_store.set_plan(tenant_id=tenant_id, plan_id=plan_id, status="active", source="admin")
     credit_ledger_service.ensure_period_grant(tenant_id)
     ensure_included_grant(tenant_id)
