@@ -38,23 +38,30 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
 
     cm_tenant_id = str(user_data.get("tenant_id") or "").strip()
     if tenant_uses_cm_runtime(cm_tenant_id):
-        cm_reply, cm_metadata = await _handle_published_cm_runtime(
-            tenant_id=cm_tenant_id,
-            message=user_input_to_process,
-            detected_language=current_preferred_lang,
-            response_language=response_language,
+        from services.brain.inbound.ack_then_reply import bind_customer_ack_sender
+
+        async with bind_customer_ack_sender(
             user_id=str(user_id or ""),
-            conversation_id=conversation_id_from_user_data(
-                user_data,
-                fallback=str(current_conversation_id or user_id or ""),
-            ),
-            channel=str(user_data.get("channel") or user_data.get("platform") or ""),
-            asset_id=str(user_data.get("asset_id") or user_data.get("page_id") or ""),
-            provider_display_name=str(user_data.get("display_name") or user_data.get("name") or ""),
-            inbound_media=_inbound_from_user_data(user_data, has_image=bool(user_image_base64)),
-            attachment_types=list(user_data.get("inbound_attachment_types") or []),
-            message_id=message_id_for_brain(user_data),
-        )
+            user_data=user_data,
+            send_message_func=send_message_func,
+        ):
+            cm_reply, cm_metadata = await _handle_published_cm_runtime(
+                tenant_id=cm_tenant_id,
+                message=user_input_to_process,
+                detected_language=current_preferred_lang,
+                response_language=response_language,
+                user_id=str(user_id or ""),
+                conversation_id=conversation_id_from_user_data(
+                    user_data,
+                    fallback=str(current_conversation_id or user_id or ""),
+                ),
+                channel=str(user_data.get("channel") or user_data.get("platform") or ""),
+                asset_id=str(user_data.get("asset_id") or user_data.get("page_id") or ""),
+                provider_display_name=str(user_data.get("display_name") or user_data.get("name") or ""),
+                inbound_media=_inbound_from_user_data(user_data, has_image=bool(user_image_base64)),
+                attachment_types=list(user_data.get("inbound_attachment_types") or []),
+                message_id=message_id_for_brain(user_data),
+            )
         # Safe diagnostic view for Testing Lab + Interaction Logs (IDs/titles only).
         cm_diag = {
             "reason": cm_metadata.get("reason"),
