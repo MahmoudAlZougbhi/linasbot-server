@@ -89,6 +89,8 @@ class RequestRule(CmBaseModel):
     attachments: list[ArticleAttachment] = Field(default_factory=list)
     ai_search_title: str = ""
     ai_search_description: str = ""
+    handoff_guidance: str = ""
+    pre_handoff_message_hint: str = ""
 
 
 class RequestsAppointmentsSection(CmBaseModel):

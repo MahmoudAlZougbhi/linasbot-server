@@ -75,6 +75,8 @@ def normalize_request_rule_item(raw: dict[str, Any]) -> dict[str, Any]:
     item["required_fields"] = (
         [str(x).strip() for x in raw_fields if str(x).strip()] if isinstance(raw_fields, list) else []
     )
+    item["handoff_guidance"] = _text(item.get("handoff_guidance"))
+    item["pre_handoff_message_hint"] = _text(item.get("pre_handoff_message_hint"))
     return item
 
 
@@ -217,6 +219,13 @@ def format_request_rules_for_ai(
         line = f"- [{type_code}] {title}"
         if note:
             line += f": {note}"
+        if type_code == "HUMAN":
+            guidance = _text(raw.get("handoff_guidance"))
+            hint = _text(raw.get("pre_handoff_message_hint"))
+            if guidance:
+                line += f" | handoff_guidance: {guidance}"
+            if hint:
+                line += f" | pre_handoff_message_hint: {hint}"
         lines.append(line)
     if wanted is not None and not lines:
         return (

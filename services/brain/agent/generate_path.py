@@ -70,10 +70,14 @@ async def generate_verified(
             },
         )
     identity = load_identity_bundle(turn.tenant_id)
+    from services.brain.actions.human_handoff_policy import policy_receipts
+
     receipt_lines = [
         f"{item.get('action_type')}:{item.get('state')}:{item.get('backend_id') or item.get('reason')}"
         for item in resource_receipts
-    ] + list(tool_receipts)
+    ]
+    receipt_lines.extend(tool_receipts)
+    receipt_lines.extend(policy_receipts(extra))
     envelope = await generate_grounded_reply(
         turn=turn,
         message=message,

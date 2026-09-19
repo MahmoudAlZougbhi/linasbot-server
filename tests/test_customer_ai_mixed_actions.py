@@ -34,8 +34,9 @@ async def test_mixed_human_and_hours_continues_to_answer(monkeypatch: pytest.Mon
         agent_trace=[],
     )
     assert gated.early is None
-    assert gated.extra.get("handoff_ok") is True
-    assert gated.extra.get("handoff_receipts")
+    assert gated.extra.get("pending_human_escalate") is True
+    assert gated.extra.get("handoff_ok") is not True
+    assert not gated.extra.get("handoff_receipts")
 
 
 @pytest.mark.asyncio

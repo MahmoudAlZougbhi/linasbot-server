@@ -389,6 +389,7 @@ async def run_customer_ai_comment(
         urls=image_urls,
         video_url=video_url,
         caption=caption,
+        context=ctx,
     )
     history = await load_history_snapshot(
         user_id=sender or f"comment:{comment_id or conv_id}",
@@ -417,6 +418,7 @@ async def run_customer_ai_comment(
             history=history,
             extra={
                 "comment_mode": mode or "",
+                "comment_channel": channel,
                 "winning_rule": getattr(decision, "rule_id", ""),
                 "comment_rule_text": str(getattr(decision, "policy_text", "") or ""),
                 "post_caption": caption,
@@ -438,7 +440,7 @@ async def run_customer_ai_comment(
 
     try:
         generated = await run_dm_after_gates(turn, message=comment_text, channel=channel)
-        generated = apply_ai_comment_destinations(generated, mode)
+        generated = apply_ai_comment_destinations(generated, mode, channel=channel)
         billed = apply_message_billing(turn, generated)
     except Exception:
         release_turn_reservation(turn)

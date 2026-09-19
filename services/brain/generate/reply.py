@@ -16,6 +16,7 @@ from services.brain.compose.blocks import (
     grounding_feedback,
     system_prompt,
 )
+from services.brain.contracts.enums import TaskDisposition
 from services.brain.contracts.evidence import EvidenceBundle
 from services.brain.contracts.plan import PlannerPlan
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
@@ -101,7 +102,9 @@ async def generate_grounded_reply(
 ) -> FinalReplyEnvelope | None:
     if not openai_configured():
         return None
-    if not bundle.items:
+    extra = turn.extra or {}
+    policy_only = bool(extra.get("pending_human_escalate") or extra.get("comment_invite_dm"))
+    if not bundle.items and not policy_only:
         # No provenance means nothing factual can be said. Ask instead of guessing.
         return _clarify()
     conflicts = detect_amount_contradictions("", items=list(bundle.items))
@@ -126,6 +129,11 @@ async def generate_grounded_reply(
             f"AI comment mode={comment_mode}. Write customer-facing wording from Comment Rules and Style. "
             "Do not use canned system copy such as 'Sent you a DM.'"
         )
+    from services.brain.actions.human_handoff_policy import human_policy_notes
+    from services.brain.comments.public_request_policy import comment_request_policy_notes
+
+    policy_notes.extend(human_policy_notes(turn, plan, extra))
+    policy_notes.extend(comment_request_policy_notes(turn, plan))
     from services.brain.greeting_policy import evaluate_greeting
 
     if turn.invocation_kind not in {"followup", "comment"}:
@@ -145,7 +153,7 @@ async def generate_grounded_reply(
                     "If this starts a session, weave at most one short greeting into the same reply. "
                     "Do not prepend a second greeting."
                 )
-    if (turn.extra or {}).get("awaiting_confirmation"):
+    if extra.get("awaiting_confirmation") and not extra.get("comment_invite_dm"):
         policy_notes.append(
             "A request is awaiting customer confirmation. Ask to confirm; do not claim it was submitted."
         )
@@ -172,11 +180,19 @@ async def generate_grounded_reply(
         reasons = ungrounded_claims(text, bundle, receipts, message=message, plan=plan)
         verdicts = verify_claims(text, bundle, receipts=receipts)
         if not reasons and not claims_fail_closed(verdicts):
+            dispositions: dict[str, TaskDisposition] = {
+                task.id: "answered" for task in plan.tasks if task.type in _ANSWERED_TASK_TYPES
+            }
+            for task in plan.tasks:
+                if task.type == "human_request":
+                    dispositions[task.id] = "awaiting_customer"
+                if extra.get("comment_invite_dm") and task.type in {"product_request", "service_request"}:
+                    dispositions[task.id] = "policy_suppressed"
             return FinalReplyEnvelope(
                 decision="reply",
                 messages=[OutboundMessage(destination=destination, text=text)],
                 used_evidence_ids=_used_evidence_ids(bundle),
-                dispositions={task.id: "answered" for task in plan.tasks if task.type in _ANSWERED_TASK_TYPES},
+                dispositions=dispositions,
             )
         feedback = grounding_feedback(reasons or [v.reason or v.status for v in verdicts if v.status != "SUPPORTED"])
     return _clarify()
