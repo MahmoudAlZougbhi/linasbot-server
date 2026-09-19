@@ -9,7 +9,6 @@ from fastapi.responses import JSONResponse
 
 from modules.api_security import require_permission, require_session, user_has_permission
 from modules.core import app
-from services.billing.credit_ledger_service import credit_ledger_service
 from services.integrations.channel_capability_disconnect import (
     clear_channel_toggles_after_disconnect,
     clear_invalid_dm_enabled_state_async,
@@ -303,7 +302,9 @@ async def mobile_usage(request: Request) -> Any:
     available = remaining_credits(session.tenant_id)
     reserved = 0
     try:
-        reserved = int(credit_ledger_service.get_reserved(session.tenant_id))
+        from services.billing.membership.message_ledger import snapshot as message_snapshot
+
+        reserved = max(0, int(message_snapshot(session.tenant_id).reserved))
     except Exception:
         reserved = 0
     ent = entitlements_store.get(session.tenant_id)

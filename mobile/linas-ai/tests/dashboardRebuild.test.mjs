@@ -135,14 +135,13 @@ test('Growth plan hides Upgrade on Max and Copilot pause uses Buy credits sheet'
   assert.match(growth, /showUpgrade/);
   assert.match(growth, /isHighestPlan/);
   assert.match(chat, /BuyCreditsSheet/);
-  assert.match(chat, /c\.credits\.open && !c\.credits\.messageBillingActive/);
+  assert.match(chat, /c\.credits\.open/);
   assert.match(chat, /CreditsPausedBanner/);
   assert.match(chat, /openChoosePlan/);
   assert.doesNotMatch(chat, /onOpenArea\('subscription'\)/);
-  assert.match(banner, /chatLeftoverCreditsPausedTitle/);
+  assert.match(banner, /chatCreditsPausedTitle/);
   assert.match(banner, /chatAddLeftoverCredits/);
   assert.doesNotMatch(banner, /dashBuyCredits/);
-  assert.doesNotMatch(banner, /chatCreditsPausedTitle/);
   assert.match(banner, /subUpgradePlan/);
 });
 

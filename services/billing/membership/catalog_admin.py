@@ -102,13 +102,23 @@ def payment_readiness() -> dict[str, Any]:
 
 
 def _catalog_unlocked() -> dict[str, Any]:
+    from services.billing.membership.economy_policy import snapshot_economy
+
     base = message_catalog_snapshot()
     if _DRAFT:
         base = _apply_draft(base, _DRAFT)
+    base["economy"] = snapshot_economy(base.get("economy") or _DRAFT.get("economy"))
     base["admin_revision"] = _REVISION
     base["published"] = _PUBLISHED
     base["payment_readiness"] = payment_readiness()
     return base
+
+
+def peek_draft_economy() -> dict[str, Any]:
+    with _LOCK:
+        _refresh_unlocked()
+        raw = _DRAFT.get("economy")
+    return dict(raw) if isinstance(raw, dict) else {}
 
 
 def current_catalog() -> dict[str, Any]:
@@ -217,6 +227,8 @@ def _apply_draft(base: dict[str, Any], draft: dict[str, Any]) -> dict[str, Any]:
                 row["reason"] = "message_topup_prices"
             packs.append(row)
         out["topup_packs"] = packs
+    if isinstance(draft.get("economy"), dict):
+        out["economy"] = deepcopy(draft["economy"])
     return out
 
 
@@ -230,6 +242,12 @@ def update_draft(*, actor: str, changes: dict[str, Any], reason: str = "") -> di
         allowed["plans"] = _sanitize_plans(changes["plans"])
     if "topup_packs" in changes:
         allowed["topup_packs"] = _sanitize_topup_overlays(changes["topup_packs"])
+    if "economy" in changes:
+        from services.billing.membership.economy_policy import validate_economy
+
+        if not isinstance(changes["economy"], dict):
+            raise ValueError("economy must be an object")
+        allowed["economy"] = validate_economy(changes["economy"])
     with _LOCK:
         global _REVISION
         _refresh_unlocked()
@@ -266,22 +284,35 @@ def published_offer_overlay(plan_id: str) -> dict[str, Any]:
 
 
 def effective_offer_fields(plan_id: str) -> dict[str, Any]:
-    """Live offer fields come from the credit plan catalog, not the draft message catalog."""
+    """Live included_messages come from the message catalog; credit rows stay historical."""
+    from services.billing.membership.message_catalog import offer_fields_for_plan
     from services.billing.membership.plan_catalog import PLAN_CATALOG, plan_price_usd
 
     pid = (plan_id or "").strip().lower()
-    plan = PLAN_CATALOG.get(pid)
-    if plan is None:
-        return {"included_credits": None, "included_messages": None, "faq_capacity": None}
-    return {
-        "included_credits": int(plan.included_credits),
-        "included_messages": None,
-        "faq_capacity": int(plan.faq_capacity),
-        "faq_enabled": True,
-        "followup_enabled": True,
-        "intended_price_usd": plan_price_usd(pid),
-        "intended_price_micro_usd": int(plan.price_micro_usd),
-    }
+    credit = PLAN_CATALOG.get(pid)
+    try:
+        offer = offer_fields_for_plan(pid)
+    except KeyError:
+        offer = {"included_messages": None, "faq_capacity": None}
+    overlay = published_offer_overlay(pid)
+    with _LOCK:
+        _refresh_unlocked()
+        draft_plan = (_DRAFT.get("plans") or {}).get(pid) or {}
+    for source in (draft_plan, overlay):
+        if source.get("included_messages") is not None:
+            offer["included_messages"] = int(source["included_messages"])
+        if source.get("faq_capacity") is not None:
+            offer["faq_capacity"] = int(source["faq_capacity"])
+    if credit is not None:
+        offer["included_credits"] = int(credit.included_credits)
+        offer.setdefault("intended_price_usd", plan_price_usd(pid))
+        offer.setdefault("intended_price_micro_usd", int(credit.price_micro_usd))
+        offer.setdefault("faq_capacity", int(credit.faq_capacity))
+        offer.setdefault("faq_enabled", True)
+        offer.setdefault("followup_enabled", True)
+    else:
+        offer.setdefault("included_credits", None)
+    return offer
 
 
 def effective_included_messages(plan_id: str) -> int | None:

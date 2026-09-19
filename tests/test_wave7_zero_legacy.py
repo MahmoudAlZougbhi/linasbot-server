@@ -293,8 +293,8 @@ def test_wave_d_one_credit_meter() -> None:
     metering = (ROOT / "services/billing/token_metering.py").read_text(encoding="utf-8")
     row = (ROOT / "db/models/credit_entitlements.py").read_text(encoding="utf-8")
     catalog = (ROOT / "services/billing/iap_product_catalog.py").read_text(encoding="utf-8")
-    assert "Subscription charges credits only" in flags
-    assert message_billing_enabled() is False
+    assert "canonical live meter is the message ledger" in flags.lower()
+    assert message_billing_enabled() is True
     assert message_billing_cutover() is False
     assert "token_wallet_service.ensure_ai_allowed" not in metering
     assert "token_wallet_service.debit" not in metering
@@ -302,10 +302,10 @@ def test_wave_d_one_credit_meter() -> None:
     assert row.count("pending_plan_effective_at") == 1
     assert "com.linasai.credits.2500" in catalog
     fields = overlay_message_fields("wave-d", "lite")
-    assert fields["message_billing_active"] is False
-    assert fields["wallet_unit"] == "credits"
+    assert fields["message_billing_active"] is True
+    assert fields["wallet_unit"] == "messages"
     assert fields["included_credits"] == 7000
-    assert fields["available_messages"] is None
+    assert fields["available_messages"] is not None
     assert debit_ai_usage(tenant_id="wave-d", prompt_tokens=10, completion_tokens=10) is None
     assert "lite" in subscription_product_map().values()
     assert credit_product_map()["com.linasai.credits.5000"] == 5000
@@ -357,8 +357,8 @@ def test_wave_f_portal_drawer_no_snapchat() -> None:
     caps = (ROOT / "services/integrations/integration_capabilities.py").read_text(encoding="utf-8")
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
 
-    assert shell.count("{ to: '/owner") == 5
-    for label in ("Overview", "Users", "Message flow", "Message catalog", "Costs"):
+    assert shell.count("{ to: '/owner") == 6
+    for label in ("Overview", "Users", "Message flow", "Message catalog", "Message economy", "Costs"):
         assert label in shell
     assert "/owner/lab" not in app
     assert "OwnerLab" not in app

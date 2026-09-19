@@ -6,16 +6,14 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from services.billing.billing_backend import billing_uses_postgres
-from services.billing.credit_ai_gate import remaining_credits, upgrade_plan_allowed
+from services.billing.credit_ai_gate import upgrade_plan_allowed
 from services.billing.credit_buckets import split_credit_remaining
-from services.billing.credit_ledger_service import credit_ledger_service
+from services.billing.credit_ledger_service import credit_ledger_service  # noqa: F401
 from services.billing.entitlements_service import (
     get_tenant_entitlement_public,
     is_subscription_exempt_tenant,
 )
 from services.billing.membership.daily_edits import status as daily_edit_status
-from services.billing.membership.message_flags import message_billing_enabled
 from services.billing.membership.plan_catalog import PLAN_CATALOG
 from services.billing.plan_economics import PLAN_PRICES_USD, recommend_allowance
 from services.dashboard.activity import build_activity_summary
@@ -71,21 +69,22 @@ def _workspace_identity(*, tenant_id: str, user_id: str) -> dict[str, Any]:
 def _plan_and_credits(tenant_id: str) -> dict[str, Any]:
     try:
         public = get_tenant_entitlement_public(tenant_id)
-        available = remaining_credits(tenant_id)
-        reserved = int(credit_ledger_service.get_reserved(tenant_id))
+        overlay = overlay_message_fields(tenant_id, str(public.get("plan_id") or "none"))
+        available = int(overlay.get("available_messages") or 0)
+        reserved = int(overlay.get("reserved_messages") or 0)
     except Exception as exc:
         return _section_error("credits_unavailable", f"Message service unavailable: {exc}")
 
     plan_id = str(public.get("plan_id") or "none")
-    included = int(public.get("included_credits") or 0)
-    extra = int(public.get("extra_credits") or 0)
+    included = int(overlay.get("included_remaining") or overlay.get("included_messages") or 0)
+    extra = int(overlay.get("purchased_messages") or 0)
     if included <= 0 and plan_id in PLAN_PRICES_USD:
         included = int(recommend_allowance(plan_id).included_credits)
     limit = included + extra
     if limit <= 0:
         limit = available + reserved
     buckets = split_credit_remaining(included=included, purchased=extra, available=available, reserved=reserved)
-    used = buckets["credits_used"]
+    used = int(overlay.get("used_messages") or buckets["credits_used"])
     catalog = PLAN_CATALOG.get(plan_id)
     edits = daily_edit_status(tenant_id)
     display_name = catalog.display_name if catalog else (plan_id if plan_id != "none" else None)
@@ -117,11 +116,8 @@ def _plan_and_credits(tenant_id: str) -> dict[str, Any]:
             "faq_max_entries": public.get("faq_max_entries"),
             "faq_used_entries": public.get("faq_used_entries"),
             "faq_quota_display": public.get("faq_quota_display"),
-            "credit_source": "postgres_credit_ledger" if billing_uses_postgres() else "file_credit_ledger",
-            "credit_source_note": (
-                "Historical credit balances stay on file. Message remaining is shown only when "
-                "message billing is enabled."
-            ),
+            "credit_source": "message_ledger",
+            "credit_source_note": "Live remaining is message units. Historical credit rows stay auditable.",
             "has_subscription": has_subscription,
             "ai_setup_edits": {
                 "limit": edits.limit,
@@ -134,8 +130,8 @@ def _plan_and_credits(tenant_id: str) -> dict[str, Any]:
             "actions": {
                 "manage_subscription": True,
                 "upgrade_plan": upgrade_plan_allowed(plan_id),
-                "buy_credits": not message_billing_enabled(),
-                "buy_messages": False,
+                "buy_credits": False,
+                "buy_messages": True,
             },
         }
     )
@@ -328,7 +324,7 @@ def build_tenant_mobile_dashboard(
         int(content.get("sections_present") or 0) > 0 or int(content.get("percent") or 0) > 0
     )
 
-    leftover_known = bool(credits_known and not message_billing_enabled())
+    leftover_known = False
     leftover = int(plan.get("available_credits") or 0) if leftover_known else None
     leftover_included = int(plan.get("included_credits") or 0) if leftover_known else included
     workspace_status = derive_workspace_status(

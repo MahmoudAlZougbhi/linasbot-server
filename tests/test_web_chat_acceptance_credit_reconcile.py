@@ -62,23 +62,19 @@ def _snapshot(tenant_id: str = "biz", session_id: str = "visitor-reconcile") -> 
 
 def test_pg_reserve_idempotent_by_request_id(tmp_path, monkeypatch, acceptance_pg_ha_env) -> None:
     start_total = patch_acceptance_eligibility(monkeypatch, tmp_path, tenant_id="biz")
-    from services.billing.credit_ledger_service import credit_ledger_service
+    from services.billing.membership.message_ledger import reserve
 
-    first = credit_ledger_service.reserve(
+    first = reserve(
         tenant_id="biz",
-        user_id=None,
-        credits=1,
-        operation_type="web_customer_reply",
-        request_id="web:biz:idem-reserve",
+        operation_id="web:biz:idem-reserve",
+        response_class="generated_ai",
     )
-    second = credit_ledger_service.reserve(
+    second = reserve(
         tenant_id="biz",
-        user_id=None,
-        credits=1,
-        operation_type="web_customer_reply",
-        request_id="web:biz:idem-reserve",
+        operation_id="web:biz:idem-reserve",
+        response_class="generated_ai",
     )
-    assert first == second
+    assert first.reservation_id == second.reservation_id
     snapshot = fetch_pg_ledger_snapshot(acceptance_pg_ha_env, "biz")
     assert_acceptance_ledger_equation(
         snapshot,
@@ -280,7 +276,7 @@ async def test_capture_failure_replay_reconciles_without_release(tmp_path, monke
 
     patch_ai_reply(monkeypatch, reply="Visible reply")
     calls = {"capture": 0}
-    from services.billing.credit_ledger_service import credit_ledger_service
+    from services.billing.membership import message_ledger
 
     monkeypatch.setattr(
         "services.integrations.web_chat.processor.persist_web_chat_message",
@@ -295,15 +291,15 @@ async def test_capture_failure_replay_reconciles_without_release(tmp_path, monke
             )
         ),
     )
-    original_capture = credit_ledger_service.capture
+    original_settle = message_ledger.settle
 
-    def fail_once_capture(**kwargs):
+    def fail_once_settle(*args, **kwargs):
         calls["capture"] += 1
         if calls["capture"] == 1:
             raise RuntimeError("capture ack lost")
-        return original_capture(**kwargs)
+        return original_settle(*args, **kwargs)
 
-    monkeypatch.setattr(credit_ledger_service, "capture", fail_once_capture)
+    monkeypatch.setattr(message_ledger, "settle", fail_once_settle)
 
     with pytest.raises(WebChatError) as exc:
         await process_web_chat_message(
@@ -343,20 +339,19 @@ async def test_capture_failure_replay_reconciles_without_release(tmp_path, monke
 def test_pg_reserve_fifty_concurrent_same_request_id(tmp_path, monkeypatch, acceptance_pg_ha_env) -> None:
     """Direct 50-way reserve must converge: one reservation, zero IntegrityError."""
     start_total = patch_acceptance_eligibility(monkeypatch, tmp_path, tenant_id="biz")
-    from services.billing.credit_ledger_service import credit_ledger_service
+    from services.billing.membership.message_ledger import reserve
 
     request_id = "web:biz:concurrent-reserve-50"
     errors: list[BaseException] = []
 
     def reserve_once() -> str:
         try:
-            return credit_ledger_service.reserve(
+            held = reserve(
                 tenant_id="biz",
-                user_id=None,
-                credits=1,
-                operation_type="web_customer_reply",
-                request_id=request_id,
+                operation_id=request_id,
+                response_class="generated_ai",
             )
+            return held.reservation_id
         except BaseException as exc:
             errors.append(exc)
             raise

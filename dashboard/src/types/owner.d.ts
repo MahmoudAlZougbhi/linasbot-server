@@ -23,6 +23,8 @@ interface OwnerSubscriber {
   status: string;
   credits_used: number;
   credits_remaining: number;
+  message_remaining?: number;
+  historical_credit_remaining?: number;
   intended_included_messages?: number | null;
   intended_price_usd?: number | null;
   users: DashboardUser[];

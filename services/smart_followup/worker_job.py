@@ -160,29 +160,23 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             job = _fence_job(session, job_id=job_id, worker_id=worker_id, claim_generation=claim_generation)
             if job is None:
                 return {"job_id": job_id, "status": "missing"}
-            from services.billing.membership.message_flags import message_billing_enabled
+            from services.brain.leftover_reserve import remember_leftover_hold, reserve_leftover_reply
             from services.smart_followup.billing_ids import leftover_followup_pins
 
             pins = leftover_followup_pins(job)
-            if message_billing_enabled():
-                reservation_id = str(job.reservation_id or "").strip() or None
-                if reservation_id:
-                    from services.brain.leftover_reserve import remember_leftover_hold
-
-                    remember_leftover_hold(
-                        tenant_id=tenant_id,
-                        reservation_id=reservation_id,
-                        request_id=canonical_sfu_credit_request_id(job.idempotency_key),
-                        operation_type=OPERATION_TYPE,
-                        pin_ids=pins,
-                    )
+            reservation_id = str(job.reservation_id or "").strip() or None
+            if reservation_id:
+                remember_leftover_hold(
+                    tenant_id=tenant_id,
+                    reservation_id=reservation_id,
+                    request_id=canonical_sfu_credit_request_id(job.idempotency_key),
+                    operation_type=OPERATION_TYPE,
+                    pin_ids=pins,
+                )
             else:
-                from services.brain.leftover_reserve import reserve_leftover_reply
-
-                request_id = canonical_sfu_credit_request_id(job.idempotency_key)
                 reservation_id = reserve_leftover_reply(
                     tenant_id=tenant_id,
-                    request_id=request_id,
+                    request_id=canonical_sfu_credit_request_id(job.idempotency_key),
                     operation_type=OPERATION_TYPE,
                     pin_ids=pins,
                 )

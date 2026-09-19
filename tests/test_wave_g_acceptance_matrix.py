@@ -279,10 +279,10 @@ def test_wave_g_ai_setup_voyage_requests_integrations_billing() -> None:
     platforms = {r["platform"] for r in rows}
     assert "snapchat" not in platforms
     assert {"instagram", "facebook", "tiktok", "web"}.issubset(platforms)
-    assert message_billing_enabled() is False
+    assert message_billing_enabled() is True
     fields = overlay_message_fields("wave-g", "lite")
-    assert fields["message_billing_active"] is False
-    assert fields["wallet_unit"] == "credits"
+    assert fields["message_billing_active"] is True
+    assert fields["wallet_unit"] == "messages"
     assert "lite" in subscription_product_map().values()
     assert credit_product_map()["com.linasai.credits.5000"] == 5000
     billing = _text("mobile/linas-ai/src/features/billing/useBillingData.ts")
@@ -302,7 +302,7 @@ def test_wave_g_web_marketing_portal_widget() -> None:
     assert "OwnerCatalog" in app
     assert "OwnerCosts" in app
     assert "/owner/lab" not in app
-    assert shell.count("{ to: '/owner") == 5
+    assert shell.count("{ to: '/owner") == 6
     assert "GuestChatPanel" in landing
     assert "showFab={false}" not in landing
     assert '@app.get("/web-chat/widget.js")' in public_routes

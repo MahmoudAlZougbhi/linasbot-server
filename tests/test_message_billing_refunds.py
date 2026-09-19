@@ -97,7 +97,7 @@ def test_stripe_token_pack_never_grants_messages() -> None:
         product_id="linas_token_pack",
         transaction_id="cs_token",
     )
-    assert grant == {"granted": False, "reason": "credits_meter_only"}
+    assert grant == {"granted": False, "reason": "pack_unmapped"}
     assert remaining_messages("stripe-shop") == 0
 
 
@@ -109,7 +109,7 @@ def test_stripe_message_pack_stays_blocked_without_sale_ready(monkeypatch: pytes
         product_id="com.linasai.messages.100",
         transaction_id="cs_msg",
     )
-    assert grant == {"granted": False, "reason": "credits_meter_only"}
+    assert grant == {"granted": False, "reason": "pack_unmapped"}
     assert remaining_messages("stripe-msg") == 0
 
 
@@ -118,7 +118,7 @@ def test_refunded_plan_expires_included_lot(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     entitlements_store.set_plan(tenant_id="refund-grant", plan_id="lite", status="active", source="admin")
-    assert remaining_messages("refund-grant") == 0
+    assert remaining_messages("refund-grant") == 550
     entitlements_store.set_plan(tenant_id="refund-grant", plan_id="lite", status="refunded", source="apple")
     assert remaining_messages("refund-grant") == 0
 

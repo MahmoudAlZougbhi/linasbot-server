@@ -115,9 +115,9 @@ test('BillingScreen routes no-sub to choose, has-sub to current, upgrade + credi
   assert.match(billing, /CurrentPlanScreen/);
   assert.match(billing, /ChoosePlanScreen/);
   assert.match(billing, /BuyCreditsSheet/);
-  assert.match(billing, /creditsOpen && !entitlement.messageBillingActive/);
+  assert.match(billing, /visible=\{creditsOpen\}/);
   const flow = read('features/billing/useBuyCreditsFlow.ts');
-  assert.match(flow, /if \(next && messageBillingActive\) return/);
+  assert.doesNotMatch(flow, /if \(next && messageBillingActive\) return/);
   assert.match(billing, /hasSub/);
   assert.match(billing, /setBrowsePlans\(true\)/);
   assert.match(billing, /purchaseSubscription/);
@@ -165,9 +165,8 @@ test('exact EN plan copy present in locale table', () => {
     'Cancel downgrade',
     'Add messages',
     'Choose a message pack',
-    'Leftover credit packs',
-    'Buy leftover credits',
-    'They are not AI messages',
+    'Extra message packs',
+    'Buy messages',
     'Purchased messages do not expire.',
     'SOLO BUSINESS',
     'SMALL BUSINESS',
@@ -283,28 +282,23 @@ test('GrowthPlanCard uses ledger remaining, not catalog allowance, for membershi
   assert.doesNotMatch(src, /limit - available/);
 });
 
-test('live credit IAP is leftover credits, not a 1:1 message relabel', () => {
+test('extra message packs are sold as messages, not leftover credits', () => {
   const en = read('i18n/locales/subscriptionEn.ts');
   const sheet = read('features/billing/BuyCreditsSheet.tsx');
   const hero = read('features/billing/CurrentPlanHeroCard.tsx');
-  assert.match(en, /leftover credits/);
-  assert.match(en, /They are not AI messages/);
+  assert.match(en, /Extra message packs/);
+  assert.match(en, /subCreditsUnit:\s*'messages'/);
   assert.match(sheet, /subCreditsUnit/);
   assert.match(sheet, /subBuyCreditsCta/);
   assert.match(hero, /subBuyCredits/);
-  assert.match(hero, /messageBillingActive \? null/);
   assert.match(sheet, /subCreditsPacksTitle/);
-  assert.match(sheet, /subLeftoverNoExpire/);
-  assert.doesNotMatch(sheet, /subPurchasedNoExpire/);
-  assert.doesNotMatch(sheet, /messageBillingActive \? tr\('subAddMessages'\)/);
-  assert.doesNotMatch(en, /subCreditsUnit:\s*'messages'/);
-  assert.doesNotMatch(sheet, /2500[\s\S]{0,40}messages/);
+  assert.match(sheet, /subPurchasedNoExpire/);
+  assert.doesNotMatch(en, /leftover credits/i);
 });
 
-test('CurrentPlanScreen never copies leftover credits as messages', () => {
+test('CurrentPlanScreen shows included messages, not leftover credits', () => {
   const src = read('features/billing/CurrentPlanScreen.tsx');
   assert.match(src, /messageBillingActive/);
   assert.match(src, /subIncludedEachMonth/);
-  assert.doesNotMatch(src, /subIncludedRemaining[\s\S]{0,80}includedMessages/);
-  assert.doesNotMatch(src, /subTotalAvailable[\s\S]{0,80}creditBalance/);
+  assert.doesNotMatch(src, /leftover credits/i);
 });

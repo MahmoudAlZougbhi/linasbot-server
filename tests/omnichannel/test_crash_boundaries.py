@@ -165,10 +165,7 @@ async def test_crash_after_credit_before_send_retries_without_second_capture(
     assert result["ok"] is True
     assert sends["n"] == 1
     captures = [item for item in credits if item[0] == "capture"]
-    assert captures[0] == ("capture", "res-9")
-    assert captures[-1] == ("capture", "res-9")
-    assert len(captures) == 2
-    assert captures[-1]  # second capture is the idempotent retry after success path
+    assert captures == [("capture", "res-9")]
 
 
 @pytest.mark.asyncio

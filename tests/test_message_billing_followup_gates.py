@@ -15,15 +15,15 @@ from services.integrations.web_chat.followup_message_ledger import (
 
 def test_flags_stay_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MESSAGE_BILLING_ENABLED", raising=False)
-    assert followup_uses_message_ledger() is False
-    assert credit_reservation_required("") is True
+    assert followup_uses_message_ledger() is True
+    assert credit_reservation_required("") is False
     assert credit_reservation_required("cred-1") is False
 
 
 def test_message_billing_skips_web_credit_reservation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
-    assert followup_uses_message_ledger() is False
-    assert credit_reservation_required("") is True
+    assert followup_uses_message_ledger() is True
+    assert credit_reservation_required("") is False
 
 
 def test_web_adapter_and_delivery_honor_message_ledger() -> None:
@@ -39,9 +39,9 @@ def test_web_adapter_and_delivery_honor_message_ledger() -> None:
     assert "followup_uses_message_ledger" in getsource(followup_delivery._finalize_followup_billing)
     assert "settle_followup_from_snapshot" in getsource(followup_delivery._finalize_followup_billing)
     src = getsource(ai_bridge.maybe_generate_and_send_ai_reply)
-    assert "message_billing_enabled" in src
-    assert src.index("if not message_billing_enabled()") < src.index("reserve_leftover_reply")
+    assert "settle_after_send" in src or "run_customer_reply_v2_dm" in src
     assert "credit_ledger_service.capture" not in src
+    assert "credit_ledger_service.reserve" not in src
 
 
 def test_reservation_insert_writes_created_at() -> None:
@@ -73,13 +73,21 @@ def test_meta_comment_forwards_caption_when_present() -> None:
     assert 'parent_comment": str(event.get("parent_id")' not in src
 
 
-def test_web_live_handle_skips_credit_ledger(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_web_live_handle_uses_message_sentinel(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.billing.membership.message_ledger import grant_lot
     from services.integrations.web_chat.credit_fsm import WebChatCreditHandle
 
-    monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
+    grant_lot(
+        tenant_id="biz",
+        lot_id="biz:web-live",
+        kind="purchased",
+        period_id="web-live",
+        amount=5,
+        expires=False,
+    )
     handle = WebChatCreditHandle(tenant_id="biz", reservation_id=None, request_id="web:live:1")
-    with pytest.raises(PermissionError):
-        handle.reserve()
+    handle.reserve()
+    assert str(handle.reservation_id).startswith("msg:")
 
 
 def test_reserve_before_ai_skips_credits_when_billing_on(
@@ -95,7 +103,7 @@ def test_reserve_before_ai_skips_credits_when_billing_on(
         called["n"] += 1
         raise AssertionError("credit reserve must not run")
 
-    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service.reserve", boom)
+    monkeypatch.setattr("services.billing.membership.message_ledger.reserve", boom)
     turn = begin_turn(tenant_id="clinic", channel="instagram", external_inbound_id="mid-bill-1")
     with pytest.raises(PermissionError):
         reserve_before_ai(turn)
@@ -106,7 +114,7 @@ def test_try_reserve_uses_messages_not_credits(monkeypatch: pytest.MonkeyPatch) 
     from services.brain.ai_reply.ai_reply_turn_runtime import try_reserve_for_ai
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
-    monkeypatch.setattr("services.billing.membership.generative_gate.generative_ai_blocked", lambda _tid, **_kw: False)
+    monkeypatch.setattr("services.billing.membership.generative_gate.generative_ai_blocked", lambda _tid, **_kw: True)
     called = {"n": 0}
 
     def boom(**_kwargs):
@@ -116,7 +124,7 @@ def test_try_reserve_uses_messages_not_credits(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service.reserve", boom)
     user_data = {"tenant_id": "clinic", "_source_message_id": "mid-bill-2", "channel": "instagram"}
     assert try_reserve_for_ai(user_data) is False
-    assert called["n"] == 1
+    assert called["n"] == 0
     assert user_data.get("_ai_credit_blocked") is True
 
 
@@ -165,10 +173,10 @@ def test_omni_and_request_persist_stay_honest() -> None:
     wa_src = getsource(generate_whatsapp_reply)
     assert "reserve_leftover_reply" in wa_src
     web_src = getsource(generate_web_chat_reply)
-    assert "message_billing_enabled" in web_src
+    assert "process_web_chat_message" in web_src
     deliver_src = getsource(deliver._finish_success)
-    assert "message_billing_enabled" in deliver_src
-    assert deliver_src.index("if not message_billing_enabled()") < deliver_src.index("capture_leftover_reply")
+    assert "settle_after_send" in deliver_src
+    assert "credit_ledger_service.capture" not in deliver_src
 
 
 def test_live_and_preview_gates_are_wired() -> None:
@@ -180,8 +188,8 @@ def test_live_and_preview_gates_are_wired() -> None:
     from services.integrations.web_chat.processor_v2_reply import generate_web_chat_reply_text
 
     reserve_src = getsource(reserve_before_ai)
-    assert "credit_ledger_service.reserve" in reserve_src
-    assert "if message_billing_enabled()" not in reserve_src
+    assert "reserve_leftover_reply" in reserve_src
+    assert "credit_ledger_service.reserve" not in reserve_src
     handle_src = getsource(WebChatCreditHandle.reserve)
     assert "followup_uses_message_ledger" in handle_src
     preview_src = getsource(whatsapp_smart_followup_api.smart_followup_preview)
@@ -228,21 +236,28 @@ def test_sfu_worker_settles_leftover_credits() -> None:
     assert "hold_billing_policy" in src[recon:]
 
 
-def test_leftover_reserve_uses_credits_even_if_message_billing_env_set(
+def test_leftover_reserve_uses_message_ledger(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from inspect import getsource
 
+    from services.billing.membership.message_ledger import grant_lot, reset_ledger_for_tests
     from services.brain.leftover_reserve import reserve_leftover_reply
 
-    monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
-    monkeypatch.setattr(
-        "services.billing.credit_ledger_service.credit_ledger_service.reserve",
-        lambda **_kwargs: "cred-leftover-1",
+    reset_ledger_for_tests()
+    grant_lot(
+        tenant_id="shop",
+        lot_id="shop:inc",
+        kind="included",
+        period_id="2099-01",
+        amount=5,
+        expires=False,
     )
     monkeypatch.setattr("services.brain.leftover_reserve.remember_leftover_hold", lambda **_kwargs: None)
     leftover_id = reserve_leftover_reply(tenant_id="shop", request_id="omni:1", operation_type="omni")
-    assert leftover_id == "cred-leftover-1"
+    assert leftover_id
+    assert leftover_id != "cred-leftover-1"
+    assert "credit_ledger_service" not in getsource(reserve_leftover_reply)
     assert "message_billing_enabled" not in getsource(reserve_leftover_reply)
 
 
@@ -276,17 +291,22 @@ def test_reserve_generative_skips_leftover_conversation_pin(monkeypatch: pytest.
     from services.billing.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests
     from services.brain.billing import reserve_generative
     from services.brain.contracts.turn import CustomerTurn
-    from services.brain.leftover_reserve import _pin, reset_leftover_pins_for_tests
+    from services.brain.leftover_reserve import reserve_leftover_reply, reset_leftover_pins_for_tests
 
     reset_ledger_for_tests()
     reset_leftover_pins_for_tests()
     monkeypatch.setenv("LINAS_MESSAGE_STORE", "memory")
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     grant_lot(tenant_id="pin-shop", lot_id="inc", kind="included", period_id=current_period_id(), amount=2)
-    _pin("pin-shop", "conv-leftover")
+    reserve_leftover_reply(
+        tenant_id="pin-shop",
+        request_id="leftover-op",
+        operation_type="omni",
+        pin_ids=("conv-leftover",),
+    )
     turn = CustomerTurn(tenant_id="pin-shop", conversation_id="conv-leftover", event_ids=["evt-new"])
     assert reserve_generative(turn) is None
-    assert remaining_messages("pin-shop") == 2
+    assert remaining_messages("pin-shop") == 1
 
 
 def test_settle_after_send_does_not_mint_when_leftover_owns_turn(
@@ -295,16 +315,21 @@ def test_settle_after_send_does_not_mint_when_leftover_owns_turn(
     from services.billing.membership.lot_window import current_period_id
     from services.billing.membership.message_ledger import grant_lot, remaining_messages, reset_ledger_for_tests
     from services.brain.billing import settle_after_send
-    from services.brain.leftover_reserve import _pin, reset_leftover_pins_for_tests
+    from services.brain.leftover_reserve import reserve_leftover_reply, reset_leftover_pins_for_tests
 
     reset_ledger_for_tests()
     reset_leftover_pins_for_tests()
     monkeypatch.setenv("LINAS_MESSAGE_STORE", "memory")
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     grant_lot(tenant_id="pin-shop", lot_id="inc", kind="included", period_id=current_period_id(), amount=2)
-    _pin("pin-shop", "mid-leftover")
+    reserve_leftover_reply(
+        tenant_id="pin-shop",
+        request_id="mid-leftover",
+        operation_type="omni",
+        pin_ids=("mid-leftover",),
+    )
     settle_after_send(tenant_id="pin-shop", operation_id="mid-leftover", accepted=True, channel="web_chat")
-    assert remaining_messages("pin-shop") == 2
+    assert remaining_messages("pin-shop") == 1
 
 
 def test_followup_leftover_pins_include_conversation() -> None:

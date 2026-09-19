@@ -105,18 +105,18 @@ async def test_ack_before_capture_does_not_complete_billing(tmp_path, monkeypatc
     )
 
     capture_calls = 0
-    original_capture = __import__(
-        "services.billing.credit_ledger_service", fromlist=["credit_ledger_service"]
-    ).credit_ledger_service.capture
+    from services.smart_followup import billing_ids
 
-    def flaky_capture(*args, **kwargs):
+    original_settle = billing_ids.settle_followup_from_snapshot
+
+    def flaky_settle(*args, **kwargs):
         nonlocal capture_calls
         capture_calls += 1
         if capture_calls == 1:
             raise RuntimeError("capture commit lost")
-        return original_capture(*args, **kwargs)
+        return original_settle(*args, **kwargs)
 
-    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service.capture", flaky_capture)
+    monkeypatch.setattr(billing_ids, "settle_followup_from_snapshot", flaky_settle)
 
     delivered = await deliver_web_followup_message(
         tenant_id=tenant_id,

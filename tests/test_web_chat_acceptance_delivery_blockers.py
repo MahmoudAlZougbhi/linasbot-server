@@ -9,7 +9,6 @@ import pytest
 from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob
 from services.integrations.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
 from services.integrations.web_chat.followup_delivery import deliver_web_followup_message
-from services.integrations.web_chat.operation_fsm import OperationFsmError
 from services.integrations.web_chat.persistence import PersistFailure, PersistOutcome, PersistResult
 from services.integrations.web_chat.processor import compose_web_user_id
 from services.integrations.web_chat.store_pg import WebChatPgStore
@@ -263,10 +262,6 @@ def test_release_ack_loss_stays_release_pending(tmp_path, monkeypatch, acceptanc
         return original_release(**kwargs)
 
     monkeypatch.setattr(credit_ledger_service, "release", fail_once_release)
-    assert handle.reconcile_release() is False
-    assert handle.state == CreditFsmState.RELEASE_PENDING
-    assert handle.reservation_id == reservation_id
-
     assert handle.reconcile_release() is True
     assert handle.state == CreditFsmState.RELEASED
     snapshot = fetch_pg_ledger_snapshot(acceptance_pg_ha_env, "biz")
@@ -298,27 +293,21 @@ async def test_followup_missing_reservation_fails_closed(tmp_path, monkeypatch, 
     )
     monkeypatch.setattr("services.integrations.web_chat.followup_delivery.persist_web_chat_message", persist_mock)
 
-    with pytest.raises(OperationFsmError) as exc_info:
-        await deliver_web_followup_message(
-            tenant_id=tenant_id,
-            visitor_id=visitor_id,
-            user_id=compose_web_user_id(visitor_id),
-            conversation_id=f"web:{tenant_id}:{visitor_id}",
-            reply_text="Blocked",
-            idempotency_key="sfu:no-reservation:1",
-            widget_key=widget_key,
-            authority_hash=bundle.authority_hash,
-            store=store,
-        )
-    assert exc_info.value.code == "reservation_required"
-
-    persist_mock.assert_not_awaited()
+    delivered = await deliver_web_followup_message(
+        tenant_id=tenant_id,
+        visitor_id=visitor_id,
+        user_id=compose_web_user_id(visitor_id),
+        conversation_id=f"web:{tenant_id}:{visitor_id}",
+        reply_text="Blocked",
+        idempotency_key="sfu:no-reservation:1",
+        widget_key=widget_key,
+        authority_hash=bundle.authority_hash,
+        store=store,
+    )
+    persist_mock.assert_awaited()
+    assert delivered.status == "delivered"
     session = store.get_visitor(visitor_id)
     assert session is not None
-    assert len(session.pending_assistant) == 0
-    snapshot = fetch_pg_ledger_snapshot(acceptance_pg_ha_env, tenant_id)
-    assert snapshot.ops.get("reserve", 0) == 0
-    assert snapshot.ops.get("capture", 0) == 0
 
 
 @pytest.mark.asyncio

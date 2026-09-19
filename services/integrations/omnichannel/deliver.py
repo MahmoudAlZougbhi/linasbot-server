@@ -229,18 +229,6 @@ def _finish_success(outbox_id: str, result: dict[str, Any]) -> None:
             reservation=str(reservation or ""),
         )
         session.commit()
-    if reservation:
-        from services.billing.membership.message_flags import message_billing_enabled
-
-        if not message_billing_enabled():
-            from services.brain.leftover_reserve import capture_leftover_reply
-
-            capture_leftover_reply(
-                tenant_id,
-                reservation,
-                model_provider=channel,
-                provider_message_id=str(result.get("message_id") or ""),
-            )
     from services.brain.billing import settle_after_send
 
     settle_after_send(
@@ -259,24 +247,15 @@ def _release_credits_if_never_submitted(snapshot: dict[str, Any], *, submitted: 
     tenant_id = str(snapshot.get("tenant_id") or "")
     if submitted or not tenant_id:
         return
-    from services.billing.membership.message_flags import message_billing_enabled
+    from services.brain.billing import settle_after_send
 
-    if message_billing_enabled():
-        from services.brain.billing import settle_after_send
-
-        settle_after_send(
-            tenant_id=tenant_id,
-            operation_id=str(snapshot.get("message_operation_id") or inbound_id or reservation or ""),
-            accepted=False,
-            channel=str(snapshot.get("channel") or ""),
-            extra_ids=tuple(snapshot.get("message_extra_ids") or ()) or (inbound_id, str(reservation or "")),
-        )
-        return
-    if not reservation:
-        return
-    from services.brain.leftover_reserve import release_leftover_reply
-
-    release_leftover_reply(tenant_id, str(reservation))
+    settle_after_send(
+        tenant_id=tenant_id,
+        operation_id=str(snapshot.get("message_operation_id") or inbound_id or reservation or ""),
+        accepted=False,
+        channel=str(snapshot.get("channel") or ""),
+        extra_ids=tuple(snapshot.get("message_extra_ids") or ()) or (inbound_id, str(reservation or "")),
+    )
 
 
 async def _notify_live_chat(

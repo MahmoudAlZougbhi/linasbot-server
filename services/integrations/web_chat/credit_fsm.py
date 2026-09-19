@@ -36,6 +36,36 @@ class WebChatCreditHandle:
     def __post_init__(self) -> None:
         self.hydrate_from_operation_context()
 
+    def _ledger_operation_id(self) -> str:
+        return str(self.request_id or "").strip()
+
+    def reservation_terminal(self) -> str | None:
+        if followup_uses_message_ledger() or is_message_reservation(self.reservation_id):
+            from services.billing.membership.message_ledger import list_reservations
+
+            op = self._ledger_operation_id()
+            wanted = {str(self.reservation_id or ""), op, message_reservation_id(op)}
+            wanted.discard("")
+            for item in list_reservations(self.tenant_id):
+                aliases = {
+                    item.reservation_id,
+                    item.operation_id,
+                    message_reservation_id(item.operation_id),
+                    message_reservation_id(item.reservation_id),
+                }
+                if wanted & aliases:
+                    if item.status == "settled":
+                        return "capture"
+                    if item.status == "released":
+                        return "release"
+                    return None
+            return None
+        if not self.reservation_id:
+            return None
+        from services.billing.credit_ledger_service import credit_ledger_service
+
+        return credit_ledger_service.reservation_terminal(self.tenant_id, self.reservation_id)
+
     def hydrate_from_operation_context(self) -> None:
         """Reconstruct in-memory credit state from durable operation + reservation ids."""
         if self.state != CreditFsmState.IDLE:
@@ -147,7 +177,28 @@ class WebChatCreditHandle:
         if self.state not in {CreditFsmState.IDLE, CreditFsmState.BILLING_PENDING}:
             return
         if followup_uses_message_ledger():
-            self.reservation_id = message_reservation_id(self.request_id)
+            from services.billing.membership.message_ledger import InsufficientMessages
+            from services.billing.membership.message_ledger import reserve as reserve_messages
+            from services.brain.leftover_reserve import remember_leftover_hold
+
+            op = self._ledger_operation_id()
+            sentinel = message_reservation_id(op)
+            try:
+                held = reserve_messages(
+                    tenant_id=self.tenant_id,
+                    operation_id=op,
+                    response_class="generated_ai",
+                )
+            except InsufficientMessages as exc:
+                raise PermissionError("insufficient_messages") from exc
+            remember_leftover_hold(
+                tenant_id=self.tenant_id,
+                reservation_id=held.reservation_id,
+                request_id=op,
+                operation_type="web_customer_reply",
+                pin_ids=tuple(item for item in (sentinel, self.request_id, self.conversation_id) if item),
+            )
+            self.reservation_id = sentinel
             self.state = CreditFsmState.RESERVED
             return
         existing = self.reconcile_existing_reservation()
@@ -173,7 +224,13 @@ class WebChatCreditHandle:
             return
         if self.state not in {CreditFsmState.RESERVED, CreditFsmState.BILLING_PENDING} or not self.reservation_id:
             return
-        if is_message_reservation(self.reservation_id):
+        if followup_uses_message_ledger() or is_message_reservation(self.reservation_id):
+            from services.billing.membership.message_ledger import settle
+
+            try:
+                settle(tenant_id=self.tenant_id, operation_id=self._ledger_operation_id(), accepted=True)
+            except KeyError:
+                pass
             self.state = CreditFsmState.CAPTURED
             self.reservation_id = None
             return
@@ -212,7 +269,16 @@ class WebChatCreditHandle:
             return True
         if not self.reservation_id:
             return False
-        if is_message_reservation(self.reservation_id):
+        if followup_uses_message_ledger() or is_message_reservation(self.reservation_id):
+            from services.billing.membership.message_ledger import settle
+
+            try:
+                settle(tenant_id=self.tenant_id, operation_id=self._ledger_operation_id(), accepted=False)
+            except KeyError:
+                pass
+            except Exception:
+                self.state = CreditFsmState.RELEASE_PENDING
+                return False
             self.state = CreditFsmState.RELEASED
             self.reservation_id = None
             self._released_once = True
@@ -273,7 +339,7 @@ class WebChatCreditHandle:
             return False
         if not self.reservation_id:
             return False
-        if is_message_reservation(self.reservation_id):
+        if followup_uses_message_ledger() or is_message_reservation(self.reservation_id):
             try:
                 self.capture(model_provider=model_provider)
                 return self.state == CreditFsmState.CAPTURED

@@ -22,6 +22,10 @@ def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CreditLedgerS
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", store)
     monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.billing.credit_ledger_pg_ops.entitlements_store", store)
+    monkeypatch.setattr("services.billing.membership.period_grants.ensure_included_grant", lambda *_a, **_k: None)
+    from services.billing.membership.message_ledger import reset_ledger_for_tests
+
+    reset_ledger_for_tests()
     store.set_plan(tenant_id="clinic", plan_id="starter", status="active", source="admin")
     store.set_plan(tenant_id="linas", plan_id="max", status="active", source="admin")
     store.set_plan(tenant_id="t_max", plan_id="max", status="active", source="admin")
@@ -44,6 +48,9 @@ def _drain(ledger: CreditLedgerService, tenant_id: str, request_id: str) -> None
 
 
 def test_zero_remaining_blocks_clinic(ledger_env: CreditLedgerService) -> None:
+    from services.billing.membership.message_ledger import grant_lot
+
+    grant_lot(tenant_id="linas", lot_id="linas-inc", kind="included", period_id="2099-01", amount=10, expires=False)
     _drain(ledger_env, "clinic", "drain-clinic")
     assert remaining_credits("clinic") == 0
     assert ai_generation_blocked("clinic") is True
@@ -141,11 +148,11 @@ def test_copilot_pause_payload_hides_upgrade_on_max(ledger_env: CreditLedgerServ
     paused = owner_credits_paused_payload("linas")
     assert paused["show_upgrade"] is False
     assert paused["actions"]["upgrade_plan"] is False
-    assert paused["actions"]["buy_credits"] is True
+    assert paused["actions"]["buy_messages"] is True
     clinic = owner_credits_paused_payload("clinic")
     assert clinic["show_upgrade"] is True
-    assert "leftover credits" in clinic["message"]
-    assert "messages" not in clinic["message"]
+    assert "messages" in clinic["message"].lower()
+    assert clinic["actions"]["buy_messages"] is True
 
 
 def test_copilot_pause_stays_leftover_when_message_billing_on(
@@ -155,39 +162,17 @@ def test_copilot_pause_stays_leftover_when_message_billing_on(
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     paused = owner_credits_paused_payload("clinic")
-    assert "leftover credits" in paused["message"]
-    assert "messages" not in paused["message"]
-    assert paused["actions"]["buy_credits"] is True
+    assert "messages" in paused["message"].lower()
+    assert paused["actions"]["buy_messages"] is True
 
 
 def test_inflight_reserved_does_not_fund_new_owner_turn(ledger_env: CreditLedgerService) -> None:
-    """Strict gate: available=0 blocks Owner Copilot even if other turns hold reserved credits."""
-    ledger_env.ensure_period_grant("clinic")
-    stuck_rid = ledger_env.reserve(
-        tenant_id="clinic",
-        user_id=None,
-        credits=1,
-        operation_type="stuck_channel_turn",
-        request_id="stuck-reserve-1",
-    )
-    rest = ledger_env.get_balance("clinic")
-    if rest > 0:
-        drain_rid = ledger_env.reserve(
-            tenant_id="clinic",
-            user_id=None,
-            credits=rest,
-            operation_type="drain_for_reserve_test",
-            request_id="drain-strict",
-        )
-        ledger_env.capture(
-            tenant_id="clinic",
-            reservation_id=drain_rid,
-            provider_cost_usd=None,
-            model_provider="test",
-        )
-    assert stuck_rid
-    assert remaining_credits("clinic") == 0
-    assert ledger_env.get_reserved("clinic") >= 1
+    """Strict gate: available=0 blocks Owner Copilot even if other turns hold reserved units."""
+    from services.billing.membership.message_ledger import grant_lot, remaining_messages, reserve
+
+    grant_lot(tenant_id="clinic", lot_id="clinic-inc", kind="included", period_id="2099-01", amount=1, expires=False)
+    reserve(tenant_id="clinic", operation_id="stuck-reserve-1", response_class="generated_ai")
+    assert remaining_messages("clinic") == 0
     assert ai_generation_blocked("clinic") is True
     assert ai_generation_blocked("clinic", honor_inflight_reserved=True) is False
 
@@ -202,13 +187,14 @@ def test_owner_turn_credit_begin_blocks_at_zero(ledger_env: CreditLedgerService)
 
 
 def test_owner_turn_credit_begin_capture_debits_ledger(ledger_env: CreditLedgerService) -> None:
+    from services.billing.membership.message_ledger import grant_lot
     from services.owner_copilot.credit import (
         owner_turn_credit_abort,
         owner_turn_credit_begin,
         owner_turn_credit_finalize,
     )
 
-    ledger_env.ensure_period_grant("t_max")
+    grant_lot(tenant_id="t_max", lot_id="tmax-inc", kind="included", period_id="2099-01", amount=10, expires=False)
     before = remaining_credits("t_max")
     credit = owner_turn_credit_begin("t_max", conversation_id="conv-max")
     assert credit.blocked is False
@@ -230,6 +216,7 @@ async def test_max_plan_owner_copilot_emits_credits_paused_at_zero(
     from services.owner_copilot.brain import iter_owner_turn_v2_events
 
     _drain(ledger_env, "t_max", "drain-max-copilot")
+    monkeypatch.setattr("services.billing.credit_ai_gate.remaining_messages", lambda *_a, **_k: 0)
     monkeypatch.setenv("OWNER_COPILOT_V2", "1")
 
     async def _must_not_run(**_kwargs):  # noqa: ANN001

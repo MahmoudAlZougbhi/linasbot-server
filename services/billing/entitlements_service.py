@@ -266,7 +266,7 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
 
         payload.update(overlay_message_fields(tenant_id, plan_id))
     except Exception:
-        payload["message_billing_active"] = False
+        payload["message_billing_active"] = True
         payload.setdefault("available_messages", None)
     return payload
 

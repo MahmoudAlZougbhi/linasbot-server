@@ -19,18 +19,16 @@ from tests.web_chat_acceptance_support import patch_acceptance_eligibility, seed
 
 
 def _reserve_followup_credit(*, tenant_id: str, idem: str) -> str:
-    from services.billing.credit_ledger_service import credit_ledger_service
-    from services.smart_followup.constants import OPERATION_TYPE
+    from services.billing.membership.message_ledger import reserve
     from services.smart_followup.idempotency import canonical_sfu_credit_request_id
 
     seed_acceptance_credit_ledger(tenant_id=tenant_id)
-    return credit_ledger_service.reserve(
+    held = reserve(
         tenant_id=tenant_id,
-        user_id=None,
-        credits=1,
-        operation_type=OPERATION_TYPE,
-        request_id=canonical_sfu_credit_request_id(idem),
+        operation_id=canonical_sfu_credit_request_id(idem),
+        response_class="followup_sent",
     )
+    return held.reservation_id
 
 
 def _web_followup_fixtures(store, *, visitor_id: str = "visitor-2", idem: str = "idem-1"):
@@ -238,8 +236,9 @@ async def test_sfu_worker_duplicate_visible_delivery_never_releases_reservation(
     from db.models import Base
     from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob, WhatsAppSmartFollowUpSequence
     from db.session import reset_engine_for_tests
-    from services.billing.credit_ledger_service import CreditLedgerService
     from services.billing.entitlements_service import EntitlementsStore
+    from services.billing.membership.message_ledger import grant_lot, remaining_messages
+    from services.billing.membership.message_ledger import snapshot as message_snapshot
     from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
     from services.smart_followup.types import FollowUpConversationView
     from services.smart_followup.worker_job import process_one_followup_job
@@ -255,12 +254,16 @@ async def test_sfu_worker_duplicate_visible_delivery_never_releases_reservation(
 
     ent_store = EntitlementsStore(root=tmp_path / "ents")
     monkeypatch.setattr("services.billing.entitlements_service.entitlements_store", ent_store)
-    monkeypatch.setattr("services.billing.credit_ledger_service.entitlements_store", ent_store)
-    ledger = CreditLedgerService(root=tmp_path / "ledger")
-    monkeypatch.setattr("services.billing.credit_ledger_service.credit_ledger_service", ledger)
     ent_store.set_plan(tenant_id="tenant-b", plan_id="starter", status="active", source="admin")
-    ledger.ensure_period_grant("tenant-b")
-    start_total = ledger.get_balance("tenant-b")
+    grant_lot(
+        tenant_id="tenant-b",
+        lot_id="tenant-b:sfu-dup",
+        kind="purchased",
+        period_id="sfu-dup",
+        amount=10,
+        expires=False,
+    )
+    start_remaining = remaining_messages("tenant-b")
 
     now = datetime.now(UTC)
     seq = WhatsAppSmartFollowUpSequence(
@@ -332,8 +335,8 @@ async def test_sfu_worker_duplicate_visible_delivery_never_releases_reservation(
 
     assert out["status"] == "reconciliation_required"
     assert job.credits_captured == 0
-    assert ledger.get_balance("tenant-b") == start_total - 1
-    assert ledger.get_reserved("tenant-b") == 1
+    assert remaining_messages("tenant-b") == start_remaining - 1
+    assert message_snapshot("tenant-b").reserved == 1
 
     db.close()
     reset_engine_for_tests()

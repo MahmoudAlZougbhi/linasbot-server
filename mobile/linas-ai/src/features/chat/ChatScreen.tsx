@@ -16,6 +16,7 @@ import { ChatModeToggle } from './ChatModeToggle';
 import { ChatScreenOverlays } from './ChatScreenOverlays';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStatusBanners } from './ChatStatusBanners';
+import { BillingConfirmBanner } from './BillingConfirmBanner';
 import { CreditsPausedBanner } from './CreditsPausedBanner';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
 import { buildApproveSendOpts, buildDiscardSendOpts } from './proposalBarActions';
@@ -160,7 +161,7 @@ export function ChatScreen({
         {isAuthenticated ? (
           <ChoiceChips
             choices={c.turn.choices}
-            disabled={c.choiceBusy || c.turn.streaming || Boolean(c.turn.creditsPaused)}
+            disabled={c.choiceBusy || c.turn.streaming || Boolean(c.turn.creditsPaused) || Boolean(c.turn.billingConfirm)}
             onSelect={(choice) => {
               if (!c.turn.choiceSetId || c.choiceBusy) return;
               c.setChoiceBusy(true);
@@ -185,6 +186,14 @@ export function ChatScreen({
             onUpgrade={() => c.nav?.openChoosePlan()}
           />
         ) : null}
+        {isAuthenticated && c.turn.billingConfirm ? (
+          <BillingConfirmBanner
+            units={c.turn.billingConfirm.units}
+            message={c.turn.billingConfirm.message}
+            onConfirm={() => void c.turn.confirmBilling()}
+            onDismiss={() => c.turn.clearBillingConfirm()}
+          />
+        ) : null}
 
         <ChatComposer
           draft={c.draft}
@@ -193,7 +202,8 @@ export function ChatScreen({
             c.sending ||
             (!isAuthenticated && c.guest.gated) ||
             (isAuthenticated && !c.sessionReady) ||
-            Boolean(c.turn.creditsPaused)
+            Boolean(c.turn.creditsPaused) ||
+            Boolean(c.turn.billingConfirm)
           }
           canSendWithAttachment={c.pendingFiles.length > 0}
           voiceState={c.authVoice?.voiceState ?? 'idle'}
@@ -283,7 +293,7 @@ export function ChatScreen({
         onRequestRegister={onRequestRegister}
       />
       <BuyCreditsSheet
-        visible={c.credits.open && !c.credits.messageBillingActive}
+        visible={c.credits.open}
         prices={c.credits.prices}
         purchasing={c.credits.purchasing}
         locale={c.credits.locale}

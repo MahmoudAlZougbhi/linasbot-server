@@ -32,7 +32,11 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
   const [choices, setChoices] = useState<StreamChoice[]>([]);
   const [choiceSetId, setChoiceSetId] = useState<string | null>(null);
   const [creditsPaused, setCreditsPaused] = useState<{ showUpgrade: boolean } | null>(null);
+  const [billingConfirm, setBillingConfirm] = useState<{ units: number; message: string } | null>(
+    null,
+  );
   const pendingConfirmRef = useRef<string | null>(null);
+  const lastSendRef = useRef<{ text: string; opts?: Record<string, unknown> } | null>(null);
 
   const resetUi = useCallback(() => {
     setThinking(false);
@@ -56,19 +60,24 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
         choice_set_id?: string;
         attachment_ids?: string[];
         confirm_tool?: string | null;
+        confirm_billing?: boolean;
         tool_args?: Record<string, unknown>;
         revise_proposal_id?: string | null;
         owner_mode?: 'chat' | 'work';
         reply_language?: 'en' | 'ar' | 'fr';
       },
-    ): Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped' | 'credits_paused'> => {
+    ): Promise<
+      'done' | 'error' | 'network_error' | 'cancelled' | 'skipped' | 'credits_paused' | 'billing_confirm'
+    > => {
       if (!conversationId) return 'skipped';
       resetUi();
       setCards([]);
       setChoices([]);
       setChoiceSetId(null);
       setCreditsPaused(null);
+      setBillingConfirm(null);
       setThinking(true);
+      lastSendRef.current = { text, opts };
       let confirmTool = opts?.confirm_tool ?? null;
       const reviseId = opts?.revise_proposal_id?.trim() || null;
       // Edit-chip revision must not auto-approve via assent shortcut.
@@ -83,6 +92,7 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
           choice_set_id: opts?.choice_set_id,
           attachment_ids: opts?.attachment_ids,
           confirm_tool: confirmTool,
+          confirm_billing: opts?.confirm_billing,
           tool_args: opts?.tool_args,
           revise_proposal_id: reviseId,
           owner_mode: opts?.owner_mode,
@@ -130,6 +140,15 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
             resetUi();
             void hooksRef.current.onTerminal();
           },
+          onBillingConfirm: (payload) => {
+            const units = Number(payload.units || 1);
+            setBillingConfirm({
+              units,
+              message: String(payload.message || `This action will use ${units} messages.`),
+            });
+            resetUi();
+            void hooksRef.current.onTerminal();
+          },
           onDone: (payload) => {
             applyTitle(payload);
             const nextPending = pendingTokenFromDonePayload(payload);
@@ -168,6 +187,13 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
     choices,
     choiceSetId,
     creditsPaused,
+    billingConfirm,
+    confirmBilling: () => {
+      const pending = lastSendRef.current;
+      if (!pending) return Promise.resolve('skipped' as const);
+      return send(pending.text, { ...(pending.opts || {}), confirm_billing: true });
+    },
     clearCreditsPaused: () => setCreditsPaused(null),
+    clearBillingConfirm: () => setBillingConfirm(null),
   };
 }

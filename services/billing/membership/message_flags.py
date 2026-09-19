@@ -1,10 +1,9 @@
-"""Message billing is not a live meter. Subscription charges credits only."""
+"""Canonical live meter is the message ledger. Credit ledger is historical/audit only."""
 
 from __future__ import annotations
 
 from typing import Any
 
-# Kept as names so old env/docs/tests can import. Values are always off.
 ACTIVATION_FLAG_NAMES = (
     "MESSAGE_BILLING_ENABLED",
     "MESSAGE_BILLING_CUTOVER",
@@ -13,18 +12,19 @@ ACTIVATION_FLAG_NAMES = (
 
 
 def activation_flags_report(values: dict[str, str] | None = None) -> dict[str, Any]:
+    """Commercial activation env flags. Live metering does not wait on these."""
     _ = values
     flags = [{"key": key, "set": False, "enabled": False} for key in ACTIVATION_FLAG_NAMES]
     return {"ok": True, "enabled": [], "flags": flags}
 
 
 def message_billing_enabled() -> bool:
-    """Always false. Live AI and IAP use the credit ledger."""
-    return False
+    """Canonical live meter is the message ledger. Always on."""
+    return True
 
 
 def message_billing_cutover() -> bool:
-    """Always false. Draft message catalog is not checkout SoT."""
+    """Store checkout sale_ready still waits on catalog publish. Temporary cutover."""
     return False
 
 

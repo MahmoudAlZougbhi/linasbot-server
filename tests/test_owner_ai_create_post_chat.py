@@ -22,7 +22,7 @@ def _stub_context(**_: Any) -> dict[str, Any]:
     }
 
 
-def _fake_turn_credit(tenant_id: str, *, conversation_id: str = "") -> Any:
+def _fake_turn_credit(tenant_id: str, *, conversation_id: str = "", **_kwargs: Any) -> Any:
     from services.owner_copilot.credit import OwnerTurnCredit
 
     return OwnerTurnCredit(tenant_id=tenant_id, reservation_id="test-reservation")

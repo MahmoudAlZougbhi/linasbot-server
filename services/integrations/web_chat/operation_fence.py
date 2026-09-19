@@ -35,12 +35,19 @@ def release_web_chat_message_hold(
     cid = str(conversation_id or "").strip()
     text = str(user_text or "").strip()
     web_mid = web_inbound_message_id(cid, text) if cid and text else ""
+    session_id = str(operation_key or "").split(":", 1)[0]
     settle_after_send(
         tenant_id=tenant_id,
         operation_id=web_mid or operation_key,
         accepted=False,
         channel="web_chat",
-        extra_ids=(operation_key, web_mid, *extra_ids),
+        extra_ids=(
+            operation_key,
+            f"web:{session_id}:{operation_key}",
+            f"web:{session_id}:{operation_key}:a1",
+            web_mid,
+            *extra_ids,
+        ),
     )
 
 
@@ -109,6 +116,10 @@ def fenced_failure_release(
             operation_key=runtime.operation_key,
             conversation_id=conversation_id or str(result.get("conversation_id") or ""),
             user_text=user_text,
-            extra_ids=(str(result.get("operation_key") or ""), conversation_id),
+            extra_ids=(
+                str(result.get("operation_key") or ""),
+                conversation_id,
+                str(getattr(credit, "request_id", "") or ""),
+            ),
         )
     return released

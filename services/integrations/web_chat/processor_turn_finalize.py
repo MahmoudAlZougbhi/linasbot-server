@@ -99,6 +99,7 @@ def complete_captured_turn(
 
     conversation_id = str((turn_result or {}).get("conversation_id") or "")
     web_mid = web_inbound_message_id(conversation_id, user_text) if conversation_id else ""
+    attempt = int(getattr(runtime.record, "attempt", 1) or 1)
     settle_after_send(
         tenant_id=runtime.tenant_id,
         operation_id=web_mid or operation_key,
@@ -106,6 +107,8 @@ def complete_captured_turn(
         channel="web_chat",
         extra_ids=(
             operation_key,
+            f"web:{visitor_id}:{operation_key}",
+            f"web:{visitor_id}:{operation_key}:a{attempt}",
             str(getattr(runtime.record, "inbound_event_id", "") or ""),
             web_mid,
             conversation_id,

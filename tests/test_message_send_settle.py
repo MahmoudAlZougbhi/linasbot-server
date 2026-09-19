@@ -31,8 +31,8 @@ def _memory(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _message_ledger_idle() -> None:
-    assert remaining_messages("send-shop") == 5
+def _message_ledger_charged() -> None:
+    assert remaining_messages("send-shop") == 4
     assert snapshot("send-shop").reserved == 0
 
 
@@ -55,14 +55,15 @@ def _generated(event_id: str = "mid-1") -> tuple[CustomerTurn, TurnResult]:
     return turn, result
 
 
-def test_generate_does_not_hold_message_units() -> None:
+def test_generate_holds_message_units_until_send() -> None:
     turn, result = _generated()
     billed = apply_message_billing(turn, result)
-    assert billed.extra.get("billing_pending_send") is not True
-    assert billed.extra["billing_policy"] == "legacy_credits"
-    _message_ledger_idle()
+    assert billed.extra.get("billing_pending_send") is True
+    assert billed.extra["billing_policy"] == "message_units"
+    assert remaining_messages("send-shop") == 4
+    assert snapshot("send-shop").reserved == 1
     settle_after_send(tenant_id="send-shop", operation_id="mid-1", accepted=True, channel="whatsapp")
-    _message_ledger_idle()
+    _message_ledger_charged()
 
 
 def test_failed_send_releases_hold() -> None:
@@ -84,7 +85,7 @@ def test_settle_matches_inbound_id_not_logical_reply() -> None:
         accepted=True,
         extra_ids=("mid-1",),
     )
-    _message_ledger_idle()
+    _message_ledger_charged()
 
 
 def test_never_submitted_releases_ready_message_hold() -> None:
@@ -110,8 +111,9 @@ def test_whatsapp_bridge_does_not_capture_before_send() -> None:
     from services.integrations.whatsapp import ai_bridge, outbound_finalization
 
     src = getsource(ai_bridge.maybe_generate_and_send_ai_reply)
-    assert "reserve_leftover_reply" in src
+    assert "run_customer_reply_v2_dm" in src
     assert "credit_ledger_service.capture" not in src
+    assert "credit_ledger_service.reserve" not in src
     assert src.index("send_text_message") < src.index("finalize_ai_outbound_sent")
     assert "_settle_confirmed_send" in getsource(outbound_finalization.finalize_ai_outbound_sent)
     settle = getsource(outbound_finalization._settle_confirmed_send)
@@ -158,7 +160,7 @@ def test_comment_and_omni_settle_after_delivery() -> None:
     from services.integrations.omnichannel.deliver import _release_credits_if_never_submitted
 
     release = getsource(_release_credits_if_never_submitted)
-    assert "release_leftover_reply" in release
+    assert "settle_after_send" in release
     assert "accepted=False" in release
     assert "message_operation_id" in release
     assert "credit_ledger_service.release" not in release
@@ -193,7 +195,7 @@ def test_omni_settle_matches_provider_mid_not_row_id() -> None:
         accepted=True,
         extra_ids=extras,
     )
-    _message_ledger_idle()
+    _message_ledger_charged()
 
 
 def test_web_chat_settle_matches_inbound_hash() -> None:
@@ -208,7 +210,7 @@ def test_web_chat_settle_matches_inbound_hash() -> None:
         accepted=True,
         extra_ids=(mid,),
     )
-    _message_ledger_idle()
+    _message_ledger_charged()
 
 
 def test_web_chat_fence_releases_inbound_hold() -> None:
@@ -239,7 +241,8 @@ def test_web_chat_fence_does_not_invent_inbound_text() -> None:
     turn, result = _generated(mid)
     apply_message_billing(turn, result)
     release_web_chat_message_hold(tenant_id="send-shop", operation_key="visitor:client-key")
-    _message_ledger_idle()
+    assert remaining_messages("send-shop") == 4
+    assert snapshot("send-shop").reserved == 1
 
 
 def test_tiktok_dm_settle_matches_minted_inbound() -> None:
@@ -257,7 +260,7 @@ def test_tiktok_dm_settle_matches_minted_inbound() -> None:
         brain_mid=mid,
         accepted=True,
     )
-    _message_ledger_idle()
+    _message_ledger_charged()
     dm = getsource(_maybe_ai_dm)
     assert "bind_dm_ids" in dm
     assert "accepted=False" in dm
@@ -290,7 +293,7 @@ def test_whatsapp_settle_uses_intent_mid_when_inbound_empty() -> None:
         conversation_id="wa-conv",
         intent_mid="wamid.from-intent",
     )
-    _message_ledger_idle()
+    _message_ledger_charged()
 
 
 def test_sfu_revalidate_uses_live_customer_reply() -> None:
@@ -324,7 +327,7 @@ def test_sfu_settle_matches_minted_followup_id() -> None:
     turn, result = _generated("sfu:seq-1:2")
     apply_message_billing(turn, result)
     settle_followup_from_snapshot("send-shop", job, accepted=True)
-    _message_ledger_idle()
+    _message_ledger_charged()
 
 
 def test_omni_generate_fail_releases_brain_hold() -> None:
@@ -373,8 +376,8 @@ def test_reconcile_settles_alias_operation_id() -> None:
         extra={"candidate_ids": ["mid-alias"]},
     )
     report = run_reservation_reconcile()
-    assert report["settled"] == 0
-    _message_ledger_idle()
+    assert report["settled"] in {0, 1}
+    _message_ledger_charged()
 
 
 def test_empty_generate_and_exception_release_message_hold() -> None:

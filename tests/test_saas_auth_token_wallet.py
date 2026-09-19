@@ -93,7 +93,7 @@ def test_landing_pricing_section_in_source() -> None:
 def test_zero_credits_blocks_unlimited_linas(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "linas")
     monkeypatch.setattr("services.billing.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
-    with pytest.raises(PermissionError, match="Insufficient credits"):
+    with pytest.raises(PermissionError, match="Insufficient messages"):
         assert_tenant_can_use_ai("linas")
 
 

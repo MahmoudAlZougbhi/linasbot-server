@@ -1,12 +1,12 @@
-"""AI pre-flight uses the credit ledger. Token wallet is not a live meter."""
+"""AI pre-flight uses the message ledger. Token wallet is not a live meter."""
 
 from __future__ import annotations
 
 from typing import Any
 
 RECHARGE_REQUIRED_MESSAGE = (
-    "AI replies are paused because this workspace has no credits left. "
-    "Please add credits or upgrade the plan to continue."
+    "AI replies are paused because this workspace has no messages left. "
+    "Please buy messages or upgrade the plan to continue."
 )
 
 
@@ -22,12 +22,12 @@ def resolve_tenant_id(user_data: dict[str, Any] | None = None, explicit: str | N
 
 
 def assert_tenant_can_use_ai(tenant_id: str | None) -> None:
-    """Raise when credit ledger remaining is 0. Token wallet is not a live gate."""
+    """Raise when remaining messages is 0. Token wallet is not a live gate."""
     tid = resolve_tenant_id(explicit=tenant_id)
     from services.billing.membership.generative_gate import generative_ai_blocked
 
     if generative_ai_blocked(tid):
-        raise PermissionError("Insufficient credits")
+        raise PermissionError("Insufficient messages")
 
 
 def debit_ai_usage(

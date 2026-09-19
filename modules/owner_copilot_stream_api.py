@@ -19,6 +19,7 @@ from services.owner_copilot.stream_protocol import encode_sse, encode_sse_done
 class StreamMessageBody(BaseModel):
     content: str = Field(default="", max_length=16000)
     confirm_tool: str | None = None
+    confirm_billing: bool = False
     tool_args: dict[str, Any] | None = None
     choice_id: str | None = None
     choice_set_id: str | None = None
@@ -162,6 +163,7 @@ async def stream_owner_message(
                 conversation_id=conversation_id,
                 user_text=content,
                 confirm_tool=body.confirm_tool,
+                confirm_billing=body.confirm_billing,
                 messages=history,
                 tool_args=body.tool_args,
                 choice_id=body.choice_id,

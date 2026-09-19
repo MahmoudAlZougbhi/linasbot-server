@@ -19,7 +19,7 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_account_summary",
-            "description": "Read setup stage, CM completeness, integrations, plan, leftover credits.",
+            "description": "Read setup stage, CM completeness, integrations, plan, and remaining messages.",
             "parameters": {"type": "object", "properties": {}},
         },
     },
@@ -59,9 +59,8 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "read_usage",
             "description": (
-                "Read leftover credits plus Subscription overlay fields. Quantities "
-                "are leftover credits, never Messages remaining. available_messages is "
-                "live remaining only when message_billing_active is true."
+                "Read remaining messages, included allowance, and extra message packs. "
+                "Quantities are message units, never historical credits."
             ),
             "parameters": {"type": "object", "properties": {}},
         },
@@ -72,7 +71,7 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "read_subscription",
             "description": (
                 "Read subscription/plan entitlements. included_messages is the catalog "
-                "allowance. Do not read leftover credits or included_credits as Messages remaining."
+                "allowance. Remaining is available_messages from the message ledger."
             ),
             "parameters": {"type": "object", "properties": {}},
         },

@@ -70,7 +70,6 @@ export function CurrentPlanHeroCard({
           </Text>
           <Text style={[styles.creditsHint, { color: colors.textMuted }]}>{includedEachMonth}</Text>
         </View>
-        {messageBillingActive ? null : (
         <Pressable
           onPress={onBuyCredits}
           accessibilityRole="button"
@@ -84,7 +83,6 @@ export function CurrentPlanHeroCard({
             {tr('subBuyCredits')}
           </Text>
         </Pressable>
-        )}
       </View>
     </View>
   );

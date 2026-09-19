@@ -14,10 +14,9 @@ export function useBuyCreditsFlow(onPurchased?: () => void) {
   const [purchasing, setPurchasing] = useState(false);
   const setOpen = useCallback(
     (next: boolean) => {
-      if (next && messageBillingActive) return;
       setOpenState(next);
     },
-    [messageBillingActive],
+    [],
   );
 
   const buy = useCallback(

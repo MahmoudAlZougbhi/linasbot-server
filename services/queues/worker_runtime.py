@@ -80,9 +80,15 @@ class WorkerRuntime:
         reservation_id = job.reservation_id or str((job.payload or {}).get("reservation_id") or "")
         if not reservation_id:
             return
-        from services.billing.credit_ledger_service import credit_ledger_service
+        from services.brain.leftover_reserve import release_leftover_reply
+        from services.integrations.web_chat.followup_message_ledger import is_message_reservation
 
-        credit_ledger_service.release(tenant_id=job.tenant_id, reservation_id=reservation_id)
+        if is_message_reservation(reservation_id):
+            from services.brain.billing import settle_after_send
+
+            settle_after_send(tenant_id=job.tenant_id, operation_id=reservation_id, accepted=False)
+            return
+        release_leftover_reply(job.tenant_id, reservation_id)
 
     def _conversation_key(self, job: Any) -> str | None:
         payload = job.payload or {}

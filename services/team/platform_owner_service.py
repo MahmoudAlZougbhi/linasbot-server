@@ -126,6 +126,7 @@ class PlatformOwnerService:
         }
 
     def tenant_detail(self, tenant_id: str) -> dict[str, Any]:
+        from services.billing.credit_ai_gate import remaining_messages
         from services.billing.credit_ledger_service import credit_ledger_service
         from services.billing.membership.catalog_revenue import intended_price_usd
         from services.integrations.integration_capabilities import list_tenant_integration_status
@@ -141,7 +142,8 @@ class PlatformOwnerService:
                 "extra_credits": ent.extra_credits,
                 "features": ent.features,
             },
-            "credit_balance": credit_ledger_service.get_balance(tenant_id),
+            "message_remaining": remaining_messages(tenant_id),
+            "historical_credit_balance": credit_ledger_service.get_balance(tenant_id),
             "integrations": list_tenant_integration_status(tenant_id),
             "estimated_revenue_usd": PLAN_PRICES_USD.get(ent.plan_id, 0.0),
             "intended_message_revenue_usd": intended_price_usd(ent.plan_id),

@@ -144,7 +144,7 @@ async def test_comment_ai_credits_and_success(tt_db, monkeypatch) -> None:
     blocked = await process_tiktok_comment_ai(
         tenant_id="linas", connection_id=connection.id, comment_id="c-credits", item_id="v1"
     )
-    assert blocked["reason"] == "insufficient_credits"
+    assert blocked["reason"] == "insufficient_messages"
 
     content.upsert_comment(
         tenant_id="linas",

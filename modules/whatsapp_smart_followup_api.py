@@ -160,20 +160,15 @@ async def smart_followup_analytics(
 
 @app.post("/api/whatsapp/smart-followup/preview")
 async def smart_followup_preview(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
-    """Safe preview — never sends WhatsApp and does not hold leftover credits or message units."""
+    """Safe preview — never sends WhatsApp and does not consume message units."""
     session = _require_manager(request)
     goal = str(body.get("goal") or "gentle_check_in").strip()
-    from services.billing.membership.message_flags import message_billing_enabled
-
-    billing = message_billing_enabled()
     disclose = {
         **preview_prompt_for_goal(goal),
         "sends_whatsapp": False,
         "uses_credits": False,
         "uses_messages": False,
-        "disclosure": (
-            "Preview never sends a WhatsApp message and does not consume leftover credits or customer message units."
-        ),
+        "disclosure": ("Preview never sends a WhatsApp message and does not consume customer message units."),
     }
     try:
         with whatsapp_session() as db:
@@ -194,20 +189,19 @@ async def smart_followup_preview(request: Request, body: dict[str, Any] = Body(d
                 c for c in repo.list_tenant_connections(session.tenant_id) if c.lifecycle_status == "connected"
             ]
             conn = connections[0]
-            if billing:
-                from services.billing.membership.generative_gate import generative_block_reason
+            from services.billing.membership.generative_gate import generative_block_reason
 
-                reason = generative_block_reason(session.tenant_id)
-                if reason:
-                    return JSONResponse(
-                        status_code=402,
-                        content={
-                            "success": False,
-                            "error": reason,
-                            "message": "Insufficient AI messages for preview",
-                            **disclose,
-                        },
-                    )
+            reason = generative_block_reason(session.tenant_id)
+            if reason:
+                return JSONResponse(
+                    status_code=402,
+                    content={
+                        "success": False,
+                        "error": reason,
+                        "message": "Insufficient AI messages for preview",
+                        **disclose,
+                    },
+                )
     except WhatsAppDatabaseUnavailable:
         return JSONResponse(
             status_code=503,

@@ -505,4 +505,5 @@ def test_sfu_uses_leftover_reserve() -> None:
 
     src = getsource(process_one_followup_job)
     assert "reserve_leftover_reply" in src
-    assert src.index("if message_billing_enabled()") < src.index("reserve_leftover_reply")
+    assert "remember_leftover_hold" in src
+    assert "credit_ledger_service.reserve" not in src

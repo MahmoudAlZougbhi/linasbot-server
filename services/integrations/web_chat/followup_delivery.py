@@ -183,7 +183,12 @@ def _finalize_followup_billing(
 
         payload = dict(record.result or {})
         payload.setdefault("idempotency_key", idempotency_key)
-        settle_followup_from_snapshot(tenant_id, payload, accepted=True)
+        try:
+            settle_followup_from_snapshot(tenant_id, payload, accepted=True)
+        except Exception:
+            advance_operation(runtime, OperationState.BILLING_PENDING, result=record.result)
+            abandon_operation_lease(runtime)
+            return False, True
         try_advance_operation(
             runtime,
             OperationState.DURABLE_VISIBLE,

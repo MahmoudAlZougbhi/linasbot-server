@@ -243,7 +243,7 @@ export default function OwnerCosts() {
             }}
             className="rounded border border-slate-600 px-3 py-2 text-sm"
           >
-            Credit inventory
+            Historical credit inventory
           </button>
         </div>
         {dryRun ? (

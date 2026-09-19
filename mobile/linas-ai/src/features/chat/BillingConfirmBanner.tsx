@@ -4,12 +4,13 @@ import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 
 type Props = {
-  showUpgrade: boolean;
-  onBuyCredits: () => void;
-  onUpgrade: () => void;
+  units: number;
+  message: string;
+  onConfirm: () => void;
+  onDismiss: () => void;
 };
 
-export function CreditsPausedBanner({ showUpgrade, onBuyCredits, onUpgrade }: Props) {
+export function BillingConfirmBanner({ units, message, onConfirm, onDismiss }: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
   return (
@@ -17,20 +18,20 @@ export function CreditsPausedBanner({ showUpgrade, onBuyCredits, onUpgrade }: Pr
       style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
       accessibilityRole="alert"
     >
-      <Text style={[styles.title, { color: colors.text }]}>{tr('chatCreditsPausedTitle')}</Text>
-      <Text style={[styles.body, { color: colors.textMuted }]}>{tr('chatCreditsPausedBody')}</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{tr('chatBillingConfirmTitle')}</Text>
+      <Text style={[styles.body, { color: colors.textMuted }]}>
+        {message || tr('chatBillingConfirmBody').replace('{n}', String(units))}
+      </Text>
       <View style={styles.row}>
-        {showUpgrade ? (
-          <Pressable onPress={onUpgrade} style={styles.outline} accessibilityRole="button">
-            <Text style={[styles.outlineText, { color: colors.accent }]}>{tr('subUpgradePlan')}</Text>
-          </Pressable>
-        ) : null}
+        <Pressable onPress={onDismiss} style={styles.outline} accessibilityRole="button">
+          <Text style={[styles.outlineText, { color: colors.accent }]}>{tr('subCancel')}</Text>
+        </Pressable>
         <Pressable
-          onPress={onBuyCredits}
+          onPress={onConfirm}
           style={[styles.fill, { backgroundColor: colors.accent }]}
           accessibilityRole="button"
         >
-          <Text style={styles.fillText}>{tr('chatAddLeftoverCredits')}</Text>
+          <Text style={styles.fillText}>{tr('chatBillingConfirmCta')}</Text>
         </Pressable>
       </View>
     </View>

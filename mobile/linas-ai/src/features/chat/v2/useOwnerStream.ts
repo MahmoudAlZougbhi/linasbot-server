@@ -31,9 +31,17 @@ type StreamHandlers = {
   onDone?: (payload: Record<string, unknown>) => void;
   onCancelled?: () => void;
   onCreditsPaused?: (payload: Record<string, unknown>) => void;
+  onBillingConfirm?: (payload: Record<string, unknown>) => void;
 };
 
-type StreamResult = 'done' | 'error' | 'network_error' | 'cancelled' | 'auth_error' | 'credits_paused';
+type StreamResult =
+  | 'done'
+  | 'error'
+  | 'network_error'
+  | 'cancelled'
+  | 'auth_error'
+  | 'credits_paused'
+  | 'billing_confirm';
 
 function dispatchEvent(raw: string, handlers: StreamHandlers) {
   let ev: Record<string, unknown>;
@@ -57,6 +65,7 @@ function dispatchEvent(raw: string, handlers: StreamHandlers) {
     handlers.onTitleUpdated?.(String(ev.title || ''));
   }   else if (type === 'error') handlers.onError?.(String(ev.message || 'error'));
   else if (type === 'credits_paused') handlers.onCreditsPaused?.(ev);
+  else if (type === 'billing_confirm') handlers.onBillingConfirm?.(ev);
   else if (type === 'cancelled') handlers.onCancelled?.();
   else if (type === 'done') handlers.onDone?.(ev);
 }
@@ -83,6 +92,7 @@ function drainSseBuffer(
       if (evType === 'error') nextTerminal = 'error';
       else if (evType === 'cancelled') nextTerminal = 'cancelled';
       else if (evType === 'credits_paused') nextTerminal = 'credits_paused';
+      else if (evType === 'billing_confirm') nextTerminal = 'billing_confirm';
       else if (evType === 'done') nextTerminal = 'done';
     } catch {
       /* ignore parse for terminal tracking */
@@ -120,6 +130,7 @@ export function useOwnerStream() {
       body: {
         content?: string;
         confirm_tool?: string | null;
+        confirm_billing?: boolean;
         tool_args?: Record<string, unknown>;
         revise_proposal_id?: string | null;
         choice_id?: string;
@@ -129,7 +140,7 @@ export function useOwnerStream() {
         reply_language?: 'en' | 'ar' | 'fr';
       },
       handlers: StreamHandlers,
-    ): Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'credits_paused'> => {
+    ): Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'credits_paused' | 'billing_confirm'> => {
       abortActive(false);
       return (async () => {
         const runOnce = (access: string): Promise<StreamResult> =>

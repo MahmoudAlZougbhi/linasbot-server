@@ -59,14 +59,13 @@ def test_generative_gate_uses_messages_only_when_billing_on(monkeypatch: pytest.
 
     monkeypatch.setattr("services.billing.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "false")
-    assert generative_block_reason("shop") == "insufficient_credits"
+    assert generative_block_reason("shop") == "insufficient_messages"
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
-    grant_lot(tenant_id="shop", lot_id="inc", kind="included", period_id=current_period_id(), amount=1)
-    assert generative_block_reason("shop") == "insufficient_credits"
+    assert generative_block_reason("shop") == "insufficient_messages"
 
 
 def test_flags_default_off() -> None:
-    assert message_billing_enabled() is False
+    assert message_billing_enabled() is True
     assert message_billing_cutover() is False
 
 
@@ -235,17 +234,16 @@ def test_public_plans_expose_messages_without_cutover() -> None:
     from modules.plans_api import public_plans
 
     body = asyncio.run(public_plans())
-    assert body["consumption_unit"] == "credits"
-    assert body["topup_unit"] == "credits"
+    assert body["consumption_unit"] == "messages"
+    assert body["topup_unit"] == "messages"
     assert body["checkout_ready"] is True
     assert body["topup_packs"]
-    assert all(pack.get("unit") == "credits" and pack.get("sale_ready") is True for pack in body["topup_packs"])
-    assert "purchased_messages" not in body["topup_packs"][0]
+    assert all(pack.get("unit") == "messages" and pack.get("sale_ready") is True for pack in body["topup_packs"])
     assert body["billing_period"] == "monthly"
     lite = next(plan for plan in body["plans"] if plan["plan_id"] == "lite")
-    assert lite["included_messages"] is None
-    assert lite["intended_price_usd"] == 9.99
-    assert lite["price_usd"] == 9.99
+    assert lite["included_messages"] == 550
+    assert lite["intended_price_usd"] == 10.0
+    assert lite["price_usd"] == 10.0
     assert lite["included_credits"] == 7000
     assert lite["live_store_price_usd"] == 9.99
     assert "credit_unit" not in body
@@ -256,8 +254,8 @@ def test_public_plans_omit_message_topups_until_sale_ready(monkeypatch: pytest.M
 
     monkeypatch.setenv("MESSAGE_BILLING_CUTOVER", "true")
     body = asyncio.run(public_plans())
-    assert body["consumption_unit"] == "credits"
-    assert body["topup_unit"] == "credits"
+    assert body["consumption_unit"] == "messages"
+    assert body["topup_unit"] == "messages"
     assert body["checkout_ready"] is True
     assert body["topup_packs"]
 
@@ -273,9 +271,9 @@ def test_message_gate_only_when_flag_on(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     decision = evaluate_gates(turn)
     assert decision.allow is False
-    assert decision.reason == "insufficient_credits"
+    assert decision.reason == "insufficient_messages"
     grant_lot(tenant_id="t-gate", lot_id="inc", kind="included", period_id=current_period_id(), amount=1)
-    assert evaluate_gates(turn).allow is False
+    assert evaluate_gates(turn).allow is True
 
 
 def test_daily_edit_commit_is_idempotent() -> None:
@@ -288,7 +286,7 @@ def test_daily_edit_commit_is_idempotent() -> None:
 
 def test_failed_generate_releases_reservation(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.billing.membership.pending_settlement import reset_pending_settlements_for_tests
-    from services.brain.billing import apply_message_billing, reserve_generative
+    from services.brain.billing import apply_message_billing
     from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
     from services.brain.contracts.turn import CustomerTurn
 
@@ -296,7 +294,6 @@ def test_failed_generate_releases_reservation(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     grant_lot(tenant_id="t-bill", lot_id="inc", kind="included", period_id=current_period_id(), amount=2)
     turn = CustomerTurn(tenant_id="t-bill", conversation_id="c1", event_ids=["evt-1"])
-    assert reserve_generative(turn) is None
     assert remaining_messages("t-bill") == 2
     result = apply_message_billing(
         turn,
@@ -306,37 +303,26 @@ def test_failed_generate_releases_reservation(monkeypatch: pytest.MonkeyPatch) -
     assert remaining_messages("t-bill") == 2
 
 
-def test_message_surface_hides_credit_quantities(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_message_surface_shows_message_quantities(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.dashboard.message_surface import (
         overlay_message_fields,
         workspace_message_balance,
     )
 
-    monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "false")
     fields = overlay_message_fields("t1", "lite")
-    assert fields["message_billing_active"] is False
-    assert fields["wallet_unit"] == "credits"
-    assert "not Messages remaining" in fields["speak_as"]
-    assert fields["included_messages"] is None
-    assert fields["available_messages"] is None
-    assert fields["usage_progress_ratio"] is None
-    remaining, included, known = workspace_message_balance(
-        {"availability": "ok", "available_credits": 7000, "included_credits": 7000}
+    assert fields["message_billing_active"] is True
+    assert fields["wallet_unit"] == "messages"
+    assert fields["included_messages"] == 550
+    remaining, used, known = workspace_message_balance(
+        {"availability": "ok", "available_messages": 7000, "used_messages": 0}
     )
-    assert remaining is None
-    assert included == 0
-    assert known is False
-    depleted, _, depleted_known = workspace_message_balance(
-        {"availability": "ok", "available_credits": 0, "included_credits": 7000}
-    )
-    assert depleted is None
-    assert depleted_known is False
-    monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
+    assert remaining == 7000
+    assert used == 0
+    assert known is True
     grant_lot(tenant_id="surf-lite", lot_id="lite-now", kind="included", period_id=current_period_id(), amount=400)
     live = overlay_message_fields("surf-lite", "lite")
-    assert live["message_billing_active"] is False
-    assert live["included_messages"] is None
-    assert live["available_messages"] is None
+    assert live["message_billing_active"] is True
+    assert live["available_messages"] >= 400
 
 
 def test_cost_dashboard_filters_and_message_totals() -> None:
@@ -369,9 +355,9 @@ def test_cost_dashboard_filters_and_message_totals() -> None:
     assert dash["messages"]["allocated"] == 10
     assert dash["messages"]["used"] == 1
     assert dash["messages"]["remaining"] == 9
-    assert dash["messages"]["message_billing_active"] is False
+    assert dash["messages"]["message_billing_active"] is True
     glob = global_dashboard()
-    assert glob["messages"]["message_billing_active"] is False
+    assert glob["messages"]["message_billing_active"] is True
     assert glob["by_feature"]["faq"] == "0.01"
     assert glob["by_feature"]["customer_chat"] == "0.02"
     assert glob["by_provider"]["openai"] == "0.03"
@@ -436,7 +422,7 @@ def test_set_plan_grants_included_when_billing_on(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     entitlements_store.set_plan(tenant_id="grant-tenant", plan_id="lite", status="active", source="admin")
-    assert remaining_messages("grant-tenant") == 0
+    assert remaining_messages("grant-tenant") == 550
 
 
 def test_conversion_dry_run_lists_credits_but_stays_blocked() -> None:

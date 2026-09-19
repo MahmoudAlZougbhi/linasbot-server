@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from services.billing.membership.message_flags import message_billing_enabled
 from services.billing.membership.message_ledger import InsufficientMessages, reserve, settle
-from services.billing.membership.message_policy import ResponseClass, classify_turn, message_units_for
+from services.billing.membership.message_policy import ResponseClass, classify_turn
 from services.billing.membership.period_grants import ensure_included_grant
 from services.brain.contracts.reply import TurnResult
 from services.brain.contracts.turn import CustomerTurn
@@ -131,13 +130,19 @@ def _release_message_hold(tenant_id: str, op: str, *, reason: str) -> None:
 def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
     response_class = classify_result(turn, result)
     op = operation_id_for_turn(turn)
+    from services.billing.membership.economy_policy import action_units
+
     extra = dict(result.extra)
     extra["response_class"] = response_class
-    extra["message_units"] = message_units_for(response_class)
+    extra["message_units"] = action_units(
+        response_class=response_class,
+        invocation_kind=turn.invocation_kind,
+        comment_mode=str(extra.get("comment_mode") or extra.get("rule_mode") or ""),
+    )
     extra["operation_id"] = op
-    extra["legacy_comment_uncharged"] = turn.invocation_kind == "comment" and not message_billing_enabled()
+    extra["legacy_comment_uncharged"] = False
     pinned = _pinned_policy(turn, op)
-    extra["billing_policy"] = pinned or ("message_units" if message_billing_enabled() else "legacy_credits")
+    extra["billing_policy"] = pinned or "message_units"
     if result.ai_called:
         _record_pending_llm(turn, op)
     from services.brain.stage_timeline import stamp
@@ -154,13 +159,20 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
     )
     if owner_preview_turn(turn) or lab_turn(turn):
         return result.model_copy(update={"extra": extra})
-    if extra["billing_policy"] != "legacy_credits":
+    if pinned:
+        extra["billing_pending_send"] = True
+    elif extra["billing_policy"] != "legacy_credits":
         ensure_included_grant(turn.tenant_id)
         accepted = accepted_for_delivery(result) and extra["message_units"] > 0
         try:
             try:
                 if accepted:
-                    reserve(tenant_id=turn.tenant_id, operation_id=op, response_class=response_class)
+                    reserve(
+                        tenant_id=turn.tenant_id,
+                        operation_id=op,
+                        response_class=response_class,
+                        units=int(extra["message_units"]),
+                    )
                     _record_message_hold(turn, op)
                     extra["billing_pending_send"] = True
                 else:
@@ -196,12 +208,7 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
 
 def reserve_generative(turn: CustomerTurn, *, mixed: bool = False) -> TurnResult | None:
     op = operation_id_for_turn(turn)
-    if (
-        not message_billing_enabled()
-        or owner_preview_turn(turn)
-        or lab_turn(turn)
-        or _pinned_policy(turn, op) == "legacy_credits"
-    ):
+    if owner_preview_turn(turn) or lab_turn(turn) or _pinned_policy(turn, op):
         return None
     ensure_included_grant(turn.tenant_id)
     if turn.invocation_kind == "followup":
@@ -257,21 +264,6 @@ def settle_after_send(
 ) -> None:
     candidates = _candidate_ops(operation_id, extra_ids)
     if not tenant_id or not candidates:
-        return
-    if not message_billing_enabled():
-        if accepted:
-            from services.brain.outbox import acknowledge_sent
-
-            acknowledge_sent(
-                tenant_id=tenant_id,
-                operation_id=candidates[0],
-                provider_message_id=provider_message_id,
-                extra_ids=candidates[1:],
-            )
-        else:
-            from services.brain.outbox import acknowledge_failed
-
-            acknowledge_failed(tenant_id=tenant_id, operation_id=candidates[0], extra_ids=candidates[1:])
         return
     settled_op = ""
     try:
@@ -366,6 +358,4 @@ def settle_followup_send(
 
 
 def release_turn_reservation(turn: CustomerTurn) -> None:
-    if not message_billing_enabled():
-        return
     _release_message_hold(turn.tenant_id, operation_id_for_turn(turn), reason="generate_failed")

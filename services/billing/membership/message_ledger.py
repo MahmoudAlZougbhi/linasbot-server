@@ -1,6 +1,6 @@
 """In-process message entitlement ledger. SQL tables are the durable target.
 
-Live Customer AI keeps the credit gate until MESSAGE_BILLING_ENABLED.
+Live Customer AI, Copilot, and extra packs meter message units.
 Quantities are non-negative integer message units. Money is not stored here.
 """
 
@@ -88,11 +88,9 @@ def _res_key(tenant_id: str, operation_id: str) -> str:
 
 
 def _pg_session() -> AbstractContextManager[Any]:
-    from services.billing.membership.message_flags import message_billing_enabled
     from services.billing.membership.pg_store import optional_message_session, postgres_requested
 
-    require = message_billing_enabled() and postgres_requested()
-    return optional_message_session(require=require)
+    return optional_message_session(require=postgres_requested())
 
 
 def grant_lot(
@@ -171,6 +169,9 @@ def snapshot(tenant_id: str) -> LedgerSnapshot:
 
 
 def remaining_messages(tenant_id: str) -> int:
+    from services.billing.membership.period_grants import ensure_included_grant
+
+    ensure_included_grant(tenant_id)
     return snapshot(tenant_id).remaining
 
 
@@ -232,8 +233,9 @@ def reserve(
     tenant_id: str,
     operation_id: str,
     response_class: ResponseClass,
+    units: int | None = None,
 ) -> MessageReservation:
-    units = message_units_for(response_class)
+    charged = message_units_for(response_class) if units is None else max(0, int(units))
     tid = tenant_id.strip()
     key = _res_key(tid, operation_id)
     created = _now()
@@ -245,7 +247,13 @@ def reserve(
             from services.billing.membership.message_ledger_pg import pg_reserve
 
             try:
-                return pg_reserve(session, tenant_id=tid, operation_id=operation_id, response_class=response_class)
+                return pg_reserve(
+                    session,
+                    tenant_id=tid,
+                    operation_id=operation_id,
+                    response_class=response_class,
+                    units=charged,
+                )
             except InsufficientMessages:
                 pass
     with _LOCK:
@@ -254,7 +262,7 @@ def reserve(
             if existing.response_class and existing.response_class != response_class:
                 raise ReservationConflict(f"operation {operation_id} already classified")
             return existing
-        if units == 0:
+        if charged == 0:
             reservation = MessageReservation(
                 reservation_id=key,
                 tenant_id=tid,
@@ -268,14 +276,14 @@ def reserve(
             return reservation
         held = sum(item.units for item in _RESERVATIONS.values() if item.tenant_id == tid and item.status == "reserved")
         available = sum(_live_remaining(lot) for lot in _LOTS.get(tid, [])) - held
-        if available < units:
+        if available < charged:
             raise InsufficientMessages(tid, max(0, available))
         lot = _pick_lot(_LOTS.get(tid, []))
         reservation = MessageReservation(
             reservation_id=key,
             tenant_id=tid,
             operation_id=operation_id,
-            units=units,
+            units=charged,
             status="reserved",
             lot_id=lot.lot_id if lot else "",
             period_id=lot.period_id if lot else "",

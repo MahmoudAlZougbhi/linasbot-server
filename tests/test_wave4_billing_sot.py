@@ -65,13 +65,11 @@ def test_entitlements_public_exposes_subscription_keys(tmp_path, monkeypatch: py
     pub = get_tenant_entitlement_public("sot-lite")
     for key in ENTITLEMENT_KEYS:
         assert key in pub, key
-    assert pub["message_billing_active"] is False
-    assert pub["included_messages"] is None
-    assert pub["available_messages"] is None
-    assert pub["included_remaining"] is None
-    assert pub["purchased_messages"] is None
-    assert pub["wallet_unit"] == "credits"
-    assert "not Messages remaining" in pub["speak_as"]
+    assert pub["message_billing_active"] is True
+    assert pub["included_messages"] == 550
+    assert pub["available_messages"] == 550
+    assert pub["wallet_unit"] == "messages"
+    assert "messages remaining" in pub["speak_as"].lower()
 
 
 def test_overlay_hides_remaining_until_message_billing_on(
@@ -83,6 +81,6 @@ def test_overlay_hides_remaining_until_message_billing_on(
     fields = overlay_message_fields("sot-off", "lite")
     for key in USAGE_MESSAGE_KEYS:
         assert key in fields, key
-    assert fields["message_billing_active"] is False
-    assert fields["available_messages"] is None
-    assert fields["wallet_unit"] == "credits"
+    assert fields["message_billing_active"] is True
+    assert fields["available_messages"] is not None
+    assert fields["wallet_unit"] == "messages"
