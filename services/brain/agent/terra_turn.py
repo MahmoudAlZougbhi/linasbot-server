@@ -118,7 +118,8 @@ async def run_terra_turn(
         )
     identity = load_identity_bundle(turn.tenant_id)
     skip = skip_tools_for_turn(turn, extra)
-    snapshot = extra.get("request_state") if isinstance(extra.get("request_state"), dict) else {}
+    raw_state = extra.get("request_state")
+    snapshot: dict[str, Any] = raw_state if isinstance(raw_state, dict) else {}
     greet = bool(greeting_turn or extra.get("identity_ok"))
     messages = build_terra_messages(
         turn=turn,

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from services.brain.agent.terra_tools import TOOL_USE_RULES
 from services.brain.compose.blocks import compose_evidence_context, compose_user_prompt, system_prompt
 from services.brain.contracts.evidence import EvidenceBundle
@@ -83,7 +85,8 @@ def build_terra_messages(
     policy_notes = collect_policy_notes(turn, plan, message=message)
     if greeting_turn:
         policy_notes.append("Greeting-only turn: do not invent hours, prices, phones, or bookings.")
-    nag = extra.get("request_state") if isinstance(extra.get("request_state"), dict) else {}
+    raw_state = extra.get("request_state")
+    nag: dict[str, Any] = raw_state if isinstance(raw_state, dict) else {}
     if nag.get("nag_policy"):
         policy_notes.append(str(nag.get("nag_policy")))
     context = compose_evidence_context(
