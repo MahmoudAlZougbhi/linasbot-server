@@ -219,6 +219,14 @@ async def send_comment_destinations(
     public_complete = (not public_tried) or public_ok or bool(public_result.get("skipped"))
     dm_complete = (not dm_tried) or dm_ok or bool(dm_result.get("skipped"))
     reply_id = str(public_result.get("reply_id") or dm_result.get("reply_id") or "")
+    if public_ok and reply_id:
+        from services.brain.comments.page_replies import remember_page_comment_reply
+
+        remember_page_comment_reply(
+            tenant_id=str(getattr(binding, "tenant_id", "") or ""),
+            channel=str(getattr(binding, "channel", "") or ""),
+            reply_id=reply_id,
+        )
     from services.billing.membership.economy_policy import comment_outcome_units
 
     units = comment_outcome_units(

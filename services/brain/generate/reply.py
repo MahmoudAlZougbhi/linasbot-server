@@ -126,6 +126,10 @@ async def generate_grounded_reply(
             f"AI comment mode={comment_mode}. Write customer-facing wording from Comment Rules and Style. "
             "Do not use canned system copy such as 'Sent you a DM.'"
         )
+    for note in list((turn.extra or {}).get("policy_notes") or []):
+        text = str(note or "").strip()
+        if text and text not in policy_notes:
+            policy_notes.append(text[:1200])
     from services.brain.greeting_policy import evaluate_greeting
 
     if turn.invocation_kind not in {"followup", "comment"}:

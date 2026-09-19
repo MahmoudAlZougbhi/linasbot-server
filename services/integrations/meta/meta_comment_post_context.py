@@ -8,6 +8,16 @@ from typing import Any
 import httpx
 
 from services.integrations.meta.meta_app_registry import MetaAssetBinding
+from services.integrations.meta.meta_comment_post_context_fb_video import (
+    FB_COMMENT_FIELDS,
+    FB_POST_FIELDS,
+    FB_VIDEO_OBJECT_FIELDS,
+    facebook_cover_urls,
+    facebook_media_type_label,
+    facebook_playable_video_url,
+    facebook_video_target_id,
+    is_site_permalink,
+)
 from services.integrations.meta.meta_graph_routing import graph_api_url
 
 _CAPTION_TTL_SECONDS = 600.0
@@ -39,11 +49,6 @@ def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _is_site_permalink(url: str) -> bool:
-    lowered = (url or "").strip().lower()
-    return any(token in lowered for token in ("instagram.com/", "facebook.com/", "fb.com/", "fb.watch"))
-
-
 def _is_video_type(media_type: str) -> bool:
     label = (media_type or "").strip().upper()
     return label in {"VIDEO", "REEL", "STORY"} or "VIDEO" in label or "REEL" in label
@@ -54,28 +59,48 @@ def _caption_from_payload(payload: dict[str, Any]) -> str:
 
 
 def _media_type_from_payload(payload: dict[str, Any]) -> str:
-    return str(payload.get("media_type") or payload.get("type") or "").strip()
+    return facebook_media_type_label(payload) or str(payload.get("media_type") or payload.get("type") or "").strip()
 
 
 def _image_urls_from_payload(payload: dict[str, Any]) -> list[str]:
     urls: list[str] = []
     keys = ("thumbnail_url", "full_picture")
     media_url = str(payload.get("media_url") or "").strip()
-    if media_url and not _is_video_type(_media_type_from_payload(payload)) and not _is_site_permalink(media_url):
+    if media_url and not _is_video_type(_media_type_from_payload(payload)) and not is_site_permalink(media_url):
         urls.append(media_url)
     for key in keys:
         value = str(payload.get(key) or "").strip()
-        if value and value not in urls and not _is_site_permalink(value):
+        if value and value not in urls and not is_site_permalink(value):
             urls.append(value)
+    for url in facebook_cover_urls(payload):
+        if url not in urls:
+            urls.append(url)
     return urls
 
 
 def _video_url_from_payload(payload: dict[str, Any]) -> str:
+    found = facebook_playable_video_url(payload)
+    if found:
+        return found
     if not _is_video_type(_media_type_from_payload(payload)):
         return ""
     media_url = str(payload.get("media_url") or "").strip()
-    if media_url and not _is_site_permalink(media_url):
+    if media_url and not is_site_permalink(media_url):
         return media_url
+    return ""
+
+
+def _from_user_id(payload: dict[str, Any]) -> str:
+    from_raw = payload.get("from")
+    if isinstance(from_raw, dict):
+        return str(from_raw.get("id") or "").strip()
+    return ""
+
+
+def _parent_from_id(payload: dict[str, Any]) -> str:
+    parent = payload.get("parent")
+    if isinstance(parent, dict):
+        return _from_user_id(parent)
     return ""
 
 
@@ -125,9 +150,9 @@ async def _fetch_comment_graph(
     graph_api_version: str,
 ) -> dict[str, Any] | None:
     if binding.channel == "instagram":
-        fields = "media{id,caption,media_type,media_url,thumbnail_url},parent_id,text,id"
+        fields = "media{id,caption,media_type,media_url,thumbnail_url},parent_id,text,id,from"
     else:
-        fields = "post{id,message,story,full_picture},parent{id,message},message,id"
+        fields = FB_COMMENT_FIELDS
     return await _graph_get(
         client,
         graph_api_url(binding, graph_api_version=graph_api_version, path=comment_id),
@@ -148,9 +173,7 @@ async def _fetch_post_context(
     cached = _cache_get(cache_key)
     if cached is not None:
         return cached
-    fields = (
-        "caption,media_type,media_url,thumbnail_url" if binding.channel == "instagram" else "message,story,full_picture"
-    )
+    fields = "caption,media_type,media_url,thumbnail_url" if binding.channel == "instagram" else FB_POST_FIELDS
     payload = await _graph_get(
         client,
         graph_api_url(binding, graph_api_version=graph_api_version, path=post_id),
@@ -158,11 +181,28 @@ async def _fetch_post_context(
         params={"fields": fields},
     )
     body = payload or {}
+    image_urls = list(_image_urls_from_payload(body))
+    video_url = _video_url_from_payload(body)
+    media_type = _media_type_from_payload(body)
+    if binding.channel != "instagram" and _is_video_type(media_type) and not video_url:
+        video_id = facebook_video_target_id(body)
+        if video_id and video_id != post_id:
+            extra = await _graph_get(
+                client,
+                graph_api_url(binding, graph_api_version=graph_api_version, path=video_id),
+                token=token,
+                params={"fields": FB_VIDEO_OBJECT_FIELDS},
+            )
+            if extra:
+                video_url = _video_url_from_payload(extra)
+                for url in _image_urls_from_payload(extra):
+                    if url not in image_urls:
+                        image_urls.append(url)
     out = {
         "caption": _caption_from_payload(body),
-        "media_type": _media_type_from_payload(body),
-        "image_urls": _image_urls_from_payload(body),
-        "video_url": _video_url_from_payload(body),
+        "media_type": media_type,
+        "image_urls": image_urls,
+        "video_url": video_url,
     }
     _cache_put(cache_key, out)
     return out
@@ -185,6 +225,7 @@ async def enrich_comment_event_post(
     caption = str(out.get("caption") or out.get("post_caption") or "").strip()
     parent_comment = str(out.get("parent_comment") or out.get("parent_text") or "").strip()
     parent_id = str(out.get("parent_id") or "").strip()
+    parent_from_id = str(out.get("parent_from_id") or "").strip()
     media_type = str(out.get("media_type") or "").strip()
     image_urls = [str(item).strip() for item in (out.get("image_urls") or []) if str(item).strip()]
     video_url = str(out.get("video_url") or "").strip()
@@ -199,9 +240,8 @@ async def enrich_comment_event_post(
     owns_client = client is None
     graph = client or httpx.AsyncClient(timeout=15.0)
     try:
-        need_comment = bool(comment_id) and (
-            (not post_id) or (parent_id and parent_id != post_id and not parent_comment)
-        )
+        nested = bool(parent_id) and parent_id != post_id
+        need_comment = bool(comment_id) and ((not post_id) or nested)
         comment_payload = None
         if need_comment:
             comment_payload = await _fetch_comment_graph(
@@ -227,6 +267,21 @@ async def enrich_comment_event_post(
             video_url = video_url or _video_url_from_payload(media) or _video_url_from_payload(post_obj)
             if not parent_comment:
                 parent_comment = _parent_text_from_payload(comment_payload)
+            parent_from_id = parent_from_id or _parent_from_id(comment_payload)
+            graph_parent = str(comment_payload.get("parent_id") or "").strip()
+            if graph_parent:
+                parent_id = parent_id or graph_parent
+        if binding.channel == "instagram" and nested and not parent_from_id and parent_id:
+            parent_payload = await _graph_get(
+                graph,
+                graph_api_url(binding, graph_api_version=graph_api_version, path=parent_id),
+                token=token,
+                params={"fields": "id,from,message,text,username"},
+            )
+            if parent_payload:
+                parent_from_id = parent_from_id or _from_user_id(parent_payload)
+                if not parent_comment:
+                    parent_comment = str(parent_payload.get("message") or parent_payload.get("text") or "").strip()
         if post_id and (
             not caption or not media_type or not image_urls or (_is_video_type(media_type) and not video_url)
         ):
@@ -262,4 +317,8 @@ async def enrich_comment_event_post(
         out["video_url"] = video_url
     if parent_comment:
         out["parent_comment"] = parent_comment
+    if parent_id:
+        out["parent_id"] = parent_id
+    if parent_from_id:
+        out["parent_from_id"] = parent_from_id
     return out

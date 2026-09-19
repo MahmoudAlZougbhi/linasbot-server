@@ -82,6 +82,11 @@ async def test_enrich_loads_instagram_media_and_caption() -> None:
                     "parent_id": "igc1",
                 },
             )
+        if path.endswith("/igc1"):
+            return httpx.Response(
+                200,
+                json={"id": "igc1", "text": "How much?", "from": {"id": "user-8", "username": "customer"}},
+            )
         raise AssertionError(path)
 
     event = {

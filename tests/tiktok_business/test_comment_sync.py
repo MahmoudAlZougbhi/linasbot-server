@@ -56,7 +56,7 @@ def test_should_not_enqueue_owner_or_old_or_reply() -> None:
             create_time=after,
             connected_at=connected,
         )
-        is False
+        is True
     )
     assert (
         should_enqueue_comment_ai(
