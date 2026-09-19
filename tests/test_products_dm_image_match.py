@@ -160,3 +160,4 @@ async def test_image_match_evidence_still_calls_terra(monkeypatch: pytest.Monkey
     assert called["terra"] is True
     assert out.ai_called is True
     assert out.envelope.messages[0].text == "terra-authored"
+    assert not (out.extra or {}).get("resource_delivery")

@@ -33,13 +33,13 @@ async def send_pending_product_media(
         sent: list[dict[str, Any]] = []
         target = capture_to or sender_id
         for item in items:
-            media_id = str(item.get("media_id") or "")
-            await capture_send(
-                target,
-                None,
-                f"product-media:{media_id}",
-                None,
-            )
+            kind = str(item.get("kind") or item.get("resource_type") or "image")
+            media_id = str(item.get("media_id") or item.get("resource_ref") or "")
+            url = str(item.get("external_url") or "")
+            if kind == "link" and url:
+                await capture_send(target, url, None, None)
+            else:
+                await capture_send(target, None, f"product-media:{media_id}", None)
             sent.append({**item, "delivery_result": "simulated"})
         user_data["_pending_product_media"] = None
         return {
@@ -58,7 +58,16 @@ async def send_pending_product_media(
 
         last: dict[str, Any] = {"success": False, "error": "no_items"}
         for item in items:
-            media_id = str(item.get("media_id") or "").strip()
+            kind = str(item.get("kind") or item.get("resource_type") or "image")
+            if kind == "link":
+                url = str(item.get("external_url") or "").strip()
+                if not url:
+                    return {"success": False, "error": "link_url_missing"}
+                last = await adapter.send_text_message(sender_id, url)
+                if last.get("success") is not True:
+                    return last
+                continue
+            media_id = str(item.get("media_id") or item.get("resource_ref") or "").strip()
             product_id = str(item.get("product_id") or "").strip()
             if not media_id or not tenant_id:
                 return {"success": False, "error": "missing_media_identity"}

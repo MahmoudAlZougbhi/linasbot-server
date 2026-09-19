@@ -81,9 +81,11 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
         media_delivery = cm_metadata.get("media_delivery") or {}
         if isinstance(media_delivery, dict) and media_delivery.get("ok") and media_delivery.get("items"):
             user_data["_pending_product_media"] = media_delivery
+        from services.brain.tools.resource_delivery import queue_channel_delivery
+
         resource_delivery = cm_metadata.get("resource_delivery") or {}
         if isinstance(resource_delivery, dict) and resource_delivery.get("ok") and resource_delivery.get("items"):
-            user_data["_pending_setup_resources"] = resource_delivery
+            queue_channel_delivery(user_data, resource_delivery)
         cm_steps = [
             {
                 "step": 1,
@@ -119,9 +121,9 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
                 "event_type": "response_sent",
             },
         ]
-        from services.brain.tools.resource_delivery import has_queued_setup_resources
+        from services.brain.tools.resource_delivery import has_queued_channel_resources
 
-        if not str(cm_reply or "").strip() and not has_queued_setup_resources(user_data):
+        if not str(cm_reply or "").strip() and not has_queued_channel_resources(user_data):
             print(
                 f"[_process_and_respond] INFO: Brain produced no outbound text "
                 f"reason={cm_metadata.get('reason')} — skip empty channel send"

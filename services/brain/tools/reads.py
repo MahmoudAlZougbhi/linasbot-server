@@ -148,16 +148,9 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
 
         item = load_product_evidence(tenant_id, item_id)
         if item is not None:
-            return {
-                "ok": True,
-                "data": {
-                    "id": item.source_id,
-                    "title": item.title,
-                    "text": item.text,
-                    "availability": (item.extra or {}).get("availability"),
-                    "listed_price": (item.extra or {}).get("listed_price"),
-                },
-            }
+            from services.brain.retrieve.products_hydrate import product_tool_payload
+
+            return {"ok": True, "data": product_tool_payload(item)}
         if query:
             hits = _card_search(tenant_id, query, {"products"}, limit=1)
             return {"ok": bool(hits), "data": hits[0] if hits else None, "error": None if hits else "not_found"}
@@ -167,10 +160,9 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
         from services.brain.retrieve.orchestrate import RetrieveContext, retrieve_published
 
         bundle = await retrieve_published(RetrieveContext(tenant_id=tenant_id, query=query, families={"products"}))
-        found = [
-            {"id": item.source_id, "family": "products", "title": item.title, "text": item.text[:500]}
-            for item in bundle.items
-        ]
+        from services.brain.retrieve.products_hydrate import product_tool_payload
+
+        found = [product_tool_payload(item, body_limit=500) for item in bundle.items]
         if bundle.outcome == "product_index_stale":
             return {"ok": False, "data": None, "error": "product_index_stale"}
         return {"ok": True, "data": found}

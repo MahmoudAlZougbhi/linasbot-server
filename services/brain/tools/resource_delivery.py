@@ -11,6 +11,7 @@ from services.brain.contracts.evidence import EvidenceBundle
 from services.brain.contracts.turn import CustomerTurn
 
 _PENDING_KEY = "_pending_setup_resources"
+_PRODUCT_PENDING = "_pending_product_media"
 
 
 def empty_delivery() -> dict[str, Any]:
@@ -20,13 +21,25 @@ def empty_delivery() -> dict[str, Any]:
 def _record_item(record: dict[str, Any]) -> dict[str, Any]:
     ref = str(record.get("resource_ref") or record.get("id") or "")
     kind = str(record.get("resource_type") or record.get("kind") or "file")
+    source_type = str(record.get("source_type") or "ai_setup_item")
+    source_item_id = str(record.get("source_item_id") or "")
+    product_id = str(record.get("product_id") or "")
+    if source_type == "product_media" and not product_id and source_item_id.startswith("products:"):
+        product_id = source_item_id.split(":", 1)[1]
+    media_id = str(record.get("media_id") or "")
+    if source_type == "product_media" and kind != "link" and not media_id:
+        media_id = ref
     return {
         "resource_ref": ref,
         "resource_type": kind,
         "title": str(record.get("title") or ref),
-        "source_item_id": str(record.get("source_item_id") or ""),
+        "source_item_id": source_item_id,
+        "source_type": source_type,
         "id": ref,
         "kind": kind,
+        "media_id": media_id,
+        "product_id": product_id,
+        "external_url": str(record.get("external_url") or record.get("url") or ""),
     }
 
 
@@ -132,3 +145,25 @@ def receipts_from_delivery(delivery: dict[str, Any]) -> list[dict[str, Any]]:
 def has_queued_setup_resources(user_data: dict[str, Any] | None) -> bool:
     pending = (user_data or {}).get(_PENDING_KEY)
     return isinstance(pending, dict) and bool(pending.get("ok")) and bool(pending.get("items"))
+
+
+def has_queued_product_media(user_data: dict[str, Any] | None) -> bool:
+    pending = (user_data or {}).get(_PRODUCT_PENDING)
+    return isinstance(pending, dict) and bool(pending.get("ok")) and bool(pending.get("items"))
+
+
+def has_queued_channel_resources(user_data: dict[str, Any] | None) -> bool:
+    return has_queued_setup_resources(user_data) or has_queued_product_media(user_data)
+
+
+def queue_channel_delivery(user_data: dict[str, Any], delivery: dict[str, Any]) -> None:
+    """Split Terra send_resource items onto the setup vs product channel queues."""
+    if not isinstance(delivery, dict) or not delivery.get("ok"):
+        return
+    items = [row for row in (delivery.get("items") or []) if isinstance(row, dict)]
+    product_items = [row for row in items if str(row.get("source_type") or "") == "product_media"]
+    setup_items = [row for row in items if str(row.get("source_type") or "") != "product_media"]
+    if product_items:
+        user_data[_PRODUCT_PENDING] = {"ok": True, "items": product_items}
+    if setup_items:
+        user_data[_PENDING_KEY] = {**delivery, "ok": True, "items": setup_items}

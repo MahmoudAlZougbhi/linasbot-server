@@ -35,7 +35,12 @@ def resolve_authorized_resource(
         record = dict(published.get("resource") or {})
         record["visual_path"] = visual_path_for_resource(has_authorized_id=True)
         return {"ok": True, "resource": record, "kind": "published"}
-    product = _resolve_product_media(session=session, tenant_id=tenant_id, media_id=ref)
+    product = _resolve_product_media(
+        session=session,
+        tenant_id=tenant_id,
+        media_id=ref,
+        allowed_source_ids=allowed_source_ids,
+    )
     if product is not None:
         return {"ok": True, "resource": product, "kind": "product_media"}
     return {"ok": False, "error": published.get("error") or "resource_not_found"}
@@ -163,40 +168,22 @@ def send_resource(
     )
 
 
-def _resolve_product_media(*, session: Any | None, tenant_id: str, media_id: str) -> dict[str, Any] | None:
-    if session is None or not tenant_id or not media_id:
-        return None
-    try:
-        from sqlalchemy import select
+def _resolve_product_media(
+    *,
+    session: Any | None,
+    tenant_id: str,
+    media_id: str,
+    allowed_source_ids: list[str] | None = None,
+) -> dict[str, Any] | None:
+    from services.products.authorized_media import resolve_customer_product_resource
 
-        from db.models.products import Product, ProductImage
-        from services.products.availability import is_customer_searchable
-    except Exception:
-        return None
-    stmt = (
-        select(ProductImage, Product)
-        .join(Product, Product.id == ProductImage.product_id)
-        .where(
-            ProductImage.tenant_id == tenant_id,
-            Product.tenant_id == tenant_id,
-            ProductImage.media_id == media_id,
-        )
+    record = resolve_customer_product_resource(
+        tenant_id=tenant_id,
+        resource_ref=media_id,
+        allowed_source_ids=allowed_source_ids,
+        session=session,
     )
-    try:
-        row = session.execute(stmt).first()
-    except Exception:
+    if record is None:
         return None
-    if row is None:
-        return None
-    image, product = row
-    if not is_customer_searchable(str(getattr(product, "availability", "") or "")):
-        return None
-    return {
-        "resource_ref": media_id,
-        "tenant_id": tenant_id,
-        "source_type": "product_media",
-        "source_item_id": str(getattr(product, "id", "") or ""),
-        "resource_type": "image",
-        "title": str(getattr(product, "name", "") or media_id),
-        "visual_path": visual_path_for_resource(has_authorized_id=True),
-    }
+    record["visual_path"] = visual_path_for_resource(has_authorized_id=True)
+    return record
