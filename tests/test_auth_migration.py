@@ -115,4 +115,4 @@ def test_no_http_bootstrap_and_cli_provisioning_exists():
     assert "bootstrap-admin" not in auth_src
     assert "provision_dashboard_admin.py" in auth_src
     assert Path("scripts/provision_dashboard_admin.py").is_file()
-    assert Path("services/team/admin_provisioning_service.py").is_file()
+    assert Path("services/team/provisioning_service.py").is_file()

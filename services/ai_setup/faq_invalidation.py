@@ -1,4 +1,4 @@
-"""Invalidate / version-link FAQ Smart Answers when related CM content changes."""
+"""Invalidate published/draft CM FAQ groups when related AI Setup content changes."""
 
 from __future__ import annotations
 
@@ -117,7 +117,7 @@ def mark_faq_groups_stale(
             ),
             if_match=env.etag,
             tenant_id=tenant_id,
-            updated_by="faq_cm_invalidation",
+            updated_by="faq_invalidation",
         )
 
     for gid in qa_group_ids:

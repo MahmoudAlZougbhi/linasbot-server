@@ -1,8 +1,8 @@
 """
-Offline first-admin provisioning (no public HTTP surface).
+Generic first-admin / platform-owner provisioning (no public HTTP surface).
 
 Operators run scripts/provision_dashboard_admin.py. Never accepts known/default passwords.
-Does not overwrite an existing user database.
+Does not overwrite an existing user database. No industry-specific tenant defaults.
 """
 
 from __future__ import annotations

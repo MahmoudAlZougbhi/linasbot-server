@@ -81,7 +81,7 @@ async def forgot_password(body: ForgotPasswordRequest) -> Any:
 @app.post("/api/auth/reset-password")
 async def reset_password(body: ResetPasswordRequest, response: Response) -> Any:
     from services.auth.auth_email_tokens import auth_email_token_service
-    from services.team.admin_provisioning_service import validate_provision_password
+    from services.team.provisioning_service import validate_provision_password
 
     token = (body.token or "").strip()
     if not token:

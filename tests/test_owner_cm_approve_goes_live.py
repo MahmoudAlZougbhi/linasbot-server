@@ -45,7 +45,7 @@ def _stub_approve_deps(monkeypatch: pytest.MonkeyPatch, *, section: str = "price
         lambda **_: {"ok": True, "errors": [], "warnings": [], "error_count": 0, "warning_count": 0},
     )
     monkeypatch.setattr(
-        "services.faq.faq_cm_invalidation.invalidate_faq_for_cm_patch",
+        "services.ai_setup.faq_invalidation.invalidate_faq_for_cm_patch",
         lambda **_: {"stale_groups": [], "stale_rows": 0, "reason": "none"},
     )
 
