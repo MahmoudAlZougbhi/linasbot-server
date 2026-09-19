@@ -17,9 +17,12 @@ from services.brain.outbox import outbox_counts, recover_unsent, reset_outbox_fo
 
 @pytest.fixture(autouse=True)
 def _memory(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.billing.membership.catalog_admin import reset_catalog_admin_for_tests
+
     monkeypatch.setenv("LINAS_MESSAGE_STORE", "memory")
     monkeypatch.setenv("MESSAGE_BILLING_ENABLED", "true")
     reset_ledger_for_tests()
+    reset_catalog_admin_for_tests()
     reset_pending_settlements_for_tests()
     reset_outbox_for_tests()
     grant_lot(

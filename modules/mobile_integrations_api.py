@@ -287,56 +287,43 @@ async def mobile_reconcile_comments(platform: str, request: Request) -> Any:
 
 @app.get("/api/mobile/usage")
 async def mobile_usage(request: Request) -> Any:
-    """Usage summary for mobile Dashboard / Usage screens.
+    """Usage summary for mobile Dashboard / Subscription screens.
 
-    Exposes used/limit fields the mobile UI already knows how to render.
-    Does not claim a full analytics portal — credits from the file ledger only.
+    Live meter is the message ledger. Historical credit fields stay as aliases.
     """
 
     session = require_session(request)
-    from services.billing.credit_ai_gate import remaining_credits
-    from services.billing.credit_buckets import split_credit_remaining
     from services.billing.entitlements_service import entitlements_store
     from services.billing.plan_economics import PLAN_PRICES_USD, recommend_allowance
-
-    available = remaining_credits(session.tenant_id)
-    reserved = 0
-    try:
-        from services.billing.membership.message_ledger import snapshot as message_snapshot
-
-        reserved = max(0, int(message_snapshot(session.tenant_id).reserved))
-    except Exception:
-        reserved = 0
-    ent = entitlements_store.get(session.tenant_id)
-    limit = int(ent.included_credits + ent.extra_credits)
-    if limit <= 0 and ent.plan_id in PLAN_PRICES_USD:
-        limit = int(recommend_allowance(ent.plan_id).included_credits)
-    if limit <= 0:
-        limit = available + reserved
-    buckets = split_credit_remaining(
-        included=int(ent.included_credits),
-        purchased=int(ent.extra_credits),
-        available=available,
-        reserved=reserved,
-    )
-    used = buckets["credits_used"]
-    allowance = recommend_allowance(ent.plan_id) if ent.plan_id in PLAN_PRICES_USD else None
     from services.dashboard.message_surface import overlay_message_fields
 
+    ent = entitlements_store.get(session.tenant_id)
     messages = overlay_message_fields(session.tenant_id, ent.plan_id)
+    remaining = int(messages.get("available_messages") or 0)
+    granted = int(messages.get("granted_messages") or 0)
+    used = int(messages.get("used_messages") or 0)
+    reserved = int(messages.get("reserved_messages") or 0)
+    included = int(messages.get("included_remaining") or 0)
+    purchased = int(messages.get("purchased_messages") or 0)
+    allowance = recommend_allowance(ent.plan_id) if ent.plan_id in PLAN_PRICES_USD else None
     return {
         "success": True,
         "plan_id": ent.plan_id,
         "status": ent.status,
-        "credit_balance": available,
-        "credits": limit,
-        "credits_limit": limit,
+        "unit": "messages",
+        "messages_remaining": remaining,
+        "messages_used": used,
+        "messages_included": messages.get("included_messages"),
+        "messages_purchased": purchased,
+        "credit_balance": remaining,
+        "credits": granted,
+        "credits_limit": granted,
         "credits_used": used,
         "reserved_credits": reserved,
-        "included_credits": int(ent.included_credits),
-        "extra_credits": int(ent.extra_credits),
-        "membership_credits_remaining": buckets["membership_credits_remaining"],
-        "purchased_credits_remaining": buckets["purchased_credits_remaining"],
+        "included_credits": included,
+        "extra_credits": purchased,
+        "membership_credits_remaining": included,
+        "purchased_credits_remaining": purchased,
         "included_dm_replies": int(allowance.included_dm_replies) if allowance else None,
         "included_owner_messages": int(allowance.included_owner_messages) if allowance else None,
         "included_images": int(allowance.included_images) if allowance else None,

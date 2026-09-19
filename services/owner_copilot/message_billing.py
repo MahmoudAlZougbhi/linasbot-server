@@ -134,12 +134,21 @@ def owner_turn_hold_begin(
         return OwnerTurnHold(tenant_id=tid, blocked=True, units=units)
 
 
-def owner_turn_hold_finalize(hold: OwnerTurnHold) -> None:
+def owner_turn_hold_finalize(hold: OwnerTurnHold, *, actual_usd: float | None = None) -> None:
     if hold._finalized or not hold.operation_id:
         return
+    capture = hold.units
+    if actual_usd is not None:
+        capture = min(hold.units, max(0, copilot_units_for_cost(actual_usd)))
     try:
-        settle(tenant_id=hold.tenant_id, operation_id=hold.operation_id, accepted=True)
+        settle(
+            tenant_id=hold.tenant_id,
+            operation_id=hold.operation_id,
+            accepted=capture > 0,
+            units=capture,
+        )
         hold._finalized = True
+        hold.units = capture
     except Exception:
         owner_turn_hold_abort(hold)
         raise
@@ -159,8 +168,13 @@ def owner_turn_hold_abort(hold: OwnerTurnHold) -> None:
         hold.operation_id = ""
 
 
-def owner_turn_hold_on_event(hold: OwnerTurnHold, event_type: str) -> None:
+def owner_turn_hold_on_event(
+    hold: OwnerTurnHold,
+    event_type: str,
+    *,
+    actual_usd: float | None = None,
+) -> None:
     if event_type == "done":
-        owner_turn_hold_finalize(hold)
+        owner_turn_hold_finalize(hold, actual_usd=actual_usd)
     elif event_type in {"cancelled", "error"}:
         owner_turn_hold_abort(hold)

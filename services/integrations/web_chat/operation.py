@@ -106,9 +106,14 @@ class WebChatOperationRepository:
             return OperationClaimResult(status="resume", record=row_to_record(row))
         if record.state == OperationState.RELEASED:
             if record.reservation_id:
-                from services.billing.credit_ledger_service import credit_ledger_service
+                from services.integrations.web_chat.credit_fsm import WebChatCreditHandle
 
-                if credit_ledger_service.reservation_terminal(record.tenant_id, record.reservation_id) is None:
+                handle = WebChatCreditHandle(
+                    tenant_id=record.tenant_id,
+                    reservation_id=record.reservation_id,
+                    request_id=record.operation_key or "",
+                )
+                if handle.reservation_terminal() is None:
                     row.state = OperationState.RESERVED.value
                     row.released = False
                     handoff_lease(row, lease_owner=lease_owner)

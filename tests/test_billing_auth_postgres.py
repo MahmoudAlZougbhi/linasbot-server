@@ -15,10 +15,7 @@ from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests, whatsapp_session  # noqa: E402
 from services.auth.auth_email_tokens import AuthEmailTokenService  # noqa: E402
 from services.auth.mobile_refresh_token_service import MobileRefreshTokenService  # noqa: E402
-from services.billing.admin_credit_idempotency import (  # noqa: E402
-    load_admin_credit_idempotent,
-    store_admin_credit_idempotent,
-)
+from services.billing.billing_pg_store import admin_credit_load, admin_credit_store
 from services.billing.stripe_checkout_service import StripeCheckoutService  # noqa: E402
 
 
@@ -100,7 +97,10 @@ def test_email_token_issue_consume(pg_env: Path) -> None:
 
 def test_admin_credit_idempotency_pg(pg_env: Path) -> None:
     payload = {"success": True, "wallet": {"tenant_id": "t1"}}
-    store_admin_credit_idempotent("idem-key-12345678", payload)
-    cached = load_admin_credit_idempotent("idem-key-12345678")
+    from services.billing.billing_backend import require_billing_pg_session
+
+    with require_billing_pg_session() as session:
+        admin_credit_store(session, "idem-key-12345678", payload)
+        cached = admin_credit_load(session, "idem-key-12345678")
     assert cached is not None
     assert cached.get("response") == payload

@@ -20,6 +20,12 @@ def catalog_admin_path() -> Path:
 
 
 def reset_admin_state_for_tests() -> None:
+    path = catalog_admin_path()
+    try:
+        if path.is_file():
+            path.unlink()
+    except OSError:
+        pass
     from services.billing.membership.pg_store import optional_message_session
 
     with optional_message_session() as session:

@@ -6,6 +6,9 @@ function emptyEconomy() {
   return {
     action_costs: {
       ai_dm_reply: 1,
+      ai_web_chat: 1,
+      ai_whatsapp: 1,
+      ai_tiktok: 1,
       ai_public_comment: 1,
       ai_comment_dm: 1,
       ai_both_mode: 'each',
@@ -79,6 +82,9 @@ export default function OwnerEconomy() {
       const payload = {
         action_costs: {
           ai_dm_reply: Number(economy.action_costs.ai_dm_reply),
+          ai_web_chat: Number(economy.action_costs.ai_web_chat),
+          ai_whatsapp: Number(economy.action_costs.ai_whatsapp),
+          ai_tiktok: Number(economy.action_costs.ai_tiktok),
           ai_public_comment: Number(economy.action_costs.ai_public_comment),
           ai_comment_dm: Number(economy.action_costs.ai_comment_dm),
           ai_both_mode: String(economy.action_costs.ai_both_mode || 'each'),
@@ -139,7 +145,10 @@ export default function OwnerEconomy() {
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <h3 className="text-lg font-medium">Customer AI action costs</h3>
         {[
-          ['ai_dm_reply', 'AI customer DM reply'],
+          ['ai_dm_reply', 'Instagram / Facebook AI DM'],
+          ['ai_web_chat', 'Web Chat AI'],
+          ['ai_whatsapp', 'WhatsApp AI'],
+          ['ai_tiktok', 'TikTok AI'],
           ['ai_public_comment', 'AI public comment'],
           ['ai_comment_dm', 'Comment-generated DM'],
           ['followup_sent', 'Smart follow-up'],
