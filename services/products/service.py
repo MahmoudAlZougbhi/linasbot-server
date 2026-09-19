@@ -77,8 +77,8 @@ class ProductsService:
             self.session.expire(row, ["images", "links"])
             refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
             assert refreshed is not None
-            self._invalidate_customer_ai_products(tenant_id)
             self._finish_daily_edit(tenant_id, edit_op, commit=True)
+            self._invalidate_customer_ai_products(tenant_id, product_id=row.id)
             return product_to_dict(refreshed)
         except Exception:
             self._finish_daily_edit(tenant_id, edit_op, commit=False)
@@ -116,8 +116,8 @@ class ProductsService:
             self.session.expire(row, ["images", "links"])
             refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
             assert refreshed is not None
-            self._invalidate_customer_ai_products(tenant_id)
             self._finish_daily_edit(tenant_id, edit_op, commit=True)
+            self._invalidate_customer_ai_products(tenant_id, product_id=row.id)
             return product_to_dict(refreshed)
         except Exception:
             self._finish_daily_edit(tenant_id, edit_op, commit=False)
@@ -133,8 +133,8 @@ class ProductsService:
             remove_product_from_index(self.session, tenant_id=tenant_id, product_id=product_id)
             clear_context_for_product(self.session, tenant_id=tenant_id, product_id=product_id)
             clear_reply_for_product(self.session, tenant_id=tenant_id, product_id=product_id)
-            self._invalidate_customer_ai_products(tenant_id)
             self._finish_daily_edit(tenant_id, edit_op, commit=True)
+            self._invalidate_customer_ai_products(tenant_id, product_id=product_id, deleted=True)
             return media_ids
         except Exception:
             self._finish_daily_edit(tenant_id, edit_op, commit=False)
@@ -279,11 +279,11 @@ class ProductsService:
             return
         release_edit(tenant_id=tenant_id, operation_id=operation_id)
 
-    def _invalidate_customer_ai_products(self, tenant_id: str) -> None:
+    def _invalidate_customer_ai_products(self, tenant_id: str, product_id: str = "", *, deleted: bool = False) -> None:
         try:
             from services.brain.search.invalidate import notify_product_change
 
-            notify_product_change(self.session, tenant_id)
+            notify_product_change(self.session, tenant_id, product_id, deleted=deleted)
         except Exception:
             return
 

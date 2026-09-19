@@ -67,8 +67,8 @@ async def test_comment_update_queues_visitor_on_any_video(tt_db, monkeypatch) ->
 
 
 @pytest.mark.asyncio
-async def test_comment_update_skips_owner_and_replies(tt_db, monkeypatch) -> None:
-    seed_connection(tt_db, open_id="biz-open")
+async def test_comment_update_skips_owner_and_queues_replies(tt_db, monkeypatch) -> None:
+    connection = seed_connection(tt_db, open_id="biz-open")
     queued: list[dict] = []
     monkeypatch.setattr(
         "services.integrations.tiktok.comment_webhook.enqueue_tiktok_comment_ai", lambda **k: queued.append(k)
@@ -104,6 +104,17 @@ async def test_comment_update_skips_owner_and_replies(tt_db, monkeypatch) -> Non
     assert owner.get("skipped") is True
     assert queued == []
 
+    async def _fetch_reply(**_k):
+        return {
+            "comment_id": "c-reply",
+            "parent_comment_id": "c-parent",
+            "text": "and color?",
+            "owner": False,
+            "unique_identifier": "mustapha",
+            "create_time": _now_epoch(),
+        }
+
+    monkeypatch.setattr("services.integrations.tiktok.comment_webhook._fetch_public_comment", _fetch_reply)
     reply_payload = {
         "event": "comment.update",
         "event_id": "evt-reply",
@@ -117,8 +128,16 @@ async def test_comment_update_skips_owner_and_replies(tt_db, monkeypatch) -> Non
         },
     }
     reply = await process_tiktok_webhook_payload(raw_body=b"{}", payload=reply_payload)
-    assert reply.get("reason") == "reply"
-    assert queued == []
+    assert reply.get("reason") != "reply"
+    assert reply.get("queued") is True
+    assert queued == [
+        {
+            "tenant_id": "linas",
+            "connection_id": connection.id,
+            "comment_id": "c-reply",
+            "item_id": "vid-1",
+        }
+    ]
 
 
 @pytest.mark.asyncio

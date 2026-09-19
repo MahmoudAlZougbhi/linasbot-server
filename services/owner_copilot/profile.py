@@ -12,7 +12,8 @@ ALLOWED_GENDERS: frozenset[str] = frozenset({"male", "female", "unset"})
 ALLOWED_LANGS: frozenset[str] = frozenset({"ar", "en", "fr"})
 
 _ARABIC_SCRIPT = re.compile(r"[\u0600-\u06FF]")
-# Safer Franco / Arabizi markers (avoid single-digit false positives like "3"/"7").
+# Safer Franco / Arabizi markers for reply-language detection only.
+# These lists never block or divert Sol — they pick response language.
 _FRANCO_WORD_MARKERS = (
     "kifak",
     "kifik",

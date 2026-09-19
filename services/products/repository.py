@@ -51,6 +51,18 @@ class ProductsRepository:
         )
         return self.session.execute(stmt).scalar_one_or_none()
 
+    def get_products_by_ids(self, *, tenant_id: str, product_ids: list[str]) -> list[Product]:
+        ids = [str(item or "").strip() for item in product_ids if str(item or "").strip()]
+        ids = list(dict.fromkeys(ids))[:32]
+        if not ids:
+            return []
+        stmt = (
+            select(Product)
+            .where(Product.tenant_id == tenant_id, Product.id.in_(ids))
+            .options(selectinload(Product.images), selectinload(Product.links))
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
     def create_product(self, *, tenant_id: str, fields: dict[str, Any]) -> Product:
         row = Product(
             id=_uuid(),
@@ -197,6 +209,7 @@ class ProductsRepository:
         return list(self.session.execute(stmt).scalars().all())
 
     def list_all_for_tenant(self, *, tenant_id: str, customer_facing: bool = True) -> list[Product]:
+        """Publish/index compile only. Customer retrieve must not call this."""
         filters = [Product.tenant_id == tenant_id]
         if customer_facing:
             filters.append(Product.availability.in_(list(CUSTOMER_SEARCH_AVAILABILITY)))

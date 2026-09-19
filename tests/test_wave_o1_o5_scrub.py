@@ -13,10 +13,11 @@ def test_wave_o1_no_unused_router_gender_bindings() -> None:
     assert "get_gender_from_message" not in ctx
     assert not (ROOT / "services/requests/human_detect.py").exists()
     assert not (ROOT / "services/brain/conversation_router.py").exists()
-    from services.brain.planner.heuristic import plan_message
+    from services.requests.constants import REQUEST_TYPES
+    from services.requests.request_graphs.compiler import destination_from_type
 
-    assert "human_request" in {task.type for task in plan_message("بدي احكي مع حدا").tasks}
-    assert "human_request" not in {task.type for task in plan_message("personal care tips").tasks}
+    assert destination_from_type("HUMAN") == "live_chat"
+    assert "HUMAN" in REQUEST_TYPES
     inbound = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "services/brain/inbound").rglob("*.py"))
     assert "GREETING_TEMPLATES" not in inbound
 

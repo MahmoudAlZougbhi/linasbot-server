@@ -72,5 +72,5 @@ def rank_price_rows(
 
 def query_is_generic(query: str) -> bool:
     tokens = [tok for tok in normalize_search_text(query).split() if tok]
-    distinctive = [tok for tok in tokens if tok not in {"price", "cost", "how", "much", "service", "laser", "hair"}]
+    distinctive = [tok for tok in tokens if tok not in {"price", "cost", "how", "much", "service"}]
     return len(distinctive) == 0

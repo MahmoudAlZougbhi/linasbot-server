@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -119,13 +118,8 @@ def test_generated_dm_does_not_prepend_catalog_greeting() -> None:
 def test_greeting_only_does_not_prepend_canned_line(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage
     from services.brain.contracts.turn import CustomerTurn
-    from services.brain.greeting_policy import is_greeting_only
     from services.brain.turn_pipeline import _apply_greeting
 
-    assert is_greeting_only("Hi") is True
-    assert is_greeting_only("marhaba kifak") is True
-    assert is_greeting_only("مرحبا كيفك") is True
-    assert is_greeting_only("Hi, what time do you open?") is False
     turn = CustomerTurn(tenant_id="t1", invocation_kind="dm")
     envelope = FinalReplyEnvelope(
         decision="reply",
@@ -136,7 +130,7 @@ def test_greeting_only_does_not_prepend_canned_line(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
-async def test_greeting_only_uses_identity_not_agent_retrieve(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_greeting_hi_reaches_terra_agentic(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
     from services.brain.contracts.turn import CustomerTurn
     from services.brain.turn_pipeline import run_dm_after_gates
@@ -156,12 +150,13 @@ async def test_greeting_only_uses_identity_not_agent_retrieve(monkeypatch: pytes
         )
 
     monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", no_confirm)
-    monkeypatch.setattr("services.brain.agent.greeting_turn.identity_greeting_result", terra_hi)
+    monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
 
-    async def agentic(*_a, **_k):
-        raise AssertionError("greeting-only must not retrieve")
+    async def no_sem(*_a, **_k):
+        return None
 
-    monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", agentic)
+    monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", no_sem)
+    monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", terra_hi)
     turn = CustomerTurn(
         tenant_id="linas", conversation_id="c-hi", event_ids=["m-hi"], extra={"response_language": "en"}
     )
@@ -172,9 +167,7 @@ async def test_greeting_only_uses_identity_not_agent_retrieve(monkeypatch: pytes
 
 
 @pytest.mark.asyncio
-async def test_greeting_only_does_not_retrieve_knowledge_when_identity_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_greeting_hi_uses_agentic_not_regex_skip(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
     from services.brain.contracts.turn import CustomerTurn
     from services.brain.turn_pipeline import run_dm_after_gates
@@ -193,24 +186,19 @@ async def test_greeting_only_does_not_retrieve_knowledge_when_identity_fails(
             extra={"path": "agentic"},
         )
 
-    async def closed(*_a, **_k):
-        return TurnResult(
-            stop_reason="failed_closed",
-            envelope=FinalReplyEnvelope(decision="no_reply", messages=[]),
-            extra={"path": "greeting_only", "customer_silence": True, "retrieval_skipped": True},
-        )
-
     monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", no_confirm)
-    monkeypatch.setattr("services.brain.agent.greeting_turn.identity_greeting_result", closed)
-    monkeypatch.setattr(
-        "services.brain.agent.loop.run_agentic_dm_path",
-        AsyncMock(side_effect=AssertionError("greeting fail-closed must not retrieve")),
-    )
+    monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
+
+    async def no_sem(*_a, **_k):
+        return None
+
+    monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", no_sem)
+    monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", terra_hi)
     turn = CustomerTurn(tenant_id="linas", conversation_id="c-hi2", event_ids=["m-hi2"])
     out = await run_dm_after_gates(turn, message="Hi", channel="instagram_dm")
-    assert out.stop_reason == "failed_closed"
-    assert not out.envelope.messages
-    assert (out.extra or {}).get("retrieval_skipped") is True
+    assert out.stop_reason == "ok"
+    assert out.envelope.messages
+    assert (out.extra or {}).get("retrieval_skipped") is not True
 
 
 def test_greeting_follows_inbound_language(monkeypatch: pytest.MonkeyPatch) -> None:

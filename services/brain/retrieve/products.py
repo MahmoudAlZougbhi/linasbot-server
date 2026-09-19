@@ -106,6 +106,7 @@ def load_product_evidence(tenant_id: str, product_id: str) -> EvidenceItem | Non
 
 
 def load_product_cards(tenant_id: str) -> list[TitleCard]:
+    """Publish-time index compile only. Customer retrieve must not call this."""
     tid = (tenant_id or "").strip()
     if not tid:
         return []

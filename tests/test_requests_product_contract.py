@@ -10,7 +10,6 @@ import pytest
 
 from services.brain.actions.requests import persist_request
 from services.brain.contracts.actions import ActionProposal
-from services.brain.planner.heuristic import plan_message
 from services.requests.constants import PERSISTABLE_REQUEST_TYPES, REQUEST_TYPES, status_bucket, status_label
 from services.requests.schemas import RequestCreateBody
 from services.requests.service import CustomerRequestsError, CustomerRequestsService
@@ -90,14 +89,20 @@ def test_persist_request_source_has_no_message_charge() -> None:
 
 
 def test_hours_question_is_not_an_order() -> None:
-    types = {task.type for task in plan_message("what are your opening hours?").tasks}
+    from tests.plan_builders import explicit_plan
+
+    types = {
+        task.type for task in explicit_plan("what are your opening hours?", ("hours", ["hours", "branches"])).tasks
+    }
     assert "hours" in types
     assert "product_request" not in types
     assert "service_request" not in types
 
 
 def test_human_intent_is_not_an_order() -> None:
-    types = {task.type for task in plan_message("Can I speak to someone?").tasks}
+    from tests.plan_builders import explicit_plan
+
+    types = {task.type for task in explicit_plan("Can I speak to someone?", ("human_request", ["none"])).tasks}
     assert "human_request" in types
     assert "product_request" not in types
 

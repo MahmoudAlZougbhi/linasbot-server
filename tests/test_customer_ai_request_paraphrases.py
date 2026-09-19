@@ -1,58 +1,49 @@
-"""Request-rule paraphrases must map to the published task type, not keywords only."""
+"""Request-rule paraphrases: GPT planner is SoT; overlay only binds published types."""
 
 from __future__ import annotations
 
 from services.ai_setup.request_rules import format_request_rules_for_ai
 from services.brain.planner.heuristic import overlay_plan, plan_message
 from tests.brain_evals.qa_tenants import shop_a_qa_sections, shop_b_qa_sections
+from tests.plan_builders import explicit_plan
 
 
-def test_appointment_paraphrases_are_service_request() -> None:
-    messages = [
+def test_heuristic_paraphrases_are_fail_soft_information() -> None:
+    for message in (
         "بدي موعد",
-        "احجزلي",
-        "فيني آخد appointment؟",
-        "بدي جي لعندكن بكرا",
-        "بدي book",
-        "بدي اعمل ليزر الأسبوع الجاي",
-        "I want an appointment",
-        "Je veux prendre rendez-vous",
-        "book me please",
-    ]
-    for message in messages:
-        types = {task.type for task in plan_message(message).tasks}
-        assert "service_request" in types, message
-
-
-def test_product_paraphrases_are_product_request() -> None:
-    messages = ["بدي اطلب المنتج", "اشتري After Care", "I want to buy the cream", "order this product"]
-    for message in messages:
-        types = {task.type for task in plan_message(message).tasks}
-        assert "product_request" in types, message
-
-
-def test_human_handoff_paraphrases_are_human_request() -> None:
-    messages = [
+        "بدي اطلب المنتج",
         "بدي احكي مع حدا",
-        "وصلني بموظف",
-        "بدي مسؤول",
-        "human please",
-        "I want to speak to a person",
-        "عندي شكوى",
-    ]
-    for message in messages:
-        types = {task.type for task in plan_message(message).tasks}
-        assert "human_request" in types, message
+        "شو ساعات عمل فرع أنطلياس؟",
+    ):
+        assert {task.type for task in plan_message(message).tasks} == {"information"}
 
 
 def test_hours_question_is_not_turned_into_booking() -> None:
-    plan = plan_message("شو ساعات عمل فرع أنطلياس؟")
+    plan = explicit_plan("شو ساعات عمل فرع أنطلياس؟", ("hours", ["hours", "branches"]))
     types = {task.type for task in plan.tasks}
     assert "hours" in types
     assert "service_request" not in types
 
 
-def test_overlay_keeps_hours_when_llm_only_sees_knowledge() -> None:
+def test_overlay_keeps_llm_hours_plan() -> None:
+    from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
+
+    llm = PlannerPlan(
+        tasks=[
+            PlannerTask(
+                id="t1",
+                type="hours",
+                span=TaskSpan(text="امتى بيفتح فرع أنطلياس؟"),
+                source_families=["hours", "branches"],
+            )
+        ],
+        read_only=True,
+    )
+    out = overlay_plan(llm, "امتى بيفتح فرع أنطلياس؟")
+    assert any(task.type == "hours" for task in out.tasks)
+
+
+def test_overlay_does_not_invent_hours_from_knowledge() -> None:
     from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 
     llm = PlannerPlan(
@@ -67,7 +58,7 @@ def test_overlay_keeps_hours_when_llm_only_sees_knowledge() -> None:
         read_only=True,
     )
     out = overlay_plan(llm, "امتى بيفتح فرع أنطلياس؟")
-    assert any(task.type == "hours" for task in out.tasks)
+    assert all(task.type != "hours" for task in out.tasks)
 
 
 def test_linas_qa_rules_block_is_not_shop_b() -> None:

@@ -12,18 +12,15 @@ from services.brain.grounding import extract
 
 _ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 _BARE_AMOUNT = re.compile(r"(?<![\w:])(\d+(?:[.,]\d+)?)(?![\w:])")
-_PRICE_INTENT = re.compile(r"\b(price|cost|how much|كم|سعر|كلفة|prix|tarif)\b", re.I)
 
 
 def is_price_context(message: str, plan: PlannerPlan | None = None) -> bool:
-    if plan is not None and any(task.type == "information" for task in plan.tasks):
-        families = {fam for task in plan.tasks for fam in (task.source_families or [])}
-        if "prices" in families or "services" in families or "products" in families:
-            if _PRICE_INTENT.search(message or "") or any(
-                "price" in (task.span.text or "").casefold() for task in plan.tasks
-            ):
-                return True
-    return bool(_PRICE_INTENT.search(message or ""))
+    """Planner/evidence flags only — not a price-keyword intent regex."""
+    _ = message
+    if plan is None:
+        return False
+    families = {fam for task in plan.tasks for fam in (task.source_families or [])}
+    return "prices" in families
 
 
 def _latin_digits(text: str) -> str:

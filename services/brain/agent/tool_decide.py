@@ -26,11 +26,11 @@ def propose_tools_from_plan(plan: PlannerPlan, message: str) -> list[dict[str, A
         elif task.type == "information" and "products" in task.source_families:
             name = "search_products"
         elif task.type == "human_request":
-            name = "escalate_to_human"
+            continue
         elif task.type == "resource_request":
-            name = "resolve_resource"
+            name = "check_setup_resources"
         elif task.type in {"service_request", "product_request"}:
-            name = "start_request"
+            continue
         if not name or name in UNSUPPORTED_TOOLS:
             continue
         if name not in READ_TOOLS and name not in ACTION_TOOLS:

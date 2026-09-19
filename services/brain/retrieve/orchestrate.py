@@ -14,7 +14,7 @@ from services.brain.retrieve.cards import TitleCard, load_published_cards
 from services.brain.retrieve.hybrid import HybridHit, search_hybrid
 from services.brain.retrieve.hydrate import expand_ranked
 from services.brain.retrieve.lexical import search_cards
-from services.brain.retrieve.products import cards_from_products, load_product_cards
+from services.brain.retrieve.products import cards_from_products
 from services.brain.retrieve.rerank import rerank_hits
 from services.brain.retrieve.validate import validate_evidence
 
@@ -44,7 +44,7 @@ async def retrieve_cards(
     tenant_id: str = "",
 ) -> EvidenceBundle:
     scoped = [c for c in cards if families is None or c.source_family in families]
-    if not scoped:
+    if not scoped and not tenant_id:
         return EvidenceBundle(outcome="not_found")
     if not voyage_configured():
         return EvidenceBundle(outcome="provider_not_configured")
@@ -93,7 +93,6 @@ async def retrieve_published(ctx: RetrieveContext) -> EvidenceBundle:
         sections = loaded
         revision = revision or str(getattr(pointer, "revision", "") or "")
         cards.extend(load_published_cards(ctx.tenant_id))
-        cards.extend(load_product_cards(ctx.tenant_id))
     elif not cards:
         cards.extend(load_published_cards(ctx.tenant_id) if ctx.tenant_id else [])
     return await retrieve_cards(

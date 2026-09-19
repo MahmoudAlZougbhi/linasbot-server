@@ -42,4 +42,6 @@ export const requestSetupEn = {
     'Request graph tables are not migrated on this server yet. Rules still save as drafts.',
   requestRulesGraphDbUnavailable: 'Customer database unavailable for request graphs.',
   requestRulesDeleteGraphFailed: 'Rule removed from the draft, but the published graph could not be deleted.',
+  requestRulesLimitTitle: 'Request rule limit',
+  requestRulesLimitBody: 'You can keep at most 10 {type} request rules.',
 } as const;

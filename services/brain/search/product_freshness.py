@@ -27,8 +27,20 @@ def product_questions_blocked(tenant_id: str, families: set[str] | None) -> dict
         return None
     if not products_index_stale(tenant_id):
         return None
+    pointer = None
+    try:
+        from services.brain.search.store import get_source_pointer_ready
+
+        pointer = get_source_pointer_ready(tenant_id, "products")
+    except Exception:
+        pointer = None
+    reason = str((pointer or {}).get("reason") or "source_changed")
     return {
         "ok": False,
         "reason": "product_index_stale",
-        "message": "Product catalog changed; reindex before Brain can answer product questions.",
+        "message": (
+            f"Product index is not ready ({reason}). "
+            "Wait for incremental product reindex or a publish-time Voyage rebuild. "
+            "Product answers stay blocked until vectors for this tenant are visible."
+        ),
     }

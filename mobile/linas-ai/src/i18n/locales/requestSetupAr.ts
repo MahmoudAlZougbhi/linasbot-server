@@ -44,4 +44,6 @@ export const requestSetupAr: Record<keyof typeof requestSetupEn, string> = {
     'جداول مخطط الطلب غير مُرحَّلة على هذا السيرفر بعد. القواعد تُحفظ كمسودة.',
   requestRulesGraphDbUnavailable: 'قاعدة بيانات الزبائن غير متاحة لمخططات الطلب.',
   requestRulesDeleteGraphFailed: 'أُزيلت القاعدة من المسودة، لكن تعذّر حذف المخطط المنشور.',
+  requestRulesLimitTitle: 'حد قواعد الطلب',
+  requestRulesLimitBody: 'يمكن حفظ 10 قواعد {type} كحد أقصى.',
 };

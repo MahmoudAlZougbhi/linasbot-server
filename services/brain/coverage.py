@@ -1,10 +1,9 @@
-"""Coverage: original message vs plan vs dispositions. Planner self-report is not enough."""
+"""Coverage: plan vs dispositions. GPT planner is authoritative — no heuristic overlay."""
 
 from __future__ import annotations
 
 from services.brain.contracts.enums import TaskDisposition, TaskType
 from services.brain.contracts.plan import PlannerPlan
-from services.brain.planner.heuristic import plan_message
 
 _DONE: set[TaskDisposition] = {
     "answered",
@@ -18,15 +17,8 @@ _DONE: set[TaskDisposition] = {
 
 
 def omitted_task_types(original: str, plan: PlannerPlan) -> list[TaskType]:
-    expected = plan_message(original)
-    planned = {task.type for task in plan.tasks}
-    missing: list[TaskType] = []
-    for task in expected.tasks:
-        if task.type == "acknowledgement":
-            continue
-        if task.type not in planned:
-            missing.append(task.type)
-    return missing
+    _ = (original, plan)
+    return []
 
 
 def uncovered_task_ids(plan: PlannerPlan, dispositions: dict[str, TaskDisposition]) -> list[str]:

@@ -9,7 +9,6 @@ import pytest
 from services.brain.actions.confirm import confirmation_valid
 from services.brain.actions.pending import attach_confirmation, try_confirm_pending
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
-from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import ConversationState, CustomerTurn
 from services.brain.conversation_history import (
@@ -182,21 +181,63 @@ async def test_try_confirm_yes_clears_pending(monkeypatch: pytest.MonkeyPatch) -
 
 @pytest.mark.asyncio
 async def test_request_confirm_survives_next_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
+    from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
+    from services.brain.tools.registry import execute_tool
+
     monkeypatch.setattr("services.brain.turn_pipeline._exact_faq_result", lambda *_a, **_k: None)
 
     async def no_semantic(*_a, **_k):
         return None
 
     monkeypatch.setattr("services.brain.turn_pipeline._semantic_faq_result", no_semantic)
+    monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
 
-    async def plan(text, _hist, tenant_id="", **_kwargs):
-        _ = tenant_id
-        return PlannerPlan(
-            read_only=False,
-            tasks=[PlannerTask(id="book", type="service_request", span=TaskSpan(text=text))],
+    async def found_retrieve(*_a, **_k):
+        return (
+            EvidenceBundle(
+                outcome="found",
+                items=[
+                    EvidenceItem(
+                        evidence_id="k1",
+                        source_family="knowledge",
+                        source_id="k1",
+                        title="Info",
+                        text="Laser is offered.",
+                    )
+                ],
+            ),
+            [],
+            {},
         )
 
-    monkeypatch.setattr("services.brain.agent.loop.plan_turn", plan)
+    async def fake_generate(turn, **_k):
+        return TurnResult(
+            stop_reason="ok",
+            envelope=FinalReplyEnvelope(
+                decision="reply",
+                messages=[OutboundMessage(destination="dm", text="ok")],
+            ),
+            extra=dict(turn.extra or {}),
+        )
+
+    async def terra_start(turn, message, **_k):
+        result = await execute_tool(
+            "start_request",
+            {"request_type": "APPOINTMENT", "title": message, "task_id": "book", "customer_text": message},
+            turn,
+        )
+        extra = {}
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        if data.get("awaiting_confirmation"):
+            extra["awaiting_confirmation"] = True
+            extra["pending_actions"] = list(data.get("pending_actions") or [])
+            turn.extra = {**dict(turn.extra or {}), **extra}
+        return [{"tool": "start_request", "ok": True}], ["tool:start_request:ok"], 1, extra
+
+    monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", found_retrieve)
+    monkeypatch.setattr("services.brain.agent.loop.generate_verified", fake_generate)
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_request_round", terra_start)
 
     first = CustomerTurn(tenant_id="t1", conversation_id="c-book", event_ids=["m1"])
     staged = await run_dm_after_gates(first, message="book laser", channel="instagram_dm")

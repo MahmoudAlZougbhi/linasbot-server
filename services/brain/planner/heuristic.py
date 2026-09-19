@@ -1,4 +1,4 @@
-"""Deterministic first-pass task split. Not a substitute for the OpenAI planner."""
+"""Fail-soft planner fallback. OpenAI/GPT plans are authoritative — no regex overlays."""
 
 from __future__ import annotations
 
@@ -7,58 +7,6 @@ import re
 from services.brain.contracts.enums import SourceFamily, TaskType
 from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 
-_HUMAN = re.compile(
-    r"("
-    r"\b(human|agent|operator|handoff|manager)\b"
-    r"|موظف|شخص حقيقي|تحدث مع|بدي احكي|احكي مع حدا|وصلني|بدي مسؤول"
-    r"|human please|speak to|talk to (a )?person|complaint|شكوى|مش راضي"
-    r")",
-    re.I,
-)
-_BOOK = re.compile(
-    r"("
-    r"\b(book|booking|appoint|appointment|reserve|rdv)\b"
-    r"|حجز|موعد|احجزلي|احجزي|بدي جي|جي لعندكن|فيني آخد|خذ موعد|بدي اعمل|في مجال"
-    r"|rendez-vous|prendre rendez"
-    r")",
-    re.I,
-)
-_ORDER = re.compile(r"\b(order|buy|purchase|اطلب|اشتري|بدي اطلب)\b", re.I)
-_PHOTO = re.compile(
-    r"("
-    r"\b(photo|picture|video|videos|image|images|link|links)\b"
-    r"|صورة|صور|فيديو|رابط|روابط|لينك"
-    r")",
-    re.I,
-)
-_HOURS = re.compile(
-    r"("
-    r"\b(hour|hours|open|opens|close|closes|opening|opened|closed)\b"
-    r"|ساعات|مفتوح|مغلق|الدوام|دوام|يفتح|تسكر|يسكر|فاتح|سكر"
-    r"|امتى|متى|aw2at|dawem|se3a|opening hours|عطلة|off.?day|day off"
-    r")",
-    re.I,
-)
-_PRICE = re.compile(r"\b(price|cost|how much|كم|سعر|غلى|كلفة)\b", re.I)
-_PRODUCT = re.compile(r"\b(product|serum|cream|shampoo|منتج|سيروم|كريم)\b", re.I)
-_CANCEL = re.compile(r"\b(cancel|status|الغِ|الغي|وين صار)\b", re.I)
-_NEGATE_BOOK = re.compile(
-    r"(لا تحجز|ما تحجز|don't book|do not book|just asking|بس عم اسأل|بس اسأل|not booking)",
-    re.I,
-)
-_NEGATE_HUMAN = re.compile(
-    r"(i do not want a human|don't want a human|لا أريد موظف|ما بدي موظف|مش بدي حدا)",
-    re.I,
-)
-_REFERENCE = re.compile(
-    r"\b(the first one|the second one|that one|this one|the same one|هي|هاد|هيدا|الأول|التاني)\b",
-    re.I,
-)
-_CORRECT = re.compile(
-    r"\b(i meant|i mean|not the|actually the|قصدت|مش ال|مو ال|غلط.? قصدي)\b",
-    re.I,
-)
-_COMPARE = re.compile(r"(الفرق|فرق بين|قارن|\bvs\b|versus|compare|difference)", re.I)
 _ANNOTATION_PREFIXES = (
     "post_media_type=",
     "post_kind=",
@@ -72,13 +20,16 @@ _ANNOTATION_INLINE = re.compile(
     r".*?(?=(?:\s(?:post_media_type|post_kind|post_visual|post_audio_transcript|post_media_url|post_caption)=)|$)",
     re.I,
 )
-_ADDRESS = re.compile(
-    r"("
-    r"\b(address|location|where are you|where is your|which branch|what branch)\b"
-    r"|عنوان|العنون|وين فرع|وين موقع|وين محل|موقعكم|فرعنا|فروعكم|الفرع"
-    r")",
-    re.I,
-)
+_RULE_BOUND = {"human_request", "service_request", "product_request"}
+_READ_ONLY = {"information", "comparison", "hours", "acknowledgement", "draft_correction"}
+_FAIL_SOFT_FAMILIES: list[SourceFamily] = [
+    "knowledge",
+    "care",
+    "services",
+    "faq",
+    "branches",
+    "prices",
+]
 
 
 def planner_customer_text(message: str) -> str:
@@ -95,13 +46,6 @@ def planner_customer_text(message: str) -> str:
     return "\n".join(kept).strip()
 
 
-def _has(pattern: re.Pattern[str], text: str, *substrings: str) -> bool:
-    if pattern.search(text):
-        return True
-    hay = text.casefold()
-    return any(token.casefold() in hay for token in substrings)
-
-
 def _task(task_id: str, task_type: TaskType, text: str, families: list[SourceFamily]) -> PlannerTask:
     return PlannerTask(
         id=task_id,
@@ -111,94 +55,15 @@ def _task(task_id: str, task_type: TaskType, text: str, families: list[SourceFam
     )
 
 
-def plan_message(message: str) -> PlannerPlan:
+def fail_soft_plan(message: str) -> PlannerPlan:
+    """Information-only plan when OpenAI is unavailable. Not a keyword catalog."""
     text = planner_customer_text(message)
-    from services.brain.greeting_policy import is_greeting_only
-
-    if is_greeting_only(text):
-        return PlannerPlan(
-            tasks=[_task("t_greet", "acknowledgement", text, ["none"])],
-            read_only=True,
-        )
-    from services.brain.catalog_intent import is_catalog_list
-
-    tasks: list[PlannerTask] = []
-    if _has(_HUMAN, text, "موظف", "شخص حقيقي", "بدي مسؤول", "شكوى") and not _NEGATE_HUMAN.search(text):
-        tasks.append(_task("t_human", "human_request", text, ["none"]))
-    if _has(_CANCEL, text, "الغي", "وين صار"):
-        tasks.append(_task("t_status", "cancel_or_status", text, ["requests"]))
-    if _has(_BOOK, text, "حجز", "موعد", "احجزلي", "رانديفو") and not _NEGATE_BOOK.search(text):
-        tasks.append(_task("t_book", "service_request", text, ["services", "branches", "hours"]))
-    if _has(_ORDER, text, "اطلب", "اشتري"):
-        tasks.append(_task("t_order", "product_request", text, ["products"]))
-    if _has(_PHOTO, text, "صورة", "صور", "فيديو", "رابط", "لينك"):
-        tasks.append(_task("t_media", "resource_request", text, ["services", "products", "knowledge"]))
-    if _has(_HOURS, text, "ساعات", "مفتوح", "مغلق", "الدوام", "دوام", "يفتح", "يسكر", "فاتح"):
-        tasks.append(_task("t_hours", "hours", text, ["hours", "branches"]))
-    if _has(_ADDRESS, text, "عنوان", "فرع", "location", "address"):
-        tasks.append(_task("t_addr", "information", text, ["branches", "hours"]))
-    if _has(_PRICE, text, "سعر", "كلفة", "غلى") or _has(_PRODUCT, text, "منتج", "سيروم", "كريم"):
-        families: list[SourceFamily] = ["services", "prices"]
-        if _has(_PRODUCT, text, "منتج", "سيروم", "كريم"):
-            families = ["products", "prices"]
-        tasks.append(_task("t_info", "information", text, families))
-    if is_catalog_list(text) and not any(task.type == "information" for task in tasks):
-        families = ["services", "products"]
-        if _has(_PRODUCT, text, "منتج", "سيروم", "كريم"):
-            families = ["products"]
-        listed = _task("t_list", "information", text, families)
-        listed.entity_mentions = ["catalog_list"]
-        tasks.append(listed)
-    elif is_catalog_list(text):
-        for task in tasks:
-            if task.type == "information" and "catalog_list" not in task.entity_mentions:
-                task.entity_mentions.append("catalog_list")
-                if not task.source_families:
-                    task.source_families = ["services", "products"]
-    if _COMPARE.search(text):
-        cmp_fams: list[SourceFamily] = ["services", "products", "prices", "knowledge"]
-        if "فرع" in text or "branch" in text.casefold() or _has(_HOURS, text, "ساعات", "دوام"):
-            cmp_fams = ["hours", "branches"]
-        tasks.append(_task("t_cmp", "comparison", text, cmp_fams))
-    questions = [part.strip() for part in re.split(r"[؟?]+", text) if part.strip()]
-    if len(questions) > 1 and all(item.type in {"information", "hours", "comparison"} for item in tasks):
-        rebuilt: list[PlannerTask] = []
-        for index, part in enumerate(questions, start=1):
-            if _has(_HOURS, part, "ساعات", "مفتوح", "مغلق", "الدوام", "دوام", "يفتح", "يسكر"):
-                rebuilt.append(_task(f"t_q{index}", "hours", part, ["hours", "branches"]))
-            elif _has(_PRICE, part, "سعر", "كلفة", "غلى"):
-                rebuilt.append(_task(f"t_q{index}", "information", part, ["services", "prices"]))
-            else:
-                rebuilt.append(
-                    _task(f"t_q{index}", "information", part, ["knowledge", "care", "services", "faq", "branches"])
-                )
-        tasks = rebuilt
-    if _CORRECT.search(text):
-        fix = _task("t_fix", "draft_correction", text, ["knowledge", "services", "products", "faq"])
-        fix.entity_mentions = ["correction"]
-        tasks.append(fix)
-    if _REFERENCE.search(text):
-        tagged = False
-        for item in tasks:
-            if item.type in {"information", "hours", "comparison"}:
-                if "anaphor" not in item.entity_mentions:
-                    item.entity_mentions.append("anaphor")
-                tagged = True
-        if not tagged:
-            ref = _task("t_ref", "information", text, ["knowledge", "services", "products", "faq"])
-            ref.entity_mentions = ["anaphor"]
-            tasks.append(ref)
-    if not tasks:
-        tasks.append(_task("t_info", "information", text, ["knowledge", "care", "services", "faq", "branches"]))
-    read_only = all(
-        item.type in {"information", "comparison", "hours", "acknowledgement", "draft_correction"} for item in tasks
-    )
-    return PlannerPlan(tasks=tasks, read_only=read_only)
+    return PlannerPlan(tasks=[_task("t_info", "information", text, list(_FAIL_SOFT_FAMILIES))], read_only=True)
 
 
-_ACTION_TYPES = {"human_request", "service_request", "product_request", "cancel_or_status", "resource_request"}
-_RULE_BOUND = {"human_request", "service_request", "product_request"}
-_READ_ONLY = {"information", "comparison", "hours", "acknowledgement", "draft_correction"}
+def plan_message(message: str) -> PlannerPlan:
+    """Fail-soft information plan. Live request actions come from Terra tools, not this fallback."""
+    return fail_soft_plan(message)
 
 
 def _bind_request_rules(
@@ -210,7 +75,7 @@ def _bind_request_rules(
         return plan
     tasks = [task for task in plan.tasks if task.type not in _RULE_BOUND or task.type in enabled_action_types]
     if not tasks:
-        tasks = [_task("t_info", "information", message, ["knowledge", "care", "services", "faq", "branches"])]
+        tasks = [_task("t_info", "information", message, list(_FAIL_SOFT_FAMILIES))]
     read_only = all(task.type in _READ_ONLY for task in tasks)
     return plan.model_copy(update={"tasks": tasks, "read_only": read_only})
 
@@ -221,63 +86,8 @@ def overlay_plan(
     *,
     enabled_action_types: set[str] | None = None,
 ) -> PlannerPlan:
-    """Keep the LLM plan, but force published hours/handoff/request tasks the heuristic saw.
-
-    The live OpenAI planner sometimes labels a hours question as knowledge-only
-    information. That must not drop hours/branches retrieval.
-    Published request rules win over heuristic/LLM action guesses.
-    """
-    heur = plan_message(message)
-    if all(task.type == "acknowledgement" for task in heur.tasks):
-        return _bind_request_rules(heur, message, enabled_action_types)
+    """Keep the GPT plan. Bind published tenant request rules. Never regex force-correct."""
+    text = planner_customer_text(message)
     if llm is None or not llm.tasks:
-        return _bind_request_rules(heur, message, enabled_action_types)
-    tasks = [task.model_copy(deep=True) for task in llm.tasks]
-    llm_types = {task.type for task in tasks}
-    heur_types = {task.type for task in heur.tasks}
-
-    if "hours" in heur_types:
-        hours_task = next(task for task in heur.tasks if task.type == "hours")
-        if "hours" not in llm_types:
-            if heur_types <= {"hours", "acknowledgement", "draft_correction"}:
-                converted = False
-                for task in tasks:
-                    if task.type == "information":
-                        task.type = "hours"
-                        task.source_families = ["hours", "branches"]
-                        converted = True
-                        break
-                if not converted:
-                    tasks.append(hours_task.model_copy(deep=True))
-            else:
-                tasks.append(hours_task.model_copy(deep=True))
-        for task in tasks:
-            if task.type == "hours":
-                families = [fam for fam in task.source_families if fam not in {"knowledge", "care", "faq", "none"}]
-                if "hours" not in families:
-                    families.append("hours")
-                if "branches" not in families:
-                    families.append("branches")
-                task.source_families = families or ["hours", "branches"]
-
-    if _has(_ADDRESS, planner_customer_text(message), "عنوان", "فرع", "location", "address"):
-        for task in tasks:
-            if task.type == "information":
-                families = [fam for fam in task.source_families if fam != "none"]
-                if "branches" not in families:
-                    families.append("branches")
-                task.source_families = families or ["branches", "hours"]
-        if not any(task.type == "information" for task in tasks):
-            addr = next((task for task in heur.tasks if "branches" in (task.source_families or [])), None)
-            if addr is not None:
-                tasks.append(addr.model_copy(deep=True))
-
-    for task in heur.tasks:
-        if task.type in _ACTION_TYPES and task.type not in llm_types:
-            if enabled_action_types is not None and task.type in _RULE_BOUND and task.type not in enabled_action_types:
-                continue
-            tasks.append(task.model_copy(deep=True))
-
-    read_only = all(task.type in _READ_ONLY for task in tasks)
-    merged = llm.model_copy(update={"tasks": tasks, "read_only": read_only})
-    return _bind_request_rules(merged, message, enabled_action_types)
+        return _bind_request_rules(fail_soft_plan(text), text, enabled_action_types)
+    return _bind_request_rules(llm, text, enabled_action_types)

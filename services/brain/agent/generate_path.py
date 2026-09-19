@@ -70,10 +70,19 @@ async def generate_verified(
             },
         )
     identity = load_identity_bundle(turn.tenant_id)
+    from services.brain.actions.human_handoff_policy import policy_receipts
+
     receipt_lines = [
         f"{item.get('action_type')}:{item.get('state')}:{item.get('backend_id') or item.get('reason')}"
         for item in resource_receipts
-    ] + list(tool_receipts)
+    ]
+    receipt_lines.extend(tool_receipts)
+    receipt_lines.extend(policy_receipts(extra))
+    from services.brain.tools.resource_inventory import format_inventory_receipt, remember_previous_inventory
+
+    previous = remember_previous_inventory(turn)
+    if previous:
+        receipt_lines.append(format_inventory_receipt(previous, prefix="previous_inventory"))
     envelope = await generate_grounded_reply(
         turn=turn,
         message=message,
@@ -186,7 +195,12 @@ async def generate_verified(
     dispositions = dict(envelope.dispositions)
     for task in plan.tasks:
         if task.type == "resource_request" and task.id not in dispositions:
-            dispositions[task.id] = "pending_delivery" if resource_receipts else "not_found"
+            if resource_receipts:
+                dispositions[task.id] = "pending_delivery"
+            elif extra.get("resource_inventory") is not None:
+                dispositions[task.id] = "awaiting_customer"
+            else:
+                dispositions[task.id] = "not_found"
     agent_trace.append({"step": "FINAL", "decision": envelope.decision})
     greeted = apply_greeting(turn, message, channel, envelope.model_copy(update={"dispositions": dispositions}))
     from services.brain.agent.action_gate import append_handoff_message

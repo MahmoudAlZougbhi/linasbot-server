@@ -158,6 +158,18 @@ class TikTokContentRepository:
             )
         )
 
+    def page_replied_as(self, *, tenant_id: str, tiktok_reply_id: str) -> bool:
+        rid = (tiktok_reply_id or "").strip()
+        if not rid:
+            return False
+        row = self.session.scalar(
+            select(TikTokCommentReply).where(
+                TikTokCommentReply.tenant_id == tenant_id,
+                TikTokCommentReply.tiktok_reply_id == rid,
+            )
+        )
+        return row is not None
+
     def claim_comment_for_ai(
         self, *, tenant_id: str, comment_id: str, lease_seconds: int = 300
     ) -> TikTokComment | None:
@@ -169,13 +181,12 @@ class TikTokContentRepository:
                 TikTokComment.tenant_id == tenant_id,
                 TikTokComment.comment_id == comment_id,
                 TikTokComment.ai_processed.is_(False),
-                TikTokComment.is_reply.is_(False),
                 or_(TikTokComment.ai_claimed_at.is_(None), TikTokComment.ai_claimed_at < cutoff),
             )
             .values(ai_claimed_at=now)
         )
         result = self.session.execute(stmt)
-        if int(result.rowcount or 0) != 1:
+        if int(getattr(result, "rowcount", 0) or 0) != 1:
             return None
         return self.session.scalar(
             select(TikTokComment).where(TikTokComment.tenant_id == tenant_id, TikTokComment.comment_id == comment_id)

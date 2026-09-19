@@ -7,33 +7,10 @@ from pathlib import Path
 import pytest
 
 from services.owner_copilot.assent import (
-    looks_like_owner_assent,
     pending_confirm_from_messages,
     resolve_pending_confirm_token,
 )
 from services.owner_copilot.cm_approval import CmPatchProposalStore
-
-
-@pytest.mark.parametrize(
-    "text,expected",
-    [
-        ("ok", True),
-        ("OK", True),
-        ("okay", True),
-        ("yes", True),
-        ("موافق", True),
-        ("نعم", True),
-        ("تمام", True),
-        ("يلا", True),
-        ("approve", True),
-        ("Agree to save", True),
-        ("ok please change the price to 50", False),
-        ("لا", False),
-        ("", False),
-    ],
-)
-def test_looks_like_owner_assent(text: str, expected: bool) -> None:
-    assert looks_like_owner_assent(text) is expected
 
 
 def test_pending_confirm_from_messages_prefers_latest_token() -> None:

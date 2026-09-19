@@ -10,7 +10,7 @@ import pytest
 
 from services.owner_copilot.attachments import store_attachment, validate_upload
 from services.owner_copilot.choices import make_choice_set, resolve_choice, setup_tone_choices
-from services.owner_copilot.creative_policy import looks_like_creative_request
+from services.owner_copilot.creative_policy import CANCELLED_CREATIVE_TOOLS
 from services.owner_copilot.flags import flags_snapshot, owner_model_name, owner_recent_history_tokens
 from services.owner_copilot.memory import estimate_messages_tokens, pack_recent_messages
 from services.owner_copilot.models import StreamEvent
@@ -98,10 +98,9 @@ def test_owner_recent_history_tokens_default_4000(monkeypatch: pytest.MonkeyPatc
     assert owner_recent_history_tokens() == 5000
 
 
-def test_creative_keywords_detected() -> None:
-    assert looks_like_creative_request("create a post please")
-    assert looks_like_creative_request("بدي نعمل بوست")
-    assert not looks_like_creative_request("why is Instagram not replying")
+def test_cancelled_creative_tools_stay_disabled() -> None:
+    assert "create_creative_draft" in CANCELLED_CREATIVE_TOOLS
+    assert "create_creative_draft" not in tool_names()
 
 
 def test_token_aware_memory_not_fixed_8x600() -> None:

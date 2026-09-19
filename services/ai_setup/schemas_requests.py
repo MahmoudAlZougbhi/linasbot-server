@@ -89,6 +89,8 @@ class RequestRule(CmBaseModel):
     attachments: list[ArticleAttachment] = Field(default_factory=list)
     ai_search_title: str = ""
     ai_search_description: str = ""
+    handoff_guidance: str = ""
+    pre_handoff_message_hint: str = ""
 
 
 class RequestsAppointmentsSection(CmBaseModel):
@@ -113,6 +115,16 @@ class RequestsAppointmentsSection(CmBaseModel):
     # Free-text prohibited / restricted request topics (owner-authored).
     prohibited: list[str] = Field(default_factory=list)
     notes: str | None = None
+
+    @field_validator("rules")
+    @classmethod
+    def _cap_rules_per_type(cls, value: list[RequestRule]) -> list[RequestRule]:
+        from services.ai_setup.request_rule_limits import count_rules_by_type, request_rule_limit_error
+
+        err = request_rule_limit_error(count_rules_by_type(value))
+        if err is not None:
+            raise ValueError(str(err))
+        return value
 
     @field_validator("enabled_types")
     @classmethod

@@ -224,6 +224,27 @@ async def process_meta_comment_event(
         allow_graph=not simulation,
     )
     post_id = str(event.get("post_id") or event.get("media_id") or "").strip()
+    parent_id = str(event.get("parent_id") or "").strip()
+    from services.brain.comments.page_replies import is_page_comment_reply
+    from services.brain.comments.thread_parent import classify_comment_parent, skip_third_party_join
+
+    owner_ids = {
+        str(binding.page_id or "").strip(),
+        str(binding.instagram_account_id or "").strip(),
+        str(binding.asset_id or "").strip(),
+    }
+    parent_kind = classify_comment_parent(
+        parent_id=parent_id,
+        post_id=post_id,
+        parent_from_id=str(event.get("parent_from_id") or "").strip(),
+        owner_ids=owner_ids,
+        parent_is_page_reply=is_page_comment_reply(
+            tenant_id=binding.tenant_id, channel=binding.channel, comment_id=parent_id
+        ),
+        current_author_id=str(event.get("author_id") or "").strip(),
+    )
+    if skip_third_party_join(parent_kind, tenant_id=binding.tenant_id, channel=binding.channel, post_id=post_id):
+        return CommentReplyResult(status="ignored", reason="reply_to_human")
     from services.ai_setup.comment_rules import evaluate_published_comment_rules
     from services.ai_setup.constants import tenant_uses_cm_runtime
 
@@ -237,8 +258,9 @@ async def process_meta_comment_event(
             account_id=binding.asset_id,
         )
         if rule_decision.action == "ignore" and rule_decision.rule_mode != "ai_guidance":
-            _mark_sent_reply(binding, comment_id)
-            return CommentReplyResult(status="ignored", reason=rule_decision.reason or "comment_rule_ignore")
+            if parent_kind != "page":
+                _mark_sent_reply(binding, comment_id)
+                return CommentReplyResult(status="ignored", reason=rule_decision.reason or "comment_rule_ignore")
 
     graph_version = settings.graph_api_version or "v24.0"
     token = settings.page_access_token
@@ -277,9 +299,10 @@ async def process_meta_comment_event(
                 "conversation_id": f"comment:{binding.tenant_id}:{binding.channel}:{post_id or comment_id}",
                 "comment_id": comment_id,
                 "post_id": post_id,
-                "parent_id": str(event.get("parent_id") or ""),
+                "parent_id": parent_id,
                 "caption": str(event.get("caption") or event.get("post_caption") or ""),
                 "parent_comment": str(event.get("parent_comment") or event.get("parent_text") or ""),
+                "parent_is_page": parent_kind == "page",
                 "media_type": str(event.get("media_type") or ""),
                 "image_urls": list(event.get("image_urls") or []),
                 "video_url": str(event.get("video_url") or ""),

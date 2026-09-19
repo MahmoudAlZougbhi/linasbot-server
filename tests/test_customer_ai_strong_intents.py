@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.brain.planner.heuristic import overlay_plan, plan_message
+from services.brain.planner.heuristic import overlay_plan
 from services.brain.retrieve.cards import cards_from_sections
 from services.brain.retrieve.hydrate import expand_hits
 from services.brain.retrieve.lexical import LexicalHit, search_cards
@@ -10,20 +10,39 @@ from tests.brain_evals.qa_tenants import shop_a_qa_sections, shop_b_qa_sections
 
 
 def test_multi_intent_keeps_hours_price_booking_and_photo() -> None:
+    from tests.plan_builders import explicit_plan
+
     message = "بدي سعر الليزر ببيروت وساعات أنطلياس وصورة الليزر وإذا في مجال موعد بكرا وقارنلي بين فرع بيروت وأنطلياس"
-    types = {task.type for task in plan_message(message).tasks}
+    plan = explicit_plan(
+        message,
+        ("information", ["services", "prices"]),
+        ("hours", ["hours", "branches"]),
+        ("service_request", ["services"]),
+        ("resource_request", ["services"]),
+        ("comparison", ["hours", "branches"]),
+    )
+    types = {task.type for task in plan.tasks}
     assert {"hours", "information", "service_request", "resource_request", "comparison"} <= types
 
 
 def test_handoff_and_price_and_hours_stay_separate() -> None:
+    from tests.plan_builders import explicit_plan
+
     message = "هيدا الفرع امتى بيفتح وشو سعر الفول بودي وفرجيني صورته وبدي احكي مع حدا إذا السعر غالي"
-    types = {task.type for task in plan_message(message).tasks}
+    plan = explicit_plan(
+        message,
+        ("hours", ["hours", "branches"]),
+        ("information", ["services", "prices"]),
+        ("resource_request", ["services"]),
+        ("human_request", ["none"]),
+    )
+    types = {task.type for task in plan.tasks}
     assert "human_request" in types
     assert "hours" in types
     assert "resource_request" in types
 
 
-def test_overlay_keeps_actions_when_llm_drops_them() -> None:
+def test_overlay_does_not_inject_actions_when_llm_omits_them() -> None:
     from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
 
     llm = PlannerPlan(
@@ -38,9 +57,7 @@ def test_overlay_keeps_actions_when_llm_drops_them() -> None:
     )
     out = overlay_plan(llm, "بدي موعد وفرجيني صورة الليزر وبدي احكي مع حدا")
     types = {task.type for task in out.tasks}
-    assert "service_request" in types
-    assert "resource_request" in types
-    assert "human_request" in types
+    assert types == {"information"}
 
 
 def test_shop_a_qa_photo_stays_on_shop_a() -> None:

@@ -112,38 +112,6 @@ def _apply_turn_by_turn_policy(action: str, bot_reply: str, lang: str) -> str:
     return cleaned
 
 
-def _user_explicitly_requests_human_agent(text: str) -> bool:
-    """True if the current user message clearly asks to speak with a person (not inferred from history)."""
-    if not text or not str(text).strip():
-        return False
-    m = str(text).lower()
-    needles = (
-        "human",
-        "agent",
-        "person",
-        "staff",
-        "representative",
-        "operator",
-        "speak to",
-        "talk to someone",
-        "real person",
-        "live agent",
-        "customer service",
-        "advisor",
-        "supervisor",
-        "موظف",
-        "شخص",
-        "بشري",
-        "حد بشري",
-        "خدمة العملاء",
-        "بدي حدا",
-        "بدي موظف",
-        "بدي اتكلم",
-        "مدير",
-    )
-    return any(n in m for n in needles)
-
-
 def _reply_offers_handover_confirmation(text: str) -> bool:
     """True when the AI reply asks permission before connecting the user to staff."""
     if not text or not str(text).strip():
@@ -285,6 +253,7 @@ async def _handle_published_cm_runtime(
     reply = (v2_outcome.reply or "").strip()
     meta_in = dict(v2_outcome.metadata or {})
     reason = (v2_outcome.reason or "").strip()
+    has_queued_media = bool((meta_in.get("resource_delivery") or {}).get("items"))
     fail_closed_reasons = {
         "insufficient_credits",
         "insufficient_messages",
@@ -305,12 +274,12 @@ async def _handle_published_cm_runtime(
         "context_overflow",
         "comments_toggle_off",
     }
-    brain_stopped = bool(v2_outcome.stop) or not reply or reason in fail_closed_reasons
+    brain_stopped = bool(v2_outcome.stop) or (not reply and not has_queued_media) or reason in fail_closed_reasons
     if brain_stopped:
         # Preserve Brain stop/empty honestly — never invent validation-failed success.
         ai_called = bool(meta_in.get("ai_called")) and bool(reply)
-        decision = reason or ("brain_no_reply" if not reply else "brain_stopped")
-        if not reply:
+        decision = reason or ("brain_no_reply" if not reply and not has_queued_media else "brain_stopped")
+        if not reply and not has_queued_media:
             decision = "brain_no_reply"
         return reply, {
             "reason": reason or "brain_no_reply",

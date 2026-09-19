@@ -7,19 +7,16 @@ from collections.abc import AsyncGenerator, Callable
 from typing import Any, Literal
 
 from services.brain.model_policy import emit_model_policy_trace, owner_stream_route_payload, resolve_owner_policy
-from services.owner_copilot.assent import looks_like_owner_assent, resolve_pending_confirm_token
 from services.owner_copilot.brain_support import (
     FINAL_ANSWER_NUDGE,
     _build_messages,
     done_payload,
-    emit_as_deltas,
     status_label,
 )
 from services.owner_copilot.cards import card_from_tool
 from services.owner_copilot.choices import choices_from_tool_result, make_choice_set
 from services.owner_copilot.confirm_path import run_confirm_path
 from services.owner_copilot.context import pack_owner_turn_context
-from services.owner_copilot.creative_policy import creative_refusal_message, looks_like_creative_request
 from services.owner_copilot.flags import owner_model_name
 from services.owner_copilot.models import ChatChoice, StreamEvent
 from services.owner_copilot.proposal_revise import load_proposal_revise_context, supersede_revised_proposal
@@ -49,15 +46,6 @@ async def _iter_owner_turn_v2_events_body(
     is_cancelled: CancelCheck | None = None,
 ) -> AsyncGenerator[StreamEvent, None]:
     text = (user_text or "").strip()
-    # Natural assent (ok / موافق / yes / …) on a pending Draft proposal → confirm path.
-    # Never invent a token; only resolve an existing pending confirmation.
-    # Edit-chip revision must not be treated as Approve assent.
-    if not confirm_tool and not revise_proposal_id and looks_like_owner_assent(text):
-        confirm_tool = resolve_pending_confirm_token(
-            tenant_id=tenant_id,
-            user_id=user_id,
-            messages=messages,
-        )
     context = pack_owner_turn_context(
         tenant_id=tenant_id,
         user_id=user_id,
@@ -150,25 +138,6 @@ async def _iter_owner_turn_v2_events_body(
                 ctx_tokens=ctx_tokens,
                 stage=stage,
                 reason="empty",
-            ),
-        )
-        return
-
-    if looks_like_creative_request(text):
-        msg = creative_refusal_message(language=reply_lang)
-        async for ev in emit_as_deltas(msg):
-            yield ev
-        yield StreamEvent(
-            type="done",
-            payload=done_payload(
-                reply_text=msg,
-                tool_calls=[],
-                cards=[],
-                choices=[],
-                model=model,
-                ctx_tokens=ctx_tokens,
-                stage=stage,
-                reason="creative_cancelled",
             ),
         )
         return

@@ -40,6 +40,7 @@ class InboundMediaResult:
     safety_reasons: list[str] = field(default_factory=list)
     fetch_errors: list[str] = field(default_factory=list)
     safety_image_urls: list[str] = field(default_factory=list)
+    product_image_matches: list[dict[str, Any]] = field(default_factory=list)
 
 
 def inbound_from_attachment_type(kind: str, *, transcript: str = "", extract: str = "") -> dict[str, Any]:
@@ -204,6 +205,7 @@ def inbound_media_view(result: InboundMediaResult) -> dict[str, Any]:
         "inbound_link": result.inbound_link or "",
         "inbound_link_host": link_host(result.inbound_link),
         "safety_blocked": bool(result.safety_blocked),
+        "product_image_matches": list(result.product_image_matches or []),
     }
 
 

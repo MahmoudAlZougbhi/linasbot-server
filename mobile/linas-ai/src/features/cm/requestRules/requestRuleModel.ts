@@ -149,6 +149,30 @@ export function collectsPhrase(graph: RequestGraphRow | undefined, empty: string
   return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
 }
 
+export const MAX_RULES_PER_REQUEST_TYPE = 10;
+
+export function countRulesByType(items: RequestRuleItem[]): Record<RequestRuleType, number> {
+  const counts: Record<RequestRuleType, number> = {
+    APPOINTMENT: 0,
+    ORDER: 0,
+    OTHER: 0,
+    HUMAN: 0,
+  };
+  for (const item of items) {
+    counts[item.type] += 1;
+  }
+  return counts;
+}
+
+export function wouldExceedRuleLimit(
+  items: RequestRuleItem[],
+  type: RequestRuleType,
+  exceptId?: string,
+): boolean {
+  const current = items.filter((item) => item.type === type && item.id !== exceptId).length;
+  return current >= MAX_RULES_PER_REQUEST_TYPE;
+}
+
 export function typeLabelKey(
   type: RequestRuleType,
 ):

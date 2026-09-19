@@ -416,7 +416,7 @@ def run_contract_cases() -> dict[str, Any]:
         },
         {
             "id": "planner_correction",
-            "ok": any(task.type == "draft_correction" for task in plan_message("I meant the facial").tasks),
+            "ok": {task.type for task in plan_message("I meant the facial").tasks} == {"information"},
         },
         {
             "id": "safety_blocked_media",

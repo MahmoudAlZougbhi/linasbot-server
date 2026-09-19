@@ -41,6 +41,12 @@ async def escalate_to_human(
             state="unknown",
             reason="handoff_unconfirmed",
         )
+    try:
+        from utils.utils_livechat_hooks import _refresh_live_chat_index_async
+
+        _refresh_live_chat_index_async(user_id, conversation_id)
+    except Exception:
+        pass
     return ActionReceipt(
         action_id=f"handoff:{proposal.task_id}",
         action_type="escalate_to_human",

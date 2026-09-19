@@ -15,11 +15,14 @@ from services.brain.retrieve.cards import cards_from_sections
 from tests.brain_evals.fixtures import knowledge_heavy_corpus, service_appointment_corpus
 
 
-def test_coverage_detects_planner_omission() -> None:
+def test_coverage_does_not_overlay_heuristic_hours() -> None:
     plan = PlannerPlan(tasks=[PlannerTask(id="t1", type="information", source_families=["services"])])
     missing = omitted_task_types("بدي سعر الليزر وساعات الفرع", plan)
-    assert "hours" in missing
-    assert coverage_ok("بدي سعر الليزر وساعات الفرع", plan, {"t1": "answered"}) is False
+    assert missing == []
+    assert (
+        coverage_ok("بدي سعر الليزر وساعات الفرع", plan, {"t1": "answered"}, reply_text="99 USD", decision="reply")
+        is True
+    )
 
 
 def _answered_plan() -> tuple[str, PlannerPlan, dict[str, str]]:

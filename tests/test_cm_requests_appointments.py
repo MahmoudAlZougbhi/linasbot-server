@@ -94,10 +94,19 @@ def test_schema_accepts_human_request_type() -> None:
         module_enabled=True,
         enabled_types=["HUMAN"],
         type_labels={"HUMAN": LocalizedLabels(en="Human", ar="موظف")},
-        rules=[{"id": "h1", "type": "HUMAN", "name": "Staff", "enabled": True}],
+        rules=[
+            {
+                "id": "h1",
+                "type": "HUMAN",
+                "name": "Staff",
+                "enabled": True,
+                "pre_handoff_message_hint": "One short line",
+            }
+        ],
     )
     assert section.enabled_types == ["HUMAN"]
     assert section.rules[0].type == "HUMAN"
+    assert section.rules[0].pre_handoff_message_hint == "One short line"
 
 
 def test_schema_rejects_bad_type_label_keys() -> None:

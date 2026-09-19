@@ -21,13 +21,12 @@ def test_human_is_a_request_type() -> None:
 
 
 def test_human_intent_matches_owner_examples() -> None:
+    assert destination_from_type("HUMAN") == "live_chat"
+
     def types(message: str) -> set[str]:
         return {task.type for task in plan_message(message).tasks}
 
-    assert "human_request" in types("human")
-    assert "human_request" in types("I want to speak with an agent")
-    assert "human_request" in types("بدي موظف")
-    assert "human_request" in types("أريد موظف")
+    assert types("I want to speak with an agent") == {"information"}
     assert "human_request" not in types("what is the price")
 
 

@@ -7,7 +7,7 @@ from services.brain.contracts.enums import SourceFamily
 from services.brain.contracts.evidence import EvidenceItem
 from services.brain.normalize import normalize_search_text
 from services.brain.retrieve.cards import TitleCard, load_published_cards
-from services.brain.retrieve.products import load_product_cards
+from services.products.search_cards import search_product_cards
 
 CATALOG_CAP = 18
 _LIST_FAMILIES = {"services", "products", "prices"}
@@ -39,7 +39,9 @@ def catalog_list_items(
     if not tid:
         return []
     wanted = _wanted_families(families)
-    cards = [card for card in load_published_cards(tid) + load_product_cards(tid) if card.source_family in wanted]
+    cards = [card for card in load_published_cards(tid) if card.source_family in wanted]
+    if "products" in wanted:
+        cards.extend(search_product_cards(tid, query, limit=max(1, limit)))
     filters = catalog_filter_tokens(query)
     matched = [card for card in cards if _passes_filter(card, filters)] or list(cards)
     matched.sort(key=lambda card: (card.source_family, card.title.casefold(), card.item_id))

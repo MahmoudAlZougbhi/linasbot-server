@@ -111,35 +111,27 @@ def test_conversation_resolve_carry() -> None:
             {"role": "assistant", "text": "Full body is 99.0 USD"},
         ],
     )
-    assert resolved.carry.get("branch") != "antelias" or not resolved.carry
-    assert "laser" not in (resolved.carry.get("service") or "")
+    assert resolved.rewritten_query == "And in Antelias?"
+    assert resolved.carry == {}
 
 
 def test_conversation_resolve_uses_published_labels(monkeypatch) -> None:
     from services.brain import conversation_resolve as cr
 
-    monkeypatch.setattr(
-        cr,
-        "published_label_index",
-        lambda _tid: {
-            "branches": (("antelias", "br_antelias"), ("beirut", "br_beirut")),
-            "services": (("full body", "svc_full_body"),),
-            "products": (),
-        },
-    )
     resolved = cr.resolve_followup_query(
         "And in Antelias?",
         [{"role": "user", "text": "How much is full body?"}],
         tenant_id="t-clinic",
     )
-    assert resolved.carry.get("branch") == "br_antelias"
+    assert resolved.rewritten_query == "And in Antelias?"
+    assert resolved.carry == {}
     shifted = cr.resolve_followup_query(
         "شو خدمات الليزر اللي عندكن؟",
         [{"role": "user", "text": "What are your opening hours in Antelias?"}],
         tenant_id="t-clinic",
     )
-    assert "br_antelias" not in shifted.rewritten_query
-    assert shifted.carry.get("branch") in {"", None}
+    assert shifted.rewritten_query == "شو خدمات الليزر اللي عندكن؟"
+    assert shifted.carry == {}
 
 
 def test_shadow_module_removed() -> None:

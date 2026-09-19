@@ -37,8 +37,11 @@ import {
   matchesRequestQuery,
   parseRequestRule,
   ruleToRecord,
+  typeLabelKey,
+  wouldExceedRuleLimit,
   type RequestGraphRow,
   type RequestRuleItem,
+  type RequestRuleType,
 } from './requestRuleModel';
 
 type Props = {
@@ -123,11 +126,24 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
 
   function handleAdd() {
     const item = createRequestRule(newId('req'));
+    if (wouldExceedRuleLimit(items, item.type)) {
+      Alert.alert(tr('requestRulesLimitTitle'), tr('requestRulesLimitBody').replace('{type}', tr(typeLabelKey(item.type))));
+      return;
+    }
     setRules([item, ...items]);
     setSelectedId(item.id);
     setPreview(undefined);
     setSaveError(null);
     setMode('edit');
+  }
+
+  function handleType(type: RequestRuleType) {
+    if (!selected) return;
+    if (type !== selected.type && wouldExceedRuleLimit(items, type, selected.id)) {
+      Alert.alert(tr('requestRulesLimitTitle'), tr('requestRulesLimitBody').replace('{type}', tr(typeLabelKey(type))));
+      return;
+    }
+    patchSelected({ type });
   }
 
   async function goList() {
@@ -283,7 +299,7 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
               graph={graphsBySource[selected.id]}
               preview={preview}
               onTitle={(name) => patchSelected({ name })}
-              onType={(type) => patchSelected({ type })}
+              onType={handleType}
               onNote={(notes) => patchSelected({ notes })}
               onPatch={patchSelected}
               onPreview={() => void handlePreview()}

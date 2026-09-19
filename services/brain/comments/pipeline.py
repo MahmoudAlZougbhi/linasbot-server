@@ -104,21 +104,26 @@ def deterministic_comment_result(
     return None
 
 
-def apply_ai_comment_destinations(result: TurnResult, mode: CommentMode | None) -> TurnResult:
+def apply_ai_comment_destinations(result: TurnResult, mode: CommentMode | None, *, channel: str = "") -> TurnResult:
+    from services.brain.comments.public_request_policy import force_tiktok_public_messages
+
+    channel = channel or str((result.extra or {}).get("comment_channel") or "")
+
     if not result.envelope.messages:
-        return result
+        return force_tiktok_public_messages(result, channel)
     if not mode or not str(mode).startswith("ai"):
         messages = [
             item.model_copy(update={"destination": "comment"}) if item.destination == "dm" else item
             for item in result.envelope.messages
         ]
         if messages == list(result.envelope.messages):
-            return result
+            return force_tiktok_public_messages(result, channel)
         extra = dict(result.extra)
         extra.setdefault("comment_mode", "ai_comment")
-        return result.model_copy(
+        rewritten = result.model_copy(
             update={"envelope": result.envelope.model_copy(update={"messages": messages}), "extra": extra}
         )
+        return force_tiktok_public_messages(rewritten, channel)
     messages = list(result.envelope.messages)
     if mode == "ai_comment":
         messages = [item.model_copy(update={"destination": "comment"}) for item in messages]
@@ -141,4 +146,5 @@ def apply_ai_comment_destinations(result: TurnResult, mode: CommentMode | None) 
     envelope = result.envelope.model_copy(update={"messages": messages})
     extra = dict(result.extra)
     extra["comment_mode"] = mode
-    return result.model_copy(update={"envelope": envelope, "extra": extra})
+    rewritten = result.model_copy(update={"envelope": envelope, "extra": extra})
+    return force_tiktok_public_messages(rewritten, channel)

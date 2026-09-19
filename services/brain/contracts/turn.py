@@ -54,6 +54,7 @@ class ConversationState(BaseModel):
     control_epoch: int = 0
     handoff_active: bool = False
     draft_revision: str = ""
+    resource_inventory: dict[str, Any] = Field(default_factory=dict)
 
 
 class SourceVersions(BaseModel):

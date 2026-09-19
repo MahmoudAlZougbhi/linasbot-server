@@ -7,10 +7,6 @@ from typing import Any
 
 def _lazy_bindings() -> dict[str, Any]:
     """Bindings actually read by phase 1 / phase 2."""
-    from services.brain.inbound.text_handlers_respond_intent import (
-        _build_out_of_scope_reply,
-        _is_out_of_business_scope_query,
-    )
     from services.brain.inbound.text_handlers_respond_reply import _handle_published_cm_runtime
     from services.brain.language_detection_service import language_detection_service
     from services.owner_copilot.dynamic_messages_service import get_dynamic_message
@@ -23,9 +19,7 @@ def _lazy_bindings() -> dict[str, Any]:
     )
 
     return {
-        "_build_out_of_scope_reply": _build_out_of_scope_reply,
         "_handle_published_cm_runtime": _handle_published_cm_runtime,
-        "_is_out_of_business_scope_query": _is_out_of_business_scope_query,
         "get_canonical_user_id_and_phone": get_canonical_user_id_and_phone,
         "get_dynamic_message": get_dynamic_message,
         "get_firestore_db": get_firestore_db,

@@ -5,8 +5,13 @@ from pathlib import Path
 
 def test_npm_audit_gate_rejects_network_and_incomplete_reports() -> None:
     source = Path("scripts/npm_audit_gate.mjs").read_text(encoding="utf-8")
+    bulk = Path("scripts/npm_audit_bulk.mjs").read_text(encoding="utf-8")
 
-    assert "report?.error" in source
-    assert "report?.auditReportVersion !== 2" in source
-    assert "!completeSeverityCounts" in source
+    assert "completeAuditReport" in source
+    assert "auditReportVersion === 2" in source
+    assert "!report.error" in source
+    assert "completeSeverityCounts" in source
     assert "refusing to pass" in source
+    assert "fetchBulkAdvisories" in source
+    assert "security/advisories/bulk" in bulk
+    assert "auditReportVersion: 2" in bulk

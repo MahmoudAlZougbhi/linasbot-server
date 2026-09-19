@@ -8,15 +8,9 @@ from __future__ import annotations
 from typing import Any
 
 from services.brain.inbound.text_handlers_respond_ctx import bootstrap_process_respond_ctx
-from services.brain.inbound.text_handlers_respond_intent import (
-    _build_out_of_scope_reply,
-    _is_out_of_business_scope_query,
-    _is_price_intent,
-)
 from services.brain.inbound.text_handlers_respond_keywords import (
     ASK_ONE_BY_ONE_ACTIONS,
     BRIEF_REPLY_ACTIONS,
-    PRICE_INTENT_KEYWORDS,
 )
 from services.brain.inbound.text_handlers_respond_phase1 import text_handlers_respond_phase1
 from services.brain.inbound.text_handlers_respond_phase2 import text_handlers_respond_phase2
@@ -24,7 +18,6 @@ from services.brain.inbound.text_handlers_respond_reply import (
     _apply_turn_by_turn_policy,
     _handle_published_cm_runtime,
     _reply_offers_handover_confirmation,
-    _user_explicitly_requests_human_agent,
 )
 
 _PHASE_HALT = "_PHASE_HALT"
@@ -71,13 +64,8 @@ async def _process_and_respond(
 __all__ = [
     "ASK_ONE_BY_ONE_ACTIONS",
     "BRIEF_REPLY_ACTIONS",
-    "PRICE_INTENT_KEYWORDS",
     "_apply_turn_by_turn_policy",
-    "_build_out_of_scope_reply",
     "_handle_published_cm_runtime",
-    "_is_out_of_business_scope_query",
-    "_is_price_intent",
     "_process_and_respond",
     "_reply_offers_handover_confirmation",
-    "_user_explicitly_requests_human_agent",
 ]

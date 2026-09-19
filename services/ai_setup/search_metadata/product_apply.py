@@ -78,36 +78,14 @@ def enrich_product_row(row: Any, *, previous: dict[str, Any] | None = None) -> b
 
 
 def _weaken_product_meta(meta: SearchMetadata, *, name: str) -> SearchMetadata:
-    """Do not invent category/use when the owner description is unusable.
-
-    Keywords may be empty after stripping invented terms. Title and description
-    stay required English strings (never empty).
-    """
-    lowered = f"{meta.title} {meta.description} {' '.join(meta.keywords)}".lower()
-    invented = any(
-        token in lowered
-        for token in (
-            "face cream",
-            "body lotion",
-            "shampoo",
-            "moisturizer",
-            "moisturising",
-            "moisturizing",
-            "headset",
-            "laser",
-            "skincare",
-            "skin care",
-        )
+    """Do not invent category/use when the owner description is unusable."""
+    _ = meta
+    safe_title = name if not _has_non_latin(name) else "Catalog product"
+    return SearchMetadata(
+        title=safe_title,
+        description="Named catalog product. Owner description is not specific.",
+        keywords=[],
     )
-    name_l = name.lower()
-    if invented and not any(token in name_l for token in ("cream", "lotion", "shampoo", "headset", "laser")):
-        safe_title = name if not _has_non_latin(name) else "Catalog product"
-        return SearchMetadata(
-            title=safe_title,
-            description="Named catalog product. Owner description is not specific.",
-            keywords=[],
-        )
-    return meta
 
 
 def _has_non_latin(text: str) -> bool:

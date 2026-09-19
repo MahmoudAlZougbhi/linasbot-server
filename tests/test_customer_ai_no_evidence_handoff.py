@@ -52,7 +52,7 @@ def _turn(*, kind: str = "dm", lang: str = "en") -> CustomerTurn:
 def test_should_handoff_only_unanswered_questions() -> None:
     info = _plan(_task("t1", "information", span="guest wifi?"))
     hours = _plan(_task("h1", "hours", families=["hours", "branches"], span="antelias hours"))
-    ack = _plan(_task("t1", "information", span="thanks"))
+    ack = _plan(_task("t1", "acknowledgement", span="thanks"))
     found_hours = hours
     assert should_handoff_unanswered(plan=info, outcome="not_found", message="Do you have guest wifi?") is True
     assert should_handoff_unanswered(plan=hours, outcome="not_found", message="شو ساعات أنطلياس؟") is True
@@ -69,8 +69,8 @@ def test_should_handoff_only_unanswered_questions() -> None:
     catchall = _plan(
         _task("t1", "information", families=["knowledge", "care", "services", "faq", "branches"], span="ok")
     )
-    assert should_handoff_unanswered(plan=catchall, outcome="not_found", message="ok") is False
-    assert should_handoff_unanswered(plan=catchall, outcome="not_found", message="cool") is False
+    assert should_handoff_unanswered(plan=catchall, outcome="not_found", message="ok") is True
+    assert should_handoff_unanswered(plan=catchall, outcome="not_found", message="cool") is True
     assert should_handoff_unanswered(plan=info, outcome="not_found", message="عنوان") is True
 
 
@@ -273,16 +273,10 @@ async def test_index_not_ready_does_not_auto_handoff(monkeypatch: pytest.MonkeyP
     execute.assert_not_called()
 
 
-def test_comment_ack_and_emoji_are_small_talk() -> None:
-    from services.brain.agent.handoff_policy import is_comment_ack
-
-    assert is_comment_ack("nice") is True
-    assert is_comment_ack("🔥") is True
-    assert is_comment_ack("WAW") is True
-    assert is_comment_ack("Whats") is True
-    assert is_comment_ack("hey") is True
-    assert is_comment_ack("price?") is False
-    assert is_comment_ack("عنوان") is False
+def test_acknowledgement_plan_does_not_handoff() -> None:
+    ack = _plan(_task("t1", "acknowledgement", span="nice"))
+    assert should_handoff_unanswered(plan=ack, outcome="not_found", message="nice") is False
+    assert should_handoff_unanswered(plan=ack, outcome="not_found", message="🔥") is False
 
 
 @pytest.mark.asyncio
@@ -312,7 +306,7 @@ async def test_comment_ack_replies_when_retrieve_is_empty(monkeypatch: pytest.Mo
         _turn(kind="comment"),
         "nice",
         "instagram_comment",
-        plan=_plan(_task("t1", "information", span="nice")),
+        plan=_plan(_task("t1", "acknowledgement", span="nice")),
     )
     assert result.stop_reason == "ok"
     assert result.envelope.messages[0].destination == "comment"

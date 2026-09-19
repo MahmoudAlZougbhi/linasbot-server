@@ -20,16 +20,15 @@ def test_o6_root_museum_prompt_and_resolver_folded() -> None:
     assert not (ROOT / "docs/FINAL_CLEANUP_VERIFY.md").exists()
 
 
-def test_o6_business_scope_guard_renamed_not_removed() -> None:
+def test_o6_business_scope_keyword_guard_removed() -> None:
     keywords = (ROOT / "services/brain/inbound/text_handlers_respond_keywords.py").read_text(encoding="utf-8")
     intent = (ROOT / "services/brain/inbound/text_handlers_respond_intent.py").read_text(encoding="utf-8")
     phase2 = (ROOT / "services/brain/inbound/text_handlers_respond_phase2.py").read_text(encoding="utf-8")
-    assert "BUSINESS_SCOPE_KEYWORDS" in keywords
-    assert "CLINIC_SCOPE_KEYWORDS" not in keywords
-    assert "_is_out_of_business_scope_query" in intent
-    assert "_is_out_of_clinic_scope_query" not in intent
-    assert "_is_out_of_business_scope_query" in phase2
-    assert "OFF_TOPIC_KEYWORDS" in keywords
+    assert "BUSINESS_SCOPE_KEYWORDS" not in keywords
+    assert "OFF_TOPIC_KEYWORDS" not in keywords
+    assert "_is_out_of_business_scope_query" not in intent
+    assert "_is_out_of_business_scope_query" not in phase2
+    assert "out_of_scope_guard" not in phase2
 
 
 def test_o6_keep_surfaces_intact() -> None:

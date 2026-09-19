@@ -9,8 +9,8 @@ from services.brain.contracts.turn import CustomerTurn
 from services.brain.normalize import normalize_search_text
 from services.brain.retrieve.cards import TitleCard, load_published_cards
 from services.brain.retrieve.lexical import search_cards
-from services.brain.retrieve.products import load_product_cards
 from services.brain.retrieve.schedule_text import schedule_search_blob
+from services.products.search_cards import search_product_cards
 
 
 def _sections(tenant_id: str) -> dict[str, Any]:
@@ -80,7 +80,9 @@ def _first_search_row(rows: list[dict[str, Any]], query: str) -> dict[str, Any] 
 
 
 def _card_search(tenant_id: str, query: str, families: set[str] | None, *, limit: int = 5) -> list[dict[str, Any]]:
-    cards: list[TitleCard] = load_published_cards(tenant_id) + load_product_cards(tenant_id)
+    cards: list[TitleCard] = load_published_cards(tenant_id)
+    if families is None or "products" in families:
+        cards = cards + search_product_cards(tenant_id, query, limit=limit)
     hits = search_cards(cards, query, families=families, limit=limit)  # type: ignore[arg-type]
     return [
         {
@@ -142,15 +144,36 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
         return {"ok": True, "data": _card_search(tenant_id, query, {"services", "prices"})}
 
     if name == "get_product":
-        products = _items(sections, "products")
-        row = _match_id(products, item_id) or _first_search_row(products, query)
-        if not row:
-            hits = _card_search(tenant_id, item_id or query, {"products"}, limit=1)
+        from services.brain.retrieve.products import load_product_evidence
+
+        item = load_product_evidence(tenant_id, item_id)
+        if item is not None:
+            return {
+                "ok": True,
+                "data": {
+                    "id": item.source_id,
+                    "title": item.title,
+                    "text": item.text,
+                    "availability": (item.extra or {}).get("availability"),
+                    "listed_price": (item.extra or {}).get("listed_price"),
+                },
+            }
+        if query:
+            hits = _card_search(tenant_id, query, {"products"}, limit=1)
             return {"ok": bool(hits), "data": hits[0] if hits else None, "error": None if hits else "not_found"}
-        return {"ok": True, "data": {"id": row.get("id"), "title": _label(row), "text": row.get("description") or ""}}
+        return {"ok": False, "data": None, "error": "not_found"}
 
     if name == "search_products":
-        return {"ok": True, "data": _card_search(tenant_id, query, {"products"})}
+        from services.brain.retrieve.orchestrate import RetrieveContext, retrieve_published
+
+        bundle = await retrieve_published(RetrieveContext(tenant_id=tenant_id, query=query, families={"products"}))
+        found = [
+            {"id": item.source_id, "family": "products", "title": item.title, "text": item.text[:500]}
+            for item in bundle.items
+        ]
+        if bundle.outcome == "product_index_stale":
+            return {"ok": False, "data": None, "error": "product_index_stale"}
+        return {"ok": True, "data": found}
 
     if name == "get_price":
         prices_raw = sections.get("prices")
@@ -289,6 +312,11 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
     if name == "get_published_knowledge":
         return {"ok": True, "data": _card_search(tenant_id, query, {"knowledge", "care", "faq"})}
 
+    if name in {"check_setup_resources", "list_resources"}:
+        from services.brain.tools.resource_inventory import run_check
+
+        return run_check(args, turn)
+
     if name == "resolve_resource":
         needle = normalize_search_text(item_id or query or str(args.get("resource_id") or ""))
         if not needle:
@@ -320,25 +348,21 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
         }
 
     if name == "get_request_state":
-        draft_id = str(args.get("draft_id") or args.get("request_id") or item_id or "").strip()
-        pending = list((turn.state.pending_actions if hasattr(turn.state, "pending_actions") else []) or [])
-        # ConversationState may store pending differently — expose typed snapshot only.
+        from services.brain.agent.request_snapshot import build_request_snapshot
         from services.brain.conversation_store import hydrate_turn_state
 
         try:
             hydrate_turn_state(turn)
         except Exception:
             pass
-        pending_rows = []
-        extra_pending = (turn.extra or {}).get("pending_actions") if isinstance(turn.extra, dict) else None
-        for row in list(pending) + list(extra_pending or []):
-            if isinstance(row, dict):
-                pending_rows.append(row)
-            elif hasattr(row, "model_dump"):
-                pending_rows.append(row.model_dump())
+        data = build_request_snapshot(turn)
+        draft_id = str(args.get("draft_id") or args.get("request_id") or item_id or "").strip()
         if draft_id:
-            pending_rows = [row for row in pending_rows if draft_id in str(row)]
-        return {"ok": True, "data": {"pending": pending_rows, "draft_id": draft_id}}
+            data = {**data, "draft_id": draft_id}
+        return {"ok": True, "data": data}
+
+    if name == "no_request_action":
+        return {"ok": True, "data": {"no_request_action": True}}
 
     return {"ok": False, "error": "unknown_tool", "data": None}
 

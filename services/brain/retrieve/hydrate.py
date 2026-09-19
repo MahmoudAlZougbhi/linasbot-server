@@ -166,28 +166,16 @@ def expand_hits(
     tenant_id: str = "",
 ) -> EvidenceBundle:
     items: list[EvidenceItem] = []
+    product_hits = [hit for hit in hits if hit.card.source_family == "products"]
+    if product_hits:
+        from services.brain.retrieve.products_hydrate import expand_product_hits
+
+        items.extend(expand_product_hits(product_hits, tenant_id=tenant_id, revision=revision))
     for hit in hits:
         card = hit.card
         _, _, source_id = card.item_id.partition(":")
         family = card.source_family
         if family == "products":
-            from services.brain.retrieve.products import evidence_from_product, load_product_evidence
-
-            match = next((row for row in _rows(sections, family) if _row_id(row) == source_id), None)
-            if match is not None:
-                product_item = evidence_from_product(match)
-            else:
-                product_item = load_product_evidence(tenant_id, source_id)
-            if product_item is None:
-                continue
-            items.append(
-                product_item.model_copy(
-                    update={
-                        "revision": revision or product_item.revision or card.revision,
-                        "extra": {**(product_item.extra or {}), "lexical_score": hit.score},
-                    }
-                )
-            )
             continue
         match = (
             _select_hours_row(sections, source_id)

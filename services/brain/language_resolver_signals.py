@@ -82,17 +82,17 @@ ARABIZI_WORDS = {
     "2addesh",
     "adde",
     "2adde",
-    # Gender words (CRITICAL for gender detection)
+    # Common Franco words (language signal only; never gates Terra/Sol; not gender detection)
     "shab",
     "chab",
-    "shabb",  # male
+    "shabb",
     "sabieh",
     "sabiye",
     "sabiyeh",
     "benet",
-    "bint",  # female
+    "bint",
     "zakar",
-    "ontha",  # formal male/female
+    "ontha",
     # Name-related
     "esme",
     "esmi",

@@ -114,6 +114,52 @@ def facts_from_tool_data(tool: str, data: Any, *, tenant_id: str = "", task_id: 
                     task_ids=[task_id] if task_id else [],
                 )
             )
+        elif tool in {"check_setup_resources", "list_resources", "resolve_resource"}:
+            media_items = item.get("items") if isinstance(item.get("items"), list) else None
+            if media_items is not None:
+                rows.append(
+                    StructuredFact(
+                        kind="resource",
+                        entity_id="inventory",
+                        value=(
+                            f"images={int(item.get('images') or 0)} "
+                            f"videos={int(item.get('videos') or 0)} "
+                            f"files={int(item.get('files') or 0)} "
+                            f"links={int(item.get('links') or 0)}"
+                        ),
+                        source=f"tool:{tool}",
+                        authority=120,
+                        tenant_id=tenant_id,
+                        task_ids=[task_id] if task_id else [],
+                        extra={"inventory": True},
+                    )
+                )
+                for media in media_items:
+                    if not isinstance(media, dict):
+                        continue
+                    rows.append(
+                        StructuredFact(
+                            kind="resource",
+                            entity_id=str(media.get("id") or ""),
+                            value=f"{media.get('kind')}:{media.get('title') or media.get('id')}",
+                            source=f"tool:{tool}",
+                            authority=120,
+                            tenant_id=tenant_id,
+                            task_ids=[task_id] if task_id else [],
+                        )
+                    )
+            elif item.get("id") or item.get("attachment"):
+                rows.append(
+                    StructuredFact(
+                        kind="resource",
+                        entity_id=str(item.get("id") or ""),
+                        value=str(item.get("title") or item.get("id") or ""),
+                        source=f"tool:{tool}",
+                        authority=95,
+                        tenant_id=tenant_id,
+                        task_ids=[task_id] if task_id else [],
+                    )
+                )
     return rows
 
 
