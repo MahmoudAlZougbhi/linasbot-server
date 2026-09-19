@@ -140,7 +140,7 @@ async def tool_read_usage(*, tenant_id: str, role: str) -> ToolResult:
         ok=True,
         name="read_usage",
         data={
-            "credits": owner_credits_public(tenant_id),
+            "messages": owner_credits_public(tenant_id),
             **copilot_usage_overlay(tenant_id, str(plan.get("plan_id") or "")),
         },
     )
@@ -182,7 +182,7 @@ async def tool_read_dashboard_metrics(*, tenant_id: str, role: str, user_id: str
             "cm_published": cm.get("published"),
             "integrations_connected": integ.get("any_connected"),
         }
-        data["credits"] = owner_credits_public(tenant_id)
+        data["messages"] = owner_credits_public(tenant_id)
         data["plan"] = get_tenant_entitlement_public(tenant_id)
         if user_id:
             data["viewer_user_id"] = user_id

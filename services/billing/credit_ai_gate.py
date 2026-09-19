@@ -59,16 +59,21 @@ def upgrade_plan_allowed(plan_id: str | None) -> bool:
     return not is_highest_catalog_plan(plan_id)
 
 
-def owner_credits_paused_payload(tenant_id: str | None) -> dict[str, Any]:
+def owner_credits_paused_payload(tenant_id: str | None, *, need: int = 1) -> dict[str, Any]:
     from services.billing.entitlements_service import entitlements_store
 
     tid = (tenant_id or "").strip().lower()
     remaining = remaining_messages(tid) if tid else 0
+    required = max(1, int(need or 1))
     plan_id = entitlements_store.get(tid).plan_id if tid else "none"
     show_upgrade = upgrade_plan_allowed(plan_id)
     return {
         "code": "insufficient_messages",
-        "message": "Not enough messages. Owner Copilot is paused until you buy messages or upgrade.",
+        "message": (
+            f"This action needs {required} messages. You have {remaining} remaining. "
+            "Buy messages or upgrade to continue."
+        ),
+        "required": required,
         "remaining": remaining,
         "plan_id": plan_id,
         "show_upgrade": show_upgrade,

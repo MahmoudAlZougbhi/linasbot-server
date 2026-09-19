@@ -28,7 +28,13 @@ async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
             elif ev.type == "credits_paused" and final is None:
                 return OwnerV2TurnResult(
                     reply_text="",
-                    route={"reason": "insufficient_credits", **ev.payload},
+                    route={"reason": "insufficient_messages", **ev.payload},
+                    model=owner_model_name(),
+                )
+            elif ev.type == "billing_confirm" and final is None:
+                return OwnerV2TurnResult(
+                    reply_text="",
+                    route={"reason": "confirm_messages", **ev.payload},
                     model=owner_model_name(),
                 )
             elif ev.type == "error" and final is None:

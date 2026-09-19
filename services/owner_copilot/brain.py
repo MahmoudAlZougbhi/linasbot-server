@@ -37,29 +37,42 @@ async def iter_owner_turn_v2_events(
         return
 
     from services.billing.credit_ai_gate import owner_credits_paused_payload
-    from services.owner_copilot.credit import (
+    from services.owner_copilot.message_billing import (
+        confirm_copy,
         estimate_copilot_cost_usd,
-        owner_turn_credit_abort,
-        owner_turn_credit_begin,
-        owner_turn_credit_on_event,
+        owner_turn_hold_abort,
+        owner_turn_hold_begin,
+        owner_turn_hold_on_event,
     )
 
-    turn_credit = owner_turn_credit_begin(
+    history_tokens = sum(len(str((m or {}).get("content") or "")) for m in (messages or [])) // 4
+    turn_hold = owner_turn_hold_begin(
         tenant_id,
         conversation_id=conversation_id,
-        estimated_usd=estimate_copilot_cost_usd(user_text=user_text),
+        user_text=user_text,
+        confirm_tool=confirm_tool,
+        choice_id=choice_id,
+        attachment_ids=attachment_ids,
+        estimated_usd=estimate_copilot_cost_usd(
+            user_text=user_text,
+            history_tokens=history_tokens,
+            attachment_count=len(attachment_ids or []),
+        ),
         confirm_billing=confirm_billing,
     )
-    if turn_credit.blocked:
-        yield StreamEvent(type="credits_paused", payload=owner_credits_paused_payload(tenant_id))
+    if turn_hold.blocked:
+        yield StreamEvent(
+            type="credits_paused",
+            payload=owner_credits_paused_payload(tenant_id, need=turn_hold.units),
+        )
         return
-    if turn_credit.confirm_required:
+    if turn_hold.confirm_required:
         yield StreamEvent(
             type="billing_confirm",
             payload={
                 "code": "confirm_messages",
-                "units": turn_credit.units,
-                "message": f"This action will use {turn_credit.units} messages.",
+                "units": turn_hold.units,
+                "message": confirm_copy(units=turn_hold.units, language=reply_language or "en"),
             },
         )
         return
@@ -82,10 +95,10 @@ async def iter_owner_turn_v2_events(
             revise_proposal_id=revise_proposal_id,
             is_cancelled=is_cancelled,
         ):
-            owner_turn_credit_on_event(turn_credit, _ev.type)
+            owner_turn_hold_on_event(turn_hold, _ev.type)
             yield _ev
     finally:
-        owner_turn_credit_abort(turn_credit)
+        owner_turn_hold_abort(turn_hold)
 
 
 def __getattr__(name: str) -> Any:

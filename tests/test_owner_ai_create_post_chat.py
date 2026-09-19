@@ -23,9 +23,9 @@ def _stub_context(**_: Any) -> dict[str, Any]:
 
 
 def _fake_turn_credit(tenant_id: str, *, conversation_id: str = "", **_kwargs: Any) -> Any:
-    from services.owner_copilot.credit import OwnerTurnCredit
+    from services.owner_copilot.message_billing import OwnerTurnHold
 
-    return OwnerTurnCredit(tenant_id=tenant_id, reservation_id="test-reservation")
+    return OwnerTurnHold(tenant_id=tenant_id, reservation_id="test-reservation")
 
 
 @pytest.mark.asyncio
@@ -34,10 +34,10 @@ async def test_v2_creative_request_refused_no_provider(monkeypatch: pytest.Monke
 
     monkeypatch.setenv("OWNER_COPILOT_V2", "true")
     monkeypatch.setattr("services.billing.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
-    monkeypatch.setattr("services.owner_copilot.credit.owner_turn_credit_begin", _fake_turn_credit)
-    monkeypatch.setattr("services.owner_copilot.credit.owner_turn_credit_on_event", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.owner_copilot.credit.owner_turn_credit_finalize", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.owner_copilot.credit.owner_turn_credit_abort", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.owner_copilot.message_billing.owner_turn_hold_begin", _fake_turn_credit)
+    monkeypatch.setattr("services.owner_copilot.message_billing.owner_turn_hold_on_event", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.owner_copilot.message_billing.owner_turn_hold_finalize", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.owner_copilot.message_billing.owner_turn_hold_abort", lambda *_a, **_k: None)
     monkeypatch.setattr("services.owner_copilot.context.pack_owner_turn_context", _stub_context)
 
     turn = await run_owner_turn(

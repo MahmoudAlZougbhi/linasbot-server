@@ -21,9 +21,9 @@ from services.owner_copilot.tool_schemas import tool_names
 def _fake_turn_credit(
     tenant_id: str, *, conversation_id: str = "", confirm_billing: bool = False, **_kwargs: Any
 ) -> Any:
-    from services.owner_copilot.credit import OwnerTurnCredit
+    from services.owner_copilot.message_billing import OwnerTurnHold
 
-    return OwnerTurnCredit(tenant_id=tenant_id, reservation_id="test-reservation")
+    return OwnerTurnHold(tenant_id=tenant_id, reservation_id="test-reservation")
 
 
 def test_owner_model_is_sol() -> None:
@@ -221,10 +221,10 @@ async def test_stream_events_thinking_then_deltas(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr("services.owner_copilot.brain_stream_body.iter_sol_tool_round", _fake_tool_round)
     monkeypatch.setattr("services.billing.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
-    monkeypatch.setattr("services.owner_copilot.credit.owner_turn_credit_begin", _fake_turn_credit)
-    monkeypatch.setattr("services.owner_copilot.credit.owner_turn_credit_on_event", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.owner_copilot.credit.owner_turn_credit_finalize", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.owner_copilot.credit.owner_turn_credit_abort", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.owner_copilot.message_billing.owner_turn_hold_begin", _fake_turn_credit)
+    monkeypatch.setattr("services.owner_copilot.message_billing.owner_turn_hold_on_event", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.owner_copilot.message_billing.owner_turn_hold_finalize", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.owner_copilot.message_billing.owner_turn_hold_abort", lambda *_a, **_k: None)
 
     events = []
     texts: list[str] = []
@@ -294,7 +294,7 @@ async def test_run_owner_turn_v2_returns_credits_paused_without_model(monkeypatc
             user_text="hello",
         )
     assert result.reply_text == ""
-    assert result.route.get("reason") == "insufficient_credits"
+    assert result.route.get("reason") == "insufficient_messages"
     assert called["n"] == 0
     assert not [w for w in caught if "aclose" in str(w.message).lower()]
 

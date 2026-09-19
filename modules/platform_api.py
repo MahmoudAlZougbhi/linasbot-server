@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from modules.api_security import require_platform_owner
 from modules.core import app
 from services.dashboard.dashboard_session_service import session_service
-from services.owner_copilot.owner_portal_service import analytics, list_subscribers
+from services.owner_portal.owner_portal_service import analytics, list_subscribers
 from services.team.platform_owner_service import platform_owner_service
 from services.team.tenant_custom_roles import tenant_custom_roles
 from services.team.user_service import user_service
