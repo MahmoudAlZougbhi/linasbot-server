@@ -178,34 +178,34 @@ def test_inflight_reserved_does_not_fund_new_owner_turn(ledger_env: CreditLedger
 
 
 def test_owner_turn_credit_begin_blocks_at_zero(ledger_env: CreditLedgerService) -> None:
-    from services.owner_copilot.credit import owner_turn_credit_begin
+    from services.owner_copilot.message_billing import owner_turn_hold_begin
 
     _drain(ledger_env, "linas", "drain-owner-begin")
-    credit = owner_turn_credit_begin("linas", conversation_id="conv-1")
+    credit = owner_turn_hold_begin("linas", conversation_id="conv-1")
     assert credit.blocked is True
     assert credit.reservation_id is None
 
 
 def test_owner_turn_credit_begin_capture_debits_ledger(ledger_env: CreditLedgerService) -> None:
     from services.billing.membership.message_ledger import grant_lot
-    from services.owner_copilot.credit import (
-        owner_turn_credit_abort,
-        owner_turn_credit_begin,
-        owner_turn_credit_finalize,
+    from services.owner_copilot.message_billing import (
+        owner_turn_hold_abort,
+        owner_turn_hold_begin,
+        owner_turn_hold_finalize,
     )
 
     grant_lot(tenant_id="t_max", lot_id="tmax-inc", kind="included", period_id="2099-01", amount=10, expires=False)
     before = remaining_credits("t_max")
-    credit = owner_turn_credit_begin("t_max", conversation_id="conv-max")
+    credit = owner_turn_hold_begin("t_max", conversation_id="conv-max")
     assert credit.blocked is False
     assert credit.reservation_id
     assert remaining_credits("t_max") == before - 1
-    owner_turn_credit_finalize(credit)
+    owner_turn_hold_finalize(credit)
     assert remaining_credits("t_max") == before - 1
     assert ledger_env.get_reserved("t_max") == 0
 
-    credit2 = owner_turn_credit_begin("t_max", conversation_id="conv-max-2")
-    owner_turn_credit_abort(credit2)
+    credit2 = owner_turn_hold_begin("t_max", conversation_id="conv-max-2")
+    owner_turn_hold_abort(credit2)
     assert remaining_credits("t_max") == before - 1
 
 

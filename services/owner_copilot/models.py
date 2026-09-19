@@ -79,20 +79,3 @@ class OwnerV2TurnResult:
     model: str | None = None
     cancelled: bool = False
     creative_draft: dict[str, Any] | None = None  # always None in V2
-
-    def to_legacy_owner_turn(self) -> dict[str, Any]:
-        """Shape compatible with modules/owner_copilot_api non-stream response."""
-        return {
-            "reply_text": self.reply_text,
-            "tool_calls": self.tool_calls,
-            "pending_confirmation": self.pending_confirmation,
-            "proposed_patch": self.proposed_patch,
-            "creative_draft": None,
-            "route": self.route,
-            "context_tokens": self.context_tokens,
-            "setup_stage": self.setup_stage,
-            "quick_actions": self.quick_actions,
-            "cards": self.cards,
-            "choices": self.choices,
-            "model": self.model,
-        }

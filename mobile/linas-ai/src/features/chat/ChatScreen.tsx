@@ -182,6 +182,8 @@ export function ChatScreen({
         {isAuthenticated && c.turn.creditsPaused ? (
           <CreditsPausedBanner
             showUpgrade={c.turn.creditsPaused.showUpgrade}
+            required={c.turn.creditsPaused.required}
+            remaining={c.turn.creditsPaused.remaining}
             onBuyCredits={() => c.credits.setOpen(true)}
             onUpgrade={() => c.nav?.openChoosePlan()}
           />

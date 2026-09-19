@@ -28,9 +28,13 @@ def owner_result_from_done_payload(payload: Mapping[str, Any]) -> OwnerV2TurnRes
 def record_owner_v2_usage(turn_context: Mapping[str, Any], result: OwnerV2TurnResult) -> None:
     """Write a completed V2 turn to the existing owner-chat usage store."""
     try:
+        from services.brain.model_pricing import compute_cost_from_usage
         from services.owner_copilot.model_router import RouteDecision, owner_chat_usage_tracker
 
         reply = result.reply_text or ""
+        prompt_tokens = int(result.context_tokens or 0)
+        completion_tokens = max(1, len(reply) // 4)
+        priced = compute_cost_from_usage(str(result.model or ""), prompt_tokens, completion_tokens)
         owner_chat_usage_tracker.record(
             tenant_id=str(turn_context.get("tenant_id") or ""),
             user_id=str(turn_context.get("user_id") or ""),
@@ -41,9 +45,9 @@ def record_owner_v2_usage(turn_context: Mapping[str, Any], result: OwnerV2TurnRe
                 reason="owner_copilot_v2",
                 max_context_tokens=0,
             ),
-            prompt_tokens=int(result.context_tokens or 0),
-            completion_tokens=max(1, len(reply) // 4),
-            meta={"source": "owner_copilot_v2", "ok": True},
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            meta={"source": "owner_copilot_v2", "ok": True, **priced},
         )
     except Exception:
         return

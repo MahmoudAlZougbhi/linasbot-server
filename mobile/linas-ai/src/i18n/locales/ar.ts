@@ -50,6 +50,7 @@ export const ar = {
   chatThinking: 'جارٍ التفكير…',
   chatCreditsPausedTitle: 'ما في رسائل كافية',
   chatCreditsPausedBody: 'مساعد المالك متوقف إلى أن تضيف رسائل. ردود الذكاء الاصطناعي على القنوات متوقفة أيضاً.',
+  chatCreditsPausedNeed: 'هالخطوة تحتاج {required} رسائل. عندك {remaining} متبقية.',
   chatLeftoverCreditsPausedTitle: 'ما في رسائل كافية',
   chatLeftoverCreditsPausedBody:
     'مساعد المالك متوقف إلى أن تضيف رسائل. ردود الذكاء الاصطناعي على القنوات متوقفة أيضاً.',

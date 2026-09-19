@@ -49,7 +49,7 @@ def test_context_compaction_flags(monkeypatch: pytest.MonkeyPatch) -> None:
             "cm": {"sections_present": 0, "sections_total": 15, "published": False, "missing_sample": []},
             "integrations": {"any_connected": False},
             "plan": {"plan_id": "starter"},
-            "credits": {"unit": "credits", "remaining": 0},
+            "messages": {"unit": "messages", "remaining": 0},
             "profile": {
                 "display_name": "Alex",
                 "gender": "unset",

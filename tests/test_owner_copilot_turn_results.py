@@ -60,7 +60,9 @@ def test_record_owner_v2_usage_preserves_usage_shape(monkeypatch: pytest.MonkeyP
     assert recorded["conversation_id"] == "conversation-1"
     assert recorded["prompt_tokens"] == 123
     assert recorded["completion_tokens"] == 2
-    assert recorded["meta"] == {"source": "owner_copilot_v2", "ok": True}
+    assert recorded["meta"]["source"] == "owner_copilot_v2"
+    assert recorded["meta"]["ok"] is True
+    assert "cost_usd" in recorded["meta"]
     assert recorded["route"].kind == "owner_help"
     assert recorded["route"].model == "gpt-5.6-sol"
     assert recorded["route"].reason == "owner_copilot_v2"

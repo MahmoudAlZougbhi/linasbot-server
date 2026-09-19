@@ -35,13 +35,14 @@ async def run_owner_turn(
     choice_id: str | None = None,
     choice_set_id: str | None = None,
     attachment_ids: list[str] | None = None,
+    confirm_billing: bool = False,
 ) -> OwnerTurnResult:
     from services.billing.credit_ai_gate import ai_generation_blocked, owner_credits_paused_payload
     from services.owner_copilot.brain_run import run_owner_turn_v2
 
     if ai_generation_blocked(tenant_id):
         paused = owner_credits_paused_payload(tenant_id)
-        return OwnerTurnResult(reply_text="", route={"reason": "insufficient_credits", **paused})
+        return OwnerTurnResult(reply_text="", route={"reason": "insufficient_messages", **paused})
 
     v2 = await run_owner_turn_v2(
         tenant_id=tenant_id,
@@ -55,6 +56,7 @@ async def run_owner_turn(
         choice_id=choice_id,
         choice_set_id=choice_set_id,
         attachment_ids=attachment_ids,
+        confirm_billing=confirm_billing,
     )
     return OwnerTurnResult(
         reply_text=v2.reply_text,
