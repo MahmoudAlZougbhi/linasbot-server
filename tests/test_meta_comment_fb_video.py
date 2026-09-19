@@ -116,7 +116,7 @@ async def test_facebook_video_comment_analyze_receives_video_url(monkeypatch: py
     monkeypatch.setattr("services.brain.runtime.run_dm_after_gates", fake_run)
     monkeypatch.setattr(
         "services.brain.comments.pipeline.apply_ai_comment_destinations",
-        lambda result, _mode: result,
+        lambda result, _mode, **_k: result,
     )
     monkeypatch.setattr("services.brain.runtime.apply_message_billing", lambda _turn, result: result)
 

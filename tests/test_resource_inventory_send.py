@@ -130,7 +130,7 @@ async def test_resource_request_checks_does_not_auto_send(monkeypatch: pytest.Mo
 
     plan = explicit_plan("send me photos please", ("resource_request", ["knowledge"]))
 
-    async def fake_plan(_message, _history, **_kwargs):
+    def fake_plan(_message: str):
         return plan
 
     async def fake_retrieve(_ctx):
@@ -162,7 +162,12 @@ async def test_resource_request_checks_does_not_auto_send(monkeypatch: pytest.Mo
         return None
 
     _patch_index(monkeypatch, {k: v for k, v in _INDEX.items() if k != "img-1"})
-    monkeypatch.setattr("services.brain.agent.loop.plan_turn", fake_plan)
+    monkeypatch.setattr("services.brain.agent.loop.default_agentic_plan", fake_plan)
+
+    async def _no_terra(*_a, **_k):
+        return [], [], 0, {}
+
+    monkeypatch.setattr("services.brain.agent.loop.run_terra_request_round", _no_terra)
     monkeypatch.setattr("services.brain.agent.multi_retrieve.retrieve_published", fake_retrieve)
     monkeypatch.setattr("services.brain.agent.loop.generate_verified", fake_generate)
     monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
