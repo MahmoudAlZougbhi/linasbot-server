@@ -8,11 +8,11 @@ os.environ.setdefault("EXTERNAL_API_BASE_URL", "https://example.com")
 os.environ.setdefault("EXTERNAL_API_TOKEN", "test-token")
 os.environ.setdefault("DASHBOARD_AUTH_SECRET", "wave2-test-secret")
 
-from services.requests.human_detect import is_human_request
 from services.integrations.social.social_contact_routing import (
     DEFAULT_SOCIAL_WHATSAPP_CONTACTS,
     is_social_channel,
 )
+from services.requests.human_detect import is_human_request
 
 
 def test_contact_matrix_empty():
