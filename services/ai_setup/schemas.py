@@ -55,6 +55,7 @@ from services.ai_setup.schemas_requests import (  # noqa: F401
     RequestsAppointmentsSection,
 )
 from services.ai_setup.schemas_sol import SolBasics  # noqa: F401
+from services.runtime_limits.schema import RuntimeLimitsSection  # noqa: F401
 
 
 class AiLimitsSection(CmBaseModel):

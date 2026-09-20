@@ -82,6 +82,8 @@ class TestRBACHelpers:
         assert required_permission_for("GET", "/api/live-chat/unified-chats") == "liveChat"
         assert required_permission_for("POST", "/api/smart-messaging/toggle") == "smartMessaging"
         assert required_permission_for("GET", "/api/content-files/knowledge/list") == "contentManagers"
+        assert required_permission_for("POST", "/api/owner-ai/conversations") == "contentManagers"
+        assert required_permission_for("GET", "/api/owner-ai/conversations") == "contentManagers"
         assert resolve_permissions("admin", None)["userManagement"] is True
         assert resolve_permissions("viewer", None)["userManagement"] is False
         assert is_social_user_id("instagram:123")

@@ -23,6 +23,7 @@ from services.ai_setup.schemas import (
     ServicesSection,
     StylePolicy,
 )
+from services.runtime_limits.schema import RuntimeLimitsSection
 
 
 def default_section_payload(section: str) -> dict[str, object]:
@@ -51,6 +52,7 @@ def default_section_payload(section: str) -> dict[str, object]:
         "off_days": OffDaysSection(),
         "opening_hours": OpeningHoursSection(),
         "requests_appointments": RequestsAppointmentsSection(),
+        "runtime_limits": RuntimeLimitsSection(),
     }
     model = builders.get(section)
     if model is None:

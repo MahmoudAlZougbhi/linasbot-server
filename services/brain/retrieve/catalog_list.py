@@ -33,11 +33,15 @@ def catalog_list_items(
     *,
     families: set[SourceFamily] | None = None,
     revision: str = "",
-    limit: int = CATALOG_CAP,
+    limit: int | None = None,
 ) -> list[EvidenceItem]:
     tid = (tenant_id or "").strip()
     if not tid:
         return []
+    if limit is None:
+        from services.runtime_limits.loader import load_runtime_limits
+
+        limit = load_runtime_limits(tid).catalog_evidence_cap
     wanted = _wanted_families(families)
     cards = [card for card in load_published_cards(tid) if card.source_family in wanted]
     if "products" in wanted:

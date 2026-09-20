@@ -8,7 +8,7 @@ from services.brain.agent.terra_prompt import build_terra_messages
 from services.brain.agent.terra_request_round import hydrate_request_snapshot
 from services.brain.agent.terra_session import repair_rewrite, run_terra_tool_loop
 from services.brain.agent.tool_calls import skip_tools_for_turn
-from services.brain.budgets import DEFAULT_BUDGETS
+from services.brain.budgets import DEFAULT_BUDGETS, budgets_for_tenant
 from services.brain.compose.blocks import grounding_feedback
 from services.brain.contracts.enums import TaskDisposition
 from services.brain.contracts.evidence import EvidenceBundle
@@ -130,6 +130,7 @@ async def run_terra_turn(
         receipts=_build_receipts(turn, extra, [], []),
         greeting_turn=greet,
     )
+    b = budgets_for_tenant(turn.tenant_id)
     text, extra, tool_receipts, _rows, llm_calls = await run_terra_tool_loop(
         turn,
         messages=messages,
@@ -138,7 +139,8 @@ async def run_terra_turn(
         skip=skip,
         snapshot=snapshot,
         trace=agent_trace,
-        budget=DEFAULT_BUDGETS.max_tool_calls,
+        budget=b.max_tool_calls,
+        max_rounds=b.max_agent_steps,
     )
     from services.brain.facts.receipt_align import align_fact_receipts
     from services.brain.stage_timeline import evidence_preview

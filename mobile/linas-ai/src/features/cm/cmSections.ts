@@ -17,6 +17,7 @@ export type CmSectionId =
   | 'requests_appointments'
   | 'sol_basics'
   | 'sol_app_knowledge'
+  | 'runtime_limits'
   /** Settings-hosted (not listed in CM hub). */
   | 'ai_limits';
 
@@ -134,6 +135,12 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     id: 'sol_app_knowledge',
     title: 'Sol knowledge',
     description: 'How the Linas app works for owners (retrieved into Sol, not customers).',
+    mobileSupported: true,
+  },
+  {
+    id: 'runtime_limits',
+    title: 'Runtime limits',
+    description: 'Customer Brain and Sol history, search, and budget caps.',
     mobileSupported: true,
   },
   {

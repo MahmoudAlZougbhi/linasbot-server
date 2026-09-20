@@ -80,6 +80,7 @@ describe('AI Setup hub restructure', () => {
     assert.match(layout, /AI_SETUP_FULL_WIDTH_IDS.*ai_basics.*knowledge.*branches/s);
     assert.match(layout, /AI_SETUP_PAIR_ROWS[\s\S]*prices.*products/s);
     assert.match(layout, /AI_SETUP_PAIR_ROWS[\s\S]*comments.*requests_appointments/s);
+    assert.match(layout, /AI_SETUP_PAIR_ROWS[\s\S]*sol_basics.*runtime_limits/s);
     assert.doesNotMatch(layout, /opening_hours/);
     assert.doesNotMatch(layout, /dynamic_messages/);
 
@@ -98,6 +99,9 @@ describe('AI Setup hub restructure', () => {
       assert.match(src, /servicesAddPriceOption/);
       assert.match(src, /aiSetupMetadataSaveError/);
       assert.match(src, /aiSetupDailyEditLimit/);
+      assert.match(src, /aiSetupSec_runtime_limits/);
+      assert.match(src, /runtimeLimitsCustomerTitle/);
+      assert.match(src, /runtimeLimitsSolTitle/);
       assert.match(src, /servicesTitle: 'Services'|servicesTitle: 'الخدمات'/);
     }
   });

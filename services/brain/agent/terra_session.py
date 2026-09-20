@@ -99,15 +99,16 @@ async def run_terra_tool_loop(
     snapshot: dict[str, Any],
     trace: list[dict[str, Any]],
     budget: int,
+    max_rounds: int | None = None,
 ) -> tuple[str, dict[str, Any], list[str], list[dict[str, Any]], int]:
     """Loop until Terra returns final text or budgets are exhausted."""
     receipts: list[str] = []
     rows: list[dict[str, Any]] = []
     used = 0
     llm_calls = 0
-    max_rounds = max(1, DEFAULT_BUDGETS.max_agent_steps)
+    rounds = max(1, DEFAULT_BUDGETS.max_agent_steps if max_rounds is None else int(max_rounds))
     text = ""
-    for _round in range(max_rounds):
+    for _round in range(rounds):
         try:
             response = await _complete(turn, messages, attempt=llm_calls, tool_choice="auto")
         except Exception:

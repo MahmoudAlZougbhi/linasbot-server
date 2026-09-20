@@ -27,7 +27,7 @@ def test_progress_marks_default_incomplete(tenant_root: Path) -> None:
     # Languages is system-managed; Comments + Requests defaults count as filled
     # (Requests stays capture-inactive until enabled/published). Owner Sol seed
     # is optional for customer fill walks and also counts as filled.
-    optional_done = 5  # languages + comments + requests_appointments + sol_basics + sol_app_knowledge
+    optional_done = 6  # languages + comments + requests + sol_basics + sol_app_knowledge + runtime_limits
     assert summary["complete"] == optional_done
     assert summary["incomplete"] == summary["total"] - optional_done
     assert summary["percent"] == int(round((optional_done / summary["total"]) * 100))
@@ -37,6 +37,7 @@ def test_progress_marks_default_incomplete(tenant_root: Path) -> None:
     assert "requests_appointments" in summary["complete_sections"]
     assert "sol_basics" in summary["complete_sections"]
     assert "sol_app_knowledge" in summary["complete_sections"]
+    assert "runtime_limits" in summary["complete_sections"]
 
 
 def test_progress_marks_filled_complete(tenant_root: Path) -> None:

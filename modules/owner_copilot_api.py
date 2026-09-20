@@ -158,6 +158,9 @@ async def send_owner_message(conversation_id: str, body: SendMessageBody, reques
             conversation_id=conversation_id,
         )
     history = [{"role": m.role, "content": m.content} for m in ((conv.messages if conv else None) or [])]
+    from services.runtime_limits.window import window_owner_messages_for_tenant
+
+    history = window_owner_messages_for_tenant(history, session.tenant_id)
     result = await run_owner_turn(
         tenant_id=session.tenant_id,
         user_id=session.user_id,

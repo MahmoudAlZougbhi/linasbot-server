@@ -9,24 +9,26 @@ from services.owner_copilot.onboarding import is_welcome_chip_prompt
 from services.owner_copilot.profile import normalize_language, resolve_owner_reply_language
 from services.owner_copilot.sol_app_knowledge import retrieve_sol_app_knowledge, sol_knowledge_prompt_block
 from services.owner_copilot.sol_identity import compose_sol_system, load_sol_identity
+from services.runtime_limits.loader import load_runtime_limits
+from services.runtime_limits.window import window_owner_messages
 
-MAX_RECENT_MESSAGES = 8
-MAX_MESSAGE_CHARS = 600
 SUMMARY_EVERY_N = 12
 
 
-def _trim(text: str, limit: int = MAX_MESSAGE_CHARS) -> str:
+def _trim(text: str, limit: int = 120) -> str:
+    """Summary-only trim for older turns. Packed owner messages are not clipped at 600."""
     t = (text or "").strip()
-    if len(t) <= limit:
+    if limit <= 0 or len(t) <= limit:
         return t
     return t[: limit - 1] + "…"
 
 
-def summarize_conversation(messages: list[dict[str, Any]]) -> str | None:
+def summarize_conversation(messages: list[dict[str, Any]], *, keep: int = 100) -> str | None:
     """Cheap extractive summary when history grows — not a full transcript."""
     if len(messages) < SUMMARY_EVERY_N:
         return None
-    older = messages[:-MAX_RECENT_MESSAGES]
+    cap = max(1, int(keep))
+    older = messages[:-cap] if len(messages) > cap else []
     if not older:
         return None
     bits: list[str] = []
@@ -54,7 +56,13 @@ def pack_owner_turn_context(
     for welcome-chip UI prompts (English tool text) and when detection is unclear.
     Sol persona is published portal CM only (sol_system). Empty portal → sol_unconfigured.
     """
+    limits = load_runtime_limits(tenant_id)
     msgs = list(messages or [])
+    windowed = window_owner_messages(
+        msgs,
+        n=limits.owner_history_messages,
+        max_chars=limits.owner_message_max_chars,
+    )
     account = build_account_summary(tenant_id=tenant_id, user_id=user_id)
     preferred = normalize_language(
         (account.get("profile") or {}).get("preferred_language"),
@@ -72,18 +80,13 @@ def pack_owner_turn_context(
     payload: dict[str, Any] = dict(raw_payload) if isinstance(raw_payload, dict) else {}
     sol_system = compose_sol_system(payload) if configured else ""
     knowledge_items = retrieve_sol_app_knowledge(tenant_id, user_text) if configured else []
-    recent = []
-    for m in msgs[-MAX_RECENT_MESSAGES:]:
-        recent.append(
-            {
-                "role": m.get("role"),
-                "content": _trim(str(m.get("content") or "")),
-            }
-        )
-    summary = summarize_conversation(msgs)
+    recent = [{"role": m.get("role"), "content": str(m.get("content") or "")} for m in windowed]
+    summary = summarize_conversation(msgs, keep=limits.owner_history_messages)
     return {
         "sol_system": sol_system,
         "sol_unconfigured": not configured,
+        "owner_history_messages": limits.owner_history_messages,
+        "owner_message_max_chars": limits.owner_message_max_chars,
         "account_summary": {
             "setup_stage": account.get("setup_stage"),
             "cm": account.get("cm"),

@@ -92,7 +92,9 @@ async def retrieve_published(ctx: RetrieveContext) -> EvidenceBundle:
             return EvidenceBundle(outcome="source_unpublished")
         sections = loaded
         revision = revision or str(getattr(pointer, "revision", "") or "")
-        cards.extend(load_published_cards(ctx.tenant_id))
+        from services.brain.retrieve.cards import cards_from_sections
+
+        cards.extend(cards_from_sections(sections, revision=revision, tenant_id=ctx.tenant_id))
     elif not cards:
         cards.extend(load_published_cards(ctx.tenant_id) if ctx.tenant_id else [])
     return await retrieve_cards(

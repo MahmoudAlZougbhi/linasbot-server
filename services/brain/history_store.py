@@ -79,12 +79,14 @@ async def load_history_snapshot(
             injected,
             current_inbound_id=current_inbound_id,
             current_inbound_text=current_inbound_text,
+            tenant_id=tenant_id,
         )
     if not user_id or not conversation_id:
         return build_history_snapshot(
             [],
             current_inbound_id=current_inbound_id,
             current_inbound_text=current_inbound_text,
+            tenant_id=tenant_id,
         )
     try:
         from utils.utils_context import get_conversation_history_from_firestore
@@ -122,4 +124,5 @@ async def load_history_snapshot(
         _as_raw(rows),
         current_inbound_id=current_inbound_id,
         current_inbound_text=current_inbound_text,
+        tenant_id=tenant_id,
     )

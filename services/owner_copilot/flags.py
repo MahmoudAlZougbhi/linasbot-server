@@ -75,9 +75,10 @@ def owner_context_token_budget() -> int:
 
 
 def owner_recent_history_tokens() -> int:
-    """Logged-in Owner Copilot recent chat-history read window (what the model reads).
+    """Optional last-resort token ceiling for Owner Copilot history.
 
-    Explicit env — not an opaque fraction of LINAS_OWNER_CONTEXT_BUDGET.
+    Sol packs the last N portal messages (default 100) at full length.
+    This env is only used when a caller passes token_budget explicitly.
     """
     raw = (os.getenv("LINAS_OWNER_RECENT_HISTORY_TOKENS") or "4000").strip()
     try:
