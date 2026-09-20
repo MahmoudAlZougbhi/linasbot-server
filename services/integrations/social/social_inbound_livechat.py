@@ -65,9 +65,7 @@ async def persist_skipped_social_inbound(
 ) -> bool:
     """Save inbound for operators. Never sends customer copy. Never calls Terra."""
     saved = False
-    body = str(text or "").strip() or (
-        NO_TEXT_PLACEHOLDER if reason == "no_text" else f"[inbound skipped: {reason}]"
-    )
+    body = str(text or "").strip() or (NO_TEXT_PLACEHOLDER if reason == "no_text" else f"[inbound skipped: {reason}]")
     if not simulation:
         try:
             if user_id not in config.user_data_whatsapp:
