@@ -68,7 +68,10 @@ async def _fetch_with_ssrf_guard(url: str) -> httpx.Response:
 @app.get("/api/media/audio")
 async def proxy_audio(url: str = Query(..., description="The audio URL to proxy")) -> Any:
     """
-    Proxy audio from allowlisted external URLs to avoid CORS issues.
+    Proxy audio from SSRF-allowlisted hosts (see services.ssrf_guard) to avoid CORS.
+
+    Host allowlist is fail-closed. Rate-limited per IP via auth_rate_limit_rules
+    (/api/media/audio, 30/min). Do not widen the host suffix list without review.
     """
     try:
         response = await _fetch_with_ssrf_guard(url)

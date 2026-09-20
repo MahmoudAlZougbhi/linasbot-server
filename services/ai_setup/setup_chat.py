@@ -38,6 +38,7 @@ from services.ai_setup.schemas import (
     default_section_payload,
 )
 from services.ai_setup.storage import ConflictError, get_draft, put_draft
+from services.runtime_limits.schema import RuntimeLimitsSection
 
 SECTION_MODELS: dict[str, type[CmBaseModel]] = {
     "ai_basics": AiBasics,
@@ -59,11 +60,14 @@ SECTION_MODELS: dict[str, type[CmBaseModel]] = {
     "requests_appointments": RequestsAppointmentsSection,
     "sol_basics": SolBasics,
     "sol_app_knowledge": KnowledgeSection,
+    "runtime_limits": RuntimeLimitsSection,
 }
 
 # Interview order for guided setup (Sources/Publish are UI hubs, not draft sections).
 # languages is system-global — owners never configure reply languages.
-_SKIP_OWNER_SETUP: frozenset[str] = frozenset({"languages", "ai_limits", "sol_basics", "sol_app_knowledge"})
+_SKIP_OWNER_SETUP: frozenset[str] = frozenset(
+    {"languages", "ai_limits", "sol_basics", "sol_app_knowledge", "runtime_limits"}
+)
 SETUP_SECTION_ORDER: tuple[str, ...] = tuple(
     s for s in CM_SECTIONS if s in SECTION_MODELS and s not in _SKIP_OWNER_SETUP
 )

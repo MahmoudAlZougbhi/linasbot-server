@@ -6,7 +6,6 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
-from services.owner_copilot.flags import owner_recent_history_tokens
 from services.owner_copilot.memory import pack_recent_messages
 from services.owner_copilot.models import StreamEvent
 
@@ -118,7 +117,8 @@ def _build_messages(
 ) -> list[dict[str, Any]]:
     recent, summary = pack_recent_messages(
         context.get("recent_messages_raw") or context.get("recent_messages"),
-        token_budget=owner_recent_history_tokens(),
+        max_messages=int(context.get("owner_history_messages") or 100),
+        max_chars=int(context.get("owner_message_max_chars") or 0),
     )
     persona = str(context.get("sol_system") or "").strip()
     parts = [

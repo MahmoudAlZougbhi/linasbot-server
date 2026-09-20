@@ -192,6 +192,8 @@ def auth_rate_limit_rules(path: str, ip: str, identifier: str | None = None) -> 
         rules.append((f"pw:{ip}", 10, 300))
     if path.startswith("/api/guest-ai/"):
         rules.append((f"guest-ai:{ip}", 60, 300))
+    if path == "/api/media/audio":
+        rules.append((f"media-audio:{ip}", 30, 60))
     if path in {"/api/public/app-version", "/api/public/app-version/check"}:
         rules.append((f"app-version:{ip}", 120, 300))
     if path == "/api/public/landing-stats":

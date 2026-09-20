@@ -25,3 +25,21 @@ class TurnBudgets:
 
 DEFAULT_BUDGETS = TurnBudgets()
 SCHEMA_VERSION = "customer_ai.v1"
+
+
+def budgets_for_tenant(tenant_id: str | None = None) -> TurnBudgets:
+    """Portal Live runtime_limits merged onto code defaults."""
+    tid = (tenant_id or "").strip()
+    if not tid:
+        return DEFAULT_BUDGETS
+    from services.runtime_limits.loader import load_runtime_limits
+
+    lim = load_runtime_limits(tid)
+    extra = max(0, lim.max_retrieval_rounds - 1)
+    return TurnBudgets(
+        history_visible_cap=lim.customer_history_messages,
+        max_retrieval_rounds=lim.max_retrieval_rounds,
+        max_agent_steps=lim.max_agent_steps,
+        max_tool_calls=lim.max_tool_calls,
+        extra_retrieval_rounds=extra,
+    )

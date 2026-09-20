@@ -8,11 +8,16 @@ from services.brain.retrieve.products import cards_from_products
 QUERY_CAP = 24
 
 
-def search_product_cards(tenant_id: str, query: str, *, limit: int = QUERY_CAP) -> list[TitleCard]:
+def search_product_cards(tenant_id: str, query: str, *, limit: int | None = None) -> list[TitleCard]:
     """SQL contains search → cards for the hit ids only (customer-facing)."""
     tid = (tenant_id or "").strip()
     needle = (query or "").strip()
-    cap = min(max(int(limit or QUERY_CAP), 1), QUERY_CAP)
+    default_cap = QUERY_CAP
+    if tid:
+        from services.runtime_limits.loader import load_runtime_limits
+
+        default_cap = load_runtime_limits(tid).product_search_cap
+    cap = min(max(int(limit if limit is not None else default_cap), 1), 200)
     if not tid or not needle:
         return []
     try:

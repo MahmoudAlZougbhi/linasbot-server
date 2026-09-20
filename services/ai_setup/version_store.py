@@ -86,6 +86,9 @@ def read_published_pointer(tenant_id: str | None = None) -> PublishedPointer | N
 
 def write_published_pointer(tenant_id: str | None, pointer: PublishedPointer) -> None:
     atomic_write_json(published_pointer_path(tenant_id), pointer.model_dump(mode="json"))
+    from services.ai_setup.published_cache import invalidate_published_cache
+
+    invalidate_published_cache(tenant_id)
 
 
 def clear_published_pointer(tenant_id: str | None = None) -> bool:
@@ -97,14 +100,16 @@ def clear_published_pointer(tenant_id: str | None = None) -> bool:
     if not path.exists():
         return False
     path.unlink()
+    from services.ai_setup.published_cache import invalidate_published_cache
+
+    invalidate_published_cache(tenant_id)
     return True
 
 
-def load_published_content(tenant_id: str | None = None) -> tuple[PublishedPointer, dict[str, dict[str, Any]]]:
-    """Load the tenant's ONE published version content, with checksum verification.
-
-    Raises :class:`PublishedVersionError` on any missing/corrupt state (no legacy fallback).
-    """
+def load_published_content_from_disk(
+    tenant_id: str | None = None,
+) -> tuple[PublishedPointer, dict[str, dict[str, Any]]]:
+    """Disk read + checksum verify. Prefer :func:`load_published_content` (process cache)."""
     pointer = read_published_pointer(tenant_id)
     if pointer is None:
         raise PublishedVersionError("No published CM version pointer for tenant.")
@@ -123,3 +128,14 @@ def load_published_content(tenant_id: str | None = None) -> tuple[PublishedPoint
             )
 
     return pointer, sections
+
+
+def load_published_content(tenant_id: str | None = None) -> tuple[PublishedPointer, dict[str, dict[str, Any]]]:
+    """Load the tenant's ONE published version content, with checksum verification.
+
+    Raises :class:`PublishedVersionError` on any missing/corrupt state (no legacy fallback).
+    Process-cached per tenant+revision; invalidated on pointer write/clear.
+    """
+    from services.ai_setup.published_cache import load_published_content_cached
+
+    return load_published_content_cached(tenant_id)

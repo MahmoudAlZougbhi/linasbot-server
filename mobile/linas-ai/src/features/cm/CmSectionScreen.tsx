@@ -21,6 +21,7 @@ import { KnowledgeScreen } from './knowledge/KnowledgeScreen';
 import { LocationHoursSectionScreen } from './LocationHoursSectionScreen';
 import { RequestRulesScreen } from './requestRules/RequestRulesScreen';
 import { SolBasicsScreen } from './sol/SolBasicsScreen';
+import { RuntimeLimitsScreen } from './runtimeLimits/RuntimeLimitsScreen';
 import { useCmDraft } from './useCmDraft';
 
 type Props = {
@@ -95,6 +96,9 @@ export function CmSectionScreen({ section, proposalReview, onBack, onOpenLocatio
   }
   if (section === 'sol_basics') {
     return <SolBasicsScreen proposalReview={proposalReview} onBack={onBack} />;
+  }
+  if (section === 'runtime_limits') {
+    return <RuntimeLimitsScreen proposalReview={proposalReview} onBack={onBack} />;
   }
   if (section === 'comments') {
     return <CommentsScreen proposalReview={proposalReview} onBack={onBack} />;

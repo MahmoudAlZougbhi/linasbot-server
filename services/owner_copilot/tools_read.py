@@ -1,4 +1,9 @@
-"""Typed read tools for the owner System Copilot."""
+"""Typed read tools for the owner System Copilot.
+
+Sensitive reads (usage, subscription, integrations, dashboard metrics, jobs)
+require contentManagers — same as Sol HTTP /api/owner-ai. Profile and
+account_summary stay lighter so greeting/onboarding still works.
+"""
 
 from __future__ import annotations
 
@@ -130,7 +135,7 @@ async def tool_validate_cm(*, tenant_id: str, role: str) -> ToolResult:
 
 
 async def tool_read_usage(*, tenant_id: str, role: str) -> ToolResult:
-    del role
+    _require(role, "contentManagers")
     from services.billing.credit_ai_gate import owner_credits_public
     from services.billing.entitlements_service import get_tenant_entitlement_public
     from services.dashboard.message_surface import copilot_usage_overlay
@@ -147,14 +152,14 @@ async def tool_read_usage(*, tenant_id: str, role: str) -> ToolResult:
 
 
 async def tool_read_subscription(*, tenant_id: str, role: str) -> ToolResult:
-    del role
+    _require(role, "contentManagers")
     from services.billing.entitlements_service import get_tenant_entitlement_public
 
     return ToolResult(ok=True, name="read_subscription", data=get_tenant_entitlement_public(tenant_id))
 
 
 async def tool_read_integrations(*, tenant_id: str, role: str) -> ToolResult:
-    del role
+    _require(role, "contentManagers")
     from services.integrations.integration_capabilities import list_tenant_integration_status
 
     # Comments are not a product surface — do not expose comment_* caps to System Copilot.
@@ -168,7 +173,7 @@ async def tool_read_integrations(*, tenant_id: str, role: str) -> ToolResult:
 
 
 async def tool_read_dashboard_metrics(*, tenant_id: str, role: str, user_id: str = "") -> ToolResult:
-    del role
+    _require(role, "contentManagers")
     data: dict[str, Any] = {"tenant_id": tenant_id}
     try:
         from services.billing.credit_ai_gate import owner_credits_public
@@ -197,7 +202,8 @@ async def tool_read_dashboard_metrics(*, tenant_id: str, role: str, user_id: str
 
 
 async def tool_read_jobs_errors(*, tenant_id: str, role: str) -> ToolResult:
-    del role, tenant_id
+    _require(role, "contentManagers")
+    del tenant_id
     import os
 
     require_redis = os.getenv("LINAS_REQUIRE_REDIS", "").strip().lower() in {"1", "true", "yes", "on"}

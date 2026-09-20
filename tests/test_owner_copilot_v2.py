@@ -12,7 +12,7 @@ from services.owner_copilot.attachments import store_attachment, validate_upload
 from services.owner_copilot.choices import make_choice_set, resolve_choice, setup_tone_choices
 from services.owner_copilot.creative_policy import CANCELLED_CREATIVE_TOOLS
 from services.owner_copilot.flags import flags_snapshot, owner_model_name, owner_recent_history_tokens
-from services.owner_copilot.memory import estimate_messages_tokens, pack_recent_messages
+from services.owner_copilot.memory import pack_recent_messages
 from services.owner_copilot.models import StreamEvent
 from services.owner_copilot.stream_protocol import encode_sse
 from services.owner_copilot.tool_schemas import tool_names
@@ -113,18 +113,13 @@ def test_token_aware_memory_not_fixed_8x600() -> None:
         assert len(recent[-1]["content"]) > 100
 
 
-def test_default_recent_history_pack_uses_4000(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Logged-in owner read window is 4000 tokens — not CONTEXT_BUDGET÷3 (~2000)."""
+def test_default_recent_history_pack_uses_count_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sol default pack is last N messages, not a 4000-token clip and not 600 chars."""
     monkeypatch.delenv("LINAS_OWNER_RECENT_HISTORY_TOKENS", raising=False)
-    monkeypatch.setenv("LINAS_OWNER_CONTEXT_BUDGET", "6000")
-    # Each message ≈ 1004 tokens (1000 chars/4 + 4 overhead) → 4 fit in 4000, 5th would exceed.
-    msgs = [{"role": "user", "content": ("x" * 4000)}] * 10
-    recent, _summary = pack_recent_messages(msgs)
-    assert owner_recent_history_tokens() == 4000
-    assert estimate_messages_tokens(recent) <= 4000
-    # With budget÷3 (~2000) only ~2 would fit; with 4000 we keep more.
-    assert len(recent) >= 3
-    assert len(recent) <= 4
+    msgs = [{"role": "user", "content": ("x" * 800)}] * 120
+    recent, _summary = pack_recent_messages(msgs, max_messages=100)
+    assert len(recent) == 100
+    assert all(len(m["content"]) == 800 for m in recent)
 
 
 def test_choices_max_three_and_single_use() -> None:

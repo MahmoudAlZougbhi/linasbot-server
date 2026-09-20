@@ -131,6 +131,9 @@ async def stream_owner_message(
         }
         for m in ((conv.messages if conv else None) or [])
     ]
+    from services.runtime_limits.window import window_owner_messages_for_tenant
+
+    history = window_owner_messages_for_tenant(history, session.tenant_id)
     cancel_flag = {"cancelled": False}
     from services.owner_copilot.profile import coerce_language, language_from_accept_header
 

@@ -28,6 +28,10 @@ def _sanitize_section_payload(section: str, payload: dict[str, object]) -> dict[
         from services.ai_setup.request_rules import sanitize_requests_appointments_payload
 
         return sanitize_requests_appointments_payload(payload)  # type: ignore[arg-type]
+    if section == "runtime_limits":
+        from services.runtime_limits.loader import sanitize_runtime_limits_payload
+
+        return sanitize_runtime_limits_payload(payload)
     return payload
 
 

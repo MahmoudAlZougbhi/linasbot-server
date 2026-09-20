@@ -200,6 +200,19 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "useful": "Reuse Knowledge editor; publish/activate like other CM articles.",
         "app_path": "AI Setup → Sol knowledge",
     },
+    "runtime_limits": {
+        "title": "Runtime limits",
+        "purpose": "Portal-tunable Customer Brain and Sol history/search/budget caps.",
+        "why": "Change last-N history and retrieve budgets without a code deploy.",
+        "what_to_fill": [
+            "owner_history_messages (default 100)",
+            "owner_message_max_chars (0 = unlimited)",
+            "customer_history_messages / customer_message_max_chars",
+            "product_search_cap / catalog_evidence_cap / retrieval and tool budgets",
+        ],
+        "useful": "Save → Live. Missing section uses code defaults.",
+        "app_path": "AI Setup → Runtime limits",
+    },
 }
 
 

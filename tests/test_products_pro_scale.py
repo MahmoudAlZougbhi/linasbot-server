@@ -8,7 +8,6 @@ from types import SimpleNamespace
 import pytest
 
 from services.brain.contracts.turn import CustomerTurn
-from services.brain.providers.voyage_client import VoyageVectors
 from services.brain.retrieve.hybrid import search_hybrid
 from services.brain.retrieve.orchestrate import RetrieveContext, retrieve_published
 from services.brain.search.store import reset_memory_store, write_documents
@@ -96,15 +95,16 @@ async def test_hybrid_hydrates_store_product_without_card_dump(monkeypatch: pyte
         called["list_all"] += 1
         raise AssertionError("list_all_for_tenant on retrieve")
 
-    async def fake_embed(space: object, texts: list[str]) -> VoyageVectors:
-        return VoyageVectors(getattr(space, "space_id", "entity"), [[1.0, 0.0] for _ in texts])
+    async def fake_query_vector(space: object, query: str, tenant_id: str = "") -> tuple[list[float], str]:
+        del query, tenant_id
+        return [1.0, 0.0], str(getattr(space, "model", "") or "voyage")
 
     monkeypatch.setattr(
         "services.products.repository.ProductsRepository.list_all_for_tenant",
         _boom,
     )
     monkeypatch.setattr("services.products.search_cards.search_product_cards", lambda *_a, **_k: [])
-    monkeypatch.setattr("services.brain.retrieve.hybrid.embed_texts", fake_embed)
+    monkeypatch.setattr("services.brain.retrieve.hybrid._query_vector", fake_query_vector)
 
     def _no_db(*_a: object, **_k: object) -> None:
         raise RuntimeError("no_db")

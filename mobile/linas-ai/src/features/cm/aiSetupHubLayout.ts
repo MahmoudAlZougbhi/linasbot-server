@@ -7,6 +7,7 @@ export const AI_SETUP_FULL_WIDTH_IDS = ['ai_basics', 'knowledge', 'branches'] as
 export const AI_SETUP_PAIR_ROWS: readonly (readonly (CmSectionCard['id'] | 'products')[])[] = [
   ['prices', 'products'],
   ['comments', 'requests_appointments'],
+  ['sol_basics', 'runtime_limits'],
 ];
 
 export type HubItem =

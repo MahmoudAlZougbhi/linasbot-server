@@ -48,14 +48,14 @@ _background_tasks: set[asyncio.Task[None]] = set()
 _runtime_logger = logging.getLogger("uvicorn.error")
 
 
-def _legacy_binding(settings: Any, channel: str) -> MetaAssetBinding:
-    """Represent the legacy single-app route without changing persisted state."""
+def _legacy_binding(settings: Any, channel: str, tenant_id: str) -> MetaAssetBinding:
+    """Represent the opt-in single-app route. tenant_id is required — never default linas."""
 
     normalized_channel: MetaChannel = "instagram" if channel == "instagram" else "facebook"
     asset_id = settings.instagram_account_id if normalized_channel == "instagram" else settings.page_id
     return MetaAssetBinding(
         binding_id="legacy-single-app",
-        tenant_id="linas",
+        tenant_id=tenant_id,
         channel=normalized_channel,
         asset_id=asset_id,
         page_id=settings.page_id,
@@ -207,6 +207,17 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             auth_flow=registry_auth_flow_for_webhook_object(payload_object),
         )
     else:
+        from services.integrations.meta.meta_legacy_tenant import legacy_webhook_tenant_id
+
+        legacy_tenant = legacy_webhook_tenant_id()
+        if not legacy_tenant:
+            _runtime_logger.error(
+                "[meta-social] registry_required registry_off opt_in=0 — refusing bind (no silent linas tenant)"
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Meta multi-app registry required (set META_MULTI_APP_REGISTRY_ENABLED or LINAS_META_LEGACY_SINGLE_TENANT)",
+            )
         legacy_events = parse_meta_messaging_events(
             payload,
             instagram_account_id=settings.instagram_account_id,
@@ -216,7 +227,7 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             ResolvedMetaEvent(
                 event=event,
                 settings=settings,
-                binding=_legacy_binding(settings, str(event.get("channel") or "facebook")),
+                binding=_legacy_binding(settings, str(event.get("channel") or "facebook"), legacy_tenant),
             )
             for event in legacy_events
         ]

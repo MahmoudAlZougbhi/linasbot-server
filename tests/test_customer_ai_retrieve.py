@@ -9,7 +9,6 @@ import pytest
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
 from services.brain.grounding.facts import evidence_supports_text, ungrounded_amounts
 from services.brain.planner.heuristic import plan_message
-from services.brain.providers.voyage_client import VoyageVectors
 from services.brain.retrieve.cards import cards_from_sections
 from services.brain.retrieve.hybrid import search_hybrid
 from services.brain.retrieve.hydrate import expand_hits
@@ -142,16 +141,14 @@ async def test_retrieve_without_voyage_is_typed(monkeypatch: pytest.MonkeyPatch)
 
 @pytest.mark.asyncio
 async def test_hybrid_mocked_ranks_hair_over_botox(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_embed(space, texts):
-        if space.input_mode == "query":
-            return VoyageVectors(space.space_id, [[1.0, 0.0]])
-        vectors = []
-        for text in texts:
-            lowered = text.lower()
-            vectors.append([0.95, 0.05] if "hair" in lowered or "شعر" in lowered else [0.05, 0.95])
-        return VoyageVectors(space.space_id, vectors)
+    async def fake_query_vector(space, query, tenant_id=""):
+        del tenant_id
+        lowered = str(query or "").lower()
+        if "hair" in lowered or "شعر" in lowered:
+            return [0.95, 0.05], str(getattr(space, "model", "") or "voyage")
+        return [0.05, 0.95], str(getattr(space, "model", "") or "voyage")
 
-    monkeypatch.setattr("services.brain.retrieve.hybrid.embed_texts", fake_embed)
+    monkeypatch.setattr("services.brain.retrieve.hybrid._query_vector", fake_query_vector)
     sections = {
         "prices": {
             "catalog": [
@@ -172,13 +169,13 @@ async def test_hybrid_uses_stored_index_without_document_embeds(monkeypatch: pyt
     reset_memory_store()
     calls: list[str] = []
 
-    async def fake_embed(space, texts):
+    async def fake_query_vector(space, query, tenant_id=""):
+        del query, tenant_id
         calls.append(space.input_mode)
         assert space.input_mode == "query"
-        assert len(texts) == 1
-        return VoyageVectors(space.space_id, [[1.0, 0.0]])
+        return [1.0, 0.0], str(getattr(space, "model", "") or "voyage")
 
-    monkeypatch.setattr("services.brain.retrieve.hybrid.embed_texts", fake_embed)
+    monkeypatch.setattr("services.brain.retrieve.hybrid._query_vector", fake_query_vector)
     write_documents(
         None,
         [
@@ -264,8 +261,9 @@ async def test_hybrid_prefers_pg_session_when_available(monkeypatch: pytest.Monk
         sessions.append(marker)
         yield marker
 
-    async def fake_embed(space, texts):
-        return VoyageVectors(space.space_id, [[1.0, 0.0]])
+    async def fake_query_vector(space, query, tenant_id=""):
+        del query, tenant_id
+        return [1.0, 0.0], str(getattr(space, "model", "") or "voyage")
 
     def fake_query(session, **kwargs):
         assert session is sessions[0]
@@ -284,7 +282,7 @@ async def test_hybrid_prefers_pg_session_when_available(monkeypatch: pytest.Monk
             ],
         )
 
-    monkeypatch.setattr("services.brain.retrieve.hybrid.embed_texts", fake_embed)
+    monkeypatch.setattr("services.brain.retrieve.hybrid._query_vector", fake_query_vector)
     monkeypatch.setattr("db.session.whatsapp_session", _session)
     monkeypatch.setattr("services.brain.search.store.query_similar", fake_query)
     sections = {"prices": {"catalog": [{"id": "hair", "labels": {"en": "Hair Removal"}, "active": True}]}}

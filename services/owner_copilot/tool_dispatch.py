@@ -131,25 +131,31 @@ async def dispatch_v2_tool(
 
     from services.owner_copilot.tools_sol_extra import dispatch_sol_extra_tool
 
-    extra = await dispatch_sol_extra_tool(
-        name,
-        tenant_id=tenant_id,
-        user_id=user_id,
-        role=role,
-        args=a,
-        confirmed=confirmed,
-    )
+    try:
+        extra = await dispatch_sol_extra_tool(
+            name,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            role=role,
+            args=a,
+            confirmed=confirmed,
+        )
+    except PermissionError as exc:
+        return ToolResult(ok=False, name=name, data={}, error=str(exc))
     if extra is not None:
         return extra
 
-    return await dispatch_tool(
-        name,
-        tenant_id=tenant_id,
-        user_id=user_id,
-        role=role,
-        args=a,
-        confirmed=confirmed,
-    )
+    try:
+        return await dispatch_tool(
+            name,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            role=role,
+            args=a,
+            confirmed=confirmed,
+        )
+    except PermissionError as exc:
+        return ToolResult(ok=False, name=name, data={}, error=str(exc))
 
 
 def tool_result_for_model(result: ToolResult) -> str:

@@ -40,6 +40,15 @@ def _visible(raw: dict[str, Any]) -> bool:
     return role in _USER or role in _ASSISTANT or role in _STAFF_VISIBLE or not role
 
 
+def _clip_text(text: str, max_chars: int | None) -> str:
+    t = (text or "").strip()
+    if not max_chars or max_chars <= 0 or len(t) <= max_chars:
+        return t
+    if max_chars == 1:
+        return "…"
+    return t[: max_chars - 1] + "…"
+
+
 def _text_of(raw: dict[str, Any]) -> str:
     return str(raw.get("text") or raw.get("content") or raw.get("message") or "").strip()
 
@@ -54,9 +63,20 @@ def build_history_snapshot(
     current_inbound_id: str = "",
     current_inbound_text: str = "",
     cap: int | None = None,
+    max_chars: int | None = None,
+    tenant_id: str = "",
 ) -> HistorySnapshot:
     """Keep chronological customer-visible messages; cap is the latest N (default 50)."""
-    limit = DEFAULT_BUDGETS.history_visible_cap if cap is None else cap
+    clip = int(max_chars) if max_chars is not None else None
+    if tenant_id:
+        from services.runtime_limits.loader import load_runtime_limits
+
+        lim = load_runtime_limits(tenant_id)
+        limit = lim.customer_history_messages if cap is None else cap
+        if clip is None:
+            clip = lim.customer_message_max_chars
+    else:
+        limit = DEFAULT_BUDGETS.history_visible_cap if cap is None else cap
     visible: list[VisibleMessage] = []
     inbound = (current_inbound_id or "").strip()
     inbound_seen = False
@@ -71,7 +91,7 @@ def build_history_snapshot(
             VisibleMessage(
                 id=mid,
                 role=_role_of(raw) or "user",
-                text=_text_of(raw),
+                text=_clip_text(_text_of(raw), clip),
                 timestamp=str(raw.get("timestamp") or raw.get("ts") or ""),
                 visible_to_customer=True,
                 is_current_inbound=is_current,
@@ -82,7 +102,7 @@ def build_history_snapshot(
             VisibleMessage(
                 id=inbound,
                 role="user",
-                text=current_inbound_text,
+                text=_clip_text(current_inbound_text, clip),
                 is_current_inbound=True,
             )
         )

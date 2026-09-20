@@ -14,9 +14,9 @@ from services.brain.providers.spaces import (
     KNOWLEDGE_QUERY,
     compatible,
 )
-from services.brain.providers.voyage_client import embed_texts
 from services.brain.retrieve.cards import TitleCard
 from services.brain.retrieve.lexical import search_cards
+from services.brain.retrieve.query_embed import embed_query_vector
 from services.brain.search.store import StoreQueryResult
 
 
@@ -26,6 +26,10 @@ class HybridHit:
     lexical_score: float
     semantic_score: float
     fused_rank: int
+
+
+async def _query_vector(space: object, query: str, tenant_id: str) -> tuple[list[float], str]:
+    return await embed_query_vector(space, query, tenant_id=tenant_id)
 
 
 def _rrf(*rank_lists: list[str], k: int = 60) -> dict[str, float]:
@@ -108,27 +112,13 @@ async def _semantic_from_store(
     seen: set[str] = set()
     for doc_space_i, query_space_i in spaces:
         try:
-            if query_space_i.endpoint == "contextualized":
-                from services.brain.providers.voyage_client import embed_contextual_groups
-
-                groups = await embed_contextual_groups(query_space_i, [[query]])
-                qvec_vectors = groups[0].vectors if groups else []
-                if not qvec_vectors:
-                    raise RuntimeError("empty_contextual_query")
-                q_vector = qvec_vectors[0]
-                q_model = query_space_i.model
-            else:
-                qvec = await embed_texts(query_space_i, [query])
-                q_vector = qvec.vectors[0]
-                q_model = query_space_i.model
+            q_vector, q_model = await _query_vector(query_space_i, query, tenant_id)
         except Exception:
             if doc_space_i is ENTITY_DOCUMENT:
                 continue
             try:
-                qvec = await embed_texts(ENTITY_QUERY, [query])
+                q_vector, q_model = await _query_vector(ENTITY_QUERY, query, tenant_id)
                 doc_space_i = ENTITY_DOCUMENT
-                q_vector = qvec.vectors[0]
-                q_model = ENTITY_QUERY.model
             except Exception:
                 continue
         record_pending_provider(
@@ -202,7 +192,12 @@ async def search_hybrid(
         from services.products.search_cards import search_product_cards
 
         seen_ids = {card.item_id for card in scoped}
-        for card in search_product_cards(tenant_id, query, limit=cap):
+        prod_cap = cap
+        if tenant_id.strip():
+            from services.runtime_limits.loader import load_runtime_limits
+
+            prod_cap = min(max(load_runtime_limits(tenant_id).product_search_cap, 1), 200)
+        for card in search_product_cards(tenant_id, query, limit=prod_cap):
             if card.item_id not in seen_ids:
                 scoped.append(card)
                 seen_ids.add(card.item_id)

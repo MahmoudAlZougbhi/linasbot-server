@@ -262,6 +262,8 @@ def required_permission_for(method: str, path: str) -> str | None:
         if p.startswith("/api/cm/local-qa"):
             return "contentManagers"
         return "contentManagers"
+    if p.startswith("/api/owner-ai") or p.startswith("/api/owner-copilot"):
+        return "contentManagers"
     # Live Chat FAQ correction (save-all-languages) — operators need liveChat, not training.
     if p.startswith("/api/faq/"):
         return "liveChat"

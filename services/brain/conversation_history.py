@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from services.brain.budgets import DEFAULT_BUDGETS
+from services.brain.budgets import budgets_for_tenant
 from services.brain.contracts.reply import TurnResult
 from services.brain.contracts.turn import ConversationState, CustomerTurn
 from services.brain.conversation_store import load_conversation, save_conversation
@@ -22,7 +22,7 @@ def load_stored_history_rows(tenant_id: str, conversation_id: str) -> list[dict[
     if raw is None:
         return []
     rows = raw.get("history") or []
-    return [row for row in rows if isinstance(row, dict)][-DEFAULT_BUDGETS.history_visible_cap :]
+    return [row for row in rows if isinstance(row, dict)][-budgets_for_tenant(tenant_id).history_visible_cap :]
 
 
 def append_visible_history(
@@ -63,7 +63,7 @@ def append_visible_history(
         conversation_id,
         state,
         list(raw.get("pending") or []),
-        history=merged[-DEFAULT_BUDGETS.history_visible_cap :],
+        history=merged[-budgets_for_tenant(tenant_id).history_visible_cap :],
     )
 
 

@@ -12,7 +12,7 @@ from services.brain.agent.rewrite import rewrite_queries
 from services.brain.agent.task_coverage import evaluate_task_coverage, missing_tasks
 from services.brain.agent.terra_turn import run_terra_turn
 from services.brain.billing import reserve_generative
-from services.brain.budgets import DEFAULT_BUDGETS
+from services.brain.budgets import budgets_for_tenant
 from services.brain.contracts.enums import StopReason
 from services.brain.contracts.evidence import EvidenceBundle
 from services.brain.contracts.plan import PlannerPlan
@@ -75,7 +75,7 @@ async def _retrieve(
 ) -> tuple[EvidenceBundle, dict[str, Any], list[dict[str, str]], dict[str, Any], int]:
     steps += 1
     retrieve_timer = StageTimer()
-    max_rounds = 1 if _fast_path_eligible(plan) else DEFAULT_BUDGETS.max_retrieval_rounds
+    max_rounds = 1 if _fast_path_eligible(plan) else budgets_for_tenant(turn.tenant_id).max_retrieval_rounds
     agent_trace.append({"step": "RETRIEVE", "n": steps, "max_rounds": max_rounds, "fast_path": max_rounds == 1})
     bundle, retrieve_trace, structured_facts = await multi_round_retrieve(turn, plan, message, max_rounds=max_rounds)
     agent_trace.extend({"step": "OBSERVE", **row} for row in retrieve_trace)
@@ -110,7 +110,7 @@ async def run_agentic_turn(
     agent_trace: list[dict[str, Any]] = []
     extra = dict(flow_extra or {})
     steps = 0
-    max_steps = DEFAULT_BUDGETS.max_agent_steps
+    max_steps = budgets_for_tenant(turn.tenant_id).max_agent_steps
 
     steps += 1
     agent_trace.append({"step": "PLAN", "n": steps})

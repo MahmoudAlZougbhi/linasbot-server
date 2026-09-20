@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,19 @@ from services.ai_setup.atomic_io import atomic_write_json, read_json_object
 from services.ai_setup.paths import tenant_cm_root
 
 CHUNK_STORE_VERSION = "luna.chunk.v1"
+_CHUNK_LOCK = threading.Lock()
+_CHUNK_CACHE: dict[tuple[str, str, str], tuple[str, ...]] = {}
+_CHUNK_MAX = 256
+
+
+def invalidate_chunk_cache(tenant_id: str | None = None) -> None:
+    tid = (tenant_id or "").strip()
+    with _CHUNK_LOCK:
+        if not tid:
+            _CHUNK_CACHE.clear()
+            return
+        for key in [k for k in _CHUNK_CACHE if k[0] == tid]:
+            _CHUNK_CACHE.pop(key, None)
 
 
 def save_chunks_dir(tenant_id: str) -> Path:
@@ -35,12 +49,25 @@ def read_chunks(tenant_id: str, section: str, item_id: str) -> dict[str, Any] | 
 
 
 def chunk_texts(tenant_id: str, section: str, item_id: str) -> tuple[str, ...]:
+    key = (tenant_id, section, item_id)
+    with _CHUNK_LOCK:
+        hit = _CHUNK_CACHE.get(key)
+        if hit is not None:
+            return hit
     data = read_chunks(tenant_id, section, item_id)
     if not data:
-        return ()
-    rows = data.get("chunks")
-    if not isinstance(rows, list):
-        return ()
+        texts: tuple[str, ...] = ()
+    else:
+        rows = data.get("chunks")
+        texts = _texts_from_rows(rows if isinstance(rows, list) else [])
+    with _CHUNK_LOCK:
+        if len(_CHUNK_CACHE) >= _CHUNK_MAX:
+            _CHUNK_CACHE.pop(next(iter(_CHUNK_CACHE)))
+        _CHUNK_CACHE[key] = texts
+    return texts
+
+
+def _texts_from_rows(rows: list[object]) -> tuple[str, ...]:
     texts: list[str] = []
     for raw in rows:
         if isinstance(raw, dict):
@@ -77,12 +104,16 @@ def write_chunks(
         ],
     }
     atomic_write_json(path, payload)
+    with _CHUNK_LOCK:
+        _CHUNK_CACHE.pop((tenant_id, section, item_id), None)
 
 
 def delete_chunks(tenant_id: str, section: str, item_id: str) -> None:
     path = chunk_path(tenant_id, section, item_id)
     if path.exists():
         path.unlink()
+    with _CHUNK_LOCK:
+        _CHUNK_CACHE.pop((tenant_id, section, item_id), None)
 
 
 def delete_missing(tenant_id: str, section: str, keep_ids: set[str]) -> list[str]:

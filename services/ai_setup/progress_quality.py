@@ -132,6 +132,14 @@ def assess_section_fill(
     """Return fill level + gaps for one CM section (never invents sections)."""
     name = section.strip().replace("-", "_")
 
+    if name == "runtime_limits":
+        return {
+            "fill": "filled",
+            "is_done": True,
+            "gaps": [],
+            "summary": "Runtime limits — code defaults until the owner edits AI Setup → Runtime limits.",
+        }
+
     if name in {"sol_basics", "sol_app_knowledge"}:
         return {
             "fill": "filled",

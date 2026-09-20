@@ -99,7 +99,7 @@ class CmPatchProposalStore:
         if not d.is_dir():
             return []
         with self._lock:
-            paths = list(d.glob("*.json"))
+            paths = sorted(d.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:200]
         found: list[ProposedCmPatch] = []
         for path in paths:
             prop = self.get(tenant_id=tenant_id, proposal_id=path.stem)

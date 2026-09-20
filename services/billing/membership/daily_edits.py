@@ -36,6 +36,7 @@ COUNTED_CM_SECTIONS = frozenset(
         "requests_appointments",
         "sol_basics",
         "sol_app_knowledge",
+        "runtime_limits",
     }
 )
 

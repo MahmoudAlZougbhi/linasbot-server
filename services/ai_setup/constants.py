@@ -113,6 +113,7 @@ CM_SECTIONS: Final[tuple[str, ...]] = (
     "requests_appointments",
     "sol_basics",
     "sol_app_knowledge",
+    "runtime_limits",
 )
 
 # Owner-copilot portal brain. Customer Terra retrieve must never index these.

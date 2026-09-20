@@ -120,10 +120,11 @@ def configured_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Meta
 
 
 @pytest.mark.asyncio
-async def test_legacy_inline_route_passes_authenticated_synthetic_tenant_and_binding(
+async def test_legacy_inline_route_refuses_without_opt_in(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("META_MULTI_APP_REGISTRY_ENABLED", "false")
+    monkeypatch.delenv("LINAS_META_LEGACY_SINGLE_TENANT", raising=False)
     settings = MetaMessagingSettings(
         enabled=True,
         app_secret="legacy-app-secret",
@@ -185,20 +186,12 @@ async def test_legacy_inline_route_passes_authenticated_synthetic_tenant_and_bin
         ],
     }
     body = json.dumps(payload, separators=(",", ":")).encode()
-    response = await meta_messaging_webhook.receive_meta_messaging_webhook(
-        _request(body, _sign(settings.app_secret, body))
-    )
-    await asyncio.sleep(0)
-    await asyncio.sleep(0)
+    from fastapi import HTTPException
 
-    assert json.loads(response.body)["accepted"] == 1
-    assert captured == [
-        {
-            "inbound_event_id": "ibe_" + "1" * 40,
-            "tenant_id": "linas",
-            "binding_id": "legacy-single-app",
-        }
-    ]
+    with pytest.raises(HTTPException) as exc:
+        await meta_messaging_webhook.receive_meta_messaging_webhook(_request(body, _sign(settings.app_secret, body)))
+    assert exc.value.status_code == 503
+    assert captured == []
 
 
 @pytest.mark.asyncio
