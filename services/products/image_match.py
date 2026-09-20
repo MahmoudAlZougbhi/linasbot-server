@@ -1,6 +1,6 @@
-"""Match an inbound image to catalog product ids via the save-time fingerprint index.
+"""Match an inbound image to catalog product ids via sha256 + tenant-scoped ANN.
 
-Phase 1: pHash / sha256 / histogram (image_index). Voyage multimodal is flag-off.
+Voyage multimodal image search stays flag-off. Hits are EVIDENCE only.
 """
 
 from __future__ import annotations

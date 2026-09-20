@@ -42,7 +42,7 @@ def _db_session() -> AbstractContextManager[Session]:
 @app.get("/api/mobile/products")
 async def mobile_list_products(
     request: Request,
-    limit: int = Query(default=200, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> Any:
     session = require_session(request)
