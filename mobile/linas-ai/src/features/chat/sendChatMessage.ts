@@ -32,7 +32,6 @@ type Args = {
   ownerSend: OwnerTurnSend;
   appendOptimisticUser: (content: string, localImageUris?: string[]) => string;
   removeOptimisticUser: (id: string) => void;
-  autoTitleFromOutgoing: (content: string) => void;
   openAuthPreservingDraft: (hard?: boolean) => void;
   setOffline: (v: boolean) => void;
   setSendError: (v: string | null) => void;
@@ -74,7 +73,6 @@ async function sendChatMessageOnce(args: Args): Promise<void> {
     ownerSend,
     appendOptimisticUser,
     removeOptimisticUser,
-    autoTitleFromOutgoing,
     openAuthPreservingDraft,
     setOffline,
     setSendError,
@@ -132,7 +130,6 @@ async function sendChatMessageOnce(args: Args): Promise<void> {
   setDraft('');
   setPendingFiles([]);
   scrollToBottom();
-  autoTitleFromOutgoing(outgoing);
 
   let attachmentIds: string[] | undefined;
   if (files.length) {

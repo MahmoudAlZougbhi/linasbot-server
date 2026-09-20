@@ -68,8 +68,8 @@ export const typography = {
     letterSpacing: 0.3,
   } satisfies TextStyle,
   /**
-   * Sidebar module tiles + chat titles — same 16px, medium fill like ChatGPT.
-   * Do not change size here without updating both DrawerNavGrid and HistoryRows.
+   * Sidebar module tiles — 16px medium.
+   * Chat titles in Recents use `chatAi` (same as Sol bubbles).
    */
   drawerItem: {
     fontFamily: bodyMedium,
@@ -77,7 +77,7 @@ export const typography = {
     lineHeight: 22,
     letterSpacing: -0.15,
   } satisfies TextStyle,
-  /** Owner Copilot AI reply — same 17px, medium fill (not larger). */
+  /** Owner Copilot AI reply + Recents chat titles. */
   chatAi: {
     fontFamily: bodyMedium,
     fontSize: 17,

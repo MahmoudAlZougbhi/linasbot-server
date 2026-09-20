@@ -241,7 +241,6 @@ export function ChatScreen({
               ownerSend: c.ownerSendWithMode,
               appendOptimisticUser: c.owner.appendOptimisticUser,
               removeOptimisticUser: c.owner.removeOptimisticUser,
-              autoTitleFromOutgoing: c.owner.autoTitleFromOutgoing,
               openAuthPreservingDraft: c.openAuthPreservingDraft,
               setOffline: c.setOffline,
               setSendError: (v) => (isAuthenticated ? c.owner.setError(v) : c.guest.setError(v)),

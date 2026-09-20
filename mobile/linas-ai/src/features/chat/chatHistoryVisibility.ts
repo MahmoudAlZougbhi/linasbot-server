@@ -25,19 +25,42 @@ export function listedHistoryEntries(conversations: ListedConversation[]): Histo
 }
 
 /**
- * Apply a fresh list response without letting a stale/default title wipe a
- * better title already shown for the same conversation id.
+ * Apply a fresh list response without reshuffling rows the owner already sees.
+ * Keep local optimistic ids in `retainIds` when the snapshot has not listed them yet.
  */
-export function mergeListedHistory(prev: HistoryEntry[], next: HistoryEntry[]): HistoryEntry[] {
+export function mergeListedHistory(
+  prev: HistoryEntry[],
+  next: HistoryEntry[],
+  opts?: { retainIds?: string[] },
+): HistoryEntry[] {
   if (!prev.length) return next;
-  const prevById = new Map(prev.map((h) => [h.id, h]));
-  return next.map((n) => {
-    const p = prevById.get(n.id);
-    if (p && isWeakHistoryTitle(n.title) && !isWeakHistoryTitle(p.title)) {
-      return { ...n, title: p.title };
+  const retain = new Set(opts?.retainIds || []);
+  const nextById = new Map(next.map((h) => [h.id, h]));
+  const seen = new Set<string>();
+  const merged: HistoryEntry[] = [];
+  for (const p of prev) {
+    const n = nextById.get(p.id);
+    if (n) {
+      merged.push(preferListedTitle(p, n));
+      seen.add(p.id);
+      continue;
     }
-    return n;
-  });
+    if (retain.has(p.id)) {
+      merged.push(p);
+      seen.add(p.id);
+    }
+  }
+  for (const n of next) {
+    if (!seen.has(n.id)) merged.push(n);
+  }
+  return merged;
+}
+
+function preferListedTitle(prev: HistoryEntry, incoming: HistoryEntry): HistoryEntry {
+  if (isWeakHistoryTitle(incoming.title) && !isWeakHistoryTitle(prev.title)) {
+    return { ...incoming, title: prev.title };
+  }
+  return incoming;
 }
 
 export function conversationHasUserTurn(messages: Array<{ role: string }>): boolean {

@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from modules.api_security import require_session
 from modules.core import app
 from services.owner_copilot.chat_store import owner_chat_store
+from services.owner_copilot.conversation_title import maybe_assign_sol_title, sse_title_if_named
 from services.owner_copilot.stream_protocol import encode_sse, encode_sse_done
 
 
@@ -156,9 +157,11 @@ async def stream_owner_message(
         watcher = asyncio.create_task(watch_disconnect())
         reply_parts: list[str] = []
         done_payload: dict[str, Any] | None = None
+        title = conversation_title
         try:
-            if conversation_title:
-                yield encode_sse(StreamEvent(type="title_updated", payload={"title": conversation_title}))
+            named = sse_title_if_named(title)
+            if named:
+                yield encode_sse(StreamEvent(type="title_updated", payload=named))
             async for ev in iter_owner_turn_v2_events(
                 tenant_id=session.tenant_id,
                 user_id=session.user_id,
@@ -182,11 +185,24 @@ async def stream_owner_message(
                 if ev.type == "done":
                     done_payload = {
                         **ev.payload,
-                        "conversation_title": conversation_title,
+                        "conversation_title": title,
                     }
                     yield encode_sse(StreamEvent(type="done", payload=done_payload))
                     continue
                 yield encode_sse(ev)
+            reply_so_far = str((done_payload or {}).get("reply_text") or "".join(reply_parts)).strip()
+            if reply_so_far and not cancel_flag["cancelled"]:
+                sol_title = await maybe_assign_sol_title(
+                    tenant_id=session.tenant_id,
+                    user_id=session.user_id,
+                    conversation_id=conversation_id,
+                    user_text=content,
+                    reply_text=reply_so_far,
+                    language=reply_language,
+                )
+                if sol_title:
+                    title = sol_title
+                    yield encode_sse(StreamEvent(type="title_updated", payload={"title": sol_title}))
             yield encode_sse_done()
         finally:
             watcher.cancel()

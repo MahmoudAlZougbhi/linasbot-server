@@ -15,12 +15,10 @@ import {
   mergeListedHistory,
   upsertStartedHistoryEntry,
   dropUnstartedHistoryEntry,
+  conversationHasUserTurn,
   type HistoryEntry,
 } from './chatHistoryVisibility';
-import {
-  autoTitleFromFirstMessage,
-  isDefaultConversationTitle,
-} from './chatSessionTitle';
+import { isDefaultConversationTitle } from './chatSessionTitle';
 import {
   OWNER_MESSAGE_PAGE,
   conversationMessagesUrl,
@@ -38,7 +36,7 @@ export type SyncAfterTurnOptions = {
 
 export type { ProposedPatch } from './chatSessionSchemas';
 export type { HistoryEntry } from './chatHistoryVisibility';
-export { autoTitleFromFirstMessage, isDefaultConversationTitle } from './chatSessionTitle';
+export { isDefaultConversationTitle } from './chatSessionTitle';
 
 async function createOwnerConversation() {
   return apiFetch('/api/owner-ai/conversations', {
@@ -78,6 +76,12 @@ export function useChatSession(enabled = true) {
   const listRequestIdRef = useRef(0);
   const openRequestIdRef = useRef(0);
 
+  function retainHistoryIds(): string[] {
+    const id = conversationIdRef.current;
+    if (!id || !conversationHasUserTurn(messagesRef.current)) return [];
+    return [id];
+  }
+
   const bootstrap = useCallback(async () => {
     if (!enabled) {
       setLoading(false);
@@ -101,7 +105,11 @@ export function useChatSession(enabled = true) {
         createOwnerConversation(),
       ]);
       if (listRequestId === listRequestIdRef.current) {
-        setHistory((prev) => mergeListedHistory(prev, listedHistoryEntries(listed.conversations)));
+        setHistory((prev) =>
+          mergeListedHistory(prev, listedHistoryEntries(listed.conversations), {
+            retainIds: retainHistoryIds(),
+          }),
+        );
       }
       setConversationId(created.conversation.id);
       setTitle(created.conversation.title);
@@ -131,13 +139,23 @@ export function useChatSession(enabled = true) {
           const listRequestId = ++listRequestIdRef.current;
           const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
           if (listRequestId === listRequestIdRef.current) {
-            setHistory((prev) => mergeListedHistory(prev, listedHistoryEntries(listed.conversations)));
+            setHistory((prev) =>
+              mergeListedHistory(prev, listedHistoryEntries(listed.conversations), {
+                retainIds: retainHistoryIds(),
+              }),
+            );
           }
           const full = await apiFetch(conversationMessagesUrl(activeId), { schema: GetConvSchema });
           if (conversationIdRef.current !== activeId) return false;
 
           const merged = mergeLatestWindow(messagesRef.current, full.conversation.messages);
-          setTitle(full.conversation.title);
+          setTitle((prevTitle) => {
+            const incoming = full.conversation.title;
+            if (isDefaultConversationTitle(incoming) && !isDefaultConversationTitle(prevTitle)) {
+              return prevTitle;
+            }
+            return incoming;
+          });
           setMessages(merged);
           messagesRef.current = merged;
 
@@ -192,17 +210,6 @@ export function useChatSession(enabled = true) {
       });
     },
     [],
-  );
-
-  /** Optimistic ChatGPT-style title from first user message while still untitled. */
-  const autoTitleFromOutgoing = useCallback(
-    (content: string) => {
-      if (!conversationId || !isDefaultConversationTitle(title)) return;
-      const next = autoTitleFromFirstMessage(content);
-      if (isDefaultConversationTitle(next)) return;
-      applyConversationTitle(conversationId, next);
-    },
-    [applyConversationTitle, conversationId, title],
   );
 
   useEffect(() => {
@@ -350,7 +357,6 @@ export function useChatSession(enabled = true) {
     bootstrap,
     syncAfterTurn,
     applyConversationTitle,
-    autoTitleFromOutgoing,
     openConversation,
     newChat,
     loadOlder,
