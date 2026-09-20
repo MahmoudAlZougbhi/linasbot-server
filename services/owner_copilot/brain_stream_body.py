@@ -46,6 +46,9 @@ async def _iter_owner_turn_v2_events_body(
     is_cancelled: CancelCheck | None = None,
 ) -> AsyncGenerator[StreamEvent, None]:
     text = (user_text or "").strip()
+    from services.owner_copilot.sol_ensure import ensure_published_sol_basics
+
+    await ensure_published_sol_basics(tenant_id)
     context = pack_owner_turn_context(
         tenant_id=tenant_id,
         user_id=user_id,

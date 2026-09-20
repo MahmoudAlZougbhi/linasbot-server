@@ -1,6 +1,6 @@
 """Optional short Terra ack before retrieve/tools, then the evidence-only final.
 
-Flag ``CUSTOMER_DM_ACK_THEN_REPLY`` defaults off. Ack never invents prices,
+Flag ``CUSTOMER_DM_ACK_THEN_REPLY`` defaults on. Ack never invents prices,
 hours, or product facts. Failure after ack stays silent (Terra fail path).
 One ack per flushed burst — this module is invoked once per agentic turn.
 """
@@ -30,7 +30,7 @@ _ACK_SYSTEM = (
 
 
 def ack_then_reply_enabled(channel: str = "") -> bool:
-    if not env_flag("CUSTOMER_DM_ACK_THEN_REPLY", default=False):
+    if not env_flag("CUSTOMER_DM_ACK_THEN_REPLY", default=True):
         return False
     allow = (os.getenv("CUSTOMER_DM_ACK_CHANNELS") or "").strip().lower()
     if not allow:

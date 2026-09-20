@@ -38,7 +38,7 @@ def classify_result(turn: CustomerTurn, result: TurnResult) -> ResponseClass:
     phase = str(extra.get("phase") or "")
     mode = str(extra.get("comment_mode") or extra.get("rule_mode") or "")
     faq_used = bool(extra.get("faq_id") or extra.get("faq_used"))
-    if path in {"faq_exact", "faq_semantic"} and not result.ai_called:
+    if path in {"faq_exact", "faq_semantic", "faq_embed_90"} and not result.ai_called:
         return "faq_only"
     if mode in {"ignore", "manual"} or (
         path == "comment_rule" and (result.envelope.decision == "no_reply" or result.stop_reason == "policy_suppressed")

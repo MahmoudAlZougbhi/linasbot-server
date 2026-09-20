@@ -57,6 +57,17 @@ def _card(
     )
 
 
+def _faq_questions(raw: dict[str, Any]) -> tuple[str, ...]:
+    seen: list[str] = []
+    for variant in raw.get("variants") or []:
+        if not isinstance(variant, dict):
+            continue
+        question = str(variant.get("question") or "").strip()
+        if question and question not in seen:
+            seen.append(question)
+    return tuple(seen)
+
+
 def _from_items(
     family: SourceFamily,
     rows: list[Any],
@@ -103,13 +114,16 @@ def _from_items(
             from services.brain.retrieve.schedule_text import schedule_search_blob
 
             extra.append(schedule_search_blob(raw))
+        questions = _faq_questions(raw) if family == "faq" else ()
         if family == "faq":
-            for variant in raw.get("variants") or []:
-                if isinstance(variant, dict):
-                    extra.append(str(variant.get("question") or ""))
+            extra.extend(questions)
+            if not title and questions:
+                title = questions[0]
         if family in {"knowledge", "care", "branches", "hours", "services"} and body:
             extra.append(body)
         card = _card(family=family, item_id=item_id, title=title, extra=extra, revision=revision, body=body)
+        if card and questions:
+            card = replace(card, chunks=questions, search_text=questions[0])
         if card:
             cards.append(card)
     return cards
