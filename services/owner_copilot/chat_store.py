@@ -13,7 +13,6 @@ from typing import Any
 from storage.persistent_storage import _DATA_ROOT
 
 DEFAULT_CONVERSATION_TITLE = "New chat"
-_AUTO_TITLE_MAX_LEN = 60
 
 
 def messages_include_user_turn(messages: Any) -> bool:
@@ -47,17 +46,7 @@ def first_user_message_ts(messages: Any) -> float:
 
 def is_default_conversation_title(title: str | None) -> bool:
     cleaned = (title or "").strip()
-    return not cleaned or cleaned in {DEFAULT_CONVERSATION_TITLE, "Chat", "Untitled"}
-
-
-def auto_title_from_first_message(content: str, *, max_len: int = _AUTO_TITLE_MAX_LEN) -> str:
-    """ChatGPT-style title: first user text, single line, truncated."""
-    cleaned = " ".join(str(content or "").replace("\r", "\n").split())
-    if not cleaned:
-        return DEFAULT_CONVERSATION_TITLE
-    if len(cleaned) <= max_len:
-        return cleaned
-    return cleaned[:max_len].rstrip()
+    return not cleaned or cleaned in {DEFAULT_CONVERSATION_TITLE, "Chat", "Untitled", "Linas AI"}
 
 
 @dataclass
@@ -269,9 +258,7 @@ class OwnerChatStore:
         msgs.append(msg)
         conv.messages = msgs
         conv.updated_at = msg.created_at
-        # Auto-title once from first user message while still on the default title.
-        if role == "user" and is_default_conversation_title(conv.title):
-            conv.title = auto_title_from_first_message(content)
+        # Title stays default until Sol names the chat (conversation_title.py).
         self._write(conv)
         return msg
 

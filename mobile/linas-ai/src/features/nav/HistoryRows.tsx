@@ -96,8 +96,7 @@ export function HistoryRows({
             ) : (
               <Text
                 style={[
-                  styles.rowTitle,
-                  drawer && styles.rowTitleDrawer,
+                  drawer ? styles.rowTitleDrawer : styles.rowTitle,
                   { color: colors.text },
                 ]}
                 numberOfLines={drawer ? 1 : 2}
@@ -271,6 +270,7 @@ const styles = StyleSheet.create({
   },
   rowTitleDrawer: {
     ...typography.chatAi,
+    flex: 1,
   },
   emptyDrawer: {
     fontFamily: fonts.body,

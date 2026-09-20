@@ -47,6 +47,10 @@ describe('drawer recents render when history exists', () => {
     assert.doesNotMatch(recents, /ScrollView/);
     assert.match(rows, /if \(!items\.length\)/);
     assert.match(rows, /items\.map\(renderRow\)/);
+    assert.match(rows, /drawer \? styles\.rowTitleDrawer : styles\.rowTitle/);
+    const drawerStyle = rows.slice(rows.indexOf('rowTitleDrawer: {'));
+    assert.match(drawerStyle, /\.\.\.typography\.chatAi/);
+    assert.doesNotMatch(drawerStyle.slice(0, 120), /fontSize:\s*14/);
   });
 });
 

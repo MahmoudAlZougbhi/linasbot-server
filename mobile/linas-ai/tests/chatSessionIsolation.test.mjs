@@ -53,7 +53,10 @@ describe('chat session isolation', () => {
     assert.match(session, /Promise\.all\(/);
     assert.doesNotMatch(session, /preferFresh/);
     assert.doesNotMatch(session, /listed\.conversations\.find/);
-    assert.match(session, /mergeListedHistory\(prev, listedHistoryEntries\(listed\.conversations\)\)/);
+    assert.match(session, /mergeListedHistory\(prev, listedHistoryEntries\(listed\.conversations\)/);
+    assert.match(session, /retainIds: retainHistoryIds\(\)/);
+    assert.doesNotMatch(session, /autoTitleFromOutgoing/);
+    assert.doesNotMatch(session, /autoTitleFromFirstMessage/);
     assert.doesNotMatch(session, /setHistory\(\(prev\) => \[\{ id: created/);
   });
 

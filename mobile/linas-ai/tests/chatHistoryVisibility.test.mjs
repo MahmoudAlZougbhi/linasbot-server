@@ -69,3 +69,43 @@ test('mergeListedHistory still accepts a real server title change', () => {
   const next = [{ id: 'a', title: 'Renamed on server' }];
   assert.equal(mergeListedHistory(prev, next)[0].title, 'Renamed on server');
 });
+
+test('mergeListedHistory keeps recents order instead of reshuffling on poll', () => {
+  const prev = [
+    { id: 'new', title: 'New chat' },
+    { id: 'old', title: 'Hours question' },
+  ];
+  const next = [
+    { id: 'old', title: 'Hours question' },
+    { id: 'new', title: 'New chat' },
+  ];
+  assert.deepEqual(
+    mergeListedHistory(prev, next).map((h) => h.id),
+    ['new', 'old'],
+  );
+});
+
+test('mergeListedHistory retains the in-flight chat when the list snapshot lags', () => {
+  const prev = [
+    { id: 'sending', title: 'New chat' },
+    { id: 'old', title: 'Hours question' },
+  ];
+  const next = [{ id: 'old', title: 'Hours question' }];
+  const merged = mergeListedHistory(prev, next, { retainIds: ['sending'] });
+  assert.deepEqual(
+    merged.map((h) => h.id),
+    ['sending', 'old'],
+  );
+});
+
+test('mergeListedHistory drops deleted chats that are not retained', () => {
+  const prev = [
+    { id: 'gone', title: 'Old name' },
+    { id: 'keep', title: 'Hours question' },
+  ];
+  const next = [{ id: 'keep', title: 'Hours question' }];
+  assert.deepEqual(
+    mergeListedHistory(prev, next).map((h) => h.id),
+    ['keep'],
+  );
+});
