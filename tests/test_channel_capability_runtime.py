@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from services.ai_setup.actions import ACTION_FACEBOOK_DM
+from services.ai_setup.actions import ACTION_FACEBOOK_DM, ACTION_INSTAGRAM_DM
 from services.integrations.channel_capability_runtime import meta_dm_replies_enabled
 
 
@@ -24,6 +24,17 @@ def test_published_dm_off_stops_replies(monkeypatch) -> None:
         lambda _tenant: ActionsSection(items=[ActionCapability(id=ACTION_FACEBOOK_DM, enabled=False)]),
     )
     assert meta_dm_replies_enabled(tenant_id="linas", platform="facebook") is False
+
+
+def test_published_missing_instagram_dm_item_keeps_replies_on(monkeypatch) -> None:
+    from services.ai_setup.schemas import ActionCapability, ActionsSection
+
+    monkeypatch.setattr(
+        "services.integrations.channel_capability_runtime.load_actions_section",
+        lambda _tenant: ActionsSection(items=[ActionCapability(id=ACTION_FACEBOOK_DM, enabled=True)]),
+    )
+    assert meta_dm_replies_enabled(tenant_id="linas", platform="instagram") is True
+    assert ACTION_INSTAGRAM_DM == "respond_instagram_dm"
 
 
 @pytest.mark.asyncio

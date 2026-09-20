@@ -25,6 +25,11 @@ from services.integrations.social.social_image_quota import (
 from services.integrations.social.social_image_quota import (
     truncate_image_attachments as _truncate_image_attachments,
 )
+from services.integrations.social.social_inbound_livechat import (
+    log_social_inbound,
+    persist_skipped_social_inbound,
+    skipped_ai_outcome,
+)
 from services.integrations.social.social_turn_outcome import meta_social_outcome_requires_retry
 from utils.utils import get_user_state_from_firestore
 
@@ -56,31 +61,33 @@ async def process_meta_social_event(
     if not resolved_tenant_id:
         raise ValueError("tenant_id required for social messaging")
     from services.integrations.channel_capability_runtime import meta_dm_replies_enabled
+    from services.integrations.channel_capability_state import action_id_for
+    from services.integrations.social.social_user_id import compose_social_user_id
 
-    if not meta_dm_replies_enabled(tenant_id=resolved_tenant_id, platform=channel):
-        print(
-            f"[meta-social] dm_replies_disabled channel={channel} tenant={resolved_tenant_id}",
-            flush=True,
-        )
-        return {
-            "ok": True,
-            "delivery": "skipped",
-            "skipped": True,
-            "reason": "dm_disabled",
-            "retryable": False,
-            "terminal": True,
-        }
     account_id = resolve_meta_send_account_id(channel, event, settings)
     resolved_binding_id = str(binding_id or settings.binding_id or "").strip()
     asset_id = settings.instagram_account_id if channel == "instagram" else settings.page_id
-    from services.integrations.social.social_user_id import compose_social_user_id
-
     user_id = compose_social_user_id(
         tenant_id=resolved_tenant_id,
         channel=channel,
         asset_id=asset_id,
         sender_id=sender_id,
     )
+    action_id = action_id_for(channel, "dm") or ""
+    message_id = str(event.get("message_id") or "")
+    if not meta_dm_replies_enabled(tenant_id=resolved_tenant_id, platform=channel):
+        saved = await persist_skipped_social_inbound(
+            user_id=user_id,
+            tenant_id=resolved_tenant_id,
+            channel=channel,
+            binding_id=resolved_binding_id,
+            action_id=action_id,
+            reason="dm_disabled",
+            message_id=message_id,
+            text=str(event.get("text") or ""),
+            simulation=simulation,
+        )
+        return skipped_ai_outcome(reason="dm_disabled", firestore_saved=saved)
 
     adapter = None
     if not simulation:
@@ -360,13 +367,19 @@ async def process_meta_social_event(
                 user_data["inbound_safety_image_urls"] = list(inbound.safety_image_urls)
             text = inbound.pipeline_text or text
         if not text:
-            return {
-                "ok": True,
-                "delivery": "no_text",
-                "skipped": True,
-                "retryable": False,
-                "terminal": True,
-            }
+            saved = await persist_skipped_social_inbound(
+                user_id=user_id,
+                tenant_id=resolved_tenant_id,
+                channel=channel,
+                binding_id=resolved_binding_id,
+                action_id=action_id,
+                reason="no_text",
+                message_id=message_id,
+                text="",
+                user_name=display_name,
+                simulation=simulation,
+            )
+            return skipped_ai_outcome(reason="no_text", firestore_saved=saved, delivery="no_text")
 
         async def send_message(
             _namespaced_id: str,
@@ -413,6 +426,15 @@ async def process_meta_social_event(
             send_action_func=send_action,
             skip_firestore_save=skip_firestore_save,
             message_combine_delay=message_combine_delay,
+        )
+        log_social_inbound(
+            tenant_id=resolved_tenant_id,
+            channel=channel,
+            binding_id=resolved_binding_id,
+            action_id=action_id,
+            reason="accepted",
+            firestore_saved=not skip_firestore_save,
+            message_id=message_id,
         )
         from services.scale.conversation_session import persist_from_process
 
