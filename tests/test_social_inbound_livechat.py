@@ -11,7 +11,6 @@ import config
 from services.integrations.meta.meta_messaging import MetaMessagingSettings
 from services.integrations.social import social_messaging_processor
 from services.integrations.social.social_inbound_livechat import (
-    NO_TEXT_PLACEHOLDER,
     hashed_message_id,
     persist_skipped_social_inbound,
 )
