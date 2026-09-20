@@ -28,7 +28,7 @@ class ProductsService:
         self.repo = ProductsRepository(session)
         self.session = session
 
-    def list_products(self, *, tenant_id: str, limit: int = 200, offset: int = 0) -> dict[str, Any]:
+    def list_products(self, *, tenant_id: str, limit: int = 50, offset: int = 0) -> dict[str, Any]:
         rows = self.repo.list_products(tenant_id=tenant_id, limit=limit, offset=offset)
         total = self.repo.count_products(tenant_id=tenant_id)
         return {"products": [product_to_dict(row) for row in rows], "total": total}

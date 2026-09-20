@@ -26,10 +26,16 @@ TURN_FILES = (
     "services/brain/agent/multi_retrieve.py",
     "services/brain/turn_pipeline.py",
     "services/brain/media/product_image_match.py",
+    "services/products/image_index.py",
+    "services/products/image_ann.py",
+    "services/products/image_match.py",
 )
 LAYOUT_FILES = (
     "services/products/search_cards.py",
     "services/products/image_match.py",
+    "services/products/image_index.py",
+    "services/products/image_ann.py",
+    "services/products/image_phash_vec.py",
     "services/products/reindex.py",
     "services/products/media_descriptors.py",
     "services/products/authorized_media.py",

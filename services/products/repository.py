@@ -26,14 +26,16 @@ class ProductsRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def list_products(self, *, tenant_id: str, limit: int = 200, offset: int = 0) -> list[Product]:
+    def list_products(self, *, tenant_id: str, limit: int = 50, offset: int = 0) -> list[Product]:
+        cap = min(max(int(limit or 50), 1), 200)
+        skip = max(int(offset or 0), 0)
         stmt = (
             select(Product)
             .where(Product.tenant_id == tenant_id)
             .options(selectinload(Product.images), selectinload(Product.links))
             .order_by(Product.updated_at.desc())
-            .limit(limit)
-            .offset(offset)
+            .limit(cap)
+            .offset(skip)
         )
         return list(self.session.execute(stmt).scalars().all())
 
