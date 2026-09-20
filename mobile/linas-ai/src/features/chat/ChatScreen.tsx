@@ -103,6 +103,7 @@ export function ChatScreen({
             messages={c.messages}
             isAuthenticated={isAuthenticated}
             stickToBottomRef={c.stickToBottomRef}
+            keyboardGuardRef={c.keyboardGuardRef}
             scrollToBottom={c.scrollToBottom}
             followBottomIfStuck={c.followBottomIfStuck}
             imagePreviewByContent={c.imagePreviewByContent}
@@ -225,6 +226,7 @@ export function ChatScreen({
           onConfirmVoice={() => void c.voice.confirmVoice()}
           onDiscardVoice={() => void c.voice.discardVoice()}
           onStop={c.turn.streaming ? () => c.turn.stop() : undefined}
+          onComposerFocus={() => c.scrollToBottom(false)}
           onSend={() =>
             void sendChatMessage({
               isAuthenticated,
@@ -245,6 +247,7 @@ export function ChatScreen({
               setSendError: (v) => (isAuthenticated ? c.owner.setError(v) : c.guest.setError(v)),
               scrollToBottom: c.scrollToBottom,
               imagePreviewByContent: c.imagePreviewByContent,
+              setSendInFlight: c.setSendInFlight,
             })
           }
         />

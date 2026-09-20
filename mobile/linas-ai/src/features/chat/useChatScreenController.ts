@@ -37,6 +37,7 @@ export function useChatScreenController(
   const [offline, setOffline] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [ownerMode, setOwnerMode] = useState<OwnerChatMode>('chat');
+  const [sendInFlight, setSendInFlight] = useState(false);
   const promoteOwnerMode = useCallback((mode: OwnerChatMode) => {
     if (mode === 'work') setOwnerMode('work');
   }, []);
@@ -57,7 +58,7 @@ export function useChatScreenController(
   const imagePreviewByContent = useRef<Record<string, string[]>>({});
   const [choiceBusy, setChoiceBusy] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
-  const { listRef, stickToBottomRef, scrollToBottom, followBottomIfStuck, armOpenAtLatest } =
+  const { listRef, stickToBottomRef, keyboardGuardRef, scrollToBottom, followBottomIfStuck, armOpenAtLatest } =
     useChatListScroll();
   const credits = useBuyCreditsFlow(() => turn.clearCreditsPaused());
   const voice = useVoiceDraft((text) => {
@@ -94,7 +95,9 @@ export function useChatScreenController(
   const awaitingGreeting =
     isAuthenticated && owner.loading && messages.length === 0 && !owner.error;
   const sessionReady = isAuthenticated && Boolean(owner.conversationId);
-  const sending = isAuthenticated ? turn.streaming : guest.sending;
+  const sending = isAuthenticated
+    ? turn.streaming || sendInFlight
+    : guest.sending || sendInFlight;
   const error = isAuthenticated ? owner.error : guest.error;
   const listKey = isAuthenticated ? owner.conversationId || 'owner' : guest.guestId || 'guest';
   const hasUserMessage = messages.some((m) => m.role === 'user');
@@ -165,6 +168,7 @@ export function useChatScreenController(
     composerInputRef,
     listRef,
     stickToBottomRef,
+    keyboardGuardRef,
     scrollToBottom,
     followBottomIfStuck,
     armOpenAtLatest,
@@ -180,6 +184,8 @@ export function useChatScreenController(
     messages,
     sessionReady,
     sending,
+    sendInFlight,
+    setSendInFlight,
     error,
     listKey,
     hasUserMessage,
