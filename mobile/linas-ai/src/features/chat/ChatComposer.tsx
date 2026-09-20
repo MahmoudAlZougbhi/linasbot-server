@@ -54,6 +54,7 @@ type Props = {
   showModelChip?: boolean;
   editChipActive?: boolean;
   onClearEditChip?: () => void;
+  onComposerFocus?: () => void;
 };
 
 /**
@@ -84,6 +85,7 @@ export function ChatComposer({
   showModelChip = false,
   editChipActive = false,
   onClearEditChip,
+  onComposerFocus,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -96,6 +98,8 @@ export function ChatComposer({
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
   const suppressFocusRef = useRef(false);
+  const sendLockRef = useRef(false);
+  const suppressDraftEchoRef = useRef(false);
   const {
     inputHeight,
     atMaxHeight,
@@ -157,6 +161,13 @@ export function ChatComposer({
     if (draft.length === 0 && expanded) setExpanded(false);
   }, [draft, expanded]);
 
+  useEffect(() => {
+    if (!sending) {
+      sendLockRef.current = false;
+      suppressDraftEchoRef.current = false;
+    }
+  }, [sending]);
+
   function toggleExpand() {
     if (expanded) {
       setExpanded(false);
@@ -188,10 +199,12 @@ export function ChatComposer({
   }, []);
 
   function handleSend() {
-    if (sending || !canSend || voiceBusy) return;
+    if (sending || !canSend || voiceBusy || sendLockRef.current) return;
+    sendLockRef.current = true;
+    suppressDraftEchoRef.current = true;
     suppressFocusRef.current = true;
-    dismissKeyboard();
     onSend();
+    dismissKeyboard();
     requestAnimationFrame(dismissKeyboard);
     setTimeout(dismissKeyboard, 80);
   }
@@ -324,9 +337,15 @@ export function ChatComposer({
           expandBg={colors.featuredIconBg}
           expandIcon={colors.textMuted}
           assignInputRef={assignInputRef}
-          onChangeText={(v) => handleChangeText(v, onChangeDraft)}
+          onChangeText={(v) => {
+            if (suppressDraftEchoRef.current) return;
+            handleChangeText(v, onChangeDraft);
+          }}
           onMeasuredLines={handleMeasuredLines}
-          onFocus={() => setFocused(true)}
+          onFocus={() => {
+            setFocused(true);
+            onComposerFocus?.();
+          }}
           onBlur={() => setFocused(false)}
           textAlign={inputTextAlign}
           writingDirection={draftEmpty ? idleWriting : draftDir.writingDirection}

@@ -15,6 +15,8 @@ import { FlatList, Keyboard, Platform } from 'react-native';
 export function useChatListScroll() {
   const listRef = useRef<FlatList>(null);
   const stickToBottomRef = useRef(false);
+  /** True while the keyboard is opening so list pan-from-resize cannot drop stick. */
+  const keyboardGuardRef = useRef(false);
 
   /** Pin to latest and scroll — send, FAB, open chat, etc. */
   const scrollToBottom = useCallback((animated = true) => {
@@ -52,6 +54,7 @@ export function useChatListScroll() {
   useEffect(() => {
     const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const sub = Keyboard.addListener(event, () => {
+      keyboardGuardRef.current = true;
       // Re-check stick on every retry — user may scroll away while KAV settles.
       const run = (animated: boolean) => {
         if (!stickToBottomRef.current) return;
@@ -61,9 +64,19 @@ export function useChatListScroll() {
       setTimeout(() => run(false), 50);
       setTimeout(() => run(false), 120);
       setTimeout(() => run(true), 220);
+      setTimeout(() => {
+        keyboardGuardRef.current = false;
+      }, 400);
     });
     return () => sub.remove();
   }, []);
 
-  return { listRef, stickToBottomRef, scrollToBottom, followBottomIfStuck, armOpenAtLatest };
+  return {
+    listRef,
+    stickToBottomRef,
+    keyboardGuardRef,
+    scrollToBottom,
+    followBottomIfStuck,
+    armOpenAtLatest,
+  };
 }

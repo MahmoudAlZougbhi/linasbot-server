@@ -109,14 +109,15 @@ function drainSseBuffer(
 export function useOwnerStream() {
   const xhrRef = useRef<XMLHttpRequest | null>(null);
   const notifyCancelRef = useRef(false);
+  const epochRef = useRef(0);
   const [streaming, setStreaming] = useState(false);
 
   const abortActive = useCallback((notifyCancel: boolean) => {
     notifyCancelRef.current = notifyCancel;
+    if (!notifyCancel) epochRef.current += 1;
     const xhr = xhrRef.current;
     xhrRef.current = null;
     if (xhr) xhr.abort();
-    else setStreaming(false);
     if (notifyCancel) setStreaming(false);
   }, []);
 
@@ -142,9 +143,15 @@ export function useOwnerStream() {
       handlers: StreamHandlers,
     ): Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'credits_paused' | 'billing_confirm'> => {
       abortActive(false);
+      setStreaming(true);
+      const epoch = epochRef.current;
       return (async () => {
         const runOnce = (access: string): Promise<StreamResult> =>
           new Promise((resolve) => {
+            if (epochRef.current !== epoch) {
+              resolve('cancelled');
+              return;
+            }
             setStreaming(true);
             const xhr = new XMLHttpRequest();
             xhrRef.current = xhr;
@@ -153,16 +160,13 @@ export function useOwnerStream() {
             let terminal: StreamResult = 'done';
             let settled = false;
             const payload = { ...body };
+            const stillOwner = () => epochRef.current === epoch;
 
             const finish = (result: StreamResult) => {
               if (settled) return;
               settled = true;
-              if (xhrRef.current === xhr) {
-                xhrRef.current = null;
-                setStreaming(false);
-              } else {
-                setStreaming(false);
-              }
+              if (xhrRef.current === xhr) xhrRef.current = null;
+              if (stillOwner()) setStreaming(false);
               resolve(result);
             };
 
@@ -176,6 +180,7 @@ export function useOwnerStream() {
             xhr.setRequestHeader('Content-Type', 'application/json');
 
             xhr.onprogress = () => {
+              if (!stillOwner()) return;
               const chunk = xhr.responseText.slice(seen);
               seen = xhr.responseText.length;
               const drained = drainSseBuffer(carry, chunk, handlers, terminal);
@@ -184,12 +189,16 @@ export function useOwnerStream() {
             };
 
             xhr.onerror = () => {
+              if (!stillOwner()) {
+                finish('cancelled');
+                return;
+              }
               handlers.onError?.('stream_network_error');
               finish('network_error');
             };
 
             xhr.onabort = () => {
-              if (notifyCancelRef.current) {
+              if (stillOwner() && notifyCancelRef.current) {
                 notifyCancelRef.current = false;
                 handlers.onCancelled?.();
               }
@@ -197,6 +206,10 @@ export function useOwnerStream() {
             };
 
             xhr.onload = () => {
+              if (!stillOwner()) {
+                finish('cancelled');
+                return;
+              }
               if (carry.trim()) {
                 const drained = drainSseBuffer(carry, '\n\n', handlers, terminal);
                 carry = drained.carry;
@@ -219,24 +232,26 @@ export function useOwnerStream() {
           });
 
         const access = await ensureAccessToken();
+        if (epochRef.current !== epoch) return 'cancelled';
         if (!access) {
           handlers.onError?.('Not authenticated');
-          setStreaming(false);
+          if (epochRef.current === epoch) setStreaming(false);
           return 'error' as const;
         }
 
         let result = await runOnce(access);
         if (result === 'auth_error') {
           const refreshed = await refreshAccessToken();
+          if (epochRef.current !== epoch) return 'cancelled';
           if (!refreshed) {
             handlers.onError?.('Not authenticated');
-            setStreaming(false);
+            if (epochRef.current === epoch) setStreaming(false);
             return 'error';
           }
           result = await runOnce(refreshed);
           if (result === 'auth_error') {
             handlers.onError?.('stream_http_401');
-            setStreaming(false);
+            if (epochRef.current === epoch) setStreaming(false);
             return 'error';
           }
         }

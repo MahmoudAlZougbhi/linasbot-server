@@ -33,6 +33,7 @@ type Props = {
   messages: ChatMessage[];
   isAuthenticated: boolean;
   stickToBottomRef: { current: boolean };
+  keyboardGuardRef?: { current: boolean };
   scrollToBottom: (animated?: boolean) => void;
   /** Stream/layout growth only — must not re-arm stick after user scrolls away. */
   followBottomIfStuck: (animated?: boolean) => void;
@@ -62,6 +63,7 @@ export function ChatMessageList({
   messages,
   isAuthenticated,
   stickToBottomRef,
+  keyboardGuardRef,
   scrollToBottom,
   followBottomIfStuck,
   imagePreviewByContent,
@@ -144,10 +146,11 @@ export function ChatMessageList({
   );
 
   const onScrollBeginDrag = useCallback(() => {
+    if (keyboardGuardRef?.current) return;
     clearInteractFallback();
     userInteractingRef.current = true;
     stickToBottomRef.current = false;
-  }, [clearInteractFallback, stickToBottomRef]);
+  }, [clearInteractFallback, keyboardGuardRef, stickToBottomRef]);
 
   const onScrollEndDrag = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -191,7 +194,9 @@ export function ChatMessageList({
         keyboardDismissMode="interactive"
         scrollEventThrottle={16}
         onScroll={onScroll}
-        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+        maintainVisibleContentPosition={
+          loadingMore ? { minIndexForVisible: 0 } : undefined
+        }
         onContentSizeChange={() => {
           followBottomIfStuck(false);
         }}

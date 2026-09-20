@@ -38,6 +38,7 @@ type Args = {
   setSendError: (v: string | null) => void;
   scrollToBottom: () => void;
   imagePreviewByContent: { current: Record<string, string[]> };
+  setSendInFlight?: (v: boolean) => void;
 };
 
 function restoreDraft(
@@ -51,6 +52,15 @@ function restoreDraft(
 }
 
 export async function sendChatMessage(args: Args): Promise<void> {
+  args.setSendInFlight?.(true);
+  try {
+    await sendChatMessageOnce(args);
+  } finally {
+    args.setSendInFlight?.(false);
+  }
+}
+
+async function sendChatMessageOnce(args: Args): Promise<void> {
   const {
     isAuthenticated,
     draft,
