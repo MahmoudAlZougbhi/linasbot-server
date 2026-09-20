@@ -67,10 +67,13 @@ def test_context_compaction_flags(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert ctx["cm_full_dump"] is False
     assert ctx["full_history"] is False
-    assert len(ctx["recent_messages"]) <= 8
+    assert ctx["owner_history_messages"] == 100
+    assert ctx["owner_message_max_chars"] == 0
+    assert len(ctx["recent_messages"]) == 20
+    assert all(len(str(m["content"])) > 200 for m in ctx["recent_messages"])
     assert estimate_context_tokens(ctx) > 0
-    summary = summarize_conversation(long_msgs)
-    assert summary is not None
+    assert summarize_conversation(long_msgs) is None
+    assert summarize_conversation(long_msgs, keep=8) is not None
 
 
 def test_model_router_and_usage_tracking(tmp_path: Any) -> None:
