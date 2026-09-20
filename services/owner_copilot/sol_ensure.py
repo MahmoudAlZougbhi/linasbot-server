@@ -30,12 +30,12 @@ async def ensure_published_sol_basics(tenant_id: str) -> bool:
 
 
 async def _publish_seed(tenant_id: str) -> bool:
-    from services.ai_setup.constants import cm_emergency_disable_publish, cm_publish_enabled
+    from services.ai_setup.constants import cm_emergency_disable_publish
     from services.ai_setup.save_live import go_live_saved_section
     from services.ai_setup.storage import get_draft, put_draft
 
-    if cm_emergency_disable_publish() or not cm_publish_enabled():
-        log.warning("sol_ensure skipped: publish disabled tenant=%s", tenant_id)
+    if cm_emergency_disable_publish():
+        log.warning("sol_ensure skipped: emergency publish disable tenant=%s", tenant_id)
         return False
 
     basics = get_draft("sol_basics", tenant_id=tenant_id, create_default=True)

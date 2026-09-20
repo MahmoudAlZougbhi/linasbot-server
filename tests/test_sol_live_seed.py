@@ -13,9 +13,10 @@ pytest_plugins = ("tests.customer_reply_ai_v2_fixtures",)
 
 
 @pytest.mark.asyncio
-async def test_ensure_publishes_seed_when_missing(v2_env: Any) -> None:
+async def test_ensure_publishes_seed_when_missing(v2_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     from services.owner_copilot.sol_ensure import ensure_published_sol_basics
 
+    monkeypatch.setenv("CM_PUBLISH_ENABLED", "false")
     tid = "t_sol_seed_empty"
     assert sol_basics_configured(load_sol_identity(tid).get("payload") or {}) is False
     ok = await ensure_published_sol_basics(tid)
