@@ -1,4 +1,4 @@
-"""Feature-flagged customer DM ack-then-final. Flag default off."""
+"""Feature-flagged customer DM ack-then-final. Flag default on."""
 
 from __future__ import annotations
 
@@ -18,9 +18,16 @@ from services.brain.inbound.ack_then_reply import (
 from services.brain.inbound.text_handlers_respond_phase2 import text_handlers_respond_phase2
 
 
-def test_ack_flag_defaults_off(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ack_flag_defaults_on(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CUSTOMER_DM_ACK_THEN_REPLY", raising=False)
+    assert ack_then_reply_enabled("whatsapp") is True
+    assert ack_then_reply_enabled("web_chat") is True
+
+
+def test_ack_flag_disabled_via_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CUSTOMER_DM_ACK_THEN_REPLY", "0")
     assert ack_then_reply_enabled("whatsapp") is False
+    monkeypatch.setenv("CUSTOMER_DM_ACK_THEN_REPLY", "false")
     assert ack_then_reply_enabled("web_chat") is False
 
 
@@ -43,7 +50,7 @@ def test_ack_line_never_carries_invented_facts() -> None:
 
 @pytest.mark.asyncio
 async def test_flag_off_skips_ack(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CUSTOMER_DM_ACK_THEN_REPLY", raising=False)
+    monkeypatch.setenv("CUSTOMER_DM_ACK_THEN_REPLY", "0")
     sent: list[str] = []
 
     async def send_fn(_uid: str, text: str | None = None, **_k: Any) -> dict[str, Any]:
@@ -135,7 +142,7 @@ async def test_phase2_flag_on_ack_then_final(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.asyncio
 async def test_phase2_flag_off_single_final(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CUSTOMER_DM_ACK_THEN_REPLY", raising=False)
+    monkeypatch.setenv("CUSTOMER_DM_ACK_THEN_REPLY", "off")
     sent: list[str] = []
 
     async def send_fn(_uid: str, text: str | None = None, **_k: Any) -> dict[str, Any]:

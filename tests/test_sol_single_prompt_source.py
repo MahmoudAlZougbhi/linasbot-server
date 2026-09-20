@@ -16,6 +16,7 @@ COMPOSE_FILES = (
     ROOT / "services/owner_copilot/brain_support.py",
     ROOT / "services/owner_copilot/context.py",
     ROOT / "services/owner_copilot/brain_stream_body.py",
+    ROOT / "services/owner_copilot/sol_ensure.py",
 )
 
 
@@ -79,7 +80,14 @@ async def test_unconfigured_sol_fail_soft_skips_model(monkeypatch: pytest.Monkey
         called["n"] += 1
         yield ("delta", "should-not-run")
 
+    async def _async_false(_tid: str) -> bool:
+        return False
+
     monkeypatch.setattr("services.owner_copilot.brain_stream_body.iter_sol_tool_round", _fake_round)
+    monkeypatch.setattr(
+        "services.owner_copilot.sol_ensure.ensure_published_sol_basics",
+        _async_false,
+    )
     monkeypatch.setattr(
         "services.owner_copilot.brain_stream_body.pack_owner_turn_context",
         lambda **_: {

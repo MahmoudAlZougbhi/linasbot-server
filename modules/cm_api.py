@@ -14,7 +14,13 @@ from fastapi.responses import JSONResponse
 
 from modules.api_security import require_permission, require_session
 from modules.core import app
-from services.ai_setup.constants import CM_SECTIONS, PUBLISH_DISABLED_MESSAGE, cm_faq_canonical, cm_runtime_mode
+from services.ai_setup.constants import (
+    CM_SECTIONS,
+    OWNER_ONLY_CM_SECTIONS,
+    PUBLISH_DISABLED_MESSAGE,
+    cm_faq_canonical,
+    cm_runtime_mode,
+)
 from services.ai_setup.provenance_headers import sanitize_section_payload
 from services.ai_setup.publish import PublishBlockedError, publish_draft, publish_faq_only
 from services.ai_setup.publish_gate import PublishDisabledError, ensure_publish_enabled, publish_status
@@ -119,6 +125,10 @@ async def cm_get_draft(section: str, request: Request) -> Any:
     tenant_id = _session_tenant(session)
     try:
         name = section.strip().replace("-", "_")
+        if name in OWNER_ONLY_CM_SECTIONS:
+            from services.owner_copilot.sol_ensure import ensure_published_sol_basics
+
+            await ensure_published_sol_basics(tenant_id)
         envelope = get_draft(name, tenant_id=tenant_id, create_default=True)
     except UnknownSectionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

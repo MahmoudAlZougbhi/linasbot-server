@@ -41,6 +41,15 @@ def test_classify_semantic_faq_is_zero_unit() -> None:
         extra={"path": "faq_semantic", "faq_id": "hours"},
     )
     assert classify_result(_turn(), result) == "faq_only"
+    embed = TurnResult(
+        stop_reason="ok",
+        envelope=FinalReplyEnvelope(
+            decision="deterministic",
+            messages=[OutboundMessage(destination="dm", text="Hours are 9-5.")],
+        ),
+        extra={"path": "faq_embed_90", "faq_id": "hours"},
+    )
+    assert classify_result(_turn(), embed) == "faq_only"
 
 
 def test_classify_mixed_faq_ai_before_generated() -> None:

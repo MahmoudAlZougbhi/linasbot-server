@@ -78,31 +78,6 @@ async def semantic_faq_result(
 ) -> TurnResult | None:
     if turn.invocation_kind == "followup" or not message.strip():
         return None
-    try:
-        from services.ai_setup.version_store import load_published_content
-        from services.brain.faq_semantic import semantic_faq_bundle
+    from services.brain.faq_embed import faq_embed_result
 
-        _pointer, sections = load_published_content(turn.tenant_id)
-        bundle = await semantic_faq_bundle(sections, message, tenant_id=turn.tenant_id)
-    except Exception:
-        return None
-    if bundle.outcome == "ambiguous" or len(bundle.items) > 1:
-        return None
-    if bundle.outcome != "found" or len(bundle.items) != 1:
-        return None
-    item = bundle.items[0]
-    if not faq_static_allowed(item.text, tenant_id=turn.tenant_id):
-        return None
-    return faq_envelope(
-        turn,
-        message,
-        channel,
-        text=item.text,
-        extra={
-            "path": "faq_semantic",
-            "faq_id": item.source_id,
-            "response_class": "faq_only",
-            "used_evidence_ids": [item.evidence_id],
-        },
-        apply_greeting=apply_greeting,
-    )
+    return await faq_embed_result(turn, message, channel, apply_greeting=apply_greeting)
