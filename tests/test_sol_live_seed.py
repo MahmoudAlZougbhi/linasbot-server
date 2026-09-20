@@ -63,8 +63,6 @@ async def test_owner_kifak_reaches_sol_not_unconfigured(v2_env: Any, monkeypatch
 def test_sol_ensure_does_not_revive_system_novels() -> None:
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[1] / "services/owner_copilot/sol_ensure.py").read_text(
-        encoding="utf-8"
-    )
+    src = (Path(__file__).resolve().parents[1] / "services/owner_copilot/sol_ensure.py").read_text(encoding="utf-8")
     assert "SYSTEM_V2" not in src
     assert "SYSTEM_PROMPT" not in src
