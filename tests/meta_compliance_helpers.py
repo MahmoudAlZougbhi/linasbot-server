@@ -55,7 +55,8 @@ class _FakeQuery:
     def __init__(self, documents: list[_FakeDocument]) -> None:
         self.documents = documents
 
-    def stream(self) -> list[_FakeSnapshot]:
+    def stream(self, *args: Any, **kwargs: Any) -> list[_FakeSnapshot]:
+        del args, kwargs
         return [_FakeSnapshot(document) for document in self.documents if document.exists]
 
 
@@ -74,7 +75,8 @@ class _FakeCollection:
             )
         return self.documents[document_id]
 
-    def stream(self) -> list[_FakeSnapshot]:
+    def stream(self, *args: Any, **kwargs: Any) -> list[_FakeSnapshot]:
+        del args, kwargs
         return [_FakeSnapshot(document) for document in self.documents.values() if document.exists]
 
     def where(self, field: str, operator: str, value: str) -> _FakeQuery:

@@ -239,9 +239,11 @@ async def ready() -> Any:
         from services.queues.config import redis_required, redis_url
         from services.queues.job_queue import job_queue
 
+        import asyncio
+
         required = redis_required()
         configured = bool(redis_url())
-        health = job_queue.health()
+        health = await asyncio.wait_for(asyncio.to_thread(job_queue.readiness), timeout=2.0)
         if required:
             queue_ok = configured and bool(health.get("ok")) and bool(health.get("production_ready"))
         else:

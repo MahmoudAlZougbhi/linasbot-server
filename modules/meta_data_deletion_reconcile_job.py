@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
+
 
 async def run_meta_data_deletion_reconcile_job() -> None:
     """Sanitize this node's private ledger and publish a generation-bound ack.
 
     This job intentionally has no cluster-wide singleton lock: every configured
     node must run it and acknowledge its own local ledger before completion.
+    Firestore reads are synchronous, so they run off the API event loop.
     """
 
     try:
         from services.integrations.meta.meta_data_deletion import process_pending_meta_deletion_requests
 
-        result = process_pending_meta_deletion_requests()
+        result = await asyncio.to_thread(process_pending_meta_deletion_requests)
         examined = int(result.get("examined") or 0)
         if examined:
             print(

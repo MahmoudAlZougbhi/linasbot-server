@@ -123,6 +123,32 @@ class JobQueue:
             out[f"{name}_dlq"] = 0
         return out
 
+    def readiness(self) -> dict[str, Any]:
+        """Ping only. Load-balancer probes must not scan heartbeats on the API loop."""
+        if self._redis is not None:
+            try:
+                ok = self._redis.ping()
+                return {
+                    "ok": ok,
+                    "backend": self.backend,
+                    "production_ready": self.production_ready and ok,
+                }
+            except Exception as exc:
+                return {
+                    "ok": False,
+                    "backend": self.backend,
+                    "production_ready": False,
+                    "error": type(exc).__name__,
+                    "note": "Redis configured but unreachable",
+                }
+        return {
+            "ok": not redis_required(),
+            "backend": self.backend,
+            "production_ready": False,
+            "error": self._init_error,
+            "note": "In-process/file queue — not durable across API restarts",
+        }
+
     def health(self) -> dict[str, Any]:
         if self._redis is not None:
             try:

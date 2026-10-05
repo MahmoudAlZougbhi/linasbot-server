@@ -72,7 +72,8 @@ class _Collection:
     def __init__(self, snapshots: list[_Snapshot]) -> None:
         self.snapshots = snapshots
 
-    def stream(self) -> list[_Snapshot]:
+    def stream(self, *args: object, **kwargs: object) -> list[_Snapshot]:
+        del args, kwargs
         return self.snapshots
 
 
