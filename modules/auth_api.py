@@ -93,7 +93,7 @@ async def login(body: LoginRequest, request: Request, response: Response) -> Any
     email = (body.email or "").strip().lower()
     password = body.password or ""
 
-    max_retries = 3
+    max_retries = 1
     last_error_type = None
 
     for attempt in range(max_retries):

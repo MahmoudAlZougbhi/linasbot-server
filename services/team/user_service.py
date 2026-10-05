@@ -248,7 +248,9 @@ class UserService(UserServiceAuthMixin):
                     f"[auth:get_user_by_email] ERROR after {elapsed:.3f}s (attempt {attempt + 1}/{max_retries}): {e} (transient={is_transient})",
                     flush=True,
                 )
-                if is_transient and attempt < max_retries - 1:
+                lowered = str(e).lower()
+                quota = any(marker in lowered for marker in ("429", "quota", "resource exhausted"))
+                if is_transient and not quota and attempt < max_retries - 1:
                     delay = (attempt + 1) * 2  # 2s, 4s
                     print(f"[auth:get_user_by_email] retrying in {delay}s...", flush=True)
                     time.sleep(delay)
