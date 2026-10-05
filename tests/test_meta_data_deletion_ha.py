@@ -134,6 +134,8 @@ def test_two_nodes_share_code_and_status_waits_for_both_local_acks(
     active["claims"] = tmp_path / "node02-claims" / "durable_claims"
     monkeypatch.setenv("META_DELETION_NODE_ID", "node02")
     reconciled = process_pending_meta_deletion_requests()
+    codes = reconciled.pop("codes")
+    assert len(codes) == 1
 
     assert reconciled == {"examined": 1, "acknowledged": 1, "completed": 1, "pending": 0, "errors": 0}
     second_status = read_deletion_status(first.confirmation_code)

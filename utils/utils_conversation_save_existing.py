@@ -192,6 +192,10 @@ async def save_message_when_conversation_id(
                 msgs.append(message_data)
                 payload = dict(update_payload)
                 payload["messages"] = msgs
+                prior_count = int(fresh_data.get("message_count") or max(0, len(msgs) - 1))
+                payload["message_count"] = prior_count + 1
+                if len(msgs) > 40:
+                    payload["thread_trim_pending"] = True
                 unread_before = int(fresh_data.get("unread_count") or 0)
                 if role == "user":
                     payload["unread_count"] = unread_before + 1
@@ -209,6 +213,10 @@ async def save_message_when_conversation_id(
             return None
         if txn_status != "ok" or not txn_payload:
             raise RuntimeError(f"Transactional message append failed for {conversation_id}: {txn_status}")
+        if txn_payload.get("thread_trim_pending"):
+            from utils.conversation_thread_tail import schedule_thread_trim
+
+            schedule_thread_trim(doc_ref)
         if txn_doc_data is not None:
             doc_data = txn_doc_data
         update_payload = txn_payload

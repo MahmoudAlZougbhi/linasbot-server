@@ -134,7 +134,24 @@ class LiveChatIndexMixin:
             query = query.where("tenant_id", "==", tid)
         return query.order_by("last_message_at", direction=firestore.Query.DESCENDING)
 
-    def _stream_tenant_index_docs(self, index_coll: Any, tenant_id: str, *, limit: int) -> list[Any]:
+    def _index_query_after_cursor(self, query: Any, cursor: str | None) -> Any:
+        raw = (cursor or "").strip()
+        if "|" not in raw:
+            return query
+        stamp, _conversation_id = raw.split("|", 1)
+        moment = self._parse_timestamp(stamp.strip())
+        if moment is None:
+            return query
+        return query.start_after([moment])
+
+    def _stream_tenant_index_docs(
+        self,
+        index_coll: Any,
+        tenant_id: str,
+        *,
+        limit: int,
+        cursor: str | None = None,
+    ) -> list[Any]:
         """Fail-closed tenant scan. Missing tenant_id never returns rows."""
         tid = normalize_live_chat_tenant_id(tenant_id)
         if not tid:
@@ -142,7 +159,8 @@ class LiveChatIndexMixin:
         timeout = self.FIRESTORE_QUERY_TIMEOUT_SECONDS
 
         def _stream(q: Any) -> list[Any]:
-            return list(q.limit(limit).stream(timeout=timeout, retry=None))
+            positioned = self._index_query_after_cursor(q, cursor)
+            return list(positioned.limit(limit).stream(timeout=timeout, retry=None))
 
         try:
             docs = _stream(self._index_recency_query(index_coll, tenant_id=tid))

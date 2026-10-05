@@ -117,6 +117,7 @@ class LiveChatDetailsMixin:
                 candidate_user_ids.append(user_id)
 
             conv_doc = None
+            conv_ref = None
             effective_user_id = canonical_user_id
             had_timeout = False
             for candidate_user_id in candidate_user_ids:
@@ -135,6 +136,7 @@ class LiveChatDetailsMixin:
                     continue
                 if candidate_doc.exists:
                     conv_doc = candidate_doc
+                    conv_ref = candidate_ref
                     effective_user_id = candidate_user_id
                     break
                 conv_doc = candidate_doc
@@ -149,7 +151,11 @@ class LiveChatDetailsMixin:
 
             payload = conv_doc.to_dict() or {}
             raw_messages = list(payload.get("messages") or [])
-            total_messages = len(raw_messages)
+            try:
+                stored_count = int(payload.get("message_count") or 0)
+            except (TypeError, ValueError):
+                stored_count = 0
+            total_messages = max(len(raw_messages), stored_count)
             sentiment = str(payload.get("sentiment") or "neutral")
             status = self._conversation_state_to_status(self._normalize_conversation_state(payload))
 
@@ -165,6 +171,12 @@ class LiveChatDetailsMixin:
                     messages = messages[-max_messages:]
             else:
                 messages = self._visible_chat_messages(raw_messages)
+                if before and conv_ref is not None:
+                    from utils.conversation_thread_tail import load_messages_before
+
+                    archived = load_messages_before(conv_ref, before, max_messages)
+                    seen = {str(item.get("message_id") or "") for item in messages}
+                    messages.extend(item for item in archived if str(item.get("message_id") or "") not in seen)
                 now = utc_now()
                 cutoff = now - datetime.timedelta(days=days) if days > 0 else None
                 before_dt = self._parse_timestamp(before) if before else None

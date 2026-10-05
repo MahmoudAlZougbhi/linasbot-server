@@ -35,9 +35,21 @@ async def platform_analytics(
 
 
 @app.get("/api/platform/users")
-async def platform_users(request: Request) -> Any:
+async def platform_users(
+    request: Request,
+    cursor: str = Query(default=""),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> Any:
     require_platform_owner(request)
-    return {"success": True, "subscribers": list_subscribers()}
+    from services.team.user_directory_page import list_user_directory_page
+
+    page = list_user_directory_page(user_service, limit=limit, cursor=cursor.strip() or None)
+    return {
+        "success": True,
+        "subscribers": list_subscribers(page["users"]),
+        "next_cursor": page["next_cursor"],
+        "has_more": page["has_more"],
+    }
 
 
 @app.patch("/api/platform/users/{user_id}")

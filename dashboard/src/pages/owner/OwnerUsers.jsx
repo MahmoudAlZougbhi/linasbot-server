@@ -2,6 +2,29 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ownerApi } from './ownerApi';
 
+/** @param {OwnerSubscriber[]} current @param {OwnerSubscriber[]} incoming */
+function mergeSubscribers(current, incoming) {
+  const byTenant = new Map(current.map((row) => [row.tenant_id, row]));
+  incoming.forEach((row) => {
+    const existing = byTenant.get(row.tenant_id);
+    if (!existing) {
+      byTenant.set(row.tenant_id, row);
+      return;
+    }
+    const users = [...existing.users];
+    row.users.forEach((user) => {
+      if (!users.some((item) => item.id === user.id)) users.push(user);
+    });
+    byTenant.set(row.tenant_id, {
+      ...existing,
+      users,
+      seats_created: users.length,
+      roles: [...new Set(users.map((user) => String(user.role || 'viewer')))].sort(),
+    });
+  });
+  return [...byTenant.values()];
+}
+
 /** @param {{ tenantId: string; onClose: () => void }} props */
 function LogsPanel({ tenantId, onClose }) {
   const [logs, setLogs] = useState(/** @type {OwnerInteractionLog[]} */ ([]));
@@ -42,17 +65,32 @@ export default function OwnerUsers() {
   const [subscribers, setSubscribers] = useState(/** @type {OwnerSubscriber[]} */ ([]));
   const [logsTenant, setLogsTenant] = useState('');
   const [error, setError] = useState('');
+  const [nextCursor, setNextCursor] = useState('');
+  const [loadingMore, setLoadingMore] = useState(false);
 
+  const applyPage = (data, append) => {
+    const rows = data.subscribers || [];
+    setSubscribers((current) => (append ? mergeSubscribers(current, rows) : rows));
+    setNextCursor(data.next_cursor || '');
+  };
   const load = () => ownerApi.subscribers()
-    .then((data) => setSubscribers(data.subscribers || []))
+    .then((data) => applyPage(data, false))
     .catch((reason) => setError(reason.message));
   useEffect(() => {
     let live = true;
     ownerApi.subscribers()
-      .then((data) => live && setSubscribers(data.subscribers || []))
+      .then((data) => live && applyPage(data, false))
       .catch((reason) => live && setError(reason.message));
     return () => { live = false; };
   }, []);
+  const loadMore = () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    ownerApi.subscribers(nextCursor)
+      .then((data) => applyPage(data, true))
+      .catch((reason) => setError(reason.message))
+      .finally(() => setLoadingMore(false));
+  };
 
   /** @param {DashboardUser} user @param {Record<string, unknown>} changes */
   const update = async (user, changes) => {
@@ -142,6 +180,11 @@ export default function OwnerUsers() {
           </tbody>
         </table>
       </div>
+      {nextCursor && (
+        <button type="button" onClick={loadMore} disabled={loadingMore} className="rounded bg-slate-800 px-4 py-2 text-sm">
+          {loadingMore ? 'Loading accounts…' : 'Load more accounts'}
+        </button>
+      )}
       {logsTenant && <LogsPanel tenantId={logsTenant} onClose={() => setLogsTenant('')} />}
     </div>
   );

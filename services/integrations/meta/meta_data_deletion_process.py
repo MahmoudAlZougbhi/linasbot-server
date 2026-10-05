@@ -175,28 +175,49 @@ def read_deletion_status(confirmation_code: str) -> dict[str, Any] | None:
     return status
 
 
-def process_pending_meta_deletion_requests() -> dict[str, int]:
-    """Run on every node so each private ledger contributes its own current ack."""
+def process_pending_meta_deletion_requests(
+    *,
+    confirmation_codes: list[str] | None = None,
+    query_limit: int = 32,
+) -> dict[str, Any]:
+    """Scan pending requests once per cluster, then let each node ack that batch."""
 
     node_id, configured_nodes = _deletion_node_config()
     db = _firestore_db()
     try:
-        from google.cloud.firestore_v1.base_query import FieldFilter
+        if confirmation_codes is not None:
+            snapshots = []
+            for code in confirmation_codes:
+                snapshot = _request_ref(db, code).get(timeout=8, retry=None)
+                if getattr(snapshot, "exists", False):
+                    snapshots.append(snapshot)
+        else:
+            from google.cloud.firestore_v1.base_query import FieldFilter
 
-        # Completed and no_data rows are history. Reading them every minute on
-        # both nodes billed one read per stored request.
-        snapshots = list(
-            _app_document(db)
-            .collection(_REQUEST_COLLECTION)
-            .where(filter=FieldFilter("state", "==", "pending"))
-            .stream(timeout=20, retry=None)
-        )
+            # Completed and no_data rows are history. One node reads a limited page.
+            snapshots = list(
+                _app_document(db)
+                .collection(_REQUEST_COLLECTION)
+                .where(filter=FieldFilter("state", "==", "pending"))
+                .limit(max(1, min(200, int(query_limit))))
+                .stream(timeout=20, retry=None)
+            )
     except Exception as exc:
         raise MetaDeletionStoreUnavailableError("Meta deletion request scan failed") from exc
-    stats = {"examined": 0, "acknowledged": 0, "completed": 0, "pending": 0, "errors": 0}
+    stats: dict[str, Any] = {
+        "examined": 0,
+        "acknowledged": 0,
+        "completed": 0,
+        "pending": 0,
+        "errors": 0,
+        "codes": [],
+    }
     for snapshot in snapshots:
         try:
             code = str(getattr(snapshot.reference, "path", "")).rsplit("/", 1)[-1]
+            codes = stats["codes"]
+            if isinstance(codes, list):
+                codes.append(code)
             request = _parse_shared_request(_snapshot_payload(snapshot, label="request"), code)
             if request.required_nodes != configured_nodes or node_id not in request.required_nodes:
                 raise MetaDeletionStateError("Meta deletion node configuration does not match the request")

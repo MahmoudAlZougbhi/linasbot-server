@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { cacheGet, cacheSet, dedupeFetch, isCacheFresh } from '../../cache/queryCache';
 import { queryKeys } from '../../cache/queryKeys';
 import { QUERY_TTL } from '../../cache/queryTtl';
-import { classifyLiveChatError, fetchUnifiedChats, setOperatorAvailable } from './liveChatApi';
+import { classifyLiveChatError, fetchUnifiedChatsFollowingSearch, setOperatorAvailable } from './liveChatApi';
 import { appendInboxPage, applyInboxNewMessage, mergeInboxPollPage } from './inboxListMerge';
 import {
   type InboxFilter,
@@ -96,7 +96,7 @@ export function useLiveChatInbox(enabled = true) {
       if (mode === 'refresh') setRefreshing(true);
       try {
         const data = await dedupeFetch(key, () =>
-          fetchUnifiedChats({
+          fetchUnifiedChatsFollowingSearch({
             search: debouncedSearch,
             page: 1,
             pageSize: PAGE_SIZE,
@@ -176,7 +176,7 @@ export function useLiveChatInbox(enabled = true) {
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const data = await fetchUnifiedChats({
+      const data = await fetchUnifiedChatsFollowingSearch({
         search: debouncedSearch,
         page: 1,
         pageSize: PAGE_SIZE,

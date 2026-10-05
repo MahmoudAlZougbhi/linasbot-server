@@ -175,6 +175,10 @@ def test_deletion_scan_asks_only_for_pending_requests(monkeypatch) -> None:
             seen["filter"] = filter
             return self
 
+        def limit(self, count: int) -> _Query:
+            seen["limit"] = count
+            return self
+
         def stream(self, timeout: float | None = None, retry: object = None) -> list[object]:
             del timeout, retry
             seen["streamed"] = True
@@ -204,4 +208,5 @@ def test_deletion_scan_asks_only_for_pending_requests(monkeypatch) -> None:
     assert seen["collection"] == "meta_deletion_requests"
     assert seen["streamed"] is True
     assert getattr(pending_filter, "value", None) == "pending"
+    assert seen["limit"] == 32
     assert stats["examined"] == 0

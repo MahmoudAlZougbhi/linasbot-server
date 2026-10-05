@@ -147,7 +147,11 @@ class LiveChatRebuildMixin:
             conv_data["last_message_text"] = last_message.get("text") or last_message.get("content", "")
         else:
             conv_data["last_message_text"] = ""
-        conv_data["message_count"] = len(visible_messages)
+        try:
+            stored_count = int((payload or {}).get("message_count") or 0)
+        except (TypeError, ValueError):
+            stored_count = 0
+        conv_data["message_count"] = max(stored_count, len(visible_messages))
 
         return conv_data
 
@@ -334,8 +338,27 @@ class LiveChatRebuildMixin:
                 return
 
             idx = self._index_collection(db).document(conv_id)
+            previous_state = ""
+            if conv_id in self._index_signature_cache:
+                previous_state = str(self._index_signature_cache[conv_id][3] or "")
+            else:
+                existing = await asyncio.to_thread(lambda: idx.get(timeout=self.INDEX_WRITE_TIMEOUT_SECONDS))
+                if getattr(existing, "exists", False):
+                    previous_state = str((existing.to_dict() or {}).get("conversation_state") or "")
+
             await asyncio.to_thread(lambda: idx.set(payload, timeout=self.INDEX_WRITE_TIMEOUT_SECONDS))
             self._index_signature_cache[conv_id] = signature
+            try:
+                from services.live_chat.index_counter_store import apply_counter_delta
+
+                apply_counter_delta(
+                    db,
+                    str(payload.get("tenant_id") or ""),
+                    previous_state,
+                    str(payload.get("conversation_state") or ""),
+                )
+            except Exception as counter_exc:
+                print(f"[live_chat:counters] delta skipped conv={conv_id} type={type(counter_exc).__name__}")
         except Exception as e:
             print(f"⚠️ Failed upserting index entry for {entry.get('conversation_id')}: {e}")
             lowered = str(e).lower()

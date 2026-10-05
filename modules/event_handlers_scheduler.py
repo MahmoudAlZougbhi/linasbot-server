@@ -148,7 +148,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     print("📅 Scheduled jobs:")
     print("   - Smart Follow-Up worker: Every 1 minute")
     print("   - Inbound event reconcile: Every 10 minutes, one node")
-    print("   - Meta data deletion reconcile: Every 1 minute per node, pending only")
+    print("   - Meta data deletion reconcile: Every 1 minute, one scan, both nodes ack")
     print("   - Customer reply reconcile: Every 10 minutes, one node")
     print("   - Web Chat release pending reconcile: Every 1 minute")
     print("   - TikTok comment webhook register: Every 60 minutes")

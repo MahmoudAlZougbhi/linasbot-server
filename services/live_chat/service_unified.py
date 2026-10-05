@@ -152,20 +152,43 @@ class LiveChatUnifiedMixin:
             index_coll = self._index_collection(db)
             fetch_limit = safe_size + 1
             if (state_values or wanted_channel) and not search_val:
-                fetch_limit = min(max((safe_size + 1) * 15, 150), 500)
+                fetch_limit = 160
+            search_page = None
             if search_val:
-                fetch_limit = self.SEARCH_WIDEN_MAX_DOCS
+                from services.live_chat.inbox_search import search_index_page
 
-            docs = await self._run_blocking_with_timeout(
-                lambda: self._stream_tenant_index_docs(index_coll, tid, limit=fetch_limit),
-                self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
-            )
+                search_page = await self._run_blocking_with_timeout(
+                    lambda: search_index_page(
+                        self,
+                        index_coll,
+                        tid,
+                        search=search_val,
+                        cursor=cursor,
+                        page_size=safe_size,
+                    ),
+                    self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+                )
+                docs = search_page.docs
+            else:
+                docs = await self._run_blocking_with_timeout(
+                    lambda: self._stream_tenant_index_docs(index_coll, tid, limit=fetch_limit, cursor=cursor),
+                    self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+                )
             print(
                 f"[live_chat:unified] source=index_page tenant={tid} docs={len(docs)} page={page_num} "
                 f"size={safe_size} search={bool(search_val)} filter={filter_state}"
             )
 
             if not docs:
+                if cursor or search_page is not None:
+                    empty = self._empty_unified_response(
+                        page_num, safe_size, filter_state, search, source="page_end", tenant_id=tid
+                    )
+                    empty["success"] = True
+                    empty["has_more"] = bool(search_page and search_page.has_more)
+                    empty["next_cursor"] = search_page.next_cursor if search_page and search_page.has_more else None
+                    empty["chats"] = []
+                    return empty
                 stale = self._stale_unified_fallback(page_num, safe_size, filter_state, search, tenant_id=tid)
                 if stale:
                     return stale
@@ -263,30 +286,33 @@ class LiveChatUnifiedMixin:
             # Always order by last_message_at desc (already sorted by query)
             chats.sort(key=lambda c: (c.get("last_message_at", ""), c.get("conversation_id", "")), reverse=True)
 
-            # Cursor-based pagination: when cursor provided, find start position for Load More
-            start_idx = 0
-            if cursor:
-                try:
-                    ts_part, conv_part = cursor.split("|", 1)
-                    ts_str = ts_part.strip()
-                    for i, c in enumerate(chats):
-                        c_ts = str(c.get("last_message_at", ""))
-                        c_conv = str(c.get("conversation_id", ""))
-                        if (c_ts, c_conv) < (ts_str, conv_part):
-                            start_idx = i
-                            break
-                    else:
-                        start_idx = len(chats)
-                except Exception:
-                    start_idx = 0
-
-            has_more = len(chats) > start_idx + safe_size
-            paged = chats[start_idx : start_idx + safe_size]
-            paged = [self._to_frontend_chat_format(c) for c in paged]
-            next_cursor = None
-            if has_more and paged:
-                last = paged[-1]
-                next_cursor = f"{last.get('last_message_at', '')}|{last.get('conversation_id', '')}"
+            # The query already started after the cursor. Search keeps its own scan cursor.
+            # A filtered window that is not full still continues from the last scanned row,
+            # so a sparse tab can reach conversations past the first page of the index.
+            scanned_cursor = None
+            if docs:
+                last_doc = docs[-1]
+                last_data = last_doc.to_dict() or {}
+                last_stamp = last_data.get("last_message_at") or ""
+                if hasattr(last_stamp, "isoformat"):
+                    last_stamp = last_stamp.isoformat()
+                scanned_cursor = f"{last_stamp}|{last_doc.id}"
+            if search_page is not None:
+                has_more = bool(search_page.has_more)
+                paged = [self._to_frontend_chat_format(chat) for chat in chats[:safe_size]]
+                next_cursor = search_page.next_cursor if has_more else None
+            else:
+                paged = [self._to_frontend_chat_format(chat) for chat in chats[:safe_size]]
+                if len(chats) > safe_size and paged:
+                    has_more = True
+                    last = paged[-1]
+                    next_cursor = f"{last.get('last_message_at', '')}|{last.get('conversation_id', '')}"
+                elif len(docs) >= fetch_limit and scanned_cursor:
+                    has_more = True
+                    next_cursor = scanned_cursor
+                else:
+                    has_more = False
+                    next_cursor = None
 
             total_returned = len(paged)
             if page_num == 1 and not cursor:
