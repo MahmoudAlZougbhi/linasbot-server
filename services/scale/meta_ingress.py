@@ -175,6 +175,21 @@ def persist_meta_dm_accepted(resolved: ResolvedMetaEvent, *, global_key: str) ->
     return event_id, created
 
 
+def persist_and_enqueue_meta_dm_accepted(resolved: ResolvedMetaEvent, *, global_key: str) -> tuple[str, bool, str]:
+    """Persist and enqueue on one worker thread.
+
+    The just-persisted cache is a context var, so enqueue has to run on the
+    same thread as persist. Callers on the API event loop must use
+    ``asyncio.to_thread`` so a slow Firestore retry cannot stop ``/api/ready``.
+    """
+
+    event_id, created = persist_meta_dm_accepted(resolved, global_key=global_key)
+    if not created:
+        return event_id, False, ""
+    dispatch = enqueue_meta_inbound_event(event_id, claim_handle=None)
+    return event_id, True, dispatch
+
+
 def enqueue_meta_inbound_event(event_id: str, *, claim_handle: Any = None, record: Any = None) -> str:
     """Return ``queued``, ``ambiguous``, or ``inline`` without double dispatch.
 

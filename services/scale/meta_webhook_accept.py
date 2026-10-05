@@ -327,7 +327,7 @@ async def accept_meta_dm_events(
         InboundBindingDeletionFencedError,
         InboundDeletionFenceStoreError,
     )
-    from services.scale.meta_ingress import enqueue_meta_inbound_event, persist_meta_dm_accepted
+    from services.scale.meta_ingress import persist_and_enqueue_meta_dm_accepted
     from services.scale.metrics import incr
 
     accepted = 0
@@ -338,7 +338,11 @@ async def accept_meta_dm_events(
         if global_key.endswith(":"):
             continue
         try:
-            event_id, created = persist_meta_dm_accepted(resolved, global_key=global_key)
+            event_id, created, dispatch = await asyncio.to_thread(
+                persist_and_enqueue_meta_dm_accepted,
+                resolved,
+                global_key=global_key,
+            )
         except InboundBindingDeletionFencedError:
             incr("inbound_deletion_fence_suppressed")
             duplicates += 1
@@ -349,7 +353,6 @@ async def accept_meta_dm_events(
             incr("inbound_provider_redelivery")
             duplicates += 1
             continue
-        dispatch = enqueue_meta_inbound_event(event_id, claim_handle=None)
         if authenticated_outcome:
             log_meta_controlled_evidence(
                 _runtime_logger,
