@@ -71,7 +71,11 @@ async def run_action(name: str, args: dict[str, Any], turn: CustomerTurn) -> dic
         fields["collected_fields"] = args["collected_fields"]
     if name == "start_request" and str(fields.get("request_type") or "").upper() == "HUMAN":
         return {"ok": False, "error": "human_use_escalate_to_human", "data": None}
-    if name in {"start_request", "update_request_draft"} and not args.get("confirmed"):
+    if name == "submit_request":
+        from services.brain.actions.pending import submit_pending_request
+
+        return await submit_pending_request(turn, args)
+    if name in {"start_request", "update_request_draft"}:
         resumed = resume_pending_or_keep(turn, fields)
         if resumed is not None:
             _persist_profile(turn, args)
@@ -103,7 +107,7 @@ async def run_action(name: str, args: dict[str, Any], turn: CustomerTurn) -> dic
         fields=fields,
     )
     proposals = ActionProposalSet(actions=[proposal])
-    if action_type in {"start_request", "submit_request"} and not args.get("confirmed"):
+    if action_type == "start_request":
         pending = attach_confirmation(turn, proposals)
         _persist_profile(turn, args)
         return {

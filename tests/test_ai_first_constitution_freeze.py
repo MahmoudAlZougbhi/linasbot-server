@@ -28,6 +28,7 @@ FORBIDDEN = (
     "CREATIVE_KEYWORDS",
     "looks_like_creative_request",
     "looks_like_owner_assent",
+    "looks_like_confirmation",
     "HUMAN_REQUEST_KEYWORDS",
     "ANGER_KEYWORDS",
     "OFFENSIVE_KEYWORDS",

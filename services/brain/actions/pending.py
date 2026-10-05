@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from services.brain.actions.confirm import (
-    looks_like_confirmation,
     material_fields_changed,
     next_draft_revision,
 )
@@ -13,7 +12,7 @@ from services.brain.actions.request_fields import (
     prior_collected_fields,
 )
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
-from services.brain.contracts.reply import FinalReplyEnvelope, TurnResult
+from services.brain.contracts.reply import TurnResult
 from services.brain.contracts.turn import CustomerTurn
 from services.brain.conversation_store import load_conversation, remember_turn
 
@@ -63,51 +62,61 @@ def attach_confirmation(turn: CustomerTurn, proposals: ActionProposalSet) -> Act
 
 
 async def try_confirm_pending(turn: CustomerTurn, message: str, channel: str) -> TurnResult | None:
-    if turn.invocation_kind in {"followup", "comment"}:
-        return None
-    if not (turn.channel or "").strip() and (channel or "").strip():
-        turn.channel = channel
-    raw = load_conversation(turn.tenant_id, turn.conversation_id)
-    pending = list((raw or {}).get("pending") or turn.extra.get("pending_actions") or [])
-    if not pending or not looks_like_confirmation(message):
-        return None
-    try:
-        proposals = ActionProposalSet(
-            actions=[
-                ActionProposal.model_validate(
-                    {
-                        **item,
-                        "fields": {
-                            **merge_proposal_fields_with_prior(item.get("fields") or {}, pending),
-                            "confirmation_text": message,
-                        },
-                    }
-                )
-                for item in pending
-            ]
-        )
-    except Exception:
-        return None
-    receipts = await _execute(turn, proposals, message)
-    ok = any(item.get("state") == "success" for item in receipts)
-    if not ok:
-        from services.brain.silence import log_customer_generation_failure
+    """Retired. Inbound wording never confirms a request or skips Terra."""
+    _ = (turn, message, channel)
+    return None
 
-        log_customer_generation_failure(
-            stage="request_persist_failed",
-            extra={"receipts": receipts, "tenant_id": turn.tenant_id},
+
+async def submit_pending_request(turn: CustomerTurn, args: dict) -> dict:
+    """Persist because Terra called submit_request. Do not read the customer's words."""
+    raw = load_conversation(turn.tenant_id, turn.conversation_id) or {}
+    pending = [
+        item for item in (raw.get("pending") or turn.extra.get("pending_actions") or []) if isinstance(item, dict)
+    ]
+    customer_text = str(args.get("customer_text") or args.get("text") or "")
+    actions: list[ActionProposal] = []
+    if pending:
+        for item in pending:
+            fields = merge_proposal_fields_with_prior(item.get("fields") or {}, pending)
+            incoming = args.get("fields") if isinstance(args.get("fields"), dict) else {}
+            if incoming:
+                fields = merge_proposal_fields_with_prior({**fields, **incoming}, pending)
+            fields = {**fields, "confirmation_text": customer_text}
+            actions.append(ActionProposal.model_validate({**item, "action_type": "submit_request", "fields": fields}))
+    else:
+        fields = dict(args.get("fields") or {})
+        for key in ("request_type", "title", "collected_fields", "draft_id", "request_id"):
+            if key in args and key not in fields:
+                fields[key] = args[key]
+        if not str(fields.get("request_type") or "").strip():
+            return {"ok": False, "error": "no_pending_draft", "data": None, "receipt": None}
+        fields["confirmation_text"] = customer_text
+        inbound = turn.event_ids[0] if turn.event_ids else ""
+        actions.append(
+            ActionProposal(
+                task_id=str(args.get("task_id") or "terra"),
+                action_type="submit_request",
+                fields=fields,
+                confirmation_message_id=inbound,
+                expected_revision=str(turn.state.draft_revision or ""),
+            )
         )
-        return TurnResult(
-            stop_reason="failed_closed",
-            envelope=FinalReplyEnvelope(decision="no_reply", messages=[]),
-            extra={"phase": "request_confirm", "receipts": receipts, "confirmed": False, "customer_silence": True},
-        )
-    remember_turn(turn, [])
-    return TurnResult(
-        stop_reason="ok",
-        envelope=FinalReplyEnvelope(decision="deterministic", messages=[]),
-        extra={"phase": "request_confirm", "receipts": receipts, "confirmed": True, "customer_silence": True},
-    )
+    receipts = await _execute(turn, ActionProposalSet(actions=actions), customer_text)
+    ok = any(item.get("state") == "success" for item in receipts)
+    if ok:
+        remember_turn(turn, [])
+        extra = dict(turn.extra or {})
+        extra["pending_actions"] = []
+        extra["awaiting_confirmation"] = False
+        extra["request_receipts"] = receipts
+        turn.extra = extra
+    reason = None if ok else str((receipts[0] if receipts else {}).get("reason") or "submit_failed")
+    return {
+        "ok": ok,
+        "data": {"receipts": receipts, "submitted": ok},
+        "receipt": receipts[0] if receipts else None,
+        "error": reason,
+    }
 
 
 async def _execute(turn: CustomerTurn, proposals: ActionProposalSet, message: str) -> list[dict]:

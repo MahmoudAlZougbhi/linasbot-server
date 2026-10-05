@@ -13,7 +13,7 @@ from services.billing.membership.feature_entitlements import (
 )
 from services.billing.membership.message_flags import activation_flags_report
 from services.billing.membership.message_policy import message_units_for
-from services.brain.actions.confirm import confirmation_valid, looks_like_confirmation
+from services.brain.actions.confirm import confirmation_valid
 from services.brain.actions.requests import request_source_channel
 from services.brain.billing import classify_result, owner_preview_turn
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
@@ -355,16 +355,22 @@ def run_contract_cases() -> dict[str, Any]:
             "id": "restricted_has_refuse",
             "ok": refuse_text(RestrictedTopic(id="x", refuse_template="No."), "hi") == "No.",
         },
-        {"id": "yes_confirms_request", "ok": looks_like_confirmation("yes") is True},
         {
-            "id": "yes_revision_bound",
+            "id": "submit_not_word_gated",
             "ok": confirmation_valid(
                 message_id="m1",
-                customer_text="yes",
+                customer_text="يلا سجل الموعد",
                 expected_revision="1",
                 current_revision="1",
             )
-            is True,
+            is True
+            and confirmation_valid(
+                message_id="m1",
+                customer_text="yes",
+                expected_revision="1",
+                current_revision="2",
+            )
+            is False,
         },
         {
             "id": "web_conversation_session",
