@@ -55,6 +55,10 @@ class _FakeQuery:
     def __init__(self, documents: list[_FakeDocument]) -> None:
         self.documents = documents
 
+    def limit(self, count: int) -> _FakeQuery:
+        del count
+        return self
+
     def stream(self, *args: Any, **kwargs: Any) -> list[_FakeSnapshot]:
         del args, kwargs
         return [_FakeSnapshot(document) for document in self.documents if document.exists]

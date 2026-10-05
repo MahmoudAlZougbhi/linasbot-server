@@ -54,6 +54,29 @@ export async function fetchUnifiedChats(opts: {
   }
 }
 
+/** Follow a short search until the page fills or the index cursor ends. */
+export async function fetchUnifiedChatsFollowingSearch(opts: {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  cursor?: string | null;
+  filter?: InboxFilter;
+  channel?: ChannelFilter;
+}) {
+  let data = await fetchUnifiedChats(opts);
+  let guard = 0;
+  const pageSize = opts.pageSize ?? 30;
+  while ((data.chats?.length ?? 0) < pageSize && data.has_more && data.next_cursor && guard < 6) {
+    guard += 1;
+    const more = await fetchUnifiedChats({ ...opts, cursor: data.next_cursor });
+    data = {
+      ...more,
+      chats: [...(data.chats ?? []), ...(more.chats ?? [])],
+    };
+  }
+  return data;
+}
+
 export async function fetchConversation(
   userId: string,
   conversationId: string,

@@ -13,7 +13,12 @@ async function request(path, options) {
 export const ownerApi = {
   /** @param {string} rangeKey */
   analytics: (rangeKey) => request(`/api/platform/analytics?range_key=${encodeURIComponent(rangeKey)}`),
-  subscribers: () => request('/api/platform/users'),
+  subscribers: (cursor = '') => {
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
+    const query = params.toString();
+    return request(query ? `/api/platform/users?${query}` : '/api/platform/users');
+  },
   /** @param {string} tenantId @param {number} [limit] */
   logs: (tenantId, limit = 50) =>
     request(`/api/flow/logs?tenant_id=${encodeURIComponent(tenantId)}&limit=${limit}`),

@@ -238,36 +238,15 @@ class LiveChatTemplatesMixin:
         if not tid:
             return self._empty_counters()
         slot = (self._index_counters_by_tenant or {}).get(tid)
-        if isinstance(slot, dict) and self._is_cache_fresh(
-            slot.get("cached_at"), ttl_seconds=self.INDEX_COUNTERS_CACHE_TTL
-        ):
-            print("[live_chat:counters] source=cache")
-            return dict(slot.get("counters") or self._empty_counters())
 
-        counters = self._empty_counters()
         try:
             db = get_firestore_db()
             if not db:
-                return counters
-            index_coll = self._index_collection(db)
-            docs = await asyncio.to_thread(
-                lambda: self._stream_tenant_index_docs(index_coll, tid, limit=self.INDEX_COUNTER_SCAN_LIMIT)
-            )
-            print(f"[live_chat:counters] source=index tenant={tid} docs_scanned={len(docs)}")
-            for doc in docs:
-                data = doc.to_dict() or {}
-                if not row_belongs_to_tenant(data, tid):
-                    continue
-                state = self._normalize_conversation_state(data)
-                counters["all"] += 1
-                if state == self.STATE_WAITING_OPERATOR:
-                    counters["waiting"] += 1
-                if state == self.STATE_ASSIGNED:
-                    counters["with_operator"] += 1
-                if state == self.STATE_BOT_ACTIVE:
-                    counters["bot_active"] += 1
-                if state in {self.STATE_RESOLVED, self.STATE_ARCHIVED}:
-                    counters["closed"] += 1
+                return self._empty_counters()
+            from services.live_chat.index_counter_store import counters_for_tenant
+
+            counters = await asyncio.to_thread(lambda: counters_for_tenant(db, tid, self._normalize_conversation_state))
+            print(f"[live_chat:counters] source=shared tenant={tid}")
             self._index_counters_by_tenant[tid] = {"counters": dict(counters), "cached_at": utc_now()}
             self._index_counters_cache = dict(counters)
             self._index_counters_cache_time = utc_now()
@@ -276,7 +255,7 @@ class LiveChatTemplatesMixin:
             print(f"⚠️ counter computation failed: {e}")
             if isinstance(slot, dict) and slot.get("counters"):
                 return dict(slot["counters"])
-            return counters
+            return self._empty_counters()
 
     def _identity_keys_for_index_chat(self, user_id: Any, phone_full: str, phone_clean: str) -> set:
         keys = set()

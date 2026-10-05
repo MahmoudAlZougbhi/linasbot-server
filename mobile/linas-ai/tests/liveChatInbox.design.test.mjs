@@ -29,6 +29,7 @@ test('inbox is a flat list with channel chips and no section headers', () => {
   assert.match(screen, /headerRight/);
   assert.match(human, /feather\('user'\)/);
   assert.match(hook, /waitingCount/);
+  assert.match(hook, /fetchUnifiedChatsFollowingSearch/);
   assert.match(hook, /setFilter/);
   assert.match(inbox, /<FlatList/);
   assert.match(inbox, /data=\{visibleChats\}/);
