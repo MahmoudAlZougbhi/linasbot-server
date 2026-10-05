@@ -69,7 +69,7 @@ def note_quota_failure(now: float | None = None) -> float:
     moment = time.time() if now is None else float(now)
     _level = min(_level + 1, 5)
     delay = min(_MAX_DELAY_SECONDS, 60 * (2 ** (_level - 1)))
-    until = moment + delay
+    until = float(moment) + float(delay)
     _local_until = until
     client = _redis()
     if client is not None:
