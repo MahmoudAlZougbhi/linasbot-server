@@ -196,7 +196,7 @@ export const AuthProvider = ({ children }) => {
       return userData;
     } catch (error) {
       const msg = error instanceof Error && error.name === 'AbortError'
-        ? 'Connection timed out. Is the backend running on port 8003?'
+        ? 'Connection timed out. The sign-in service did not respond.'
         : (errorMessage(error) || 'Login failed');
       console.error('[AuthContext] login failed:', msg, error);
       toast.error(msg);
