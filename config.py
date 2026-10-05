@@ -211,4 +211,3 @@ WELCOME_MESSAGES = {
     "fr": _welcome_message("fr", "Bonjour ! Comment puis-je vous aider ?"),
     "franco": _welcome_message("franco", "مرحباً! كيف يمكنني مساعدتك؟"),
 }
-

@@ -54,6 +54,7 @@ __all__ = (
     "user_has_permission",
 )
 
+
 def is_platform_owner(session: SessionRecord) -> bool:
     return (session.role or "").strip().lower() == "platform_owner"
 

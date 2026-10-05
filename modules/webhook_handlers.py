@@ -97,10 +97,7 @@ async def receive_webhook(request: Request) -> Any:
             authenticated = True
 
         _last_webhook_received_at = time.time()
-        print(
-            f"WhatsApp webhook POST received ({len(raw_body)} bytes) auth={authenticated} — "
-            "inbound AI disabled"
-        )
+        print(f"WhatsApp webhook POST received ({len(raw_body)} bytes) auth={authenticated} — inbound AI disabled")
         return JSONResponse(
             status_code=200,
             content={
