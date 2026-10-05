@@ -58,7 +58,35 @@ def test_sanitize_user_skips_missing_tenant_and_uses_doc_id() -> None:
     assert out["tenantId"] == "linas"
 
 
-def _mock_collection(svc: UserService, monkeypatch: pytest.MonkeyPatch, coll: MagicMock) -> None:
+class _LimitedQuery:
+    def __init__(self, docs: list[Any]) -> None:
+        self.docs = docs
+        self.cap: int | None = None
+
+    def limit(self, count: int) -> _LimitedQuery:
+        self.cap = count
+        return self
+
+    def stream(self, **_kwargs: Any) -> Any:
+        rows = self.docs if self.cap is None else self.docs[: self.cap]
+        return iter(rows)
+
+
+class _FilteringCollection:
+    def __init__(self, docs: list[Any]) -> None:
+        self.docs = docs
+
+    def where(self, *, filter: Any) -> _LimitedQuery:
+        field = getattr(filter, "field_path", None)
+        value = getattr(filter, "value", None)
+        matched = [doc for doc in self.docs if (doc.to_dict() or {}).get(field) == value]
+        return _LimitedQuery(matched)
+
+    def limit(self, count: int) -> _LimitedQuery:
+        return _LimitedQuery(self.docs).limit(count)
+
+
+def _mock_collection(svc: UserService, monkeypatch: pytest.MonkeyPatch, coll: Any) -> None:
     mock_db = MagicMock()
     mock_db.collection.return_value.document.return_value.collection.return_value = coll
     monkeypatch.setattr(svc, "_db", mock_db)
@@ -67,34 +95,16 @@ def _mock_collection(svc: UserService, monkeypatch: pytest.MonkeyPatch, coll: Ma
 def test_get_users_for_tenant_includes_legacy_tenant_id_and_mixed_case(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from services.team.user_tenant_query import invalidate_tenant_user_cache
+
+    invalidate_tenant_user_cache()
     svc = UserService()
-    monkeypatch.setattr(
-        svc,
-        "get_all_users",
-        lambda: [
-            {
-                "id": "u-admin",
-                "email": "admin@linas.test",
-                "role": "admin",
-                "tenantId": "linas",
-                "status": "active",
-            },
-            {
-                "id": "u-operator",
-                "email": "op@linas.test",
-                "role": "operator",
-                "tenantId": "linas",
-                "status": "active",
-            },
-            {
-                "id": "other",
-                "email": "x@other.test",
-                "role": "viewer",
-                "tenantId": "other",
-                "status": "active",
-            },
-        ],
-    )
+    docs = [
+        _doc("u-admin", {"email": "admin@linas.test", "role": "admin", "tenantId": "linas", "status": "active"}),
+        _doc("u-operator", {"email": "op@linas.test", "role": "operator", "tenantId": "Linas", "status": "active"}),
+        _doc("other", {"email": "x@other.test", "role": "viewer", "tenantId": "other", "status": "active"}),
+    ]
+    _mock_collection(svc, monkeypatch, _FilteringCollection(docs))
 
     users = svc.get_users_for_tenant("LINAS")
     assert {u["id"] for u in users} == {"u-admin", "u-operator"}
@@ -122,7 +132,10 @@ def test_get_users_for_tenant_recovers_mixed_case_via_sanitize(monkeypatch: pyte
             },
         ),
     ]
-    _mock_collection(svc, monkeypatch, MagicMock(stream=lambda **_kwargs: iter(docs)))
+    from services.team.user_tenant_query import invalidate_tenant_user_cache
+
+    invalidate_tenant_user_cache()
+    _mock_collection(svc, monkeypatch, _FilteringCollection(docs))
 
     users = svc.get_users_for_tenant("linas")
     assert {u["id"] for u in users} == {"legacy-op", "snake-admin"}

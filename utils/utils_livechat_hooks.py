@@ -357,7 +357,7 @@ async def _resolve_latest_conversation_id(conversations_collection_for_user: Any
         print(f"⚠️ Could not query conversations by last_updated, scanning: {q_err}")
 
     try:
-        docs = await asyncio.to_thread(lambda: list(conversations_collection_for_user.stream()))
+        docs = await asyncio.to_thread(lambda: list(conversations_collection_for_user.limit(40).stream()))
     except Exception as e2:
         print(f"⚠️ Conversation collection stream failed: {e2}")
         return None
@@ -405,7 +405,7 @@ async def _latest_smart_ai_across_conversations(canonical_user_id: str, within_h
     best = None
     best_ts = None
     try:
-        docs = await asyncio.to_thread(lambda: list(coll.stream()))
+        docs = await asyncio.to_thread(lambda: list(coll.limit(40).stream()))
     except Exception as e:
         print(f"⚠️ _latest_smart_ai_across_conversations: {e}")
         return None

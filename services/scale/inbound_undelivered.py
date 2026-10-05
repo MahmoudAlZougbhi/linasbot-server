@@ -124,8 +124,11 @@ def _list_shared_completed_undelivered(*, older_than_seconds: float, now: float)
         return []
     collection = _firestore_inbound_collection(db)
     found: dict[str, InboundEventRecord] = {}
+    from services.scale.inbound_active_scan import active_scan_limit
+
+    limit = active_scan_limit()
     for status in ("unknown", "needs_owner_action"):
-        query = collection.where(filter=FieldFilter("outbound_status", "==", status))
+        query = collection.where(filter=FieldFilter("outbound_status", "==", status)).limit(limit)
         for snapshot in query.stream():
             rec = _record_from_firestore_snapshot(snapshot)
             if rec is None:

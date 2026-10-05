@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import asyncio
 
-from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
+from services.scale.durable_event_claim import try_acquire_job_lock
+from services.scale.firestore_quota_backoff import note_quota_result, quota_backoff_active
+from services.scale.inbound_active_scan import RECONCILE_LOCK_TTL_SECONDS
 
 
 def _run_inbound_event_reconcile_job_sync() -> None:
-    if not try_acquire_job_lock("inbound_event_reconcile", ttl_seconds=55):
+    # Leave the Redis key in place until it expires. Releasing it when this
+    # pass returns lets the other node repeat the same Firestore scan.
+    if quota_backoff_active():
+        return
+    if not try_acquire_job_lock("inbound_event_reconcile", ttl_seconds=RECONCILE_LOCK_TTL_SECONDS):
         return
     try:
         from services.scale.inbound_event_reconcile import reconcile_stuck_inbound_events
@@ -27,10 +33,10 @@ def _run_inbound_event_reconcile_job_sync() -> None:
         omni = reconcile_omnichannel(older_than_seconds=45.0)
         if int(omni.get("examined") or 0):
             print(f"[omnichannel-reconcile] examined={omni.get('examined')} actions={len(omni.get('actions') or [])}")
+        note_quota_result(None)
     except Exception as exc:
+        note_quota_result(exc)
         print(f"[inbound-reconcile] failed type={type(exc).__name__}")
-    finally:
-        release_job_lock("inbound_event_reconcile")
 
 
 async def run_inbound_event_reconcile_job() -> None:

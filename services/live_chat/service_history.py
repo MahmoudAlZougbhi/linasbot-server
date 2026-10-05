@@ -72,14 +72,14 @@ class LiveChatHistoryMixin:
         if users_collection is None:
             return []
         try:
-            q = users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING)
-            if limit is not None:
-                q = q.limit(limit)
+            cap = 80 if limit is None else max(1, int(limit))
+            q = users_collection.order_by("last_activity", direction=firestore.Query.DESCENDING).limit(cap)
             return await asyncio.to_thread(lambda: list(q.stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS)))
         except Exception:
             try:
+                capped = users_collection.limit(80 if limit is None else max(1, int(limit)))
                 return await asyncio.to_thread(
-                    lambda: list(users_collection.stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS))
+                    lambda: list(capped.stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS))
                 )
             except Exception:
                 return []
@@ -90,7 +90,9 @@ class LiveChatHistoryMixin:
                 config.FIRESTORE_CONVERSATIONS_COLLECTION
             )
             conversations_docs = await asyncio.to_thread(
-                lambda: list(conversations_collection.stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS))
+                lambda: list(
+                    conversations_collection.limit(40).stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS)
+                )
             )
             return user_id, conversations_docs
         except Exception as e:
@@ -130,7 +132,8 @@ class LiveChatHistoryMixin:
         if users_collection is None:
             return []
 
-        users_docs = await self._stream_user_docs(users_collection)
+        cap = int(getattr(self, "FALLBACK_USERS_STREAM_LIMIT", 80) or 80)
+        users_docs = await self._stream_user_docs(users_collection, limit=cap)
         user_ids = [doc.id for doc in users_docs]
         fetch_results = await self._stream_conversations_for_users(users_collection, user_ids)
 
@@ -225,7 +228,7 @@ class LiveChatHistoryMixin:
             .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
         )
 
-        conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
+        conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.limit(20).stream()))
 
         blob_parts: list[str] = []
         for conv_doc in conversations_docs:

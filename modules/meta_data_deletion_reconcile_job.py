@@ -13,10 +13,15 @@ async def run_meta_data_deletion_reconcile_job() -> None:
     Firestore reads are synchronous, so they run off the API event loop.
     """
 
+    from services.scale.firestore_quota_backoff import note_quota_result, quota_backoff_active
+
+    if quota_backoff_active():
+        return
     try:
         from services.integrations.meta.meta_data_deletion import process_pending_meta_deletion_requests
 
         result = await asyncio.to_thread(process_pending_meta_deletion_requests)
+        note_quota_result(None)
         examined = int(result.get("examined") or 0)
         if examined:
             print(
@@ -26,4 +31,5 @@ async def run_meta_data_deletion_reconcile_job() -> None:
                 f"errors={int(result.get('errors') or 0)}"
             )
     except Exception as exc:
+        note_quota_result(exc)
         print(f"[meta-deletion-reconcile] failed type={type(exc).__name__}")

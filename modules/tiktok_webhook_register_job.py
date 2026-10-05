@@ -3,23 +3,23 @@
 from __future__ import annotations
 
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_db_configured
-from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
+from services.scale.job_interval_lock import job_interval_lock
 
 
 async def run_tiktok_comment_webhook_register_job() -> None:
-    if not try_acquire_job_lock("tiktok_comment_webhook_register", ttl_seconds=55):
-        return
-    try:
-        if not whatsapp_db_configured():
+    # The schedule is hourly. Hold the key for most of that hour.
+    with job_interval_lock("tiktok_comment_webhook_register", ttl_seconds=3300) as acquired:
+        if not acquired:
             return
-        from services.integrations.tiktok.config import get_tiktok_settings
-        from services.integrations.tiktok.errors import TikTokApiError
-        from services.integrations.tiktok.webhook_subscription import ensure_comment_webhook_registered
+        try:
+            if not whatsapp_db_configured():
+                return
+            from services.integrations.tiktok.config import get_tiktok_settings
+            from services.integrations.tiktok.errors import TikTokApiError
+            from services.integrations.tiktok.webhook_subscription import ensure_comment_webhook_registered
 
-        if not get_tiktok_settings().configured:
+            if not get_tiktok_settings().configured:
+                return
+            await ensure_comment_webhook_registered()
+        except (WhatsAppDatabaseUnavailable, TikTokApiError):
             return
-        await ensure_comment_webhook_registered()
-    except (WhatsAppDatabaseUnavailable, TikTokApiError):
-        return
-    finally:
-        release_job_lock("tiktok_comment_webhook_register")

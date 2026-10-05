@@ -234,7 +234,12 @@ def scan_reconcile_candidates(
     from services.scale.inbound_undelivered import list_completed_undelivered_meta_dms
 
     try:
-        events = list_active_inbound_events(older_than_seconds=older_than_seconds)
+        from services.scale.inbound_active_scan import active_scan_limit
+
+        events = list_active_inbound_events(
+            older_than_seconds=older_than_seconds,
+            query_limit=active_scan_limit(),
+        )
     except Exception as exc:
         _logger.warning("[reconcile-scan] active_list_failed type=%s", type(exc).__name__)
         events = []

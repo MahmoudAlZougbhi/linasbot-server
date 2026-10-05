@@ -7,24 +7,23 @@ from typing import Any
 
 
 async def run_smart_followup_worker_job() -> None:
-    from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
+    from services.scale.job_interval_lock import job_interval_lock
 
-    if not try_acquire_job_lock("whatsapp_smart_followup_worker", ttl_seconds=55):
-        return
-    try:
-        from services.smart_followup.worker import process_due_followup_jobs
+    with job_interval_lock("whatsapp_smart_followup_worker", ttl_seconds=50) as acquired:
+        if not acquired:
+            return
+        try:
+            from services.smart_followup.worker import process_due_followup_jobs
 
-        result = await process_due_followup_jobs(limit=25)
-        processed = int(result.get("processed") or 0)
-        if processed:
-            print(f"[smart_followup] processed {processed} due job(s)")
-    except Exception as e:
-        print(f"❌ Error in Smart Follow-Up worker: {e}")
-        import traceback
+            result = await process_due_followup_jobs(limit=25)
+            processed = int(result.get("processed") or 0)
+            if processed:
+                print(f"[smart_followup] processed {processed} due job(s)")
+        except Exception as e:
+            print(f"❌ Error in Smart Follow-Up worker: {e}")
+            import traceback
 
-        traceback.print_exc()
-    finally:
-        release_job_lock("whatsapp_smart_followup_worker")
+            traceback.print_exc()
 
 
 async def start_smart_messaging_scheduler(app_state: Any) -> Any:
@@ -42,11 +41,12 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
         replace_existing=True,
     )
     from modules.inbound_event_reconcile_job import run_inbound_event_reconcile_job
+    from services.scale.inbound_active_scan import RECONCILE_INTERVAL_MINUTES
 
     scheduler.add_job(
         run_inbound_event_reconcile_job,
         "interval",
-        minutes=1,
+        minutes=RECONCILE_INTERVAL_MINUTES,
         id="inbound_event_reconcile",
         name="Inbound Event Reconcile Watchdog",
         replace_existing=True,
@@ -66,7 +66,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     scheduler.add_job(
         run_customer_reply_reconcile_job,
         "interval",
-        minutes=1,
+        minutes=RECONCILE_INTERVAL_MINUTES,
         id="customer_reply_reconcile",
         name="Customer Reply Reconcile Worker",
         replace_existing=True,
@@ -147,9 +147,9 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     print("✅ Runtime scheduler started")
     print("📅 Scheduled jobs:")
     print("   - Smart Follow-Up worker: Every 1 minute")
-    print("   - Inbound event reconcile: Every 1 minute")
-    print("   - Meta data deletion reconcile: Every 1 minute per node")
-    print("   - Customer reply reconcile: Every 1 minute")
+    print("   - Inbound event reconcile: Every 10 minutes, one node")
+    print("   - Meta data deletion reconcile: Every 1 minute per node, pending only")
+    print("   - Customer reply reconcile: Every 10 minutes, one node")
     print("   - Web Chat release pending reconcile: Every 1 minute")
     print("   - TikTok comment webhook register: Every 60 minutes")
     print("   - WhatsApp outbound retry: Every 1 minute")

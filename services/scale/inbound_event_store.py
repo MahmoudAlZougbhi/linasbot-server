@@ -83,26 +83,17 @@ def _shared_active_records(
     collection: Any,
     *,
     local_event_ids: set[str],
+    query_limit: int | None = None,
 ) -> dict[str, InboundEventRecord]:
-    """Read active shared records plus primary state for every local candidate."""
+    """Read a capped active query plus primary state for local candidates."""
 
-    from google.cloud.firestore_v1.base_query import FieldFilter
+    from services.scale.inbound_active_scan import shared_active_records
 
-    query = collection.where(filter=FieldFilter("state", "in", sorted(ACTIVE_STATES)))
-    primary: dict[str, InboundEventRecord] = {}
-    for snapshot in query.stream(timeout=8, retry=None):
-        record = _record_from_firestore_snapshot(snapshot)
-        if record is not None:
-            primary[record.event_id] = record
-
-    # An active local cache can be stale after a peer completed the shared
-    # record. Read its primary document even though terminal records are absent
-    # from the active query, otherwise this node could requeue completed work.
-    for event_id in local_event_ids - primary.keys():
-        record = _record_from_firestore_snapshot(collection.document(event_id).get())
-        if record is not None:
-            primary[record.event_id] = record
-    return primary
+    return shared_active_records(
+        collection,
+        local_event_ids=local_event_ids,
+        query_limit=query_limit,
+    )
 
 
 def put_inbound_event(
@@ -227,7 +218,11 @@ def get_inbound_event(
         return local
 
 
-def list_active_inbound_events(*, older_than_seconds: float = 30.0) -> list[InboundEventRecord]:
+def list_active_inbound_events(
+    *,
+    older_than_seconds: float = 30.0,
+    query_limit: int | None = None,
+) -> list[InboundEventRecord]:
     """Return deduplicated local + shared reconcile candidates.
 
     Firestore is the HA authority when configured. Query failures raise instead
@@ -255,7 +250,11 @@ def list_active_inbound_events(*, older_than_seconds: float = 30.0) -> list[Inbo
 
     try:
         collection = _firestore_inbound_collection(db)
-        primary_by_id = _shared_active_records(collection, local_event_ids=set(local_by_id))
+        primary_by_id = _shared_active_records(
+            collection,
+            local_event_ids=set(local_by_id),
+            query_limit=query_limit,
+        )
     except Exception as exc:
         raise InboundEventStoreUnavailableError("Unable to query the shared inbound-event ledger") from exc
 

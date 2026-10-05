@@ -4,23 +4,22 @@ from __future__ import annotations
 
 import asyncio
 
-from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
+from services.scale.job_interval_lock import job_interval_lock
 
 
 def _run_omnichannel_reconcile_job_sync() -> None:
-    if not try_acquire_job_lock("omnichannel_reconcile", ttl_seconds=55):
-        return
-    try:
-        from services.integrations.omnichannel.reconcile import reconcile_omnichannel
+    with job_interval_lock("omnichannel_reconcile", ttl_seconds=50) as acquired:
+        if not acquired:
+            return
+        try:
+            from services.integrations.omnichannel.reconcile import reconcile_omnichannel
 
-        result = reconcile_omnichannel(older_than_seconds=45.0)
-        examined = int(result.get("examined") or 0)
-        if examined:
-            print(f"[omnichannel-reconcile] examined={examined} actions={len(result.get('actions') or [])}")
-    except Exception as exc:
-        print(f"[omnichannel-reconcile] failed type={type(exc).__name__}")
-    finally:
-        release_job_lock("omnichannel_reconcile")
+            result = reconcile_omnichannel(older_than_seconds=45.0)
+            examined = int(result.get("examined") or 0)
+            if examined:
+                print(f"[omnichannel-reconcile] examined={examined} actions={len(result.get('actions') or [])}")
+        except Exception as exc:
+            print(f"[omnichannel-reconcile] failed type={type(exc).__name__}")
 
 
 async def run_omnichannel_reconcile_job() -> None:

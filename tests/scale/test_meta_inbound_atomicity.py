@@ -415,7 +415,7 @@ def test_watchdog_skips_local_orphan_and_reconciles_later_shared_event(
     monkeypatch.setattr(
         event_store,
         "_shared_active_records",
-        lambda _collection, *, local_event_ids: {valid.event_id: valid},
+        lambda _collection, *, local_event_ids, query_limit=None: {valid.event_id: valid},
     )
     monkeypatch.setattr(event_store, "_firestore_inbound_collection", lambda _db: TrackingCollection())
     monkeypatch.setattr(claims, "try_claim_event_handle", acquire)
@@ -440,7 +440,7 @@ async def test_scheduled_watchdog_reports_orphan_count_without_reconcile_candida
     import modules.inbound_event_reconcile_job as job
 
     monkeypatch.setattr(job, "try_acquire_job_lock", lambda *_args, **_kwargs: True)
-    monkeypatch.setattr(job, "release_job_lock", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(job, "release_job_lock", lambda *_args, **_kwargs: None, raising=False)
     monkeypatch.setattr(
         reconcile,
         "reconcile_stuck_inbound_events",

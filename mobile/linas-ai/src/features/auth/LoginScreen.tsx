@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ApiError, mobileLogin } from '../../api/client';
@@ -23,14 +23,22 @@ export function LoginScreen({ onLoggedIn, onGoRegister, onForgotPassword, onBack
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const quotaBlockUntil = useRef(0);
 
   async function onSubmit() {
+    if (Date.now() < quotaBlockUntil.current) {
+      setError(tr('loginGenericError'));
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       await mobileLogin(email.trim(), password);
       onLoggedIn();
     } catch (err) {
+      if (err instanceof ApiError && (err.status === 429 || err.status >= 500)) {
+        quotaBlockUntil.current = Date.now() + 20000;
+      }
       if (err instanceof ApiError) {
         setError(
           err.status === 401 || err.status === 403 ? tr('loginFailed') : tr('loginGenericError'),

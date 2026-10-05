@@ -99,7 +99,10 @@ def _billing_by_tenant(tenant_ids: set[str]) -> dict[str, dict[str, Any]]:
 
 def list_subscribers(users: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """One Firestore scan plus one batched billing query; no per-row reads."""
-    users = user_service.get_all_users() if users is None else users
+    if users is None:
+        from services.team.user_tenant_query import list_users_capped
+
+        users = list_users_capped(user_service, limit=200)
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for user in users:
         tenant_id = str(user.get("tenantId") or "").strip()
@@ -169,7 +172,9 @@ def analytics(range_key: str) -> dict[str, Any]:
     end = now
     if range_key == "last_week":
         end = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-    users = user_service.get_all_users()
+    from services.team.user_tenant_query import list_users_capped
+
+    users = list_users_capped(user_service, limit=200)
     flows = [row for row in get_recent_flows(limit=500) if _in_range(row.get("timestamp"), start, end)]
     channels = Counter(str(row.get("channel") or "unknown") for row in flows)
     message_types = Counter(str(row.get("message_type") or "text") for row in flows)
