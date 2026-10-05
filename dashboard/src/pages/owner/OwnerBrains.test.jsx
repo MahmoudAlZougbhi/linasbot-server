@@ -10,15 +10,18 @@ vi.mock("./ownerApi", () => ({
   },
 }));
 
+const subscribers = /** @type {import("vitest").Mock} */ (ownerApi.subscribers);
+const brainTurn = /** @type {import("vitest").Mock} */ (ownerApi.brainTurn);
+
 describe("OwnerBrains", () => {
   beforeEach(() => {
-    ownerApi.subscribers.mockResolvedValue({
+    subscribers.mockResolvedValue({
       subscribers: [
         { tenant_id: "shop-a", business_name: "Shop A", email: "a@example.com" },
         { tenant_id: "shop-b", business_name: "Shop B", email: "b@example.com" },
       ],
     });
-    ownerApi.brainTurn.mockResolvedValue({ reply: "أهلا من شوب أ", reason: "" });
+    brainTurn.mockResolvedValue({ reply: "أهلا من شوب أ", reason: "" });
   });
 
   it("sends the selected tenant to the customer brain and clears the thread on switch", async () => {
@@ -30,7 +33,7 @@ describe("OwnerBrains", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send to Customer brain" }));
 
     await waitFor(() => expect(screen.getByText("أهلا من شوب أ")).toBeInTheDocument());
-    expect(ownerApi.brainTurn).toHaveBeenCalledWith("customer", {
+    expect(brainTurn).toHaveBeenCalledWith("customer", {
       tenant_id: "shop-a",
       message: "بدي سعر",
       history: [],
