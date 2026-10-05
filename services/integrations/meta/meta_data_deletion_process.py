@@ -181,9 +181,7 @@ def process_pending_meta_deletion_requests() -> dict[str, int]:
     node_id, configured_nodes = _deletion_node_config()
     db = _firestore_db()
     try:
-        snapshots = list(
-            _app_document(db).collection(_REQUEST_COLLECTION).stream(timeout=20, retry=None)
-        )
+        snapshots = list(_app_document(db).collection(_REQUEST_COLLECTION).stream(timeout=20, retry=None))
     except Exception as exc:
         raise MetaDeletionStoreUnavailableError("Meta deletion request scan failed") from exc
     stats = {"examined": 0, "acknowledged": 0, "completed": 0, "pending": 0, "errors": 0}
