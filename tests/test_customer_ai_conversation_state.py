@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from services.brain.actions.confirm import confirmation_valid
-from services.brain.actions.pending import attach_confirmation, try_confirm_pending
+from services.brain.actions.pending import attach_confirmation, submit_pending_request, try_confirm_pending
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
 from services.brain.contracts.reply import FinalReplyEnvelope, OutboundMessage, TurnResult
 from services.brain.contracts.turn import ConversationState, CustomerTurn
@@ -147,22 +147,24 @@ def test_attach_confirmation_binds_revision_and_inbound() -> None:
 
 
 @pytest.mark.asyncio
-async def test_try_confirm_ignores_non_yes() -> None:
+async def test_assent_words_do_not_skip_terra() -> None:
     turn = CustomerTurn(tenant_id="t1", conversation_id="c1", event_ids=["m1"])
     attach_confirmation(
         turn,
         ActionProposalSet(actions=[ActionProposal(task_id="t", action_type="start_request")]),
     )
     assert await try_confirm_pending(turn, "book tomorrow", "instagram_dm") is None
+    assert await try_confirm_pending(turn, "yes", "instagram_dm") is None
+    assert await try_confirm_pending(turn, "تمام", "instagram_dm") is None
 
 
 @pytest.mark.asyncio
-async def test_try_confirm_yes_clears_pending(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_terra_submit_clears_pending(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_execute(turn, proposals, message):
         assert proposals.actions[0].confirmation_message_id == "m1"
-        assert message == "yes"
+        assert message == "يلا سجل الموعد"
         _ = turn
-        return [{"action_type": "start_request", "state": "success", "backend_id": "req1"}]
+        return [{"action_type": "submit_request", "state": "success", "backend_id": "req1"}]
 
     monkeypatch.setattr("services.brain.actions.pending._execute", fake_execute)
     turn = CustomerTurn(tenant_id="t1", conversation_id="c1", event_ids=["m1"])
@@ -173,9 +175,8 @@ async def test_try_confirm_yes_clears_pending(monkeypatch: pytest.MonkeyPatch) -
         ),
     )
     next_turn = hydrate_turn_state(CustomerTurn(tenant_id="t1", conversation_id="c1", event_ids=["m2"]))
-    result = await try_confirm_pending(next_turn, "yes", "instagram_dm")
-    assert result is not None
-    assert result.extra["confirmed"] is True
+    result = await submit_pending_request(next_turn, {"customer_text": "يلا سجل الموعد", "task_id": "t"})
+    assert result["ok"] is True
     assert load_conversation("t1", "c1")["pending"] == []
 
 
@@ -211,25 +212,37 @@ async def test_request_confirm_survives_next_turn(monkeypatch: pytest.MonkeyPatc
             {},
         )
 
+    calls = {"n": 0}
+
     async def terra_start(turn, **kwargs):
+        calls["n"] += 1
         message = str(kwargs.get("message") or "")
         extra = dict(kwargs.get("extra") or turn.extra or {})
-        result = await execute_tool(
-            "start_request",
-            {"request_type": "APPOINTMENT", "title": message, "task_id": "book", "customer_text": message},
-            turn,
-        )
-        data = result.get("data") if isinstance(result.get("data"), dict) else {}
-        if data.get("awaiting_confirmation"):
-            extra["awaiting_confirmation"] = True
-            extra["pending_actions"] = list(data.get("pending_actions") or [])
-            turn.extra = {**dict(turn.extra or {}), **extra}
+        if calls["n"] == 1:
+            result = await execute_tool(
+                "start_request",
+                {"request_type": "APPOINTMENT", "title": message, "task_id": "book", "customer_text": message},
+                turn,
+            )
+            data = result.get("data") if isinstance(result.get("data"), dict) else {}
+            if data.get("awaiting_confirmation"):
+                extra["awaiting_confirmation"] = True
+                extra["pending_actions"] = list(data.get("pending_actions") or [])
+                turn.extra = {**dict(turn.extra or {}), **extra}
+            reply = "بدي أكد التاريخ"
+        else:
+            result = await execute_tool(
+                "submit_request",
+                {"task_id": "book", "customer_text": message},
+                turn,
+            )
+            reply = "تم تسجيل الموعد" if result.get("ok") else "ما قدرت سجل"
         extra.update(dict(turn.extra or {}))
         return TurnResult(
             stop_reason="ok",
             envelope=FinalReplyEnvelope(
                 decision="reply",
-                messages=[OutboundMessage(destination="dm", text="ok")],
+                messages=[OutboundMessage(destination="dm", text=reply)],
             ),
             extra=extra,
         )
@@ -249,14 +262,14 @@ async def test_request_confirm_survives_next_turn(monkeypatch: pytest.MonkeyPatc
             expected_revision=proposals.actions[0].expected_revision,
             current_revision=turn.state.draft_revision,
         )
-        return [{"action_type": "start_request", "state": "success"}]
+        return [{"action_type": "submit_request", "state": "success", "backend_id": "req-1"}]
 
     monkeypatch.setattr("services.brain.actions.pending._execute", fake_execute)
     second = hydrate_turn_state(CustomerTurn(tenant_id="t1", conversation_id="c-book", event_ids=["m2"]))
-    confirmed = await run_dm_after_gates(second, message="yes", channel="instagram_dm")
-    assert confirmed.extra["phase"] == "request_confirm"
-    assert confirmed.extra["confirmed"] is True
-    assert confirmed.envelope.decision == "deterministic"
+    confirmed = await run_dm_after_gates(second, message="يلا سجل الموعد", channel="instagram_dm")
+    assert confirmed.envelope.messages[0].text == "تم تسجيل الموعد"
+    assert confirmed.extra.get("phase") != "request_confirm"
+    assert load_conversation("t1", "c-book")["pending"] == []
 
 
 def test_greeting_flag_survives_next_turn() -> None:
@@ -351,10 +364,9 @@ async def test_yes_persists_request_when_db_is_up(req_db, monkeypatch: pytest.Mo
             event_ids=["m2"],
         )
     )
-    result = await try_confirm_pending(second, "yes", "instagram_dm")
-    assert result is not None
-    assert result.extra["confirmed"] is True
-    backend_id = result.extra["receipts"][0]["backend_id"]
+    result = await submit_pending_request(second, {"customer_text": "يلا سجل الموعد", "task_id": "laser"})
+    assert result["ok"] is True
+    backend_id = result["data"]["receipts"][0]["backend_id"]
     assert backend_id
     with whatsapp_session(require=False) as session:
         row = CustomerRequestsService(session).repo.get_for_tenant(tenant_id="t-book", request_id=backend_id)
@@ -376,6 +388,7 @@ async def test_yes_explains_when_requests_are_not_set_up(monkeypatch: pytest.Mon
 
     monkeypatch.setattr("db.session.whatsapp_session", fake_session)
     monkeypatch.setattr("services.requests.service.requests_capture_active", lambda _tid: False)
+    monkeypatch.setattr("services.brain.actions.requests.published_configuration_version", lambda _tid: "v")
     first = CustomerTurn(tenant_id="t-setup", conversation_id="c-setup", channel="instagram_dm", event_ids=["m1"])
     attach_confirmation(
         first,
@@ -386,12 +399,9 @@ async def test_yes_explains_when_requests_are_not_set_up(monkeypatch: pytest.Mon
     second = hydrate_turn_state(
         CustomerTurn(tenant_id="t-setup", conversation_id="c-setup", channel="instagram_dm", event_ids=["m2"])
     )
-    result = await try_confirm_pending(second, "yes", "instagram_dm")
-    assert result is not None
-    assert result.extra["confirmed"] is False
-    assert result.stop_reason == "failed_closed"
-    assert not result.envelope.messages
-    assert (result.extra or {}).get("customer_silence") is True
+    result = await submit_pending_request(second, {"customer_text": "يلا سجل الموعد", "task_id": "t"})
+    assert result["ok"] is False
+    assert result["error"] == "REQUESTS_SETUP_REQUIRED"
     assert load_conversation("t-setup", "c-setup")["pending"]
 
 

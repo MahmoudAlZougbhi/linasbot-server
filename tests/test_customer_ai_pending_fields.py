@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from services.brain.actions.pending import attach_confirmation, try_confirm_pending
+from services.brain.actions.pending import attach_confirmation, submit_pending_request
 from services.brain.actions.request_fields import merge_proposal_fields_with_prior
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
 from services.brain.contracts.turn import ConversationState, CustomerTurn, HistorySnapshot
@@ -106,11 +106,10 @@ async def test_confirm_passes_merged_collected_fields(monkeypatch: pytest.Monkey
         ),
     )
     later = hydrate_turn_state(CustomerTurn(tenant_id="t1", conversation_id="c1", event_ids=["m2"]))
-    result = await try_confirm_pending(later, "yes", "instagram_dm")
-    assert result is not None
-    assert result.extra["confirmed"] is True
+    result = await submit_pending_request(later, {"customer_text": "يلا سجل الموعد", "task_id": "book"})
+    assert result["ok"] is True
     assert captured["fields"]["collected_fields"]["name"] == "Sara"
-    assert captured["fields"]["confirmation_text"] == "yes"
+    assert captured["fields"]["confirmation_text"] == "يلا سجل الموعد"
 
 
 def test_bind_dm_ids_uses_existing_ids_only() -> None:

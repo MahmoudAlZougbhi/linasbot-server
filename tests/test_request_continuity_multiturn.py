@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from services.brain.actions.pending import try_confirm_pending
+from services.brain.actions.pending import submit_pending_request
 from services.brain.agent.request_policy import policy_notes_for_turn, request_policy_notes
 from services.brain.agent.request_snapshot import build_request_snapshot
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
@@ -234,9 +234,9 @@ async def test_confirm_persists_merged_collected_fields(monkeypatch: pytest.Monk
         turn,
     )
     later = _turn("c2")
-    result = await try_confirm_pending(later, "yes", "whatsapp")
-    assert result is not None
-    assert result.extra.get("confirmed") is True
+    later.channel = "whatsapp"
+    result = await submit_pending_request(later, {"customer_text": "يلا سجل الموعد", "task_id": "book"})
+    assert result["ok"] is True
     assert captured["fields"]["collected_fields"]["name"] == "محمود"
     assert captured["fields"]["collected_fields"]["preferred_date"] == "بكرا"
     assert (load_conversation(_HINT_TENANT, _CONV) or {}).get("pending") == []

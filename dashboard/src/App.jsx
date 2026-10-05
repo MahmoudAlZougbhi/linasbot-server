@@ -22,6 +22,7 @@ import OwnerCatalog from './pages/owner/OwnerCatalog';
 import OwnerEconomy from './pages/owner/OwnerEconomy';
 import OwnerCosts from './pages/owner/OwnerCosts';
 import OwnerMessages from './pages/owner/OwnerMessages';
+import OwnerBrains from './pages/owner/OwnerBrains';
 
 /**
  * Operator SPA shell removed after FINAL_WEB_TO_MOBILE_PARITY_MATRIX.csv.
@@ -76,6 +77,7 @@ function App() {
             <Route path="catalog" element={<OwnerCatalog />} />
             <Route path="economy" element={<OwnerEconomy />} />
             <Route path="costs" element={<OwnerCosts />} />
+            <Route path="brains" element={<OwnerBrains />} />
           </Route>
           {OBSOLETE_OPERATOR_PATHS.map((path) => (
             <Route key={path} path={path} element={<Navigate to="/#get-app" replace />} />
