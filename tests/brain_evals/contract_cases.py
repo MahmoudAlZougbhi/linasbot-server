@@ -257,6 +257,10 @@ def run_contract_cases() -> dict[str, Any]:
     )
     semantic = classify_result(
         _turn(),
+        TurnResult(stop_reason="ok", extra={"path": "faq_embed_90"}),
+    )
+    retired_semantic = classify_result(
+        _turn(),
         TurnResult(stop_reason="ok", extra={"path": "faq_semantic"}),
     )
     mixed = classify_result(
@@ -332,7 +336,10 @@ def run_contract_cases() -> dict[str, Any]:
     free_faq, _ = faq_limits_for_plan("free")
     cases = [
         {"id": "faq_exact_zero", "ok": faq == "faq_only" and message_units_for(faq) == 0},
-        {"id": "faq_semantic_zero", "ok": semantic == "faq_only" and message_units_for(semantic) == 0},
+        {
+            "id": "faq_embed_90_zero",
+            "ok": semantic == "faq_only" and message_units_for(semantic) == 0 and retired_semantic != "faq_only",
+        },
         {"id": "mixed_faq_ai_one", "ok": mixed == "mixed_faq_ai" and message_units_for(mixed) == 1},
         {"id": "generated_ai_one", "ok": generated == "generated_ai" and message_units_for(generated) == 1},
         {"id": "comment_static_zero", "ok": comment_static == "static" and message_units_for(comment_static) == 0},
