@@ -37,6 +37,9 @@ class _Query:
     def __init__(self, documents: list[_Document]) -> None:
         self.documents = documents
 
+    def limit(self, count: int) -> _Query:
+        return _Query(self.documents[: max(0, int(count))])
+
     def stream(self, *args: object, **kwargs: object) -> list[_Snapshot]:
         del args, kwargs
         return [_Snapshot(document) for document in self.documents if document.exists]
