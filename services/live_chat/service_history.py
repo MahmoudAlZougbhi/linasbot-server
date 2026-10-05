@@ -90,9 +90,7 @@ class LiveChatHistoryMixin:
                 config.FIRESTORE_CONVERSATIONS_COLLECTION
             )
             conversations_docs = await asyncio.to_thread(
-                lambda: list(
-                    conversations_collection.limit(40).stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS)
-                )
+                lambda: list(conversations_collection.limit(40).stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS))
             )
             return user_id, conversations_docs
         except Exception as e:

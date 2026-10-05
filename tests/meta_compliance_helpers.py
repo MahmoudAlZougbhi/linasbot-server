@@ -92,11 +92,7 @@ class _FakeCollection:
             value = kwargs.get("value")
         assert operator == "=="
         return _FakeQuery(
-            [
-                document
-                for document in self.documents.values()
-                if document.exists and document.data.get(field) == value
-            ]
+            [document for document in self.documents.values() if document.exists and document.data.get(field) == value]
         )
 
 
