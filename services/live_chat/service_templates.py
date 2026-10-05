@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import config
@@ -240,13 +239,10 @@ class LiveChatTemplatesMixin:
         slot = (self._index_counters_by_tenant or {}).get(tid)
 
         try:
-            db = get_firestore_db()
-            if not db:
-                return self._empty_counters()
-            from services.live_chat.index_counter_store import counters_for_tenant
+            from services.persistence.chat_store import counters_for_tenant
 
-            counters = await asyncio.to_thread(lambda: counters_for_tenant(db, tid, self._normalize_conversation_state))
-            print(f"[live_chat:counters] source=shared tenant={tid}")
+            counters = counters_for_tenant(tid)
+            print(f"[live_chat:counters] source=postgres tenant={tid}")
             self._index_counters_by_tenant[tid] = {"counters": dict(counters), "cached_at": utc_now()}
             self._index_counters_cache = dict(counters)
             self._index_counters_cache_time = utc_now()

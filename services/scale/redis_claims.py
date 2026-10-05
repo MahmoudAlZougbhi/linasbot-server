@@ -86,6 +86,38 @@ class RedisClaimStore:
         deleted = int(client.delete(self._redis_key(namespace, key)))
         return deleted > 0
 
+    def try_claim_owner(self, namespace: str, key: str, owner_hash: str, *, ttl_seconds: float) -> bool | None:
+        """True when this owner created the key. False when another owner holds it."""
+        client = self._client()
+        if client is None:
+            return None
+        ok = client.set(self._redis_key(namespace, key), owner_hash, nx=True, ex=max(1, int(ttl_seconds)))
+        return bool(ok)
+
+    def _compare(self, namespace: str, key: str, owner_hash: str, script: str, *args: str) -> bool | None:
+        client = self._client()
+        if client is None:
+            return None
+        result = client.eval(script, 1, self._redis_key(namespace, key), owner_hash, *args)
+        return bool(int(result or 0))
+
+    def renew_owner(self, namespace: str, key: str, owner_hash: str, *, ttl_seconds: float) -> bool | None:
+        script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end"
+        return self._compare(namespace, key, owner_hash, script, str(max(1, int(ttl_seconds))))
+
+    def release_owner(self, namespace: str, key: str, owner_hash: str) -> bool | None:
+        script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
+        return self._compare(namespace, key, owner_hash, script)
+
+    def complete_owner(self, namespace: str, key: str, owner_hash: str, *, ttl_seconds: float) -> bool | None:
+        """Leave a done marker so a second worker cannot claim the same key until the TTL."""
+        script = (
+            "if redis.call('get', KEYS[1]) == ARGV[1] then "
+            "redis.call('set', KEYS[1], ARGV[2], 'EX', ARGV[3]); return 1 else return 0 end"
+        )
+        done = f"done:{owner_hash}"
+        return self._compare(namespace, key, owner_hash, script, done, str(max(1, int(ttl_seconds))))
+
 
 _shared_claims = RedisClaimStore()
 

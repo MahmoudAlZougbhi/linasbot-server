@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -61,104 +61,85 @@ def test_admin_channel_privilege_still_tenant_scoped() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unified_chats_tenant_a_never_sees_tenant_b() -> None:
+async def test_unified_chats_tenant_a_never_sees_tenant_b(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from db.session import reset_engine_for_tests
+    from services.persistence.chat_store import ChatTenantRequired, append_message
+
+    monkeypatch.setenv("LINAS_WHATSAPP_ALLOW_SQLITE", "true")
+    monkeypatch.setenv("LINAS_WHATSAPP_DATABASE_URL", f"sqlite:///{tmp_path}/chat.sqlite")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    reset_engine_for_tests()
     svc = live_chat_service
     svc.invalidate_cache()
-    now = utc_now()
-    docs = [
-        _Doc(
-            "conv-a",
-            {
-                "tenant_id": "tenant-a",
-                "user_id": "whatsapp:aaa",
-                "last_message_text": "from A",
-                "last_message_at": now,
-                "conversation_state": svc.STATE_BOT_ACTIVE,
-                "human_takeover_active": False,
-            },
-        ),
-        _Doc(
-            "conv-b",
-            {
-                "tenant_id": "tenant-b",
-                "user_id": "whatsapp:bbb",
-                "last_message_text": "from B",
-                "last_message_at": now,
-                "conversation_state": svc.STATE_BOT_ACTIVE,
-                "human_takeover_active": False,
-            },
-        ),
-        _Doc(
-            "conv-unscoped",
-            {
-                "user_id": "+96170123456",
-                "last_message_text": "no tenant",
-                "last_message_at": now,
-                "conversation_state": svc.STATE_BOT_ACTIVE,
-                "human_takeover_active": False,
-            },
-        ),
-    ]
-    with (
-        patch("services.live_chat.service_unified.get_firestore_db", return_value=MagicMock()),
-        patch.object(svc, "_index_collection", return_value=MagicMock()),
-        patch.object(svc, "_run_blocking_with_timeout", new_callable=AsyncMock, return_value=docs),
-        patch.object(svc, "_compute_index_counters", new_callable=AsyncMock, return_value=svc._empty_counters()),
-        patch.object(svc, "_stream_tenant_index_docs", return_value=docs),
-    ):
-        result_a = await svc.get_unified_chats(tenant_id="tenant-a", page=1, page_size=20, filter_state="all")
-        result_b = await svc.get_unified_chats(tenant_id="tenant-b", page=1, page_size=20, filter_state="all")
-        missing = await svc.get_unified_chats(search="", page=1, page_size=20, filter_state="all")
+    append_message(
+        user_id="whatsapp:aaa",
+        role="user",
+        text_body="from A",
+        conversation_id="conv-a",
+        metadata={"tenant_id": "tenant-a"},
+    )
+    append_message(
+        user_id="whatsapp:bbb",
+        role="user",
+        text_body="from B",
+        conversation_id="conv-b",
+        metadata={"tenant_id": "tenant-b"},
+    )
+    with pytest.raises(ChatTenantRequired):
+        append_message(user_id="+96170123456", role="user", text_body="no tenant", conversation_id="conv-unscoped")
+    result_a = await svc.get_unified_chats(tenant_id="tenant-a", page=1, page_size=20, filter_state="all")
+    result_b = await svc.get_unified_chats(tenant_id="tenant-b", page=1, page_size=20, filter_state="all")
+    missing = await svc.get_unified_chats(search="", page=1, page_size=20, filter_state="all")
+    reset_engine_for_tests()
     ids_a = [row["conversation_id"] for row in result_a.get("chats") or []]
     ids_b = [row["conversation_id"] for row in result_b.get("chats") or []]
     assert ids_a == ["conv-a"]
     assert ids_b == ["conv-b"]
     assert "conv-unscoped" not in ids_a
-    assert "conv-unscoped" not in ids_b
     assert missing.get("chats") == []
     assert missing.get("source") == "missing_tenant"
 
 
 @pytest.mark.asyncio
-async def test_unified_cache_does_not_leak_across_tenants() -> None:
+async def test_unified_cache_does_not_leak_across_tenants(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from db.session import reset_engine_for_tests
+    from services.persistence.chat_store import append_message
+
+    monkeypatch.setenv("LINAS_WHATSAPP_ALLOW_SQLITE", "true")
+    monkeypatch.setenv("LINAS_WHATSAPP_DATABASE_URL", f"sqlite:///{tmp_path}/chat.sqlite")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    reset_engine_for_tests()
     svc = live_chat_service
     svc.invalidate_cache()
-    svc._store_unified_inbox(
-        "tenant-a",
-        chats=[
-            {
-                "conversation_id": "cached-a",
-                "tenant_id": "tenant-a",
-                "user_id": "whatsapp:aaa",
-                "last_message_at": utc_now().isoformat(),
-                "conversation_state": svc.STATE_BOT_ACTIVE,
-            }
-        ],
-        has_more=False,
-        total=1,
-        next_cursor=None,
-        page_size=20,
-        counters=svc._empty_counters(),
+    append_message(
+        user_id="whatsapp:aaa",
+        role="user",
+        text_body="cached",
+        conversation_id="cached-a",
+        metadata={"tenant_id": "tenant-a"},
     )
-    with patch("services.live_chat.service_unified.get_firestore_db", return_value=None):
-        leaked = await svc.get_unified_chats(tenant_id="tenant-b", page=1, page_size=20, filter_state="all")
-        own = await svc.get_unified_chats(tenant_id="tenant-a", page=1, page_size=20, filter_state="all")
+    leaked = await svc.get_unified_chats(tenant_id="tenant-b", page=1, page_size=20, filter_state="all")
+    own = await svc.get_unified_chats(tenant_id="tenant-a", page=1, page_size=20, filter_state="all")
+    reset_engine_for_tests()
     assert leaked.get("chats") == []
     assert [row["conversation_id"] for row in own.get("chats") or []] == ["cached-a"]
 
 
 @pytest.mark.asyncio
-async def test_conversation_details_reject_foreign_tenant() -> None:
+async def test_conversation_details_reject_foreign_tenant(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from db.session import reset_engine_for_tests
+
+    monkeypatch.setenv("LINAS_WHATSAPP_ALLOW_SQLITE", "true")
+    monkeypatch.setenv("LINAS_WHATSAPP_DATABASE_URL", f"sqlite:///{tmp_path}/chat.sqlite")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    reset_engine_for_tests()
     svc = live_chat_service
-    with (
-        patch("services.live_chat.service_details.get_firestore_db", return_value=MagicMock()),
-        patch.object(svc, "thread_visible_to_tenant", new_callable=AsyncMock, return_value=False),
-    ):
-        result = await svc.get_conversation_details(
-            user_id="whatsapp:bbb",
-            conversation_id="conv-b",
-            tenant_id="tenant-a",
-        )
+    result = await svc.get_conversation_details(
+        user_id="whatsapp:bbb",
+        conversation_id="conv-b",
+        tenant_id="tenant-a",
+    )
+    reset_engine_for_tests()
     assert result.get("success") is False
     assert result.get("error") == "Conversation not found"
 

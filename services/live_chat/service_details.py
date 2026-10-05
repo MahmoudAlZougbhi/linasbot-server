@@ -7,18 +7,7 @@ move, not a dead-island delete.
 
 from __future__ import annotations
 
-import asyncio
-import datetime
 from typing import Any
-
-import config
-from services.live_chat.contracts import (
-    utc_now,
-)
-from utils.utils import (
-    get_canonical_user_id_and_phone,
-    get_firestore_db,
-)
 
 
 class LiveChatDetailsMixin:
@@ -58,178 +47,48 @@ class LiveChatDetailsMixin:
             day_window: If before is set and > 0, return only messages in (before - day_window days, before]
         """
         try:
-            from services.live_chat.tenant import normalize_live_chat_tenant_id, row_belongs_to_tenant
+            from services.live_chat.tenant import normalize_live_chat_tenant_id
+            from services.persistence.chat_store import get_thread, list_messages
 
-            db = get_firestore_db()
-            if not db:
-                return {"success": False, "error": "Firestore not initialized"}
             workspace = normalize_live_chat_tenant_id(tenant_id)
-            if workspace:
-                visible = await self.thread_visible_to_tenant(
-                    user_id=user_id, conversation_id=conversation_id, tenant_id=workspace
-                )
-                if not visible:
-                    return {"success": False, "error": "Conversation not found"}
-
-            app_id = "linas-ai-bot-backend"
-            index_coll = self._index_collection(db)
-
-            # Fast path: initial open (no days/before filter) — serve from index in <3s so UI opens in <5s
-            if days <= 0 and not before:
-                try:
-                    index_ref = index_coll.document(conversation_id)
-                    index_doc = await self._get_doc_with_timeout(
-                        index_ref, timeout_seconds=self.INDEX_READ_TIMEOUT_SECONDS
-                    )
-                    if index_doc.exists:
-                        data = index_doc.to_dict() or {}
-                        data.setdefault("conversation_id", conversation_id)
-                        data.setdefault("user_id", user_id)
-                        if workspace and not row_belongs_to_tenant(data, workspace):
-                            return {"success": False, "error": "Conversation not found"}
-                        recent = data.get("recent_messages")
-                        if isinstance(recent, list) and len(recent) > 0:
-                            formatted_recent = [
-                                self._format_single_message(msg) for msg in recent if isinstance(msg, dict)
-                            ]
-                            msg_count = int(data.get("message_count") or 0)
-                            print(
-                                f"[live_chat:conversation] source=index_recent conv={conversation_id} returned={len(formatted_recent)} total={msg_count}"
-                            )
-                            return {
-                                "success": True,
-                                "conversation_id": conversation_id,
-                                "messages": formatted_recent,
-                                "total_messages": msg_count,
-                                "returned_messages": len(formatted_recent),
-                                "has_more": msg_count > len(formatted_recent),
-                                "sentiment": str(data.get("sentiment") or "neutral"),
-                                "status": self._conversation_state_to_status(self._normalize_conversation_state(data)),
-                            }
-                except TimeoutError:
-                    pass
-                except Exception:
-                    pass
-
-            canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
-            candidate_user_ids = [canonical_user_id]
-            if user_id != canonical_user_id:
-                candidate_user_ids.append(user_id)
-
-            conv_doc = None
-            conv_ref = None
-            effective_user_id = canonical_user_id
-            had_timeout = False
-            for candidate_user_id in candidate_user_ids:
-                candidate_ref = (
-                    db.collection("artifacts")
-                    .document(app_id)
-                    .collection("users")
-                    .document(candidate_user_id)
-                    .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
-                    .document(conversation_id)
-                )
-                try:
-                    candidate_doc = await self._get_doc_with_timeout(candidate_ref)
-                except TimeoutError:
-                    had_timeout = True
-                    continue
-                if candidate_doc.exists:
-                    conv_doc = candidate_doc
-                    conv_ref = candidate_ref
-                    effective_user_id = candidate_user_id
-                    break
-                conv_doc = candidate_doc
-
-            if not conv_doc or not conv_doc.exists:
-                if had_timeout:
-                    return {
-                        "success": False,
-                        "error": "Conversation loading timed out. Please retry.",
-                    }
+            if not workspace:
                 return {"success": False, "error": "Conversation not found"}
+            thread = get_thread(workspace, conversation_id)
+            if thread is None:
+                return {"success": False, "error": "Conversation not found"}
+            rows = list_messages(workspace, conversation_id, limit=max_messages, before=before)
+            messages = []
+            for row in reversed(rows):
+                meta = {}
+                try:
+                    import json
 
-            payload = conv_doc.to_dict() or {}
-            raw_messages = list(payload.get("messages") or [])
-            try:
-                stored_count = int(payload.get("message_count") or 0)
-            except (TypeError, ValueError):
-                stored_count = 0
-            total_messages = max(len(raw_messages), stored_count)
-            sentiment = str(payload.get("sentiment") or "neutral")
-            status = self._conversation_state_to_status(self._normalize_conversation_state(payload))
-
-            # Fast path for initial open (days=0, before not set):
-            # avoid scanning/normalizing the full conversation history on every open.
-            if days <= 0 and not before:
-                tail_window = max(max_messages * 4, 100)
-                candidate = raw_messages[-tail_window:] if len(raw_messages) > tail_window else raw_messages
-                messages = self._visible_chat_messages(candidate)
-                messages.sort(key=lambda m: self._parse_timestamp(m.get("timestamp")))
-                messages_before_slice = len(messages)
-                if len(messages) > max_messages:
-                    messages = messages[-max_messages:]
-            else:
-                messages = self._visible_chat_messages(raw_messages)
-                if before and conv_ref is not None:
-                    from utils.conversation_thread_tail import load_messages_before
-
-                    archived = load_messages_before(conv_ref, before, max_messages)
-                    seen = {str(item.get("message_id") or "") for item in messages}
-                    messages.extend(item for item in archived if str(item.get("message_id") or "") not in seen)
-                now = utc_now()
-                cutoff = now - datetime.timedelta(days=days) if days > 0 else None
-                before_dt = self._parse_timestamp(before) if before else None
-                # When before + day_window: only messages in (before_dt - day_window days, before_dt]
-                after_dt = (before_dt - datetime.timedelta(days=day_window)) if (before_dt and day_window > 0) else None
-
-                filtered = []
-                for msg in messages:
-                    ts = self._parse_timestamp(msg.get("timestamp"))
-                    if days > 0 and cutoff is not None and (ts is None or ts < cutoff):
-                        continue
-                    if before_dt and ts >= before_dt:
-                        continue
-                    if after_dt is not None and ts <= after_dt:
-                        continue
-                    filtered.append(msg)
-                messages = filtered
-                messages.sort(key=lambda m: self._parse_timestamp(m.get("timestamp")))
-                messages_before_slice = len(messages)
-                if len(messages) > max_messages:
-                    messages = messages[-max_messages:]
-
-            formatted_messages = [self._format_single_message(msg) for msg in messages]
-
-            # WhatsApp-style: has_more = more older messages available (for Load More)
-            has_more = messages_before_slice > max_messages if before else total_messages > max_messages
-
-            out = {
+                    meta = json.loads(row.get("metadata_json") or "{}")
+                except Exception:
+                    meta = {}
+                messages.append(
+                    self._format_single_message(
+                        {
+                            "message_id": row["message_id"],
+                            "role": row["role"],
+                            "text": row["body"],
+                            "timestamp": row["sent_at"],
+                            "metadata": meta if isinstance(meta, dict) else {},
+                        }
+                    )
+                )
+            total = int(thread.get("message_count") or len(messages))
+            state = str(thread.get("conversation_state") or "")
+            return {
                 "success": True,
                 "conversation_id": conversation_id,
-                "messages": formatted_messages,
-                "total_messages": total_messages,
-                "returned_messages": len(formatted_messages),
-                "has_more": has_more,
-                "sentiment": sentiment,
-                "status": status,
+                "messages": messages,
+                "total_messages": total,
+                "returned_messages": len(messages),
+                "has_more": total > len(messages),
+                "sentiment": "neutral",
+                "status": self._conversation_state_to_status(state or "bot_active"),
             }
-            print(
-                f"[live_chat:conversation] source=full_document conv={conversation_id} total_raw={total_messages} returned={len(formatted_messages)}"
-            )
-            #  read-path backfill (disabled by default to avoid write amplification)
-            if (
-                days <= 0
-                and not before
-                and self.ENABLE_INDEX_BACKFILL_ON_READ
-                and self._should_schedule_read_path_refresh(conversation_id)
-            ):
-                asyncio.create_task(self._refresh_index_for_conversation(effective_user_id, conversation_id))
-            return out
-
         except Exception as e:
-            print(f"❌ Error getting conversation details: {e}")
-            import traceback
-
-            traceback.print_exc()
+            print(f"Error getting conversation details: {e}")
             return {"success": False, "error": str(e)}
