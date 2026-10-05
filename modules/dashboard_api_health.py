@@ -236,12 +236,14 @@ async def ready() -> Any:
 
     # Queue / Redis readiness — hard-fail only when LINAS_REQUIRE_REDIS (or durable queues) is on.
     try:
+        import asyncio
+
         from services.queues.config import redis_required, redis_url
         from services.queues.job_queue import job_queue
 
         required = redis_required()
         configured = bool(redis_url())
-        health = job_queue.health()
+        health = await asyncio.wait_for(asyncio.to_thread(job_queue.readiness), timeout=2.0)
         if required:
             queue_ok = configured and bool(health.get("ok")) and bool(health.get("production_ready"))
         else:

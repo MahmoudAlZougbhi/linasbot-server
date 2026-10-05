@@ -59,6 +59,7 @@ def test_meta_deletion_reconcile_runs_per_node_without_cluster_singleton_lock() 
     source = Path("modules/meta_data_deletion_reconcile_job.py").read_text(encoding="utf-8")
     scheduler_source = Path("modules/event_handlers_scheduler.py").read_text(encoding="utf-8")
     assert "try_acquire_job_lock" not in source
+    assert "asyncio.to_thread" in source
     assert 'id="meta_data_deletion_reconcile"' in scheduler_source
 
 

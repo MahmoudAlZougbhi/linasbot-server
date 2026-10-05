@@ -37,7 +37,8 @@ class _Query:
     def __init__(self, documents: list[_Document]) -> None:
         self.documents = documents
 
-    def stream(self) -> list[_Snapshot]:
+    def stream(self, *args: object, **kwargs: object) -> list[_Snapshot]:
+        del args, kwargs
         return [_Snapshot(document) for document in self.documents if document.exists]
 
 

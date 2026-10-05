@@ -90,7 +90,7 @@ def _shared_active_records(
 
     query = collection.where(filter=FieldFilter("state", "in", sorted(ACTIVE_STATES)))
     primary: dict[str, InboundEventRecord] = {}
-    for snapshot in query.stream():
+    for snapshot in query.stream(timeout=8, retry=None):
         record = _record_from_firestore_snapshot(snapshot)
         if record is not None:
             primary[record.event_id] = record
