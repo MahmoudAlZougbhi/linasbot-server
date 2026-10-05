@@ -68,6 +68,10 @@ export default function OwnerUsers() {
   const [nextCursor, setNextCursor] = useState('');
   const [loadingMore, setLoadingMore] = useState(false);
 
+  /**
+   * @param {{ subscribers?: OwnerSubscriber[]; next_cursor?: string }} data
+   * @param {boolean} append
+   */
   const applyPage = (data, append) => {
     const rows = data.subscribers || [];
     setSubscribers((current) => (append ? mergeSubscribers(current, rows) : rows));
