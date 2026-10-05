@@ -79,4 +79,10 @@ export const ownerApi = {
   /** @param {string} tenantId @param {string} operationId */
   messageFlow: (tenantId, operationId) =>
     request(`/api/platform/message-flows/${encodeURIComponent(tenantId)}/${encodeURIComponent(operationId)}`),
+  /**
+   * @param {'customer' | 'copilot'} brain
+   * @param {{ tenant_id: string, message: string, history: { role: string, text: string }[] }} body
+   */
+  brainTurn: (brain, body) =>
+    request(`/api/platform/brains/${brain}`, { method: 'POST', body: JSON.stringify(body) }),
 };

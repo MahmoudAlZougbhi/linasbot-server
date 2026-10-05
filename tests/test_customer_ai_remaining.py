@@ -234,7 +234,7 @@ def test_material_change_invalidates_confirmation() -> None:
     assert (
         confirmation_valid(
             message_id="m1",
-            customer_text="yes",
+            customer_text="يلا سجل الموعد",
             expected_revision="draft-1",
             current_revision="draft-1",
         )

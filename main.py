@@ -103,6 +103,7 @@ import modules.mobile_app_version_api  # noqa: E402, F401
 import modules.mobile_products_api  # noqa: E402, F401
 import modules.mobile_stt_api  # noqa: E402, F401
 import modules.platform_api  # noqa: E402, F401
+import modules.platform_brain_lab_api  # noqa: E402, F401
 import modules.platform_message_api  # noqa: E402, F401
 import modules.platform_search_api  # noqa: E402, F401
 import modules.products_media_api  # noqa: E402, F401

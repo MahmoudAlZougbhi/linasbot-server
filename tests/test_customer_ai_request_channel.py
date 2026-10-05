@@ -6,7 +6,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from services.brain.actions.pending import attach_confirmation, try_confirm_pending
+from services.brain.actions.pending import attach_confirmation, submit_pending_request
 from services.brain.actions.requests import persist_request, request_source_channel
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
 from services.brain.contracts.turn import CustomerTurn
@@ -190,10 +190,9 @@ async def test_yes_from_web_chat_persists_web_source(req_db, monkeypatch: pytest
             event_ids=["m2"],
         )
     )
-    result = await try_confirm_pending(second, "yes", "web_chat")
-    assert result is not None
-    assert result.extra["confirmed"] is True
-    backend_id = result.extra["receipts"][0]["backend_id"]
+    result = await submit_pending_request(second, {"customer_text": "يلا سجل الموعد", "task_id": "laser"})
+    assert result["ok"] is True
+    backend_id = result["data"]["receipts"][0]["backend_id"]
     with whatsapp_session(require=False) as session:
         row = CustomerRequestsService(session).repo.get_for_tenant(tenant_id="shop-web", request_id=backend_id)
         assert row is not None
@@ -215,11 +214,12 @@ async def test_empty_turn_channel_binds_live_channel(req_db, monkeypatch: pytest
             actions=[ActionProposal(task_id="t", action_type="start_request", fields={"request_type": "APPOINTMENT"})]
         ),
     )
-    second = hydrate_turn_state(CustomerTurn(tenant_id="shop-ig", conversation_id="c-ig", event_ids=["m2"]))
-    result = await try_confirm_pending(second, "yes", "instagram_dm")
-    assert result is not None
-    assert result.extra["confirmed"] is True
-    backend_id = result.extra["receipts"][0]["backend_id"]
+    second = hydrate_turn_state(
+        CustomerTurn(tenant_id="shop-ig", conversation_id="c-ig", channel="instagram_dm", event_ids=["m2"])
+    )
+    result = await submit_pending_request(second, {"customer_text": "يلا سجل الموعد", "task_id": "t"})
+    assert result["ok"] is True
+    backend_id = result["data"]["receipts"][0]["backend_id"]
     with whatsapp_session(require=False) as session:
         row = CustomerRequestsService(session).repo.get_for_tenant(tenant_id="shop-ig", request_id=backend_id)
         assert row is not None
@@ -250,8 +250,6 @@ async def test_yes_from_tiktok_explains_unsupported_channel(monkeypatch: pytest.
     second = hydrate_turn_state(
         CustomerTurn(tenant_id="shop-tt", conversation_id="ttconv_12345678", channel="tiktok", event_ids=["m2"])
     )
-    result = await try_confirm_pending(second, "yes", "tiktok")
-    assert result is not None
-    assert result.extra["confirmed"] is False
-    assert result.stop_reason == "failed_closed"
-    assert not result.envelope.messages
+    result = await submit_pending_request(second, {"customer_text": "يلا سجل الموعد", "task_id": "t"})
+    assert result["ok"] is False
+    assert result["error"] == "invalid_source_channel"

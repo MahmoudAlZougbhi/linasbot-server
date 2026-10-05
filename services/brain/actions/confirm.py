@@ -1,14 +1,6 @@
-"""Revision-bound confirmation. Model confirmed=true is not enough."""
+"""Revision binding for a draft Terra already staged. Wording is not a gate."""
 
 from __future__ import annotations
-
-import re
-
-_YES = re.compile(
-    r"^\s*(yes|yep|yeah|ok|okay|sure|confirm|confirmed|نعم|اي|أي|تمام|موافق|اوك)\s*[.!]?\s*$",
-    re.I,
-)
-
 
 MATERIAL_FIELDS = (
     "service",
@@ -20,10 +12,6 @@ MATERIAL_FIELDS = (
     "variant",
     "recipient",
 )
-
-
-def looks_like_confirmation(text: str) -> bool:
-    return bool(_YES.match((text or "").strip()))
 
 
 def _norm(value: object) -> str:
@@ -59,4 +47,5 @@ def confirmation_valid(
         return False
     if expected_revision and expected_revision != (current_revision or ""):
         return False
-    return looks_like_confirmation(customer_text)
+    _ = customer_text
+    return True

@@ -88,6 +88,7 @@ async def run_dm_after_gates(turn: CustomerTurn, *, message: str, channel: str) 
             },
         ),
     )
+    # Retired assent gate. Always None so Terra sees the inbound and decides submit.
     confirmed = await try_confirm_pending(turn, message, channel)
     if confirmed is not None:
         return confirmed.model_copy(
