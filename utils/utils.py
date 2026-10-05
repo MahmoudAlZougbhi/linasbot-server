@@ -12,7 +12,7 @@ from utils.utils_context import (
     get_last_bot_message_from_conversation,
 )
 from utils.utils_conversation_save import save_conversation_message_to_firestore
-from utils.utils_firestore import get_firestore_db, initialize_firestore
+from utils.document_db import get_document_db, initialize_document_db
 from utils.utils_identity import (
     _clean_phone_for_lookup,
     _is_placeholder_phone,
@@ -102,12 +102,12 @@ __all__ = [
     "get_conversation_context_for_gpt",
     "get_conversation_history_from_firestore",
     "get_conversation_last_ai_response_at",
-    "get_firestore_db",
+    "get_document_db",
     "get_last_bot_message_for_gpt_context",
     "get_last_bot_message_from_conversation",
     "get_openai_tools_schema",
     "get_user_state_from_firestore",
-    "initialize_firestore",
+    "initialize_document_db",
     "is_post_takeover_escalation_cooldown",
     "iter_conversation_parent_user_ids_for_firestore",
     "merge_conversation_user_id_variants",

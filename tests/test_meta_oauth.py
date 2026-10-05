@@ -259,7 +259,7 @@ async def test_deletion_blocks_facebook_before_subscription_or_staging(
 ) -> None:
     import utils.utils
 
-    db = utils.utils.get_firestore_db()
+    db = utils.utils.get_document_db()
     assert isinstance(db, _FakeFirestore)
     subject_key = meta_deletion_subject_hmac(
         app_key=APP_A_KEY,

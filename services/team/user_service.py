@@ -14,10 +14,10 @@ import uuid
 from datetime import datetime
 from typing import Any, cast
 
-from google.cloud.firestore_v1.base_query import FieldFilter
+from services.persistence.query_api import FieldFilter
 
 from services.team.user_service_auth import UserServiceAuthMixin
-from utils.utils import get_firestore_db
+from utils.utils import get_document_db
 
 
 class AuthBackendUnavailableError(RuntimeError):
@@ -56,11 +56,11 @@ class UserService(UserServiceAuthMixin):
         """Lazy-load Firestore database connection"""
         if self._db is None:
             t0 = time.monotonic()
-            print("[auth:user_service] db property: first access, calling get_firestore_db t=0.00s", flush=True)
-            self._db = get_firestore_db()
+            print("[auth:user_service] db property: first access, calling get_document_db t=0.00s", flush=True)
+            self._db = get_document_db()
             elapsed = time.monotonic() - t0
             print(
-                f"[auth:user_service] db property: get_firestore_db returned in {elapsed:.3f}s (db is None: {self._db is None})",
+                f"[auth:user_service] db property: get_document_db returned in {elapsed:.3f}s (db is None: {self._db is None})",
                 flush=True,
             )
         return self._db

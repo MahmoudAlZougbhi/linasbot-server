@@ -24,11 +24,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from google.cloud import firestore
+from services.persistence import query_api as firestore
 
 import config
 from services.live_chat.service import live_chat_service
-from utils.utils import get_firestore_db
+from utils.utils import get_document_db
 
 
 async def _count_index(db: Any) -> int:
@@ -99,7 +99,7 @@ async def run_backfill(
     resume_from: str | None,
     checkpoint_file: Path | None,
 ) -> dict[str, Any]:
-    db = get_firestore_db()
+    db = get_document_db()
     if not db:
         raise RuntimeError("Firestore not initialized")
 

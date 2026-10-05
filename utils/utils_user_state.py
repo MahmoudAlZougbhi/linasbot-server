@@ -6,10 +6,9 @@ import asyncio
 import datetime
 import logging
 
-from firebase_admin import firestore
-
 import config
-from utils.utils_firestore import get_firestore_db
+from services.persistence import query_api as firestore
+from utils.document_db import get_document_db
 
 _log = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ async def save_user_name_to_firestore(user_id: str, name: str) -> None:
         print(f"🧪 TESTING MODE: Skipping Firebase name save for user {user_id}")
         return
 
-    db = get_firestore_db()
+    db = get_document_db()
     if not db:
         print("⚠️ Firestore not initialized. Skipping user name save.")
         return
@@ -72,7 +71,7 @@ async def get_user_state_from_firestore(user_id: str) -> dict:
         Returns empty dict if user not found or error occurs.
     """
 
-    db = get_firestore_db()
+    db = get_document_db()
     if not db:
         print("⚠️ Firestore not initialized. Cannot retrieve user state.")
         return {}

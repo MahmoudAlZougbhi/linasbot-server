@@ -57,7 +57,7 @@ def _stub_platform_dependencies(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
         "PERSISTENT_MAINTENANCE_DRAIN_FILE",
         str(tmp_path / "absent-maintenance"),
     )
-    monkeypatch.setattr("utils.utils.get_firestore_db", lambda: object())
+    monkeypatch.setattr("utils.utils.get_document_db", lambda: object())
     settings = tmp_path / "settings"
     settings.mkdir()
     monkeypatch.setattr("storage.persistent_storage.SETTINGS_DIR", settings)

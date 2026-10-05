@@ -158,5 +158,19 @@ def test_inbound_ledger_round_trip(sqlite_db: str) -> None:
     assert [row["event_id"] for row in active] == ["e1"]
 
 
+def test_document_store_keeps_tenants_apart(sqlite_db: str) -> None:
+    del sqlite_db
+    from services.persistence.document_store import DocumentClient
+    from services.persistence.query_api import FieldFilter
+
+    client = DocumentClient()
+    users = client.collection("artifacts").document("linas-ai-bot-backend").collection("dashboard_users")
+    users.document("a").set({"email": "a@example.com", "tenantId": "alpha", "role": "admin"})
+    users.document("b").set({"email": "b@example.com", "tenantId": "beta", "role": "admin"})
+    found = list(users.where(filter=FieldFilter("tenantId", "==", "alpha")).stream())
+    assert [snap.id for snap in found] == ["a"]
+    assert users.document("a").get().to_dict()["email"] == "a@example.com"
+
+
 def test_env_is_isolated(sqlite_db: str) -> None:
     assert os.environ["LINAS_WHATSAPP_DATABASE_URL"].endswith(sqlite_db)

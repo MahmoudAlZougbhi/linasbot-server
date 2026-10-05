@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from modules.api_security import PERMISSION_KEYS
-from utils.utils import get_firestore_db
+from utils.utils import get_document_db
 
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9_-]{1,39}$")
 _RESERVED = frozenset({"admin", "operator", "viewer", "platform_owner", "owner"})
@@ -58,7 +58,7 @@ class TenantCustomRolesStore:
     @property
     def db(self) -> Any:
         if self._db is None:
-            self._db = get_firestore_db()
+            self._db = get_document_db()
         return self._db
 
     def _doc(self, tenant_id: str) -> Any:

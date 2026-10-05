@@ -71,7 +71,7 @@ async def test_image_send_reports_failure_when_adapter_fails() -> None:
         ),
         patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("+96170123456", "+96170123456")),
-        patch("utils.utils.get_firestore_db", return_value=None),
+        patch("utils.utils.get_document_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
         patch(
             "utils.utils.upload_base64_to_firebase_storage", new_callable=AsyncMock, return_value="https://cdn/x.jpg"

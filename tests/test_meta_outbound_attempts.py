@@ -78,7 +78,7 @@ async def test_google_transactional_primary_send_is_accepted_once(
     db = _GoogleLikeFirestore()
     _install_google_transactional_fake(monkeypatch)
     monkeypatch.setenv("ENVIRONMENT", "development")
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
     calls = 0
 
     async def send() -> dict[str, Any]:

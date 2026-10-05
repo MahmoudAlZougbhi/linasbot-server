@@ -100,7 +100,7 @@ def _send_patches(*extra: object):
         ),
         patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("web:visitor-1", None)),
-        patch("utils.utils.get_firestore_db", return_value=None),
+        patch("utils.utils.get_document_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
         patch(
             "services.requests.manual_mode.activate_manual_mode",
@@ -186,7 +186,7 @@ async def test_unknown_channel_text_does_not_call_whatsapp() -> None:
         ),
         patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("unlabeled", None)),
-        patch("utils.utils.get_firestore_db", return_value=None),
+        patch("utils.utils.get_document_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
         patch(
             "services.requests.manual_mode.activate_manual_mode",

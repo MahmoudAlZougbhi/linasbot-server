@@ -97,7 +97,7 @@ async def test_waiting_queue_empty_index_never_calls_source_scan():
             new_callable=AsyncMock,
             side_effect=AssertionError("source scan must not be called"),
         ),
-        patch("services.live_chat.service_history_api.get_firestore_db", return_value=MagicMock()),
+        patch("services.live_chat.service_history_api.get_document_db", return_value=MagicMock()),
         patch("services.live_chat.service_history_api.asyncio.to_thread", new_callable=AsyncMock, return_value=[]),
     ):
         queue = await svc.get_waiting_queue()

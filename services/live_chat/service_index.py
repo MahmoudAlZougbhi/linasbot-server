@@ -4,7 +4,7 @@ import asyncio
 import datetime
 from typing import Any
 
-from google.cloud import firestore
+from services.persistence import query_api as firestore
 
 import config
 from services.live_chat.channel import coerce_live_chat_user_id, resolve_live_chat_channel
@@ -19,7 +19,7 @@ from services.live_chat.tenant import (
 )
 from utils.utils import (
     get_canonical_user_id_and_phone,
-    get_firestore_db,
+    get_document_db,
 )
 
 
@@ -176,7 +176,7 @@ class LiveChatIndexMixin:
         tid = normalize_live_chat_tenant_id(tenant_id)
         if not tid or not str(conversation_id or "").strip():
             return False
-        db = get_firestore_db()
+        db = get_document_db()
         if not db:
             return False
         try:

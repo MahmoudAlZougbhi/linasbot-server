@@ -47,7 +47,7 @@ def _subject_key() -> str:
 def _patch_db(monkeypatch: pytest.MonkeyPatch, db: Any) -> None:
     import utils.utils
 
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
 
 
 def _set_request(

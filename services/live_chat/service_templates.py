@@ -13,7 +13,7 @@ from services.live_chat.service_common import (
 from services.live_chat.tenant import normalize_live_chat_tenant_id, row_belongs_to_tenant
 from utils.phone_utils import phone_match_key
 from utils.utils import (
-    get_firestore_db,
+    get_document_db,
 )
 
 
@@ -121,7 +121,7 @@ class LiveChatTemplatesMixin:
                 "message": "No send log entries for this template in the selected date range.",
             }
 
-        db = get_firestore_db()
+        db = get_document_db()
         if not db:
             return {
                 "success": False,

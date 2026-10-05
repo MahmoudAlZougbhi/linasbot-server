@@ -7,7 +7,7 @@ import datetime
 import logging
 from typing import Any
 
-from firebase_admin import firestore
+from services.persistence import query_api as firestore
 
 import config
 from services.live_chat.contracts import (
@@ -20,7 +20,7 @@ from services.live_chat.contracts import (
     parse_timestamp_utc,
     utc_now,
 )
-from utils.utils_firestore import get_firestore_db
+from utils.document_db import get_document_db
 from utils.utils_identity import get_canonical_user_id_and_phone
 from utils.utils_takeover import (
     firestore_post_release_waiting_blocked,
@@ -390,7 +390,7 @@ async def _resolve_latest_conversation_id(conversations_collection_for_user: Any
 
 async def _latest_smart_ai_across_conversations(canonical_user_id: str, within_hours: float = 72) -> dict | None:
     """Newest ai message with metadata.source == smart_message across all threads for this user."""
-    db = get_firestore_db()
+    db = get_document_db()
     if not db or not canonical_user_id:
         return None
     app_id = "linas-ai-bot-backend"

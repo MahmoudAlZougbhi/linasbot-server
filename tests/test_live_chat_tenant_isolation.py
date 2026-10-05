@@ -159,5 +159,5 @@ async def test_build_index_entry_requires_proven_tenant_for_upsert() -> None:
     assert entry["tenant_id"] == ""
     phone = svc._build_index_entry("+96170123456", {"conversation_id": "wa-1", "customer_info": {}}, [])
     assert phone.get("tenant_id") == ""
-    with patch("services.live_chat.service_rebuild.get_firestore_db", return_value=MagicMock()):
+    with patch("services.live_chat.service_rebuild.get_document_db", return_value=MagicMock()):
         await svc._upsert_index_entry(phone)

@@ -114,12 +114,12 @@ def _list_local_completed_undelivered(*, older_than_seconds: float, now: float) 
 
 
 def _list_shared_completed_undelivered(*, older_than_seconds: float, now: float) -> list[InboundEventRecord]:
-    from google.cloud.firestore_v1.base_query import FieldFilter
+    from services.persistence.query_api import FieldFilter
 
     from services.scale.inbound_event_store import _firestore_inbound_collection, _record_from_firestore_snapshot
-    from utils.utils import get_firestore_db
+    from utils.utils import get_document_db
 
-    db = get_firestore_db()
+    db = get_document_db()
     if db is None:
         return []
     collection = _firestore_inbound_collection(db)

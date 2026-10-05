@@ -55,7 +55,7 @@ async def test_handle_message_does_not_send_canned_session_greeting(
         "services.brain.inbound.text_handlers_message.maybe_send_takeover_autoreply",
         AsyncMock(return_value=False),
     )
-    monkeypatch.setattr("services.brain.inbound.text_handlers_message.get_firestore_db", lambda: None)
+    monkeypatch.setattr("services.brain.inbound.text_handlers_message.get_document_db", lambda: None)
     monkeypatch.setattr(
         "services.brain.inbound.text_handlers_message.sentiment_service.analyze_sentiment",
         lambda **_: {"sentiment": "neutral"},
@@ -137,7 +137,7 @@ async def test_handle_message_does_not_log_phone_or_message_preview(
         "services.brain.inbound.text_handlers_message.maybe_send_takeover_autoreply",
         AsyncMock(return_value=False),
     )
-    monkeypatch.setattr("services.brain.inbound.text_handlers_message.get_firestore_db", lambda: None)
+    monkeypatch.setattr("services.brain.inbound.text_handlers_message.get_document_db", lambda: None)
     monkeypatch.setattr(
         "services.brain.inbound.text_handlers_message.get_canonical_user_id_and_phone",
         lambda uid, phone: (uid, phone),

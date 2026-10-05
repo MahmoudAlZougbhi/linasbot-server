@@ -11,7 +11,7 @@ from services.live_chat.contracts import (
 )
 from utils.utils import (
     get_canonical_user_id_and_phone,
-    get_firestore_db,
+    get_document_db,
     set_human_takeover_status,
 )
 
@@ -45,7 +45,7 @@ class LiveChatLifecycleMixin:
         """
         try:
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
-            db = get_firestore_db()
+            db = get_document_db()
             if not db:
                 return {"success": False, "error": "Firestore not initialized"}
 
@@ -153,7 +153,7 @@ class LiveChatLifecycleMixin:
         """
         try:
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
-            db = get_firestore_db()
+            db = get_document_db()
             if not db:
                 return {"success": False, "error": "Firestore not initialized"}
 
@@ -197,7 +197,7 @@ class LiveChatLifecycleMixin:
         Auto-archive conversations older than 6 hours
         """
         try:
-            db = get_firestore_db()
+            db = get_document_db()
             if not db:
                 return
 
@@ -245,7 +245,7 @@ class LiveChatLifecycleMixin:
         """Operator takes over a conversation (server-authoritative AI pause)."""
         try:
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
-            db = get_firestore_db()
+            db = get_document_db()
             resolved_user_id = canonical_user_id
             conv_ref = None
             if db:
@@ -326,7 +326,7 @@ class LiveChatLifecycleMixin:
     async def release_conversation(self, conversation_id: str, user_id: str) -> dict[str, Any]:
         """Release conversation back to bot"""
         try:
-            db = get_firestore_db()
+            db = get_document_db()
             conv_ref = None
             resolved_user_id = user_id
             if db:
@@ -414,7 +414,7 @@ class LiveChatLifecycleMixin:
         """
         try:
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
-            db = get_firestore_db()
+            db = get_document_db()
             if not db:
                 return {"success": False, "error": "Firestore not initialized"}
 

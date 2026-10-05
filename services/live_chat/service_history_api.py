@@ -14,7 +14,7 @@ from services.live_chat.service_common import (
 )
 from services.live_chat.tenant import normalize_live_chat_tenant_id, row_belongs_to_tenant
 from utils.utils import (
-    get_firestore_db,
+    get_document_db,
 )
 
 
@@ -116,7 +116,7 @@ class LiveChatHistoryApiMixin:
     ) -> dict[str, Any]:
         """Canonical conversation list for a single user."""
         try:
-            db = get_firestore_db()
+            db = get_document_db()
             if not db:
                 return {"success": False, "error": "Firestore not initialized"}
 
@@ -213,7 +213,7 @@ class LiveChatHistoryApiMixin:
     ) -> dict[str, Any]:
         """Canonical paginated message history for one conversation."""
         try:
-            db = get_firestore_db()
+            db = get_document_db()
             if not db:
                 return {"success": False, "error": "Firestore not initialized", "messages": []}
 
@@ -290,7 +290,7 @@ class LiveChatHistoryApiMixin:
         Get all conversations for a specific client (for expanded view)
         """
         try:
-            db = get_firestore_db()
+            db = get_document_db()
             if not db:
                 return []
 
@@ -352,7 +352,7 @@ class LiveChatHistoryApiMixin:
             if isinstance(slot, dict) and self._is_cache_fresh(slot.get("cached_at")):
                 return list(slot.get("items") or [])
 
-            db = get_firestore_db()
+            db = get_document_db()
             if not db:
                 return []
 

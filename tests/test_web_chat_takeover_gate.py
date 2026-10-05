@@ -20,7 +20,7 @@ def _widget() -> SimpleNamespace:
 
 @pytest.mark.asyncio
 async def test_firestore_error_allows_ai() -> None:
-    with patch("utils.utils.get_firestore_db", side_effect=RuntimeError("fs down")):
+    with patch("utils.utils.get_document_db", side_effect=RuntimeError("fs down")):
         state = await read_web_chat_takeover_state(user_id="web:v1", conversation_id="web:linas:v1")
     assert state.active is False
 

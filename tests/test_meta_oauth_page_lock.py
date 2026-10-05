@@ -201,7 +201,7 @@ def _registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistr
     monkeypatch.setenv("META_WEBHOOK_VERIFY_TOKEN", "verify-a-tests-thirty-two-characters-long")
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v24.0")
     db = _FakeFirestore()
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
 
     async def _enable_channel_defaults(**_kwargs: Any) -> None:
         return None

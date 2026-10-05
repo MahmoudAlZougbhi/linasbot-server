@@ -231,9 +231,9 @@ def _deletion_node_config() -> tuple[str, tuple[str, ...]]:
 
 def _firestore_db() -> Any:
     try:
-        from utils.utils import get_firestore_db
+        from utils.utils import get_document_db
 
-        db = get_firestore_db()
+        db = get_document_db()
     except Exception as exc:
         raise MetaDeletionStoreUnavailableError("Meta deletion store is unavailable") from exc
     if db is None:

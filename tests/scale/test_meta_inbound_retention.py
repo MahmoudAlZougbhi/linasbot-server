@@ -148,7 +148,7 @@ def test_authorization_redaction_preserves_active_records_and_blocks_completion(
     unrelated_path = _write(root, _ledger(event_id="ibe_other", state="completed", binding_id="binding-other"))
     firestore_active = _Snapshot(_ledger(event_id="ibe_fs_active", state="accepted", binding_id="binding-target"))
     monkeypatch.setattr(event_store, "_store_dir", lambda: root)
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: _Firestore([firestore_active]))
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: _Firestore([firestore_active]))
 
     stats = redact_inbound_events_for_bindings(
         {"binding-target"},
@@ -180,7 +180,7 @@ def test_authorization_redaction_updates_matching_terminal_rows_in_both_stores(
     monkeypatch.setattr(event_store, "_store_dir", lambda: root)
     monkeypatch.setattr(
         utils.utils,
-        "get_firestore_db",
+        "get_document_db",
         lambda: _Firestore([firestore_matching, firestore_unrelated]),
     )
 

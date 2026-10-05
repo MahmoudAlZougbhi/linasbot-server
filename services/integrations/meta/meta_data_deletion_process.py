@@ -192,7 +192,7 @@ def process_pending_meta_deletion_requests(
                 if getattr(snapshot, "exists", False):
                     snapshots.append(snapshot)
         else:
-            from google.cloud.firestore_v1.base_query import FieldFilter
+            from services.persistence.query_api import FieldFilter
 
             # Completed and no_data rows are history. One node reads a limited page.
             snapshots = list(

@@ -148,8 +148,8 @@ def ha_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, _Fi
     claims_root = tmp_path / "logs"
     db = _Firestore()
     monkeypatch.setattr(event_store, "_store_dir", lambda: root)
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
-    monkeypatch.setattr(turn_claims, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
+    monkeypatch.setattr(turn_claims, "get_document_db", lambda: db)
     monkeypatch.setattr(durable_claims, "LOGS_DIR", claims_root)
     monkeypatch.setattr(durable_claims, "ensure_dirs", lambda: claims_root.mkdir(parents=True, exist_ok=True))
     monkeypatch.setattr(
@@ -240,7 +240,7 @@ def test_missing_shared_inbound_store_is_fail_closed_in_production(
     import utils.utils
 
     monkeypatch.setenv("ENVIRONMENT", "production")
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: None)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: None)
 
     with pytest.raises(InboundEventStoreUnavailableError, match="unavailable in production"):
         list_active_inbound_events(older_than_seconds=0.0)

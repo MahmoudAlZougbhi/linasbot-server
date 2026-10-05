@@ -56,7 +56,7 @@ class LiveChatOperatorMixin:
         try:
             from utils.utils import (
                 get_canonical_user_id_and_phone,
-                get_firestore_db,
+                get_document_db,
                 save_conversation_message_to_firestore,
             )
 
@@ -67,7 +67,7 @@ class LiveChatOperatorMixin:
                 message_type,
                 message,
             )
-            db = get_firestore_db()
+            db = get_document_db()
             acquired, lock_ref = await _try_acquire_operator_send_idempotency(db, self.APP_ID, fingerprint)
             if not acquired:
                 return {

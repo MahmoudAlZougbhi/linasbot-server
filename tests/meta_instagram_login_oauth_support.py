@@ -59,7 +59,7 @@ def registry(tmp_path: Path, instagram_env: None, monkeypatch: pytest.MonkeyPatc
     import utils.utils
 
     db = _FakeFirestore()
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
     return MetaAppRegistry(
         store_path=tmp_path / "registry.json",
         audit_path=tmp_path / "audit.jsonl",

@@ -24,9 +24,9 @@ def _waiting_notice(lang: str = "ar") -> str:
 async def read_web_chat_takeover_state(*, user_id: str, conversation_id: str) -> WebChatTakeoverState:
     """Firestore human_takeover_active. Errors allow AI (WhatsApp parity)."""
     try:
-        from utils.utils import get_canonical_user_id_and_phone, get_firestore_db
+        from utils.utils import get_canonical_user_id_and_phone, get_document_db
 
-        db = get_firestore_db()
+        db = get_document_db()
         if not db:
             return WebChatTakeoverState(active=False, operator_id=None)
         from services.brain.inbound.text_handlers_message_takeover import resolve_conversation_doc_ref

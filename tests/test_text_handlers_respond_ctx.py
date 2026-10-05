@@ -14,7 +14,7 @@ def test_bootstrap_injects_language_detection_service() -> None:
     ctx: dict = {}
     bootstrap_process_respond_ctx(ctx)
     assert ctx.get("language_detection_service") is not None
-    assert callable(ctx.get("get_firestore_db"))
+    assert callable(ctx.get("get_document_db"))
     assert callable(ctx.get("log_interaction"))
 
 

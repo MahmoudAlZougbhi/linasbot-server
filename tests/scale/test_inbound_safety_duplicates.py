@@ -23,7 +23,7 @@ def shared_ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _FakeFires
     root = tmp_path / "inbound"
     root.mkdir()
     monkeypatch.setattr(event_store, "_store_dir", lambda: root)
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
     monkeypatch.setenv("ENVIRONMENT", "production")
     return db
 
