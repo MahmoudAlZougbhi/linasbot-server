@@ -21,8 +21,7 @@ def read_env() -> dict[str, str]:
     values: dict[str, str] = {}
     for path in (
         Path("/opt/linasbot/.env"),
-        Path("/opt/linasbot/linaslaserbot-2.7.22/.env"),
-    ):
+        ):
         if not path.is_file():
             continue
         for line in path.read_text(encoding="utf-8", errors="strict").splitlines():

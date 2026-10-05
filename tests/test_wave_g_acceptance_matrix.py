@@ -22,6 +22,20 @@ GONE = (
     "dashboard/src/pages/owner/OwnerLab.jsx",
     "modules/mobile_services_api.py",
     "services/service_catalog",
+    "services/brain/agent/greeting_turn.py",
+    "services/brain/agent/tool_decide.py",
+    "services/brain/planner/openai_plan.py",
+    "services/brain/faq_semantic.py",
+    "services/brain/actions/resource_turn.py",
+    "services/brain/published_labels.py",
+    "services/brain/memory",
+    "services/owner_copilot/assent.py",
+    "modules/webhook_handlers_process.py",
+    "modules/webhook_handlers_parse.py",
+    "modules/webhook_handlers_photo.py",
+    "modules/webhook_handlers_voice.py",
+    "modules/webhook_handlers_dedupe.py",
+    "services/brain/inbound/voice_handlers.py",
 )
 
 DOMAIN = (

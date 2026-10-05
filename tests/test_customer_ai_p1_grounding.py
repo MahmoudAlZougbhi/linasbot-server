@@ -191,7 +191,6 @@ async def test_visual_disabled_skipped_when_image_already_described(monkeypatch:
         )
 
     monkeypatch.setattr(pipeline, "try_confirm_pending", _no_confirm)
-    monkeypatch.setattr("services.brain.agent.greeting_turn.identity_greeting_result", _no_greet)
     monkeypatch.setattr("services.brain.agent.loop.run_agentic_dm_path", _agent)
     monkeypatch.setattr(pipeline, "_exact_faq_result", lambda *_a, **_k: None)
     monkeypatch.setattr(pipeline, "_semantic_faq_result", _no_greet)

@@ -84,12 +84,10 @@ def test_pick_winner_threshold_and_ambiguous() -> None:
 
 
 def test_live_faq_path_has_no_soft_lexical_gate() -> None:
-    src = (ROOT / "services/brain/faq_semantic.py").read_text(encoding="utf-8")
-    assert "title_score" not in src
-    assert "0.35" not in src
-    assert "62.0" not in src
+    assert not (ROOT / "services/brain/faq_semantic.py").exists()
     live = (ROOT / "services/brain/faq_turn.py").read_text(encoding="utf-8")
     assert "faq_embed_result" in live
+    assert "title_score" not in live
 
 
 @pytest.mark.asyncio

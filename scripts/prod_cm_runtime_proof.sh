@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 
 def load_env() -> None:
-    for env_path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")):
+    for env_path in (Path("/opt/linasbot/.env"),):
         if not env_path.is_file():
             continue
         for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -44,7 +44,9 @@ from services.ai_setup.constants import (
 )
 from services.ai_setup.version_store import load_published_content, read_published_pointer
 
-tenant_id = "linas"
+tenant_id = os.environ.get("TENANT_ID", "").strip()
+if not tenant_id:
+    raise SystemExit("[runtime-proof] TENANT_ID is required")
 _ = read_published_pointer(tenant_id)
 loaded_pointer, sections = load_published_content(tenant_id)
 ai = sections.get("ai_basics") or {}
@@ -75,11 +77,11 @@ an = str(report["assistant_name"] or "").lower()
 cn = str(report["clinic_name"] or "").lower()
 if "marwa" in an or "marwa" in cn:
     report["failures"].append("marwa_identity")
-if "linas" not in an and "lina" not in an:
-    report["failures"].append("assistant_name_not_linas")
+if not an and not cn:
+    report["failures"].append("missing_identity")
 
 # Prefer an authoritative catalog label for the price probe when structured prices exist.
-price_probe = "How much is underarm laser?"
+price_probe = "What is a typical price?"
 try:
     from services.ai_setup.pricing.section import normalize_prices_section, section_catalog_items
 
@@ -95,9 +97,9 @@ except Exception as exc:
     report["price_probe_source_error"] = type(exc).__name__
 
 probes = [
-    ("business", "What laser services do you offer?"),
-    ("branch", "Where is your Beirut branch?"),
-    ("service", "Do you offer laser hair removal?"),
+    ("business", "What services do you offer?"),
+    ("branch", "Where are you located?"),
+    ("service", "Which services are available?"),
     ("price", price_probe),
     ("handoff", "I want to book an appointment with a human."),
     ("off_day", "Are you open today?"),
@@ -130,10 +132,7 @@ async def run_probes() -> None:
             "mentions_marwa": "marwa" in low,
             "mentions_montymobile": "montymobile" in low or "monty mobile" in low,
             "has_wa_me": "wa.me/" in low,
-            "has_expected_phone_tail": any(
-                tail in re.sub(r"\D", "", str(text or ""))
-                for tail in ("78847527", "70707354", "71534928", "71226082")
-            ),
+            "has_expected_phone_tail": bool(re.search(r"\+\d{8,15}", str(text or ""))),
         }
         if cv != loaded_pointer.content_version_id:
             report["failures"].append(f"probe_version_mismatch:{kind}")

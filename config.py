@@ -6,10 +6,6 @@ import os
 from collections import defaultdict, deque
 from typing import Any
 
-from storage.persistent_storage import (
-    ensure_dirs,
-)
-
 # --- API Keys and Tokens ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Customer Brain retrieval (Voyage). Do not reuse OPENAI_API_KEY for embeddings.
@@ -215,24 +211,3 @@ WELCOME_MESSAGES = {
     "fr": _welcome_message("fr", "Bonjour ! Comment puis-je vous aider ?"),
     "franco": _welcome_message("franco", "مرحباً! كيف يمكنني مساعدتك؟"),
 }
-
-# --- Bot Knowledge Base (Loaded from files) ---
-PRICE_LIST = ""
-BOT_STYLE_GUIDE = ""
-CORE_KNOWLEDGE_BASE = ""
-SYSTEM_PROMPT_TEMPLATE = ""
-
-
-def load_bot_assets() -> None:
-    """SaaS is published-CM only — clinic file corpus is never injected."""
-    global PRICE_LIST, BOT_STYLE_GUIDE, CORE_KNOWLEDGE_BASE, SYSTEM_PROMPT_TEMPLATE
-
-    ensure_dirs()
-    PRICE_LIST = ""
-    BOT_STYLE_GUIDE = ""
-    CORE_KNOWLEDGE_BASE = ""
-    SYSTEM_PROMPT_TEMPLATE = ""
-
-
-# --- Initialize Bot Assets on startup ---
-load_bot_assets()

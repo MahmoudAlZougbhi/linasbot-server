@@ -46,13 +46,14 @@ def test_workflow_has_no_asset_selectors_token_transport_or_source_transport() -
     parsed = yaml.safe_load(source)
     inputs = parsed[True]["workflow_dispatch"]["inputs"]
 
-    assert set(inputs) == {"PHASE", "CONFIRM"}
+    assert set(inputs) == {"PHASE", "CONFIRM", "tenant_id"}
     assert inputs["PHASE"] == {
-        "description": "Validate the fixed Meta asset or bind it to tenant linas",
+        "description": "Validate the fixed Meta asset or bind it to TENANT_ID",
         "required": True,
         "type": "choice",
         "options": ["DRY_RUN", "BIND"],
     }
+    assert inputs["tenant_id"]["required"] is True
     assert inputs["CONFIRM"]["required"] is True
     assert inputs["CONFIRM"]["type"] == "string"
     assert "META_WHATSAPP_APP_REVIEW_BIND_TOKEN" not in source
@@ -74,7 +75,8 @@ def test_script_is_guarded_fixed_asset_dry_run_first_and_redacted() -> None:
     source = SCRIPT.read_text(encoding="utf-8")
 
     assert "linas_require_production_mutation_guard" in source
-    assert 'TENANT_ID = "linas"' in source
+    assert 'TENANT_ID = "linas"' not in source
+    assert 'os.environ.get("TENANT_ID"' in source
     assert 'WABA_ID = "1409769574350248"' in source
     assert 'PHONE_NUMBER_ID = "1322897994230591"' in source
     assert 'EXPECTED_APP_ID = "2963733803971681"' in source

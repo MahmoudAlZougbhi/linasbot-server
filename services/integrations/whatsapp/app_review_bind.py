@@ -1,4 +1,4 @@
-"""Temporary Meta App Review WhatsApp bind for tenant linas.
+"""Temporary Meta App Review WhatsApp bind for the tenant in TENANT_ID.
 
 Creates a real PostgreSQL whatsapp_connections row (no fake UI). Credentials are
 sealed with the existing AES-GCM path. Public availability is never flipped.
@@ -17,7 +17,6 @@ from db.session import whatsapp_session
 from services.integrations.meta.meta_app_registry import APP_A_KEY, get_meta_app_configs
 from services.integrations.whatsapp.app_review_bind_helpers import (
     APP_REVIEW_SOURCE,
-    APP_REVIEW_TENANT_ID,
     AppReviewBindError,
     _assert_numeric_ids,
     _assert_tenant,
@@ -81,7 +80,7 @@ class AppReviewBindResult:
         }
 
 
-def status_app_review_bind(*, tenant_id: str = APP_REVIEW_TENANT_ID) -> dict[str, Any]:
+def status_app_review_bind(*, tenant_id: str = "") -> dict[str, Any]:
     tid = _assert_tenant(tenant_id)
     flags = get_whatsapp_cloud_flags()
     with whatsapp_session() as session:
@@ -381,7 +380,7 @@ async def bind_app_review_test_number(
 
 def unbind_app_review_test_number(
     *,
-    tenant_id: str = APP_REVIEW_TENANT_ID,
+    tenant_id: str = "",
     actor_user_id: str,
     connection_id: str | None = None,
     idempotency_key: str | None = None,
@@ -394,7 +393,7 @@ def unbind_app_review_test_number(
         if connection_id:
             target = repo.get_tenant_connection(tenant_id=tid, connection_id=connection_id)
             if target is None:
-                raise AppReviewBindError("connection_not_found", "connection not found for tenant linas")
+                raise AppReviewBindError("connection_not_found", "connection not found for tenant")
             if not _is_app_review_connection(target):
                 raise AppReviewBindError("not_app_review_bind", "refusing to unbind a non app-review connection")
             if target.lifecycle_status == "revoked":

@@ -17,7 +17,6 @@ from services.integrations.whatsapp.graph_client import (
 
 # Constants mirrored from app_review_bind for helper use.
 APP_REVIEW_SOURCE = "meta_app_review_test"
-APP_REVIEW_TENANT_ID = "linas"
 TOKEN_ENV = "META_WHATSAPP_APP_REVIEW_BIND_TOKEN"
 ALLOWED_WABA_ENV = "META_WHATSAPP_APP_REVIEW_ALLOWED_WABA_IDS"
 
@@ -64,14 +63,21 @@ def _allowed_waba_ids() -> frozenset[str]:
     return frozenset(values)
 
 
+def app_review_tenant_id() -> str:
+    return (os.getenv("APP_REVIEW_TENANT_ID") or os.getenv("TENANT_ID") or "").strip()
+
+
 def _assert_tenant(tenant_id: str) -> str:
+    expected = app_review_tenant_id()
     tid = str(tenant_id or "").strip()
-    if tid != APP_REVIEW_TENANT_ID:
+    if not tid and not expected:
+        raise AppReviewBindError("tenant_required", "TENANT_ID is required")
+    if expected and tid and tid != expected:
         raise AppReviewBindError(
             "tenant_forbidden",
-            f"temporary bind is only allowed for tenant {APP_REVIEW_TENANT_ID}",
+            f"temporary bind is only allowed for tenant {expected}",
         )
-    return tid
+    return tid or expected
 
 
 def _assert_numeric_ids(*, waba_id: str, phone_number_id: str) -> tuple[str, str]:

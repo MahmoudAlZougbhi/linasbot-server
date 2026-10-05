@@ -37,10 +37,6 @@ def test_default_agentic_plan_searches_cm_together() -> None:
 async def test_agentic_dm_does_not_call_plan_turn(monkeypatch: pytest.MonkeyPatch) -> None:
     called = {"plan": 0}
 
-    async def boom(*_a, **_k):
-        called["plan"] += 1
-        raise AssertionError("plan_turn must not run on DM agentic")
-
     async def found_retrieve(*_a, **_k):
         return (
             EvidenceBundle(
@@ -69,8 +65,6 @@ async def test_agentic_dm_does_not_call_plan_turn(monkeypatch: pytest.MonkeyPatc
             extra=dict(turn.extra or {}),
         )
 
-    monkeypatch.setattr("services.brain.planner.openai_plan.plan_turn", boom)
-    monkeypatch.setattr("services.brain.planner.openai_plan.plan_with_openai", boom)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", found_retrieve)
     monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", fake_generate)
     monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)

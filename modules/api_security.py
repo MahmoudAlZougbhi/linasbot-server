@@ -17,6 +17,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from modules.api_permission_catalog import PERMISSION_KEYS, SYSTEM_ROLE_PERMISSIONS
 from services.auth.auth_rate_limits import auth_rate_limit_rules, check_rate_limit, client_ip
 from services.dashboard.dashboard_session_service import (
     CSRF_COOKIE_NAME,
@@ -38,6 +39,8 @@ __all__ = (
     "client_ip",
     "get_request_session",
     "is_keep_tenant_api_path",
+    "PERMISSION_KEYS",
+    "SYSTEM_ROLE_PERMISSIONS",
     "is_platform_owner",
     "is_production_env",
     "is_public_api",
@@ -50,89 +53,6 @@ __all__ = (
     "resolve_permissions",
     "user_has_permission",
 )
-
-# Frontend-aligned permission keys
-PERMISSION_KEYS = {
-    "dashboard",
-    "liveChat",
-    "training",
-    "testing",
-    "analytics",
-    "smartMessaging",
-    "settings",
-    "userManagement",
-    "contentManagers",
-    "contentPublish",
-    "activityFlow",
-    "requests",
-    "requestsManage",
-    "requestsNotify",
-    "requestsManualChat",
-    "requestsSensitive",
-    "comments",
-    "commentsManage",
-    "channelWhatsapp",
-    "channelInstagram",
-    "channelFacebook",
-    "channelTiktok",
-    "channelWeb",
-}
-
-SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
-    "admin": {k: True for k in PERMISSION_KEYS},
-    "owner": {k: True for k in PERMISSION_KEYS},
-    "platform_owner": {k: True for k in PERMISSION_KEYS},
-    "operator": {
-        "dashboard": True,
-        "liveChat": True,
-        "training": False,
-        "testing": False,
-        "analytics": True,
-        "smartMessaging": True,
-        "settings": False,
-        "userManagement": False,
-        "contentManagers": False,
-        "contentPublish": False,
-        "activityFlow": True,
-        "requests": True,
-        "requestsManage": True,
-        "requestsNotify": True,
-        "requestsManualChat": True,
-        "requestsSensitive": False,
-        "comments": True,
-        "commentsManage": True,
-        "channelWhatsapp": True,
-        "channelInstagram": True,
-        "channelFacebook": True,
-        "channelTiktok": True,
-        "channelWeb": True,
-    },
-    "viewer": {
-        "dashboard": True,
-        "liveChat": False,
-        "training": False,
-        "testing": False,
-        "analytics": True,
-        "smartMessaging": False,
-        "settings": False,
-        "userManagement": False,
-        "contentManagers": False,
-        "contentPublish": False,
-        "activityFlow": True,
-        "requests": False,
-        "requestsManage": False,
-        "requestsNotify": False,
-        "requestsManualChat": False,
-        "requestsSensitive": False,
-        "comments": False,
-        "commentsManage": False,
-        "channelWhatsapp": True,
-        "channelInstagram": True,
-        "channelFacebook": True,
-        "channelTiktok": True,
-        "channelWeb": True,
-    },
-}
 
 
 def is_platform_owner(session: SessionRecord) -> bool:
@@ -247,8 +167,6 @@ def required_permission_for(method: str, path: str) -> str | None:
         return "requests"
     if p.startswith("/api/owner-notifications"):
         return "liveChat"
-    if p.startswith("/api/smart-messaging"):
-        return "smartMessaging"
     if p.startswith("/api/settings"):
         return "settings"
     if p.startswith("/api/training-files") or p.startswith("/api/instructions"):
@@ -269,8 +187,6 @@ def required_permission_for(method: str, path: str) -> str | None:
         return "liveChat"
     if p.startswith("/api/local-qa"):
         return "training"
-    if p.startswith("/api/test") or p.startswith("/api/switch-provider") or p.startswith("/api/debug"):
-        return "testing"
     if p.startswith("/api/media"):
         return "liveChat"
     if p == "/api/health":

@@ -23,7 +23,7 @@ import shutil
 from pathlib import Path
 
 def load_env() -> None:
-    for env_path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")):
+    for env_path in (Path("/opt/linasbot/.env"),):
         if not env_path.is_file():
             continue
         for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -48,17 +48,7 @@ from services.brain.inbound.text_handlers_respond import _handle_published_cm_ru
 
 PROOF_TENANT = "cutover_proof_saas"
 LEAK_TERMS = [
-    "marwa",
-    "linas laser",
-    "laser hair",
-    "tattoo",
-    "beirut",
-    "antelias",
-    "khaled",
-    "78847527",
-    "70707354",
-    "71534928",
-    "71226082",
+    "founder-clinic",
 ]
 
 data_root = Path(os.environ["LINASBOT_DATA_ROOT"])
@@ -98,7 +88,7 @@ _overwrite(
         ai_role="cafe concierge",
         business_purpose="Help customers of Green Field Cafe with menu and location questions.",
         short_introduction="Hi, I'm Nova Concierge for Green Field Cafe.",
-        advanced_instructions="Never invent other brands. Never mention Linas, Marwa, laser, tattoo, Beirut, or Antelias.",
+        advanced_instructions="Never invent other brands or locations.",
     ).model_dump(mode="json"),
 )
 _overwrite(
@@ -127,7 +117,7 @@ _overwrite(
 )
 contact = HandoffContact(
     id="cafe_whatsapp",
-    phone_e164="+96171111111",
+    phone_e164="+15555550100",
     label="Cafe WhatsApp",
     gender="any",
     branch_id="downtown",

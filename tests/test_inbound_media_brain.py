@@ -180,33 +180,15 @@ def test_inbound_bytes_store_resource_id(tmp_path, monkeypatch) -> None:
 def test_whatsapp_photo_and_voice_stamp_inbound_media() -> None:
     from pathlib import Path
 
-    from modules import webhook_handlers_photo
-    from services.brain.inbound import voice_handlers
     from services.brain.inbound.text_handlers_respond_phase2 import text_handlers_respond_phase2
 
     assert not Path("services/brain/inbound/photo_handlers.py").exists()
-    webhook = getsource(webhook_handlers_photo)
-    assert "store_inbound_image_base64" in webhook
-    assert "wrap_tracked_send" in webhook
-    assert "run_reserved_customer_turn" in webhook
-    assert 'user_data["_source_message_id"] = str(image_id)' in webhook
-    assert "user_image_base64=base64_image" in webhook
-    voice = getsource(voice_handlers.handle_voice_message)
-    assert 'mark_inbound_attachment(user_data, "audio", transcript=user_text_input)' in voice
-    assert "record_pending_provider" in voice
-    assert 'category="stt"' in voice
-    assert "0.006" not in voice
-    assert "whisper_cost" not in voice
+    assert not Path("modules/webhook_handlers_photo.py").exists()
+    assert not Path("services/brain/inbound/voice_handlers.py").exists()
     phase2 = getsource(text_handlers_respond_phase2)
     assert "has_image=bool(user_image_base64)" in phase2
     assert "settle_after_outbound" in phase2
     assert "settle_reserved_credits" in phase2
-    photo = getsource(webhook_handlers_photo.handle_photo_message_whatsapp_with_adapter)
-    assert "run_reserved_customer_turn" in photo
-    assert "_process_and_respond" in photo
-    assert "wrap_tracked_send" in photo
-    assert "store_inbound_image_base64" in photo
-    assert "get_bot_photo_analysis_from_gpt" not in getsource(webhook_handlers_photo)
     from services.integrations.whatsapp import ai_bridge
 
     wa = getsource(ai_bridge.maybe_generate_and_send_ai_reply)

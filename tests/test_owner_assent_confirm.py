@@ -1,62 +1,12 @@
-"""Natural owner assent for pending Draft approvals (ok / موافق / yes)."""
+"""Owner confirm is the Approve bar. Keyword assent helpers stay deleted."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 
-from services.owner_copilot.assent import (
-    pending_confirm_from_messages,
-    resolve_pending_confirm_token,
-)
-from services.owner_copilot.cm_approval import CmPatchProposalStore
-
-
-def test_pending_confirm_from_messages_prefers_latest_token() -> None:
-    messages = [
-        {
-            "role": "assistant",
-            "content": "proposal ready",
-            "tool_calls": [
-                {
-                    "ok": True,
-                    "name": "propose_cm_patch",
-                    "requires_confirmation": True,
-                    "confirmation_token": "approve_cm_patch:old",
-                    "data": {},
-                }
-            ],
-        },
-        {
-            "role": "assistant",
-            "content": "newer proposal",
-            "tool_calls": [
-                {
-                    "ok": True,
-                    "name": "propose_cm_patch",
-                    "requires_confirmation": True,
-                    "confirmation_token": "approve_cm_patch:new",
-                    "data": {},
-                }
-            ],
-        },
-    ]
-    assert pending_confirm_from_messages(messages) == "approve_cm_patch:new"
-
-
-def test_resolve_pending_confirm_from_cm_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    store = CmPatchProposalStore(root=tmp_path / "props")
-    monkeypatch.setattr("services.owner_copilot.cm_approval.cm_patch_proposal_store", store)
-    prop = store.create(
-        tenant_id="t1",
-        user_id="u1",
-        section="ai_basics",
-        patch={"welcome": "hi"},
-        preview={"section": "ai_basics", "changed_keys": ["welcome"]},
-    )
-    token = resolve_pending_confirm_token(tenant_id="t1", user_id="u1", messages=[])
-    assert token == f"approve_cm_patch:{prop.id}"
+def test_assent_module_is_gone() -> None:
+    assert not Path("services/owner_copilot/assent.py").exists()
 
 
 def test_system_prompt_forbids_keyword_assent() -> None:

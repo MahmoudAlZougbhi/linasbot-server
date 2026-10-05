@@ -76,6 +76,7 @@ def test_registry_seed_activates_only_the_facebook_page_binding(
 ) -> None:
     monkeypatch.setenv("META_PAGE_ACCESS_TOKEN", "page-token")
     monkeypatch.setenv("META_CREDENTIAL_ENCRYPTION_KEY", "k" * 32)
+    monkeypatch.setenv("TENANT_ID", "demo")
     app = SimpleNamespace(
         enabled=True,
         app_id=APP_A_EXPECTED_ID,
@@ -173,6 +174,7 @@ def test_registry_seed_rejects_legacy_instagram_grants_on_page_token(
 ) -> None:
     monkeypatch.setenv("META_PAGE_ACCESS_TOKEN", "page-token")
     monkeypatch.setenv("META_CREDENTIAL_ENCRYPTION_KEY", "k" * 32)
+    monkeypatch.setenv("TENANT_ID", "demo")
     app = SimpleNamespace(
         enabled=True,
         app_id=APP_A_EXPECTED_ID,
@@ -220,6 +222,7 @@ def test_registry_seed_rejects_page_token_missing_comment_permission(
 ) -> None:
     monkeypatch.setenv("META_PAGE_ACCESS_TOKEN", "page-token")
     monkeypatch.setenv("META_CREDENTIAL_ENCRYPTION_KEY", "k" * 32)
+    monkeypatch.setenv("TENANT_ID", "demo")
     app = SimpleNamespace(
         enabled=True,
         app_id=APP_A_EXPECTED_ID,
@@ -267,6 +270,7 @@ def test_registry_seed_rejects_foreign_granular_page_target(
 ) -> None:
     monkeypatch.setenv("META_PAGE_ACCESS_TOKEN", "page-token")
     monkeypatch.setenv("META_CREDENTIAL_ENCRYPTION_KEY", "k" * 32)
+    monkeypatch.setenv("TENANT_ID", "demo")
     app = SimpleNamespace(
         enabled=True,
         app_id=APP_A_EXPECTED_ID,

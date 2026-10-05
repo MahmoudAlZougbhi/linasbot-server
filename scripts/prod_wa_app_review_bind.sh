@@ -35,7 +35,10 @@ from services.integrations.whatsapp.app_review_bind import (
 from services.integrations.whatsapp.config import WHATSAPP_REQUIRED_SCOPES, get_whatsapp_cloud_flags
 from services.integrations.whatsapp.repository import ACTIVE_LIFECYCLES, WhatsAppCloudRepository
 
-TENANT_ID = "linas"
+TENANT_ID = os.environ.get("TENANT_ID", "").strip()
+if not TENANT_ID:
+    print("[wa-app-review-bind] TENANT_ID is required", file=sys.stderr)
+    raise SystemExit(2)
 WABA_ID = "1409769574350248"
 PHONE_NUMBER_ID = "1322897994230591"
 EXPECTED_APP_ID = "2963733803971681"

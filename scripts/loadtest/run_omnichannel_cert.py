@@ -50,11 +50,11 @@ def _build_events(scale: float, minutes: float) -> list[NormalizedInbound]:
             events.append(
                 NormalizedInbound(
                     provider_event_id=pid,
-                    tenant_id="linas" if i % 17 else f"t{i % 5}",
+                    tenant_id="demo" if i % 17 else f"t{i % 5}",
                     account_id=f"acct-{i % 11}",
                     channel=channel,  # type: ignore[arg-type]
                     surface=surface,  # type: ignore[arg-type]
-                    conversation_key=f"linas:{channel}:{i % 40}",
+                    conversation_key=f"demo:{channel}:{i % 40}",
                     provider_timestamp=time.time(),
                     payload_hash=pid,
                     payload={"text": "hi", "i": i},

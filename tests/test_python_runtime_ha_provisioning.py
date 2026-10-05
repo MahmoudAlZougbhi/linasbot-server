@@ -148,8 +148,8 @@ def test_control_plane_archive_imports_bootstrap_dependencies(tmp_path: Path) ->
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert module._nested.NESTED_RUNTIME_NAME == "linaslaserbot-2.7.22"
-    assert module._nested_evidence.NESTED_RUNTIME_NAME == "linaslaserbot-2.7.22"
+    assert module._nested.NESTED_RUNTIME_NAME == "nested-runtime"
+    assert module._nested_evidence.NESTED_RUNTIME_NAME == "nested-runtime"
     assert Path(module._nested_evidence.__file__) == Path(module._nested._evidence.__file__)
     assert module._lb_contract.LB_NETWORK_STACK == "DUALSTACK"
     absent = module._nested_evidence.portable_content_identity({"schema": 1, "present": False})
@@ -206,7 +206,7 @@ def test_bootstrap_nested_runtime_modules_load_from_closed_control_tree_only(tmp
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert not sentinel.exists()
-    assert module._nested_evidence.NESTED_RUNTIME_NAME == "linaslaserbot-2.7.22"
+    assert module._nested_evidence.NESTED_RUNTIME_NAME == "nested-runtime"
     assert module._nested._safety.READ_CHUNK == 1024 * 1024
 
 

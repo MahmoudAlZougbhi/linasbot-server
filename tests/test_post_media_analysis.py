@@ -171,28 +171,10 @@ def test_comment_what_is_not_catalog_photo_request() -> None:
     assert "resource_request" not in {task.type for task in plan_message(collapsed).tasks}
 
 
-def test_resource_turn_skips_comment_surface() -> None:
-    import asyncio
+def test_resource_turn_module_is_gone() -> None:
+    from pathlib import Path
 
-    from services.brain.actions.resource_turn import resource_request_result
-    from services.brain.contracts.plan import PlannerPlan, PlannerTask, TaskSpan
-
-    turn = CustomerTurn(tenant_id="t1", surface="comment", invocation_kind="comment")
-    plan = PlannerPlan(
-        tasks=[
-            PlannerTask(
-                id="t_media",
-                type="resource_request",
-                span=TaskSpan(text="What", end=4),
-                source_families=["knowledge"],
-            )
-        ]
-    )
-
-    async def _run() -> object:
-        return await resource_request_result(turn, message="What", channel="instagram_comment", plan=plan)
-
-    assert asyncio.run(_run()) is None
+    assert not Path("services/brain/actions/resource_turn.py").exists()
 
 
 def test_analyzed_inbound_image_does_not_use_visual_disabled_gate() -> None:

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Wave 6 helper: seed/publish Linas tenant CM from existing draft defaults (local/rehearsal).
+"""Publish one tenant's CM drafts (local/rehearsal).
 
-Does NOT deploy or flip production. Run on a machine with LINASBOT_DATA_ROOT pointed at
-the target data root after reviewing drafts. Production cutover requires Mahmoud approval.
+Does NOT deploy or flip production. Pass --tenant-id. Production cutover requires approval.
 """
 
 from __future__ import annotations
@@ -14,8 +13,8 @@ import sys
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(description="Publish Linas CM content (rehearsal/local).")
-    parser.add_argument("--tenant-id", default="linas")
+    parser = argparse.ArgumentParser(description="Publish one tenant's CM content (rehearsal/local).")
+    parser.add_argument("--tenant-id", required=True)
     parser.add_argument("--published-by", default="wave6_migration")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

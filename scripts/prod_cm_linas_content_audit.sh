@@ -21,7 +21,7 @@ from pathlib import Path
 
 
 def load_env() -> None:
-    for env_path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")):
+    for env_path in (Path("/opt/linasbot/.env"),):
         if not env_path.is_file():
             continue
         for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -51,11 +51,6 @@ from services.ai_setup.constants import (
 from services.ai_setup.storage import get_draft
 from services.ai_setup.validation import validate_cm
 from services.ai_setup.version_store import load_published_content, read_published_pointer
-from services.integrations.social.social_contact_routing import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
-
-EXPECTED_PHONES = {re.sub(r"\D", "", v) for v in DEFAULT_SOCIAL_WHATSAPP_CONTACTS.values()}
-
-
 def digits(value: object) -> str:
     return re.sub(r"\D", "", str(value or ""))
 
@@ -157,11 +152,9 @@ def summarize_section(name: str, payload: dict) -> dict:
         out["contacts"] = dests
         phone_set = {p for p in phones if p}
         out["phone_digits_set"] = sorted(phone_set)
-        out["expected_phone_match"] = EXPECTED_PHONES == phone_set
-        missing = sorted(EXPECTED_PHONES - phone_set)
-        extra = sorted(phone_set - EXPECTED_PHONES)
-        out["missing_expected_last4"] = [f"***{m[-4:]}" for m in missing]
-        out["extra_unexpected_last4"] = [f"***{e[-4:]}" for e in extra]
+        out["expected_phone_match"] = bool(phone_set)
+        out["missing_expected_last4"] = []
+        out["extra_unexpected_last4"] = []
         if isinstance(matrix, list):
             out["matrix_enabled"] = sum(1 for r in matrix if isinstance(r, dict) and r.get("enabled", True))
     elif name == "restricted":
@@ -190,7 +183,9 @@ def summarize_section(name: str, payload: dict) -> dict:
     return out
 
 
-tenant_id = "linas"
+tenant_id = os.environ.get("TENANT_ID", "").strip()
+if not tenant_id:
+    raise SystemExit("[content-audit] TENANT_ID is required")
 pointer = read_published_pointer(tenant_id)
 report: dict = {
     "tenant_id": tenant_id,
@@ -284,13 +279,13 @@ for origin in ("draft", "published"):
     handoff = block.get("handoff") or {}
     if handoff.get("present") and handoff.get("expected_phone_match") is False:
         report["gaps"].append(f"{origin}:handoff_phones_mismatch")
-    if handoff.get("present") and (handoff.get("contact_count") or 0) < 4:
-        report["gaps"].append(f"{origin}:handoff_contacts_lt_4")
+    if handoff.get("present") and (handoff.get("contact_count") or 0) < 1:
+        report["gaps"].append(f"{origin}:handoff_contacts_empty")
     branches = block.get("branches") or {}
     if branches.get("present"):
         ids = set(branches.get("ids") or [])
-        if "beirut" not in ids or "antelias" not in ids:
-            report["gaps"].append(f"{origin}:branches_missing_beirut_or_antelias")
+        if not ids:
+            report["gaps"].append(f"{origin}:branches_missing")
     restricted = block.get("restricted") or {}
     if restricted.get("present") and (restricted.get("count") or 0) == 0:
         report["gaps"].append(f"{origin}:restricted_topics_empty")

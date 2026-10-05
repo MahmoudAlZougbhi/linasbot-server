@@ -1781,18 +1781,23 @@ def _assert_live_units(live: dict[str, dict[str, Any]]) -> None:
 
 
 def _repo_bytecode_manifest() -> list[dict[str, Any]]:
-    excluded_roots = {".git", ".venv", "venv", "linaslaserbot-2.7.22"}
+    excluded_roots = {".git", ".venv", "venv"}
     manifest: list[dict[str, Any]] = []
     total_size = 0
     for current, dirnames, filenames in os.walk(REPO_DIR, topdown=True, followlinks=False):
         directory = Path(current)
         relative_directory = directory.relative_to(REPO_DIR)
-        if relative_directory.parts[:1] == ("linaslaserbot-2.7.22",):
-            dirnames[:] = []
-            filenames.clear()
-            continue
         if not relative_directory.parts:
-            dirnames[:] = [name for name in dirnames if name not in excluded_roots]
+            nested_name = _nested_evidence.NESTED_RUNTIME_NAME
+            kept: list[str] = []
+            for name in dirnames:
+                if name in excluded_roots or name == nested_name:
+                    continue
+                child = directory / name
+                if (child / "main.py").is_file() and (child / "venv").exists():
+                    continue
+                kept.append(name)
+            dirnames[:] = kept
         if relative_directory.parts[:2] in {("dashboard", "node_modules"), ("dashboard", "build")}:
             dirnames[:] = []
             continue

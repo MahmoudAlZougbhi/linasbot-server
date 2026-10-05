@@ -1,32 +1,27 @@
-"""LOC split: webhook_handlers dedupe/parse/process/media under 500 lines; public exports preserved."""
+"""Legacy /webhook stays a thin verify+ignore route. The process chain stays deleted."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-
-def _line_count(rel: str) -> int:
-    return len(Path(rel).read_text(encoding="utf-8").splitlines())
+ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_webhook_handlers_modules_under_500_lines() -> None:
-    assert _line_count("modules/webhook_handlers.py") < 500
-    assert _line_count("modules/webhook_handlers_dedupe.py") < 500
-    assert _line_count("modules/webhook_handlers_parse.py") < 500
-    assert _line_count("modules/webhook_handlers_process.py") < 500
-    assert _line_count("modules/webhook_handlers_photo.py") < 500
-    assert _line_count("modules/webhook_handlers_voice.py") < 500
-
-
-def test_webhook_handlers_preserves_public_api() -> None:
-    from modules.webhook_handlers_dedupe import _webhook_text_body_fingerprint
-
-    webhook = Path("modules/webhook_handlers.py").read_text(encoding="utf-8")
-    assert "from modules.webhook_handlers_dedupe import" in webhook
-    assert "from modules.webhook_handlers_process import" in webhook
-    assert "process_parsed_message" in webhook
-    assert "handle_message_whatsapp_with_adapter" in webhook
+def test_webhook_museum_modules_are_gone() -> None:
+    for rel in (
+        "modules/webhook_handlers_dedupe.py",
+        "modules/webhook_handlers_parse.py",
+        "modules/webhook_handlers_process.py",
+        "modules/webhook_handlers_photo.py",
+        "modules/webhook_handlers_voice.py",
+        "services/brain/inbound/voice_handlers.py",
+    ):
+        assert not (ROOT / rel).exists(), rel
+    webhook = (ROOT / "modules/webhook_handlers.py").read_text(encoding="utf-8")
+    assert len(webhook.splitlines()) < 400
+    assert "process_parsed_message" not in webhook
     assert "whatsapp_inbound_ai_disabled" in webhook
-    assert callable(_webhook_text_body_fingerprint)
-    p = {"type": "text", "content": {"text": "hi"}, "phone_number": "+96171112222", "user_id": "+96171112222"}
-    assert _webhook_text_body_fingerprint(p).startswith("bodyfp_")
+    assert '@app.get("/webhook")' in webhook
+    assert '@app.post("/webhook")' in webhook
+    cloud = (ROOT / "modules/whatsapp_cloud_webhook.py").read_text(encoding="utf-8")
+    assert "/webhook/whatsapp-cloud" in cloud

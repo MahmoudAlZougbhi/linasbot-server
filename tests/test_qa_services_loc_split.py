@@ -14,7 +14,7 @@ def _line_count(rel: str) -> int:
 
 def test_canonical_faq_modules_under_500_lines() -> None:
     assert _line_count("services/brain/faq_exact.py") < 500
-    assert _line_count("services/brain/faq_semantic.py") < 500
+    assert not Path("services/brain/faq_semantic.py").exists()
     assert _line_count("services/ai_setup/faq_invalidation.py") < 500
     assert not Path("services/faq/local_qa_service.py").exists()
     assert not Path("services/faq/local_qa_service_match.py").exists()

@@ -116,7 +116,3 @@ def hydrate_request_snapshot(turn: CustomerTurn) -> dict[str, Any]:
     extra = {"request_state": snapshot}
     turn.extra = {**dict(turn.extra or {}), **extra}
     return extra
-
-
-async def run_terra_request_round(*_a: Any, **_k: Any) -> tuple[list[dict[str, Any]], list[str], int, dict[str, Any]]:
-    raise RuntimeError("dead path: customer inbound uses run_terra_turn")

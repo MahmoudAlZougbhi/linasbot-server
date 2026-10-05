@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from services.billing.membership.expense_journal import list_events, reset_expenses_for_tests
@@ -38,9 +40,10 @@ def test_classify_semantic_faq_is_zero_unit() -> None:
             decision="deterministic",
             messages=[OutboundMessage(destination="dm", text="Hours are 9-5.")],
         ),
-        extra={"path": "faq_semantic", "faq_id": "hours"},
+        extra={"path": "faq_exact", "faq_id": "hours"},
     )
     assert classify_result(_turn(), result) == "faq_only"
+    assert "faq_semantic" not in Path("services/brain/billing.py").read_text(encoding="utf-8")
     embed = TurnResult(
         stop_reason="ok",
         envelope=FinalReplyEnvelope(

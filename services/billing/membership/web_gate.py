@@ -13,7 +13,7 @@ class WebPlanDenied(PermissionError):
 def assert_web_plan_allowed(tenant_id: str) -> None:
     """Fail closed for paid tenants without the Web Chat plan flag.
 
-    Subscription-exempt tenants (default: ``linas``) are allowed.
+    Subscription-exempt tenants (``SUBSCRIPTION_EXEMPT_TENANT_IDS``) are allowed.
     Catalog features are SoT; stored entitlement.features may be stale.
     """
 

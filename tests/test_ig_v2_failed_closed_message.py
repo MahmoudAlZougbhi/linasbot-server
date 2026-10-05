@@ -47,52 +47,15 @@ def test_greeting_without_owner_opener_does_not_emit_canned_copy() -> None:
     assert decision.text != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "ar")
 
 
-@pytest.mark.asyncio
-async def test_identity_greeting_is_terra_path_not_catalog_retrieve(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.brain.agent.greeting_turn import identity_greeting_result
-    from services.brain.contracts.turn import CustomerTurn
+def test_greeting_and_planner_modules_are_gone() -> None:
+    from pathlib import Path
 
-    class _Msg:
-        content = "Hello! How can I help you today?"
-
-    class _Choice:
-        message = _Msg()
-
-    class _Resp:
-        choices = [_Choice()]
-
-    async def fake_llm(*_a, **_k):
-        return _Resp()
-
-    monkeypatch.setattr("services.brain.agent.greeting_turn.openai_configured", lambda: True)
-    monkeypatch.setattr("services.brain.agent.terra_turn.openai_configured", lambda: True)
-    monkeypatch.setattr("services.brain.agent.greeting_turn._identity_context", lambda _turn: "IDENTITY\nname=Marwa")
-    monkeypatch.setattr("services.billing.membership.provider_expense.record_pending_provider", lambda **_k: None)
-    monkeypatch.setattr("services.brain.providers.config.answer_model", lambda: "gpt-test")
-    monkeypatch.setattr("services.brain.billing.operation_id_for_turn", lambda _turn: "op-test")
-    monkeypatch.setattr("services.brain.llm_core_service.create_chat_completion", fake_llm)
-    monkeypatch.setattr("services.brain.conversation_store.remember_turn", lambda *_a, **_k: None)
-    monkeypatch.setattr("services.brain.agent.generate_path.coverage_ok", lambda *_a, **_k: True)
-    turn = CustomerTurn(tenant_id="t-greet-llm", conversation_id="c1", event_ids=["m1"])
-    out = await identity_greeting_result(turn, message="Hi kifak", channel="instagram_dm")
-    assert out is not None
-    assert out.ai_called is True
-    assert out.envelope.messages[0].text.startswith("Hello")
-    assert (out.extra or {}).get("retrieval_skipped") is True
-
-
-@pytest.mark.asyncio
-async def test_planner_openai_error_uses_overlay_not_exception(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.brain.planner.openai_plan import plan_turn, plan_with_openai
-
-    async def boom(*_a, **_k):
-        raise RuntimeError("planner timeout")
-
-    monkeypatch.setattr("services.brain.planner.openai_plan.openai_configured", lambda: True)
-    monkeypatch.setattr("services.brain.llm_core_service.create_chat_completion", boom)
-    assert await plan_with_openai("how much is full body?") is None
-    plan = await plan_turn("how much is full body?")
-    assert plan.tasks
+    root = Path(__file__).resolve().parents[1]
+    assert not (root / "services/brain/agent/greeting_turn.py").exists()
+    assert not (root / "services/brain/planner/openai_plan.py").exists()
+    loop = (root / "services/brain/agent/loop.py").read_text(encoding="utf-8")
+    assert "retrieval_skipped" in loop
+    assert "run_terra_turn" in loop
 
 
 @pytest.mark.asyncio

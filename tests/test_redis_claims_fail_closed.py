@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from unittest.mock import patch
 
 import pytest
@@ -24,24 +23,6 @@ def test_redis_claims_fail_closed_via_require_redis(monkeypatch):
     from services.scale.redis_claims import redis_claims_fail_closed
 
     assert redis_claims_fail_closed() is True
-
-
-@pytest.mark.asyncio
-async def test_webhook_mid_fail_closed_rejects_when_redis_unavailable(monkeypatch):
-    monkeypatch.setenv("LINAS_FAIL_CLOSED_REDIS_CLAIMS", "true")
-    from modules.webhook_handlers_dedupe import _webhook_memory_try_claim
-
-    with patch("services.scale.redis_claims.redis_try_claim", return_value=None):
-        assert await _webhook_memory_try_claim("fc-mid-1", time.time()) is False
-
-
-@pytest.mark.asyncio
-async def test_webhook_bodyfp_fail_closed_rejects_when_redis_unavailable(monkeypatch):
-    monkeypatch.setenv("LINAS_FAIL_CLOSED_REDIS_CLAIMS", "true")
-    from modules.webhook_handlers_dedupe import _webhook_bodyfp_try_claim
-
-    with patch("services.scale.redis_claims.redis_try_claim", return_value=None):
-        assert await _webhook_bodyfp_try_claim("bodyfp_fc_test", time.time()) is False
 
 
 @pytest.mark.asyncio

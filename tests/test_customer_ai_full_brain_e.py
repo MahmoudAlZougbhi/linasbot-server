@@ -6,7 +6,6 @@ import pytest
 
 from services.brain.compiler.chunks import chunks_from_texts, contextual_groups
 from services.brain.contracts.evidence import EvidenceBundle, EvidenceItem
-from services.brain.memory.store import recall_facts, remember_fact, reset_memory_for_tests
 from services.brain.providers.spaces import KNOWLEDGE_DOCUMENT, KNOWLEDGE_MODEL, spaces_snapshot
 from services.brain.retrieve.conflict import apply_authority
 from services.brain.search.store import activate_pointer, query_similar, write_documents
@@ -64,12 +63,10 @@ def test_authority_drops_lower_conflicting_amount() -> None:
     assert meta.get("decisions") or meta.get("conflicts") is not None
 
 
-def test_memory_durable_api_roundtrip() -> None:
-    reset_memory_for_tests()
-    out = remember_fact(tenant_id="t1", customer_id="c1", key="branch", value="Antelias")
-    assert out["ok"] is True
-    rows = recall_facts(tenant_id="t1", customer_id="c1")
-    assert any(row.get("key") == "branch" and "Antelias" in row.get("value", "") for row in rows)
+def test_memory_package_is_gone() -> None:
+    from pathlib import Path
+
+    assert not Path("services/brain/memory").exists()
 
 
 def test_index_pointer_atomic_activate_and_query_filters_version() -> None:
