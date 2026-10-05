@@ -6,6 +6,7 @@ from typing import Any
 
 import config
 from services.live_chat.contracts import (
+    parse_timestamp_utc,
     utc_now,
 )
 from utils.utils import (
@@ -431,6 +432,9 @@ class LiveChatLifecycleMixin:
 
             current = conv_snap.to_dict() or {}
             unread = int(current.get("unread_count") or 0)
+            viewed = parse_timestamp_utc(current.get("operator_viewed_at"), fallback=None)
+            if unread == 0 and viewed is not None and (utc_now() - viewed).total_seconds() < 120:
+                return {"success": True, "message": "Already read"}
             update: dict[str, Any] = {"operator_viewed_at": utc_now()}
             if unread != 0:
                 update["unread_count"] = 0
