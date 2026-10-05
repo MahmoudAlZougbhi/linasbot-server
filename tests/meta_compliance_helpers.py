@@ -79,7 +79,17 @@ class _FakeCollection:
         del args, kwargs
         return [_FakeSnapshot(document) for document in self.documents.values() if document.exists]
 
-    def where(self, field: str, operator: str, value: str) -> _FakeQuery:
+    def where(self, *args: Any, filter: Any = None, **kwargs: Any) -> _FakeQuery:
+        if filter is not None:
+            field = getattr(filter, "field_path", None)
+            operator = getattr(filter, "op_string", None)
+            value = getattr(filter, "value", None)
+        elif len(args) >= 3:
+            field, operator, value = args[0], args[1], args[2]
+        else:
+            field = kwargs.get("field")
+            operator = kwargs.get("operator")
+            value = kwargs.get("value")
         assert operator == "=="
         return _FakeQuery(
             [document for document in self.documents.values() if document.exists and document.data.get(field) == value]

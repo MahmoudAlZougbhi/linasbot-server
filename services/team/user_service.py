@@ -309,22 +309,13 @@ class UserService(UserServiceAuthMixin):
     def get_users_for_tenant(self, tenant_id: str) -> list[dict[str, Any]]:
         """List sanitized dashboard users for one tenant.
 
-        Compare via sanitize-normalized tenantId (not raw Firestore equality) so
-        legacy mixed-case tenantId/tenant_id rows still appear on the Users screen.
-        Bad rows are skipped inside get_all_users.
+        Equality queries cover tenantId and legacy tenant_id, plus the common
+        case spellings. Rows are still dropped unless sanitize normalizes them
+        onto this tenant.
         """
-        tid = self._normalize_tenant_id(tenant_id)
-        users: list[dict[str, Any]] = []
-        seen_ids: set[str] = set()
-        for sanitized in self.get_all_users():
-            uid = str(sanitized.get("id") or "").strip()
-            if not uid or uid in seen_ids:
-                continue
-            if str(sanitized.get("tenantId") or "").strip() != tid:
-                continue
-            users.append(sanitized)
-            seen_ids.add(uid)
-        return users
+        from services.team.user_tenant_query import list_users_for_tenant
+
+        return list_users_for_tenant(self, tenant_id)
 
     def update_user(self, user_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
         """
@@ -418,6 +409,9 @@ class UserService(UserServiceAuthMixin):
             updated_user = self.get_user_by_id(user_id)
             if updated_user is None:
                 raise ValueError(f"User not found after update: {user_id}")
+            from services.team.user_tenant_query import invalidate_tenant_user_cache
+
+            invalidate_tenant_user_cache()
             return self._sanitize_user(updated_user) or {}
 
         except ValueError:

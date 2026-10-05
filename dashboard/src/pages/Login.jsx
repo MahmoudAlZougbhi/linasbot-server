@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
@@ -17,6 +17,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const quotaBlockUntil = useRef(0);
   const { login } = /** @type {AuthContextValue} */ (useAuth());
   const location = useLocation();
   const redirectTo = location.state?.from
@@ -36,11 +37,19 @@ const Login = () => {
   };
 
   const tryLogin = async () => {
+    if (Date.now() < quotaBlockUntil.current) {
+      setError('Sign-in is paused for 20 seconds after a quota error. Try again shortly.');
+      return;
+    }
     setLoading(true);
     try {
       await login(email, password, redirectTo);
     } catch (err) {
-      setError(errorMessage(err) || 'Login failed. Please try again.');
+      const message = errorMessage(err) || 'Login failed. Please try again.';
+      if (isConnectionError(message)) {
+        quotaBlockUntil.current = Date.now() + 20000;
+      }
+      setError(message);
       console.error('Login error:', err);
     } finally {
       setLoading(false);

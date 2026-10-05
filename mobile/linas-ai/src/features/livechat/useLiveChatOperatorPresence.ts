@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 
 import { markConversationRead } from './liveChatApi';
 
@@ -23,9 +24,26 @@ export function useLiveChatOperatorPresence(
 
   useEffect(() => {
     if (!userId || !conversationId) return;
-    const id = setInterval(() => {
-      void markConversationRead(userId, conversationId);
-    }, HEARTBEAT_MS);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (id) return;
+      id = setInterval(() => {
+        void markConversationRead(userId, conversationId);
+      }, HEARTBEAT_MS);
+    };
+    const stop = () => {
+      if (!id) return;
+      clearInterval(id);
+      id = null;
+    };
+    if (AppState.currentState === 'active') start();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') start();
+      else stop();
+    });
+    return () => {
+      stop();
+      sub.remove();
+    };
   }, [userId, conversationId]);
 }

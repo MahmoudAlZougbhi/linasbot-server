@@ -97,6 +97,9 @@ test('thread restores WhatsApp handoff, assign, and composer', () => {
   assert.match(thread, /busy=\{thread\.busy\}/);
   assert.doesNotMatch(thread, /thread\.busy \|\| \(thread\.loading && !thread\.messages\.length\)/);
   assert.match(thread, /useLiveChatOperatorPresence/);
+  const presence = read('features/livechat/useLiveChatOperatorPresence.ts');
+  assert.match(presence, /AppState/);
+  assert.match(presence, /else stop\(\)/);
   assert.match(hook, /claimOnOpen/);
   assert.match(hook, /previewMessagesFromInbox/);
   assert.doesNotMatch(hook, /days:\s*1/);

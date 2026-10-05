@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 from functools import partial
 from typing import Any
@@ -236,12 +235,10 @@ def reconcile_stuck_inbound_events(*, older_than_seconds: float = 45.0) -> dict[
             },
             "unexplained_missing_events": 0,
         }
-    stuck = list_active_inbound_events(older_than_seconds=older_than_seconds)
-    raw_limit = (os.getenv("LINAS_INBOUND_RECONCILE_BATCH") or "32").strip()
-    try:
-        limit = max(1, min(200, int(raw_limit)))
-    except ValueError:
-        limit = 32
+    from services.scale.inbound_active_scan import active_scan_limit
+
+    limit = active_scan_limit()
+    stuck = list_active_inbound_events(older_than_seconds=older_than_seconds, query_limit=limit)
     stuck = stuck[:limit]
     actions: list[dict[str, Any]] = []
     for rec in stuck:

@@ -77,7 +77,10 @@ def test_daily_edit_zero_limit_blocks_reserve() -> None:
 
 
 def test_analytics_keeps_legacy_credits_and_adds_catalog_mrr(monkeypatch):
-    monkeypatch.setattr(portal, "user_service", type("U", (), {"get_all_users": staticmethod(lambda: [])})())
+    monkeypatch.setattr(
+        "services.team.user_tenant_query.list_users_capped",
+        lambda *_args, **_kwargs: [],
+    )
     monkeypatch.setattr(portal, "get_recent_flows", lambda limit=500: [])
     monkeypatch.setattr(
         portal,

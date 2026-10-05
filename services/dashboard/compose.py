@@ -203,7 +203,7 @@ def _team_capacity(tenant_id: str, plan_id: str | None) -> dict[str, Any]:
     try:
         from services.team.user_service import user_service
 
-        users = [u for u in user_service.get_all_users() if str(u.get("tenantId") or "").strip().lower() == tenant_id]
+        users = user_service.get_users_for_tenant(tenant_id)
     except Exception as exc:
         return _section_error("users_unavailable", str(exc))
 

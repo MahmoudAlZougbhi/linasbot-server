@@ -122,18 +122,62 @@ def test_auth_email_explicit_linas_ok(tmp_path: Path) -> None:
 
 def test_compose_skips_users_without_tenant_id(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.dashboard import compose
+    from services.team.user_service import user_service
+    from services.team.user_tenant_query import invalidate_tenant_user_cache
 
-    users = [
-        {"id": "u0", "role": "owner", "status": "active"},  # missing tenantId
-        {"id": "u1", "tenantId": "acme", "role": "owner", "email": "a@x.com", "status": "active"},
-        {"id": "u2", "tenantId": "", "role": "admin", "status": "active"},
-        {"id": "u3", "tenantId": "other", "role": "owner", "status": "active"},
+    class _Doc:
+        def __init__(self, doc_id: str, data: dict) -> None:
+            self.id = doc_id
+            self._data = data
+
+        def to_dict(self) -> dict:
+            return dict(self._data)
+
+    class _Query:
+        def __init__(self, docs: list[_Doc]) -> None:
+            self.docs = docs
+
+        def limit(self, count: int) -> _Query:
+            return _Query(self.docs[: max(0, int(count))])
+
+        def stream(self, **_kwargs: object) -> list[_Doc]:
+            return list(self.docs)
+
+    class _Collection:
+        def __init__(self, docs: list[_Doc]) -> None:
+            self.docs = docs
+
+        def where(self, *, filter: object) -> _Query:
+            field = getattr(filter, "field_path", None)
+            value = getattr(filter, "value", None)
+            return _Query([doc for doc in self.docs if doc.to_dict().get(field) == value])
+
+    docs = [
+        _Doc("u0", {"role": "owner", "status": "active"}),
+        _Doc("u1", {"tenantId": "acme", "role": "owner", "email": "a@x.com", "status": "active"}),
+        _Doc("u2", {"tenantId": "", "role": "admin", "status": "active"}),
+        _Doc("u3", {"tenantId": "other", "role": "owner", "status": "active"}),
     ]
-    monkeypatch.setattr(
-        "services.team.user_service.user_service.get_all_users",
-        lambda: users,
-    )
-    result = compose._team_capacity("acme", None)
+    users = _Collection(docs)
+
+    class _Backend:
+        def collection(self, _name: str) -> _Collection:
+            return users
+
+    class _Artifacts:
+        def document(self, _doc_id: str) -> _Backend:
+            return _Backend()
+
+    class _Database:
+        def collection(self, _name: str) -> _Artifacts:
+            return _Artifacts()
+
+    invalidate_tenant_user_cache()
+    monkeypatch.setattr(user_service, "_db", _Database())
+    try:
+        result = compose._team_capacity("acme", None)
+    finally:
+        invalidate_tenant_user_cache()
     assert result["availability"] == "ok"
     # Only u1 matches; missing/blank tenantId must not coerce into this tenant.
     assert result["owner"]["id"] == "u1"

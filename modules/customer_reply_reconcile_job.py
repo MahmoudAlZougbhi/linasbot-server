@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import asyncio
 
-from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
+from services.scale.durable_event_claim import try_acquire_job_lock
+from services.scale.firestore_quota_backoff import note_quota_result, quota_backoff_active
+from services.scale.inbound_active_scan import RECONCILE_LOCK_TTL_SECONDS
 
 
 def _run_customer_reply_reconcile_job_sync() -> None:
-    if not try_acquire_job_lock("customer_reply_reconcile", ttl_seconds=55):
+    # Same hold-until-expiry rule as the inbound watchdog: one cluster scan per interval.
+    if quota_backoff_active():
+        return
+    if not try_acquire_job_lock("customer_reply_reconcile", ttl_seconds=RECONCILE_LOCK_TTL_SECONDS):
         return
     try:
 
@@ -28,10 +33,10 @@ def _run_customer_reply_reconcile_job_sync() -> None:
                 f"retry_success={metrics.get('retry_success_count', 0)} "
                 f"charged_undelivered={metrics.get('charged_without_delivery_count', 0)}"
             )
+        note_quota_result(None)
     except Exception as exc:
+        note_quota_result(exc)
         print(f"[customer-reply-reconcile] failed type={type(exc).__name__} detail={str(exc)[:160]}")
-    finally:
-        release_job_lock("customer_reply_reconcile")
 
 
 async def run_customer_reply_reconcile_job() -> None:

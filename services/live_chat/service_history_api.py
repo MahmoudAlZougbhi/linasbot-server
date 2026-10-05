@@ -129,7 +129,7 @@ class LiveChatHistoryApiMixin:
                 .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
             )
 
-            conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
+            conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.limit(100).stream()))
 
             conversations: list[dict[str, Any]] = []
             total_messages = 0
@@ -304,7 +304,7 @@ class LiveChatHistoryApiMixin:
             )
 
             # ✅ Use asyncio.to_thread to prevent blocking the event loop
-            conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.stream()))
+            conversations_docs = await asyncio.to_thread(lambda: list(conversations_collection.limit(100).stream()))
             conversations = []
 
             for conv_doc in conversations_docs:

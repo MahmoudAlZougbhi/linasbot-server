@@ -5,11 +5,9 @@ from __future__ import annotations
 
 async def run_whatsapp_outbound_retry_job() -> None:
     from services.integrations.whatsapp.delivery_retry import retry_pending_outbound_intents
-    from services.scale.durable_event_claim import release_job_lock, try_acquire_job_lock
+    from services.scale.job_interval_lock import job_interval_lock
 
-    if not try_acquire_job_lock("whatsapp_outbound_retry", ttl_seconds=55):
-        return
-    try:
+    with job_interval_lock("whatsapp_outbound_retry", ttl_seconds=50) as acquired:
+        if not acquired:
+            return
         await retry_pending_outbound_intents()
-    finally:
-        release_job_lock("whatsapp_outbound_retry")
