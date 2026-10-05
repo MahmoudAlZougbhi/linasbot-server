@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
+from modules.api_permission_catalog import PERMISSION_KEYS
 from modules.api_security import (
     _client_ip,
     auth_rate_limit_rules,
@@ -80,7 +81,9 @@ class TestRBACHelpers:
         assert not is_public_api("POST", "/api/auth/bootstrap-admin")
         assert not is_public_api("GET", "/api/live-chat/unified-chats")
         assert required_permission_for("GET", "/api/live-chat/unified-chats") == "liveChat"
-        assert required_permission_for("POST", "/api/smart-messaging/toggle") == "smartMessaging"
+        assert required_permission_for("POST", "/api/smart-messaging/toggle") == "settings"
+        assert "smartMessaging" not in PERMISSION_KEYS
+        assert "testing" not in PERMISSION_KEYS
         assert required_permission_for("GET", "/api/content-files/knowledge/list") == "contentManagers"
         assert required_permission_for("POST", "/api/owner-ai/conversations") == "contentManagers"
         assert required_permission_for("GET", "/api/owner-ai/conversations") == "contentManagers"

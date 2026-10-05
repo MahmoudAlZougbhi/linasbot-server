@@ -86,20 +86,12 @@ policy questions in DMs and, when explicitly enabled and reviewed, replies to
 Facebook/Instagram comments. It does not create, edit, confirm, reschedule, or
 cancel appointments on Meta or in a CRM.
 
-When a customer requests booking or a human, the assistant collects only the
-missing branch/gender fields and returns the applicable public WhatsApp handoff:
-
-| Use | Number |
-|---|---|
-| Laser — women — Beirut / Ramlet El Bayda | `+96178847527` |
-| Laser — women — Antelias | `+96170707354` |
-| Laser — men — Beirut / Ramlet El Bayda | `+96171534928` |
-| Laser — men — Antelias | `+96171226082` |
+When a customer requests a human, the assistant returns the handoff number
+published for that tenant in Content Management. Do not hard-code a clinic
+phone in this repo. Local examples use `+1555…` only.
 
 Customer-facing links use `https://wa.me/<digits>`, never a short-link service.
-Tattoo removal is not currently offered and must return the approved refusal
-without any WhatsApp handoff. Social DMs do not activate the dashboard
-human-takeover queue.
+Social DMs do not activate the dashboard human-takeover queue.
 
 ## Release verification
 

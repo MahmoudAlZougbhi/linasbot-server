@@ -13,9 +13,6 @@ from fastapi.responses import JSONResponse
 from services.scale.rate_limit_service import rate_limit_service
 
 _SENSITIVE_MUTATION_PREFIXES = (
-    "/api/smart-messaging/send",
-    "/api/smart-messaging/campaigns",
-    "/api/smart-messaging/toggle",
     "/api/live-chat/send-message",
     "/api/live-chat/takeover",
     "/api/debug/",

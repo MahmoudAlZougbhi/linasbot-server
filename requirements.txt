@@ -1,4 +1,4 @@
-# Lina's Laser Bot - Python Dependencies
+# Linas AI (linasbot-server) — Python dependencies
 # =======================================
 
 # Core Framework

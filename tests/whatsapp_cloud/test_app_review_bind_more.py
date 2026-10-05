@@ -23,6 +23,7 @@ os.environ["WHATSAPP_CLOUD_OUTBOUND_SENDS_ENABLED"] = "true"
 os.environ["WHATSAPP_CLOUD_AI_REPLIES_ENABLED"] = "true"
 os.environ["WHATSAPP_CLOUD_PUBLIC_AVAILABILITY"] = "false"
 os.environ["PUBLIC_URL"] = "https://example.test"
+os.environ["TENANT_ID"] = "linas"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402

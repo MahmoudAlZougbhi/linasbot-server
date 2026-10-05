@@ -37,6 +37,7 @@ def _required_env(name: str) -> str:
 
 
 def main() -> None:
+    tenant_id = _required_env("TENANT_ID")
     app = get_meta_app_configs()[APP_A_KEY]
     if not app.enabled or app.app_id != APP_A_EXPECTED_ID:
         raise MetaTokenValidationError("App A configuration is missing or has an unexpected App ID")
@@ -95,7 +96,7 @@ def main() -> None:
         (
             binding
             for binding in registry.get_active_bindings_for_app(APP_A_KEY)
-            if binding.tenant_id == "linas" and binding.channel == "facebook" and binding.asset_id == EXPECTED_PAGE_ID
+            if binding.tenant_id == tenant_id and binding.channel == "facebook" and binding.asset_id == EXPECTED_PAGE_ID
         ),
         None,
     )
@@ -111,7 +112,7 @@ def main() -> None:
         )
     if not already_active:
         registry.activate_binding(
-            tenant_id="linas",
+            tenant_id=tenant_id,
             channel="facebook",
             asset_id=EXPECTED_PAGE_ID,
             page_id=EXPECTED_PAGE_ID,

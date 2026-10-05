@@ -17,7 +17,7 @@ ENV_BACKUP_DIR="${ENV_BACKUP_DIR:-/opt/linasbot_backups/env}"
 DEFAULT_DUMP_PATH="${DEFAULT_DUMP_PATH:-/opt/linasbot_backups/pg/linas_whatsapp_20260812T182822Z.dump}"
 TARGET_DB_NAME="${TARGET_DB_NAME:-linas_whatsapp}"
 
-FORBIDDEN_DB_NAMES_RE='(?i)^(sportbook|boc|linaslaser|linas_laser).*$'
+FORBIDDEN_DB_NAMES_RE='(?i)^(sportbook|boc).*$'
 
 mg_apply=0
 mg_parse_apply() {

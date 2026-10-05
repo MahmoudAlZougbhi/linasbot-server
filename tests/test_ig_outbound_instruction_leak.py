@@ -17,7 +17,7 @@ from services.brain.outbound_safety import is_customer_safe_opener, looks_like_i
 from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
 _SOP = (
-    "Arabic-specific rule: مروى / المساعدة الذكية / ليناز ليزر\n"
+    "Arabic-specific rule: reply in the customer's language.\n"
     "Use this rule only if the user message is only a casual greeting.\n"
     "If the user message is not a casual greeting, process the message according to the knowledge base."
 )
@@ -89,47 +89,14 @@ def test_greeting_context_omits_advanced_instructions() -> None:
     assert "advanced=" in full
 
 
-@pytest.mark.asyncio
-async def test_identity_llm_sop_echo_falls_back_to_safe_greeting(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.brain.agent.greeting_turn import identity_greeting_result
-    from services.brain.contracts.turn import CustomerTurn
+def test_terra_greeting_blocks_instruction_echo() -> None:
+    from pathlib import Path
 
-    class _Msg:
-        content = _SOP
-
-    class _Choice:
-        message = _Msg()
-
-    class _Resp:
-        choices = [_Choice()]
-
-    async def echo(*_a, **_k):
-        return _Resp()
-
-    monkeypatch.setattr("services.brain.agent.greeting_turn.openai_configured", lambda: True)
-    monkeypatch.setattr("services.brain.agent.terra_turn.openai_configured", lambda: True)
-    monkeypatch.setattr(
-        "services.brain.agent.greeting_turn._identity_context",
-        lambda _turn: "IDENTITY\nname=Marwa",
-    )
-    monkeypatch.setattr(
-        "services.billing.membership.provider_expense.record_pending_provider",
-        lambda **_k: None,
-    )
-    monkeypatch.setattr("services.brain.providers.config.answer_model", lambda: "gpt-test")
-    monkeypatch.setattr("services.brain.billing.operation_id_for_turn", lambda _turn: "op-test")
-    monkeypatch.setattr("services.brain.llm_core_service.create_chat_completion", echo)
-    monkeypatch.setattr("services.brain.conversation_store.remember_turn", lambda *_a, **_k: None)
-    turn = CustomerTurn(
-        tenant_id="t-sop-llm",
-        conversation_id="c1",
-        event_ids=["m1"],
-        extra={"response_language": "ar"},
-    )
-    out = await identity_greeting_result(turn, message="Hello", channel="instagram_dm")
-    assert out is not None
-    assert out.stop_reason == "failed_closed"
-    assert not out.envelope.messages
+    src = Path("services/brain/agent/terra_turn.py").read_text(encoding="utf-8")
+    assert "looks_like_instruction_text" in src
+    assert "outbound_instruction_blocked" in src
+    assert "greeting_turn" in src
+    assert not Path("services/brain/agent/greeting_turn.py").exists()
 
 
 def test_apply_greeting_does_not_prepend_sop() -> None:

@@ -42,6 +42,11 @@ on:
         required: false
         type: string
         default: ""
+      tenant_id:
+        description: "Required for content audit and runtime proof. No default tenant."
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: meta-social-cutover
@@ -64,6 +69,7 @@ jobs:
           EXPECTED_RELEASE_SHA: ${{ github.sha }}
           PHASE: ${{ inputs.phase }}
           CONTENT_VERSION_ID: ${{ inputs.content_version_id }}
+          TENANT_ID: ${{ inputs.tenant_id }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -71,7 +77,7 @@ jobs:
           port: 22
           script_stop: true
           command_timeout: 40m
-          envs: EXPECTED_RELEASE_SHA,PHASE,CONTENT_VERSION_ID
+          envs: EXPECTED_RELEASE_SHA,PHASE,CONTENT_VERSION_ID,TENANT_ID
           script: |
             set -euo pipefail
             REPO_DIR=/opt/linasbot

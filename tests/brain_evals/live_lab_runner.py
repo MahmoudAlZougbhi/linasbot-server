@@ -16,7 +16,6 @@ from typing import Any
 from db.session import whatsapp_session
 from services.brain.flags import voyage_configured
 from services.brain.generate.reply import openai_configured
-from services.brain.memory import store_pg as memory_pg
 from services.brain.providers.spaces import KNOWLEDGE_DOCUMENT, KNOWLEDGE_MODEL, RERANK_MODEL
 from services.brain.providers.voyage_client import VoyageContractError, rerank_texts
 from services.brain.retrieve.cards import load_published_cards
@@ -45,44 +44,7 @@ def _session() -> AbstractContextManager[Any]:
 
 
 def prove_memory_durability() -> dict[str, Any]:
-    if not (os.getenv("LINAS_WHATSAPP_DATABASE_URL") or os.getenv("DATABASE_URL") or "").strip():
-        return _gate("BLOCKED", "DATABASE_URL missing")
-    customer_id = "lab-customer-1"
-    with _session() as session:
-        if not memory_pg.table_ready(session):
-            return _gate("FAIL", "customer_ai_memory_facts missing")
-        memory_pg.upsert_fact(
-            session,
-            tenant_id=LAB_TENANT,
-            customer_id=customer_id,
-            key="preferred_branch",
-            value="antelias",
-            confidence=0.95,
-            fact_type="preference",
-        )
-    # New engine/session = reconnect proof (dispose pool).
-    from db.session import reset_engine_for_tests
-
-    reset_engine_for_tests()
-    with _session() as session:
-        rows = memory_pg.list_facts(session, tenant_id=LAB_TENANT, customer_id=customer_id)
-        ok = any(r.get("key") == "preferred_branch" and r.get("value") == "antelias" for r in rows)
-        # Tenant isolation
-        memory_pg.upsert_fact(
-            session,
-            tenant_id=OTHER_TENANT,
-            customer_id=customer_id,
-            key="preferred_branch",
-            value="verdun",
-            confidence=0.9,
-        )
-        a_rows = memory_pg.list_facts(session, tenant_id=LAB_TENANT, customer_id=customer_id)
-        leak = any(r.get("value") == "verdun" for r in a_rows)
-    if not ok:
-        return _gate("FAIL", "memory not durable across reconnect")
-    if leak:
-        return _gate("FAIL", "cross_tenant_memory_leak")
-    return _gate("PASS", "write→reconnect→read + tenant isolation", facts=len(rows))
+    return _gate("NOT_RUN", "customer memory package deleted; Terra session state is the live path")
 
 
 async def build_contextual_live() -> dict[str, Any]:

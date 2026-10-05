@@ -172,10 +172,9 @@ def _tiktok_comment_settles_after_send() -> bool:
 
 
 def _legacy_voice_journals_stt() -> bool:
-    from services.brain.inbound.voice_handlers import handle_voice_message
+    from pathlib import Path
 
-    src = getsource(handle_voice_message)
-    return "record_pending_provider" in src and 'category="stt"' in src and "0.006" not in src
+    return not Path("services/brain/inbound/voice_handlers.py").exists()
 
 
 def _meta_ai_both_skips_public_after_reply() -> bool:

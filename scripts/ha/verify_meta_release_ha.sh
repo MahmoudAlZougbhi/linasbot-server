@@ -287,11 +287,12 @@ verify_node() {
     return 1
   fi
   test -f "$repo_dir/scripts/ha/verify_meta_release_ha.sh"
-  if [ -e "$repo_dir/linaslaserbot-2.7.22/main.py" ] || \
-     [ -e "$repo_dir/linaslaserbot-2.7.22/venv/bin/python" ]; then
-    echo "[meta-ha-release] legacy nested runtime still exists" >&2
-    return 1
-  fi
+  for nested in "$repo_dir"/*; do
+    if [ -f "$nested/main.py" ] || [ -e "$nested/venv/bin/python" ]; then
+      echo "[meta-ha-release] legacy nested runtime still exists" >&2
+      return 1
+    fi
+  done
   deployed_sha="$(git -C "$repo_dir" rev-parse HEAD)"
   if [ "$deployed_sha" != "$expected_sha" ]; then
     echo "[meta-ha-release] deployed release mismatch" >&2

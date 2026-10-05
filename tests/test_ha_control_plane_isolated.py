@@ -44,7 +44,7 @@ ISOLATED_RUNNER = textwrap.dedent(
     spec.loader.exec_module(module)
     if checkout_sentinel.exists():
         raise SystemExit("malicious checkout preempted authenticated nested-runtime load")
-    if module._nested.NESTED_RUNTIME_NAME != "linaslaserbot-2.7.22":
+    if module._nested.NESTED_RUNTIME_NAME != "nested-runtime":
         raise SystemExit("nested runtime name mismatch")
     if getattr(module._nested_evidence, "__nested_runtime_source_sha256__", "") == "deadbeef":
         raise SystemExit("authenticated evidence module trusted spoofed digest")

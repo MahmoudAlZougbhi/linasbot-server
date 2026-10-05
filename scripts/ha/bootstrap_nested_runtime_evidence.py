@@ -33,7 +33,7 @@ iter_tree_members = _safety.iter_tree_members
 TreeEnumerateState = _safety.TreeEnumerateState
 
 SCHEMA = 1
-NESTED_RUNTIME_NAME = "linaslaserbot-2.7.22"
+NESTED_RUNTIME_NAME = "nested-runtime"
 MAX_FILE_COUNT = 500_000
 MAX_SYMLINK_COUNT = 100_000
 MAX_DIRECTORY_COUNT = 100_000

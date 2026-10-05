@@ -1,16 +1,20 @@
-# Bind the fixed Meta test number to tenant linas for permission-review filming.
+# Bind the fixed Meta test number to the tenant passed as TENANT_ID.
 name: WA App Review Test Number Bind
 
 on:
   workflow_dispatch:
     inputs:
       PHASE:
-        description: "Validate the fixed Meta asset or bind it to tenant linas"
+        description: "Validate the fixed Meta asset or bind it to TENANT_ID"
         required: true
         type: choice
         options:
           - DRY_RUN
           - BIND
+      tenant_id:
+        description: "Tenant id to bind. Required."
+        required: true
+        type: string
       CONFIRM:
         description: "DRY_RUN_WA_APP_REVIEW_BIND or BIND_LINAS_WABA_1409769574350248_PHONE_1322897994230591"
         required: true
@@ -37,6 +41,7 @@ jobs:
           EXPECTED_RELEASE_SHA: ${{ github.sha }}
           PHASE: ${{ inputs.PHASE }}
           CONFIRM: ${{ inputs.CONFIRM }}
+          TENANT_ID: ${{ inputs.tenant_id }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -44,7 +49,7 @@ jobs:
           port: 22
           script_stop: true
           command_timeout: 12m
-          envs: EXPECTED_RELEASE_SHA,PHASE,CONFIRM
+          envs: EXPECTED_RELEASE_SHA,PHASE,CONFIRM,TENANT_ID
           script: |
             set -euo pipefail
             if [ "$PHASE" = DRY_RUN ] && [ "$CONFIRM" = DRY_RUN_WA_APP_REVIEW_BIND ]; then

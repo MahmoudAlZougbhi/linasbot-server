@@ -136,9 +136,7 @@ if os.path.exists(DASHBOARD_BUILD_PATH) and os.path.exists(INDEX_HTML_PATH):
 
 if __name__ == "__main__":
     try:
-        # Initialize Firebase and load bot assets
         initialize_firestore()
-        config.load_bot_assets()
         print("Linas AI is ready.")
         if os.path.exists(INDEX_HTML_PATH):
             print("📊 Dashboard: http://localhost:8003/")

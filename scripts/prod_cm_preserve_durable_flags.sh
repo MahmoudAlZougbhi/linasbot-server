@@ -10,11 +10,7 @@ linas_require_production_mutation_guard "scripts/prod_cm_preserve_durable_flags.
 APP_DIR="${1:-}"
 if [ -z "$APP_DIR" ]; then
   REPO_ROOT="/opt/linasbot"
-  CANONICAL_SUBDIR="$REPO_ROOT/linaslaserbot-2.7.22"
-  APP_DIR="$REPO_ROOT"
-  if [ -f "$CANONICAL_SUBDIR/main.py" ]; then
-    APP_DIR="$CANONICAL_SUBDIR"
-  fi
+  APP_DIR="${LINASBOT_RELEASE_DIR:-$REPO_ROOT}"
 fi
 
 export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"

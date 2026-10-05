@@ -136,7 +136,7 @@ async def repair_tenant(tenant_id: str, *, actor_id: str) -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tenant-id", default="linas")
+    parser.add_argument("--tenant-id", required=True)
     parser.add_argument("--repair", action="store_true", help="Discard testing bindings and retry IG cleanup markers")
     args = parser.parse_args()
 

@@ -49,7 +49,7 @@ async def handle_message(
     Combines rapid messages and then processes them.
 
     Args:
-        skip_firestore_save: If True, skips saving to Firestore (used when called from voice_handlers after already saving)
+        skip_firestore_save: If True, skips saving to Firestore when the caller already saved.
         message_combine_delay: If set (e.g. 0.0), overrides config.MESSAGE_COMBINING_DELAY for this turn (dashboard tests).
     """
     user_id = str(user_id).strip()
@@ -106,7 +106,7 @@ async def handle_message(
         inactivity_seconds = (now_ts - previous_user_msg_ts).total_seconds()
     user_data["last_user_message_at"] = now_ts
 
-    # ✅ FIXED: Only save to Firestore if not called from voice_handlers
+    # Only save to Firestore when the caller has not already saved.
     # Voice handler already saved the message with type="voice" and audio_url
     if not skip_firestore_save:
         # Save user's message to Firestore immediately

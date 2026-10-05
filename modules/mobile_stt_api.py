@@ -54,7 +54,7 @@ async def mobile_transcribe(
         client = getattr(llm_core_service, "client", None)
         if client is None:
             raise HTTPException(status_code=503, detail="STT unavailable")
-        # OpenAI SDK uses fileobj.name for format detection (same pattern as voice_handlers).
+        # OpenAI SDK uses fileobj.name for format detection.
         buf = io.BytesIO(raw)
         buf.name = filename
         result = await client.audio.transcriptions.create(

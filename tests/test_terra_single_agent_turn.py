@@ -18,8 +18,6 @@ from services.brain.turn_pipeline import run_dm_after_gates
 
 ROOT = Path(__file__).resolve().parents[1]
 _LOOP = (ROOT / "services/brain/agent/loop.py").read_text(encoding="utf-8")
-_GREET = (ROOT / "services/brain/agent/greeting_turn.py").read_text(encoding="utf-8")
-_DECIDE = (ROOT / "services/brain/agent/tool_decide.py").read_text(encoding="utf-8")
 
 
 def test_loop_source_is_single_terra_session() -> None:
@@ -38,10 +36,10 @@ def test_loop_source_is_single_terra_session() -> None:
     assert "default_agentic_plan" in getsource(agent_loop.run_agentic_dm_path)
 
 
-def test_dead_llm_paths_have_no_create_chat_completion() -> None:
-    assert "create_chat_completion" not in _GREET
-    assert "create_chat_completion" not in _DECIDE
-    assert "Pick up to 2 tools" not in _DECIDE
+def test_dead_llm_paths_are_deleted() -> None:
+    assert not (ROOT / "services/brain/agent/greeting_turn.py").exists()
+    assert not (ROOT / "services/brain/agent/tool_decide.py").exists()
+    assert not (ROOT / "services/brain/planner/openai_plan.py").exists()
 
 
 def test_customer_tools_include_request_and_reads() -> None:
@@ -80,12 +78,6 @@ def _completion(*, content: str = "", name: str = "", arguments: str = "{}"):
 
 @pytest.mark.asyncio
 async def test_agentic_dm_does_not_call_plan_or_request_round(monkeypatch: pytest.MonkeyPatch) -> None:
-    called = {"plan": 0}
-
-    async def boom(*_a: Any, **_k: Any):
-        called["plan"] += 1
-        raise AssertionError("plan_turn must not run on DM agentic")
-
     async def fake_terra(turn: CustomerTurn, **_k: Any) -> TurnResult:
         return TurnResult(
             stop_reason="ok",
@@ -96,8 +88,6 @@ async def test_agentic_dm_does_not_call_plan_or_request_round(monkeypatch: pytes
             extra=dict(turn.extra or {}),
         )
 
-    monkeypatch.setattr("services.brain.planner.openai_plan.plan_turn", boom)
-    monkeypatch.setattr("services.brain.planner.openai_plan.plan_with_openai", boom)
     monkeypatch.setattr("services.brain.agent.loop.multi_round_retrieve", _found_retrieve)
     monkeypatch.setattr("services.brain.agent.loop.run_terra_turn", fake_terra)
     monkeypatch.setattr("services.brain.agent.loop.reserve_generative", lambda *_a, **_k: None)
@@ -110,7 +100,6 @@ async def test_agentic_dm_does_not_call_plan_or_request_round(monkeypatch: pytes
     monkeypatch.setattr("services.brain.turn_pipeline.try_confirm_pending", no_sem)
     turn = CustomerTurn(tenant_id="t-freeze", conversation_id="c1", event_ids=["m1"], channel="whatsapp")
     result = await run_dm_after_gates(turn, message="how much is laser?", channel="whatsapp")
-    assert called["plan"] == 0
     assert result.envelope.decision == "reply"
 
 

@@ -8,20 +8,28 @@ grant_linas_pilot_if_requested() {
     return 0
   fi
   if [ -x "$REPO_DIR/scripts/prod_grant_whatsapp_pilot.py" ] || [ -f "$REPO_DIR/scripts/prod_grant_whatsapp_pilot.py" ]; then
+    if [ -z "${WHATSAPP_PILOT_TENANT_ID:-}" ]; then
+      echo "[wa-pilot-grant] skipped=true reason=WHATSAPP_PILOT_TENANT_ID_unset"
+      return 0
+    fi
     "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/prod_grant_whatsapp_pilot.py" \
-      --tenant-id linas \
-      --reason "Internal WhatsApp coexistence pilot after Phase 1 flags" \
+      --tenant-id "$WHATSAPP_PILOT_TENANT_ID" \
+      --reason "WhatsApp coexistence pilot after Phase 1 flags" \
       --granted-by production_ops
     return 0
   fi
   "$REPO_DIR/venv/bin/python" -I - <<'PY'
+import os
 import sys
 
 sys.path.insert(0, "/opt/linasbot")
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 from services.integrations.whatsapp.repository import WhatsAppCloudRepository
 
-tenant_id = "linas"
+tenant_id = os.environ.get("WHATSAPP_PILOT_TENANT_ID", "").strip()
+if not tenant_id:
+    print("[wa-pilot-grant] skipped=true reason=WHATSAPP_PILOT_TENANT_ID_unset")
+    raise SystemExit(0)
 reason = "Internal WhatsApp coexistence pilot after Phase 1 flags"
 try:
     with whatsapp_session(require=True) as session:
