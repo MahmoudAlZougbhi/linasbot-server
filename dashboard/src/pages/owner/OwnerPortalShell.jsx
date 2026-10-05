@@ -9,6 +9,7 @@ const links = [
   { to: '/owner/catalog', label: 'Message catalog' },
   { to: '/owner/economy', label: 'Message economy' },
   { to: '/owner/costs', label: 'Costs' },
+  { to: '/owner/brains', label: 'Brains' },
 ];
 
 export default function OwnerPortalShell() {

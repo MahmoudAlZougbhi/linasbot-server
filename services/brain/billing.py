@@ -28,6 +28,11 @@ def lab_turn(turn: CustomerTurn) -> bool:
     return tid == "lab" or tid.startswith("lab_") or cid.startswith("lab:")
 
 
+def platform_desk_turn(turn: CustomerTurn) -> bool:
+    cid = (turn.conversation_id or "").strip().lower()
+    return cid.startswith("lab:platform:")
+
+
 _STATIC_COMMENT_MODES = frozenset({"ignore", "static_comment", "static_dm", "static_both", "manual"})
 _AI_COMMENT_MODES = frozenset({"ai_comment", "ai_dm", "ai_both"})
 
@@ -144,7 +149,7 @@ def apply_message_billing(turn: CustomerTurn, result: TurnResult) -> TurnResult:
     extra["legacy_comment_uncharged"] = False
     pinned = _pinned_policy(turn, op)
     extra["billing_policy"] = pinned or "message_units"
-    if result.ai_called:
+    if result.ai_called and not platform_desk_turn(turn):
         _record_pending_llm(turn, op)
     from services.brain.stage_timeline import stamp
 

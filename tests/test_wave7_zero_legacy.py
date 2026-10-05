@@ -357,8 +357,8 @@ def test_wave_f_portal_drawer_no_snapchat() -> None:
     caps = (ROOT / "services/integrations/integration_capabilities.py").read_text(encoding="utf-8")
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
 
-    assert shell.count("{ to: '/owner") == 6
-    for label in ("Overview", "Users", "Message flow", "Message catalog", "Message economy", "Costs"):
+    assert shell.count("{ to: '/owner") == 7
+    for label in ("Overview", "Users", "Message flow", "Message catalog", "Message economy", "Costs", "Brains"):
         assert label in shell
     assert "/owner/lab" not in app
     assert "OwnerLab" not in app
@@ -389,4 +389,4 @@ def test_wave_f_portal_drawer_no_snapchat() -> None:
     assert {"instagram", "facebook", "tiktok", "web"}.issubset(platforms)
     assert "Creative publishing is separate" not in about
     assert "WAVE F" in keep
-    assert "portal sidebar is those five items" in keep.lower() or "five items" in keep
+    assert "Brains" in keep

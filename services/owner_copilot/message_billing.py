@@ -88,6 +88,8 @@ def owner_turn_hold_begin(
     confirm_billing: bool = False,
 ) -> OwnerTurnHold:
     tid = (tenant_id or "").strip().lower()
+    if str(conversation_id or "").startswith("lab:platform:"):
+        return OwnerTurnHold(tenant_id=tid, units=0, _finalized=True)
     units = estimate_copilot_units(estimated_usd)
     if not tid or credit_ai_gate.ai_generation_blocked(tid, need=units):
         return OwnerTurnHold(tenant_id=tid, blocked=True, units=units)

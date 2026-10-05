@@ -27,6 +27,8 @@ def owner_result_from_done_payload(payload: Mapping[str, Any]) -> OwnerV2TurnRes
 
 def record_owner_v2_usage(turn_context: Mapping[str, Any], result: OwnerV2TurnResult) -> None:
     """Write a completed V2 turn to the existing owner-chat usage store."""
+    if str(turn_context.get("conversation_id") or "").startswith("lab:platform:"):
+        return
     try:
         from services.brain.model_pricing import compute_cost_from_usage
         from services.owner_copilot.model_router import RouteDecision, owner_chat_usage_tracker

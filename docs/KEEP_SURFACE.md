@@ -199,8 +199,8 @@ Keep #677 media analysis.
 
 ## WAVE F — web marketing+portal; mobile drawer-only
 
-- Web KEEP: public marketing, owner portal (Overview / Users / Message flow / Message catalog / Costs), auth recovery, web-chat widget. Lab, Creative, and operator SPA pages stay gone.
-- Portal sidebar is those five items only (`dashboard/src/pages/owner/OwnerPortalShell.jsx`).
+- Web KEEP: public marketing, owner portal (Overview / Users / Message flow / Message catalog / Message economy / Costs / Brains), auth recovery, web-chat widget. Lab, Creative, and operator SPA pages stay gone.
+- Portal sidebar is Overview, Users, Message flow, Message catalog, Message economy, Costs, and Brains (`dashboard/src/pages/owner/OwnerPortalShell.jsx`).
 - Mobile screen union is drawer tiles + Copilot chat + auth + notifications + nested AI Setup / products / services + deep links. `owner` remains the platform_owner WA pilot (not a tenant drawer tile).
 - Snapchat is not a live Integrations row (no coming-soon stub). Connectable channels: Instagram, Facebook, WhatsApp, Website, TikTok.
 - KEEP hub tiles stay `mobileSupported: true`. Creative types stay refused under Owner Copilot only.

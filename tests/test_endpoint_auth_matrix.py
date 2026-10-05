@@ -39,6 +39,7 @@ _ROUTE_MODULES = (
     "modules.web_chat_api",
     "modules.entitlements_api",
     "modules.platform_api",
+    "modules.platform_brain_lab_api",
     "modules.platform_message_api",
     "modules.mobile_integrations_api",
     "modules.mobile_app_version_api",
