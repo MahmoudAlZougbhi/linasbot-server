@@ -81,14 +81,34 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
   const [gated, setGated] = useState(false);
   const [gateText, setGateText] = useState(/** @type {string | null} */ (null));
   const listRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const bootstrapAttempt = useRef(0);
 
   const bootstrap = useCallback(async () => {
+    const attempt = ++bootstrapAttempt.current;
     setLoading(true);
     setError(null);
     try {
-      const id = getOrCreateGuestSessionId();
+      let id = getOrCreateGuestSessionId();
       setGuestId(id);
-      const session = await ensureGuestSession(id, locale);
+      let session;
+      try {
+        session = await ensureGuestSession(id, locale);
+      } catch (err) {
+        const status = err && typeof err === 'object' && 'status' in err ? Number(err.status) : 0;
+        if (status === 400 || status === 422) {
+          try {
+            localStorage.removeItem('linas_guest_session_id');
+          } catch {
+            /* storage blocked */
+          }
+          id = getOrCreateGuestSessionId();
+          setGuestId(id);
+          session = await ensureGuestSession(id, locale);
+        } else {
+          throw err;
+        }
+      }
+      if (attempt !== bootstrapAttempt.current) return;
       setLiveToken(String(session.live_token || ''));
       setMessages(session.messages || []);
       setGated(Boolean(session.limit_reached));
@@ -96,9 +116,9 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
         setGateText(GATE_FALLBACK[locale] || GATE_FALLBACK.en);
       }
     } catch {
-      setError(copy.retry);
+      if (attempt === bootstrapAttempt.current) setError(copy.retry);
     } finally {
-      setLoading(false);
+      if (attempt === bootstrapAttempt.current) setLoading(false);
     }
   }, [copy.retry, locale]);
 

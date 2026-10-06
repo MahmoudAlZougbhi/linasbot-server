@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ApiError } from '../../api/client';
 import { isNetworkFailure } from '../../api/networkError';
@@ -28,6 +28,7 @@ export function useGuestChatSession(enabled = true) {
   const [error, setError] = useState<string | null>(null);
   const [gated, setGated] = useState(false);
   const [gateText, setGateText] = useState<string | null>(null);
+  const bootstrapAttempt = useRef(0);
 
   const bootstrap = useCallback(async () => {
     if (!enabled) {
@@ -35,17 +36,34 @@ export function useGuestChatSession(enabled = true) {
       clearGuestState(setGuestId, setMessages, setGated, setGateText);
       return;
     }
+    const attempt = ++bootstrapAttempt.current;
     setError(null);
+    setLoading(true);
     try {
       const id = await getOrCreateGuestSessionId();
+      if (attempt !== bootstrapAttempt.current) return;
       setGuestId(id);
-      setLoading(false);
-      const session = await ensureGuestSession(id, language);
-      setMessages(session.messages);
-      setGated(Boolean(session.limit_reached));
-    } catch {
+      let lastError: unknown;
+      for (let tryNo = 0; tryNo < 3; tryNo += 1) {
+        try {
+          const session = await ensureGuestSession(id, language);
+          if (attempt !== bootstrapAttempt.current) return;
+          setMessages(session.messages);
+          setGated(Boolean(session.limit_reached));
+          setError(null);
+          return;
+        } catch (err) {
+          lastError = err;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+      }
+      if (attempt !== bootstrapAttempt.current) return;
+      void lastError;
       setError('retry');
-      setLoading(false);
+    } catch {
+      if (attempt === bootstrapAttempt.current) setError('retry');
+    } finally {
+      if (attempt === bootstrapAttempt.current) setLoading(false);
     }
   }, [enabled, language]);
 
