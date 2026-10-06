@@ -38,10 +38,10 @@ def test_restricted_gate_runs_before_faq(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr("services.billing.membership.generative_gate.generative_block_reason", lambda *_a, **_k: None)
     turn = CustomerTurn(tenant_id="t1", customer_id="u1")
     blocked = evaluate_gates(turn, apply_credits=False, message="do you do tattoo removal?")
-    assert blocked.allow is False
-    assert blocked.reason == "restricted"
-    assert blocked.detail == "tattoo_removal"
-    assert "isn't one of the services" in blocked.reply_text.lower()
+    assert blocked.allow is True
+    assert blocked.reason == "ok"
+    assert any("tattoo_removal" in note for note in turn.extra.get("policy_notes") or [])
+    assert "isn't one of the services" not in " ".join(turn.extra.get("policy_notes") or []).lower()
 
 
 def test_restricted_refuse_template_wins(monkeypatch: pytest.MonkeyPatch) -> None:
