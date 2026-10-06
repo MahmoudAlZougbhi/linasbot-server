@@ -50,7 +50,8 @@ def test_wave_x7_live_imports_use_packages() -> None:
     assert "from services.meta_" not in connections
     assert "services.billing.apple.apple_sign_in_service" in auth_api
     assert "services.billing.apple.apple_iap_processor" in iap_api
-    assert "services.integrations.whatsapp.cloud_template_service" in notify
+    assert "services.integrations.whatsapp.cloud_template_service" not in notify
+    assert "services.live_chat.staff_alert_transport" in notify
     assert "def is_social_channel" in detect_src
     assert "WAVE X7" in keep
     from services.integrations.social.social_contact_routing_detect import DEFAULT_SOCIAL_WHATSAPP_CONTACTS
