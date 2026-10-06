@@ -6,10 +6,8 @@ Sends WhatsApp template notifications to admin/staff when a conversation is esca
 from __future__ import annotations
 
 # services/live_chat/human_takeover_notification_service.py
-import re
-from typing import Any, cast
+from typing import Any
 
-from services.integrations.whatsapp.cloud_template_service import whatsapp_cloud_template_service
 from services.saas_no_boc import log_report_event
 
 
@@ -50,32 +48,9 @@ class HumanTakeoverNotificationService:
             return []
 
         # Split by common separators and clean each number
-        numbers = []
-        seen_numbers = set()
-        for number in re.split(r"[,;\n]+", mobile_numbers_string):
-            cleaned = number.strip()
-            if cleaned:
-                # Keep only digits and leading plus
-                cleaned = re.sub(r"[^\d+]", "", cleaned)
-                if cleaned.startswith("00"):
-                    cleaned = "+" + cleaned[2:]
+        from services.live_chat.staff_alert_numbers import parse_e164_list
 
-                # Ensure number starts with +
-                if not cleaned.startswith("+"):
-                    # Assume Lebanon country code if not provided
-                    if cleaned.startswith("961"):
-                        cleaned = "+" + cleaned
-                    elif cleaned.startswith("0"):
-                        # Remove leading 0 and add +961
-                        cleaned = "+961" + cleaned[1:]
-                    else:
-                        # Add +961 prefix
-                        cleaned = "+961" + cleaned
-                if cleaned not in seen_numbers:
-                    seen_numbers.add(cleaned)
-                    numbers.append(cleaned)
-
-        return numbers
+        return parse_e164_list(mobile_numbers_string)
 
     async def send_notification(
         self,
@@ -116,52 +91,13 @@ class HumanTakeoverNotificationService:
             "last_message": last_message_truncated,
         }
 
-        print(f"📤 Sending human takeover notifications to {len(notify_numbers)} number(s)")
-        print(
-            f"   Customer: name_len={len(str(customer_name or ''))} (***{str(customer_phone)[-4:] if customer_phone else ''})"
-        )
-        print(f"   Reason: {escalation_reason} → {escalation_reason_ar}")
-        print(f"   Notify: {', '.join(notify_numbers)}")
-
-        results = []
-        success_count = 0
-
-        # Send to each number
-        for phone_number in notify_numbers:
-            try:
-                result = await whatsapp_cloud_template_service.send_template_message(
-                    template_id=self.template_id,
-                    phone_number=phone_number,
-                    language="ar",
-                    parameters=cast(dict[str, str | None], parameters),
-                )
-
-                if result.get("success"):
-                    success_count += 1
-                    print(f"   ✅ Sent to ***{str(phone_number)[-4:] if phone_number else ''}")
-                else:
-                    print(
-                        f"   ❌ Failed to send to ***{str(phone_number)[-4:] if phone_number else ''}: {result.get('error')}"
-                    )
-
-                results.append(
-                    {
-                        "phone_number": phone_number,
-                        "success": result.get("success", False),
-                        "message_id": result.get("message_id"),
-                        "error": result.get("error"),
-                    }
-                )
-
-            except Exception as e:
-                print(f"   ❌ Exception sending to ***{str(phone_number)[-4:] if phone_number else ''}: {e}")
-                results.append({"phone_number": phone_number, "success": False, "error": str(e)})
-
+        del parameters, escalation_reason_ar, customer_name, customer_phone
         return {
-            "success": success_count > 0,
-            "sent_count": success_count,
+            "success": False,
+            "error": "tenant_delivery_unavailable",
+            "sent_count": 0,
             "total_numbers": len(notify_numbers),
-            "results": results,
+            "results": [],
         }
 
     async def notify_from_settings(
@@ -222,18 +158,23 @@ class HumanTakeoverNotificationService:
         2) Writes an audit event with notification outcome
         3) Persists an in-app owner alert (Linas AI Notifications inbox)
         """
-        if settings_mobile_numbers is None:
-            from services.dashboard.settings_service import settings_service
+        from services.live_chat.staff_alert_numbers import load_staff_alerts
+        from services.live_chat.staff_alert_transport import deliver_staff_whatsapp
 
-            settings_mobile_numbers = settings_service.get_human_takeover_notify_mobiles()
-
-        notification_result = await self.notify_from_settings(
-            customer_name=customer_name,
-            customer_phone=customer_phone,
-            escalation_reason=escalation_reason,
-            last_message=last_message,
-            settings_mobile_numbers=settings_mobile_numbers,
+        alerts = load_staff_alerts(str(tenant_id or ""))
+        notification_result = await deliver_staff_whatsapp(
+            tenant_id=str(tenant_id or ""),
+            numbers=list(alerts["numbers"]),
+            template_name=str(alerts["template_name"]),
+            template_language=str(alerts["template_language"]),
+            parameters={
+                "customer_name": customer_name,
+                "customer_phone": customer_phone,
+                "escalation_reason": escalation_reason,
+                "last_message": (last_message or "")[:100],
+            },
         )
+        del settings_mobile_numbers
 
         audit_details = {
             "trigger_source": trigger_source,
