@@ -167,6 +167,7 @@ async def trigger_human_takeover(
             last_message=customer_message,
             trigger_source=trigger_source,
             conversation_id=current_conversation_id,
+            tenant_id=str(user_data.get("tenant_id") or ""),
             extra_details={"escalation_score": escalation_score, "detected_issues": detected_issues or []},
         )
         notification_result = notify_result.get("notification_result", {})
