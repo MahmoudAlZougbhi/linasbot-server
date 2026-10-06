@@ -20,7 +20,6 @@ from services.auth.google_identity_service import (
     unlink_google_identity,
 )
 from services.auth.google_sign_in_service import GoogleSignInError, verify_identity_token
-from services.integrations.social.social_account_sign_in import is_social_only_account
 from services.team.tenant_registration_service import allocate_tenant_id
 from services.team.user_service import user_service
 
@@ -43,16 +42,6 @@ class GoogleUnlinkRequest(BaseModel):
     identity_token: str | None = None
     sub: str | None = None
     nonce: str | None = None
-
-
-def _email_hint(email: str) -> str:
-    e = (email or "").strip().lower()
-    if "@" not in e:
-        return "***"
-    local, _, domain = e.partition("@")
-    if not local:
-        return f"***@{domain}"
-    return f"{local[0]}***@{domain}"
 
 
 def _compose_full_name(full_name: str | None, claims_name: str | None) -> str | None:
@@ -130,26 +119,23 @@ async def mobile_google_sign_in(body: GoogleSignInRequest) -> Any:
 
     existing = user_service.get_user_by_email(email)
     if existing is not None:
-        if is_social_only_account(existing):
-            try:
-                link_google_identity(
-                    tenant_id=str(existing.get("tenantId") or ""),
-                    user_id=str(existing["id"]),
-                    sub=sub,
-                    email=email,
-                    display_name=display_name,
-                )
-            except GoogleIdentityError as exc:
-                raise HTTPException(status_code=409, detail=str(exc)) from exc
-            return issue_mobile_tokens(existing)
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": "link_required",
-                "email_hint": _email_hint(email),
-                "message": "An account with this email already exists. Sign in and link Google.",
-            },
-        )
+        if str(existing.get("status") or "") != "active":
+            raise HTTPException(status_code=401, detail="User not available")
+        try:
+            link_google_identity(
+                tenant_id=str(existing.get("tenantId") or existing.get("tenant_id") or ""),
+                user_id=str(existing["id"]),
+                sub=sub,
+                email=email,
+                display_name=display_name,
+            )
+        except GoogleIdentityError as exc:
+            if str(exc) == "google_sub_linked_to_other_user":
+                raise HTTPException(
+                    status_code=409,
+                    detail={"code": "google_identity_conflict", "message": str(exc)},
+                ) from exc
+        return issue_mobile_tokens(existing)
 
     try:
         user = _create_google_account(email=email, display_name=display_name)

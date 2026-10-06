@@ -92,6 +92,7 @@ import modules.wallet_api  # noqa: E402, F401
 
 # Owner Copilot
 import modules.guest_ai_api  # noqa: E402, F401
+import modules.guest_ai_events  # noqa: E402, F401
 import modules.owner_copilot_api  # noqa: E402, F401
 import modules.owner_notifications_api  # noqa: E402, F401
 

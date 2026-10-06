@@ -72,6 +72,7 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
 
   const [guestId, setGuestId] = useState(/** @type {string | null} */ (null));
+  const [liveToken, setLiveToken] = useState('');
   const [messages, setMessages] = useState(/** @type {Array<{id: string; role: string; content: string}>} */ ([]));
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -88,6 +89,7 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
       const id = getOrCreateGuestSessionId();
       setGuestId(id);
       const session = await ensureGuestSession(id, locale);
+      setLiveToken(String(session.live_token || ''));
       setMessages(session.messages || []);
       setGated(Boolean(session.limit_reached));
       if (session.limit_reached) {
@@ -104,6 +106,21 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
     if (!open) return;
     void bootstrap();
   }, [bootstrap, open]);
+
+  useEffect(() => {
+    if (!open || !guestId || !liveToken || typeof EventSource === 'undefined') return undefined;
+    const url = `/api/guest-ai/events?guest_session_id=${encodeURIComponent(guestId)}&token=${encodeURIComponent(liveToken)}`;
+    const source = new EventSource(url);
+    const refresh = () => {
+      ensureGuestSession(guestId, locale)
+        .then((session) => {
+          setMessages(session.messages || []);
+        })
+        .catch(() => {});
+    };
+    source.addEventListener('new_message', refresh);
+    return () => source.close();
+  }, [guestId, liveToken, locale, open]);
 
   useEffect(() => {
     const node = listRef.current;
