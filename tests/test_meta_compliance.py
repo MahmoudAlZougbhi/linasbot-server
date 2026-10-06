@@ -68,6 +68,11 @@ def test_meta_signed_request_rejects_invalid_input(signed_request: str, secret: 
         verify_meta_deletion_signed_request(signed_request, secret, now=now)
 
 
+def test_meta_signed_request_rejects_non_ascii() -> None:
+    with pytest.raises(MetaSignedRequestError):
+        verify_meta_deletion_signed_request("sig.حمولة", APP_SECRET)
+
+
 def test_confirmation_code_does_not_expose_meta_id() -> None:
     code = deletion_confirmation_code("123456789", APP_SECRET)
     assert len(code) == 32

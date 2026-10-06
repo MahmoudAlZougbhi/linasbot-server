@@ -140,10 +140,14 @@ def verify_meta_deletion_signed_request(
         raise MetaSignedRequestError("Invalid signed request")
 
     encoded_signature, encoded_payload = raw.split(".", 1)
+    try:
+        payload_bytes = encoded_payload.encode("ascii")
+    except UnicodeError as exc:
+        raise MetaSignedRequestError("Invalid signed request") from exc
     received_signature = _decode_base64url(encoded_signature)
     expected_signature = hmac.new(
         secret.encode("utf-8"),
-        encoded_payload.encode("ascii"),
+        payload_bytes,
         hashlib.sha256,
     ).digest()
     if not hmac.compare_digest(received_signature, expected_signature):
