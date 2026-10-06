@@ -87,16 +87,18 @@ async def handle_message(
         [ln for ln in raw_msg.replace("\r\n", "\n").replace("\r", "\n").split("\n") if ln.strip()]
     )
     if non_empty_line_count > config.MAX_TEXT_LINES_PER_SINGLE_MESSAGE:
-        await send_message_func(
-            user_id,
-            f"لطفاً خفّف طول الرسالة: الحد الأقصى للرسالة الواحدة هو {config.MAX_TEXT_LINES_PER_SINGLE_MESSAGE} سطر. "
-            "قسّمها على أكثر من رسالة قصيرة.",
-        )
+        kept: list[str] = []
+        for line in raw_msg.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+            if not line.strip():
+                continue
+            kept.append(line)
+            if len(kept) >= int(config.MAX_TEXT_LINES_PER_SINGLE_MESSAGE):
+                break
+        raw_msg = "\n".join(kept)
         print(
-            f"[handle_message] Blocked long single message for user {user_id}: "
-            f"{non_empty_line_count} lines (limit: {config.MAX_TEXT_LINES_PER_SINGLE_MESSAGE})"
+            f"[handle_message] Truncated long message for user ...{str(user_id)[-4:]}: "
+            f"{non_empty_line_count} lines to {len(kept)}"
         )
-        return
 
     # Session timing for greeting policy (new conversation or inactivity >= 1h)
     now_ts = datetime.datetime.now()
