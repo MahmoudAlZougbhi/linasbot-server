@@ -65,17 +65,17 @@ def _matches(data: dict[str, Any], field: str, op: str, expected: Any) -> bool:
     if isinstance(actual, datetime):
         actual = actual.isoformat()
     if op == "==":
-        return actual == expected
+        return bool(actual == expected)
     if op == "<":
-        return actual is not None and actual < expected
+        return bool(actual is not None and actual < expected)
     if op == "<=":
-        return actual is not None and actual <= expected
+        return bool(actual is not None and actual <= expected)
     if op == ">":
-        return actual is not None and actual > expected
+        return bool(actual is not None and actual > expected)
     if op == ">=":
-        return actual is not None and actual >= expected
+        return bool(actual is not None and actual >= expected)
     if op == "in":
-        return actual in set(expected or [])
+        return bool(actual in set(expected or []))
     return False
 
 
@@ -250,7 +250,7 @@ class DocumentClient:
     def transaction(self) -> Transaction:
         return Transaction(self)
 
-    def _session(self):
+    def _session(self) -> Any:
         return whatsapp_session(require=True)
 
     def _ensure(self, session: Any) -> None:

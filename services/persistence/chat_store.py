@@ -34,7 +34,7 @@ def empty_counters() -> dict[str, int]:
     return {"all": 0, "waiting": 0, "with_operator": 0, "bot_active": 0, "closed": 0}
 
 
-def _session():
+def _session() -> Any:
     return whatsapp_session(require=True)
 
 
