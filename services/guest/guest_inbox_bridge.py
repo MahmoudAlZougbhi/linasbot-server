@@ -62,10 +62,10 @@ def resolve_guest_widget(origin: str | None) -> Any | None:
     try:
         with with_ha_session() as db:
             rows = list(db.scalars(select(WebChatWidgetRow)))
+            widgets = [_widget_from_row(row) for row in rows]
     except Exception as exc:
         _log.info("guest widget lookup skipped: %s", type(exc).__name__)
         return None
-    widgets = [_widget_from_row(row) for row in rows]
     if not widgets:
         return None
     host = _host(origin)
@@ -173,7 +173,11 @@ def publish_guest_view(session: GuestSession, *, origin: str | None) -> dict[str
     messages = [
         {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at} for m in session.messages
     ]
-    widget = resolve_guest_widget(origin)
+    try:
+        widget = resolve_guest_widget(origin)
+    except Exception as exc:
+        _log.info("guest widget lookup skipped: %s", type(exc).__name__)
+        widget = None
     if widget is None:
         return {"messages": messages, "live_token": token}
     tenant_id = str(widget.tenant_id or "").strip().lower()
