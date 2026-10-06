@@ -171,9 +171,7 @@ async def test_retrieve_miss_without_handoff_is_silence(monkeypatch: pytest.Monk
         visual_reason="",
         tool_rows=[],
     )
-    assert out is not None
-    assert not out.envelope.messages
-    assert out.stop_reason == "failed_closed"
+    assert out is None
 
 
 def test_outbound_safety_blocks_sop() -> None:
