@@ -212,9 +212,9 @@ async def test_whatsapp_sync_when_durable_off() -> None:
             tenant_id="linas",
             idempotency_key="local-wa",
         )
-    assert result.get("success") is True
-    assert result.get("delivered") is True
-    adapter.send_text_message.assert_awaited_once()
+    assert result.get("success") is False
+    assert "tenant_delivery_unavailable" in str(result.get("error") or "")
+    adapter.send_text_message.assert_not_awaited()
 
 
 def test_whatsapp_enqueue_skipped_in_sync_mode(monkeypatch: pytest.MonkeyPatch) -> None:

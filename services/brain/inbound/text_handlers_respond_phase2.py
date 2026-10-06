@@ -203,6 +203,7 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
 
     if not tenant_allows_legacy_bridge(cm_tenant_id):
         print(f"[handle_message] unpublished tenant stays silent tenant={cm_tenant_id}")
+        settle_after_outbound(user_data, reply="")
         log_interaction(
             user_id,
             user_input_to_process,
