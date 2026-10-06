@@ -19,7 +19,7 @@ from modules.core import app
 
 # Must import before config/modules.core so legacy data is migrated first.
 from storage.migrate_bootstrap import MIGRATED as _DATA_MIGRATED
-from utils.utils import initialize_firestore
+from utils.utils import initialize_document_db
 
 if not _DATA_MIGRATED:
     raise RuntimeError("storage migrate bootstrap did not run")
@@ -136,7 +136,7 @@ if os.path.exists(DASHBOARD_BUILD_PATH) and os.path.exists(INDEX_HTML_PATH):
 
 if __name__ == "__main__":
     try:
-        initialize_firestore()
+        initialize_document_db()
         print("Linas AI is ready.")
         if os.path.exists(INDEX_HTML_PATH):
             print("📊 Dashboard: http://localhost:8003/")

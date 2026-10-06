@@ -11,7 +11,7 @@ import config
 from services.live_chat.contracts import (
     utc_now,
 )
-from utils.utils_firestore import get_firestore_db
+from utils.document_db import get_document_db
 from utils.utils_livechat_hooks import _invalidate_live_chat_cache
 
 _log = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ async def update_voice_message_with_transcription(
         print("🧪 TESTING MODE: Skipping Firebase update for voice message")
         return
 
-    db = get_firestore_db()
+    db = get_document_db()
     if not db:
         print("⚠️ Firestore not initialized. Skipping voice message update.")
         return
@@ -136,7 +136,6 @@ async def upload_base64_to_firebase_storage(
     try:
         import base64
         import uuid
-        from urllib.parse import quote
 
         # Decode base64 to bytes
         file_bytes = base64.b64decode(base64_data)
@@ -153,42 +152,13 @@ async def upload_base64_to_firebase_storage(
         with open(local_path, "wb") as f:
             f.write(file_bytes)
 
-        # Upload to Firebase Storage with a download token for public access
-        try:
-            from firebase_admin import storage as fb_storage
+        from services.live_chat.media_service import build_public_media_url
 
-            bucket = fb_storage.bucket()
-            storage_path = unique_filename
-            blob = bucket.blob(storage_path)
-
-            # Set download token for public URL access
-            download_token = str(uuid.uuid4())
-            blob.metadata = {"firebaseStorageDownloadTokens": download_token}
-            blob.upload_from_string(file_bytes, content_type=file_type)
-
-            # Build Firebase Storage download URL (publicly accessible with token)
-            encoded_path = quote(storage_path, safe="")
-            firebase_url = f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{encoded_path}?alt=media&token={download_token}"
-
-            print(f"✅ Uploaded to Firebase Storage: {storage_path}")
-            print(f"   Firebase URL: {firebase_url}")
-            return firebase_url
-
-        except Exception as e:
-            print(f"⚠️ Firebase Storage upload failed: {e}")
-            import traceback
-
-            traceback.print_exc()
-
-            # Fallback to local serve URL
-            from services.live_chat.media_service import build_public_media_url
-
-            serve_url = build_public_media_url(unique_filename)
-            if serve_url.startswith("/"):
-                bot_domain = os.getenv("BOT_PUBLIC_DOMAIN", "linasaibot.com")
-                serve_url = f"https://{bot_domain}{serve_url}"
-            print(f"   Falling back to local serve URL: {serve_url}")
-            return serve_url
+        serve_url = build_public_media_url(unique_filename)
+        if serve_url.startswith("/"):
+            bot_domain = os.getenv("BOT_PUBLIC_DOMAIN", "linasaibot.com")
+            serve_url = f"https://{bot_domain}{serve_url}"
+        return serve_url
 
     except Exception as e:
         print(f"❌ ERROR saving media file: {e}")
@@ -203,7 +173,7 @@ async def update_dashboard_metric_in_firestore(user_id: str, metric_name: str, i
     Updates a specific dashboard metric in Firestore.
     Metrics are stored under a 'summary' document for each user.
     """
-    db = get_firestore_db()
+    db = get_document_db()
     if not db:
         print("⚠️ Firestore not initialized. Skipping metric update.")
         return

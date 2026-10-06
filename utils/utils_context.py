@@ -13,7 +13,7 @@ from services.live_chat.contracts import (
     parse_timestamp_utc,
     utc_now,
 )
-from utils.utils_firestore import get_firestore_db
+from utils.document_db import get_document_db
 from utils.utils_livechat_hooks import _latest_smart_ai_across_conversations
 
 _log = logging.getLogger(__name__)
@@ -128,7 +128,7 @@ async def get_conversation_history_from_firestore(
     Returns:
         List of message dicts in OpenAI format
     """
-    db = get_firestore_db()
+    db = get_document_db()
     if not db:
         print("⚠️ Firestore not initialized. Returning empty conversation history.")
         return []
@@ -283,7 +283,7 @@ async def get_conversation_last_ai_response_at(
     Returns None if not found or no prior AI response.
     Tries user_id first, then alternate_user_id (e.g. canonical_user_id) if provided.
     """
-    db = get_firestore_db()
+    db = get_document_db()
     if not db or not conversation_id:
         return None
     app_id = "linas-ai-bot-backend"
@@ -320,7 +320,7 @@ async def get_last_bot_message_from_conversation(
     Used to give GPT context when user replies after a smart message or any notification.
     Returns None if not found.
     """
-    db = get_firestore_db()
+    db = get_document_db()
     if not db or not conversation_id:
         return None
     app_id = "linas-ai-bot-backend"

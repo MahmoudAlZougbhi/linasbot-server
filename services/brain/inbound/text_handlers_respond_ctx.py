@@ -14,7 +14,7 @@ def _lazy_bindings() -> dict[str, Any]:
     from services.team.user_persistence_service import user_persistence
     from utils.utils import (
         get_canonical_user_id_and_phone,
-        get_firestore_db,
+        get_document_db,
         save_conversation_message_to_firestore,
     )
 
@@ -22,7 +22,7 @@ def _lazy_bindings() -> dict[str, Any]:
         "_handle_published_cm_runtime": _handle_published_cm_runtime,
         "get_canonical_user_id_and_phone": get_canonical_user_id_and_phone,
         "get_dynamic_message": get_dynamic_message,
-        "get_firestore_db": get_firestore_db,
+        "get_document_db": get_document_db,
         "is_flow_logging_enabled": is_flow_logging_enabled,
         "language_detection_service": language_detection_service,
         "log_interaction": log_interaction,

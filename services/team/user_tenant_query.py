@@ -44,7 +44,7 @@ def list_users_for_tenant(service: Any, tenant_id: str) -> list[dict[str, Any]]:
     if cached is not None and now - cached[0] < _CACHE_TTL_SECONDS:
         return [dict(row) for row in cached[1]]
 
-    from google.cloud.firestore_v1.base_query import FieldFilter
+    from services.persistence.query_api import FieldFilter
 
     found: dict[str, dict[str, Any]] = {}
     for field in _FIELDS:

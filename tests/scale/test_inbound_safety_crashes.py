@@ -20,7 +20,7 @@ def outbound_store(monkeypatch: pytest.MonkeyPatch) -> _FakeFirestore:
 
     db = _FakeFirestore()
     monkeypatch.setenv("ENVIRONMENT", "development")
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
     return db
 
 

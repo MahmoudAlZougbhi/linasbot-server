@@ -58,7 +58,7 @@ def _configure_ha_stores(
     active = {"root": roots["node01"], "claims": claims_roots["node01"] / "durable_claims"}
     monkeypatch.setattr(event_store, "_store_dir", lambda: active["root"])
     monkeypatch.setattr(durable_claims, "_claims_dir", lambda: active["claims"])
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
     monkeypatch.setattr(deletion_service, "_LOCK_DIR", tmp_path / "deletion_runtime")
     monkeypatch.setenv("META_DELETION_NODE_ID", "node01")
     monkeypatch.setenv("META_DELETION_REQUIRED_NODES", "node01,node02")

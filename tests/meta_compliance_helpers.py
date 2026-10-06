@@ -215,7 +215,7 @@ class _GoogleLikeFirestore(_FakeFirestore):
 def _install_google_transactional_fake(monkeypatch: Any) -> None:
     """Make google.cloud.firestore.transactional execute the SDK-like fake."""
 
-    from google.cloud import firestore as gcf
+    from services.persistence import query_api as gcf
 
     def _transactional(fn: Any) -> Any:
         def _run(transaction: _GoogleLikeTransaction, *args: Any, **kwargs: Any) -> Any:

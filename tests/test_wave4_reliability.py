@@ -17,8 +17,8 @@ from services.scale.durable_event_claim import (
 class TestDurableClaims:
     def test_file_claim_exclusive_and_release(self):
         async def _run():
-            with patch("services.scale.durable_event_claim.get_firestore_db", create=True):
-                with patch("utils.utils.get_firestore_db", return_value=None):
+            with patch("services.scale.durable_event_claim.get_document_db", create=True):
+                with patch("utils.utils.get_document_db", return_value=None):
                     a = await try_claim_event("unit_ns", "mid-1", ttl_seconds=60)
                     b = await try_claim_event("unit_ns", "mid-1", ttl_seconds=60)
                     assert a is True

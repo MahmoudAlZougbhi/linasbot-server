@@ -72,7 +72,7 @@ def registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistry
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v24.0")
     monkeypatch.setenv("META_OAUTH_REDIRECT_URI", "https://www.linasaibot.com/oauth/meta/callback")
     db = _FakeFirestore()
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
 
     async def _enable_channel_defaults(**_kwargs: Any) -> None:
         return None

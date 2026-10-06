@@ -197,9 +197,9 @@ def _redact_ledgers(
     if not include_firestore:
         return stats
 
-    from utils.utils import get_firestore_db
+    from utils.utils import get_document_db
 
-    db = get_firestore_db()
+    db = get_document_db()
     if db is None:
         raise RuntimeError("Firestore is unavailable for inbound ledger redaction")
     stats["firestore_available"] = True

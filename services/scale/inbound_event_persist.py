@@ -119,15 +119,14 @@ def _create_soak_firestore_event(record: Any) -> tuple[dict[str, Any], bool]:
     soak workers do not read it.
     """
 
-    from google.api_core.exceptions import AlreadyExists
-
     from services.integrations.meta.meta_inbound_deletion_fence import (
         InboundDeletionFenceStoreError,
         _firestore_event_ref,
     )
-    from utils.utils import get_firestore_db
+    from services.persistence.query_api import AlreadyExists
+    from utils.utils import get_document_db
 
-    db = get_firestore_db()
+    db = get_document_db()
     if db is None:
         raise InboundDeletionFenceStoreError("Firestore inbound fence store is unavailable")
     persisted = dict(record.to_dict())

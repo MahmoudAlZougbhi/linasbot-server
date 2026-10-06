@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from google.cloud import firestore
-
 import config
 from services.live_chat.channel import resolve_live_chat_channel
 from services.live_chat.contracts import (
@@ -18,8 +16,9 @@ from services.live_chat.tenant import (
     conversation_tenant_fields,
     resolve_live_chat_tenant_id,
 )
+from services.persistence import query_api as firestore
 from utils.utils import (
-    get_firestore_db,
+    get_document_db,
 )
 
 
@@ -72,7 +71,7 @@ class LiveChatRebuildMixin:
         self, user_id: str, conversation_id: str, *, allow_state_backfill: bool = False
     ) -> dict[str, Any]:
         """Read canonical conversation from Firestore, normalize, and upsert index entry."""
-        db = get_firestore_db()
+        db = get_document_db()
         if not db:
             return {"written": False, "reason": "firestore_missing"}
 
@@ -166,7 +165,7 @@ class LiveChatRebuildMixin:
 
         Returns number of index entries written.
         """
-        db = get_firestore_db()
+        db = get_document_db()
         if not db:
             print("⚠️ Firestore not initialized; cannot rebuild index")
             return 0
@@ -303,7 +302,7 @@ class LiveChatRebuildMixin:
 
     async def _upsert_index_entry(self, entry: dict) -> None:
         try:
-            db = get_firestore_db()
+            db = get_document_db()
             if not db or not entry:
                 return
             if self._is_index_write_paused():

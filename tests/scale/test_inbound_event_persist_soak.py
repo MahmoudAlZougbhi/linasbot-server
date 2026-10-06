@@ -6,8 +6,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from google.api_core.exceptions import AlreadyExists
 
+from services.persistence.query_api import AlreadyExists
 from services.scale.inbound_event_persist import persist_created_inbound
 
 
@@ -40,7 +40,7 @@ def test_soak_create_uses_direct_firestore_create(monkeypatch: pytest.MonkeyPatc
     ref = _FakeRef()
     fence_calls: list[object] = []
     cache_calls: list[object] = []
-    monkeypatch.setattr("utils.utils.get_firestore_db", lambda: object())
+    monkeypatch.setattr("utils.utils.get_document_db", lambda: object())
     monkeypatch.setattr(
         "services.integrations.meta.meta_inbound_deletion_fence._firestore_event_ref",
         lambda *_a, **_k: ref,
@@ -77,7 +77,7 @@ def test_soak_create_returns_existing_row_on_already_exists(monkeypatch: pytest.
     ref = _FakeRef()
     ref.create_error = AlreadyExists("row exists")
     ref.existing = {"event_id": "ibe_soak", "state": "queued"}
-    monkeypatch.setattr("utils.utils.get_firestore_db", lambda: object())
+    monkeypatch.setattr("utils.utils.get_document_db", lambda: object())
     monkeypatch.setattr(
         "services.integrations.meta.meta_inbound_deletion_fence._firestore_event_ref",
         lambda *_a, **_k: ref,

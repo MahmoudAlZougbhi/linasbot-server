@@ -24,7 +24,7 @@ def _send_patches(*extra: object, user_id: str = "instagram:178414:psid"):
         ),
         patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=(user_id, None)),
-        patch("utils.utils.get_firestore_db", return_value=None),
+        patch("utils.utils.get_document_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
         patch(
             "services.requests.manual_mode.activate_manual_mode",

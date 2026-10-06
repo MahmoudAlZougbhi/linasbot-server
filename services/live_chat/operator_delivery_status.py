@@ -93,9 +93,9 @@ async def persist_operator_delivery_status(
     try:
         import asyncio
 
-        from utils.utils import get_canonical_user_id_and_phone, get_firestore_db
+        from utils.utils import get_canonical_user_id_and_phone, get_document_db
 
-        db = get_firestore_db()
+        db = get_document_db()
         if not db:
             return
         canonical, _ = get_canonical_user_id_and_phone(user_id)

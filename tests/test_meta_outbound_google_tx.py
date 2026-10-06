@@ -21,7 +21,7 @@ async def test_google_transactional_quota_reserve_and_fence_reconcile(
     db = _GoogleLikeFirestore()
     _install_google_transactional_fake(monkeypatch)
     monkeypatch.setenv("ENVIRONMENT", "development")
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
 
     raw = db.transaction()
     event_id = "ibe_" + "7" * 40

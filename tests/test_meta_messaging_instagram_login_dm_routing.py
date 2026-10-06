@@ -91,7 +91,7 @@ def registry_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegi
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN", "verify-ig-login-tests")
     monkeypatch.setenv("META_CREDENTIAL_ENCRYPTION_KEY", "ig-login-dm-webhook-secret-tests-1234567890")
     firestore = _FakeFirestore()
-    monkeypatch.setattr("utils.utils.get_firestore_db", lambda: firestore)
+    monkeypatch.setattr("utils.utils.get_document_db", lambda: firestore)
     registry = MetaAppRegistry(
         store_path=tmp_path / "registry.json",
         audit_path=tmp_path / "audit.jsonl",

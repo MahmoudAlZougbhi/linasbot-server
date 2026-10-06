@@ -1,11 +1,9 @@
 """
 Durable event/outbound claim helpers for multi-instance safety.
 
-Uses Firestore create-if-absent when available, otherwise a file lock under
-LINASBOT_DATA_ROOT. Claims can be released on processing failure so providers
-can safely retry.
-
-Compatibility facade: file/Firestore internals live in sibling modules.
+Redis owner keys are the shared claim store. A file lock is only the
+non-production fallback when Redis is down. A Meta deletion fence blocks a
+new claim before the key is written.
 """
 
 from __future__ import annotations
@@ -35,11 +33,6 @@ from services.scale.durable_event_claim_file import (
     local_event_claim_store_lock,
     meta_claim_binding_digest,
 )
-from services.scale.durable_event_claim_firestore import (
-    _firestore_owner_transition,
-    _firestore_try_claim,
-    _is_already_exists,
-)
 from storage.persistent_storage import LOGS_DIR, ensure_dirs
 
 _T = TypeVar("_T")
@@ -51,6 +44,36 @@ _FACADE_REEXPORTS = (
     is_stale_file_claim,
     meta_claim_binding_digest,
 )
+
+
+def _binding_claim_blocked(meta_binding_id: str) -> bool:
+    """True when this binding is fenced, or production cannot read the fence."""
+
+    if not meta_binding_id:
+        return False
+    from config import is_production_runtime
+    from services.integrations.meta.meta_inbound_deletion_fence import (
+        firestore_binding_deletion_fence_ref,
+        local_binding_deletion_is_fenced,
+    )
+
+    try:
+        if local_binding_deletion_is_fenced(meta_binding_id):
+            return True
+    except Exception:
+        return is_production_runtime()
+    try:
+        from utils.utils import get_document_db
+
+        db = get_document_db()
+    except Exception:
+        db = None
+    if db is None:
+        return is_production_runtime()
+    try:
+        return bool(firestore_binding_deletion_fence_ref(db, meta_binding_id).get().exists)
+    except Exception:
+        return is_production_runtime()
 
 
 async def try_claim_event_handle(
@@ -104,65 +127,29 @@ async def try_claim_event_handle(
     coll = (firestore_collection or ns).strip()
     owner_token = secrets.token_urlsafe(32)
     owner_hash = hashlib.sha256(f"event-claim-owner\0{owner_token}".encode()).hexdigest()
+    if _binding_claim_blocked(str(meta_binding_id or "").strip()):
+        return None
 
-    # Capture SERVER_TIMESTAMP in the import scope so the except path never needs
-    # an unbound/None module assignment (avoids type: ignore on failed imports).
-    server_timestamp: object | None = None
-    db = None
-    try:
-        from google.cloud import firestore
+    from services.scale.redis_claims import RedisClaimStore, redis_claims_fail_closed
 
-        from utils.utils import get_firestore_db
+    claimed = RedisClaimStore().try_claim_owner(ns, mid, owner_hash, ttl_seconds=ttl_seconds)
+    if claimed is True:
+        return event_claim_handle_from_token(
+            ns,
+            mid,
+            firestore_collection=coll,
+            owner_token=owner_token,
+            generation=1,
+            firestore_document_id=firestore_document_id,
+        )
+    if claimed is False:
+        return None
+    if redis_claims_fail_closed():
+        return None
+    from config import is_production_runtime
 
-        db = get_firestore_db()
-        server_timestamp = firestore.SERVER_TIMESTAMP
-    except Exception:
-        db = None
-        server_timestamp = None
-
-    if db is not None and server_timestamp is not None:
-        doc_id = _firestore_claim_document_id(ns, mid, document_id=firestore_document_id)
-        ref = db.collection("artifacts").document("linas-ai-bot-backend").collection(coll).document(doc_id)
-        created_at_marker = server_timestamp
-
-        try:
-            generation = await asyncio.to_thread(
-                _firestore_try_claim,
-                db,
-                ref=ref,
-                namespace=ns,
-                key=mid,
-                ttl_seconds=ttl_seconds,
-                metadata=dict(firestore_claim_metadata or {}),
-                server_timestamp=created_at_marker,
-                owner_hash=owner_hash,
-                meta_binding_id=str(meta_binding_id or "").strip(),
-            )
-            if not generation:
-                return None
-            return event_claim_handle_from_token(
-                ns,
-                mid,
-                firestore_collection=coll,
-                owner_token=owner_token,
-                generation=generation,
-                firestore_document_id=firestore_document_id,
-            )
-        except Exception as e:
-            if _is_already_exists(e):
-                return None
-            from config import is_production_runtime
-
-            if is_production_runtime():
-                print(f"⚠️ durable_event_claim shared claim failed closed: {type(e).__name__}")
-                return None
-            print(f"⚠️ durable_event_claim Firestore create failed; file fallback: {type(e).__name__}")
-
-    if db is None:
-        from config import is_production_runtime
-
-        if is_production_runtime():
-            return None
+    if is_production_runtime():
+        return None
 
     generation = await asyncio.to_thread(
         _file_try_claim,
@@ -224,51 +211,36 @@ def run_claim_coroutine_blocking(factory: Callable[[], Coroutine[Any, Any, _T]])
 async def renew_event_claim(handle: EventClaimHandle, *, ttl_seconds: float) -> bool:
     """Extend only the exact live owner generation."""
 
-    try:
-        from utils.utils import get_firestore_db
+    from services.scale.redis_claims import RedisClaimStore
 
-        db = get_firestore_db()
-    except Exception:
-        db = None
-    if db is None:
-        with local_event_claim_store_lock():
-            data = get_file_claim_status(handle.namespace, handle.key) or {}
-            if (
-                str(data.get("status") or "") != "claimed"
-                or str(data.get("owner_hash") or "") != handle.owner_hash
-                or int(data.get("generation") or 0) != handle.generation
-            ):
-                return False
-            data["expires_at_epoch"] = time.time() + max(1.0, float(ttl_seconds))
-            path = _file_claim_path(handle.namespace, handle.key)
-            tmp = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    renewed = RedisClaimStore().renew_owner(handle.namespace, handle.key, handle.owner_hash, ttl_seconds=ttl_seconds)
+    if renewed is not None:
+        return renewed
+    with local_event_claim_store_lock():
+        data = get_file_claim_status(handle.namespace, handle.key) or {}
+        if (
+            str(data.get("status") or "") != "claimed"
+            or str(data.get("owner_hash") or "") != handle.owner_hash
+            or int(data.get("generation") or 0) != handle.generation
+        ):
+            return False
+        data["expires_at_epoch"] = time.time() + max(1.0, float(ttl_seconds))
+        path = _file_claim_path(handle.namespace, handle.key)
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
+        try:
+            fd = os.open(str(tmp), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                json.dump(data, stream, separators=(",", ":"), sort_keys=True)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(tmp, path)
+        finally:
             try:
-                fd = os.open(str(tmp), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-                with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                    json.dump(data, stream, separators=(",", ":"), sort_keys=True)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                os.replace(tmp, path)
-            finally:
-                try:
-                    tmp.unlink()
-                except FileNotFoundError:
-                    pass
-            return True
-    ref = (
-        db.collection("artifacts")
-        .document("linas-ai-bot-backend")
-        .collection(handle.collection)
-        .document(handle.document_id)
-    )
-    return await asyncio.to_thread(
-        _firestore_owner_transition,
-        db,
-        ref=ref,
-        handle=handle,
-        action="renew",
-        ttl_seconds=ttl_seconds,
-    )
+                tmp.unlink()
+            except FileNotFoundError:
+                pass
+        return True
+    return False
 
 
 async def run_under_event_claim(
@@ -320,45 +292,22 @@ async def release_event_claim(
     if not mid:
         return
     ns = (namespace or "default").strip() or "default"
-    coll = (firestore_collection or ns).strip()
     await asyncio.to_thread(
         _file_release,
         ns,
         mid,
         owner_hash=claim_handle.owner_hash if claim_handle else None,
     )
+    del firestore_collection, firestore_document_id
+    from services.scale.redis_claims import RedisClaimStore
 
-    try:
-        from utils.utils import get_firestore_db
-
-        db = get_firestore_db()
-    except Exception:
-        db = None
-    if not db:
-        return
-    doc_id = _firestore_claim_document_id(ns, mid, document_id=firestore_document_id)
-    ref = db.collection("artifacts").document("linas-ai-bot-backend").collection(coll).document(doc_id)
     if claim_handle is None:
         from config import is_production_runtime
 
         if is_production_runtime():
             raise RuntimeError("claim owner is required for production release")
-        try:
-            await asyncio.to_thread(ref.delete)
-        except Exception as e:
-            print(f"⚠️ durable_event_claim release failed: {type(e).__name__}")
         return
-    try:
-        await asyncio.to_thread(
-            _firestore_owner_transition,
-            db,
-            ref=ref,
-            handle=claim_handle,
-            action="release",
-            server_timestamp=None,
-        )
-    except Exception as e:
-        print(f"⚠️ durable_event_claim release failed: {type(e).__name__}")
+    RedisClaimStore().release_owner(ns, mid, claim_handle.owner_hash)
 
 
 async def complete_event_claim(
@@ -379,45 +328,16 @@ async def complete_event_claim(
         mid,
         owner_hash=claim_handle.owner_hash if claim_handle else None,
     )
-    # Firestore create already proves ownership; leave doc as completed marker.
-    try:
-        from google.cloud import firestore
+    del firestore_collection, firestore_document_id
+    from services.scale.redis_claims import RedisClaimStore
 
-        from utils.utils import get_firestore_db
-
-        db = get_firestore_db()
-    except Exception:
-        return
-    if not db:
-        return
-    coll = (firestore_collection or ns).strip()
-    doc_id = _firestore_claim_document_id(ns, mid, document_id=firestore_document_id)
-    ref = db.collection("artifacts").document("linas-ai-bot-backend").collection(coll).document(doc_id)
     if claim_handle is None:
         from config import is_production_runtime
 
         if is_production_runtime():
             raise RuntimeError("claim owner is required for production completion")
-        try:
-            await asyncio.to_thread(
-                ref.set,
-                {"status": "completed", "completed_at": firestore.SERVER_TIMESTAMP},
-                merge=True,
-            )
-        except Exception:
-            pass
         return
-    try:
-        await asyncio.to_thread(
-            _firestore_owner_transition,
-            db,
-            ref=ref,
-            handle=claim_handle,
-            action="complete",
-            server_timestamp=firestore.SERVER_TIMESTAMP,
-        )
-    except Exception:
-        pass
+    RedisClaimStore().complete_owner(ns, mid, claim_handle.owner_hash, ttl_seconds=7 * 24 * 3600)
 
 
 def try_acquire_job_lock(job_id: str, *, ttl_seconds: float = 120.0) -> bool:

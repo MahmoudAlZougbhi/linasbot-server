@@ -15,7 +15,7 @@ _PHASE_HALT = "_PHASE_HALT"
 async def text_handlers_respond_phase1(ctx: dict) -> Any:
     get_canonical_user_id_and_phone = cast(Any, ctx.get("get_canonical_user_id_and_phone"))
     get_dynamic_message = cast(Any, ctx.get("get_dynamic_message"))
-    get_firestore_db = cast(Any, ctx.get("get_firestore_db"))
+    get_document_db = cast(Any, ctx.get("get_document_db"))
     is_flow_logging_enabled = cast(Any, ctx.get("is_flow_logging_enabled"))
     language_detection_service = cast(Any, ctx.get("language_detection_service"))
     log_interaction = cast(Any, ctx.get("log_interaction"))
@@ -148,7 +148,7 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
         should_send_waiting = True
         takeover_still_active = True
         try:
-            db = get_firestore_db()
+            db = get_document_db()
             if db:
                 canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
                 users_coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("users")
@@ -262,7 +262,7 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
         "firestore_conversation_id",
         "get_canonical_user_id_and_phone",
         "get_dynamic_message",
-        "get_firestore_db",
+        "get_document_db",
         "image_quota",
         "is_expecting_name",
         "is_flow_logging_enabled",

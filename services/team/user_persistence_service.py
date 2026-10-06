@@ -14,7 +14,7 @@ from typing import cast
 import config
 from services.saas_no_boc import get_customer_by_phone
 from utils.phone_utils import normalize_phone
-from utils.utils import get_firestore_db, get_user_state_from_firestore
+from utils.utils import get_document_db, get_user_state_from_firestore
 
 
 class UserPersistenceService:
@@ -93,7 +93,7 @@ class UserPersistenceService:
         # Save to Firestore (primary persistence)
         firestore_saved = False
         try:
-            db = get_firestore_db()
+            db = get_document_db()
             if db:
                 app_id_for_firestore = "linas-ai-bot-backend"
                 user_doc_ref = (
@@ -137,7 +137,7 @@ class UserPersistenceService:
 
         # Also update the most recent conversation's customer_info (for dashboard visibility)
         try:
-            db = get_firestore_db()
+            db = get_document_db()
             if db:
                 app_id_for_firestore = "linas-ai-bot-backend"
                 conversations_ref = (
@@ -149,7 +149,7 @@ class UserPersistenceService:
                 )
 
                 # Get the most recent conversation - use asyncio.to_thread
-                from google.cloud.firestore import Query
+                from services.persistence.query_api import Query
 
                 recent_convs = await asyncio.to_thread(
                     lambda: list(conversations_ref.order_by("last_updated", direction=Query.DESCENDING).limit(1).get())
@@ -191,7 +191,7 @@ class UserPersistenceService:
         if not re.fullmatch(r"[0-9a-f]{64}", preference_key):
             raise ValueError("Invalid social booking preference key")
 
-        db = get_firestore_db()
+        db = get_document_db()
         if not db:
             print("[social-preference] persistence_unavailable")
             return False
@@ -298,10 +298,10 @@ class UserPersistenceService:
         """Read language from the most recently updated conversation doc for this user."""
         if not user_id:
             return None
-        db = get_firestore_db()
+        db = get_document_db()
         if not db:
             return None
-        from google.cloud import firestore
+        from services.persistence import query_api as firestore
 
         app_id = "linas-ai-bot-backend"
         conv_col = (

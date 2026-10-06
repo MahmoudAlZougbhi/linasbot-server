@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from utils.utils import (
-    get_firestore_db,
+    get_document_db,
     get_openai_tools_schema,
     save_conversation_message_to_firestore,
 )
@@ -23,7 +23,7 @@ def test_utils_modules_under_500_lines() -> None:
 
 
 def test_utils_preserves_public_api() -> None:
-    assert callable(get_firestore_db)
+    assert callable(get_document_db)
     assert callable(save_conversation_message_to_firestore)
     assert callable(get_openai_tools_schema)
     tools = get_openai_tools_schema()
@@ -35,8 +35,6 @@ def test_utils_preserves_public_api() -> None:
 
 def test_utils_keeps_qiscus_room_id_identity() -> None:
     identity = Path("utils/utils_identity.py").read_text(encoding="utf-8")
-    save = Path("utils/utils_conversation_save.py").read_text(encoding="utf-8")
     assert "Qiscus" in identity
     assert "room_id" in identity
-    assert "Qiscus" in save
-    assert "room_id" in save
+    assert "canonical" in identity

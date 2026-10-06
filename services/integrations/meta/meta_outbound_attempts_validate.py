@@ -179,9 +179,9 @@ def _validate_stored_identity(
 def _db_or_bypass() -> Any | None:
     resolution_error: BaseException | None
     try:
-        from utils.utils import get_firestore_db
+        from utils.utils import get_document_db
 
-        db = get_firestore_db()
+        db = get_document_db()
     except Exception as exc:
         db = None
         resolution_error = exc

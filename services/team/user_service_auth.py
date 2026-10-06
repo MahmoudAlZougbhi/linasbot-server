@@ -9,7 +9,8 @@ from datetime import datetime
 from typing import Any
 
 import bcrypt
-from google.cloud.firestore_v1.base_query import FieldFilter
+
+from services.persistence.query_api import FieldFilter
 
 
 class UserServiceAuthMixin:

@@ -4,8 +4,6 @@ import asyncio
 import datetime
 from typing import Any
 
-from google.cloud import firestore
-
 import config
 from services.live_chat.contracts import (
     dedupe_messages as contract_dedupe_messages,
@@ -17,8 +15,9 @@ from services.live_chat.contracts import (
 from services.live_chat.service_common import (
     _live_chat_display_name,
 )
+from services.persistence import query_api as firestore
 from utils.utils import (
-    get_firestore_db,
+    get_document_db,
 )
 
 
@@ -63,7 +62,7 @@ class LiveChatHistoryMixin:
         return (utc_now() - cache_time).total_seconds() < ttl
 
     def _get_users_collection(self) -> Any:
-        db = get_firestore_db()
+        db = get_document_db()
         if not db:
             return None
         return db.collection("artifacts").document(self.APP_ID).collection("users")
@@ -214,7 +213,7 @@ class LiveChatHistoryMixin:
         if not names:
             return True
 
-        db = get_firestore_db()
+        db = get_document_db()
         if not db:
             return False
 

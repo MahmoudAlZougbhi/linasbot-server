@@ -176,7 +176,7 @@ async def save_message_when_conversation_id(
 
         # Transactional append: re-read messages under a transaction to avoid RMW races.
         def _txn_append() -> Any:
-            from google.cloud import firestore as gcf
+            from services.persistence import query_api as gcf
 
             transaction = db.transaction()
 
@@ -251,7 +251,7 @@ async def save_message_when_conversation_id(
         new_doc_ref = conversations_collection_for_user.document(conversation_id)
 
         def _create_or_append() -> str:
-            from google.cloud import firestore as gcf
+            from services.persistence import query_api as gcf
 
             transaction = db.transaction()
 

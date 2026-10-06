@@ -200,15 +200,15 @@ async def ready() -> Any:
         }
 
     try:
-        from utils.utils import get_firestore_db
+        from utils.utils import get_document_db
 
-        db = get_firestore_db()
+        db = get_document_db()
         fs_ok = db is not None
-        checks["firestore"] = {"ok": fs_ok}
+        checks["documents"] = {"ok": fs_ok}
         if not fs_ok:
             overall_ok = False
     except Exception as e:
-        checks["firestore"] = {"ok": False, "error": type(e).__name__}
+        checks["documents"] = {"ok": False, "error": type(e).__name__}
         overall_ok = False
 
     try:

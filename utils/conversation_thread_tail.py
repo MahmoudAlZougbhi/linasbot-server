@@ -66,9 +66,8 @@ def _trim_one_batch(doc_ref: Any) -> bool:
 
 def load_messages_before(doc_ref: Any, before: Any, limit: int) -> list[dict[str, Any]]:
     """Older archived messages strictly before a timestamp."""
-    from google.cloud import firestore
-
     from services.live_chat.contracts import parse_timestamp_utc
+    from services.persistence import query_api as firestore
 
     moment = parse_timestamp_utc(before)
     cap = max(1, min(100, int(limit)))

@@ -49,7 +49,7 @@ def registry(tmp_path: Path, oauth_env: None, monkeypatch: pytest.MonkeyPatch) -
     import utils.utils
 
     db = _FakeFirestore()
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
 
     async def _enable_channel_defaults(**_kwargs: Any) -> None:
         return None

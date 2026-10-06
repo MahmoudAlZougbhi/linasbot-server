@@ -93,7 +93,7 @@ def test_shared_completed_unknown_reopens_in_firestore(
     from tests.meta_compliance_helpers import _FakeFirestore
 
     db = _FakeFirestore()
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
     monkeypatch.setattr("config.is_production_runtime", lambda: True)
 
     rec = put_inbound_event(_record(event_id="ibe_shared_unknown", state="accepted", outbound=None))
@@ -125,7 +125,7 @@ def test_shared_completed_sent_stays_terminal(
     from tests.meta_compliance_helpers import _FakeFirestore
 
     db = _FakeFirestore()
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
     monkeypatch.setattr("config.is_production_runtime", lambda: True)
 
     rec = put_inbound_event(_record(event_id="ibe_shared_sent", state="accepted", outbound=None))

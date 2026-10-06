@@ -128,9 +128,9 @@ def put_inbound_event(
 
     _file_put(record)
     try:
-        from utils.utils import get_firestore_db
+        from utils.utils import get_document_db
 
-        db = get_firestore_db()
+        db = get_document_db()
         if db is not None:
             ref = (
                 db.collection("artifacts")
@@ -186,9 +186,9 @@ def get_inbound_event(
     strict_shared_authority = bool(require_shared_authority or is_production_runtime())
     local = _file_get(event_id)
     try:
-        from utils.utils import get_firestore_db
+        from utils.utils import get_document_db
 
-        db = get_firestore_db()
+        db = get_document_db()
         if db is None:
             if strict_shared_authority:
                 raise InboundEventStoreUnavailableError("Shared inbound-event ledger is unavailable")
@@ -201,8 +201,6 @@ def get_inbound_event(
             .get()
         )
         if not snap.exists:
-            # A local file is only a cache.  Production state transitions must
-            # never resurrect a row that the shared authority no longer has.
             if strict_shared_authority:
                 return None
             return local
@@ -238,9 +236,9 @@ def list_active_inbound_events(
     local_by_id = {record.event_id: record for record in local}
 
     try:
-        from utils.utils import get_firestore_db
+        from utils.utils import get_document_db
 
-        db = get_firestore_db()
+        db = get_document_db()
     except Exception as exc:
         raise InboundEventStoreUnavailableError("Unable to resolve the shared inbound-event ledger") from exc
     if db is None:
@@ -368,9 +366,9 @@ def accountability_stats(records: list[InboundEventRecord] | None = None) -> dic
 
         if is_production_runtime():
             try:
-                from utils.utils import get_firestore_db
+                from utils.utils import get_document_db
 
-                db = get_firestore_db()
+                db = get_document_db()
                 if db is None:
                     raise InboundEventStoreUnavailableError("Shared inbound-event ledger is unavailable in production")
                 collection = _firestore_inbound_collection(db)
@@ -451,9 +449,9 @@ def sanitize_persisted_meta_credentials(
     firestore_errors = 0
     firestore_available = False
     if include_firestore:
-        from utils.utils import get_firestore_db
+        from utils.utils import get_document_db
 
-        db = get_firestore_db()
+        db = get_document_db()
         if db is None:
             raise RuntimeError("Firestore is unavailable for inbound credential sanitization")
         firestore_available = True

@@ -170,9 +170,9 @@ class DashboardSessionService:
             tmp.replace(path)
         # Best-effort Firestore mirror for multi-instance hosts
         try:
-            from utils.utils import get_firestore_db
+            from utils.utils import get_document_db
 
-            db = get_firestore_db()
+            db = get_document_db()
             if db:
                 db.collection("artifacts").document("linas-ai-bot-backend").collection(SESSION_COLLECTION).document(
                     record.session_id
@@ -193,9 +193,9 @@ class DashboardSessionService:
                 except Exception:
                     return None
         try:
-            from utils.utils import get_firestore_db
+            from utils.utils import get_document_db
 
-            db = get_firestore_db()
+            db = get_document_db()
             if not db:
                 return None
             snap = (
@@ -317,9 +317,9 @@ class DashboardSessionService:
                     count += 1
         # Mirror revoke across instances via Firestore query on user_id
         try:
-            from utils.utils import get_firestore_db
+            from utils.utils import get_document_db
 
-            db = get_firestore_db()
+            db = get_document_db()
             if db:
                 coll = db.collection("artifacts").document("linas-ai-bot-backend").collection(SESSION_COLLECTION)
                 snaps = list(coll.where("user_id", "==", str(user_id)).stream())

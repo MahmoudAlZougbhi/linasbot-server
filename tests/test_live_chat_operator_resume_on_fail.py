@@ -22,7 +22,7 @@ async def test_failed_social_send_undoes_fresh_manual_pause() -> None:
         ),
         patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("instagram:1761", None)),
-        patch("utils.utils.get_firestore_db", return_value=None),
+        patch("utils.utils.get_document_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
         patch(
             "services.requests.manual_mode.activate_manual_mode",
@@ -66,7 +66,7 @@ async def test_instagram_send_does_not_open_whatsapp_postgres() -> None:
         ),
         patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("instagram:1761", None)),
-        patch("utils.utils.get_firestore_db", return_value=None),
+        patch("utils.utils.get_document_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
         patch(
             "services.requests.manual_mode.activate_manual_mode",
@@ -104,7 +104,7 @@ async def test_social_send_exception_undoes_fresh_pause() -> None:
         ),
         patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("instagram:1761", None)),
-        patch("utils.utils.get_firestore_db", return_value=None),
+        patch("utils.utils.get_document_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
         patch(
             "services.requests.manual_mode.activate_manual_mode",
@@ -144,7 +144,7 @@ async def test_failed_social_image_send_undoes_fresh_pause() -> None:
         ),
         patch("services.live_chat.service_operator._release_operator_idempotency_lock", new_callable=AsyncMock),
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("instagram:1761", None)),
-        patch("utils.utils.get_firestore_db", return_value=None),
+        patch("utils.utils.get_document_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
         patch(
             "utils.utils.upload_base64_to_firebase_storage",

@@ -88,7 +88,7 @@ def runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[_FakeFirestore]:
 
     db = _FakeFirestore()
     monkeypatch.setenv("ENVIRONMENT", "development")
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
 
     async def restore(_user_id: str) -> dict[str, Any]:
         return {}

@@ -85,7 +85,7 @@ def test_revoke_all_for_user_marks_local_sessions():
     r1 = svc.create_session(user_id="u1", email="a@x.com", role="admin", permissions=None, tenant_id="linas")
     r2 = svc.create_session(user_id="u1", email="a@x.com", role="admin", permissions=None, tenant_id="linas")
     other = svc.create_session(user_id="u2", email="b@x.com", role="viewer", permissions=None, tenant_id="linas")
-    with patch("utils.utils.get_firestore_db", return_value=None):
+    with patch("utils.utils.get_document_db", return_value=None):
         n = svc.revoke_all_for_user("u1")
     assert n >= 2
     with patch("services.team.user_service.user_service.get_user_by_id", return_value=None):

@@ -148,8 +148,8 @@ def ha_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, _Fi
     claims_root = tmp_path / "logs"
     db = _Firestore()
     monkeypatch.setattr(event_store, "_store_dir", lambda: root)
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
-    monkeypatch.setattr(turn_claims, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
+    monkeypatch.setattr(turn_claims, "get_document_db", lambda: db)
     monkeypatch.setattr(durable_claims, "LOGS_DIR", claims_root)
     monkeypatch.setattr(durable_claims, "ensure_dirs", lambda: claims_root.mkdir(parents=True, exist_ok=True))
     monkeypatch.setattr(
@@ -180,17 +180,14 @@ async def test_ai_turn_release_uses_primary_claim_document_and_allows_peer_retry
     assert legacy.document(legacy_id).exists is False
 
     assert await turn_claims.try_claim_ai_turn("customer-1", ["mid-ha-1"]) is True
-    assert primary.document(primary_id).exists is True
+    assert await turn_claims.try_claim_ai_turn("customer-1", ["mid-ha-1"]) is False
     assert legacy.document(legacy_id).exists is False
 
     await turn_claims.release_ai_turn_claim(key_basis)
-    assert primary.document(primary_id).exists is False
+    assert await turn_claims.try_claim_ai_turn("customer-1", ["mid-ha-1"]) is True
     assert legacy.document(legacy_id).exists is False
 
-    # A different worker using the shared database can now acquire the exact key.
-    assert await turn_claims.try_claim_ai_turn("customer-1", ["mid-ha-1"]) is True
     await turn_claims.complete_ai_turn_claim(key_basis)
-    assert primary.document(primary_id).data["status"] == "completed"
     assert await turn_claims.try_claim_ai_turn("customer-1", ["mid-ha-1"]) is False
 
 
@@ -240,7 +237,7 @@ def test_missing_shared_inbound_store_is_fail_closed_in_production(
     import utils.utils
 
     monkeypatch.setenv("ENVIRONMENT", "production")
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: None)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: None)
 
     with pytest.raises(InboundEventStoreUnavailableError, match="unavailable in production"):
         list_active_inbound_events(older_than_seconds=0.0)

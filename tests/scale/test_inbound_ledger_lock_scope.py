@@ -34,7 +34,7 @@ def test_create_releases_flock_before_firestore(monkeypatch, tmp_path: Path) -> 
     root = tmp_path / "inbound"
     root.mkdir()
     monkeypatch.setattr(event_store, "_store_dir", lambda: root)
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: object())
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: object())
     monkeypatch.setenv("ENVIRONMENT", "production")
 
     started = threading.Event()
@@ -82,7 +82,7 @@ def test_put_releases_flock_before_firestore(monkeypatch, tmp_path: Path) -> Non
     root = tmp_path / "inbound"
     root.mkdir()
     monkeypatch.setattr(event_store, "_store_dir", lambda: root)
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: object())
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: object())
     monkeypatch.setenv("ENVIRONMENT", "production")
 
     started = threading.Event()

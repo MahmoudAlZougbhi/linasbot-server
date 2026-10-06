@@ -10,15 +10,12 @@ python-multipart==0.0.31
 # OpenAI & AI
 openai>=1.57.0,<2.0.0
 
-# HTTP Client (firebase-admin 7.3 requires httpx 0.28.1)
+# HTTP Client
 httpx==0.28.1
 
 # Environment Variables
 python-dotenv==1.2.2
 
-# Firebase & Database
-firebase-admin==7.3.0
-google-cloud-firestore==2.23.0
 # Pin grpc/protobuf explicitly to avoid long pip backtracking on Python 3.13 during deploy
 grpcio==1.80.0
 grpcio-status==1.80.0

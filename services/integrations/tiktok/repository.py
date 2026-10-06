@@ -62,7 +62,7 @@ class TikTokRepository:
             .values(status="consumed", consumed_at=now, outcome_code="consumed")
         )
         result = self.session.execute(stmt)
-        if int(result.rowcount or 0) != 1:
+        if int(getattr(result, "rowcount", 0) or 0) != 1:
             existing = self.session.scalar(
                 select(TikTokOAuthAttempt).where(TikTokOAuthAttempt.state_hash == state_hash)
             )
@@ -251,7 +251,7 @@ class TikTokRepository:
             .values(sync_lease_until=until, sync_lease_owner=owner)
         )
         result = self.session.execute(stmt)
-        if int(result.rowcount or 0) != 1:
+        if int(getattr(result, "rowcount", 0) or 0) != 1:
             return None
         return self.session.get(TikTokConnection, connection_id)
 

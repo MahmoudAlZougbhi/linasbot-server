@@ -39,8 +39,8 @@ def readiness_for_role(role: str | None = None) -> dict[str, Any]:
         if _redis_required_for_live() and not redis_ok:
             overall = False
 
-        fs_ok, fs_detail = _firestore_check()
-        checks["firestore"] = fs_detail
+        fs_ok, fs_detail = _document_store_check()
+        checks["documents"] = fs_detail
         if role_name in {"api", "all"} and not fs_ok:
             overall = False
 
@@ -139,11 +139,11 @@ def _postgres_check(*, required: bool) -> tuple[bool, dict[str, Any]]:
         return False, {"ok": False, "configured": True, "error": type(exc).__name__, "required": required}
 
 
-def _firestore_check() -> tuple[bool, dict[str, Any]]:
+def _document_store_check() -> tuple[bool, dict[str, Any]]:
     try:
-        from utils.utils import get_firestore_db
+        from utils.utils import get_document_db
 
-        ok = get_firestore_db() is not None
+        ok = get_document_db() is not None
         return ok, {"ok": ok}
     except Exception as exc:
         return False, {"ok": False, "error": type(exc).__name__}

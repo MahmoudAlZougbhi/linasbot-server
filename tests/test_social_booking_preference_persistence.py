@@ -27,7 +27,7 @@ async def test_social_preference_updates_only_its_scoped_field_in_existing_profi
     artifacts.document.return_value = app_document
     database = Mock()
     database.collection.return_value = artifacts
-    monkeypatch.setattr(user_persistence_service, "get_firestore_db", lambda: database)
+    monkeypatch.setattr(user_persistence_service, "get_document_db", lambda: database)
 
     saved = await UserPersistenceService().save_social_booking_preference("facebook:sender", key, "female")
 
@@ -54,7 +54,7 @@ async def test_social_preference_creates_backward_compatible_existing_profile_do
     artifacts.document.return_value = app_document
     database = Mock()
     database.collection.return_value = artifacts
-    monkeypatch.setattr(user_persistence_service, "get_firestore_db", lambda: database)
+    monkeypatch.setattr(user_persistence_service, "get_document_db", lambda: database)
 
     saved = await UserPersistenceService().save_social_booking_preference("instagram:sender", key, "male")
 

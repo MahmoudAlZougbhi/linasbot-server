@@ -18,7 +18,7 @@ from services.brain.sentiment_escalation_service import sentiment_service
 from services.scale.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
 from utils.utils import (
     get_canonical_user_id_and_phone,
-    get_firestore_db,
+    get_document_db,
     save_conversation_message_to_firestore,
 )
 
@@ -189,7 +189,7 @@ async def handle_message(
     )
 
     # Get Firestore DB instance for sentiment and takeover checks
-    db = get_firestore_db()
+    db = get_document_db()
 
     # AI-primary: GPT decides when to transfer to human (handover_degree, human_handover action).
     # Sentiment is dashboard telemetry only; it must not keyword-escalate or skip Terra.

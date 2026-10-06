@@ -39,7 +39,7 @@ def _configure_app_a(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_ID", INSTAGRAM_APP_ID)
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_SECRET", INSTAGRAM_APP_SECRET)
     db = _FakeFirestore()
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
 
 
 def test_meta_signed_request_success() -> None:
@@ -462,7 +462,7 @@ def test_public_status_page_does_not_expose_pii(
             "safe_error": "none",
         }
     )
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
     response = compliance_client.get(f"/data-deletion/status/{code}")
     assert response.status_code == 200
     assert "noindex" in response.text
@@ -477,7 +477,7 @@ def test_unknown_status_code_returns_safe_message(
 ) -> None:
     import utils.utils
 
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: _FakeFirestore())
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: _FakeFirestore())
     response = compliance_client.get("/data-deletion/status/" + ("e" * 32))
     assert response.status_code == 200
     assert "could not find" in response.text.lower()
@@ -490,7 +490,7 @@ def test_status_page_fails_closed_when_shared_store_is_unavailable(
 ) -> None:
     import utils.utils
 
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: None)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: None)
     response = compliance_client.get("/data-deletion/status/" + ("f" * 32))
     assert response.status_code == 503
     assert response.json() == {"detail": "Deletion status is temporarily unavailable"}

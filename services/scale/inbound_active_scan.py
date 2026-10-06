@@ -42,7 +42,7 @@ def shared_active_records(
 ) -> dict[str, InboundEventRecord]:
     """Read a capped active query, plus primary state for local candidates."""
 
-    from google.cloud.firestore_v1.base_query import FieldFilter
+    from services.persistence.query_api import FieldFilter
 
     query = collection.where(filter=FieldFilter("state", "in", sorted(ACTIVE_STATES)))
     if query_limit is not None:

@@ -8,9 +8,8 @@ import os
 import time
 from typing import Any
 
-from google.cloud import firestore
-
 from services.integrations.meta.meta_messaging import scrub_legacy_meta_channel_placeholder
+from services.persistence import query_api as firestore
 
 # In-memory fallback when Firestore idempotency is unavailable (single-process only).
 _operator_send_idempotency_keys: dict[str, float] = {}
@@ -123,9 +122,9 @@ async def release_operator_send_idempotency(fingerprint: str) -> None:
         return
     _operator_send_idempotency_keys.pop(key, None)
     try:
-        from utils.utils_firestore import get_firestore_db
+        from utils.document_db import get_document_db
 
-        db = get_firestore_db()
+        db = get_document_db()
         if not db:
             return
         app_id = "linas-ai-bot-backend"

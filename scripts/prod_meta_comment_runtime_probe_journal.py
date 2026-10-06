@@ -279,9 +279,9 @@ def evaluate_controlled_attempt_documents(
 
 def _read_shared_outbound_attempts(manifest: ControlledManifest) -> dict[str, Mapping[str, Any]]:
     try:
-        from utils.utils import get_firestore_db
+        from utils.utils import get_document_db
 
-        db = get_firestore_db()
+        db = get_document_db()
     except Exception as exc:
         raise ControlledEvidenceError("shared_attempt_store_unavailable") from exc
     if db is None:

@@ -133,10 +133,10 @@ def create_firestore_event_unless_fenced(
     processing claim without creating a claim-without-ledger loss window.
     """
 
-    from utils.utils import get_firestore_db
+    from utils.utils import get_document_db
 
     target_binding = _binding_id(binding_id)
-    db = get_firestore_db()
+    db = get_document_db()
     if db is None:
         raise InboundDeletionFenceStoreError("Firestore inbound fence store is unavailable")
     fence_ref = None if skip_shared_fence_reads else _firestore_fence_ref(db, target_binding)
@@ -235,10 +235,10 @@ def persist_firestore_event_respecting_fence(
     """
 
     from services.integrations.meta.meta_inbound_retention import redacted_inbound_event_tombstone
-    from utils.utils import get_firestore_db
+    from utils.utils import get_document_db
 
     target_binding = _binding_id(binding_id)
-    db = get_firestore_db()
+    db = get_document_db()
     if db is None:
         raise InboundDeletionFenceStoreError("Firestore inbound fence store is unavailable")
     fence_ref = _firestore_fence_ref(db, target_binding)
@@ -390,14 +390,14 @@ def install_inbound_binding_deletion_fences(
     """Permanently fence exact bindings in Firestore, then the local ledger."""
 
     from services.scale import inbound_event_store as event_store
-    from utils.utils import get_firestore_db
+    from utils.utils import get_document_db
 
     targets = tuple(sorted({_binding_id(value) for value in binding_ids}))
     stats = {"firestore_fenced": 0, "local_fenced": 0}
     if not targets:
         return stats
     created_at = time.time() if now is None else float(now)
-    db = get_firestore_db()
+    db = get_document_db()
     if db is None:
         raise InboundDeletionFenceStoreError("Firestore inbound fence store is unavailable")
     try:

@@ -13,7 +13,7 @@ import time
 from typing import Any
 
 from utils.phone_utils import phone_match_key
-from utils.utils import get_canonical_user_id_and_phone, get_firestore_db
+from utils.utils import get_canonical_user_id_and_phone, get_document_db
 
 _AI_TURN_CLAIM_NAMESPACE = "ai_turn_claims"
 _AI_TURN_PRIMARY_COLLECTION = "ai_turn_claims"
@@ -170,7 +170,7 @@ async def _legacy_ai_turn_claim_exists(key_basis: str) -> bool:
     import asyncio
 
     try:
-        db = get_firestore_db()
+        db = get_document_db()
     except Exception:
         db = None
     if not db:
@@ -195,7 +195,7 @@ async def _sync_legacy_ai_turn_claim(key_basis: str, *, release: bool) -> None:
     import asyncio
 
     try:
-        db = get_firestore_db()
+        db = get_document_db()
     except Exception:
         db = None
     if not db:
@@ -212,7 +212,7 @@ async def _sync_legacy_ai_turn_claim(key_basis: str, *, release: bool) -> None:
             return
         snapshot = await asyncio.to_thread(ref.get)
         if getattr(snapshot, "exists", False):
-            from google.cloud import firestore
+            from services.persistence import query_api as firestore
 
             await asyncio.to_thread(
                 ref.set,

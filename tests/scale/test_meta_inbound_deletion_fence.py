@@ -57,7 +57,7 @@ def _patch_stores(
     root = tmp_path / "inbound_events"
     root.mkdir()
     monkeypatch.setattr(event_store, "_store_dir", lambda: root)
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
     return root
 
 

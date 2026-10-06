@@ -10,7 +10,7 @@ from services.brain.silence import log_customer_generation_failure
 from services.scale.outbound_turn_idempotency import stable_ai_claim_identity
 from utils.utils import (
     get_canonical_user_id_and_phone,
-    get_firestore_db,
+    get_document_db,
     save_conversation_message_to_firestore,
 )
 
@@ -102,7 +102,7 @@ async def _maybe_waiting_queue_notice(
     outbound_send: Any,
 ) -> bool:
     try:
-        db = get_firestore_db()
+        db = get_document_db()
         current_conversation_id = user_data.get("current_conversation_id")
         if not db or not current_conversation_id:
             return False

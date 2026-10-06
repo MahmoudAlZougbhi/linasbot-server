@@ -128,7 +128,7 @@ def apply_counter_delta(db: Any, tenant_id: str, previous_state: str, next_state
     record_usage("inbox_counter_delta", reads=1)
     if _ready_counters(snapshot) is None:
         return
-    from google.cloud.firestore_v1.transforms import Increment
+    from services.persistence.query_api import Increment
 
     updates: dict[str, Any] = {}
     if previous:
@@ -147,7 +147,7 @@ def apply_counter_delta(db: Any, tenant_id: str, previous_state: str, next_state
 
 def rebuild_counters(db: Any, tenant_id: str, normalize: Any) -> dict[str, int]:
     """Page the tenant index and store the totals. A 5,000-document pass resumes later."""
-    from google.cloud import firestore
+    from services.persistence import query_api as firestore
 
     ref = _counter_collection(db).document(tenant_id)
     snapshot = ref.get(timeout=4, retry=None)

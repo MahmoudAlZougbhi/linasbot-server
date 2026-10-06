@@ -256,7 +256,7 @@ async def test_queue_uses_snapshot_a_for_outbound_authority_with_replacement_b_c
 
     db = _FakeFirestore()
     monkeypatch.setenv("ENVIRONMENT", "development")
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
     record = _dm_record()
     record.event_id = "ibe_" + "4" * 40
     record.claim_key = "claim-replacement-authority"

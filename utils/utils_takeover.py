@@ -12,8 +12,8 @@ from services.live_chat.contracts import (
     parse_timestamp_utc,
     utc_now,
 )
+from utils.document_db import get_document_db
 from utils.phone_utils import is_phone_like_user_id, normalize_phone
-from utils.utils_firestore import get_firestore_db
 from utils.utils_identity import get_canonical_user_id_and_phone
 
 _log = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ async def conversation_any_path_post_release_blocked(
     conversation_id: str, user_id: str, request_user_id: str | None = None
 ) -> bool:
     """True if any duplicate conversation doc under users/* has an active post-release cooldown."""
-    db = get_firestore_db()
+    db = get_document_db()
     if not db or not conversation_id or not (user_id or request_user_id):
         return False
     app_id_for_firestore = "linas-ai-bot-backend"
@@ -120,7 +120,7 @@ async def update_conversation_on_all_existing_paths(
     request_user_id: str | None = None,
 ) -> int:
     """Merge-update every users/*/conversations/{conversation_id} that exists. Returns write count."""
-    db = get_firestore_db()
+    db = get_document_db()
     if not db or not conversation_id or not user_id or not update_payload:
         return 0
     app_id_for_firestore = "linas-ai-bot-backend"
@@ -225,7 +225,7 @@ async def set_human_takeover_status(
         return
 
     canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
-    db = get_firestore_db()
+    db = get_document_db()
     if not db:
         print("❌ Firestore not initialized. Cannot set human takeover status.")
         return

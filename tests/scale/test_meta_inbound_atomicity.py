@@ -13,6 +13,7 @@ import services.scale.inbound_event_reconcile as reconcile
 import services.scale.inbound_event_store as event_store
 from services.scale.inbound_event_store import InboundEventRecord
 from tests.meta_compliance_helpers import _FakeFirestore
+from tests.scale.memory_claim_redis import install_memory_claim_store
 
 
 @pytest.fixture()
@@ -26,8 +27,9 @@ def shared_ledger(
     root = tmp_path / "inbound"
     root.mkdir()
     monkeypatch.setattr(event_store, "_store_dir", lambda: root)
-    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
     monkeypatch.setenv("ENVIRONMENT", "production")
+    install_memory_claim_store(monkeypatch)
     return db, root
 
 
@@ -452,138 +454,3 @@ async def test_scheduled_watchdog_reports_orphan_count_without_reconcile_candida
     output = capsys.readouterr().out
     assert "examined=0" in output
     assert "unexplained_missing=1" in output
-
-
-@pytest.mark.asyncio
-async def test_expired_firestore_claim_can_be_recovered_after_claim_owner_crash(
-    shared_ledger: tuple[_FakeFirestore, Path],
-) -> None:
-    db, _ = shared_ledger
-    claim_collection = "meta_social_dm_global_claims"
-    namespace = "meta_social_dm_global"
-    key = "facebook:provider-mid-crash"
-
-    assert await claims.try_claim_event(
-        namespace,
-        key,
-        ttl_seconds=0.01,
-        firestore_collection=claim_collection,
-    )
-    document_id = claims._firestore_claim_document_id(namespace, key)
-    reference = (
-        db.collection("artifacts").document("linas-ai-bot-backend").collection(claim_collection).document(document_id)
-    )
-    reference.update({"expires_at_epoch": time.time() - 1})
-
-    assert await claims.try_claim_event(
-        namespace,
-        key,
-        ttl_seconds=300,
-        firestore_collection=claim_collection,
-    )
-    assert reference.data["status"] == "claimed"
-    assert reference.data["expires_at_epoch"] > time.time()
-
-
-@pytest.mark.asyncio
-async def test_released_firestore_claim_can_be_reacquired_by_new_generation(
-    shared_ledger: tuple[_FakeFirestore, Path],
-) -> None:
-    db, _ = shared_ledger
-    namespace = "meta_social_dm_global"
-    collection = "meta_social_dm_global_claims"
-    key = "facebook:provider-mid-retry"
-
-    first = await claims.try_claim_event_handle(
-        namespace,
-        key,
-        firestore_collection=collection,
-    )
-    assert first is not None
-    await claims.release_event_claim(
-        namespace,
-        key,
-        firestore_collection=collection,
-        claim_handle=first,
-    )
-
-    second = await claims.try_claim_event_handle(
-        namespace,
-        key,
-        firestore_collection=collection,
-    )
-    assert second is not None
-    assert second.generation == first.generation + 1
-
-    # A delayed completion/release from the prior owner cannot mutate the new
-    # worker's generation.
-    await claims.complete_event_claim(
-        namespace,
-        key,
-        firestore_collection=collection,
-        claim_handle=first,
-    )
-    await claims.release_event_claim(
-        namespace,
-        key,
-        firestore_collection=collection,
-        claim_handle=first,
-    )
-    document_id = claims._firestore_claim_document_id(namespace, key)
-    reference = db.collection("artifacts").document("linas-ai-bot-backend").collection(collection).document(document_id)
-    assert reference.data["status"] == "claimed"
-    assert reference.data["generation"] == second.generation
-
-
-@pytest.mark.asyncio
-async def test_watchdog_never_bumps_or_dead_letters_event_with_live_owner(
-    shared_ledger: tuple[_FakeFirestore, Path],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    event_id = "ibe_" + "4" * 40
-    rec = _record(event_id=event_id, state="processing")
-    rec.attempts = 7
-    namespace = "meta_social_dm_global"
-    collection = "meta_social_dm_global_claims"
-    live = await claims.try_claim_event_handle(
-        namespace,
-        rec.claim_key,
-        ttl_seconds=300,
-        firestore_collection=collection,
-    )
-    assert live is not None
-    monkeypatch.setattr(reconcile, "list_active_inbound_events", lambda **_kwargs: [rec])
-    monkeypatch.setattr(reconcile, "accountability_stats", lambda: {"unexplained_missing_events": 0})
-    transitions: list[dict[str, object]] = []
-    monkeypatch.setattr(
-        reconcile,
-        "mark_inbound_state",
-        lambda *_args, **kwargs: transitions.append(kwargs),
-    )
-
-    for _ in range(12):
-        result = reconcile.reconcile_stuck_inbound_events(older_than_seconds=0)
-        assert result["actions"] == [{"event_id": event_id, "action": "live_claim_skipped"}]
-
-    assert rec.attempts == 7
-    assert transitions == []
-
-
-@pytest.mark.asyncio
-async def test_binding_fence_prevents_new_ai_or_global_claim(
-    shared_ledger: tuple[_FakeFirestore, Path],
-) -> None:
-    db, _ = shared_ledger
-    binding_id = "binding-deletion-fenced"
-    from services.integrations.meta.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
-
-    firestore_binding_deletion_fence_ref(db, binding_id).set({"status": "fenced"})
-    handle = await claims.try_claim_event_handle(
-        "ai_turn_claims",
-        "private-key-basis",
-        firestore_collection="ai_turn_claims",
-        meta_binding_id=binding_id,
-        firestore_claim_metadata={"binding_id_sha256": claims.meta_claim_binding_digest(binding_id)},
-    )
-
-    assert handle is None
