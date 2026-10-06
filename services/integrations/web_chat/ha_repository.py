@@ -83,6 +83,11 @@ class WebChatHaRepository:
         )
         session.add(row)
         session.flush()
+        if not str(greeting or "").strip():
+            loaded_empty = self._load(session, session_id)
+            if loaded_empty is None:
+                raise WebChatHaUnavailable("Visitor session could not be loaded after create.")
+            return loaded_empty
         msg = WebChatMessageRow(
             session_id=session_id,
             tenant_id=tenant_id,
