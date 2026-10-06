@@ -313,7 +313,7 @@ async def maybe_send_takeover_autoreply(
                                         f"[handle_message] waiting queue has no tenant text; staying silent "
                                         f"user=...{str(user_id)[-4:]}"
                                     )
-                                    return
+                                    return True
                                 await send_message_func(user_id, waiting_msg)
                                 await save_conversation_message_to_firestore(
                                     user_id,
