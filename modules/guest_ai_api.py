@@ -82,10 +82,14 @@ def _public_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if role not in {"user", "assistant", "system"}:
             role = "assistant"
         raw_stamp = item.get("created_at")
-        try:
+        created_at = 0.0
+        if isinstance(raw_stamp, (int, float)) and not isinstance(raw_stamp, bool):
             created_at = float(raw_stamp)
-        except (TypeError, ValueError):
-            created_at = 0.0
+        elif isinstance(raw_stamp, str):
+            try:
+                created_at = float(raw_stamp)
+            except ValueError:
+                created_at = 0.0
         public.append(
             {
                 "id": str(item.get("id") or ""),
