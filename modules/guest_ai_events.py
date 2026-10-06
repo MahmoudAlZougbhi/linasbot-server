@@ -15,10 +15,11 @@ _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
 def _allows(session_id: str, event: dict[str, Any] | None) -> bool:
-    rec = event if isinstance(event, dict) else {}
+    rec: dict[str, Any] = event if isinstance(event, dict) else {}
     if str(rec.get("type") or "") in {"heartbeat", "connected"}:
         return True
-    data = rec.get("data") if isinstance(rec.get("data"), dict) else {}
+    raw = rec.get("data")
+    data: dict[str, Any] = raw if isinstance(raw, dict) else {}
     parts = str(data.get("conversation_id") or "").split(":")
     return len(parts) >= 3 and parts[0] == "web" and parts[-1] == session_id
 

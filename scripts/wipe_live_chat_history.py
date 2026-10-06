@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import text
 
@@ -29,7 +30,7 @@ def chat_delete_statements() -> tuple[str, ...]:
     return CHAT_DELETE_SQL
 
 
-def _engine():
+def _engine() -> Any:
     from sqlalchemy import create_engine
 
     url = os.environ.get("LINAS_WHATSAPP_DATABASE_URL") or os.environ.get("DATABASE_URL")
@@ -38,11 +39,11 @@ def _engine():
     return create_engine(url)
 
 
-def _count(conn, sql: str) -> int:
+def _count(conn: Any, sql: str) -> int:
     return int(conn.execute(text(sql)).scalar() or 0)
 
 
-def wipe_postgres(conn) -> dict[str, int]:
+def wipe_postgres(conn: Any) -> dict[str, int]:
     before = {
         "threads": _count(conn, "SELECT COUNT(*) FROM linas_chat_threads"),
         "messages": _count(conn, "SELECT COUNT(*) FROM linas_chat_messages"),
@@ -82,7 +83,9 @@ def wipe_redis() -> int:
     deleted = 0
     for pattern in REDIS_PATTERNS:
         for key in client.scan_iter(match=pattern, count=200):
-            deleted += int(client.delete(key))
+            removed = client.delete(key)
+            if isinstance(removed, int):
+                deleted += removed
     return deleted
 
 
