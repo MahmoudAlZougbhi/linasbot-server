@@ -227,6 +227,8 @@ class LiveChatOperatorMixin:
                         "handled_by": "human",
                         "client_message_id": fingerprint,
                         "delivery_status": "sending",
+                        "tenant_id": tenant_id or "",
+                        "channel": "web" if str(user_id or "").lower().startswith("web:") else "",
                     },
                 )
                 print("✅ Saved operator message to Firestore")

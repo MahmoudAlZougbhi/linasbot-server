@@ -70,21 +70,21 @@ def _rate_limit_guest(request: Request, session_id: str) -> None:
             )
 
 
-def _session_payload(session: Any) -> dict[str, Any]:
+def _request_origin(request: Request) -> str:
+    return request.headers.get("origin") or request.headers.get("host") or ""
+
+
+def _session_payload(session: Any, request: Request | None = None) -> dict[str, Any]:
     """Public session shape for UI — no remaining-count meters."""
+    from services.guest.guest_inbox_bridge import publish_guest_view
+
+    view = publish_guest_view(session, origin=_request_origin(request) if request is not None else None)
     return {
         "id": session.id,
         "limit_reached": session.questions_used >= GUEST_MAX_QUESTIONS,
         "max_input_tokens": GUEST_MAX_INPUT_TOKENS,
-        "messages": [
-            {
-                "id": m.id,
-                "role": m.role,
-                "content": m.content,
-                "created_at": m.created_at,
-            }
-            for m in session.messages
-        ],
+        "messages": view["messages"],
+        "live_token": view.get("live_token") or "",
     }
 
 
@@ -108,7 +108,7 @@ async def ensure_guest_session(body: GuestSessionBody, request: Request) -> Any:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"success": True, "session": _session_payload(session)}
+    return {"success": True, "session": _session_payload(session, request)}
 
 
 @app.get("/api/guest-ai/session")
@@ -123,7 +123,7 @@ async def get_guest_session(
     session = guest_chat_store.get(sid)
     if session is None:
         raise HTTPException(status_code=404, detail="Guest session not found")
-    return {"success": True, "session": _session_payload(session)}
+    return {"success": True, "session": _session_payload(session, request)}
 
 
 @app.post("/api/guest-ai/session/messages")
@@ -192,7 +192,7 @@ async def send_guest_message(body: GuestMessageBody, request: Request) -> Any:
             "success": False,
             "error": "guest_limit",
             "code": "GUEST_QUESTION_LIMIT",
-            "session": _session_payload(session),
+            "session": _session_payload(session, request),
             "message": {
                 "en": "You’ve reached the guest limit. Download the Linas AI app and subscribe to continue.",
                 "ar": "وصلت إلى حد الضيف. حمّل تطبيق Linas AI واشترك للمتابعة.",
@@ -236,7 +236,7 @@ async def send_guest_message(body: GuestMessageBody, request: Request) -> Any:
             "content": assistant.content,
             "created_at": assistant.created_at,
         },
-        "session": _session_payload(updated),
+        "session": _session_payload(updated, request),
         "meta": {
             "tools_used": [],
             "capabilities": composed.get("capabilities") or [],

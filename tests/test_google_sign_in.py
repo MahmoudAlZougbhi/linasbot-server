@@ -84,8 +84,17 @@ def test_verify_rejects_bad_audience(rsa_pair: tuple[Any, dict[str, Any]], monke
             gsi.verify_identity_token(_mint(private, aud="other-client"))
 
 
-def test_mobile_google_sign_in_link_required(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mobile_google_sign_in_existing_password_account_logs_in(monkeypatch: pytest.MonkeyPatch) -> None:
     from modules import google_auth_api as api
+
+    linked: list[str] = []
+    password_user = {
+        "id": "u1",
+        "email": "taken@example.com",
+        "status": "active",
+        "tenantId": "tenant-a",
+        "passwordLoginEnabled": True,
+    }
 
     async def _run() -> None:
         monkeypatch.setattr(
@@ -99,19 +108,23 @@ def test_mobile_google_sign_in_link_required(monkeypatch: pytest.MonkeyPatch) ->
             },
         )
         monkeypatch.setattr(api, "find_by_google_sub", lambda _s: None)
+        monkeypatch.setattr(api.user_service, "get_user_by_email", lambda _e: password_user)
+
+        def _link(**kwargs: object) -> dict[str, str]:
+            linked.append(str(kwargs.get("sub")))
+            return {"id": "gid"}
+
+        monkeypatch.setattr(api, "link_google_identity", _link)
         monkeypatch.setattr(
-            api.user_service,
-            "get_user_by_email",
-            lambda _e: {"id": "u1", "email": "taken@example.com", "status": "active"},
+            api,
+            "issue_mobile_tokens",
+            lambda user: {"access_token": "access", "refresh_token": "refresh", "user": user},
         )
         body = api.GoogleSignInRequest(identity_token="x" * 20)
-        with pytest.raises(Exception) as ei:
-            await api.mobile_google_sign_in(body)
-        exc = ei.value
-        assert getattr(exc, "status_code", None) == 409
-        detail = getattr(exc, "detail", {})
-        assert isinstance(detail, dict)
-        assert detail.get("code") == "link_required"
+        result = await api.mobile_google_sign_in(body)
+        assert result["access_token"] == "access"
+        assert result["user"]["id"] == "u1"
+        assert linked == ["g-sub"]
 
     import asyncio
 

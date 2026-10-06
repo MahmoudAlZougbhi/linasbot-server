@@ -214,27 +214,24 @@ class UserService(UserServiceAuthMixin):
                 print(f"[auth:get_user_by_email] collection accessed in {time.monotonic() - t1:.3f}s", flush=True)
 
                 # Firestore query - direct email lookup
-                query = coll.where(filter=FieldFilter("email", "==", email_lower)).limit(1)
-
                 t2 = time.monotonic()
                 print(
-                    f"[auth:get_user_by_email] query.stream() START t={t2 - t_start:.3f}s (FIRESTORE NETWORK OP - may block)",
+                    f"[auth:get_user_by_email] query.stream() START t={t2 - t_start:.3f}s",
                     flush=True,
                 )
-                docs = list(
-                    query.stream(
-                        timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
-                        retry=None,
-                    )
-                )
+                docs = list(coll.stream(timeout=self.AUTH_QUERY_TIMEOUT_SECONDS, retry=None))
                 elapsed = time.monotonic() - t2
                 print(
                     f"[auth:get_user_by_email] query.stream() RETURNED in {elapsed:.3f}s, doc_count={len(docs)}",
                     flush=True,
                 )
-
-                if docs:
-                    result = docs[0].to_dict()
+                result = None
+                for doc in docs:
+                    data = doc.to_dict() or {}
+                    if str(data.get("email") or "").strip().lower() == email_lower:
+                        result = data
+                        break
+                if result is not None:
                     print(f"[auth:get_user_by_email] USER_FOUND in {time.monotonic() - t_start:.3f}s", flush=True)
                     return cast(dict[str, Any] | None, result)
                 print(f"[auth:get_user_by_email] USER_NOT_FOUND in {time.monotonic() - t_start:.3f}s", flush=True)
