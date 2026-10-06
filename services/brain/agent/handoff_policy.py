@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.ai_setup.capability_gates import human_handoff_enabled
+from services.ai_setup.capability_gates import auto_handoff_on_unanswered, human_handoff_enabled
 from services.brain.actions.execute import execute_actions
 from services.brain.contracts.actions import ActionProposal, ActionProposalSet
 from services.brain.contracts.enums import ReplyDecision, StopReason, TaskDisposition
@@ -89,6 +89,8 @@ async def unanswered_question_result(
     tool_rows: list[dict[str, Any]],
 ) -> TurnResult | None:
     _ = (dest, lang)
+    if not auto_handoff_on_unanswered(turn.tenant_id):
+        return None
     if not should_handoff_unanswered(
         plan=plan,
         outcome=outcome,

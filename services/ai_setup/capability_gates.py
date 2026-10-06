@@ -57,11 +57,11 @@ def human_handoff_enabled(tenant_id: str) -> bool:
     if not tid:
         raise ValueError("tenant_id required")
     if not tenant_uses_cm_runtime(tid):
-        return True
+        return False
     try:
         _pointer, sections = load_published_content(tid)
     except PublishedVersionError:
-        return True
+        return False
 
     human_rule = _published_human_request_rule_enabled(sections)
     if human_rule is not None:
@@ -82,3 +82,19 @@ def human_handoff_enabled(tenant_id: str) -> bool:
 
     limits = AiLimitsSection.model_validate(raw_limits or {})
     return bool(limits.human_handoff_enabled)
+
+
+def auto_handoff_on_unanswered(tenant_id: str) -> bool:
+    """Off unless this tenant published the switch. Missing config does not escalate."""
+    tid = (tenant_id or "").strip()
+    if not tid or not tenant_uses_cm_runtime(tid):
+        return False
+    try:
+        _pointer, sections = load_published_content(tid)
+    except PublishedVersionError:
+        return False
+    for key in ("ai_limits", "handoff"):
+        raw = sections.get(key)
+        if isinstance(raw, dict) and "auto_handoff_on_unanswered" in raw:
+            return bool(raw["auto_handoff_on_unanswered"])
+    return False

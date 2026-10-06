@@ -82,7 +82,29 @@ def test_unanswered_handoff_is_silence_not_canned() -> None:
 
 
 @pytest.mark.asyncio
+async def test_unanswered_stays_with_terra_unless_the_tenant_opts_in() -> None:
+    plan = _plan(_task("t1", "information", span="unpublished policy?"))
+    result = await unanswered_question_result(
+        _turn(),
+        message="What is your unpublished refund policy?",
+        plan=plan,
+        dest="dm",
+        lang="en",
+        extra={},
+        agent_trace=[],
+        outcome="not_found",
+        evidence=[],
+        structured_facts={},
+        resource_receipts=[],
+        visual_reason="",
+        tool_rows=[],
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
 async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("services.brain.agent.handoff_policy.auto_handoff_on_unanswered", lambda _tid: True)
     monkeypatch.setattr(
         "services.brain.agent.handoff_policy.human_handoff_enabled",
         lambda _tid: True,
@@ -125,6 +147,7 @@ async def test_unanswered_question_persists_live_chat(monkeypatch: pytest.Monkey
 
 @pytest.mark.asyncio
 async def test_unanswered_does_not_claim_transfer_when_persist_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("services.brain.agent.handoff_policy.auto_handoff_on_unanswered", lambda _tid: True)
     monkeypatch.setattr(
         "services.brain.agent.handoff_policy.human_handoff_enabled",
         lambda _tid: True,
@@ -167,6 +190,8 @@ async def test_unanswered_does_not_claim_transfer_when_persist_fails(monkeypatch
 
 @pytest.mark.asyncio
 async def test_agentic_not_found_question_hands_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("services.brain.agent.handoff_policy.auto_handoff_on_unanswered", lambda _tid: True)
+
     async def _gate(turn, plan, *, message, dest, lang, extra, agent_trace):
         return ActionGateResult(early=None, extra=dict(extra))
 
@@ -311,6 +336,8 @@ async def test_comment_ack_replies_when_retrieve_is_empty(monkeypatch: pytest.Mo
 
 @pytest.mark.asyncio
 async def test_comment_question_hands_off_instead_of_silence(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("services.brain.agent.handoff_policy.auto_handoff_on_unanswered", lambda _tid: True)
+
     async def _gate(turn, plan, *, message, dest, lang, extra, agent_trace):
         return ActionGateResult(early=None, extra=dict(extra))
 
