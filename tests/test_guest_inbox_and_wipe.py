@@ -11,6 +11,19 @@ from services.guest.guest_chat_store import GuestMessage, GuestSession
 from services.guest.guest_inbox_bridge import publish_guest_view
 
 
+def test_guest_live_key_is_not_a_public_constant(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.guest.guest_inbox_bridge import guest_live_key
+
+    monkeypatch.setenv("DASHBOARD_AUTH_SECRET", "unit-test-secret")
+    monkeypatch.delenv("LINAS_GUEST_LIVE_KEY", raising=False)
+    assert guest_live_key() != "linas-guest-live"
+    monkeypatch.delenv("DASHBOARD_AUTH_SECRET", raising=False)
+    monkeypatch.delenv("AUTH_SESSION_SECRET", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    with pytest.raises(RuntimeError):
+        guest_live_key()
+
+
 def test_wipe_statements_target_chats_only() -> None:
     sql = "\n".join(chat_delete_statements()).lower()
     assert "linas_chat_threads" in sql
