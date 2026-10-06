@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.ai_setup.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY, BRAIN_TEMPORARY_ERROR_MESSAGE_KEY
+from services.ai_setup.constants import BRAIN_TEMPORARY_ERROR_MESSAGE_KEY
 from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
 
@@ -27,7 +27,7 @@ def test_hi_kifak_still_evaluates_greeting_policy() -> None:
         history=HistorySnapshot(),
         language="ar",
     )
-    assert decision.text != get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "ar")
+    assert "ما قدرت أتأكد" not in (decision.text or "")
 
 
 def test_greeting_without_owner_opener_does_not_emit_canned_copy() -> None:
@@ -43,8 +43,8 @@ def test_greeting_without_owner_opener_does_not_emit_canned_copy() -> None:
     assert decision.eligible is False
     assert decision.text == ""
     assert "ما قدرت أتأكد" not in decision.text
-    assert decision.text != get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, "ar")
-    assert decision.text != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "ar")
+    assert "ما قدرت أتأكد" not in (decision.text or "")
+    assert "مشكلة مؤقتة" not in (decision.text or "")
 
 
 def test_greeting_and_planner_modules_are_gone() -> None:
@@ -77,7 +77,7 @@ async def test_greeting_only_handler_fail_soft_is_not_temporary_error() -> None:
         )
     assert reply == ""
     assert "Use this rule only" not in (reply or "")
-    assert reply != get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "en")
+    assert "something went wrong" not in (reply or "").lower()
     assert metadata["customer_silence"] is True
     assert metadata["exception_class"] == "RuntimeError"
 
@@ -134,9 +134,8 @@ async def test_forced_runtime_error_temporary_error_once_then_silence() -> None:
             response_language="en",
             conversation_id="conv-temp-1",
         )
-    expected = get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "en")
+    assert get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "en") == ""
     assert first == ""
-    assert first != expected
     assert meta1["exception_class"] == "RuntimeError"
     assert str(meta1.get("blocker") or "").startswith("RuntimeError:")
     assert meta1.get("customer_silence") is True

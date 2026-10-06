@@ -16,10 +16,8 @@ def test_public_staff_label_never_returns_email() -> None:
 
 def test_customer_handover_notice_comes_from_ai_setup_not_email() -> None:
     notice = customer_human_handover_notice("en")
-    assert notice
-    assert "@" not in notice
+    assert notice == ""
     assert "mahmoudalzougbhi@gmail.com" not in notice.lower()
-    assert "The conversation has been transferred to" not in notice
 
 
 def test_inbox_omits_empty_last_message_preview() -> None:

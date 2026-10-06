@@ -1,237 +1,39 @@
-"""
-Dynamic Messages Service
-
-Stores editable bot dynamic messages (with usage conditions) in persistent settings.
-Used by AI Setup to let operators inspect/edit runtime wording.
-"""
+"""Tenant published dynamic messages. Missing text means silence."""
 
 from __future__ import annotations
 
-import json
-from copy import deepcopy
-from pathlib import Path
-from typing import Any
 
-from storage.persistent_storage import SETTINGS_DIR
+def get_tenant_dynamic_message(tenant_id: str, key: str, lang: str = "ar") -> str:
+    """Read one published CM dynamic_messages item. No global catalog and no fallback copy."""
+    tid = str(tenant_id or "").strip()
+    message_key = str(key or "").strip()
+    if not tid or not message_key:
+        return ""
+    from services.brain.greeting_policy import load_dynamic_messages
 
-DYNAMIC_MESSAGES_FILE = SETTINGS_DIR / "dynamic_messages.json"
-
-
-DEFAULT_DYNAMIC_MESSAGES: dict[str, dict[str, Any]] = {
-    "router_greeting": {
-        "label": "Router Greeting",
-        "when_used": "Sent when user message is greeting-only and there is no pending state.",
-        "messages": {
-            "ar": "مرحباً! كيف يمكنني مساعدتك؟",
-            "en": "Hello! How can I help you today?",
-            "fr": "Bonjour ! Comment puis-je vous aider ?",
-            "franco": "مرحباً! كيف يمكنني مساعدتك؟",
-        },
-    },
-    "router_fallback": {
-        "label": "Router Fallback",
-        "when_used": "Sent when router cannot determine a safe intent.",
-        "messages": {
-            "ar": "أكيد، فيك توضحلي أكتر شو الخدمة أو الموضوع اللي بدك تستفسر عنه؟",
-            "en": "Sure, could you tell me more about which service or topic you'd like to know about?",
-            "fr": "Bien sûr, pourriez-vous préciser quel service ou sujet vous intéresse ?",
-            "franco": "أكيد، فيك توضحلي أكتر شو الخدمة أو الموضوع اللي بدك تستفسر عنه؟",
-        },
-    },
-    "router_ask_clarification": {
-        "label": "Ask Clarification",
-        "when_used": "Sent when user request is too vague and missing required detail (service/topic).",
-        "messages": {
-            "ar": "أكيد، لأي خدمة أو موضوع بدك الأسعار أو المعلومات؟",
-            "en": "Sure! Which service or topic would you like prices or information about?",
-            "fr": "Bien sûr ! Pour quel service ou sujet souhaitez-vous des prix ou des informations ?",
-            "franco": "أكيد، لأي خدمة أو موضوع بدك الأسعار أو المعلومات؟",
-        },
-    },
-    "session_greeting_after_inactivity": {
-        "label": "Session Greeting (Inactivity)",
-        "when_used": "Sent at session start for new conversation or after long inactivity window.",
-        "messages": {
-            "ar": "مرحباً! 😊 كيف فيني ساعدك اليوم؟",
-            "en": "Hello! 😊 How can I help you today?",
-            "fr": "Bonjour ! 😊 Comment puis-je vous aider aujourd'hui ?",
-            "franco": "Marhaba! 😊 kif fini se3dik el yom?",
-        },
-    },
-    "human_handover_message": {
-        "label": "Human Handover Message",
-        "when_used": "Sent when user requests a human or escalation requires handover.",
-        "messages": {
-            "ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
-            "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
-            "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏",
-            "franco": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
-        },
-    },
-    "brain_handoff_ack": {
-        "label": "Brain Human Handoff Ack",
-        "when_used": "Sent when the customer asked for a person and Live Chat takeover succeeded.",
-        "messages": {
-            "ar": "رح حوّلك لحدا من الفريق شوي، وبيكون معك.",
-            "en": "I'll connect you with someone from the team shortly, and they'll be with you.",
-            "fr": "Je vous mets en relation avec quelqu’un de l’équipe sous peu, et il sera avec vous.",
-            "franco": "رح حوّلك لحدا من الفريق شوي، وبيكون معك.",
-        },
-    },
-    "brain_no_evidence": {
-        "label": "Brain No Published Answer",
-        "when_used": (
-            "Sent when Brain has no published answer and cannot place the chat in Live Chat "
-            "(handoff disabled or persist failed). Does not tell the customer to go find the team."
-        ),
-        "messages": {
-            "ar": "آسف، ما عندي معلومات عن هالسؤال هلق.",
-            "en": "Sorry, I don’t have information about that question yet.",
-            "fr": "Désolé, je n’ai pas encore d’information sur cette question.",
-            "franco": "آسف، ما عندي معلومات عن هالسؤال هلق.",
-        },
-    },
-    "brain_no_evidence_handoff": {
-        "label": "Brain Unanswered Question Handoff",
-        "when_used": (
-            "Sent when Brain found no published answer for a real customer question and "
-            "automatically transferred the chat to Live Chat."
-        ),
-        "messages": {
-            "ar": "آسف، ما عندي معلومات عن هالسؤال هلق. رح حوّلك لحدا من الفريق شوي، وبيكون معك.",
-            "en": (
-                "Sorry, I don’t have information about that question yet. "
-                "I’ll connect you with someone from the team shortly, and they’ll be with you."
-            ),
-            "fr": (
-                "Désolé, je n’ai pas encore d’information sur cette question. "
-                "Je vous mets en relation avec quelqu’un de l’équipe sous peu, et il sera avec vous."
-            ),
-            "franco": "آسف، ما عندي معلومات عن هالسؤال هلق. رح حوّلك لحدا من الفريق شوي، وبيكون معك.",
-        },
-    },
-    "waiting_queue_message": {
-        "label": "Waiting Queue Message",
-        "when_used": "Sent while human takeover is active and no operator assigned yet.",
-        "messages": {
-            "ar": "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏",
-            "en": "Just a moment, we'll be with you shortly. Thank you for your patience 🙏",
-            "fr": "Un instant, nous serons avec vous sous peu. Merci pour votre patience 🙏",
-            "franco": "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏",
-        },
-    },
-    "answer_validation_failed": {
-        "label": "Answer Validation Failed (CM Runtime)",
-        "when_used": (
-            "Sent only when CM finalize_response rejects a generated answer (captions / "
-            "runtime_pipeline validator). Not used for Instagram/Facebook DM technical failures."
-        ),
-        "messages": {
-            "ar": "آسف، ما قدرت أتأكد من هالمعلومة هلق.",
-            "en": "Sorry, I couldn't fully confirm that detail right now.",
-            "fr": "Désolé, je n'ai pas pu confirmer entièrement ce détail pour le moment.",
-            "franco": "آسف، ما قدرت أتأكد من هالمعلومة هلق.",
-        },
-    },
-    "brain_temporary_error": {
-        "label": "Brain Temporary Error",
-        "when_used": (
-            "Sent when Customer Brain raises on a live IG/FB DM (catch-all around "
-            "run_customer_reply_v2_dm). Technical failure — not a validator miss."
-        ),
-        "messages": {
-            "ar": "آسف، في مشكلة مؤقتة هلق. جرّب كمان شوي.",
-            "en": "Sorry, something went wrong on our side. Please try again in a moment.",
-            "fr": "Désolé, un problème temporaire est survenu. Réessayez dans un instant.",
-            "franco": "آسف، في مشكلة مؤقتة هلق. جرّب كمان شوي.",
-        },
-    },
-}
-
-
-def _ensure_parent_dir() -> None:
-    Path(SETTINGS_DIR).mkdir(parents=True, exist_ok=True)
-
-
-def _read_file() -> dict[str, Any]:
-    _ensure_parent_dir()
-    if not Path(DYNAMIC_MESSAGES_FILE).exists():
-        return {}
-    try:
-        with open(DYNAMIC_MESSAGES_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
-
-
-def _write_file(data: dict[str, Any]) -> None:
-    _ensure_parent_dir()
-    with open(DYNAMIC_MESSAGES_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-
-def get_dynamic_messages_catalog() -> dict[str, Any]:
-    """Return merged catalog: defaults + persisted overrides."""
-    merged = deepcopy(DEFAULT_DYNAMIC_MESSAGES)
-    stored = _read_file()
-    for key, value in stored.items():
-        if key not in merged:
+    section = load_dynamic_messages(tid)
+    if section is None:
+        return ""
+    lang_key = (lang or "").strip().lower()
+    for item in section.items:
+        if not item.enabled:
             continue
-        if isinstance(value, dict):
-            if isinstance(value.get("label"), str):
-                merged[key]["label"] = value["label"]
-            if isinstance(value.get("when_used"), str):
-                merged[key]["when_used"] = value["when_used"]
-            msgs = value.get("messages")
-            if isinstance(msgs, dict):
-                for lang in ("ar", "en", "fr", "franco"):
-                    lang_msg = msgs.get(lang)
-                    if isinstance(lang_msg, str) and lang_msg.strip():
-                        merged[key]["messages"][lang] = lang_msg
-    return merged
-
-
-def update_dynamic_messages_catalog(payload: dict[str, Any]) -> dict[str, Any]:
-    """Update persisted overrides from API payload and return merged catalog."""
-    if not isinstance(payload, dict):
-        return get_dynamic_messages_catalog()
-    current = get_dynamic_messages_catalog()
-    for key, item in payload.items():
-        if key not in current or not isinstance(item, dict):
+        if item.id != message_key and (item.name or "").strip() != message_key:
             continue
-        if isinstance(item.get("label"), str):
-            current[key]["label"] = item["label"]
-        if isinstance(item.get("when_used"), str):
-            current[key]["when_used"] = item["when_used"]
-        msgs = item.get("messages")
-        if isinstance(msgs, dict):
-            for lang in ("ar", "en", "fr", "franco"):
-                if isinstance(msgs.get(lang), str):
-                    current[key]["messages"][lang] = msgs[lang]
-    _write_file(current)
-    return current
+        if lang_key == "franco":
+            return str(item.ar or "").strip()
+        if lang_key not in {"ar", "en", "fr"}:
+            return ""
+        return str(getattr(item, lang_key, "") or "").strip()
+    return ""
 
 
-def get_dynamic_message(key: str, lang: str = "ar") -> str:
-    """Get one dynamic message by key/language with catalog defaults (dashboard/preview)."""
-    catalog = get_dynamic_messages_catalog()
-    item = catalog.get(key) or {}
-    msgs = item.get("messages") or {}
-    lang_key = (lang or "ar").lower()
-    message = msgs.get(lang_key) or msgs.get("ar") or ""
-    return message
+def get_dynamic_message(key: str, lang: str = "ar", tenant_id: str | None = None) -> str:
+    """Compatibility wrapper. Without a tenant id the result is empty."""
+    return get_tenant_dynamic_message(str(tenant_id or ""), key, lang)
 
 
 def get_owner_persisted_message(key: str, lang: str = "ar") -> str:
-    """Owner-saved copy only. Catalog defaults never count as configured protocol text."""
-    stored = _read_file()
-    item = stored.get(key) or {}
-    msgs = item.get("messages") if isinstance(item, dict) else {}
-    if not isinstance(msgs, dict):
-        return ""
-    lang_key = (lang or "ar").lower()
-    text = str(msgs.get(lang_key) or "").strip()
-    if text:
-        return text
-    return str(msgs.get("ar") or "").strip()
+    """Global file copy is not a customer reply. Callers that still patch this get silence."""
+    del key, lang
+    return ""
