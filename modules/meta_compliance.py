@@ -226,7 +226,7 @@ async def _handle_meta_data_deletion(
         if not signed_request.strip():
             raise MetaSignedRequestError("Missing signed request")
         verified = verify_meta_deletion_signed_request(signed_request, context.app_secret)
-    except (MetaSignedRequestError, UnicodeDecodeError):
+    except (MetaSignedRequestError, UnicodeError):
         raise HTTPException(status_code=400, detail="Invalid signed deletion request") from None
 
     try:

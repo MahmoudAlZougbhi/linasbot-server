@@ -197,10 +197,7 @@ class LiveChatSSEBroadcaster:
                     event_type = event.get("type", "message")
                     yield f"event: {event_type}\ndata: {event_data}\n\n"
                 except TimeoutError:
-                    heartbeat = {
-                        "timestamp": utc_now().isoformat(),
-                        "active_clients": await self.active_clients_count(),
-                    }
+                    heartbeat = {"timestamp": utc_now().isoformat()}
                     yield f"event: heartbeat\ndata: {json.dumps(heartbeat)}\n\n"
         except asyncio.CancelledError:
             pass

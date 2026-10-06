@@ -186,10 +186,10 @@ async def mark_conversation_read(request: MarkConversationReadRequest, http_requ
 
     async def _handler() -> Any:
         session = await require_live_chat_thread(http_request, request.user_id, request.conversation_id)
-        _ = session
         return await live_chat_service.mark_conversation_read(
             user_id=request.user_id,
             conversation_id=request.conversation_id,
+            tenant_id=str(getattr(session, "tenant_id", "") or ""),
         )
 
     return await _run_endpoint(_handler)
@@ -302,12 +302,12 @@ async def end_conversation(request: dict, http_request: Request) -> Any:
             )
             if not resume.get("success"):
                 print(f"⚠️ end-conversation: resume before end failed: {resume.get('error')}")
-            adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
             return await live_chat_service.end_conversation(
                 conversation_id=str(conversation_id),
                 user_id=str(user_id),
                 operator_id=session.user_id,
-                adapter=adapter,
+                adapter=None,
+                tenant_id=str(getattr(session, "tenant_id", "") or ""),
             )
 
     return await _run_endpoint(_handler)

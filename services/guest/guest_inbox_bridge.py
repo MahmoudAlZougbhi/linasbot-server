@@ -32,12 +32,17 @@ def live_token_matches(session_id: str, token: str, *, key: str) -> bool:
 
 
 def guest_live_key() -> str:
+    import hashlib
+    import hmac
     import os
 
-    raw = (os.getenv("LINAS_GUEST_LIVE_KEY") or os.getenv("DASHBOARD_SESSION_SECRET") or "").strip()
-    if raw:
-        return raw
-    return "linas-guest-live"
+    explicit = (os.getenv("LINAS_GUEST_LIVE_KEY") or "").strip()
+    if explicit:
+        return explicit
+    from services.dashboard.dashboard_session_service import get_auth_secret
+
+    secret = get_auth_secret()
+    return hmac.new(secret.encode("utf-8"), b"linas-guest-live-v1", hashlib.sha256).hexdigest()
 
 
 def _host(origin: str | None) -> str:

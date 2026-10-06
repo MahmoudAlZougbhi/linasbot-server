@@ -6,11 +6,10 @@ from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
 
 def customer_human_handover_notice(lang: str) -> str:
-    lang_key = (lang or "ar").strip().lower() or "ar"
-    text = str(get_dynamic_message("human_handover_message", lang_key) or "").strip()
-    if text:
-        return text
-    return str(get_dynamic_message("human_handover_message", "ar") or "").strip()
+    lang_key = (lang or "").strip().lower()
+    if not lang_key:
+        return ""
+    return str(get_dynamic_message("human_handover_message", lang_key) or "").strip()
 
 
 def public_staff_label(*candidates: object) -> str:

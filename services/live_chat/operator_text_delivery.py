@@ -85,22 +85,10 @@ async def deliver_saved_operator_text(
     )
     if queued is not None:
         return queued
-
-    try:
-        result = await adapter.send_text_message(canonical_user_id, text)
-    except Exception as send_error:
-        return {
-            "success": False,
-            "delivered": False,
-            "error": str(send_error),
-            "channel": "whatsapp",
-        }
-    if not isinstance(result, dict) or not result.get("success"):
-        send_err = str((result or {}).get("error") or "send failed") if isinstance(result, dict) else "send failed"
-        return {
-            "success": False,
-            "delivered": False,
-            "error": send_err,
-            "channel": "whatsapp",
-        }
-    return {"success": True, "delivered": True, "channel": "whatsapp", **result}
+    del adapter
+    return {
+        "success": False,
+        "delivered": False,
+        "error": "tenant_delivery_unavailable",
+        "channel": "whatsapp",
+    }

@@ -280,21 +280,22 @@ async def maybe_send_takeover_autoreply(
                                     )
 
                                     handover_msg = customer_human_handover_notice(user_lang)
-                                    await send_message_func(user_id, handover_msg)
-                                    await save_conversation_message_to_firestore(
-                                        user_id,
-                                        "ai",
-                                        handover_msg,
-                                        conv_id_for_save,
-                                        user_name,
-                                        user_data.get("phone_number"),
-                                        metadata={
-                                            "handled_by": "ai",
-                                            "source": "smart_message",
-                                            "event": "operator_assigned_notice",
-                                        },
-                                    )
                                     user_data["notified_human_takeover"] = True
+                                    if handover_msg:
+                                        await send_message_func(user_id, handover_msg)
+                                        await save_conversation_message_to_firestore(
+                                            user_id,
+                                            "ai",
+                                            handover_msg,
+                                            conv_id_for_save,
+                                            user_name,
+                                            user_data.get("phone_number"),
+                                            metadata={
+                                                "handled_by": "ai",
+                                                "source": "smart_message",
+                                                "event": "operator_assigned_notice",
+                                            },
+                                        )
                                 else:
                                     # Operator is handling the chat — do not send a bot follow-up on every user turn
                                     # (it duplicated the human reply and looked like "two messages").
@@ -306,10 +307,13 @@ async def maybe_send_takeover_autoreply(
                                 print(
                                     f"[handle_message] INFO: User {user_id} in waiting queue. Sending waiting auto-reply."
                                 )
-                                waiting_msg = (
-                                    get_dynamic_message("waiting_queue_message", user_lang)
-                                    or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
-                                )
+                                waiting_msg = (get_dynamic_message("waiting_queue_message", user_lang) or "").strip()
+                                if not waiting_msg:
+                                    print(
+                                        f"[handle_message] waiting queue has no tenant text; staying silent "
+                                        f"user=...{str(user_id)[-4:]}"
+                                    )
+                                    return True
                                 await send_message_func(user_id, waiting_msg)
                                 await save_conversation_message_to_firestore(
                                     user_id,

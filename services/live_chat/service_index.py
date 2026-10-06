@@ -12,13 +12,11 @@ from services.live_chat.contracts import (
 )
 from services.live_chat.tenant import (
     normalize_live_chat_tenant_id,
-    resolve_live_chat_tenant_id,
     row_belongs_to_tenant,
 )
 from services.persistence import query_api as firestore
 from utils.utils import (
     get_canonical_user_id_and_phone,
-    get_document_db,
 )
 
 
@@ -172,32 +170,18 @@ class LiveChatIndexMixin:
         return [doc for doc in docs if row_belongs_to_tenant(doc.to_dict() or {}, tid)]
 
     async def thread_visible_to_tenant(self, *, user_id: str, conversation_id: str, tenant_id: str) -> bool:
+        del user_id
         tid = normalize_live_chat_tenant_id(tenant_id)
         if not tid or not str(conversation_id or "").strip():
             return False
-        db = get_document_db()
-        if not db:
-            return False
+
+        def _exists() -> bool:
+            from services.persistence.chat_store import get_thread
+
+            return get_thread(tid, str(conversation_id)) is not None
+
         try:
-            index_ref = self._index_collection(db).document(str(conversation_id))
-            index_doc = await self._get_doc_with_timeout(index_ref, timeout_seconds=self.FIRESTORE_DOC_TIMEOUT_SECONDS)
-            if index_doc and index_doc.exists:
-                data = index_doc.to_dict() or {}
-                data.setdefault("conversation_id", conversation_id)
-                data.setdefault("user_id", user_id)
-                return row_belongs_to_tenant(data, tid)
-            conv_ref, conv_snap, resolved_user_id = await self._resolve_conversation_doc_ref(
-                db, user_id, conversation_id
-            )
-            if not conv_snap or not conv_snap.exists:
-                return False
-            payload = conv_snap.to_dict() or {}
-            proven = resolve_live_chat_tenant_id(
-                user_id=resolved_user_id or user_id,
-                conversation_id=conversation_id,
-                payload=payload,
-            )
-            return proven == tid
+            return bool(await asyncio.to_thread(_exists))
         except Exception:
             return False
 

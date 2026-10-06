@@ -167,16 +167,20 @@ def _upsert_thread(
             ON CONFLICT (tenant_id, conversation_id) DO UPDATE SET
                 user_id = excluded.user_id,
                 channel = CASE WHEN excluded.channel = '' THEN linas_chat_threads.channel ELSE excluded.channel END,
-                conversation_state = excluded.conversation_state,
                 last_message_at = excluded.last_message_at,
                 last_message_text = excluded.last_message_text,
                 user_name = CASE WHEN excluded.user_name = '' THEN linas_chat_threads.user_name ELSE excluded.user_name END,
                 user_phone = CASE WHEN excluded.user_phone = '' THEN linas_chat_threads.user_phone ELSE excluded.user_phone END,
-                unread_count = excluded.unread_count,
-                message_count = excluded.message_count
+                unread_count = CASE
+                    WHEN :role = 'user' THEN linas_chat_threads.unread_count + 1
+                    WHEN :role = 'operator' THEN 0
+                    ELSE linas_chat_threads.unread_count
+                END,
+                message_count = linas_chat_threads.message_count + 1
             """
         ),
         {
+            "role": role,
             "tenant_id": tenant_id,
             "conversation_id": conversation_id,
             "user_id": user_id,
@@ -288,6 +292,48 @@ def get_thread(tenant_id: str, conversation_id: str) -> dict[str, Any] | None:
             .first()
         )
     return dict(row) if row else None
+
+
+def update_thread_lifecycle(
+    tenant_id: str,
+    conversation_id: str,
+    *,
+    conversation_state: str | None = None,
+    operator_id: str | None = None,
+    unread_count: int | None = None,
+    human_takeover_active: int | None = None,
+) -> bool:
+    """Tenant-scoped inbox state. Message inserts do not call this."""
+    tid = _require_tenant(tenant_id)
+    sets = ["payload_json = payload_json"]
+    params: dict[str, Any] = {"tenant_id": tid, "conversation_id": conversation_id}
+    if conversation_state is not None:
+        sets.append("conversation_state = :conversation_state")
+        params["conversation_state"] = conversation_state
+    if operator_id is not None:
+        sets.append("operator_id = :operator_id")
+        params["operator_id"] = operator_id
+    if unread_count is not None:
+        sets.append("unread_count = :unread_count")
+        params["unread_count"] = int(unread_count)
+    if human_takeover_active is not None:
+        sets.append("human_takeover_active = :human_takeover_active")
+        params["human_takeover_active"] = int(human_takeover_active)
+    if len(sets) == 1:
+        return False
+    with _session() as session:
+        ensure_schema(session)
+        result = session.execute(
+            text(
+                f"""
+                UPDATE linas_chat_threads
+                SET {", ".join(sets)}
+                WHERE tenant_id = :tenant_id AND conversation_id = :conversation_id
+                """
+            ),
+            params,
+        )
+    return bool(getattr(result, "rowcount", 0))
 
 
 def list_messages(

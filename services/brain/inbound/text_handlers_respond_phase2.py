@@ -28,10 +28,8 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
 
     # ===== CM AI CONTROL PLANE — per-tenant published runtime =====
     # Published CM is the SoT when this tenant has an active published version.
-    # New tenants without publish get an honest unpublished message (never Marwa/Linas).
-    # No classic GPT fallback. Unpublished tenants get the unpublished message.
+    # Unpublished tenants stay silent. The owner sees the dashboard state.
     from services.ai_setup.constants import (
-        UNPUBLISHED_AI_MESSAGE,
         tenant_allows_legacy_bridge,
         tenant_uses_cm_runtime,
     )
@@ -204,25 +202,12 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
         return _PHASE_HALT
 
     if not tenant_allows_legacy_bridge(cm_tenant_id):
-        lang_key = (response_language or current_preferred_lang or "en").strip().lower()
-        if lang_key not in UNPUBLISHED_AI_MESSAGE:
-            lang_key = "en" if lang_key == "en" else ("ar" if lang_key in {"ar", "franco"} else "en")
-        unpublished_reply = UNPUBLISHED_AI_MESSAGE.get(lang_key) or UNPUBLISHED_AI_MESSAGE["en"]
-        await send_message_func(user_id, unpublished_reply)
-        settle_after_outbound(user_data, reply=unpublished_reply)
-        await save_conversation_message_to_firestore(
-            user_id,
-            "ai",
-            unpublished_reply,
-            current_conversation_id,
-            user_name,
-            user_data.get("phone_number"),
-            metadata={"handled_by": "cm_unpublished_guard", "tenant_id": cm_tenant_id},
-        )
+        print(f"[handle_message] unpublished tenant stays silent tenant={cm_tenant_id}")
+        settle_after_outbound(user_data, reply="")
         log_interaction(
             user_id,
             user_input_to_process,
-            unpublished_reply,
+            "",
             "cm_unpublished",
             user_name=user_name,
             user_phone=user_data.get("phone_number"),
@@ -230,7 +215,7 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
             user_data=user_data,
             conversation_id=current_conversation_id,
             handler_path="cm_unpublished_guard",
-            outcome="unpublished",
+            outcome="unpublished_silent",
             ai_called=False,
             cost_status="none",
             flow_steps=[
@@ -238,10 +223,9 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
                 {
                     "step": 2,
                     "title": "CM unpublished guard",
-                    "content": "Tenant has no published CM version; refused without legacy fallback.",
-                    "event_type": "unpublished_refuse",
+                    "content": "Tenant has no published CM version; no customer text sent.",
+                    "event_type": "unpublished_silent",
                 },
-                {"step": 3, "title": "Bot → User", "content": unpublished_reply, "event_type": "response_sent"},
             ],
         )
         return _PHASE_HALT

@@ -241,7 +241,7 @@ async def get_conversation_history_from_firestore(
             meta = msg.get("metadata", {}) or {}
             src = meta.get("source", "")
             if src == "smart_message":
-                content = f"[Clinic notification we sent to user]\n{content}"
+                content = f"[Business notification we sent]\n{content}"
             elif src == "qa_database":
                 content = f"[FAQ answer we sent to user]\n{content}"
             openai_messages.append({"role": role, "content": content})

@@ -219,10 +219,9 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
             print(f"[_process_and_respond] ⚠️ Takeover fallback check failed: {takeover_check_error}")
 
         if takeover_still_active and should_send_waiting:
-            waiting_msg = (
-                get_dynamic_message("waiting_queue_message", current_preferred_lang)
-                or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
-            )
+            waiting_msg = (get_dynamic_message("waiting_queue_message", current_preferred_lang) or "").strip()
+            if not waiting_msg:
+                return _PHASE_HALT
             await send_message_func(user_id, waiting_msg)
             await save_conversation_message_to_firestore(
                 user_id,
