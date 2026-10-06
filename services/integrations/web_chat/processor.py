@@ -115,13 +115,14 @@ def default_greeting(language: str | None = None, widget: WebChatWidgetConfig | 
         custom = str((identity or {}).get("welcome_message") or "").strip()
         if custom:
             return custom
-    lang = (language or "en").strip().lower()[:2]
-    messages = {
-        "ar": "مرحباً! كيف بقدر ساعدك اليوم؟",
-        "fr": "Bonjour ! Comment puis-je vous aider aujourd'hui ?",
-        "en": "Hi! How can I help you today?",
-    }
-    return messages.get(lang, messages["en"])
+        from services.owner_copilot.dynamic_messages_service import get_tenant_dynamic_message
+
+        lang = (language or "").strip().lower()[:2] or "en"
+        for key in ("greeting", "session_greeting", "welcome"):
+            text = get_tenant_dynamic_message(widget.tenant_id, key, lang)
+            if text:
+                return text
+    return ""
 
 
 async def process_web_chat_message(
