@@ -458,8 +458,5 @@ class LiveChatHistoryApiMixin:
             return []
 
     async def _fallback_waiting_queue_from_source(self, limit: int = 500) -> list:
-        """Removed from request paths. Use scripts/backfill_live_chat_index.py."""
-        raise RuntimeError(
-            "Legacy Live Chat waiting-queue source scan is disabled; "
-            "run scripts/backfill_live_chat_index.py or POST /api/live-chat/rebuild-index"
-        )
+        """Removed from request paths."""
+        raise RuntimeError("Legacy Live Chat waiting-queue source scan is disabled")

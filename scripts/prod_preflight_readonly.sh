@@ -306,11 +306,11 @@ for env_path in (Path("/opt/linasbot/.env"), Path(APP_DIR) / ".env"):
         k, v = line.split("=", 1)
         os.environ.setdefault(k.strip(), v.strip().strip("'").strip('"'))
 
-from utils.utils import get_firestore_db
+from utils.utils import get_document_db
 
-db = get_firestore_db()
+db = get_document_db()
 if not db:
-    raise SystemExit("[preflight] NO_EXISTING_ADMIN_USERS firestore_unavailable")
+    raise SystemExit("[preflight] NO_EXISTING_ADMIN_USERS document_store_unavailable")
 
 coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("dashboard_users")
 docs = list(coll.stream())
@@ -330,7 +330,7 @@ for doc in docs:
 print(
     f"[preflight] dashboard_users count={len(docs)} active={active} "
     f"owners_or_admins={owners} roles={roles} "
-    f"source=firestore:artifacts/linas-ai-bot-backend/dashboard_users"
+    f"source=postgres:artifacts/linas-ai-bot-backend/dashboard_users"
 )
 if owners < 1 and active < 1:
     raise SystemExit("[preflight] NO_EXISTING_ADMIN_USERS")
@@ -353,14 +353,7 @@ for name, ok in (durable.get("tables") or {}).items():
     print(f"[preflight] message_table_{name}={str(bool(ok)).lower()}")
 PY
 
-if [ -f scripts/backfill_live_chat_index.py ]; then
-  echo "[preflight] starting live_chat_index dry-run"
-  "$PYTHON_BIN" scripts/backfill_live_chat_index.py --dry-run
-  echo "[preflight] dry_run_backfill_exit=0"
-else
-  echo "[preflight] backfill_script_missing_on_current_deploy=true"
-  echo "[preflight] NOTE: dry-run will be executed after release deploy when script is present"
-fi
+echo "[preflight] chat_store=postgres"
 
 if [ -f scripts/prod_verify_webhook_challenge.sh ]; then
   echo "[preflight] starting webhook challenge verify"

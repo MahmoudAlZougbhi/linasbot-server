@@ -69,11 +69,8 @@ class LiveChatUnifiedMixin:
         page_size: int,
         filter_state: str,
     ) -> dict:
-        """Removed from request paths. Use scripts/backfill_live_chat_index.py."""
-        raise RuntimeError(
-            "Legacy Live Chat full-scan is disabled; run scripts/backfill_live_chat_index.py "
-            "or POST /api/live-chat/rebuild-index"
-        )
+        """Removed from request paths."""
+        raise RuntimeError("Legacy Live Chat full-scan is disabled")
 
     async def _fallback_unified_chats_with_timeout(
         self,
@@ -82,10 +79,7 @@ class LiveChatUnifiedMixin:
         page_size: int,
         filter_state: str,
     ) -> dict:
-        raise RuntimeError(
-            "Legacy Live Chat full-scan is disabled; run scripts/backfill_live_chat_index.py "
-            "or POST /api/live-chat/rebuild-index"
-        )
+        raise RuntimeError("Legacy Live Chat full-scan is disabled")
 
     async def get_unified_chats(
         self,
