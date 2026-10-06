@@ -116,9 +116,7 @@ class Document:
         self._client.remove(self)
 
     def create(self, data: dict[str, Any]) -> None:
-        if self.get().exists:
-            raise AlreadyExists(self.path)
-        self.set(data, merge=False)
+        self._client.create_once(self, data)
 
 
 class Collection:
@@ -298,6 +296,28 @@ class DocumentClient:
                     "updated_at": _now(),
                 },
             )
+
+    def create_once(self, ref: Document, data: dict[str, Any]) -> None:
+        with self._session() as session:
+            self._ensure(session)
+            result = session.execute(
+                text(
+                    """
+                    INSERT INTO linas_documents (path, parent, doc_id, data_json, updated_at)
+                    VALUES (:path, :parent, :doc_id, :data_json, :updated_at)
+                    ON CONFLICT (path) DO NOTHING
+                    """
+                ),
+                {
+                    "path": ref.path,
+                    "parent": ref.parent,
+                    "doc_id": ref.doc_id,
+                    "data_json": json.dumps(data, default=str),
+                    "updated_at": _now(),
+                },
+            )
+        if int(getattr(result, "rowcount", 0) or 0) == 0:
+            raise AlreadyExists(ref.path)
 
     def remove(self, ref: Document) -> None:
         with self._session() as session:

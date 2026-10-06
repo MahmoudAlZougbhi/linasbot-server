@@ -87,7 +87,7 @@ def get_engine(*, require: bool = True) -> Engine:
                     "SQLite is not permitted for WhatsApp SoT unless "
                     "LINAS_WHATSAPP_ALLOW_SQLITE=true (tests only)."
                 )
-            _ENGINE = create_engine(url, future=True)
+            _ENGINE = create_engine(url, future=True, connect_args={"check_same_thread": False})
         else:
             if not (url.startswith("postgresql://") or url.startswith("postgresql+psycopg2://")):
                 raise WhatsAppDatabaseUnavailable(
