@@ -136,7 +136,7 @@ async def trigger_human_takeover(
     else:
         from services.live_chat.takeover_customer_notice import customer_human_handover_notice
 
-        escalation_msg = customer_human_handover_notice(user_lang)
+        escalation_msg = customer_human_handover_notice(user_lang, str(user_data.get("tenant_id") or ""))
     await send_message_func(user_id, escalation_msg)
     await save_conversation_message_to_firestore(
         user_id,
@@ -279,7 +279,9 @@ async def maybe_send_takeover_autoreply(
                                         customer_human_handover_notice,
                                     )
 
-                                    handover_msg = customer_human_handover_notice(user_lang)
+                                    handover_msg = customer_human_handover_notice(
+                                        user_lang, str(user_data.get("tenant_id") or "")
+                                    )
                                     user_data["notified_human_takeover"] = True
                                     if handover_msg:
                                         await send_message_func(user_id, handover_msg)
@@ -307,7 +309,14 @@ async def maybe_send_takeover_autoreply(
                                 print(
                                     f"[handle_message] INFO: User {user_id} in waiting queue. Sending waiting auto-reply."
                                 )
-                                waiting_msg = (get_dynamic_message("waiting_queue_message", user_lang) or "").strip()
+                                waiting_msg = (
+                                    get_dynamic_message(
+                                        "waiting_queue_message",
+                                        user_lang,
+                                        str(user_data.get("tenant_id") or ""),
+                                    )
+                                    or ""
+                                ).strip()
                                 if not waiting_msg:
                                     print(
                                         f"[handle_message] waiting queue has no tenant text; staying silent "
