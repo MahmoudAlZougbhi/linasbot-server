@@ -57,5 +57,13 @@ def evaluate_gates(turn: CustomerTurn, *, apply_credits: bool = True, message: s
         if topic is not None:
             from services.brain.policies.restricted import refuse_text
 
-            return GateDecision(False, "restricted", topic.id, reply_text=refuse_text(topic, inbound))
+            template = refuse_text(topic, inbound)
+            if template:
+                return GateDecision(False, "restricted", topic.id, reply_text=template)
+            notes = list(turn.extra.get("policy_notes") or [])
+            notes.append(
+                f"Restricted topic {topic.id}. Refuse in the customer's language. Do not offer the restricted service."
+            )
+            turn.extra["policy_notes"] = notes
+            return GateDecision(True, "ok")
     return GateDecision(True, "ok")
