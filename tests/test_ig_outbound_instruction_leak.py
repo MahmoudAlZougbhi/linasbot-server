@@ -58,7 +58,7 @@ def test_polluted_dynamic_message_is_not_sent_as_hello(monkeypatch: pytest.Monke
     assert decision.text == ""
     assert "Use this rule only" not in decision.text
     assert "Arabic-specific rule" not in decision.text
-    assert get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "en") != ""
+    assert get_dynamic_message(BRAIN_TEMPORARY_ERROR_MESSAGE_KEY, "en") == ""
 
 
 def test_greeting_context_omits_advanced_instructions() -> None:
