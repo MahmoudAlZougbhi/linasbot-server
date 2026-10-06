@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -12,6 +13,7 @@ from db.session import database_url, whatsapp_session
 from services.persistence.query_api import SERVER_TIMESTAMP, AlreadyExists, FieldFilter, Increment
 from services.persistence.schema import ensure_schema
 
+_JSON_FIELD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _DOCUMENTS = """
 CREATE TABLE IF NOT EXISTS linas_documents (
     path TEXT PRIMARY KEY,
@@ -77,6 +79,23 @@ def _matches(data: dict[str, Any], field: str, op: str, expected: Any) -> bool:
     if op == "in":
         return bool(actual in set(expected or []))
     return False
+
+
+def _json_text(dialect: str, field: str) -> str:
+    if dialect == "sqlite":
+        return f"json_extract(data_json, '$.{field}')"
+    return f"(data_json::jsonb)->>'{field}'"
+
+
+def _sql_equals(value: Any) -> str | None:
+    encoded = _encode(value)
+    if isinstance(encoded, bool) or encoded is None or isinstance(encoded, (dict, list)):
+        return None
+    if isinstance(encoded, (int, float)):
+        return str(encoded)
+    if isinstance(encoded, str):
+        return encoded
+    return None
 
 
 class Snapshot:
@@ -184,6 +203,9 @@ class QuerySet:
 
     def stream(self, timeout: float | None = None, retry: Any = None) -> list[Snapshot]:
         del timeout, retry
+        pushed = self._client.query_documents(self)
+        if pushed is not None:
+            return pushed
         rows = []
         for snapshot in self._client.children(self.path):
             data = snapshot.to_dict() or {}
@@ -323,6 +345,59 @@ class DocumentClient:
         with self._session() as session:
             self._ensure(session)
             session.execute(text("DELETE FROM linas_documents WHERE path = :path"), {"path": ref.path})
+
+    def query_documents(self, query: QuerySet) -> list[Snapshot] | None:
+        """Equality, order, and limit in SQL. Returns None when the query cannot be pushed."""
+        if query._after or len(query._order) > 1:
+            return None
+        comparisons: list[tuple[str, str]] = []
+        for field, op, value in query._filters:
+            if op != "==" or not _JSON_FIELD.fullmatch(field):
+                return None
+            compared = _sql_equals(value)
+            if compared is None:
+                return None
+            comparisons.append((field, compared))
+        order_field = ""
+        order_dir = "ASC"
+        if query._order:
+            name, direction = query._order[0]
+            if name != "__name__" and not _JSON_FIELD.fullmatch(name):
+                return None
+            order_field = name
+            order_dir = "DESC" if direction == "DESCENDING" else "ASC"
+        with self._session() as session:
+            self._ensure(session)
+            dialect = session.get_bind().dialect.name
+            clauses = ["parent = :parent"]
+            params: dict[str, Any] = {"parent": query.path}
+            for index, (field, compared) in enumerate(comparisons):
+                clauses.append(f"{_json_text(dialect, field)} = :eq_{index}")
+                params[f"eq_{index}"] = compared
+            order_sql = ""
+            if order_field == "__name__":
+                order_sql = f" ORDER BY doc_id {order_dir}"
+            elif order_field:
+                order_sql = f" ORDER BY {_json_text(dialect, order_field)} {order_dir}"
+            limit_sql = ""
+            if query._limit is not None:
+                limit_sql = " LIMIT :limit"
+                params["limit"] = int(query._limit)
+            rows = session.execute(
+                text(
+                    f"""
+                    SELECT path, doc_id, data_json FROM linas_documents
+                    WHERE {' AND '.join(clauses)}{order_sql}{limit_sql}
+                    """
+                ),
+                params,
+            ).all()
+        snapshots = []
+        for path, doc_id, raw in rows:
+            ref = Document(self, path)
+            ref.doc_id = doc_id
+            snapshots.append(Snapshot(ref, json.loads(raw)))
+        return snapshots
 
     def children(self, parent: str) -> list[Snapshot]:
         with self._session() as session:
