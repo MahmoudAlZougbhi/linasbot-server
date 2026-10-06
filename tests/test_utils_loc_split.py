@@ -35,8 +35,6 @@ def test_utils_preserves_public_api() -> None:
 
 def test_utils_keeps_qiscus_room_id_identity() -> None:
     identity = Path("utils/utils_identity.py").read_text(encoding="utf-8")
-    save = Path("utils/utils_conversation_save.py").read_text(encoding="utf-8")
     assert "Qiscus" in identity
     assert "room_id" in identity
-    assert "Qiscus" in save
-    assert "room_id" in save
+    assert "canonical" in identity

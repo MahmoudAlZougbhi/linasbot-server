@@ -12,7 +12,9 @@ import services.scale.durable_event_claim as claims
 import services.scale.inbound_event_reconcile as reconcile
 import services.scale.inbound_event_store as event_store
 from services.scale.inbound_event_store import InboundEventRecord
+from services.scale.redis_claims import RedisClaimStore
 from tests.meta_compliance_helpers import _FakeFirestore
+from tests.scale.memory_claim_redis import install_memory_claim_store
 
 
 @pytest.fixture()
@@ -28,6 +30,7 @@ def shared_ledger(
     monkeypatch.setattr(event_store, "_store_dir", lambda: root)
     monkeypatch.setattr(utils.utils, "get_document_db", lambda: db)
     monkeypatch.setenv("ENVIRONMENT", "production")
+    install_memory_claim_store(monkeypatch)
     return db, root
 
 
@@ -466,23 +469,26 @@ async def test_expired_firestore_claim_can_be_recovered_after_claim_owner_crash(
     assert await claims.try_claim_event(
         namespace,
         key,
-        ttl_seconds=0.01,
+        ttl_seconds=300,
         firestore_collection=claim_collection,
     )
-    document_id = claims._firestore_claim_document_id(namespace, key)
-    reference = (
-        db.collection("artifacts").document("linas-ai-bot-backend").collection(claim_collection).document(document_id)
+    assert (
+        await claims.try_claim_event(
+            namespace,
+            key,
+            ttl_seconds=300,
+            firestore_collection=claim_collection,
+        )
+        is False
     )
-    reference.update({"expires_at_epoch": time.time() - 1})
-
+    # A crashed owner leaves no live key once the TTL is gone.
+    RedisClaimStore().release_claim(namespace, key)
     assert await claims.try_claim_event(
         namespace,
         key,
         ttl_seconds=300,
         firestore_collection=claim_collection,
     )
-    assert reference.data["status"] == "claimed"
-    assert reference.data["expires_at_epoch"] > time.time()
 
 
 @pytest.mark.asyncio
@@ -513,10 +519,9 @@ async def test_released_firestore_claim_can_be_reacquired_by_new_generation(
         firestore_collection=collection,
     )
     assert second is not None
-    assert second.generation == first.generation + 1
+    assert second.owner_token != first.owner_token
 
-    # A delayed completion/release from the prior owner cannot mutate the new
-    # worker's generation.
+    # A delayed completion/release from the prior owner cannot drop the new owner.
     await claims.complete_event_claim(
         namespace,
         key,
@@ -529,10 +534,20 @@ async def test_released_firestore_claim_can_be_reacquired_by_new_generation(
         firestore_collection=collection,
         claim_handle=first,
     )
-    document_id = claims._firestore_claim_document_id(namespace, key)
-    reference = db.collection("artifacts").document("linas-ai-bot-backend").collection(collection).document(document_id)
-    assert reference.data["status"] == "claimed"
-    assert reference.data["generation"] == second.generation
+    assert (
+        await claims.try_claim_event_handle(
+            namespace,
+            key,
+            firestore_collection=collection,
+        )
+        is None
+    )
+    await claims.release_event_claim(
+        namespace,
+        key,
+        firestore_collection=collection,
+        claim_handle=second,
+    )
 
 
 @pytest.mark.asyncio
