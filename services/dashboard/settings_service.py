@@ -128,9 +128,8 @@ class SettingsService:
             return False
 
     def get_human_takeover_notify_mobiles(self) -> str:
-        """Get the mobile numbers for human takeover notifications"""
-        raw_numbers = self.get_setting("notifications", "humanTakeoverNotifyMobiles", "")
-        return self.normalize_human_takeover_notify_mobiles(raw_numbers)
+        """Global staff numbers are not used. Alerts are per tenant."""
+        return ""
 
     def normalize_human_takeover_notify_mobiles(self, mobile_numbers: str) -> str:
         """
@@ -172,14 +171,8 @@ class SettingsService:
         if cleaned.startswith("00"):
             cleaned = "+" + cleaned[2:]
 
-        if not cleaned.startswith("+"):
-            if cleaned.startswith("961"):
-                cleaned = "+" + cleaned
-            elif cleaned.startswith("0"):
-                cleaned = "+961" + cleaned[1:]
-            else:
-                cleaned = "+961" + cleaned
-
+        if not re.fullmatch(r"\+[1-9]\d{7,14}", cleaned):
+            return ""
         return cleaned
 
     def get_human_takeover_notify_mobiles_list(self) -> Any:
