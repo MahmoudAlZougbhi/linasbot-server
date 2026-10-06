@@ -387,7 +387,7 @@ class DocumentClient:
                 text(
                     f"""
                     SELECT path, doc_id, data_json FROM linas_documents
-                    WHERE {' AND '.join(clauses)}{order_sql}{limit_sql}
+                    WHERE {" AND ".join(clauses)}{order_sql}{limit_sql}
                     """
                 ),
                 params,
