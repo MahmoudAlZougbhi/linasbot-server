@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 
 import bcrypt
+
 from services.persistence.query_api import FieldFilter
 
 

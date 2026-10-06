@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from services.persistence import query_api as firestore
-
 import config
 from services.live_chat.channel import resolve_live_chat_channel
 from services.live_chat.contracts import (
@@ -18,6 +16,7 @@ from services.live_chat.tenant import (
     conversation_tenant_fields,
     resolve_live_chat_tenant_id,
 )
+from services.persistence import query_api as firestore
 from utils.utils import (
     get_document_db,
 )

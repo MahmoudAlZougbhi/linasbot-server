@@ -12,8 +12,8 @@ from services.live_chat.contracts import (
     parse_timestamp_utc,
     utc_now,
 )
-from utils.phone_utils import is_phone_like_user_id, normalize_phone
 from utils.document_db import get_document_db
+from utils.phone_utils import is_phone_like_user_id, normalize_phone
 from utils.utils_identity import get_canonical_user_id_and_phone
 
 _log = logging.getLogger(__name__)

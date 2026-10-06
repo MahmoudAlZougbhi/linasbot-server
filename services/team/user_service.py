@@ -15,7 +15,6 @@ from datetime import datetime
 from typing import Any, cast
 
 from services.persistence.query_api import FieldFilter
-
 from services.team.user_service_auth import UserServiceAuthMixin
 from utils.utils import get_document_db
 

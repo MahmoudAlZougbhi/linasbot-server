@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from utils.document_db import get_document_db, initialize_document_db
 from utils.utils_context import (
     _filter_in_memory_context_for_window,
     append_turn_to_user_context_memory,
@@ -12,7 +13,6 @@ from utils.utils_context import (
     get_last_bot_message_from_conversation,
 )
 from utils.utils_conversation_save import save_conversation_message_to_firestore
-from utils.document_db import get_document_db, initialize_document_db
 from utils.utils_identity import (
     _clean_phone_for_lookup,
     _is_placeholder_phone,

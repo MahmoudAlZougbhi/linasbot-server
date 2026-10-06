@@ -6,8 +6,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from services.persistence.query_api import AlreadyExists
 
+from services.persistence.query_api import AlreadyExists
 from services.scale.inbound_event_persist import persist_created_inbound
 
 

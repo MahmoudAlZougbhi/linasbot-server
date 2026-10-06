@@ -7,8 +7,6 @@ import datetime
 import logging
 from typing import Any
 
-from services.persistence import query_api as firestore
-
 import config
 from services.live_chat.contracts import (
     extract_source_message_id as contract_extract_source_message_id,
@@ -20,6 +18,7 @@ from services.live_chat.contracts import (
     parse_timestamp_utc,
     utc_now,
 )
+from services.persistence import query_api as firestore
 from utils.document_db import get_document_db
 from utils.utils_identity import get_canonical_user_id_and_phone
 from utils.utils_takeover import (

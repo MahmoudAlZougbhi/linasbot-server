@@ -4,8 +4,6 @@ import asyncio
 import datetime
 from typing import Any
 
-from services.persistence import query_api as firestore
-
 import config
 from services.live_chat.contracts import (
     dedupe_messages as contract_dedupe_messages,
@@ -17,6 +15,7 @@ from services.live_chat.contracts import (
 from services.live_chat.service_common import (
     _live_chat_display_name,
 )
+from services.persistence import query_api as firestore
 from utils.utils import (
     get_document_db,
 )

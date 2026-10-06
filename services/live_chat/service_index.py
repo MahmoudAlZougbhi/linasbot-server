@@ -4,8 +4,6 @@ import asyncio
 import datetime
 from typing import Any
 
-from services.persistence import query_api as firestore
-
 import config
 from services.live_chat.channel import coerce_live_chat_user_id, resolve_live_chat_channel
 from services.live_chat.contracts import (
@@ -17,6 +15,7 @@ from services.live_chat.tenant import (
     resolve_live_chat_tenant_id,
     row_belongs_to_tenant,
 )
+from services.persistence import query_api as firestore
 from utils.utils import (
     get_canonical_user_id_and_phone,
     get_document_db,
