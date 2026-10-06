@@ -17,14 +17,29 @@ function randomId(): string {
   return `g_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
 }
 
+async function readStoredGuestId(): Promise<string | null> {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const existing = await SecureStore.getItemAsync(GUEST_ID_KEY, SECURE_STORE_OPTIONS);
+      if (existing && existing.length >= 8 && existing.length <= 80) return existing;
+      return null;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+  }
+  return null;
+}
+
 /** Idempotent guest session id persisted in SecureStore for this app session. */
 export async function getOrCreateGuestSessionId(): Promise<string> {
-  const existing = await SecureStore.getItemAsync(GUEST_ID_KEY, SECURE_STORE_OPTIONS);
-  if (existing && existing.length >= 8) {
-    return existing;
-  }
+  const existing = await readStoredGuestId();
+  if (existing) return existing;
   const id = randomId();
-  await SecureStore.setItemAsync(GUEST_ID_KEY, id, SECURE_STORE_OPTIONS);
+  try {
+    await SecureStore.setItemAsync(GUEST_ID_KEY, id, SECURE_STORE_OPTIONS);
+  } catch {
+    /* Keychain not ready. The in-memory id still opens this chat. */
+  }
   return id;
 }
 

@@ -74,17 +74,49 @@ def _request_origin(request: Request) -> str:
     return request.headers.get("origin") or request.headers.get("host") or ""
 
 
+def _public_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Shape every guest bubble so the app schema can read it."""
+    public: list[dict[str, Any]] = []
+    for item in messages:
+        role = str(item.get("role") or "")
+        if role not in {"user", "assistant", "system"}:
+            role = "assistant"
+        raw_stamp = item.get("created_at")
+        try:
+            created_at = float(raw_stamp)
+        except (TypeError, ValueError):
+            created_at = 0.0
+        public.append(
+            {
+                "id": str(item.get("id") or ""),
+                "role": role,
+                "content": str(item.get("content") or ""),
+                "created_at": created_at,
+            }
+        )
+    return public
+
+
 def _session_payload(session: Any, request: Request | None = None) -> dict[str, Any]:
     """Public session shape for UI — no remaining-count meters."""
     from services.guest.guest_inbox_bridge import publish_guest_view
 
-    view = publish_guest_view(session, origin=_request_origin(request) if request is not None else None)
+    fallback = [
+        {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at} for m in session.messages
+    ]
+    try:
+        view = publish_guest_view(session, origin=_request_origin(request) if request is not None else None)
+        messages = view.get("messages") or fallback
+        live_token = view.get("live_token") or ""
+    except Exception:
+        messages = fallback
+        live_token = ""
     return {
         "id": session.id,
         "limit_reached": session.questions_used >= GUEST_MAX_QUESTIONS,
         "max_input_tokens": GUEST_MAX_INPUT_TOKENS,
-        "messages": view["messages"],
-        "live_token": view.get("live_token") or "",
+        "messages": _public_messages(messages),
+        "live_token": live_token,
     }
 
 
