@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import pytest
 
 from services.live_chat.channel import (
@@ -114,8 +112,8 @@ def test_unified_chats_api_declares_channel_query() -> None:
     assert 'channel: str = Query(default="all"' in src
     assert "channel=inbox_channel" in src
     unified = Path("services/live_chat/service_unified.py").read_text(encoding="utf-8")
-    assert "wanted_channel" in unified
-    assert '"channel": row_channel' in unified
+    assert "channel=normalize_live_chat_channel(channel)" in unified
+    assert '"channel": row["channel"]' in unified
     assert "tenant_id" in unified
     assert "_store_unified_inbox" in Path("services/live_chat/service_inbox_cache.py").read_text(encoding="utf-8")
     assert "tenant_id=workspace" in src
@@ -182,28 +180,24 @@ def test_coerce_user_id_never_blank_for_real_threads() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unified_chats_uses_disk_cache_when_firestore_missing() -> None:
-    svc = live_chat_service
-    svc.invalidate_cache()
-    svc._store_unified_inbox(
-        "t-cache",
-        chats=[
-            {
-                "conversation_id": "cached-1",
-                "tenant_id": "t-cache",
-                "user_id": "+96170111111",
-                "last_message_at": utc_now().isoformat(),
-                "conversation_state": svc.STATE_BOT_ACTIVE,
-            }
-        ],
-        has_more=False,
-        total=1,
-        next_cursor=None,
-        page_size=20,
-        counters=svc._empty_counters(),
+async def test_unified_chats_reads_the_postgres_inbox(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from db.session import reset_engine_for_tests
+    from services.persistence.chat_store import append_message
+
+    monkeypatch.setenv("LINAS_WHATSAPP_ALLOW_SQLITE", "true")
+    monkeypatch.setenv("LINAS_WHATSAPP_DATABASE_URL", f"sqlite:///{tmp_path}/inbox.sqlite")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    reset_engine_for_tests()
+    append_message(
+        user_id="whatsapp:111",
+        role="user",
+        text_body="hello",
+        conversation_id="cached-1",
+        metadata={"tenant_id": "t-cache"},
     )
-    with patch("services.live_chat.service_unified.get_document_db", return_value=None):
-        result = await svc.get_unified_chats(search="", page=1, page_size=20, filter_state="all", tenant_id="t-cache")
+    result = await live_chat_service.get_unified_chats(
+        search="", page=1, page_size=20, filter_state="all", tenant_id="t-cache"
+    )
+    reset_engine_for_tests()
     assert result.get("success") is True
-    assert len(result.get("chats") or []) == 1
-    assert result.get("source") in {"cache", "memory_cache"}
+    assert [row["conversation_id"] for row in result.get("chats") or []] == ["cached-1"]

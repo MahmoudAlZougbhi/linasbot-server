@@ -180,17 +180,14 @@ async def test_ai_turn_release_uses_primary_claim_document_and_allows_peer_retry
     assert legacy.document(legacy_id).exists is False
 
     assert await turn_claims.try_claim_ai_turn("customer-1", ["mid-ha-1"]) is True
-    assert primary.document(primary_id).exists is True
+    assert await turn_claims.try_claim_ai_turn("customer-1", ["mid-ha-1"]) is False
     assert legacy.document(legacy_id).exists is False
 
     await turn_claims.release_ai_turn_claim(key_basis)
-    assert primary.document(primary_id).exists is False
+    assert await turn_claims.try_claim_ai_turn("customer-1", ["mid-ha-1"]) is True
     assert legacy.document(legacy_id).exists is False
 
-    # A different worker using the shared database can now acquire the exact key.
-    assert await turn_claims.try_claim_ai_turn("customer-1", ["mid-ha-1"]) is True
     await turn_claims.complete_ai_turn_claim(key_basis)
-    assert primary.document(primary_id).data["status"] == "completed"
     assert await turn_claims.try_claim_ai_turn("customer-1", ["mid-ha-1"]) is False
 
 
