@@ -137,7 +137,14 @@ async def _maybe_waiting_queue_notice(
         from services.owner_copilot.dynamic_messages_service import get_dynamic_message
 
         user_lang = user_data.get("user_preferred_lang", "ar")
-        waiting_msg = (get_dynamic_message("waiting_queue_message", user_lang) or "").strip()
+        waiting_msg = (
+            get_dynamic_message(
+                "waiting_queue_message",
+                user_lang,
+                str(user_data.get("tenant_id") or ""),
+            )
+            or ""
+        ).strip()
         if not waiting_msg:
             log_customer_generation_failure(stage="delayed_error_takeover_queue")
             return False
