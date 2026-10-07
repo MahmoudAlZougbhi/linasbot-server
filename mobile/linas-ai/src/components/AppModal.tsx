@@ -14,12 +14,17 @@ export function AppModal({
   children,
   transparent = true,
   animationType = 'fade',
+  visible = false,
   ...rest
 }: Props) {
+  // A hidden RN Modal stays a native window on iOS and swallows every tap
+  // until the process is killed. Chat keeps AuthGate and the + menu mounted.
+  if (!visible) return null;
   const resolvedAnimation = animationType === 'slide' ? 'fade' : animationType;
 
   return (
     <Modal
+      visible
       transparent={transparent}
       statusBarTranslucent
       presentationStyle="overFullScreen"

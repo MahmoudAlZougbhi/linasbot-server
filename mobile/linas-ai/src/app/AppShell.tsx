@@ -90,7 +90,11 @@ export function AppShell() {
 
   useEffect(() => {
     return onAuthCleared(() => {
-      rotateGuestSessionIdSync();
+      try {
+        rotateGuestSessionIdSync();
+      } catch {
+        /* Same as logout: the logged-out screen still has to paint. */
+      }
       setHasAccess(false);
       bumpAuthEpoch();
       setScreen({ name: 'chat' });
@@ -242,7 +246,11 @@ export function AppShell() {
   function logout() {
     const access = peekAccessToken();
     tokenStore.forgetLocal();
-    rotateGuestSessionIdSync();
+    try {
+      rotateGuestSessionIdSync();
+    } catch {
+      /* A failed guest id must not leave the owner screen on screen. */
+    }
     setHasAccess(false);
     setResumeArea(null);
     bumpAuthEpoch();
