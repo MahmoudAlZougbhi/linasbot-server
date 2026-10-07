@@ -99,4 +99,19 @@ export const ownerApi = {
    */
   brainTurn: (brain, body) =>
     request(`/api/platform/brains/${brain}`, { method: 'POST', body: JSON.stringify(body) }),
+  listKnowledge: () => request('/api/platform/copilot/knowledge'),
+  saveKnowledge: (body) => request('/api/platform/copilot/knowledge', { method: 'POST', body: JSON.stringify(body) }),
+  deleteKnowledge: (id) => request(`/api/platform/copilot/knowledge/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  listQa: () => request('/api/platform/copilot/qa'),
+  saveQa: (body) => request('/api/platform/copilot/qa', { method: 'POST', body: JSON.stringify(body) }),
+  listTraces: (filters = {}) => {
+    const params = new URLSearchParams(
+      Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined && value !== null && String(value) !== '')),
+    );
+    const query = params.toString();
+    return request(query ? `/api/platform/copilot/traces?${query}` : '/api/platform/copilot/traces');
+  },
+  getTrace: (id) => request(`/api/platform/copilot/traces/${encodeURIComponent(id)}`),
+  audit: () => request('/api/platform/audit'),
+  health: () => request('/api/platform/health'),
 };

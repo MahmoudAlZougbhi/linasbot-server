@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 _MAX_BLOCK_CHARS = 3500
-_TOP_K = 4
+_TOP_K = 5
 
 
 def _published_items(tenant_id: str) -> list[dict[str, Any]]:
@@ -53,6 +53,17 @@ def _score(query: str, item: dict[str, Any]) -> int:
 
 
 def retrieve_sol_app_knowledge(tenant_id: str, query: str, *, limit: int = _TOP_K) -> list[dict[str, Any]]:
+    try:
+        from services.owner_portal.owner_kb_store import search_kb
+
+        semantic = search_kb(query, limit=limit)
+        if semantic:
+            return [
+                {"id": item.get("id") or "", "title": item.get("title") or "", "body": item.get("body") or ""}
+                for item in semantic
+            ]
+    except Exception:
+        pass
     items = _published_items(tenant_id)
     if not items:
         return []

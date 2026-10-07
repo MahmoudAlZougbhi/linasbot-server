@@ -23,6 +23,13 @@ import OwnerEconomy from './pages/owner/OwnerEconomy';
 import OwnerCosts from './pages/owner/OwnerCosts';
 import OwnerMessages from './pages/owner/OwnerMessages';
 import OwnerBrains from './pages/owner/OwnerBrains';
+import OwnerKnowledge from './pages/owner/OwnerKnowledge';
+import OwnerQa from './pages/owner/OwnerQa';
+import OwnerCopilotChats from './pages/owner/OwnerCopilotChats';
+import OwnerTraces from './pages/owner/OwnerTraces';
+import OwnerTenants from './pages/owner/OwnerTenants';
+import OwnerAudit from './pages/owner/OwnerAudit';
+import OwnerHealth from './pages/owner/OwnerHealth';
 
 /**
  * Operator SPA shell removed after FINAL_WEB_TO_MOBILE_PARITY_MATRIX.csv.
@@ -78,6 +85,13 @@ function App() {
             <Route path="economy" element={<OwnerEconomy />} />
             <Route path="costs" element={<OwnerCosts />} />
             <Route path="brains" element={<OwnerBrains />} />
+            <Route path="knowledge" element={<OwnerKnowledge />} />
+            <Route path="qa" element={<OwnerQa />} />
+            <Route path="copilot" element={<OwnerCopilotChats />} />
+            <Route path="traces" element={<OwnerTraces />} />
+            <Route path="tenants" element={<OwnerTenants />} />
+            <Route path="audit" element={<OwnerAudit />} />
+            <Route path="health" element={<OwnerHealth />} />
           </Route>
           {OBSOLETE_OPERATOR_PATHS.map((path) => (
             <Route key={path} path={path} element={<Navigate to="/#get-app" replace />} />

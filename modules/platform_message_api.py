@@ -85,22 +85,25 @@ async def platform_costs(
     since: str | None = Query(default=None),
     until: str | None = Query(default=None),
     period: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
 ) -> Any:
     require_platform_owner(request)
     start, end = period_bounds(period)
     env = (environment or "").strip() or None
-    return {
-        "success": True,
-        "dashboard": global_dashboard(
-            environment=env,
-            category=category,
-            feature=feature,
-            provider=provider,
-            model=model,
-            since=since or start,
-            until=until or end,
-        ),
-    }
+    dashboard = global_dashboard(
+        environment=env,
+        category=category,
+        feature=feature,
+        provider=provider,
+        model=model,
+        since=since or start,
+        until=until or end,
+    )
+    events = list(dashboard.get("events") or [])
+    dashboard["events_total"] = len(events)
+    dashboard["events"] = events[offset : offset + limit]
+    return {"success": True, "dashboard": dashboard}
 
 
 @app.get("/api/platform/costs/tenants/{tenant_id}")
@@ -117,6 +120,10 @@ async def platform_tenant_costs(
     period: str | None = Query(default=None),
 ) -> Any:
     require_platform_owner(request)
+    from services.owner_portal.analytics_sql import tenant_is_known
+
+    if not tenant_is_known(tenant_id):
+        raise HTTPException(status_code=404, detail="Unknown tenant")
     start, end = period_bounds(period)
     env = (environment or "").strip() or None
     return {
@@ -192,6 +199,10 @@ async def platform_message_ledger(tenant_id: str, request: Request) -> Any:
     tid = tenant_id.strip()
     if not tid:
         raise HTTPException(status_code=400, detail="tenant_id is required")
+    from services.owner_portal.analytics_sql import tenant_is_known
+
+    if not tenant_is_known(tid):
+        raise HTTPException(status_code=404, detail="Unknown tenant")
     return {"success": True, "ledger": snapshot_dict(tid), "health": ledger_health(tid)}
 
 

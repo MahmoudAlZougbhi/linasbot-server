@@ -41,8 +41,7 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   webServer: {
-    // Production dashboard uses `base: "./"` for FastAPI static hosting. Deep-link browser
-    // smoke needs absolute asset URLs, so build a dedicated e2e bundle with `base: "/"`.
+    // Production dashboard uses `base: "/"`. The e2e bundle matches that absolute asset path.
     command:
       "npx vite build --base / --outDir build-e2e --emptyOutDir && npx vite preview --host 127.0.0.1 --port 4173 --strictPort --outDir build-e2e",
     url: "http://127.0.0.1:4173",

@@ -186,7 +186,29 @@ def persist_from_interaction_entry(entry: dict[str, Any]) -> dict[str, Any] | No
         interaction_id=str(entry.get("message_id") or entry.get("trace_id") or uuid.uuid4().hex),
         extra={"handler_path": entry.get("handler_path"), "outcome": entry.get("outcome")},
     )
-    return customer_response_trace_store.persist(trace)
+    stored = customer_response_trace_store.persist(trace)
+    try:
+        from services.owner_portal.owner_traces import record_trace
+
+        record_trace(
+            {
+                "id": stored.get("trace_id"),
+                "tenant_id": stored.get("tenant_id"),
+                "brain": "customer",
+                "channel": stored.get("channel"),
+                "created_at": stored.get("timestamp_iso"),
+                "user_message": stored.get("customer_message"),
+                "reply": stored.get("ai_response"),
+                "model": stored.get("model"),
+                "faq_match": stored.get("faq_match"),
+                "retrieved": stored.get("retrieved_sections"),
+                "tools": stored.get("tools_used"),
+                "steps": ["receive", "faq_or_retrieve", "reply"],
+            }
+        )
+    except Exception:
+        pass
+    return stored
 
 
 def get_recent_customer_interactions(*, tenant_id: str, limit: int = 20) -> list[dict[str, Any]]:

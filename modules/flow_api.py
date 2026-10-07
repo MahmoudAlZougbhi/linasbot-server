@@ -28,9 +28,13 @@ async def get_flow_logs(
     """
     session = require_session(request)
     session_tenant = session.tenant_id.strip().lower()
-    requested_tenant = (tenant_id or session_tenant).strip().lower()
-    if requested_tenant != session_tenant and not is_platform_owner(session):
-        raise HTTPException(status_code=403, detail="Cross-tenant logs are forbidden")
+    owner = is_platform_owner(session)
+    if owner and not (tenant_id or "").strip():
+        requested_tenant = None
+    else:
+        requested_tenant = (tenant_id or session_tenant).strip().lower()
+        if requested_tenant != session_tenant and not owner:
+            raise HTTPException(status_code=403, detail="Cross-tenant logs are forbidden")
     # Run in thread pool so file read / JSON parse don't block the event loop.
     # Exact tenant filtering is mandatory; historical rows without tenant_id are excluded.
     logs = await asyncio.to_thread(

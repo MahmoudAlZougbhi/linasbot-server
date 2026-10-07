@@ -454,8 +454,8 @@ def test_owner_portal_wires_catalog_and_costs() -> None:
     assert "customer-ai-lab" not in api
     assert "/api/platform/daily-edits" in api
     banner = (root / "OwnerActivationBanner.jsx").read_text(encoding="utf-8")
-    assert "durable_tables" in banner
-    assert "Activation stays off" in banner
+    assert "ready_to_enable" in banner
+    assert "Activation is off" in banner
 
 
 def test_cost_dashboard_includes_processing_and_edit_tenants() -> None:

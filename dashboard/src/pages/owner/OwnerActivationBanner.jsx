@@ -1,84 +1,63 @@
 import { useEffect, useState } from 'react';
 import { ownerApi } from './ownerApi';
 
+const LABELS = {
+  free_ai_message_allowance: 'Free message allowance',
+  free_message_renewal: 'Free message renewal',
+  knowledge_line_budget: 'Knowledge line budget',
+  services_products_line_budget: 'Services and products budget',
+  content_line_definition: 'Content line definition',
+  message_topup_prices: 'Top-up prices',
+  credit_to_message_conversion: 'Credit conversion',
+  alembic_head: 'Database migrations',
+  message_catalog_unpublished: 'Message catalog publish',
+  message_checkout_not_ready: 'Checkout',
+  message_topup_not_sale_ready: 'Top-up sales',
+  message_billing_cutover_off: 'Billing cutover',
+  live_message_ready: 'Live messages',
+  eval_suite_below_800: 'Eval suite',
+  live_channel_proof_missing: 'Live channel proof',
+  live_voyage_pgvector_unverified: 'Search index',
+  unresolved_pending_settlements: 'Pending settlements',
+  stale_leftover_credit_holds: 'Leftover credit holds',
+};
+
+function labelFor(key) {
+  return LABELS[key] || String(key).replaceAll('_', ' ');
+}
+
 export default function OwnerActivationBanner() {
   const [report, setReport] = useState(/** @type {any} */ (null));
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let live = true;
-    ownerApi
-      .activationReadiness()
+    ownerApi.activationReadiness()
       .then((data) => live && setReport(data.readiness || data))
       .catch((reason) => live && setError(reason instanceof Error ? reason.message : String(reason)));
-    return () => {
-      live = false;
-    };
+    return () => { live = false; };
   }, []);
 
   if (error) {
-    return (
-      <p role="alert" className="rounded-lg bg-amber-950 p-3 text-sm text-amber-100">
-        Activation report unavailable: {error}
-      </p>
-    );
+    return <p role="alert" className="rounded-lg bg-amber-950 p-3 text-sm text-amber-100">Activation status unavailable.</p>;
   }
   if (!report) return null;
-  const blockers = report.blockers || report.catalog_unconfigured || [];
-  const failedImports = Object.entries(report.imports || {})
-    .filter(([, ok]) => !ok)
-    .map(([name]) => name);
-  const missingTables = Object.entries(report.durable_tables?.tables || {})
-    .filter(([, ok]) => !ok)
-    .map(([name]) => name);
-  const testingReady = Boolean(report.testing_ready);
+  const ready = Boolean(report.ready_to_enable);
+  const blockers = (report.blockers || []).map(labelFor);
   return (
-    <section
-      className={`rounded-xl border p-4 text-sm ${
-        testingReady
-          ? 'border-teal-900 bg-teal-950/30 text-teal-50'
-          : 'border-amber-900 bg-amber-950/40 text-amber-100'
-      }`}
-    >
-      <p className="font-semibold">
-        {testingReady ? 'Activation ready' : 'Activation not ready'}
-      </p>
-      <p className="mt-1 opacity-90">
-        testing_ready={String(testingReady)} · ready_to_enable=
-        {String(Boolean(report.ready_to_enable))} — Activation stays off until readiness passes; production cutover stays off). Store{' '}
-        {report.store || '—'} · alembic {report.alembic?.ok ? 'ok' : 'check'}.
-        {report.outbox
-          ? ` Outbox accepted ${report.outbox.accepted || 0} · pending settlement ${
-              report.outbox.pending_settlement || 0
-            }.`
-          : ''}
-      </p>
+    <section className={`rounded-xl border p-4 text-sm ${ready ? 'border-teal-900 bg-teal-950/30' : 'border-amber-900 bg-amber-950/40'}`}>
+      <button type="button" className="flex w-full items-center justify-between text-left" onClick={() => setOpen((value) => !value)}>
+        <span className="font-semibold">{ready ? 'Activation is on' : 'Activation is off'}</span>
+        <span className="text-xs opacity-70">{open ? 'Hide' : 'Details'}</span>
+      </button>
       <p className="mt-1 opacity-80">
-        Pending provider events attribute to tenant_id; known_usd stays 0 until invoice finalization.
+        {ready ? 'Production cutover checks passed.' : `${blockers.length} checks still need attention.`}
       </p>
-      <p className="mt-1 opacity-80">
-        Conversion {report.conversion?.blocked ? 'blocked' : 'open'} ({report.conversion?.reason || '—'}).
-        Catalog published={String(Boolean(report.catalog?.published))} · checkout_ready=
-        {String(Boolean(report.catalog?.checkout_ready))}.
-      </p>
-      {report.durable_tables ? (
-        <p className="mt-1 opacity-80">
-          Durable tables ready={String(Boolean(report.durable_tables.ready))}
-          {missingTables.length ? ` · missing ${missingTables.join(', ')}` : ''}.
-        </p>
-      ) : null}
-      {report.verification ? (
-        <p className="mt-1 opacity-80">
-          Eval suite complete={String(Boolean(report.verification.eval_suite_complete))} · live channel
-          proof={String(Boolean(report.verification.live_channel_proof))} · Voyage/pgvector=
-          {String(Boolean(report.verification.live_voyage_pgvector))}.
-        </p>
-      ) : null}
-      {failedImports.length ? (
-        <p className="mt-1 opacity-80">Failed imports: {failedImports.join(', ')}</p>
-      ) : null}
-      {blockers.length ? (
-        <p className="mt-2 opacity-80">Production blockers: {blockers.join(', ')}</p>
+      {open && blockers.length ? (
+        <ul className="mt-3 list-disc space-y-1 pl-5">
+          {blockers.map((item) => <li key={item}>{item}</li>)}
+        </ul>
       ) : null}
     </section>
   );

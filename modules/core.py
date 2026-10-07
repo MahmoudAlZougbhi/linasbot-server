@@ -83,8 +83,10 @@ app.add_middleware(
 
 # Deny-by-default dashboard API auth (must be after CORS so preflight works)
 from modules.api_security import DashboardAuthMiddleware  # noqa: E402
+from modules.security_headers import SecurityHeadersMiddleware  # noqa: E402
 
 app.add_middleware(DashboardAuthMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Initialize HTTP client for WhatsApp API calls (Meta provider only)
 # Avoids URL with "None" when Meta credentials are missing
