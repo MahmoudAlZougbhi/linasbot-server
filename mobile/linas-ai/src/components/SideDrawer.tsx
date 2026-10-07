@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radii, useTheme } from '../theme';
 
+/** Closed drawers unmount immediately so DRAWER_CLOSE_MS cannot leave an invisible hit layer. */
 /** Above ChatHeader (20) and ChatModeToggle (15) so chat chrome cannot leak on the panel. */
 export const DRAWER_Z = 40;
 
@@ -65,10 +66,11 @@ export function SideDrawer({
     ]).start();
   }, [open, anim, fade, closedX]);
 
-  if (!open) return null;
+  const hitActive = open;
+  if (!hitActive) return null;
 
   return (
-    <View pointerEvents="auto" style={[StyleSheet.absoluteFill, styles.layer]}>
+    <View pointerEvents={hitActive ? 'auto' : 'none'} style={[StyleSheet.absoluteFill, styles.layer]}>
       <Animated.View style={[styles.scrim, { opacity: fade, backgroundColor: colors.overlay }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
