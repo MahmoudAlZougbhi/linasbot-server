@@ -44,6 +44,14 @@ def first_user_message_ts(messages: Any) -> float:
     return earliest
 
 
+def _visible_conversation(data: dict[str, Any]) -> bool:
+    if data.get("deleted"):
+        return False
+    if messages_include_user_turn(data.get("messages")):
+        return True
+    return not is_default_conversation_title(str(data.get("title") or ""))
+
+
 def is_default_conversation_title(title: str | None) -> bool:
     cleaned = (title or "").strip()
     return not cleaned or cleaned in {DEFAULT_CONVERSATION_TITLE, "Chat", "Untitled", "Linas AI"}
@@ -147,33 +155,44 @@ class OwnerChatStore:
         return removed
 
     def list_conversations(self, *, tenant_id: str, user_id: str) -> list[dict[str, Any]]:
-        items: list[dict[str, Any]] = []
+        from services.owner_copilot.owner_chat_pg import list_conversations as shared_list
+
+        by_id: dict[str, dict[str, Any]] = {}
+        for data in self._file_conversations(tenant_id, user_id):
+            row = self._public_row(data)
+            if row:
+                by_id[str(row["id"])] = row
+        shared = shared_list(tenant_id=tenant_id, user_id=user_id)
+        for data in shared or []:
+            if not _visible_conversation(data):
+                continue
+            row = self._public_row(data)
+            if row:
+                by_id[str(row["id"])] = row
+        items = list(by_id.values())
+        items.sort(key=lambda row: float(row.get("updated_at") or 0), reverse=True)
+        return items
+
+    def _file_conversations(self, tenant_id: str, user_id: str) -> list[dict[str, Any]]:
+        found: list[dict[str, Any]] = []
         with self._lock:
             for path in self._tenant_dir(tenant_id).glob("*.json"):
                 try:
                     data = json.loads(path.read_text(encoding="utf-8"))
                 except Exception:
                     continue
-                if str(data.get("user_id")) != user_id:
+                if str(data.get("user_id")) != user_id or data.get("deleted"):
                     continue
-                if data.get("deleted"):
-                    continue
-                if not messages_include_user_turn(data.get("messages")):
-                    continue
-                items.append(
-                    {
-                        "id": data["id"],
-                        "title": data.get("title") or "Chat",
-                        "created_at": data.get("created_at"),
-                        "updated_at": data.get("updated_at"),
-                        "archived": bool(data.get("archived")),
-                        "has_user_message": True,
-                    }
-                )
-        items.sort(key=lambda x: float(x.get("updated_at") or 0), reverse=True)
-        return items
+                if _visible_conversation(data):
+                    found.append(data)
+        return found
 
     def get_conversation(self, *, tenant_id: str, user_id: str, conversation_id: str) -> OwnerConversation | None:
+        from services.owner_copilot.owner_chat_pg import load_conversation
+
+        shared = load_conversation(tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id)
+        if shared is not None:
+            return self._from_payload(shared, tenant_id=tenant_id, user_id=user_id)
         path = self._conv_path(tenant_id, conversation_id)
         with self._lock:
             if not path.is_file():
@@ -312,6 +331,47 @@ class OwnerChatStore:
         self._write(conv)
         return True
 
+    @staticmethod
+    def _public_row(data: dict[str, Any]) -> dict[str, Any] | None:
+        if not data.get("id"):
+            return None
+        return {
+            "id": data["id"],
+            "title": data.get("title") or "Chat",
+            "created_at": data.get("created_at"),
+            "updated_at": data.get("updated_at"),
+            "archived": bool(data.get("archived")),
+            "has_user_message": messages_include_user_turn(data.get("messages")),
+        }
+
+    def _from_payload(self, data: dict[str, Any], *, tenant_id: str, user_id: str) -> OwnerConversation | None:
+        if str(data.get("tenant_id")) != tenant_id or str(data.get("user_id")) != user_id:
+            return None
+        if data.get("deleted"):
+            return None
+        messages = [
+            OwnerChatMessage(
+                id=str(item.get("id") or uuid.uuid4().hex),
+                role=str(item.get("role") or "assistant"),
+                content=str(item.get("content") or ""),
+                created_at=float(item.get("created_at") or 0),
+                tool_calls=item.get("tool_calls") if isinstance(item.get("tool_calls"), list) else None,
+            )
+            for item in (data.get("messages") or [])
+            if isinstance(item, dict)
+        ]
+        return OwnerConversation(
+            id=str(data["id"]),
+            tenant_id=tenant_id,
+            user_id=user_id,
+            title=str(data.get("title") or "Chat"),
+            created_at=float(data.get("created_at") or 0),
+            updated_at=float(data.get("updated_at") or 0),
+            archived=bool(data.get("archived")),
+            deleted=False,
+            messages=messages,
+        )
+
     def _write(self, conv: OwnerConversation) -> None:
         payload = {
             "id": conv.id,
@@ -327,6 +387,9 @@ class OwnerChatStore:
         path = self._conv_path(conv.tenant_id, conv.id)
         with self._lock:
             path.write_text(json.dumps(payload), encoding="utf-8")
+        from services.owner_copilot.owner_chat_pg import save_conversation
+
+        save_conversation(payload)
 
 
 owner_chat_store = OwnerChatStore()

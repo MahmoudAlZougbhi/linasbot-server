@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -12,8 +13,12 @@ from services.brain.providers.spaces import ENTITY_DOCUMENT
 from services.owner_portal.owner_embed import embed_one
 from services.owner_portal.owner_kb_store import OWNER_KB_TENANT, _session
 
+logger = logging.getLogger(__name__)
+
 _FAMILY = "owner_qa"
-_THRESHOLD = 0.90
+# Cross-lingual cosine on the Voyage entity model sits around 0.75–0.80.
+# 0.90 only kept exact duplicates. Unrelated questions stay well below 0.75.
+_THRESHOLD = 0.75
 _LANGS = ("ar", "en", "fr", "franco")
 
 
@@ -98,6 +103,7 @@ def _index(qa_id: str, rows: list[dict[str, str]]) -> None:
     for row in rows:
         vector = embed_one(row["question"], query=False)
         if not vector:
+            logger.warning("owner qa variant %s/%s was not embedded", qa_id, row["language"])
             continue
         docs.append(
             {
@@ -166,7 +172,9 @@ def match_owner_qa(question: str, language: str) -> dict[str, Any] | None:
             families={_FAMILY},
             limit=3,
         )
-    if not found.items or found.items[0].score < _THRESHOLD:
+    top = found.items[0].score if found.items else None
+    logger.info("owner qa top score %s threshold %s", top, _THRESHOLD)
+    if top is None or top < _THRESHOLD:
         return None
     source = found.items[0].source_id
     qa_id = source.split(":", 1)[0]

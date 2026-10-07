@@ -45,6 +45,29 @@ async def iter_owner_turn_v2_events(
         owner_turn_hold_on_event,
     )
 
+    asked = (user_text or "").strip()
+    if asked and not confirm_tool and not choice_id:
+        from services.owner_copilot.brain_support import done_payload
+        from services.owner_portal.owner_qa import match_owner_qa
+
+        hit = match_owner_qa(asked, reply_language or "en")
+        if hit:
+            yield StreamEvent(
+                type="done",
+                payload=done_payload(
+                    reply_text=str(hit["answer"]),
+                    tool_calls=[],
+                    cards=[],
+                    choices=[],
+                    model="",
+                    ctx_tokens=0,
+                    stage="",
+                    reason="qa_hit",
+                    route={"kind": "owner_qa", "reason": "qa_hit", "score": hit.get("score"), "tokens": 0},
+                ),
+            )
+            return
+    exempt = str(role or "") == "platform_owner" or str(tenant_id or "").strip().lower() == "platform"
     history_tokens = sum(len(str((m or {}).get("content") or "")) for m in (messages or [])) // 4
     turn_hold = owner_turn_hold_begin(
         tenant_id,
@@ -59,6 +82,7 @@ async def iter_owner_turn_v2_events(
             attachment_count=len(attachment_ids or []),
         ),
         confirm_billing=confirm_billing,
+        skip_credit=exempt,
     )
     if turn_hold.blocked:
         yield StreamEvent(

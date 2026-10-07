@@ -84,8 +84,22 @@ async def stream_owner_message(
 
     from services.billing.credit_ai_gate import ai_generation_blocked, owner_credits_paused_payload
     from services.owner_copilot.models import StreamEvent as CopilotStreamEvent
+    from services.owner_copilot.profile import coerce_language, language_from_accept_header
 
-    if ai_generation_blocked(session.tenant_id):
+    reply_language = coerce_language(body.reply_language) or language_from_accept_header(
+        request.headers.get("accept-language")
+    )
+    asked = (body.content or "").strip()
+    exempt = (
+        str(getattr(session, "role", "") or "") == "platform_owner"
+        or str(session.tenant_id or "").strip().lower() == "platform"
+    )
+    qa_free = False
+    if asked and not body.confirm_tool and not body.choice_id:
+        from services.owner_portal.owner_qa import match_owner_qa
+
+        qa_free = match_owner_qa(asked, reply_language or "en") is not None
+    if not exempt and not qa_free and ai_generation_blocked(session.tenant_id):
         paused = owner_credits_paused_payload(session.tenant_id)
 
         async def paused_gen() -> AsyncIterator[str]:
@@ -136,11 +150,6 @@ async def stream_owner_message(
 
     history = window_owner_messages_for_tenant(history, session.tenant_id)
     cancel_flag = {"cancelled": False}
-    from services.owner_copilot.profile import coerce_language, language_from_accept_header
-
-    reply_language = coerce_language(body.reply_language) or language_from_accept_header(
-        request.headers.get("accept-language")
-    )
 
     async def event_gen() -> AsyncIterator[str]:
         from services.owner_copilot.brain import iter_owner_turn_v2_events
@@ -232,11 +241,11 @@ async def stream_owner_message(
             final_text = str((done_payload or {}).get("reply_text") or "".join(reply_parts)).strip()
             incomplete = cancel_flag["cancelled"] or done_payload is None
             save_reply(final_text, incomplete=incomplete, payload=done_payload)
-            from services.owner_portal.owner_traces import record_trace
+            from services.owner_portal.owner_traces import write_trace
 
             route = (done_payload or {}).get("route") if isinstance(done_payload, dict) else {}
             qa_hit = isinstance(route, dict) and str(route.get("reason") or "") == "qa_hit"
-            record_trace(
+            write_trace(
                 {
                     "tenant_id": session.tenant_id,
                     "brain": "owner_copilot",

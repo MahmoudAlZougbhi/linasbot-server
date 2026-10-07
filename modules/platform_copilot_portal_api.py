@@ -40,13 +40,13 @@ async def _variants(body: QaBody) -> list[dict[str, str]]:
         from services.brain.language_detection_service import language_detection_service
 
         for language in _langs():
-            if language == source or language == "franco" and source == "ar":
+            if language in {source, "franco"}:
                 continue
             question = await language_detection_service.translate_answer_text(
-                body.question, source_language=source, target_language="ar" if language == "franco" else language
+                body.question, source_language=source, target_language=language
             )
             answer = await language_detection_service.translate_answer_text(
-                body.answer, source_language=source, target_language="ar" if language == "franco" else language
+                body.answer, source_language=source, target_language=language
             )
             variants[language] = {
                 "language": language,
@@ -55,23 +55,21 @@ async def _variants(body: QaBody) -> list[dict[str, str]]:
             }
     except Exception:
         pass
-    if "ar" in variants and "franco" not in variants:
-        variants["franco"] = {
-            "language": "franco",
-            "question": variants["ar"]["question"],
-            "answer": variants["ar"]["answer"],
-        }
     for language in _langs():
+        if language == "franco":
+            continue
         variants.setdefault(
             language,
             {"language": language, "question": body.question.strip(), "answer": body.answer.strip()},
         )
-    if source == "ar":
-        variants["franco"] = {
-            "language": "franco",
-            "question": body.question.strip(),
-            "answer": body.answer.strip(),
-        }
+    from services.owner_portal.franco import to_franco
+
+    arabic = variants.get("ar") or {"question": body.question.strip(), "answer": body.answer.strip()}
+    variants["franco"] = {
+        "language": "franco",
+        "question": to_franco(str(arabic.get("question") or "")),
+        "answer": to_franco(str(arabic.get("answer") or "")),
+    }
     return list(variants.values())
 
 
@@ -164,9 +162,9 @@ async def portal_trace(trace_id: str, request: Request) -> Any:
 @app.get("/api/platform/audit")
 async def portal_audit(request: Request) -> Any:
     require_platform_owner(request)
-    from services.billing.membership.catalog_admin import audit_log
+    from services.owner_portal.audit_feed import merged_audit_events
 
-    return {"success": True, "events": audit_log()}
+    return {"success": True, "events": merged_audit_events()}
 
 
 @app.get("/api/platform/health")

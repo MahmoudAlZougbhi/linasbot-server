@@ -136,6 +136,13 @@ class UserService(UserServiceAuthMixin):
         business_name = str(user_data.get("businessName") or "").strip()
         if business_name:
             user_doc["businessName"] = business_name[:120]
+        from services.team.tenant_identity import validate_tenant_identity
+
+        validate_tenant_identity(
+            tenant_id=str(user_doc["tenantId"]),
+            business_name=business_name,
+            email=str(user_doc["email"]),
+        )
 
         # Optional owner preferences — never infer gender from email/name.
         gender_raw = str(user_data.get("gender") or "unset").strip().lower()

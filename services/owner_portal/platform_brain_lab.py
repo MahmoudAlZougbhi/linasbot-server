@@ -10,6 +10,58 @@ from typing import Any
 
 LAB_PREFIX = "lab:platform:"
 
+_HINTS = {
+    "failed_closed": ("The live brain refused to answer (fail-closed). Check the tenant setup or turn on Test draft."),
+    "unpublished": "This tenant is not published. Turn on Test draft to try the saved draft.",
+    "no_draft": "Save a draft in the tenant app before testing it here.",
+    "draft_model_unavailable": "The draft is saved, but the model did not answer. Publish the tenant or retry.",
+}
+
+
+def hint_for(reason: str, *, has_reply: bool) -> str:
+    if has_reply:
+        return ""
+    key = (reason or "").strip() or "no_reply"
+    return _HINTS.get(key) or f"The brain stopped ({key.replace('_', ' ')})."
+
+
+def observe_lab_turn(*, tenant_id: str, brain: str, message: str, result: dict[str, Any]) -> None:
+    """Record the lab turn. The lab must not enqueue a customer outbox send."""
+    from services.owner_copilot.interaction_flow_logger import log_interaction
+    from services.owner_portal.owner_traces import write_trace
+
+    trace_brain = "owner_copilot" if brain == "copilot" else "customer"
+    reply = str(result.get("reply") or "")
+    reason = str(result.get("reason") or "")
+    model = str(result.get("model") or "")
+    write_trace(
+        {
+            "tenant_id": tenant_id,
+            "brain": trace_brain,
+            "channel": "brains_test",
+            "user_message": message[:4000],
+            "reply": reply,
+            "model": model,
+            "tokens_in": int(result.get("tokens_in") or 0),
+            "tokens_out": int(result.get("tokens_out") or 0),
+            "error": reason if result.get("stopped") else "",
+            "steps": [{"name": "lab", "reason": reason}],
+        }
+    )
+    log_interaction(
+        f"platform-lab:{tenant_id}",
+        message[:4000],
+        reply,
+        "brains_test",
+        channel="brains_test",
+        message_type="text",
+        model=model or None,
+        tokens=0,
+        ai_called=False,
+        outcome=reason or "lab",
+        user_data={"tenant_id": tenant_id},
+    )
+
 
 def lab_conversation_id(*, actor_user_id: str, tenant_id: str, brain: str) -> str:
     actor = (actor_user_id or "owner").strip() or "owner"
@@ -58,7 +110,7 @@ async def _draft_reply(tenant_id: str, message: str) -> dict[str, Any]:
             "brain": "customer",
             "reply": "",
             "reason": "no_draft",
-            "hint": "Save a draft in the tenant app before testing it here.",
+            "hint": hint_for("no_draft", has_reply=False),
             "stopped": True,
         }
     draft_text = "\n".join(sections)[:5000]
@@ -83,7 +135,7 @@ async def _draft_reply(tenant_id: str, message: str) -> dict[str, Any]:
         "brain": "customer",
         "reply": reply,
         "reason": "draft_sandbox" if reply else "draft_model_unavailable",
-        "hint": "" if reply else "The draft is saved, but the model did not answer. Publish the tenant or retry.",
+        "hint": hint_for("draft_sandbox" if reply else "draft_model_unavailable", has_reply=bool(reply)),
         "stopped": not bool(reply),
     }
 
@@ -101,7 +153,9 @@ async def customer_lab_turn(
     if not text:
         raise ValueError("empty_message")
     if mode == "draft":
-        return await _draft_reply(tid, text)
+        drafted = await _draft_reply(tid, text)
+        observe_lab_turn(tenant_id=tid, brain="customer", message=text, result=drafted)
+        return drafted
     from services.brain.reply.orchestrator import run_customer_reply_v2_dm
 
     prior = prior_turns(history)
@@ -120,18 +174,18 @@ async def customer_lab_turn(
     )
     reply = str(getattr(outcome, "reply", None) or "").strip()
     reason = str(getattr(outcome, "reason", None) or "").strip()
-    return {
+    stopped = bool(getattr(outcome, "stop", False) and not reply)
+    result = {
         "tenant_id": tid,
         "brain": "customer",
         "reply": reply,
         "reason": reason,
-        "stopped": bool(getattr(outcome, "stop", False) and not reply),
-        "hint": (
-            "This tenant is not published. Turn on Test draft to try the saved draft."
-            if reason == "unpublished" and not reply
-            else ""
-        ),
+        "model": str(getattr(outcome, "model", None) or ""),
+        "stopped": stopped,
+        "hint": hint_for(reason, has_reply=bool(reply)),
     }
+    observe_lab_turn(tenant_id=tid, brain="customer", message=text, result=result)
+    return result
 
 
 async def copilot_lab_turn(
@@ -166,11 +220,16 @@ async def copilot_lab_turn(
     if isinstance(route, dict):
         reason = str(route.get("reason") or route.get("code") or "").strip()
     pending = str(getattr(result, "pending_confirmation", None) or "").strip()
-    return {
+    stopped = not reply and bool(reason)
+    payload = {
         "tenant_id": tid,
         "brain": "copilot",
         "reply": reply,
         "reason": reason,
+        "model": str(getattr(result, "model", None) or ""),
         "pending_confirmation": pending,
-        "stopped": not reply and bool(reason),
+        "stopped": stopped,
+        "hint": hint_for(reason, has_reply=bool(reply)),
     }
+    observe_lab_turn(tenant_id=tid, brain="copilot", message=text, result=payload)
+    return payload

@@ -1,32 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ownerApi } from './ownerApi';
-
-/** @type {Record<string, string>} */
-const LABELS = {
-  free_ai_message_allowance: 'Free message allowance',
-  free_message_renewal: 'Free message renewal',
-  knowledge_line_budget: 'Knowledge line budget',
-  services_products_line_budget: 'Services and products budget',
-  content_line_definition: 'Content line definition',
-  message_topup_prices: 'Top-up prices',
-  credit_to_message_conversion: 'Credit conversion',
-  alembic_head: 'Database migrations',
-  message_catalog_unpublished: 'Message catalog publish',
-  message_checkout_not_ready: 'Checkout',
-  message_topup_not_sale_ready: 'Top-up sales',
-  message_billing_cutover_off: 'Billing cutover',
-  live_message_ready: 'Live messages',
-  eval_suite_below_800: 'Eval suite',
-  live_channel_proof_missing: 'Live channel proof',
-  live_voyage_pgvector_unverified: 'Search index',
-  unresolved_pending_settlements: 'Pending settlements',
-  stale_leftover_credit_holds: 'Leftover credit holds',
-};
-
-/** @param {string} key */
-function labelFor(key) {
-  return LABELS[key] || String(key).replaceAll('_', ' ');
-}
+import { readinessLabel } from './ownerLabels';
 
 export default function OwnerActivationBanner() {
   const [report, setReport] = useState(/** @type {any} */ (null));
@@ -46,7 +20,7 @@ export default function OwnerActivationBanner() {
   }
   if (!report) return null;
   const ready = Boolean(report.ready_to_enable);
-  const blockers = (report.blockers || []).map(labelFor);
+  const blockers = (report.blockers || []).map((/** @type {string} */ key) => readinessLabel(key));
   return (
     <section className={`rounded-xl border p-4 text-sm ${ready ? 'border-teal-900 bg-teal-950/30' : 'border-amber-900 bg-amber-950/40'}`}>
       <button type="button" className="flex w-full items-center justify-between text-left" onClick={() => setOpen((value) => !value)}>

@@ -5,6 +5,7 @@ export default function OwnerTenants() {
   const [rows, setRows] = useState(/** @type {any[]} */ ([]));
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState('name');
+  const [hideTest, setHideTest] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -15,6 +16,7 @@ export default function OwnerTenants() {
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const filtered = rows.filter((row) => {
+      if (hideTest && row.hide_by_default) return false;
       const blob = `${row.business_name || ''} ${row.email || ''} ${row.tenant_id || ''}`.toLowerCase();
       return !needle || blob.includes(needle);
     });
@@ -24,7 +26,7 @@ export default function OwnerTenants() {
       return String(a).localeCompare(String(b));
     });
     return filtered;
-  }, [rows, query, sort]);
+  }, [rows, query, sort, hideTest]);
 
   const exportCsv = () => {
     const header = 'tenant_id,business_name,email,membership,messages_remaining';
@@ -71,6 +73,10 @@ export default function OwnerTenants() {
           <option value="name">Name</option>
           <option value="tenant">Tenant id</option>
         </select>
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input type="checkbox" checked={hideTest} onChange={(event) => setHideTest(event.target.checked)} />
+          Hide test and blocked
+        </label>
       </div>
       {visible.length === 0 ? <p className="text-sm text-slate-400">No tenants match.</p> : null}
       <ul className="space-y-2">

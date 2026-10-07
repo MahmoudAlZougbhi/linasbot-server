@@ -86,9 +86,10 @@ def owner_turn_hold_begin(
     attachment_ids: list[str] | None = None,
     estimated_usd: float | None = None,
     confirm_billing: bool = False,
+    skip_credit: bool = False,
 ) -> OwnerTurnHold:
     tid = (tenant_id or "").strip().lower()
-    if str(conversation_id or "").startswith("lab:platform:"):
+    if skip_credit or str(conversation_id or "").startswith("lab:platform:"):
         return OwnerTurnHold(tenant_id=tid, units=0, _finalized=True)
     units = estimate_copilot_units(estimated_usd)
     if not tid or credit_ai_gate.ai_generation_blocked(tid, need=units):

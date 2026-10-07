@@ -1,14 +1,17 @@
-"""Async-safe message traces for the owner portal. Writes happen off the reply path."""
+"""Message traces for the owner portal."""
 
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 _SECRET_PARTS = ("api_key", "authorization", "password", "secret", "bearer", "token")
 
@@ -34,12 +37,19 @@ def record_trace(payload: dict[str, Any]) -> None:
     threading.Thread(target=_write, args=(_redact(dict(payload)),), daemon=True).start()
 
 
-def _write(payload: dict[str, Any]) -> None:
+def write_trace(payload: dict[str, Any]) -> str:
+    """Insert one trace and commit before the caller returns."""
+    return _write(_redact(dict(payload)))
+
+
+def _write(payload: dict[str, Any]) -> str:
     from db.session import whatsapp_session
 
     trace_id = str(payload.get("id") or uuid.uuid4().hex)
     try:
         with whatsapp_session(require=False) as session:
+            if session is None:
+                raise RuntimeError("owner trace database session is missing")
             session.execute(
                 text(
                     """
@@ -64,7 +74,9 @@ def _write(payload: dict[str, Any]) -> None:
                 },
             )
     except Exception:
-        return
+        logger.exception("owner message trace was not stored")
+        return ""
+    return trace_id
 
 
 def list_traces(

@@ -61,6 +61,24 @@ class PlatformOwnerService:
                 fh.write(json.dumps(asdict(entry)) + "\n")
         return entry
 
+    def list_actions(self, *, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+        path = self._actions_path()
+        if not path.is_file():
+            return []
+        rows: list[dict[str, Any]] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(item, dict):
+                rows.append(item)
+        rows.reverse()
+        start = max(0, offset)
+        return rows[start : start + max(1, min(limit, 200))]
+
     def suspend_tenant(self, *, actor_user_id: str, tenant_id: str, reason: str) -> None:
         self._suspended.add(tenant_id)
         self._suspended_path().write_text(json.dumps(sorted(self._suspended)), encoding="utf-8")
