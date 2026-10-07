@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from services.billing.billing_backend import billing_uses_postgres, require_billing_pg_session
-from services.owner_copilot.interaction_flow_logger import get_recent_flows
 from services.team.user_service import user_service
 from storage.persistent_storage import _DATA_ROOT
 
@@ -141,11 +140,25 @@ def list_subscribers(users: list[dict[str, Any]] | None = None) -> list[dict[str
                 "messages_remaining": msg_remaining,
                 "message_remaining": msg_remaining,
                 "historical_credit_remaining": remaining,
+                "hide_by_default": _hide_tenant(
+                    tenant_id=tenant_id,
+                    business_name=str(primary.get("businessName") or ""),
+                    email=str(primary.get("email") or ""),
+                    status=str(primary.get("status") or ""),
+                ),
                 **_catalog_offer(plan_id),
                 "users": members,
             }
         )
     return sorted(rows, key=lambda row: (str(row["business_name"] or "").lower(), row["tenant_id"]))
+
+
+def _hide_tenant(*, tenant_id: str, business_name: str, email: str, status: str) -> bool:
+    from services.team.tenant_identity import is_junk_identity
+
+    if status.strip().lower() == "blocked":
+        return True
+    return is_junk_identity(tenant_id=tenant_id, business_name=business_name, email=email)
 
 
 def _catalog_offer(plan_id: str) -> dict[str, Any]:
@@ -168,17 +181,38 @@ def _catalog_revenue(plan_ids: list[str]) -> dict[str, Any]:
     return revenue_pair(plan_ids)
 
 
+def _subscriber_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Same credit and message definitions as the Users rows."""
+    active = [row for row in rows if row.get("membership") in {"active", "trial", "grace"}]
+
+    def _num(row: dict[str, Any], key: str, fallback: str) -> int:
+        raw = row.get(key, row.get(fallback, 0))
+        return int(raw or 0)
+
+    return {
+        "subscribers": len(active),
+        "credits_total": sum(_num(row, "credits_total", "credits_total") for row in active),
+        "credits_used": sum(_num(row, "credits_used", "credits_used") for row in active),
+        "credits_remaining": sum(_num(row, "credits_remaining", "credits_remaining") for row in active),
+        "messages_total": sum(_num(row, "messages_total", "credits_total") for row in active),
+        "messages_used": sum(_num(row, "messages_used", "credits_used") for row in active),
+        "messages_remaining": sum(_num(row, "messages_remaining", "credits_remaining") for row in active),
+        "historical_credit_remaining": sum(int(row.get("historical_credit_remaining") or 0) for row in active),
+    }
+
+
 def analytics(range_key: str) -> dict[str, Any]:
     now = datetime.now(UTC)
     start = _range_start(range_key, now)
     end = now
     if range_key == "last_week":
         end = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    from services.owner_portal.flow_counts import channel_counts_for_range
     from services.team.user_tenant_query import list_users_capped
 
-    flows = [row for row in get_recent_flows(limit=500) if _in_range(row.get("timestamp"), start, end)]
-    channels = Counter(str(row.get("channel") or "unknown") for row in flows)
-    message_types = Counter(str(row.get("message_type") or "text") for row in flows)
+    counted = channel_counts_for_range(start, end)
+    channels = Counter(counted["messages_by_channel"])
+    comments = int(counted["comments"])
     from services.owner_portal.analytics_sql import load_overview
 
     sql = load_overview(start, end)
@@ -205,6 +239,15 @@ def analytics(range_key: str) -> dict[str, Any]:
         plan_ids = [str(row["subscription"] or "") for row in active]
         coverage_users = "dashboard user documents"
         coverage_billing = "tenant entitlements + message ledger"
+    billing_rows = list_subscribers(list_users_capped(user_service, limit=500))
+    totals.update(_subscriber_totals(billing_rows))
+    active_plans = [
+        str(row.get("subscription") or "")
+        for row in billing_rows
+        if row.get("membership") in {"active", "trial", "grace"}
+    ]
+    if active_plans:
+        plan_ids = active_plans
     return {
         "range": range_key,
         "start": start.isoformat(),
@@ -213,13 +256,14 @@ def analytics(range_key: str) -> dict[str, Any]:
         "live_users": totals["live_users"],
         "subscribers": totals["subscribers"],
         "messages_by_channel": dict(channels),
-        "comments": int(message_types.get("comment", 0)),
+        "comments": comments,
         "credits_total": totals["credits_total"],
         "credits_used": totals["credits_used"],
         "credits_remaining": totals["credits_remaining"],
         "messages_total": totals["messages_total"],
         "messages_used": totals["messages_used"],
         "messages_remaining": totals["messages_remaining"],
+        "historical_credit_remaining": totals.get("historical_credit_remaining", 0),
         **_catalog_revenue(plan_ids),
         "coverage": {
             "users": coverage_users,

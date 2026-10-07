@@ -139,7 +139,10 @@ def test_analytics_keeps_legacy_credits_and_adds_catalog_mrr(monkeypatch):
         "services.team.user_tenant_query.list_users_capped",
         lambda *_args, **_kwargs: [],
     )
-    monkeypatch.setattr(portal, "get_recent_flows", lambda limit=500: [])
+    monkeypatch.setattr(
+        "services.owner_portal.flow_counts.channel_counts_for_range",
+        lambda *_args, **_kwargs: {"messages_by_channel": {}, "comments": 0},
+    )
     monkeypatch.setattr(
         portal,
         "list_subscribers",

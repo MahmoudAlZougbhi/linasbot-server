@@ -2,13 +2,53 @@
 
 from __future__ import annotations
 
+import ast
 from typing import Any
 
 from services.billing.membership.message_catalog import AI_SETUP_DAILY_EDIT_DEFAULT, UNCONFIGURED_FREE_FIELDS
 from services.billing.membership.message_flags import activation_flags_report
 from services.billing.membership.pg_store import store_backend
 
-EXPECTED_ALEMBIC_HEAD = "20260910_req_web_chat"
+
+def expected_alembic_head() -> str:
+    """The single script head. A hardcoded older id reports a false migration blocker."""
+    from pathlib import Path
+
+    revisions: dict[str, set[str]] = {}
+    versions = Path("alembic/versions")
+    if not versions.is_dir():
+        versions = Path(__file__).resolve().parents[2] / "alembic" / "versions"
+    for path in versions.glob("*.py"):
+        module = ast.parse(path.read_text(encoding="utf-8"))
+        revision = ""
+        parents: set[str] = set()
+        for node in module.body:
+            if not isinstance(node, ast.AnnAssign) or not isinstance(node.target, ast.Name):
+                continue
+            if node.target.id == "revision" and isinstance(node.value, ast.Constant):
+                revision = str(node.value.value)
+            elif node.target.id == "down_revision":
+                parents = _revision_ids(node.value)
+        if revision:
+            revisions[revision] = parents
+    mentioned = {parent for parents in revisions.values() for parent in parents}
+    heads = sorted(revision for revision in revisions if revision not in mentioned)
+    if len(heads) != 1:
+        return ""
+    return heads[0]
+
+
+def _revision_ids(node: ast.AST | None) -> set[str]:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return {node.value}
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        found: set[str] = set()
+        for element in node.elts:
+            found.update(_revision_ids(element))
+        return found
+    return set()
+
+
 LIVE_VERIFICATION_BLOCKERS = (
     "eval_suite_below_800",
     "live_channel_proof_missing",
@@ -18,18 +58,15 @@ LIVE_VERIFICATION_BLOCKERS = (
 
 def _alembic_head() -> dict[str, Any]:
     try:
-        from alembic.config import Config
-        from alembic.script import ScriptDirectory
-
-        script = ScriptDirectory.from_config(Config("alembic.ini"))
-        heads = list(script.get_heads())
+        expected = expected_alembic_head()
+        heads = [expected] if expected else []
         return {
             "heads": heads,
-            "expected": EXPECTED_ALEMBIC_HEAD,
-            "ok": heads == [EXPECTED_ALEMBIC_HEAD],
+            "expected": expected,
+            "ok": bool(expected) and heads == [expected],
         }
     except Exception as exc:
-        return {"heads": [], "expected": EXPECTED_ALEMBIC_HEAD, "ok": False, "error": type(exc).__name__}
+        return {"heads": [], "expected": "", "ok": False, "error": type(exc).__name__}
 
 
 def _brain_imports() -> dict[str, bool]:

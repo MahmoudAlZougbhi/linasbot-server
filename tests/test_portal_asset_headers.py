@@ -28,15 +28,25 @@ def test_nginx_serves_assets_and_security_headers() -> None:
     assert text.count("try_files $uri =404;") >= 2
 
 
-def test_security_headers_middleware_sets_nosniff() -> None:
+def test_security_headers_come_from_nginx_once() -> None:
+    """Portal HTML keeps the nginx headers. The app must not add a second copy on /api."""
     app = FastAPI()
     app.add_middleware(SecurityHeadersMiddleware)
 
-    @app.get("/ping")
+    @app.get("/api/ping")
     def ping() -> dict[str, bool]:
         return {"ok": True}
 
-    response = TestClient(app).get("/ping")
-    assert response.headers["x-content-type-options"] == "nosniff"
-    assert response.headers["x-frame-options"] == "DENY"
-    assert "frame-ancestors" in response.headers["content-security-policy"]
+    response = TestClient(app).get("/api/ping")
+    assert "x-content-type-options" not in response.headers
+    assert "content-security-policy" not in response.headers
+    assert "strict-transport-security" not in response.headers
+    conf = (ROOT / "deploy" / "nginx-linasaibot.conf").read_text(encoding="utf-8")
+    for header in (
+        "Strict-Transport-Security",
+        "X-Content-Type-Options",
+        "X-Frame-Options",
+        "Referrer-Policy",
+        "Content-Security-Policy",
+    ):
+        assert conf.count(header) == 2

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ownerApi } from './ownerApi';
+import { replyHtml } from './replyFormat';
 
 /** @typedef {{ role: 'user' | 'assistant' | 'status', text: string }} BrainLine */
 
@@ -36,7 +37,11 @@ function BrainColumn({ title, messages, draft, setDraft, onSend, busy, disabled,
                   : 'mr-8 rounded-lg bg-slate-900 px-3 py-2 text-sm'
             }
           >
-            {line.text}
+            {line.role === 'assistant' ? (
+              <span dangerouslySetInnerHTML={replyHtml(line.text)} />
+            ) : (
+              line.text
+            )}
           </p>
         ))}
       </div>

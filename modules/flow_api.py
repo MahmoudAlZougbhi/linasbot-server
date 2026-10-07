@@ -43,4 +43,10 @@ async def get_flow_logs(
         search_phone=search,
         tenant_id=requested_tenant,
     )
-    return {"success": True, "data": logs, "count": len(logs)}
+    ordered = newest_first(logs)
+    return {"success": True, "data": ordered, "count": len(ordered)}
+
+
+def newest_first(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Activity Flow is newest first. An empty tenant filter still returns every tenant."""
+    return sorted(rows, key=lambda row: str(row.get("timestamp") or ""), reverse=True)

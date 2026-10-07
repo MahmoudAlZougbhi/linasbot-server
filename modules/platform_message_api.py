@@ -147,10 +147,12 @@ async def platform_daily_edits(
     tenant_id: str = Query(default=""),
 ) -> Any:
     require_platform_owner(request)
+    from services.owner_portal.analytics_sql import tenant_is_known
+
     tid = tenant_id.strip()
-    if not tid:
-        raise HTTPException(status_code=400, detail="tenant_id is required")
-    return {"success": True, "daily_edits": decision_payload(status(tid))}
+    if tid and not tenant_is_known(tid):
+        raise HTTPException(status_code=404, detail="Unknown tenant")
+    return {"success": True, "daily_edits": decision_payload(status(tid or "platform"))}
 
 
 @app.patch("/api/platform/daily-edits")
@@ -214,10 +216,14 @@ async def platform_message_flows(
 ) -> Any:
     require_platform_owner(request)
     from services.brain.turn_inspector import list_message_flows
+    from services.owner_portal.analytics_sql import tenant_is_known
 
+    tid = (tenant_id or "").strip()
+    if tid and not tenant_is_known(tid):
+        raise HTTPException(status_code=404, detail="Unknown tenant")
     return {
         "success": True,
-        "messages": list_message_flows(tenant_id=(tenant_id or "").strip(), limit=limit),
+        "messages": list_message_flows(tenant_id=tid, limit=limit),
     }
 
 

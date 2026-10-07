@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ownerApi } from './ownerApi';
+import { paymentLabel } from './ownerLabels';
 
 function parseOptionalInt(/** @type {unknown} */ raw, /** @type {string} */ label) {
   const text = String(raw ?? '').trim();
@@ -171,7 +172,7 @@ export default function OwnerCatalog() {
         </p>
       )}
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-        <p className="text-sm text-slate-400">Revision {catalog?.admin_revision || '—'}</p>
+        {catalog?.admin_revision ? <p className="text-sm text-slate-400">Revision {catalog.admin_revision}</p> : null}
         <p className="mt-1 text-sm text-slate-400">Published: {catalog?.published ? 'yes' : 'no'}</p>
         <label className="mt-4 block text-sm text-slate-300">
           Daily AI Setup edit limit
@@ -248,7 +249,7 @@ export default function OwnerCatalog() {
         </div>
         <div className="mt-4 space-y-1 text-sm text-slate-400">
           <p>Apple: {catalog?.payment_readiness?.apple?.status || '—'}</p>
-          <p>Google: {catalog?.payment_readiness?.google?.status || '—'} ({catalog?.payment_readiness?.google?.blocker || 'ok'})</p>
+          <p>Google: {paymentLabel(catalog?.payment_readiness?.google?.status)} ({paymentLabel(catalog?.payment_readiness?.google?.blocker || 'ok')})</p>
           <p>Stripe: {catalog?.payment_readiness?.stripe?.status || '—'}</p>
           <p>Annual offers: {catalog?.payment_readiness?.annual_offers?.status || 'unconfigured'}</p>
         </div>

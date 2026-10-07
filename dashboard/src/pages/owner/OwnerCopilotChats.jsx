@@ -1,23 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ownerApi } from './ownerApi';
-
-/** @param {string} text */
-function replyHtml(text) {
-  const escaped = String(text || '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replaceAll('\n', '<br/>');
-  return { __html: escaped };
-}
+import { detectSourceLanguage, replyHtml } from './replyFormat';
 
 export default function OwnerCopilotChats() {
   const [traces, setTraces] = useState(/** @type {any[]} */ ([]));
   const [popup, setPopup] = useState(/** @type {any} */ (null));
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
+  const [language, setLanguage] = useState('en');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
@@ -30,15 +21,17 @@ export default function OwnerCopilotChats() {
   /** @param {any} trace */
   const openSave = (trace) => {
     const payload = trace.payload || {};
-    setQuestion(String(payload.user_message || ''));
+    const asked = String(payload.user_message || '');
+    setQuestion(asked);
     setAnswer(String(payload.reply || ''));
+    setLanguage(detectSourceLanguage(asked));
     setPopup(trace);
   };
 
   const save = async () => {
     setError('');
     try {
-      await ownerApi.saveQa({ question, answer, source_language: 'en' });
+      await ownerApi.saveQa({ question, answer, source_language: language });
       setNotice('Saved to Q&A in every language.');
       setPopup(null);
     } catch (reason) {
@@ -75,6 +68,15 @@ export default function OwnerCopilotChats() {
         <div className="fixed inset-0 z-40 grid place-items-center bg-slate-950/70 p-4">
           <div className="w-full max-w-lg space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-5">
             <h3 className="text-lg font-semibold">Save to Q&A</h3>
+            <label className="block text-sm text-slate-300">
+              Language
+              <select value={language} onChange={(event) => setLanguage(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2">
+                <option value="en">English</option>
+                <option value="ar">Arabic</option>
+                <option value="fr">French</option>
+                <option value="franco">Franco</option>
+              </select>
+            </label>
             <input value={question} onChange={(event) => setQuestion(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2" />
             <textarea value={answer} onChange={(event) => setAnswer(event.target.value)} rows={4} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2" />
             <div className="flex gap-2">
