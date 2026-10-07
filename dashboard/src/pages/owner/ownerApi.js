@@ -4,12 +4,13 @@ import { authFetch } from '../../utils/authFetch';
 async function request(path, options) {
   const response = await authFetch(path, options);
   const text = await response.text();
+  /** @type {any} */
   let data = {};
   if (text) {
     try {
       data = JSON.parse(text);
     } catch {
-      throw new Error(`Overview data was not readable (${response.status}).`);
+      throw new Error(`The portal could not read this response (${response.status}).`);
     }
   }
   if (!response.ok || data.success === false) {
