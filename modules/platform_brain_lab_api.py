@@ -22,6 +22,7 @@ class LabTurnBody(BaseModel):
     tenant_id: str = Field(min_length=1, max_length=80)
     message: str = Field(min_length=1, max_length=4000)
     history: list[LabHistoryItem] = Field(default_factory=list, max_length=20)
+    mode: Literal["live", "draft"] = "live"
 
 
 def _history(body: LabTurnBody) -> list[dict[str, str]]:
@@ -32,12 +33,15 @@ async def _turn(request: Request, body: LabTurnBody, brain: Literal["customer", 
     session = require_platform_owner(request)
     runner = customer_lab_turn if brain == "customer" else copilot_lab_turn
     try:
-        result = await runner(
-            actor_user_id=session.user_id,
-            tenant_id=body.tenant_id,
-            message=body.message,
-            history=_history(body),
-        )
+        kwargs: dict[str, Any] = {
+            "actor_user_id": session.user_id,
+            "tenant_id": body.tenant_id,
+            "message": body.message,
+            "history": _history(body),
+        }
+        if brain == "customer":
+            kwargs["mode"] = body.mode
+        result = await runner(**kwargs)
     except ValueError as exc:
         code = str(exc)
         status = 400 if code == "empty_message" else 404

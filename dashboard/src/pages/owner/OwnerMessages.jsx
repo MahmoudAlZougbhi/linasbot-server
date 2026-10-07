@@ -80,7 +80,7 @@ export default function OwnerMessages() {
         <h2 className="text-2xl font-semibold">Message flow</h2>
         <p className="mt-1 text-sm text-slate-400">
           Every Brain turn by tenant and channel. Open a row to see stages: receive → understand →
-          search → evidence sent to AI → reply → cost. No code dumps.
+          search, evidence sent to the AI, the reply, and the cost.
         </p>
       </header>
       {error ? (
@@ -91,7 +91,7 @@ export default function OwnerMessages() {
       <section className="flex flex-wrap gap-2">
         <input
           className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-          placeholder="filter tenant id (optional)"
+          placeholder="Tenant id"
           value={tenantId}
           onChange={(event) => setTenantId(event.target.value)}
         />

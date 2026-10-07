@@ -199,7 +199,6 @@ export const AuthProvider = ({ children }) => {
         ? 'Connection timed out. The sign-in service did not respond.'
         : (errorMessage(error) || 'Login failed');
       console.error('[AuthContext] login failed:', msg, error);
-      toast.error(msg);
       throw new Error(msg);
     }
   };

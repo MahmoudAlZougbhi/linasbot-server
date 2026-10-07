@@ -176,32 +176,55 @@ def analytics(range_key: str) -> dict[str, Any]:
         end = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     from services.team.user_tenant_query import list_users_capped
 
-    users = list_users_capped(user_service, limit=200)
     flows = [row for row in get_recent_flows(limit=500) if _in_range(row.get("timestamp"), start, end)]
     channels = Counter(str(row.get("channel") or "unknown") for row in flows)
     message_types = Counter(str(row.get("message_type") or "text") for row in flows)
-    subscribers = list_subscribers(users)
-    active_subscribers = [r for r in subscribers if r["membership"] in {"active", "trial", "grace"}]
+    from services.owner_portal.analytics_sql import load_overview
+
+    sql = load_overview(start, end)
+    if sql is not None:
+        totals = sql
+        plan_ids = list(sql["plan_ids"])
+        coverage_users = "Postgres dashboard users"
+        coverage_billing = "tenant entitlements and message lots"
+    else:
+        users = list_users_capped(user_service, limit=500)
+        subscribers = list_subscribers(users)
+        active = [row for row in subscribers if row["membership"] in {"active", "trial", "grace"}]
+        totals = {
+            "new_users": sum(1 for user in users if _in_range(user.get("createdAt"), start, end)),
+            "live_users": sum(1 for user in users if _in_range(user.get("lastLogin"), start, end)),
+            "subscribers": len(active),
+            "credits_total": sum(int(row["credits_total"]) for row in active),
+            "credits_used": sum(int(row["credits_used"]) for row in active),
+            "credits_remaining": sum(int(row["credits_remaining"]) for row in active),
+            "messages_total": sum(int(row.get("messages_total", row["credits_total"])) for row in active),
+            "messages_used": sum(int(row.get("messages_used", row["credits_used"])) for row in active),
+            "messages_remaining": sum(int(row.get("messages_remaining", row["credits_remaining"])) for row in active),
+        }
+        plan_ids = [str(row["subscription"] or "") for row in active]
+        coverage_users = "dashboard user documents"
+        coverage_billing = "tenant entitlements + message ledger"
     return {
         "range": range_key,
         "start": start.isoformat(),
         "end": end.isoformat(),
-        "new_users": sum(1 for user in users if _in_range(user.get("createdAt"), start, end)),
-        "live_users": sum(1 for user in users if _in_range(user.get("lastLogin"), start, end)),
-        "subscribers": len(active_subscribers),
+        "new_users": totals["new_users"],
+        "live_users": totals["live_users"],
+        "subscribers": totals["subscribers"],
         "messages_by_channel": dict(channels),
         "comments": int(message_types.get("comment", 0)),
-        "credits_total": sum(int(row["credits_total"]) for row in active_subscribers),
-        "credits_used": sum(int(row["credits_used"]) for row in active_subscribers),
-        "credits_remaining": sum(int(row["credits_remaining"]) for row in active_subscribers),
-        "messages_total": sum(int(row["credits_total"]) for row in active_subscribers),
-        "messages_used": sum(int(row["credits_used"]) for row in active_subscribers),
-        "messages_remaining": sum(int(row["credits_remaining"]) for row in active_subscribers),
-        **_catalog_revenue([str(row["subscription"] or "") for row in active_subscribers]),
+        "credits_total": totals["credits_total"],
+        "credits_used": totals["credits_used"],
+        "credits_remaining": totals["credits_remaining"],
+        "messages_total": totals["messages_total"],
+        "messages_used": totals["messages_used"],
+        "messages_remaining": totals["messages_remaining"],
+        **_catalog_revenue(plan_ids),
         "coverage": {
-            "users": "Firestore dashboard users",
-            "billing": "tenant entitlements + message ledger remaining",
-            "messages": "bounded Interaction Logs (latest 500 rows); not a full historical aggregate",
+            "users": coverage_users,
+            "billing": coverage_billing,
+            "messages": "interaction logs in the selected range",
             "tiktok": "stored TikTok comments/DMs + interaction logs when connected",
             "revenue": "live_checkout_mrr_usd and intended_message_mrr_usd both use the credit plan catalog.",
         },

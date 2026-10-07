@@ -316,6 +316,12 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
                 status_code=403,
                 content={"success": False, "error": "Tenant-isolated API unavailable"},
             )
+        if path == "/api/platform" or path.startswith("/api/platform/"):
+            if not is_platform_owner(session):
+                return JSONResponse(
+                    status_code=403,
+                    content={"success": False, "error": "Platform owner role required"},
+                )
 
         # CSRF for cookie-authenticated mutations only (Bearer mobile clients skip CSRF)
         if method in {"POST", "PUT", "PATCH", "DELETE"} and not used_bearer:

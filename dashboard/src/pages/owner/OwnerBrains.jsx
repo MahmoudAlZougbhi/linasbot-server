@@ -12,9 +12,10 @@ import { ownerApi } from './ownerApi';
  *   onSend: () => void,
  *   busy: boolean,
  *   disabled: boolean,
+ *   disabledReason: string,
  * }} props
  */
-function BrainColumn({ title, messages, draft, setDraft, onSend, busy, disabled }) {
+function BrainColumn({ title, messages, draft, setDraft, onSend, busy, disabled, disabledReason }) {
   return (
     <section className="flex min-h-[32rem] flex-col rounded-xl border border-slate-800 bg-slate-950">
       <header className="border-b border-slate-800 px-4 py-3">
@@ -58,6 +59,7 @@ function BrainColumn({ title, messages, draft, setDraft, onSend, busy, disabled 
           type="submit"
           aria-label={`Send to ${title}`}
           disabled={disabled || busy || !draft.trim()}
+          title={disabled ? disabledReason : busy ? 'A reply is in progress' : !draft.trim() ? 'Write a message first' : 'Send'}
           className="rounded-lg bg-teal-500 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-40"
         >
           {busy ? 'Sending…' : 'Send'}
@@ -69,6 +71,8 @@ function BrainColumn({ title, messages, draft, setDraft, onSend, busy, disabled 
 
 export default function OwnerBrains() {
   const [subscribers, setSubscribers] = useState(/** @type {OwnerSubscriber[]} */ ([]));
+  const [loadingTenants, setLoadingTenants] = useState(true);
+  const [draftMode, setDraftMode] = useState(false);
   const [tenantId, setTenantId] = useState('');
   const [error, setError] = useState('');
   const [customer, setCustomer] = useState(/** @type {BrainLine[]} */ ([]));
@@ -88,7 +92,8 @@ export default function OwnerBrains() {
         setSubscribers(rows);
         if (rows[0]?.tenant_id) setTenantId(rows[0].tenant_id);
       })
-      .catch((reason) => live && setError(reason.message));
+      .catch((reason) => live && setError(reason.message))
+      .finally(() => live && setLoadingTenants(false));
     return () => { live = false; };
   }, []);
 
@@ -122,12 +127,18 @@ export default function OwnerBrains() {
       .map((line) => ({ role: line.role, text: line.text }));
     setThread([...thread, { role: 'user', text: message }]);
     try {
-      const data = await ownerApi.brainTurn(brain, { tenant_id: startedTenant, message, history });
+      const data = await ownerApi.brainTurn(brain, {
+        tenant_id: startedTenant,
+        message,
+        history,
+        mode: brain === 'customer' && draftMode ? 'draft' : 'live',
+      });
       if (tenantRef.current !== startedTenant) return;
       /** @type {BrainLine[]} */
       const extra = [];
       if (data.reply) extra.push({ role: 'assistant', text: data.reply });
-      if (!data.reply && data.reason) extra.push({ role: 'status', text: `Status: ${data.reason}` });
+      if (data.hint) extra.push({ role: 'status', text: data.hint });
+      else if (!data.reply && data.reason) extra.push({ role: 'status', text: `Status: ${data.reason}` });
       if (data.pending_confirmation) extra.push({ role: 'status', text: `Waiting for approval: ${data.pending_confirmation}` });
       if (!extra.length) extra.push({ role: 'status', text: 'Status: no reply' });
       setThread([...thread, { role: 'user', text: message }, ...extra]);
@@ -157,13 +168,18 @@ export default function OwnerBrains() {
           onChange={(event) => chooseTenant(event.target.value)}
           className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2"
         >
-          {subscribers.length === 0 && <option value="">No tenants</option>}
+          {loadingTenants && <option value="">Loading tenants…</option>}
+          {!loadingTenants && subscribers.length === 0 && <option value="">No tenants yet. Create one from the app.</option>}
           {subscribers.map((row) => (
             <option key={row.tenant_id} value={row.tenant_id}>
               {row.business_name || row.email || row.tenant_id}
             </option>
           ))}
         </select>
+      </label>
+      <label className="flex items-center gap-2 text-sm text-slate-300">
+        <input type="checkbox" checked={draftMode} onChange={(event) => setDraftMode(event.target.checked)} />
+        Test draft (unpublished customer brain)
       </label>
       {error && <p role="alert" className="rounded-lg bg-red-950 p-3 text-red-200">{error}</p>}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -174,6 +190,7 @@ export default function OwnerBrains() {
           setDraft={setCustomerDraft}
           busy={busy === 'customer'}
           disabled={!tenantId || busy === 'copilot'}
+          disabledReason={loadingTenants ? 'Tenants are still loading' : 'Choose a tenant first'}
           onSend={() => send('customer', customer, customerDraft, setCustomer, setCustomerDraft)}
         />
         <BrainColumn
@@ -183,6 +200,7 @@ export default function OwnerBrains() {
           setDraft={setCopilotDraft}
           busy={busy === 'copilot'}
           disabled={!tenantId || busy === 'customer'}
+          disabledReason={loadingTenants ? 'Tenants are still loading' : 'Choose a tenant first'}
           onSend={() => send('copilot', copilot, copilotDraft, setCopilot, setCopilotDraft)}
         />
       </div>

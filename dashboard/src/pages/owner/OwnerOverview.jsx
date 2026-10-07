@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ownerApi } from './ownerApi';
+import OwnerActivationBanner from './OwnerActivationBanner';
 
 const ranges = [
   ['last_day', 'Last day'],
@@ -37,6 +38,7 @@ export default function OwnerOverview() {
   const channels = analytics?.messages_by_channel || {};
   return (
     <div className="space-y-7">
+      <OwnerActivationBanner />
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-2xl font-semibold">Business overview</h2>
@@ -51,6 +53,7 @@ export default function OwnerOverview() {
         </select>
       </header>
       {error && <p role="alert" className="rounded-lg bg-red-950 p-3 text-sm text-red-200">{error}</p>}
+      {!error && !analytics ? <p className="text-sm text-slate-400">Loading overview…</p> : null}
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="New users" value={analytics?.new_users} />
         <Metric label="Live users" value={analytics?.live_users} />
@@ -65,12 +68,19 @@ export default function OwnerOverview() {
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <h3 className="font-semibold">Messages by channel</h3>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {['facebook', 'instagram', 'tiktok', 'whatsapp', 'web', 'unknown'].map((channel) => (
-            <div key={channel} className="rounded-lg bg-slate-950 p-3">
-              <p className="capitalize text-slate-400">{channel.replace('_', ' ')}</p>
-              <p className="mt-1 text-xl font-semibold">{Number(channels[channel] || 0).toLocaleString()}</p>
-            </div>
-          ))}
+          {['facebook', 'instagram', 'tiktok', 'whatsapp', 'web', 'unknown'].map((channel) => {
+            const count = Number(channels[channel] || 0);
+            const max = Math.max(1, ...Object.values(channels).map((value) => Number(value) || 0));
+            return (
+              <div key={channel} className="rounded-lg bg-slate-950 p-3">
+                <p className="capitalize text-slate-400">{channel.replace('_', ' ')}</p>
+                <p className="mt-1 text-xl font-semibold">{count.toLocaleString()}</p>
+                <div className="mt-2 h-1.5 rounded bg-slate-800">
+                  <div className="h-1.5 rounded bg-teal-500" style={{ width: `${Math.round((count / max) * 100)}%` }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
       <section className="rounded-xl border border-amber-900/60 bg-amber-950/30 p-5 text-sm text-amber-100">

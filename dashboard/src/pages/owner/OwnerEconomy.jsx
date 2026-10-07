@@ -40,6 +40,15 @@ export default function OwnerEconomy() {
   const [economy, setEconomy] = useState(/** @type {any} */ (emptyEconomy()));
   const [error, setError] = useState('');
   const [dryRun, setDryRun] = useState(/** @type {any} */ (null));
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (!dirty) return undefined;
+    /** @param {BeforeUnloadEvent} event */
+    const warn = (event) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
 
   useEffect(() => {
     let live = true;
@@ -49,6 +58,7 @@ export default function OwnerEconomy() {
         if (!live) return;
         setCatalog(data.catalog);
         setEconomy(economyFromCatalog(data.catalog));
+        setDirty(false);
       })
       .catch((reason) => live && setError(reason.message));
     return () => {
@@ -58,6 +68,7 @@ export default function OwnerEconomy() {
 
   /** @param {string} key @param {string} value */
   function editCost(key, value) {
+    setDirty(true);
     setEconomy((/** @type {any} */ current) => ({
       ...current,
       action_costs: { ...current.action_costs, [key]: value },
@@ -102,6 +113,7 @@ export default function OwnerEconomy() {
       const data = await ownerApi.updateMessageCatalog({ economy: payload, reason: 'economy_edit' });
       setCatalog(data.catalog);
       setEconomy(economyFromCatalog(data.catalog));
+      setDirty(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -246,9 +258,19 @@ export default function OwnerEconomy() {
           </pre>
         )}
       </section>
-      <button type="button" onClick={() => void save()} className="rounded bg-teal-500 px-3 py-2 text-slate-950">
-        Save economy
-      </button>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => void save()} className="rounded bg-teal-500 px-3 py-2 text-slate-950">
+          Save economy
+        </button>
+        <button
+          type="button"
+          onClick={() => { setEconomy(economyFromCatalog(catalog)); setDirty(false); }}
+          className="rounded border border-slate-600 px-3 py-2"
+        >
+          Reset
+        </button>
+      </div>
+      {dirty ? <p className="text-sm text-amber-200">You have unsaved changes.</p> : null}
       <p className="text-xs text-slate-500">Catalog revision {catalog?.admin_revision || '—'}</p>
     </div>
   );

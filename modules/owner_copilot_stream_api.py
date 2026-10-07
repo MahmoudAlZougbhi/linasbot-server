@@ -232,6 +232,29 @@ async def stream_owner_message(
             final_text = str((done_payload or {}).get("reply_text") or "".join(reply_parts)).strip()
             incomplete = cancel_flag["cancelled"] or done_payload is None
             save_reply(final_text, incomplete=incomplete, payload=done_payload)
+            from services.owner_portal.owner_traces import record_trace
+
+            route = (done_payload or {}).get("route") if isinstance(done_payload, dict) else {}
+            qa_hit = isinstance(route, dict) and str(route.get("reason") or "") == "qa_hit"
+            record_trace(
+                {
+                    "tenant_id": session.tenant_id,
+                    "brain": "owner_copilot",
+                    "channel": "owner_copilot",
+                    "user_message": content,
+                    "reply": final_text,
+                    "prompt": "redacted-at-rest" if not qa_hit else "",
+                    "error": "incomplete" if incomplete else "",
+                    "steps": [
+                        {"name": "receive"},
+                        {"name": "qa", "hit": qa_hit},
+                        {"name": "reply"},
+                    ],
+                    "qa_hit": qa_hit,
+                    "tokens_in": 0 if qa_hit else None,
+                    "tokens_out": 0 if qa_hit else None,
+                }
+            )
 
     return StreamingResponse(
         event_gen(),

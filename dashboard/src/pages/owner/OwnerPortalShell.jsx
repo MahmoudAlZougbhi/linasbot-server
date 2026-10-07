@@ -1,15 +1,20 @@
 import { NavLink, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import OwnerActivationBanner from './OwnerActivationBanner';
-
 const links = [
   { to: '/owner', label: 'Overview' },
   { to: '/owner/users', label: 'Users' },
+  { to: '/owner/tenants', label: 'Tenants' },
   { to: '/owner/messages', label: 'Message flow' },
+  { to: '/owner/traces', label: 'Traces' },
+  { to: '/owner/copilot', label: 'Copilot chats' },
+  { to: '/owner/knowledge', label: 'Knowledge' },
+  { to: '/owner/qa', label: 'Q&A' },
   { to: '/owner/catalog', label: 'Message catalog' },
   { to: '/owner/economy', label: 'Message economy' },
   { to: '/owner/costs', label: 'Costs' },
   { to: '/owner/brains', label: 'Brains' },
+  { to: '/owner/audit', label: 'Audit' },
+  { to: '/owner/health', label: 'Health' },
 ];
 
 export default function OwnerPortalShell() {
@@ -34,7 +39,7 @@ export default function OwnerPortalShell() {
               end={to === '/owner'}
               className={({ isActive }) =>
                 `whitespace-nowrap rounded-lg px-3 py-2 text-sm ${
-                  isActive ? 'bg-teal-500 text-slate-950' : 'text-slate-300 hover:bg-slate-800'
+                  isActive ? 'bg-teal-500 text-slate-950' : 'text-slate-100 hover:bg-slate-800'
                 }`
               }
             >
@@ -42,12 +47,11 @@ export default function OwnerPortalShell() {
             </NavLink>
           ))}
         </nav>
-        <button type="button" onClick={logout} className="mt-7 text-sm text-slate-400 hover:text-white">
+        <button type="button" onClick={logout} className="mt-7 rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800">
           Sign out
         </button>
       </aside>
-      <main className="min-w-0 flex-1 space-y-5 p-5 md:p-8">
-        <OwnerActivationBanner />
+      <main className="min-w-0 flex-1 space-y-5 overflow-x-hidden p-5 md:p-8">
         <Outlet />
       </main>
     </div>

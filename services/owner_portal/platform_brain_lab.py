@@ -40,17 +40,68 @@ def prior_turns(history: list[dict[str, Any]] | None) -> list[dict[str, str]]:
     return rows[-20:]
 
 
+async def _draft_reply(tenant_id: str, message: str) -> dict[str, Any]:
+    from services.ai_setup.storage import get_draft
+
+    sections = []
+    for name in ("ai_basics", "knowledge", "faq"):
+        try:
+            envelope = get_draft(name, tenant_id=tenant_id, create_default=False)
+        except Exception:
+            continue
+        payload = getattr(envelope, "payload", None)
+        if payload:
+            sections.append(f"{name}: {str(payload)[:1500]}")
+    if not sections:
+        return {
+            "tenant_id": tenant_id,
+            "brain": "customer",
+            "reply": "",
+            "reason": "no_draft",
+            "hint": "Save a draft in the tenant app before testing it here.",
+            "stopped": True,
+        }
+    draft_text = "\n".join(sections)[:5000]
+    try:
+        from services.brain.llm_core_service import create_chat_completion
+        from services.owner_copilot.flags import owner_model_name
+
+        response = await create_chat_completion(
+            model=owner_model_name(),
+            messages=[
+                {"role": "system", "content": "Answer only from this unpublished draft.\n" + draft_text},
+                {"role": "user", "content": message[:4000]},
+            ],
+            max_tokens=400,
+            reasoning_effort="low",
+        )
+        reply = str(response.choices[0].message.content or "").strip()
+    except Exception:
+        reply = ""
+    return {
+        "tenant_id": tenant_id,
+        "brain": "customer",
+        "reply": reply,
+        "reason": "draft_sandbox" if reply else "draft_model_unavailable",
+        "hint": "" if reply else "The draft is saved, but the model did not answer. Publish the tenant or retry.",
+        "stopped": not bool(reply),
+    }
+
+
 async def customer_lab_turn(
     *,
     actor_user_id: str,
     tenant_id: str,
     message: str,
     history: list[dict[str, Any]] | None = None,
+    mode: str = "live",
 ) -> dict[str, Any]:
     tid = known_tenant_id(tenant_id)
     text = (message or "").strip()
     if not text:
         raise ValueError("empty_message")
+    if mode == "draft":
+        return await _draft_reply(tid, text)
     from services.brain.reply.orchestrator import run_customer_reply_v2_dm
 
     prior = prior_turns(history)
@@ -75,6 +126,11 @@ async def customer_lab_turn(
         "reply": reply,
         "reason": reason,
         "stopped": bool(getattr(outcome, "stop", False) and not reply),
+        "hint": (
+            "This tenant is not published. Turn on Test draft to try the saved draft."
+            if reason == "unpublished" and not reply
+            else ""
+        ),
     }
 
 

@@ -104,6 +104,7 @@ import modules.mobile_app_version_api  # noqa: E402, F401
 import modules.mobile_products_api  # noqa: E402, F401
 import modules.mobile_stt_api  # noqa: E402, F401
 import modules.platform_api  # noqa: E402, F401
+import modules.platform_copilot_portal_api  # noqa: E402, F401
 import modules.platform_brain_lab_api  # noqa: E402, F401
 import modules.platform_message_api  # noqa: E402, F401
 import modules.platform_search_api  # noqa: E402, F401
@@ -123,6 +124,18 @@ if os.path.exists(DASHBOARD_BUILD_PATH) and os.path.exists(INDEX_HTML_PATH):
     @app.get("/{full_path:path}")
     async def serve_dashboard_spa(full_path: str) -> FileResponse:
         # Don't serve index.html for API or static paths
+        asset_suffixes = (
+            ".js",
+            ".css",
+            ".map",
+            ".json",
+            ".webmanifest",
+            ".svg",
+            ".png",
+            ".ico",
+            ".woff",
+            ".woff2",
+        )
         if (
             full_path.startswith("api/")
             or full_path.startswith("static/")
@@ -130,6 +143,7 @@ if os.path.exists(DASHBOARD_BUILD_PATH) and os.path.exists(INDEX_HTML_PATH):
             or full_path.startswith("web-chat/")
             or full_path == "webhook"
             or full_path.startswith("webhook/")
+            or full_path.endswith(asset_suffixes)
         ):
             raise HTTPException(status_code=404, detail="Not found")
         return FileResponse(INDEX_HTML_PATH)

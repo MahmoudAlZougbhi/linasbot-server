@@ -71,6 +71,26 @@ async def _iter_owner_turn_v2_events_body(
             tool_args = {**(tool_args or {}), "replace_proposal_id": revise_ctx["proposal_id"]}
     stage = str((context.get("account_summary") or {}).get("setup_stage") or "")
     reply_lang = str(context.get("reply_language") or "en")
+    if text and not confirm_tool and not choice_id:
+        from services.owner_portal.owner_qa import match_owner_qa
+
+        qa_hit = match_owner_qa(text, reply_lang)
+        if qa_hit:
+            yield StreamEvent(
+                type="done",
+                payload=done_payload(
+                    reply_text=str(qa_hit["answer"]),
+                    tool_calls=[],
+                    cards=[],
+                    choices=[],
+                    model="",
+                    ctx_tokens=0,
+                    stage=stage,
+                    reason="qa_hit",
+                    route={"kind": "owner_qa", "reason": "qa_hit", "score": qa_hit.get("score"), "tokens": 0},
+                ),
+            )
+            return
     attachment_action: Literal["none", "analyze", "import"] | None = None
     if attachment_ids:
         # Attachment alone does not force high; import/apply paths set import via extract tool.
