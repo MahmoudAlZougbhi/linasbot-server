@@ -75,6 +75,7 @@ export function useChatSession(enabled = true) {
   const loadingMoreRef = useRef(false);
   const listRequestIdRef = useRef(0);
   const openRequestIdRef = useRef(0);
+  const syncGenRef = useRef(0);
 
   function retainHistoryIds(): string[] {
     const id = conversationIdRef.current;
@@ -130,14 +131,30 @@ export function useChatSession(enabled = true) {
       const activeId = conversationId;
       if (!activeId) return false;
       const expectReply = opts?.expectReplyText?.trim() || '';
+      const gen = ++syncGenRef.current;
+      if (expectReply && !messagesIncludeAssistantReply(messagesRef.current, expectReply)) {
+        const pinned = [
+          ...messagesRef.current,
+          {
+            id: `local-assistant-${Date.now()}`,
+            role: 'assistant' as const,
+            content: expectReply,
+            created_at: Date.now() / 1000,
+          },
+        ];
+        messagesRef.current = pinned;
+        setMessages(pinned);
+      }
       try {
         let synced = false;
         for (let attempt = 0; attempt < SYNC_AFTER_TURN_RETRY_MS.length; attempt++) {
           if (SYNC_AFTER_TURN_RETRY_MS[attempt] > 0) {
             await new Promise((resolve) => setTimeout(resolve, SYNC_AFTER_TURN_RETRY_MS[attempt]));
           }
+          if (gen !== syncGenRef.current) return true;
           const listRequestId = ++listRequestIdRef.current;
           const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
+          if (gen !== syncGenRef.current) return true;
           if (listRequestId === listRequestIdRef.current) {
             setHistory((prev) =>
               mergeListedHistory(prev, listedHistoryEntries(listed.conversations), {
@@ -146,7 +163,7 @@ export function useChatSession(enabled = true) {
             );
           }
           const full = await apiFetch(conversationMessagesUrl(activeId), { schema: GetConvSchema });
-          if (conversationIdRef.current !== activeId) return false;
+          if (conversationIdRef.current !== activeId || gen !== syncGenRef.current) return true;
 
           const merged = mergeLatestWindow(messagesRef.current, full.conversation.messages);
           setTitle((prevTitle) => {
@@ -181,8 +198,8 @@ export function useChatSession(enabled = true) {
         }
         return synced;
       } catch {
-        /* keep live stream bubble; user can retry via error banner */
-        return false;
+        /* The pinned reply stays in the transcript. Live text can clear. */
+        return Boolean(expectReply);
       }
     },
     [conversationId, enabled],

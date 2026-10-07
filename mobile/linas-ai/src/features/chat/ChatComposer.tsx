@@ -32,7 +32,7 @@ import { VoiceComposerControls } from './VoiceComposerControls';
 type Props = {
   draft: string;
   onChangeDraft: (v: string) => void;
-  onSend: () => void;
+  onSend: () => void | Promise<void>;
   onPlus?: () => void;
   onToggleVoice?: () => void;
   onResumeVoice?: () => void;
@@ -100,6 +100,9 @@ export function ChatComposer({
   const suppressFocusRef = useRef(false);
   const sendLockRef = useRef(false);
   const suppressDraftEchoRef = useRef(false);
+  /** iOS puts the submitted string back into the field after Send. Ignore that echo. */
+  const sentEchoRef = useRef<string | null>(null);
+  const sentEchoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     inputHeight,
     atMaxHeight,
@@ -203,6 +206,11 @@ export function ChatComposer({
     sendLockRef.current = true;
     suppressDraftEchoRef.current = true;
     suppressFocusRef.current = true;
+    sentEchoRef.current = draft;
+    if (sentEchoTimerRef.current) clearTimeout(sentEchoTimerRef.current);
+    sentEchoTimerRef.current = setTimeout(() => {
+      sentEchoRef.current = null;
+    }, 2000);
     onSend();
     dismissKeyboard();
     requestAnimationFrame(dismissKeyboard);
@@ -234,7 +242,7 @@ export function ChatComposer({
         { backgroundColor: colors.accent },
         sending && styles.sendBusy,
       ]}
-      onPress={handleSend}
+      onPressIn={handleSend}
       disabled={sending || !canSend || voiceBusy}
       accessibilityLabel={tr('composerSend')}
     >
@@ -339,6 +347,8 @@ export function ChatComposer({
           assignInputRef={assignInputRef}
           onChangeText={(v) => {
             if (suppressDraftEchoRef.current) return;
+            if (sentEchoRef.current !== null && v.trim() === sentEchoRef.current.trim()) return;
+            sentEchoRef.current = null;
             handleChangeText(v, onChangeDraft);
           }}
           onMeasuredLines={handleMeasuredLines}

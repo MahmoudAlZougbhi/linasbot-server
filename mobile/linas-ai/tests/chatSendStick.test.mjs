@@ -42,6 +42,8 @@ describe('in-app chat send + stick', () => {
     assert.match(body, /suppressDraftEchoRef\.current = true/);
     assert.ok(body.indexOf('onSend()') < body.indexOf('dismissKeyboard()'));
     assert.match(composer, /if \(suppressDraftEchoRef\.current\) return;/);
+    assert.match(composer, /onPressIn=\{handleSend\}/);
+    assert.match(composer, /sentEchoRef/);
     assert.match(composer, /onComposerFocus/);
   });
 

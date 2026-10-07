@@ -158,6 +158,24 @@ async def stream_owner_message(
         reply_parts: list[str] = []
         done_payload: dict[str, Any] | None = None
         title = conversation_title
+        reply_saved = False
+
+        def save_reply(text: str, *, incomplete: bool, payload: dict[str, Any] | None) -> None:
+            nonlocal reply_saved
+            cleaned = (text or "").strip()
+            if reply_saved or not cleaned:
+                return
+            calls = (payload or {}).get("tool_calls")
+            owner_chat_store.append_message(
+                tenant_id=session.tenant_id,
+                user_id=session.user_id,
+                conversation_id=conversation_id,
+                role="assistant",
+                content=cleaned if not incomplete else cleaned + "\n\n[incomplete]",
+                tool_calls=calls if isinstance(calls, list) else None,
+            )
+            reply_saved = True
+
         try:
             named = sse_title_if_named(title)
             if named:
@@ -187,6 +205,11 @@ async def stream_owner_message(
                         **ev.payload,
                         "conversation_title": title,
                     }
+                    # Save before the phone refetches. The title call below is slow,
+                    # and the client sync starts as soon as it sees this event.
+                    reply_now = str(done_payload.get("reply_text") or "".join(reply_parts)).strip()
+                    if reply_now and not cancel_flag["cancelled"]:
+                        save_reply(reply_now, incomplete=False, payload=done_payload)
                     yield encode_sse(StreamEvent(type="done", payload=done_payload))
                     continue
                 yield encode_sse(ev)
@@ -208,15 +231,7 @@ async def stream_owner_message(
             watcher.cancel()
             final_text = str((done_payload or {}).get("reply_text") or "".join(reply_parts)).strip()
             incomplete = cancel_flag["cancelled"] or done_payload is None
-            if final_text:
-                owner_chat_store.append_message(
-                    tenant_id=session.tenant_id,
-                    user_id=session.user_id,
-                    conversation_id=conversation_id,
-                    role="assistant",
-                    content=final_text if not incomplete else final_text + "\n\n[incomplete]",
-                    tool_calls=(done_payload or {}).get("tool_calls"),
-                )
+            save_reply(final_text, incomplete=incomplete, payload=done_payload)
 
     return StreamingResponse(
         event_gen(),
