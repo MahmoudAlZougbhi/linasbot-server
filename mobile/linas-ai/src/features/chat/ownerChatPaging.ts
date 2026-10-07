@@ -13,23 +13,26 @@ export function conversationMessagesUrl(
   return `/api/owner-ai/conversations/${conversationId}?${params.toString()}`;
 }
 
-/** Keep already-loaded older messages; refresh the latest window from server. */
+function sameVisibleTurn(a: ChatMessage, b: ChatMessage): boolean {
+  const left = a.content.trim();
+  return Boolean(left) && a.role === b.role && left === b.content.trim();
+}
+
+/**
+ * Refresh from the server page without dropping bubbles the screen already showed.
+ * A short page (or a stale read) must not erase Sol's earlier replies.
+ */
 export function mergeLatestWindow(prev: ChatMessage[], latest: ChatMessage[]): ChatMessage[] {
   if (!latest.length) return prev;
-  const latestIds = new Set(latest.map((m) => m.id));
-  const firstHit = prev.findIndex((m) => latestIds.has(m.id));
-  const older =
-    firstHit > 0
-      ? prev.slice(0, firstHit)
-      : firstHit === 0
-        ? []
-        : prev.filter((m) => !m.id.startsWith('local-') && m.created_at < latest[0].created_at);
-  const locals = prev.filter(
-    (m) =>
-      m.id.startsWith('local-') &&
-      !latest.some((l) => l.role === 'user' && l.content === m.content),
+  const serverIds = new Set(latest.map((m) => m.id));
+  const kept = prev.filter((m) => {
+    if (serverIds.has(m.id)) return false;
+    if (m.id.startsWith('local-') && latest.some((l) => sameVisibleTurn(l, m))) return false;
+    return true;
+  });
+  return [...kept, ...latest].sort(
+    (a, b) => a.created_at - b.created_at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
   );
-  return [...older, ...latest, ...locals];
 }
 
 export function prependOlderUnique(prev: ChatMessage[], older: ChatMessage[]): ChatMessage[] {
@@ -39,15 +42,19 @@ export function prependOlderUnique(prev: ChatMessage[], older: ChatMessage[]): C
   return fresh.length ? [...fresh, ...prev] : prev;
 }
 
-/** Match streamed reply text to a persisted assistant message (prefix compare). */
+/** True when the newest assistant bubble is already this reply. Older bubbles do not count. */
 export function messagesIncludeAssistantReply(
   messages: ChatMessage[],
   replyText: string,
 ): boolean {
-  const needle = replyText.trim().slice(0, 80);
+  const needle = replyText.trim();
   if (!needle) return true;
-  const short = needle.slice(0, 40);
-  return messages.some(
-    (m) => m.role === 'assistant' && !m.id.startsWith('local-') && m.content.includes(short),
-  );
+  const head = needle.slice(0, 80);
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (!message || message.role !== 'assistant') continue;
+    const body = message.content.trim();
+    return body === needle || body.startsWith(head);
+  }
+  return false;
 }
