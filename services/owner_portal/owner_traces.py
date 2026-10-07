@@ -147,8 +147,9 @@ def get_trace(trace_id: str) -> dict[str, Any] | None:
     if row is None:
         return None
     try:
-        body = json.loads(row[0] or "{}")
+        loaded = json.loads(row[0] or "{}")
     except Exception:
-        body = {}
+        loaded = {}
+    body: dict[str, Any] = loaded if isinstance(loaded, dict) else {}
     body["id"] = trace_id
     return body

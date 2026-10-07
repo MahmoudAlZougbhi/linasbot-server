@@ -132,12 +132,13 @@ def _answer_for(qa_id: str, language: str) -> str:
         if group["id"] != qa_id:
             continue
         for variant in group["variants"]:
-            if variant["language"] == wanted and variant["answer"]:
-                return variant["answer"]
-            if variant["language"] == "ar":
-                fallback = variant["answer"]
+            answer = str(variant.get("answer") or "")
+            if variant.get("language") == wanted and answer:
+                return answer
+            if variant.get("language") == "ar":
+                fallback = answer
             elif not fallback:
-                fallback = variant["answer"]
+                fallback = answer
     return fallback
 
 

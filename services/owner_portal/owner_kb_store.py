@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from contextlib import AbstractContextManager
 from typing import Any
 
 from sqlalchemy import text
@@ -15,7 +16,7 @@ _FAMILY = "owner_kb"
 _TOP_K = 5
 
 
-def _session():
+def _session() -> AbstractContextManager[Any]:
     from db.session import whatsapp_session
 
     return whatsapp_session(require=False)
