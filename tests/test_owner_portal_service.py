@@ -26,6 +26,64 @@ def test_recent_flows_excludes_other_tenants_and_untagged_rows(monkeypatch):
     assert [row["user_message"] for row in rows] == ["a"]
 
 
+def test_billing_by_tenant_reads_columns_before_the_session_closes(monkeypatch):
+    """Rows expire when the billing session exits. The copy must happen inside it."""
+
+    class _Gate:
+        closed = False
+
+    gate = _Gate()
+
+    class _Ent:
+        tenant_id = "alpha"
+
+        @property
+        def plan_id(self):
+            if gate.closed:
+                raise RuntimeError("detached")
+            return "growth"
+
+        @property
+        def status(self):
+            if gate.closed:
+                raise RuntimeError("detached")
+            return "active"
+
+        included_credits = 10
+        extra_credits = 1
+
+    class _Balance:
+        @property
+        def available(self):
+            if gate.closed:
+                raise RuntimeError("detached")
+            return 4
+
+    class _Session:
+        def execute(self, _query):
+            return self
+
+        def all(self):
+            return [(_Ent(), _Balance())]
+
+    class _Ctx:
+        def __enter__(self):
+            return _Session()
+
+        def __exit__(self, *_args):
+            gate.closed = True
+            return False
+
+    monkeypatch.setattr(portal, "billing_uses_postgres", lambda: True)
+    monkeypatch.setattr(portal, "require_billing_pg_session", lambda: _Ctx())
+
+    loaded = portal._billing_by_tenant({"alpha"})
+
+    assert loaded["alpha"]["plan_id"] == "growth"
+    assert loaded["alpha"]["credits_remaining"] == 4
+    assert gate.closed is True
+
+
 def test_list_subscribers_groups_users_and_batches_billing(monkeypatch):
     users = [
         {"id": "u1", "tenantId": "alpha", "email": "owner@example.com", "role": "owner", "status": "active"},
