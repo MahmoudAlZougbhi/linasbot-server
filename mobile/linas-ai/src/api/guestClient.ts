@@ -90,14 +90,19 @@ function looseGuestSession(body: unknown): GuestSession | null {
   const row = session as { id?: unknown; messages?: unknown; limit_reached?: unknown };
   if (typeof row.id !== 'string') return null;
   const messages = Array.isArray(row.messages) ? row.messages : [];
-  const clean = messages.flatMap((item) => {
-    if (!item || typeof item !== 'object') return [];
+  const clean: GuestSession['messages'] = [];
+  for (const item of messages) {
+    if (!item || typeof item !== 'object') continue;
     const msg = item as { id?: unknown; role?: unknown; content?: unknown; created_at?: unknown };
+    if (typeof msg.content !== 'string') continue;
     const role = msg.role === 'user' || msg.role === 'system' ? msg.role : 'assistant';
-    const created = typeof msg.created_at === 'number' ? msg.created_at : 0;
-    if (typeof msg.content !== 'string') return [];
-    return [{ id: String(msg.id ?? ''), role, content: msg.content, created_at: created }];
-  });
+    clean.push({
+      id: String(msg.id ?? ''),
+      role,
+      content: msg.content,
+      created_at: typeof msg.created_at === 'number' ? msg.created_at : 0,
+    });
+  }
   return {
     id: row.id,
     limit_reached: row.limit_reached === true,
