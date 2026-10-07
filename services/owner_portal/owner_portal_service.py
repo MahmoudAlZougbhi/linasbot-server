@@ -57,18 +57,20 @@ def _billing_by_tenant(tenant_ids: set[str]) -> dict[str, dict[str, Any]]:
                 .outerjoin(CreditBalanceRow, CreditBalanceRow.tenant_id == TenantEntitlementRow.tenant_id)
                 .where(TenantEntitlementRow.tenant_id.in_(tenant_ids))
             ).all()
-        return {
-            ent.tenant_id: {
-                "plan_id": ent.plan_id,
-                "subscription_status": ent.status,
-                "included_credits": int(ent.included_credits or 0),
-                "extra_credits": int(ent.extra_credits or 0),
-                "credits_remaining": int(balance.available or 0)
-                if balance is not None
-                else int((ent.included_credits or 0) + (ent.extra_credits or 0)),
+            # Copy columns before the session closes. Reading them afterwards
+            # raises DetachedInstanceError and the overview comes back empty.
+            return {
+                ent.tenant_id: {
+                    "plan_id": ent.plan_id,
+                    "subscription_status": ent.status,
+                    "included_credits": int(ent.included_credits or 0),
+                    "extra_credits": int(ent.extra_credits or 0),
+                    "credits_remaining": int(balance.available or 0)
+                    if balance is not None
+                    else int((ent.included_credits or 0) + (ent.extra_credits or 0)),
+                }
+                for ent, balance in rows
             }
-            for ent, balance in rows
-        }
 
     import json
 

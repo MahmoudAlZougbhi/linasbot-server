@@ -3,7 +3,16 @@ import { authFetch } from '../../utils/authFetch';
 /** @param {string} path @param {RequestInit} [options] */
 async function request(path, options) {
   const response = await authFetch(path, options);
-  const data = await response.json();
+  const text = await response.text();
+  /** @type {any} */
+  let data = {};
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`The portal could not read this response (${response.status}).`);
+    }
+  }
   if (!response.ok || data.success === false) {
     throw new Error(data.error || data.detail || `Request failed (${response.status})`);
   }
