@@ -13,8 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radii, useTheme } from '../theme';
 
-/** Keep in sync with close `Animated.timing` duration below (+ small buffer). */
-const DRAWER_CLOSE_MS = 260;
 /** Above ChatHeader (20) and ChatModeToggle (15) so chat chrome cannot leak on the panel. */
 export const DRAWER_Z = 40;
 
@@ -43,7 +41,6 @@ export function SideDrawer({
   const closedX = side === 'left' ? -width : width;
   const anim = useRef(new Animated.Value(closedX)).current;
   const fade = useRef(new Animated.Value(0)).current;
-  const [hitActive, setHitActive] = useState(open);
 
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => {
@@ -53,10 +50,7 @@ export function SideDrawer({
   }, []);
 
   useEffect(() => {
-    if (open) {
-      setHitActive(true);
-      Keyboard.dismiss();
-    }
+    if (open) Keyboard.dismiss();
     Animated.parallel([
       Animated.timing(anim, {
         toValue: open ? 0 : closedX,
@@ -69,17 +63,12 @@ export function SideDrawer({
         useNativeDriver: true,
       }),
     ]).start();
-    if (!open) {
-      const t = setTimeout(() => setHitActive(false), DRAWER_CLOSE_MS);
-      return () => clearTimeout(t);
-    }
   }, [open, anim, fade, closedX]);
 
+  if (!open) return null;
+
   return (
-    <View
-      pointerEvents={hitActive ? 'auto' : 'none'}
-      style={[StyleSheet.absoluteFill, styles.layer]}
-    >
+    <View pointerEvents="auto" style={[StyleSheet.absoluteFill, styles.layer]}>
       <Animated.View style={[styles.scrim, { opacity: fade, backgroundColor: colors.overlay }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>

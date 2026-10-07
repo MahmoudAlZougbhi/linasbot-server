@@ -190,10 +190,10 @@ describe('session persist source contracts', () => {
     assert.match(tokens, /resetSessionCaches/);
   });
 
-  it('logout still clears the token store before dropping hasAccess', () => {
+  it('logout drops the in-memory session before the guest screen', () => {
     const shell = read('app/AppShell.tsx');
-    const logout = shell.slice(shell.indexOf('async function logout'));
-    const clearAt = logout.indexOf('tokenStore.clear()');
+    const logout = shell.slice(shell.indexOf('function logout'));
+    const clearAt = logout.indexOf('tokenStore.forgetLocal()');
     const accessAt = logout.indexOf('setHasAccess(false)');
     assert.ok(clearAt >= 0 && accessAt > clearAt);
   });

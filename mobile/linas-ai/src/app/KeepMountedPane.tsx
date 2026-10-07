@@ -37,9 +37,15 @@ export function KeepMountedPane({ active, children }: Props) {
 const styles = StyleSheet.create({
   active: {
     ...StyleSheet.absoluteFill,
+    zIndex: 1,
+    elevation: 1,
   },
+  // Hidden panes must not stay full-screen. A later sibling with absolute fill
+  // sits on top of the visible screen and swallows taps until the process restarts.
   inactive: {
-    ...StyleSheet.absoluteFill,
     display: 'none',
+    height: 0,
+    width: 0,
+    overflow: 'hidden',
   },
 });
