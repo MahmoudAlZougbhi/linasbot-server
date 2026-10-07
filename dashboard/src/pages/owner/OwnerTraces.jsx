@@ -14,7 +14,11 @@ export default function OwnerTraces() {
       .catch((reason) => setError(reason.message));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    ownerApi.listTraces({ tenant_id: '', brain: '' })
+      .then((data) => setTraces(data.traces || []))
+      .catch((reason) => setError(reason.message));
+  }, []);
 
   return (
     <div className="space-y-6">

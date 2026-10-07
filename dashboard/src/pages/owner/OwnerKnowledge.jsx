@@ -13,7 +13,9 @@ export default function OwnerKnowledge() {
     ownerApi.listKnowledge().then((data) => setEntries(data.entries || [])).catch((reason) => setError(reason.message));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    ownerApi.listKnowledge().then((data) => setEntries(data.entries || [])).catch((reason) => setError(reason.message));
+  }, []);
 
   const save = async () => {
     setError('');

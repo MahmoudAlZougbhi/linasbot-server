@@ -357,7 +357,7 @@ def test_wave_f_portal_drawer_no_snapchat() -> None:
     caps = (ROOT / "services/integrations/integration_capabilities.py").read_text(encoding="utf-8")
     keep = (ROOT / "docs/KEEP_SURFACE.md").read_text(encoding="utf-8")
 
-    assert shell.count("{ to: '/owner") == 7
+    assert shell.count("{ to: '/owner") == 14
     for label in ("Overview", "Users", "Message flow", "Message catalog", "Message economy", "Costs", "Brains"):
         assert label in shell
     assert "/owner/lab" not in app

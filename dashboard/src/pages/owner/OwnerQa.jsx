@@ -10,7 +10,9 @@ export default function OwnerQa() {
   const [notice, setNotice] = useState('');
 
   const load = () => ownerApi.listQa().then((data) => setItems(data.items || [])).catch((reason) => setError(reason.message));
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    ownerApi.listQa().then((data) => setItems(data.items || [])).catch((reason) => setError(reason.message));
+  }, []);
 
   const save = async () => {
     setError('');

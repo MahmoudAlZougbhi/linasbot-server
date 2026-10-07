@@ -317,7 +317,7 @@ def test_wave_g_web_marketing_portal_widget() -> None:
     assert "OwnerCosts" in app
     assert "OwnerBrains" in app
     assert "/owner/lab" not in app
-    assert shell.count("{ to: '/owner") == 7
+    assert shell.count("{ to: '/owner") == 14
     assert "GuestChatPanel" in landing
     assert "showFab={false}" not in landing
     assert '@app.get("/web-chat/widget.js")' in public_routes
