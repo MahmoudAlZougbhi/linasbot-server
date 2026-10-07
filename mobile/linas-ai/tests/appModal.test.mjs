@@ -22,6 +22,7 @@ describe('AppModal chrome', () => {
   it('remaps slide animation to fade to avoid black bar flash', () => {
     const src = read('components/AppModal.tsx');
     assert.match(src, /animationType === 'slide' \? 'fade'/);
+    assert.match(src, /if \(!visible\) return null/);
   });
 
   it('ModalScrim uses theme overlay token and full-screen fill', () => {

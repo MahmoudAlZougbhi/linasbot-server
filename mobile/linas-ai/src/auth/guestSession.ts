@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
 import { SECURE_STORE_OPTIONS } from './secureStoreOptions';
@@ -11,11 +12,16 @@ let memoryGuestId: string | null = null;
 
 function randomId(): string {
   const bytes = new Uint8Array(16);
-  const cryptoApi = globalThis.crypto;
-  if (!cryptoApi || typeof cryptoApi.getRandomValues !== 'function') {
-    throw new Error('Secure random generator unavailable');
+  try {
+    Crypto.getRandomValues(bytes);
+  } catch {
+    const cryptoApi = globalThis.crypto;
+    if (cryptoApi && typeof cryptoApi.getRandomValues === 'function') {
+      cryptoApi.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+    }
   }
-  cryptoApi.getRandomValues(bytes);
   return `g_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
 }
 

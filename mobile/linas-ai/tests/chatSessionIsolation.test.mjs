@@ -17,6 +17,8 @@ describe('chat session isolation', () => {
     const shell = read('app/AppShell.tsx');
     const guest = read('auth/guestSession.ts');
     const boot = read('auth/restoreOwnerSession.ts');
+    assert.match(guest, /from 'expo-crypto'/);
+    assert.doesNotMatch(guest, /Secure random generator unavailable/);
     assert.match(guest, /export async function rotateGuestSessionId/);
     assert.match(guest, /export async function rotateGuestSessionOnAppLaunch/);
     assert.match(shell, /rotateGuestSessionOnAppLaunch/);

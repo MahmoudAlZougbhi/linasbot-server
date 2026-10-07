@@ -70,7 +70,8 @@ export function ProductChannelLinksCard({ channel, onAddChannel, onRemoveChannel
       </Pressable>
       <Text style={styles.platformsLine}>{tr('productsChannelPlatforms')}</Text>
 
-      <Modal visible={platformOpen} transparent animationType="fade" onRequestClose={() => setPlatformOpen(false)}>
+      {platformOpen ? (
+      <Modal visible transparent animationType="fade" onRequestClose={() => setPlatformOpen(false)}>
         <Pressable style={styles.modalBg} onPress={() => setPlatformOpen(false)}>
           <View style={styles.modalCard}>
             {CHANNEL_PLATFORMS.map((p) => (
@@ -88,6 +89,7 @@ export function ProductChannelLinksCard({ channel, onAddChannel, onRemoveChannel
           </View>
         </Pressable>
       </Modal>
+      ) : null}
     </View>
   );
 }
