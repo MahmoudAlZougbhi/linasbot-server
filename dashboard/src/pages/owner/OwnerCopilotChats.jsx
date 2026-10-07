@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ownerApi } from './ownerApi';
 
+/** @param {string} text */
 function replyHtml(text) {
   const escaped = String(text || '')
     .replaceAll('&', '&amp;')
@@ -26,6 +27,7 @@ export default function OwnerCopilotChats() {
       .catch((reason) => setError(reason.message));
   }, []);
 
+  /** @param {any} trace */
   const openSave = (trace) => {
     const payload = trace.payload || {};
     setQuestion(String(payload.user_message || ''));

@@ -50,7 +50,7 @@ export default function OwnerQa() {
       <ul className="space-y-3">
         {items.map((item) => (
           <li key={item.id} className="rounded-xl border border-slate-800 p-4 text-sm">
-            {(item.variants || []).map((variant) => (
+            {(item.variants || []).map((/** @type {any} */ variant) => (
               <p key={variant.language} className="mt-2"><span className="text-teal-300">{variant.language}:</span> {variant.question}</p>
             ))}
           </li>

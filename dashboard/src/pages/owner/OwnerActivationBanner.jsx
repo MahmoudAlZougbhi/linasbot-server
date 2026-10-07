@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ownerApi } from './ownerApi';
 
+/** @type {Record<string, string>} */
 const LABELS = {
   free_ai_message_allowance: 'Free message allowance',
   free_message_renewal: 'Free message renewal',
@@ -22,6 +23,7 @@ const LABELS = {
   stale_leftover_credit_holds: 'Leftover credit holds',
 };
 
+/** @param {string} key */
 function labelFor(key) {
   return LABELS[key] || String(key).replaceAll('_', ' ');
 }
@@ -56,7 +58,7 @@ export default function OwnerActivationBanner() {
       </p>
       {open && blockers.length ? (
         <ul className="mt-3 list-disc space-y-1 pl-5">
-          {blockers.map((item) => <li key={item}>{item}</li>)}
+          {blockers.map((/** @type {string} */ item) => <li key={item}>{item}</li>)}
         </ul>
       ) : null}
     </section>

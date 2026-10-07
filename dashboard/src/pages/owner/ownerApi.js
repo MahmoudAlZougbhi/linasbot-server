@@ -95,15 +95,19 @@ export const ownerApi = {
     request(`/api/platform/message-flows/${encodeURIComponent(tenantId)}/${encodeURIComponent(operationId)}`),
   /**
    * @param {'customer' | 'copilot'} brain
-   * @param {{ tenant_id: string, message: string, history: { role: string, text: string }[] }} body
+   * @param {{ tenant_id: string, message: string, history: { role: string, text: string }[], mode?: string }} body
    */
   brainTurn: (brain, body) =>
     request(`/api/platform/brains/${brain}`, { method: 'POST', body: JSON.stringify(body) }),
   listKnowledge: () => request('/api/platform/copilot/knowledge'),
+  /** @param {Record<string, unknown>} body */
   saveKnowledge: (body) => request('/api/platform/copilot/knowledge', { method: 'POST', body: JSON.stringify(body) }),
+  /** @param {string} id */
   deleteKnowledge: (id) => request(`/api/platform/copilot/knowledge/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   listQa: () => request('/api/platform/copilot/qa'),
+  /** @param {Record<string, unknown>} body */
   saveQa: (body) => request('/api/platform/copilot/qa', { method: 'POST', body: JSON.stringify(body) }),
+  /** @param {Record<string, string>} [filters] */
   listTraces: (filters = {}) => {
     const params = new URLSearchParams(
       Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined && value !== null && String(value) !== '')),
@@ -111,6 +115,7 @@ export const ownerApi = {
     const query = params.toString();
     return request(query ? `/api/platform/copilot/traces?${query}` : '/api/platform/copilot/traces');
   },
+  /** @param {string} id */
   getTrace: (id) => request(`/api/platform/copilot/traces/${encodeURIComponent(id)}`),
   audit: () => request('/api/platform/audit'),
   health: () => request('/api/platform/health'),

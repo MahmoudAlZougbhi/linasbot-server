@@ -44,6 +44,7 @@ export default function OwnerEconomy() {
 
   useEffect(() => {
     if (!dirty) return undefined;
+    /** @param {BeforeUnloadEvent} event */
     const warn = (event) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);

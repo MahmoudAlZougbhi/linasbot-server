@@ -39,10 +39,11 @@ export default function OwnerTenants() {
     URL.revokeObjectURL(url);
   };
 
+  /** @param {any} row */
   const archive = async (row) => {
     const label = row.business_name || row.tenant_id;
     if (!window.confirm(`Hide ${label}? This blocks the owner account. It does not delete data.`)) return;
-    const owner = (row.users || []).find((user) => user.role === 'owner') || row.users?.[0];
+    const owner = (row.users || []).find((/** @type {any} */ user) => user.role === 'owner') || row.users?.[0];
     if (!owner?.id) {
       setError('No user id to update.');
       return;
