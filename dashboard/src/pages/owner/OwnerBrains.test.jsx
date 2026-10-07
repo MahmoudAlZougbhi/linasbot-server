@@ -37,6 +37,7 @@ describe("OwnerBrains", () => {
       tenant_id: "shop-a",
       message: "بدي سعر",
       history: [],
+      mode: "live",
     });
 
     fireEvent.change(tenant, { target: { value: "shop-b" } });
