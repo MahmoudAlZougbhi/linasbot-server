@@ -24,15 +24,15 @@ describe('chat session isolation', () => {
     const restoreAt = boot.indexOf('await restoreOwnerSession');
     const rotateAt = boot.indexOf('await rotateGuest()');
     assert.ok(restoreAt >= 0 && rotateAt > restoreAt, 'owner restore must run before guest rotate');
-    assert.match(shell, /await rotateGuestSessionId\(\)/);
-    const logout = shell.slice(shell.indexOf('async function logout'));
-    const logoutRotateAt = logout.indexOf('await rotateGuestSessionId()');
+    assert.match(shell, /rotateGuestSessionIdSync\(\)/);
+    const logout = shell.slice(shell.indexOf('function logout'));
+    const logoutRotateAt = logout.indexOf('rotateGuestSessionIdSync()');
     const accessAt = logout.indexOf('setHasAccess(false)');
-    assert.ok(logoutRotateAt >= 0 && accessAt > logoutRotateAt, 'logout must rotate guest id before guest screen');
+    assert.ok(logoutRotateAt >= 0 && accessAt > logoutRotateAt, 'logout must mint a guest id before the guest screen');
     const cleared = shell.slice(shell.indexOf('onAuthCleared'));
     assert.ok(
-      cleared.indexOf('rotateGuestSessionId') < cleared.indexOf('setHasAccess(false)'),
-      'auth-cleared must rotate guest id before guest screen',
+      cleared.indexOf('rotateGuestSessionIdSync') < cleared.indexOf('setHasAccess(false)'),
+      'auth-cleared must mint a guest id before the guest screen',
     );
   });
 

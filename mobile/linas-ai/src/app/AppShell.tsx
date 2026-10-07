@@ -4,8 +4,13 @@ import { Linking, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { onAuthCleared } from '../api/client';
-import { rotateGuestSessionId, rotateGuestSessionOnAppLaunch } from '../auth/guestSession';
+import {
+  rotateGuestSessionId,
+  rotateGuestSessionIdSync,
+  rotateGuestSessionOnAppLaunch,
+} from '../auth/guestSession';
 import { bootPersistedAuth } from '../auth/restoreOwnerSession';
+import { peekAccessToken } from '../auth/tokenMemory';
 import { tokenStore } from '../auth/tokenStore';
 import { scheduleIdlePrefetch } from '../cache/idlePrefetch';
 import '../cache/bindSessionCaches';
@@ -85,10 +90,11 @@ export function AppShell() {
 
   useEffect(() => {
     return onAuthCleared(() => {
-      void rotateGuestSessionId().then(() => {
-        setHasAccess(false);
-        bumpAuthEpoch();
-      });
+      rotateGuestSessionIdSync();
+      setHasAccess(false);
+      bumpAuthEpoch();
+      setScreen({ name: 'chat' });
+      void rotateGuestSessionId();
     });
   }, [bumpAuthEpoch]);
 
@@ -233,24 +239,38 @@ export function AppShell() {
     setScreen({ name: 'cm' });
   }
 
-  async function logout() {
-    try {
-      const access = await tokenStore.getAccessToken();
-      if (access) {
-        await fetch(`${API_BASE}/api/auth/mobile/logout`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${access}`, Accept: 'application/json' },
-        });
-      }
-    } catch {
-      // Local clear still proceeds.
-    }
-    await tokenStore.clear();
-    await rotateGuestSessionId();
+  function logout() {
+    const access = peekAccessToken();
+    tokenStore.forgetLocal();
+    rotateGuestSessionIdSync();
     setHasAccess(false);
     setResumeArea(null);
     bumpAuthEpoch();
     setScreen({ name: 'chat' });
+    void persistLogout(access);
+  }
+
+  async function persistLogout(access: string | null) {
+    try {
+      if (access) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 4000);
+        await fetch(`${API_BASE}/api/auth/mobile/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${access}`, Accept: 'application/json' },
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+      }
+    } catch {
+      // Local clear still proceeds.
+    }
+    try {
+      await tokenStore.clear();
+    } catch {
+      /* Memory is already wiped. Keychain delete can finish next launch. */
+    }
+    await rotateGuestSessionId();
   }
 
   function openArea(area: ControlArea) {

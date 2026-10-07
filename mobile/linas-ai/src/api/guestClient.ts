@@ -56,20 +56,58 @@ function detailCode(body: unknown): string | null {
 }
 
 export async function ensureGuestSession(guestSessionId: string, language?: string) {
-  const response = await fetch(`${API_BASE}/api/guest-ai/session`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      ...(language ? { 'Accept-Language': language } : {}),
-    },
-    body: JSON.stringify({ guest_session_id: guestSessionId, language }),
-  });
-  const body = await parseJson(response);
-  if (!response.ok) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12000);
+  try {
+    const response = await fetch(`${API_BASE}/api/guest-ai/session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(language ? { 'Accept-Language': language } : {}),
+      },
+      body: JSON.stringify({ guest_session_id: guestSessionId, language }),
+      signal: ctrl.signal,
+    });
+    const body = await parseJson(response);
+    if (!response.ok) {
+      throw new ApiError('Guest session failed', response.status, body);
+    }
+    const parsed = EnsureSchema.safeParse(body);
+    if (parsed.success) return parsed.data.session;
+    const loose = looseGuestSession(body);
+    if (loose) return loose;
     throw new ApiError('Guest session failed', response.status, body);
+  } finally {
+    clearTimeout(timer);
   }
-  return EnsureSchema.parse(body).session;
+}
+
+function looseGuestSession(body: unknown): GuestSession | null {
+  if (!body || typeof body !== 'object') return null;
+  const session = (body as { session?: unknown }).session;
+  if (!session || typeof session !== 'object') return null;
+  const row = session as { id?: unknown; messages?: unknown; limit_reached?: unknown };
+  if (typeof row.id !== 'string') return null;
+  const messages = Array.isArray(row.messages) ? row.messages : [];
+  const clean: GuestSession['messages'] = [];
+  for (const item of messages) {
+    if (!item || typeof item !== 'object') continue;
+    const msg = item as { id?: unknown; role?: unknown; content?: unknown; created_at?: unknown };
+    if (typeof msg.content !== 'string') continue;
+    const role = msg.role === 'user' || msg.role === 'system' ? msg.role : 'assistant';
+    clean.push({
+      id: String(msg.id ?? ''),
+      role,
+      content: msg.content,
+      created_at: typeof msg.created_at === 'number' ? msg.created_at : 0,
+    });
+  }
+  return {
+    id: row.id,
+    limit_reached: row.limit_reached === true,
+    messages: clean,
+  };
 }
 
 export async function sendGuestMessage(

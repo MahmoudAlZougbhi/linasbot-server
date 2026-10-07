@@ -76,9 +76,12 @@ export const tokenStore = {
       return null;
     }
   },
-  async clear(): Promise<void> {
+  forgetLocal(): void {
     wipeTokenMemory();
     resetSessionCaches();
+  },
+  async clear(): Promise<void> {
+    this.forgetLocal();
     await SecureStore.deleteItemAsync(ACCESS_KEY, SECURE_STORE_OPTIONS);
     await SecureStore.deleteItemAsync(REFRESH_KEY, SECURE_STORE_OPTIONS);
     await SecureStore.deleteItemAsync(USER_KEY, SECURE_STORE_OPTIONS);

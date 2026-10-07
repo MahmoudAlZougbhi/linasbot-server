@@ -6,6 +6,8 @@ const GUEST_ID_KEY = 'linas_guest_session_id';
 
 /** One rotate per JS process so Fast Refresh does not wipe an in-progress guest chat. */
 let appLaunchRotated = false;
+/** Set immediately on logout so the guest screen does not wait on the keychain. */
+let memoryGuestId: string | null = null;
 
 function randomId(): string {
   const bytes = new Uint8Array(16);
@@ -30,11 +32,24 @@ async function readStoredGuestId(): Promise<string | null> {
   return null;
 }
 
+/** New guest id in memory only. The screen can switch before SecureStore answers. */
+export function rotateGuestSessionIdSync(): string {
+  memoryGuestId = randomId();
+  return memoryGuestId;
+}
+
 /** Idempotent guest session id persisted in SecureStore for this app session. */
 export async function getOrCreateGuestSessionId(): Promise<string> {
+  if (memoryGuestId && memoryGuestId.length >= 8 && memoryGuestId.length <= 80) {
+    return memoryGuestId;
+  }
   const existing = await readStoredGuestId();
-  if (existing) return existing;
+  if (existing) {
+    memoryGuestId = existing;
+    return existing;
+  }
   const id = randomId();
+  memoryGuestId = id;
   try {
     await SecureStore.setItemAsync(GUEST_ID_KEY, id, SECURE_STORE_OPTIONS);
   } catch {
@@ -49,8 +64,15 @@ export async function clearGuestSessionId(): Promise<void> {
 
 /** Mint a new guest id so the next guest bootstrap cannot reopen a prior thread. */
 export async function rotateGuestSessionId(): Promise<string> {
-  await clearGuestSessionId();
-  return getOrCreateGuestSessionId();
+  const id = memoryGuestId && memoryGuestId.length >= 8 ? memoryGuestId : rotateGuestSessionIdSync();
+  memoryGuestId = id;
+  try {
+    await SecureStore.deleteItemAsync(GUEST_ID_KEY, SECURE_STORE_OPTIONS);
+    await SecureStore.setItemAsync(GUEST_ID_KEY, id, SECURE_STORE_OPTIONS);
+  } catch {
+    /* Memory id is already the session the UI is using. */
+  }
+  return id;
 }
 
 /** Cold start: drop any prior guest thread. Safe to call more than once per process. */
