@@ -14,13 +14,21 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 _SECRET_PARTS = ("api_key", "authorization", "password", "secret", "bearer", "token")
+_USAGE_KEYS = {"tokens_in", "tokens_out", "token_source", "cost_usd"}
+
+
+def _is_secret_key(key: str) -> bool:
+    lowered = str(key).lower()
+    if lowered in _USAGE_KEYS or lowered.startswith("tokens_"):
+        return False
+    return any(part in lowered for part in _SECRET_PARTS)
 
 
 def _redact(value: Any) -> Any:
     if isinstance(value, dict):
         cleaned = {}
         for key, item in value.items():
-            if any(part in str(key).lower() for part in _SECRET_PARTS):
+            if _is_secret_key(str(key)):
                 cleaned[key] = "[redacted]"
             else:
                 cleaned[key] = _redact(item)

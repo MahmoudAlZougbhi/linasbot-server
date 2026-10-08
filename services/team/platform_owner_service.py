@@ -56,12 +56,21 @@ class PlatformOwnerService:
             details=details,
             created_at=time.time(),
         )
-        with self._lock:
-            with self._actions_path().open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(asdict(entry)) + "\n")
+        from services.owner_portal.shared_events import insert_audit_event
+
+        if not insert_audit_event(asdict(entry)):
+            with self._lock:
+                with self._actions_path().open("a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(asdict(entry)) + "\n")
         return entry
 
     def list_actions(self, *, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+        from services.owner_portal.shared_events import list_audit_events
+
+        shared = list_audit_events(limit=max(limit + offset, limit))
+        if shared is not None:
+            start = max(0, offset)
+            return shared[start : start + max(1, min(limit, 200))]
         path = self._actions_path()
         if not path.is_file():
             return []

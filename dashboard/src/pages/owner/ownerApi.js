@@ -107,6 +107,8 @@ export const ownerApi = {
   listQa: () => request('/api/platform/copilot/qa'),
   /** @param {Record<string, unknown>} body */
   saveQa: (body) => request('/api/platform/copilot/qa', { method: 'POST', body: JSON.stringify(body) }),
+  /** @param {string} id */
+  deleteQa: (id) => request(`/api/platform/copilot/qa/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   /** @param {Record<string, string>} [filters] */
   listTraces: (filters = {}) => {
     const params = new URLSearchParams(

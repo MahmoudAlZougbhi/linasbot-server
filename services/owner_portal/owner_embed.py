@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+
 import httpx
 
 from services.brain.flags import voyage_api_key
 from services.brain.providers.spaces import ENTITY_DOCUMENT, ENTITY_QUERY
 from services.brain.providers.voyage_client import VOYAGE_BASE
+
+logger = logging.getLogger(__name__)
 
 
 def embed_one(text: str, *, query: bool) -> list[float] | None:
@@ -31,6 +35,7 @@ def embed_one(text: str, *, query: bool) -> list[float] | None:
         data = response.json().get("data") or []
         vector = data[0].get("embedding") if data else None
     except Exception:
+        logger.exception("owner embedding failed")
         return None
     if not isinstance(vector, list) or not vector:
         return None

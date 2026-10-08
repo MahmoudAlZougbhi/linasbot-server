@@ -34,6 +34,14 @@ def observe_lab_turn(*, tenant_id: str, brain: str, message: str, result: dict[s
     reply = str(result.get("reply") or "")
     reason = str(result.get("reason") or "")
     model = str(result.get("model") or "")
+    stopped = bool(result.get("stopped"))
+    qa_hit = reason == "qa_hit"
+    tokens_in = 0 if qa_hit else int(result.get("tokens_in") or 0)
+    tokens_out = 0 if qa_hit else int(result.get("tokens_out") or 0)
+    if not qa_hit and reply and tokens_out <= 0:
+        tokens_out = max(1, len(reply) // 4)
+    if not qa_hit and reply and tokens_in <= 0:
+        tokens_in = max(1, len(message) // 4)
     write_trace(
         {
             "tenant_id": tenant_id,
@@ -42,9 +50,10 @@ def observe_lab_turn(*, tenant_id: str, brain: str, message: str, result: dict[s
             "user_message": message[:4000],
             "reply": reply,
             "model": model,
-            "tokens_in": int(result.get("tokens_in") or 0),
-            "tokens_out": int(result.get("tokens_out") or 0),
-            "error": reason if result.get("stopped") else "",
+            "tokens_in": tokens_in,
+            "tokens_out": tokens_out,
+            "cost_usd": 0.0 if qa_hit else float(result.get("cost_usd") or 0),
+            "error": reason if stopped or not reply else "",
             "steps": [{"name": "lab", "reason": reason}],
         }
     )
@@ -181,6 +190,8 @@ async def customer_lab_turn(
         "reply": reply,
         "reason": reason,
         "model": str(getattr(outcome, "model", None) or ""),
+        "tokens_in": int(getattr(outcome, "prompt_tokens", 0) or getattr(outcome, "context_tokens", 0) or 0),
+        "tokens_out": int(getattr(outcome, "completion_tokens", 0) or 0),
         "stopped": stopped,
         "hint": hint_for(reason, has_reply=bool(reply)),
     }
@@ -227,6 +238,8 @@ async def copilot_lab_turn(
         "reply": reply,
         "reason": reason,
         "model": str(getattr(result, "model", None) or ""),
+        "tokens_in": 0 if reason == "qa_hit" else int(getattr(result, "context_tokens", 0) or 0),
+        "tokens_out": 0 if reason == "qa_hit" else 0,
         "pending_confirmation": pending,
         "stopped": stopped,
         "hint": hint_for(reason, has_reply=bool(reply)),

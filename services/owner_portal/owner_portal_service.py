@@ -145,6 +145,9 @@ def list_subscribers(users: list[dict[str, Any]] | None = None) -> list[dict[str
                     business_name=str(primary.get("businessName") or ""),
                     email=str(primary.get("email") or ""),
                     status=str(primary.get("status") or ""),
+                    messages_used=max(0, granted - msg_remaining),
+                    credits_used=max(0, granted - msg_remaining),
+                    historical_credit_remaining=remaining,
                 ),
                 **_catalog_offer(plan_id),
                 "users": members,
@@ -153,11 +156,28 @@ def list_subscribers(users: list[dict[str, Any]] | None = None) -> list[dict[str
     return sorted(rows, key=lambda row: (str(row["business_name"] or "").lower(), row["tenant_id"]))
 
 
-def _hide_tenant(*, tenant_id: str, business_name: str, email: str, status: str) -> bool:
-    from services.team.tenant_identity import is_junk_identity
+def _hide_tenant(
+    *,
+    tenant_id: str,
+    business_name: str,
+    email: str,
+    status: str,
+    messages_used: int = 0,
+    credits_used: int = 0,
+    historical_credit_remaining: int = 0,
+) -> bool:
+    from services.owner_portal.tenant_visibility import hidden_override
+    from services.team.tenant_identity import PROTECTED_TENANTS, is_junk_identity
 
+    if tenant_id.strip().lower() in PROTECTED_TENANTS:
+        return False
+    override = hidden_override(tenant_id)
+    if override is not None:
+        return override
     if status.strip().lower() == "blocked":
         return True
+    if messages_used or credits_used or historical_credit_remaining:
+        return False
     return is_junk_identity(tenant_id=tenant_id, business_name=business_name, email=email)
 
 
@@ -208,7 +228,6 @@ def analytics(range_key: str) -> dict[str, Any]:
     if range_key == "last_week":
         end = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     from services.owner_portal.flow_counts import channel_counts_for_range
-    from services.team.user_tenant_query import list_users_capped
 
     counted = channel_counts_for_range(start, end)
     channels = Counter(counted["messages_by_channel"])
@@ -222,32 +241,21 @@ def analytics(range_key: str) -> dict[str, Any]:
         coverage_users = "Postgres dashboard users"
         coverage_billing = "tenant entitlements and message lots"
     else:
-        users = list_users_capped(user_service, limit=500)
-        subscribers = list_subscribers(users)
-        active = [row for row in subscribers if row["membership"] in {"active", "trial", "grace"}]
         totals = {
-            "new_users": sum(1 for user in users if _in_range(user.get("createdAt"), start, end)),
-            "live_users": sum(1 for user in users if _in_range(user.get("lastLogin"), start, end)),
-            "subscribers": len(active),
-            "credits_total": sum(int(row["credits_total"]) for row in active),
-            "credits_used": sum(int(row["credits_used"]) for row in active),
-            "credits_remaining": sum(int(row["credits_remaining"]) for row in active),
-            "messages_total": sum(int(row.get("messages_total", row["credits_total"])) for row in active),
-            "messages_used": sum(int(row.get("messages_used", row["credits_used"])) for row in active),
-            "messages_remaining": sum(int(row.get("messages_remaining", row["credits_remaining"])) for row in active),
+            "new_users": 0,
+            "live_users": 0,
+            "subscribers": 0,
+            "credits_total": 0,
+            "credits_used": 0,
+            "credits_remaining": 0,
+            "messages_total": 0,
+            "messages_used": 0,
+            "messages_remaining": 0,
+            "historical_credit_remaining": 0,
         }
-        plan_ids = [str(row["subscription"] or "") for row in active]
-        coverage_users = "dashboard user documents"
-        coverage_billing = "tenant entitlements + message ledger"
-    billing_rows = list_subscribers(list_users_capped(user_service, limit=500))
-    totals.update(_subscriber_totals(billing_rows))
-    active_plans = [
-        str(row.get("subscription") or "")
-        for row in billing_rows
-        if row.get("membership") in {"active", "trial", "grace"}
-    ]
-    if active_plans:
-        plan_ids = active_plans
+        plan_ids = []
+        coverage_users = "Postgres dashboard users"
+        coverage_billing = "tenant entitlements and message lots"
     return {
         "range": range_key,
         "start": start.isoformat(),

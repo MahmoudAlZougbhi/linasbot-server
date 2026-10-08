@@ -136,25 +136,29 @@ def test_daily_edit_zero_limit_blocks_reserve() -> None:
 
 def test_analytics_keeps_legacy_credits_and_adds_catalog_mrr(monkeypatch):
     monkeypatch.setattr(
-        "services.team.user_tenant_query.list_users_capped",
-        lambda *_args, **_kwargs: [],
-    )
-    monkeypatch.setattr(
         "services.owner_portal.flow_counts.channel_counts_for_range",
         lambda *_args, **_kwargs: {"messages_by_channel": {}, "comments": 0},
     )
+
+    def _forbid(*_args, **_kwargs):
+        raise AssertionError("analytics must not scan subscriber rows")
+
+    monkeypatch.setattr(portal, "list_subscribers", _forbid)
     monkeypatch.setattr(
-        portal,
-        "list_subscribers",
-        lambda _users: [
-            {
-                "subscription": "lite",
-                "membership": "active",
-                "credits_total": 7000,
-                "credits_used": 10,
-                "credits_remaining": 6990,
-            }
-        ],
+        "services.owner_portal.analytics_sql.load_overview",
+        lambda *_args, **_kwargs: {
+            "new_users": 0,
+            "live_users": 0,
+            "subscribers": 1,
+            "credits_total": 7000,
+            "credits_used": 10,
+            "credits_remaining": 6990,
+            "messages_total": 7000,
+            "messages_used": 10,
+            "messages_remaining": 6990,
+            "historical_credit_remaining": 0,
+            "plan_ids": ["lite"],
+        },
     )
     data = portal.analytics("last_7_days")
     assert data["credits_total"] == 7000

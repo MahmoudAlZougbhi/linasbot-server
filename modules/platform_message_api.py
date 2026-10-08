@@ -221,9 +221,29 @@ async def platform_message_flows(
     tid = (tenant_id or "").strip()
     if tid and not tenant_is_known(tid):
         raise HTTPException(status_code=404, detail="Unknown tenant")
+    messages = list(list_message_flows(tenant_id=tid, limit=limit))
+    from services.owner_portal.shared_events import list_flow_events
+
+    shared = list_flow_events(tenant_id=tid or None, limit=limit) or []
+    for row in shared:
+        if str(row.get("channel") or "") != "brains_test":
+            continue
+        messages.append(
+            {
+                "tenant_id": row.get("tenant_id") or "",
+                "operation_id": row.get("message_id") or "",
+                "channel": "brains_test",
+                "source": "lab",
+                "state": row.get("outcome") or "lab",
+                "updated_at": row.get("timestamp") or "",
+                "inbound_preview": str(row.get("user_message") or "")[:280],
+                "reply_preview": str(row.get("bot_to_user") or "")[:280],
+            }
+        )
+    messages.sort(key=lambda row: str(row.get("updated_at") or ""), reverse=True)
     return {
         "success": True,
-        "messages": list_message_flows(tenant_id=tid, limit=limit),
+        "messages": messages[:limit],
     }
 
 

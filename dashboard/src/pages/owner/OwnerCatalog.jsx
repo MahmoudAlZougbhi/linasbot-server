@@ -248,10 +248,11 @@ export default function OwnerCatalog() {
           </div>
         </div>
         <div className="mt-4 space-y-1 text-sm text-slate-400">
-          <p>Apple: {catalog?.payment_readiness?.apple?.status || '—'}</p>
+          <p>Apple: {paymentLabel(catalog?.payment_readiness?.apple?.status)}</p>
           <p>Google: {paymentLabel(catalog?.payment_readiness?.google?.status)} ({paymentLabel(catalog?.payment_readiness?.google?.blocker || 'ok')})</p>
-          <p>Stripe: {catalog?.payment_readiness?.stripe?.status || '—'}</p>
-          <p>Annual offers: {catalog?.payment_readiness?.annual_offers?.status || 'unconfigured'}</p>
+          <p>Stripe: {paymentLabel(catalog?.payment_readiness?.stripe?.status)} ({paymentLabel(catalog?.payment_readiness?.stripe?.blocker)})</p>
+          <p>Annual offers: {paymentLabel(catalog?.payment_readiness?.annual_offers?.status)}</p>
+          <p>Top-up packs: {paymentLabel(catalog?.payment_readiness?.topup_packs?.status)}</p>
         </div>
       </section>
       <section className="overflow-x-auto rounded-xl border border-slate-800">

@@ -192,30 +192,25 @@ def test_audit_includes_lab_action(tmp_path, monkeypatch) -> None:
 
 def test_analytics_matches_user_rows_and_rejects_all(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.owner_portal.owner_portal_service.list_subscribers",
-        lambda _users: [
-            {
-                "subscription": "lite",
-                "membership": "active",
-                "credits_total": 24994,
-                "credits_used": 0,
-                "credits_remaining": 24994,
-                "messages_total": 24994,
-                "messages_used": 0,
-                "messages_remaining": 24994,
-                "historical_credit_remaining": 180858,
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        "services.team.user_tenant_query.list_users_capped",
-        lambda *_a, **_k: [],
-    )
-    monkeypatch.setattr(
         "services.owner_portal.flow_counts.channel_counts_for_range",
         lambda *_a, **_k: {"messages_by_channel": {}, "comments": 0},
     )
-    monkeypatch.setattr("services.owner_portal.analytics_sql.load_overview", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "services.owner_portal.analytics_sql.load_overview",
+        lambda *_a, **_k: {
+            "new_users": 1,
+            "live_users": 1,
+            "subscribers": 1,
+            "credits_total": 24994,
+            "credits_used": 0,
+            "credits_remaining": 24994,
+            "messages_total": 24994,
+            "messages_used": 0,
+            "messages_remaining": 24994,
+            "historical_credit_remaining": 180858,
+            "plan_ids": ["lite"],
+        },
+    )
     data = analytics("last_7_days")
     assert data["credits_total"] == 24994
     assert data["messages_total"] == 24994
@@ -317,10 +312,10 @@ def test_shared_chat_is_visible_without_the_local_file(tmp_path, monkeypatch) ->
         "deleted": False,
         "messages": [{"id": "m", "role": "assistant", "content": "hi", "created_at": 1}],
     }
-    monkeypatch.setattr("services.owner_copilot.owner_chat_pg.load_conversation", lambda **_k: payload)
+    monkeypatch.setattr("services.owner_copilot.owner_chat_pg.load_conversation", lambda **_k: ("ok", payload))
     monkeypatch.setattr(
         "services.owner_copilot.owner_chat_pg.list_conversations",
-        lambda **_k: [payload],
+        lambda **_k: ("ok", [payload]),
     )
     store = OwnerChatStore(root=tmp_path)
     assert all(

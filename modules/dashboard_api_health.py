@@ -308,9 +308,16 @@ async def ready() -> Any:
     status = 200 if overall_ok else 503
     from fastapi.responses import JSONResponse
 
+    from services.owner_portal.release_version import short_sha
+
     return JSONResponse(
         status_code=status,
-        content={"ok": overall_ok, "role": "readiness", "checks": checks},
+        content={
+            "ok": overall_ok,
+            "role": "readiness",
+            "checks": checks,
+            "version": {"git_sha": short_sha()},
+        },
     )
 
 

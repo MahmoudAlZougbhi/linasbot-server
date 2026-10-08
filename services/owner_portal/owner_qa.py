@@ -19,6 +19,7 @@ _FAMILY = "owner_qa"
 # Cross-lingual cosine on the Voyage entity model sits around 0.75–0.80.
 # 0.90 only kept exact duplicates. Unrelated questions stay well below 0.75.
 _THRESHOLD = 0.75
+_MARGIN = 0.05
 _LANGS = ("ar", "en", "fr", "franco")
 
 
@@ -124,9 +125,13 @@ def _index(qa_id: str, rows: list[dict[str, str]]) -> None:
         )
         vectors.append(vector)
     if not docs:
+        logger.warning("owner qa %s stored no vectors", qa_id)
         return
     with _session() as session:
-        write_documents(session, docs, vectors)
+        written = write_documents(session, docs, vectors)
+        if not written.get("ok"):
+            logger.warning("owner qa %s vector write failed: %s", qa_id, written.get("reason"))
+            return
         if session is not None:
             session.commit()
 
@@ -148,7 +153,55 @@ def _answer_for(qa_id: str, language: str) -> str:
     return fallback
 
 
+def delete_qa(qa_id: str) -> bool:
+    item_id = (qa_id or "").strip()
+    if not item_id:
+        return False
+    with _session() as session:
+        if session is None:
+            return False
+        found = session.execute(text("SELECT 1 FROM owner_copilot_qa WHERE id = :id"), {"id": item_id}).first()
+        if found is None:
+            return False
+        session.execute(text("DELETE FROM owner_copilot_qa_variants WHERE qa_id = :id"), {"id": item_id})
+        session.execute(text("DELETE FROM owner_copilot_qa WHERE id = :id"), {"id": item_id})
+        session.execute(
+            text(
+                """
+                DELETE FROM customer_ai_search_documents
+                WHERE parent_id = :id OR id LIKE :prefix
+                """
+            ),
+            {"id": item_id, "prefix": f"owner-qa-{item_id}-%"},
+        )
+        session.commit()
+    return True
+
+
+def reindex_saved_qa() -> int:
+    count = 0
+    for group in list_qa():
+        _index(str(group["id"]), list(group.get("variants") or []))
+        count += 1
+    return count
+
+
+_REINDEXED = False
+
+
+def ensure_reindexed() -> None:
+    global _REINDEXED
+    if _REINDEXED:
+        return
+    _REINDEXED = True
+    try:
+        reindex_saved_qa()
+    except Exception:
+        logger.exception("owner qa reindex failed")
+
+
 def match_owner_qa(question: str, language: str) -> dict[str, Any] | None:
+    ensure_reindexed()
     needle = _norm(question)
     if not needle:
         return None
@@ -172,13 +225,23 @@ def match_owner_qa(question: str, language: str) -> dict[str, Any] | None:
             families={_FAMILY},
             limit=3,
         )
-    top = found.items[0].score if found.items else None
-    logger.info("owner qa top score %s threshold %s", top, _THRESHOLD)
-    if top is None or top < _THRESHOLD:
+    logger.info(
+        "owner qa candidates %s",
+        [(item.source_id, round(item.score, 4)) for item in found.items[:3]],
+    )
+    if not found.items or found.items[0].score < _THRESHOLD:
+        return None
+    top = found.items[0]
+    second = 0.0
+    for item in found.items[1:]:
+        if item.source_id.split(":", 1)[0] != top.source_id.split(":", 1)[0]:
+            second = item.score
+            break
+    if top.score - second < _MARGIN:
         return None
     source = found.items[0].source_id
     qa_id = source.split(":", 1)[0]
     answer = _answer_for(qa_id, language)
     if not answer:
         return None
-    return {"qa_id": qa_id, "answer": answer, "score": found.items[0].score, "hit": "semantic"}
+    return {"qa_id": qa_id, "answer": answer, "score": top.score, "hit": "semantic"}

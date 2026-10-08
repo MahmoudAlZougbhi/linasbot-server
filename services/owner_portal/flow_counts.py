@@ -67,6 +67,7 @@ def sql_channel_counts(start: datetime, end: datetime) -> dict[str, int] | None:
                     SELECT channel, count(*)
                     FROM omnichannel_inbound_events
                     WHERE created_at >= :start AND created_at < :end
+                      AND channel <> 'brains_test'
                     GROUP BY channel
                     """
                 ),
@@ -78,10 +79,6 @@ def sql_channel_counts(start: datetime, end: datetime) -> dict[str, int] | None:
 
 
 def channel_counts_for_range(start: datetime, end: datetime) -> dict[str, Any]:
-    counted = accumulate_channel_counts(_file_rows(start, end))
-    sql_counts = sql_channel_counts(start, end)
-    file_total = sum(counted["messages_by_channel"].values())
-    if sql_counts is not None and sum(sql_counts.values()) >= file_total:
-        comments = counted["comments"]
-        return {"messages_by_channel": sql_counts, "comments": comments}
-    return counted
+    """SQL aggregate only. Lab turns are not customer traffic, and the jsonl is not scanned."""
+    sql_counts = sql_channel_counts(start, end) or {}
+    return {"messages_by_channel": sql_counts, "comments": int(sql_counts.get("comment", 0))}

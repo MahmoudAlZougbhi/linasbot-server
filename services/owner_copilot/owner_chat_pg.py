@@ -8,24 +8,29 @@ from typing import Any
 from sqlalchemy import text
 
 
-def load_conversation(*, tenant_id: str, user_id: str, conversation_id: str) -> dict[str, Any] | None:
+def load_conversation(*, tenant_id: str, user_id: str, conversation_id: str) -> tuple[str, dict[str, Any] | None]:
+    """Return (ok|missing|deleted|unavailable, payload). Postgres is authoritative when available."""
     rows = _select(
         """
-        SELECT payload FROM owner_copilot_conversations
-        WHERE id = :id AND tenant_id = :tenant AND user_id = :user AND deleted = 0
+        SELECT payload, deleted FROM owner_copilot_conversations
+        WHERE id = :id AND tenant_id = :tenant AND user_id = :user
         """,
         {"id": conversation_id, "tenant": tenant_id, "user": user_id},
     )
+    if rows is None:
+        return "unavailable", None
     if not rows:
-        return None
+        return "missing", None
+    if int(rows[0][1] or 0):
+        return "deleted", None
     try:
         payload = json.loads(rows[0][0] or "{}")
     except json.JSONDecodeError:
-        return None
-    return payload if isinstance(payload, dict) else None
+        return "missing", None
+    return ("ok", payload) if isinstance(payload, dict) else ("missing", None)
 
 
-def list_conversations(*, tenant_id: str, user_id: str) -> list[dict[str, Any]] | None:
+def list_conversations(*, tenant_id: str, user_id: str) -> tuple[str, list[dict[str, Any]]]:
     rows = _select(
         """
         SELECT payload FROM owner_copilot_conversations
@@ -35,7 +40,7 @@ def list_conversations(*, tenant_id: str, user_id: str) -> list[dict[str, Any]] 
         {"tenant": tenant_id, "user": user_id},
     )
     if rows is None:
-        return None
+        return "unavailable", []
     items: list[dict[str, Any]] = []
     for row in rows:
         try:
@@ -44,7 +49,7 @@ def list_conversations(*, tenant_id: str, user_id: str) -> list[dict[str, Any]] 
             continue
         if isinstance(payload, dict):
             items.append(payload)
-    return items
+    return "ok", items
 
 
 def save_conversation(payload: dict[str, Any]) -> None:
@@ -82,6 +87,60 @@ def save_conversation(payload: dict[str, Any]) -> None:
                     "payload": body,
                 },
             )
+    except Exception:
+        return
+
+
+_IMPORTED = False
+
+
+def reset_local_import() -> None:
+    global _IMPORTED
+    _IMPORTED = False
+
+
+def import_local_conversations(root: Any) -> None:
+    """Copy file-only chats into Postgres once. An existing row, including a deletion, wins."""
+    global _IMPORTED
+    if _IMPORTED:
+        return
+    from pathlib import Path
+
+    from db.session import whatsapp_session
+
+    try:
+        with whatsapp_session(require=False) as session:
+            if session is None:
+                return
+            _IMPORTED = True
+            for path in Path(root).glob("*/*.json"):
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if not isinstance(payload, dict) or payload.get("deleted") or not payload.get("id"):
+                    continue
+                session.execute(
+                    text(
+                        """
+                        INSERT INTO owner_copilot_conversations
+                          (id, tenant_id, user_id, title, created_at, updated_at, archived, deleted, payload)
+                        VALUES
+                          (:id, :tenant, :user, :title, :created, :updated, :archived, 0, :payload)
+                        ON CONFLICT (id) DO NOTHING
+                        """
+                    ),
+                    {
+                        "id": payload["id"],
+                        "tenant": payload.get("tenant_id") or "",
+                        "user": payload.get("user_id") or "",
+                        "title": payload.get("title") or "",
+                        "created": float(payload.get("created_at") or 0),
+                        "updated": float(payload.get("updated_at") or 0),
+                        "archived": 1 if payload.get("archived") else 0,
+                        "payload": json.dumps(payload, default=str),
+                    },
+                )
     except Exception:
         return
 

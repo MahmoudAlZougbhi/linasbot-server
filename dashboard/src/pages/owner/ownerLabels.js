@@ -25,7 +25,11 @@ export const READINESS_LABELS = {
 export const PAYMENT_LABELS = {
   incomplete: 'Incomplete',
   ok: 'Ready',
-  unconfigured: 'Not configured',
+  unconfigured: 'Not set up',
+  unpriced: 'No price yet',
+  implemented: 'Built (waiting for message-price cutover)',
+  retired_token_packs: 'Old token packs retired',
+  not_message_subscription_checkout: 'Message subscription checkout not built',
   google_iap_not_fully_implemented: 'Google Play billing is not finished',
 };
 
