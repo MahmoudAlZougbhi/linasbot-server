@@ -36,12 +36,18 @@ def observe_lab_turn(*, tenant_id: str, brain: str, message: str, result: dict[s
     model = str(result.get("model") or "")
     stopped = bool(result.get("stopped"))
     qa_hit = reason == "qa_hit"
-    tokens_in = 0 if qa_hit else int(result.get("tokens_in") or 0)
-    tokens_out = 0 if qa_hit else int(result.get("tokens_out") or 0)
-    if not qa_hit and reply and tokens_out <= 0:
-        tokens_out = max(1, len(reply) // 4)
-    if not qa_hit and reply and tokens_in <= 0:
-        tokens_in = max(1, len(message) // 4)
+    from services.owner_portal.turn_usage import priced_usage
+
+    usage = result.get("usage") if isinstance(result.get("usage"), dict) else None
+    priced = priced_usage(
+        qa_hit=qa_hit,
+        usage=usage,
+        reply=reply,
+        message=message,
+        model=model,
+        given_in=int(result.get("tokens_in") or 0),
+        given_out=int(result.get("tokens_out") or 0),
+    )
     write_trace(
         {
             "tenant_id": tenant_id,
@@ -50,9 +56,10 @@ def observe_lab_turn(*, tenant_id: str, brain: str, message: str, result: dict[s
             "user_message": message[:4000],
             "reply": reply,
             "model": model,
-            "tokens_in": tokens_in,
-            "tokens_out": tokens_out,
-            "cost_usd": 0.0 if qa_hit else float(result.get("cost_usd") or 0),
+            "tokens_in": priced["tokens_in"],
+            "tokens_out": priced["tokens_out"],
+            "cost_usd": priced["cost_usd"],
+            "usage_estimated": priced["usage_estimated"],
             "error": reason if stopped or not reply else "",
             "steps": [{"name": "lab", "reason": reason}],
         }
@@ -190,7 +197,7 @@ async def customer_lab_turn(
         "reply": reply,
         "reason": reason,
         "model": str(getattr(outcome, "model", None) or ""),
-        "tokens_in": int(getattr(outcome, "prompt_tokens", 0) or getattr(outcome, "context_tokens", 0) or 0),
+        "tokens_in": int(getattr(outcome, "prompt_tokens", 0) or 0),
         "tokens_out": int(getattr(outcome, "completion_tokens", 0) or 0),
         "stopped": stopped,
         "hint": hint_for(reason, has_reply=bool(reply)),
@@ -232,14 +239,18 @@ async def copilot_lab_turn(
         reason = str(route.get("reason") or route.get("code") or "").strip()
     pending = str(getattr(result, "pending_confirmation", None) or "").strip()
     stopped = not reply and bool(reason)
+    from services.owner_portal.turn_usage import consume_provider_usage
+
+    usage = None if reason == "qa_hit" else consume_provider_usage()
     payload = {
         "tenant_id": tid,
         "brain": "copilot",
         "reply": reply,
         "reason": reason,
         "model": str(getattr(result, "model", None) or ""),
-        "tokens_in": 0 if reason == "qa_hit" else int(getattr(result, "context_tokens", 0) or 0),
-        "tokens_out": 0 if reason == "qa_hit" else 0,
+        "usage": usage,
+        "tokens_in": 0,
+        "tokens_out": 0,
         "pending_confirmation": pending,
         "stopped": stopped,
         "hint": hint_for(reason, has_reply=bool(reply)),

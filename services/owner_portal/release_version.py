@@ -26,6 +26,18 @@ def short_sha() -> str:
     return value[:12]
 
 
+def build_time() -> str:
+    value = (os.getenv("LINAS_BUILD_TIME") or "").strip()
+    if value:
+        return value
+    path = Path(os.getenv("LINAS_BUILD_TIME_FILE") or "/var/lib/linasbot/release_build_time")
+    try:
+        stored = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        stored = ""
+    return stored
+
+
 def version_payload() -> dict[str, str]:
     from services.billing.membership.activation_readiness import expected_alembic_head
 
@@ -46,10 +58,18 @@ def version_payload() -> dict[str, str]:
         expected = expected_alembic_head()
     except Exception:
         expected = ""
+    voyage_429 = "0"
+    try:
+        from services.owner_portal.voyage_metrics import recent_count
+
+        voyage_429 = str(recent_count(seconds=300))
+    except Exception:
+        voyage_429 = "0"
     return {
         "git_sha": git_sha(),
-        "build_time": (os.getenv("LINAS_BUILD_TIME") or "").strip(),
+        "build_time": build_time(),
         "node": socket.gethostname(),
         "db_alembic_head": head,
         "expected_alembic_head": expected,
+        "voyage_429_5m": voyage_429,
     }

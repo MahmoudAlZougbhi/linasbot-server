@@ -74,7 +74,24 @@ def main(argv: list[str] | None = None) -> int:
     if echoed != [row["tenant_id"] for row in chosen]:
         print("confirmation did not match the candidate ids; nothing changed")
         return 2
-    print("confirmed archive list only; this script does not delete rows")
+    from services.owner_portal.tenant_archive import KEEP_TENANTS, archive_tenants
+
+    if any(item in KEEP_TENANTS for item in echoed):
+        print("confirmation included a protected tenant; nothing changed")
+        return 2
+    for row in chosen:
+        if (
+            row["messages_used"]
+            or row["credits_used"]
+            or row["historical_credit_remaining"]
+            or row["payments"]
+            or row["published_brain"] == "y"
+            or int(row.get("conversations") or 0)
+        ):
+            print("a candidate gained usage; nothing changed")
+            return 3
+    archived = archive_tenants(chosen)
+    print(json.dumps({"archived": archived}, ensure_ascii=False))
     return 0
 
 

@@ -143,6 +143,14 @@ class UserService(UserServiceAuthMixin):
             business_name=business_name,
             email=str(user_doc["email"]),
         )
+        from services.owner_portal.tenant_archive import reuse_blocked
+
+        if reuse_blocked(tenant_id=str(user_doc["tenantId"]), email=str(user_doc["email"])):
+            raise ValueError("Invalid tenant identifier")
+        from services.owner_portal.tenant_archive import reuse_blocked
+
+        if reuse_blocked(tenant_id=str(user_doc["tenantId"]), email=str(user_doc["email"])):
+            raise ValueError("Invalid tenant identifier")
 
         # Optional owner preferences — never infer gender from email/name.
         gender_raw = str(user_data.get("gender") or "unset").strip().lower()

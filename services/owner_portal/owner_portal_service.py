@@ -110,8 +110,18 @@ def list_subscribers(users: list[dict[str, Any]] | None = None) -> list[dict[str
         if tenant_id:
             grouped[tenant_id].append(user)
     billing = _billing_by_tenant(set(grouped))
+    from services.owner_portal.tenant_archive import archived_tenant_ids
+
+    archived = archived_tenant_ids()
+    from services.owner_portal.tenant_archive import archived_tenant_ids
+
+    hidden_tenants = archived_tenant_ids()
     rows: list[dict[str, Any]] = []
     for tenant_id, members in grouped.items():
+        if tenant_id.strip().lower() in hidden_tenants:
+            continue
+        if tenant_id.strip().lower() in archived:
+            continue
         bill = billing.get(tenant_id, {})
         remaining = int(bill.get("credits_remaining") or 0)
         primary = next((u for u in members if u.get("role") in {"owner", "admin"}), members[0])

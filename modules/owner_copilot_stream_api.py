@@ -95,10 +95,14 @@ async def stream_owner_message(
         or str(session.tenant_id or "").strip().lower() == "platform"
     )
     qa_free = False
+    qa_match = None
+    qa_match_ready = False
     if asked and not body.confirm_tool and not body.choice_id:
         from services.owner_portal.owner_qa import match_owner_qa
 
-        qa_free = match_owner_qa(asked, reply_language or "en") is not None
+        qa_match = await asyncio.to_thread(match_owner_qa, asked, reply_language or "en")
+        qa_match_ready = True
+        qa_free = qa_match is not None
     if not exempt and not qa_free and ai_generation_blocked(session.tenant_id):
         paused = owner_credits_paused_payload(session.tenant_id)
 
@@ -206,6 +210,8 @@ async def stream_owner_message(
                 reply_language=reply_language,
                 revise_proposal_id=body.revise_proposal_id,
                 is_cancelled=lambda: cancel_flag["cancelled"],
+                qa_match=qa_match,
+                qa_match_ready=qa_match_ready,
             ):
                 if ev.type == "delta":
                     reply_parts.append(str(ev.payload.get("text") or ""))
@@ -245,16 +251,16 @@ async def stream_owner_message(
 
             route = (done_payload or {}).get("route") if isinstance(done_payload, dict) else {}
             qa_hit = isinstance(route, dict) and str(route.get("reason") or "") == "qa_hit"
-            prompt_tokens = int((done_payload or {}).get("context_tokens") or 0)
-            completion_tokens = 0 if qa_hit or not final_text else max(1, len(final_text) // 4)
-            if qa_hit:
-                prompt_tokens = 0
-            model_name = "" if qa_hit else str((done_payload or {}).get("model") or "")
-            cost_usd = 0.0
-            if model_name and (prompt_tokens or completion_tokens):
-                from services.brain.model_pricing import compute_cost_from_usage
+            from services.owner_portal.turn_usage import consume_provider_usage, priced_usage
 
-                cost_usd = float(compute_cost_from_usage(model_name, prompt_tokens, completion_tokens)["cost_usd"])
+            model_name = "" if qa_hit else str((done_payload or {}).get("model") or "")
+            priced = priced_usage(
+                qa_hit=qa_hit,
+                usage=None if qa_hit else consume_provider_usage(),
+                reply=final_text,
+                message=content,
+                model=model_name,
+            )
             write_trace(
                 {
                     "tenant_id": session.tenant_id,
@@ -270,9 +276,10 @@ async def stream_owner_message(
                         {"name": "reply"},
                     ],
                     "qa_hit": qa_hit,
-                    "tokens_in": prompt_tokens,
-                    "tokens_out": completion_tokens,
-                    "cost_usd": cost_usd,
+                    "tokens_in": priced["tokens_in"],
+                    "tokens_out": priced["tokens_out"],
+                    "cost_usd": priced["cost_usd"],
+                    "usage_estimated": priced["usage_estimated"],
                 }
             )
 
