@@ -54,7 +54,7 @@ export default function OwnerCosts() {
             ))}
             <Badge tone={statusTone('cost', Number(data.known_usd) > 0)}>{statusLabel('cost', Number(data.known_usd) > 0)}</Badge>
           </Card>
-          <TechDetails text={data.attribution_note || ''} />
+          <TechDetails text={`${data.attribution_note || ''}\n${JSON.stringify(data.usage_classes?.by_class || {})}\n${JSON.stringify(data.daily_edits?.tenants || [])}`} />
         </>
       ) : null}
     </div>

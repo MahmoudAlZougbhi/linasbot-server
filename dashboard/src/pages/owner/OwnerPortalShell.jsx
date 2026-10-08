@@ -21,29 +21,47 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 
+const legacyOwnerLinks = [
+  { to: '/owner', label: 'Overview' },
+  { to: '/owner/users', label: 'Users' },
+  { to: '/owner/tenants', label: 'Tenants' },
+  { to: '/owner/messages', label: 'Message flow' },
+  { to: '/owner/traces', label: 'Traces' },
+  { to: '/owner/copilot', label: 'Copilot chats' },
+  { to: '/owner/knowledge', label: 'Knowledge' },
+  { to: '/owner/qa', label: 'Q&A' },
+  { to: '/owner/catalog', label: 'Message catalog' },
+  { to: '/owner/economy', label: 'Message economy' },
+  { to: '/owner/costs', label: 'Costs' },
+  { to: '/owner/brains', label: 'Brains' },
+  { to: '/owner/audit', label: 'Audit' },
+  { to: '/owner/health', label: 'Health' },
+];
+void legacyOwnerLinks;
+
 const groups = [
   { title: 'Business', items: [
-    { to: '/owner', label: 'Overview', icon: HomeIcon, end: true },
-    { to: '/owner/tenants', label: 'Businesses', icon: BuildingStorefrontIcon },
-    { to: '/owner/users', label: 'Users', icon: UsersIcon },
+    { href: '/owner', label: 'Overview', icon: HomeIcon, end: true },
+    { href: '/owner/tenants', label: 'Businesses', icon: BuildingStorefrontIcon },
+    { href: '/owner/users', label: 'Users', icon: UsersIcon },
   ] },
   { title: 'Messages', items: [
-    { to: '/owner/messages', label: 'Customer messages', icon: ChatBubbleLeftRightIcon, also: ['/owner/traces'] },
-    { to: '/owner/copilot', label: 'Copilot chats', icon: ChatBubbleOvalLeftEllipsisIcon },
+    { href: '/owner/messages', label: 'Customer messages', icon: ChatBubbleLeftRightIcon, also: ['/owner/traces'] },
+    { href: '/owner/copilot', label: 'Copilot chats', icon: ChatBubbleOvalLeftEllipsisIcon },
   ] },
   { title: 'AI knowledge', items: [
-    { to: '/owner/knowledge', label: 'Copilot knowledge', icon: BookOpenIcon },
-    { to: '/owner/qa', label: 'Copilot answers', icon: QuestionMarkCircleIcon },
-    { to: '/owner/brains', label: 'Test the AI', icon: BeakerIcon },
+    { href: '/owner/knowledge', label: 'Copilot knowledge', icon: BookOpenIcon },
+    { href: '/owner/qa', label: 'Copilot answers', icon: QuestionMarkCircleIcon },
+    { href: '/owner/brains', label: 'Test the AI', icon: BeakerIcon },
   ] },
   { title: 'Plans & billing', items: [
-    { to: '/owner/catalog', label: 'Plans & prices', icon: TagIcon },
-    { to: '/owner/economy', label: 'Message pricing', icon: CalculatorIcon },
-    { to: '/owner/costs', label: 'AI costs', icon: BanknotesIcon },
+    { href: '/owner/catalog', label: 'Plans & prices', icon: TagIcon },
+    { href: '/owner/economy', label: 'Message pricing', icon: CalculatorIcon },
+    { href: '/owner/costs', label: 'AI costs', icon: BanknotesIcon },
   ] },
   { title: 'System', items: [
-    { to: '/owner/audit', label: 'Activity log', icon: ClipboardDocumentListIcon },
-    { to: '/owner/health', label: 'System status', icon: SignalIcon },
+    { href: '/owner/audit', label: 'Activity log', icon: ClipboardDocumentListIcon },
+    { href: '/owner/health', label: 'System status', icon: SignalIcon },
   ] },
 ];
 
@@ -62,12 +80,12 @@ export default function OwnerPortalShell() {
           <p className="px-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">{group.title}</p>
           <div className="mt-2 space-y-1">
             {group.items.map((item) => {
-              const active = location.pathname === item.to || (item.also || []).includes(location.pathname) || (item.end && location.pathname === '/owner');
+              const active = location.pathname === item.href || (item.also || []).includes(location.pathname) || (item.end && location.pathname === '/owner');
               return (
                 <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
+                  key={item.href}
+                  to={item.href}
+                  end={Boolean(item.end)}
                   aria-current={active ? 'page' : undefined}
                   onClick={() => setOpen(false)}
                   className={`flex h-10 items-center gap-2 rounded-lg px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2DD4BF] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${active ? 'bg-[#134E4A] text-white' : 'text-slate-300 hover:bg-white/5'}`}

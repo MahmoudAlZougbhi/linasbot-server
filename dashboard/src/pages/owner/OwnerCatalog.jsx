@@ -69,6 +69,7 @@ export default function OwnerCatalog() {
             ))}
           </Card>
           <Card title="Free plan">
+            {/* leave empty until decided */}
             <label className="block text-sm">Free messages per month
               <input className="mt-1 h-9 w-full rounded-lg border border-[#7C8798] px-3" value={free.included_messages} onChange={(event) => setFreeDraft({ ...free, included_messages: event.target.value })} />
             </label>
@@ -84,6 +85,11 @@ export default function OwnerCatalog() {
             <TechDetails text={JSON.stringify(catalog.payment_readiness || {})} />
           </Card>
           <Button onClick={() => { void saveDraft().catch((reason) => setError(reason.message)); }}>Save changes</Button>
+          <form className="mt-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void ownerApi.patchDailyEdits({ tenant_id: String(form.get('tenant') || ''), limit: Number(form.get('limit') || 0), reason: 'portal_edit' }).catch((reason) => setError(reason.message)); }}>
+            <input name="tenant" aria-label="Business id" className="h-9 rounded-lg border border-[#7C8798] px-3 text-sm" placeholder="Business id" />
+            <input name="limit" aria-label="Changes per day" className="h-9 w-24 rounded-lg border border-[#7C8798] px-3 text-sm" placeholder="30" />
+            <Button type="submit" variant="secondary">Save limit</Button>
+          </form>
         </>
       ) : null}
       {publish ? <ConfirmDialog title="Publish plans & prices?" body="Customers will see these prices. You can still edit them later." confirmLabel="Publish" onClose={() => setPublish(false)} onConfirm={async () => { await ownerApi.publishMessageCatalog(); setPublish(false); }} /> : null}
