@@ -15,8 +15,9 @@ describe('ConfirmDialog', () => {
   });
 
   it('shows Deleting and stays disabled until the request finishes', async () => {
-    let finish = () => {};
-    const onConfirm = () => new Promise((resolve) => { finish = resolve; });
+    /** @type {{ finish: (value?: unknown) => void }} */
+    const gate = { finish: () => {} };
+    const onConfirm = () => new Promise((resolve) => { gate.finish = resolve; });
     render(
       <ConfirmDialog
         title="Delete this answer?"
@@ -29,7 +30,7 @@ describe('ConfirmDialog', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(await screen.findByRole('button', { name: 'Deleting…' })).toBeDisabled();
-    finish();
+    gate.finish();
     expect(await screen.findByRole('button', { name: 'Delete' })).toBeEnabled();
   });
 });

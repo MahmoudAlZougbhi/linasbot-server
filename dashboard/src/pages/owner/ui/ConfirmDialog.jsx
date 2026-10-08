@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Button from './Button';
 
-/** @param {{ title: string, body: string, confirmLabel: string, onConfirm: () => void | Promise<void>, onClose: () => void, busy?: boolean }} props */
+/** @param {{ title: string, body: string, confirmLabel: string, onConfirm: () => void | Promise<void>, onClose: () => void, busy?: boolean, loadingLabel?: string }} props */
 export default function ConfirmDialog({ title, body, confirmLabel, onConfirm, onClose, busy = false, loadingLabel = 'Saving…' }) {
   const cancelRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
   const [pending, setPending] = useState(false);
