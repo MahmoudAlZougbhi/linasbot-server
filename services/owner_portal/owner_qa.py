@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -16,9 +17,10 @@ from services.owner_portal.owner_kb_store import OWNER_KB_TENANT, _session
 logger = logging.getLogger(__name__)
 
 _FAMILY = "owner_qa"
-# Cross-lingual cosine on the Voyage entity model sits around 0.75–0.80.
-# 0.90 only kept exact duplicates. Unrelated questions stay well below 0.75.
-_THRESHOLD = 0.75
+# A measured near-copy ("…please?") scored 0.73 on the Voyage entity model.
+# Unrelated questions stay below that. 0.90 only kept exact duplicates.
+_THRESHOLD = 0.72
+_LABEL = re.compile(r"^(?:QA-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*\s+)+", re.IGNORECASE)
 _MARGIN = 0.05
 _LANGS = ("ar", "en", "fr", "franco")
 
@@ -96,34 +98,24 @@ def save_qa(*, variants: list[dict[str, str]], source_language: str = "en", qa_i
     return item_id
 
 
+def search_forms(question: str) -> list[str]:
+    """Full question plus the same question without a leading QA- label."""
+    full = (question or "").strip()
+    forms = [full] if full else []
+    stripped = _LABEL.sub("", full).strip()
+    if stripped and stripped.lower() != full.lower():
+        forms.append(stripped)
+    return forms
+
+
 def _index(qa_id: str, rows: list[dict[str, str]]) -> None:
     from services.brain.search.store import write_documents
 
     docs: list[dict[str, Any]] = []
     vectors: list[list[float]] = []
     for row in rows:
-        vector = embed_one(row["question"], query=False)
-        if not vector:
-            logger.warning("owner qa variant %s/%s was not embedded", qa_id, row["language"])
-            continue
-        docs.append(
-            {
-                "id": f"owner-qa-{qa_id}-{row['language']}",
-                "tenant_id": OWNER_KB_TENANT,
-                "space_id": ENTITY_DOCUMENT.space_id,
-                "source_family": _FAMILY,
-                "source_id": f"{qa_id}:{row['language']}",
-                "chunk_id": row["language"],
-                "parent_id": qa_id,
-                "index_version": "",
-                "source_revision": "1",
-                "content_hash": qa_id + row["language"],
-                "title": row["answer"][:200],
-                "search_text": row["question"],
-                "visible": True,
-            }
-        )
-        vectors.append(vector)
+        for form in search_forms(row["question"]):
+            _add_form(qa_id, row, form, docs, vectors)
     if not docs:
         logger.warning("owner qa %s stored no vectors", qa_id)
         return
@@ -134,6 +126,38 @@ def _index(qa_id: str, rows: list[dict[str, str]]) -> None:
             return
         if session is not None:
             session.commit()
+
+
+def _add_form(
+    qa_id: str,
+    row: dict[str, str],
+    form: str,
+    docs: list[dict[str, Any]],
+    vectors: list[list[float]],
+) -> None:
+    vector = embed_one(form, query=False)
+    if not vector:
+        logger.warning("owner qa variant %s/%s was not embedded", qa_id, row["language"])
+        return
+    suffix = row["language"] if form == row["question"].strip() else f"{row['language']}-core"
+    docs.append(
+        {
+            "id": f"owner-qa-{qa_id}-{suffix}",
+            "tenant_id": OWNER_KB_TENANT,
+            "space_id": ENTITY_DOCUMENT.space_id,
+            "source_family": _FAMILY,
+            "source_id": f"{qa_id}:{row['language']}",
+            "chunk_id": suffix,
+            "parent_id": qa_id,
+            "index_version": "",
+            "source_revision": "1",
+            "content_hash": qa_id + suffix,
+            "title": row["answer"][:200],
+            "search_text": form,
+            "visible": True,
+        }
+    )
+    vectors.append(vector)
 
 
 def _answer_for(qa_id: str, language: str) -> str:
