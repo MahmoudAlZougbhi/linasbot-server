@@ -58,16 +58,26 @@ def load_overview(start: datetime, end: datetime) -> dict[str, Any] | None:
                     WITH active AS (
                       SELECT tenant_id FROM tenant_entitlements
                       WHERE status IN ('active', 'trial', 'grace')
+                    ),
+                    live AS (
+                      SELECT COALESCE(SUM(l.remaining), 0) AS total
+                      FROM customer_ai_message_lots l
+                      JOIN active a ON a.tenant_id = l.tenant_id
+                      WHERE l.expires = false
+                         OR l.period_id = to_char((now() AT TIME ZONE 'utc'), 'YYYY-MM')
+                    ),
+                    reserved AS (
+                      SELECT COALESCE(SUM(r.units), 0) AS total
+                      FROM customer_ai_message_reservations r
+                      JOIN active a ON a.tenant_id = r.tenant_id
+                      WHERE r.status = 'reserved'
                     )
                     SELECT
-                      COALESCE((SELECT SUM(granted) FROM customer_ai_message_lots
-                                WHERE tenant_id IN (SELECT tenant_id FROM active)), 0),
-                      COALESCE((SELECT SUM(GREATEST(granted - remaining, 0)) FROM customer_ai_message_lots
-                                WHERE tenant_id IN (SELECT tenant_id FROM active)), 0),
-                      COALESCE((SELECT SUM(remaining) FROM customer_ai_message_lots
-                                WHERE tenant_id IN (SELECT tenant_id FROM active)), 0),
-                      COALESCE((SELECT SUM(available) FROM credit_balances
-                                WHERE tenant_id IN (SELECT tenant_id FROM active)), 0)
+                      live.total,
+                      GREATEST(live.total - reserved.total, 0),
+                      (SELECT COALESCE(SUM(available), 0) FROM credit_balances
+                       WHERE tenant_id IN (SELECT tenant_id FROM active))
+                    FROM live, reserved
                     """
                 )
             ).one()
@@ -90,12 +100,12 @@ def load_overview(start: datetime, end: datetime) -> dict[str, Any] | None:
         "live_users": int(live_users or 0),
         "subscribers": int(subscribers or 0),
         "credits_total": int(messages[0] or 0),
-        "credits_used": int(messages[1] or 0),
-        "credits_remaining": int(messages[2] or 0),
+        "credits_used": int(messages[0] or 0) - int(messages[1] or 0),
+        "credits_remaining": int(messages[1] or 0),
         "messages_total": int(messages[0] or 0),
-        "messages_used": int(messages[1] or 0),
-        "messages_remaining": int(messages[2] or 0),
-        "historical_credit_remaining": int(messages[3] or 0),
+        "messages_used": int(messages[0] or 0) - int(messages[1] or 0),
+        "messages_remaining": int(messages[1] or 0),
+        "historical_credit_remaining": int(messages[2] or 0),
         "plan_ids": [str(plan or "") for plan in plans],
         "active_statuses": list(_ACTIVE),
     }
