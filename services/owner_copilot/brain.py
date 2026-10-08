@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator, Callable
 from typing import Any, Literal
 
@@ -31,10 +32,15 @@ async def iter_owner_turn_v2_events(
     reply_language: str | None = None,
     revise_proposal_id: str | None = None,
     is_cancelled: CancelCheck | None = None,
+    qa_match: dict[str, Any] | None = None,
+    qa_match_ready: bool = False,
 ) -> AsyncGenerator[StreamEvent, None]:
     if not owner_copilot_v2_enabled():
         yield StreamEvent(type="error", payload={"message": "OWNER_COPILOT_V2 disabled"})
         return
+    from services.owner_portal.turn_usage import reset_provider_usage
+
+    reset_provider_usage()
 
     from services.billing.credit_ai_gate import owner_credits_paused_payload
     from services.owner_copilot.message_billing import (
@@ -48,9 +54,13 @@ async def iter_owner_turn_v2_events(
     asked = (user_text or "").strip()
     if asked and not confirm_tool and not choice_id:
         from services.owner_copilot.brain_support import done_payload
-        from services.owner_portal.owner_qa import match_owner_qa
 
-        hit = match_owner_qa(asked, reply_language or "en")
+        if not qa_match_ready:
+            from services.owner_portal.owner_qa import match_owner_qa
+
+            qa_match = await asyncio.to_thread(match_owner_qa, asked, reply_language or "en")
+            qa_match_ready = True
+        hit = qa_match
         if hit:
             yield StreamEvent(
                 type="done",
@@ -118,6 +128,8 @@ async def iter_owner_turn_v2_events(
             reply_language=reply_language,
             revise_proposal_id=revise_proposal_id,
             is_cancelled=is_cancelled,
+            qa_match=qa_match,
+            qa_match_ready=qa_match_ready,
         ):
             actual_usd = None
             if _ev.type == "done":

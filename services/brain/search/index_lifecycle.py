@@ -122,6 +122,20 @@ def mark_stale_durable(tenant_id: str, *, revision: str = "", reason: str = "con
 
 def mark_failed(tenant_id: str, *, revision: str, reason: str) -> dict[str, Any]:
     prev = get_lifecycle(tenant_id)
+    # A provider failure must keep the last good index serving.
+    if (
+        reason == "provider_error"
+        and str(prev.get("status") or "") == "ACTIVE"
+        and str(prev.get("active_version") or "")
+    ):
+        return upsert_lifecycle(
+            tenant_id,
+            status="ACTIVE",
+            content_revision=str(prev.get("content_revision") or revision or ""),
+            active_version=str(prev.get("active_version") or ""),
+            failure_reason=reason,
+            retry_count=int(prev.get("retry_count") or 0) + 1,
+        )
     return upsert_lifecycle(
         tenant_id,
         status="FAILED",

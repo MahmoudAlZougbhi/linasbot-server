@@ -11,10 +11,15 @@ from services.brain.outbox import list_recent, outbox_id_for
 from services.brain.stage_timeline import public_flow_from_extra
 
 
-def _cost_for_operation(tenant_id: str, operation_id: str) -> dict[str, Any]:
+def _cost_for_operation(
+    tenant_id: str,
+    operation_id: str,
+    events: list[Any] | None = None,
+) -> dict[str, Any]:
+    source = events if events is not None else list_events(tenant_id=tenant_id)
     events = [
         item
-        for item in list_events(tenant_id=tenant_id)
+        for item in source
         if str(item.operation_id or "") == operation_id or str(item.event_id or "").endswith(f":{operation_id}")
     ]
     pending = sum(1 for item in events if item.status in {"pending", "unpriced"})
@@ -55,9 +60,16 @@ def _interaction_row(tenant_id: str, operation_id: str) -> dict[str, Any] | None
 def list_message_flows(*, tenant_id: str = "", limit: int = 50) -> list[dict[str, Any]]:
     items = list_recent(tenant_id=tenant_id or "", limit=max(1, min(limit, 200)))
     rows: list[dict[str, Any]] = []
+    events_by_tenant: dict[str, list[Any]] = {}
     for item in items:
         extra = dict(item.extra or {})
-        cost = _cost_for_operation(item.tenant_id, item.operation_id)
+        if item.tenant_id not in events_by_tenant:
+            events_by_tenant[item.tenant_id] = list_events(tenant_id=item.tenant_id)
+        cost = _cost_for_operation(
+            item.tenant_id,
+            item.operation_id,
+            events=events_by_tenant[item.tenant_id],
+        )
         reply_texts = []
         envelope = item.envelope if isinstance(item.envelope, dict) else {}
         for message in envelope.get("messages") or []:

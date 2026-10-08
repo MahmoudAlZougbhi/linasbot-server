@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import HTTPException, Query, Request
@@ -38,22 +39,25 @@ async def _variants(body: QaBody) -> list[dict[str, str]]:
     variants = {source: {"language": source, "question": body.question.strip(), "answer": body.answer.strip()}}
     try:
         from services.brain.language_detection_service import language_detection_service
-        from services.owner_portal.franco import keep_verbatim
+        from services.owner_portal.protected_text import translate_kept
 
-        for language in _langs():
-            if language in {source, "franco"}:
-                continue
-            question = await language_detection_service.translate_answer_text(
-                body.question, source_language=source, target_language=language
-            )
-            answer = await language_detection_service.translate_answer_text(
-                body.answer, source_language=source, target_language=language
-            )
-            variants[language] = {
-                "language": language,
-                "question": keep_verbatim(body.question, question or body.question),
-                "answer": keep_verbatim(body.answer, answer or body.answer),
-            }
+        async def _one(language: str) -> tuple[str, str, str]:
+            async def _translate(text: str, attempt: int) -> str:
+                payload = text
+                if attempt > 1:
+                    payload = f"{text}\nKeep every placeholder exactly as written."
+                rendered = await language_detection_service.translate_answer_text(
+                    payload, source_language=source, target_language=language
+                )
+                return str(rendered or "")
+
+            question, _tries = await translate_kept(body.question, target=language, translate=_translate)
+            answer, _tries = await translate_kept(body.answer, target=language, translate=_translate)
+            return language, question, answer
+
+        targets = [language for language in ("ar", "fr") if language != source]
+        for language, question, answer in await asyncio.gather(*[_one(language) for language in targets]):
+            variants[language] = {"language": language, "question": question, "answer": answer}
     except Exception:
         pass
     for language in _langs():
@@ -84,7 +88,7 @@ async def save_knowledge(body: KbBody, request: Request) -> Any:
     from services.owner_portal.owner_kb_store import save_entry
 
     try:
-        entry = save_entry(title=body.title, body=body.body, entry_id=body.id)
+        entry = await asyncio.to_thread(save_entry, title=body.title, body=body.body, entry_id=body.id)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"success": True, "entry": entry}
@@ -95,7 +99,7 @@ async def remove_knowledge(entry_id: str, request: Request) -> Any:
     require_platform_owner(request)
     from services.owner_portal.owner_kb_store import delete_entry
 
-    delete_entry(entry_id)
+    await asyncio.to_thread(delete_entry, entry_id)
     return {"success": True}
 
 
@@ -113,7 +117,8 @@ async def save_saved_qa(body: QaBody, request: Request) -> Any:
     from services.owner_portal.owner_qa import save_qa
 
     try:
-        qa_id = save_qa(variants=await _variants(body), source_language=body.source_language)
+        variants = await _variants(body)
+        qa_id = await asyncio.to_thread(save_qa, variants=variants, source_language=body.source_language)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"success": True, "id": qa_id}
@@ -125,7 +130,7 @@ async def delete_saved_qa(qa_id: str, request: Request) -> Any:
     from services.owner_portal.owner_qa import delete_qa
     from services.team.platform_owner_service import platform_owner_service
 
-    if not delete_qa(qa_id):
+    if not await asyncio.to_thread(delete_qa, qa_id):
         raise HTTPException(status_code=404, detail="qa_not_found")
     platform_owner_service.log_action(
         actor_user_id=session.user_id,

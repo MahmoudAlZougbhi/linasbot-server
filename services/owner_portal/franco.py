@@ -70,20 +70,25 @@ def keep_verbatim(source: str, translated: str) -> str:
 
 async def franco_pair(question: str, answer: str) -> tuple[str, str]:
     """Natural Latin Arabizi. Falls back to the letter map after one retry."""
+    from services.owner_portal.protected_text import mask_tokens, restore_tokens
+
+    masked_question, question_tokens = mask_tokens(question)
+    masked_answer, answer_tokens = mask_tokens(answer)
     locked = verbatim_tokens(f"{question}\n{answer}")
     for _attempt in range(2):
-        rendered = await _ask_franco(question, answer)
+        rendered = await _ask_franco(masked_question, masked_answer)
         parts = [part.strip() for part in (rendered or "").split("\n---\n", 1)]
         if len(parts) != 2:
             continue
-        combined = " ".join(parts)
+        restored = [restore_tokens(parts[0], question_tokens), restore_tokens(parts[1], answer_tokens)]
+        combined = " ".join(restored)
         if has_arabic_script(combined):
             continue
         if any(token not in combined for token in locked):
             continue
         if not re.search(r"[aeiou]", combined, re.I):
             continue
-        return parts[0], parts[1]
+        return restored[0], restored[1]
     return to_franco(question), to_franco(answer)
 
 

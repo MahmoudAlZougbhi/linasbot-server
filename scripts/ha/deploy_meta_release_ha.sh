@@ -8922,6 +8922,11 @@ activate_impl() {
     die "untracked runtime source appeared before target service start"
   install -d -o root -g root -m 0755 /var/lib/linasbot
   printf '%s\n' "$target_sha" > /var/lib/linasbot/release_git_sha
+  if [ -n "${LINAS_BUILD_TIME:-}" ]; then
+    printf '%s\n' "$LINAS_BUILD_TIME" > /var/lib/linasbot/release_build_time
+  else
+    date -u +%Y-%m-%dT%H:%M:%SZ > /var/lib/linasbot/release_build_time
+  fi
   start_target_runtime "$tx_dir"
   test "$(current_head)" = "$target_sha" || die "activated target SHA mismatch"
   git -C "$REPO_DIR" diff --quiet "$target_sha" -- || die "activated tracked tree is dirty"

@@ -12,6 +12,15 @@ from services.owner_copilot.flags import owner_max_output_tokens, owner_model_na
 CancelCheck = Callable[[], bool]
 
 
+def _note_stream_usage(event: Any) -> None:
+    usage = getattr(event, "usage", None)
+    if usage is None:
+        return
+    from services.owner_portal.turn_usage import add_provider_usage
+
+    add_provider_usage(getattr(usage, "prompt_tokens", 0), getattr(usage, "completion_tokens", 0))
+
+
 @dataclass
 class _FnDelta:
     name: str = ""
@@ -64,6 +73,7 @@ async def sol_chat_completion(
         kwargs["tool_choice"] = "auto"
     if stream:
         kwargs["stream"] = True
+        kwargs["stream_options"] = {"include_usage": True}
     emit_model_policy_trace(
         decision,
         extra={
@@ -87,6 +97,7 @@ async def _stream_text_once(
     """Yield (delta_text, finish_reason_or_none). finish_reason appears on the last event."""
     stream = await sol_chat_completion(messages=messages, tools=None, stream=True, policy=policy)
     async for event in stream:
+        _note_stream_usage(event)
         if is_cancelled and is_cancelled():
             return
         finish: str | None = None
@@ -168,6 +179,7 @@ async def iter_sol_tool_round(
     tool_acc: dict[int, AssembledToolCall] = {}
 
     async for event in stream:
+        _note_stream_usage(event)
         if is_cancelled and is_cancelled():
             break
         try:

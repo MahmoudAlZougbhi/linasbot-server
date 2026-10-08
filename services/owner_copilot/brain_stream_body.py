@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncGenerator, Callable
 from typing import Any, Literal
@@ -44,6 +45,8 @@ async def _iter_owner_turn_v2_events_body(
     reply_language: str | None = None,
     revise_proposal_id: str | None = None,
     is_cancelled: CancelCheck | None = None,
+    qa_match: dict[str, Any] | None = None,
+    qa_match_ready: bool = False,
 ) -> AsyncGenerator[StreamEvent, None]:
     text = (user_text or "").strip()
     from services.owner_copilot.sol_ensure import ensure_published_sol_basics
@@ -52,7 +55,8 @@ async def _iter_owner_turn_v2_events_body(
     from services.runtime_limits.window import window_owner_messages_for_tenant
 
     messages = window_owner_messages_for_tenant(messages, tenant_id)
-    context = pack_owner_turn_context(
+    context = await asyncio.to_thread(
+        pack_owner_turn_context,
         tenant_id=tenant_id,
         user_id=user_id,
         user_text=text or (confirm_tool or choice_id or ""),
@@ -72,9 +76,12 @@ async def _iter_owner_turn_v2_events_body(
     stage = str((context.get("account_summary") or {}).get("setup_stage") or "")
     reply_lang = str(context.get("reply_language") or "en")
     if text and not confirm_tool and not choice_id:
-        from services.owner_portal.owner_qa import match_owner_qa
+        if not qa_match_ready:
+            from services.owner_portal.owner_qa import match_owner_qa
 
-        qa_hit = match_owner_qa(text, reply_lang)
+            qa_hit = await asyncio.to_thread(match_owner_qa, text, reply_lang)
+        else:
+            qa_hit = qa_match
         if qa_hit:
             yield StreamEvent(
                 type="done",
