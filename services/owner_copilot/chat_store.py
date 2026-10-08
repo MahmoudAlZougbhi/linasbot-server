@@ -159,18 +159,23 @@ class OwnerChatStore:
 
         status, shared = shared_list(tenant_id=tenant_id, user_id=user_id)
         if status != "unavailable":
-            items = [self._public_row(data) for data in shared if _visible_conversation(data)]
-            items = [item for item in items if item]
-            items.sort(key=lambda row: float(row.get("updated_at") or 0), reverse=True)
-            return items
+            visible = [
+                row
+                for data in shared
+                if _visible_conversation(data)
+                for row in [self._public_row(data)]
+                if row is not None
+            ]
+            visible.sort(key=lambda row: float(row.get("updated_at") or 0), reverse=True)
+            return visible
         by_id: dict[str, dict[str, Any]] = {}
         for data in self._file_conversations(tenant_id, user_id):
             row = self._public_row(data)
-            if row:
+            if row is not None:
                 by_id[str(row["id"])] = row
-        items = list(by_id.values())
-        items.sort(key=lambda row: float(row.get("updated_at") or 0), reverse=True)
-        return items
+        visible = list(by_id.values())
+        visible.sort(key=lambda row: float(row.get("updated_at") or 0), reverse=True)
+        return visible
 
     def _file_conversations(self, tenant_id: str, user_id: str) -> list[dict[str, Any]]:
         found: list[dict[str, Any]] = []
