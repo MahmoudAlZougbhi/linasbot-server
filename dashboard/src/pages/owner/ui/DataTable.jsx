@@ -31,6 +31,7 @@ export default function DataTable({
   toolbar = null,
   onRowClick,
   pageSize = 25,
+  countNoun = 'rows',
 }) {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
@@ -41,7 +42,7 @@ export default function DataTable({
   }, [rows, query, searchText]);
   const start = page * pageSize;
   const visible = filtered.slice(start, start + pageSize);
-  const countLabel = `${filtered.length} rows`;
+  const countLabel = loading ? 'Loading…' : `${filtered.length} ${countNoun}`;
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 p-4">

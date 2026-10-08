@@ -20,6 +20,7 @@ describe('AI traces route', () => {
         </Routes>
       </MemoryRouter>,
     );
-    expect(await screen.findByRole('tab', { name: 'AI traces' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('heading', { name: 'AI traces' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Messages' })).not.toBeInTheDocument();
   });
 });

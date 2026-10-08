@@ -21,7 +21,7 @@ export default function OwnerKnowledge() {
   const [error, setError] = useState('');
   return (
     <div className="space-y-6">
-      <PageHeader title="Copilot knowledge" subtitle="Facts the Owner Copilot uses to answer business owners' questions about the app." actions={<Button onClick={() => setOpen(true)}>Add knowledge</Button>} />
+      <PageHeader title="Copilot knowledge" subtitle="Facts the Owner Copilot uses to answer business owners' questions about the app." actions={state.status === 'ready' && state.data.length > 0 ? <Button onClick={() => setOpen(true)}>Add knowledge</Button> : null} />
       {state.status === 'loading' ? <SkeletonRows /> : null}
       {state.status === 'error' ? <Alert title="We couldn't load knowledge." detail={state.error} /> : null}
       {state.status === 'ready' && state.data.length === 0 ? <EmptyState icon={<BookOpenIcon className="h-6 w-6" />} title="No knowledge yet" text="Add facts about the app so the Copilot answers owners correctly." action={<Button onClick={() => setOpen(true)}>Add knowledge</Button>} /> : null}

@@ -40,6 +40,7 @@ export function statusLabel(kind, value) {
   if (kind === 'payment' && (text === 'implemented' || text === 'ok')) return 'Ready';
   if (kind === 'payment' && text === 'incomplete') return 'Not finished';
   if (kind === 'payment' && text === 'retired_token_packs') return 'Not used';
+  if (kind === 'payment' && text === 'unpriced') return 'No price yet';
   if (kind === 'payment') return 'Not set up';
   return 'Not set';
 }

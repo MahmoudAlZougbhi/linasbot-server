@@ -226,6 +226,23 @@
   @apply from-primary-500 to-primary-700;
 }
 
+.owner-scroll {
+  scrollbar-color: #94A3B8 #F1F5F9;
+}
+
+.owner-scroll::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+
+.owner-scroll::-webkit-scrollbar-thumb {
+  background: #94A3B8;
+  background-image: none;
+}
+
+.owner-scroll::-webkit-scrollbar-thumb:hover {
+  background: #64748B;
+}
+
 /* Loading animation */
 .loading-dots {
   display: inline-block;
