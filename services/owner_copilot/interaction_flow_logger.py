@@ -432,8 +432,7 @@ def get_recent_flows(
             shared = [
                 row
                 for row in shared
-                if needle
-                in str(row.get("user_phone") or "").replace(" ", "").replace("+", "").replace("-", "")
+                if needle in str(row.get("user_phone") or "").replace(" ", "").replace("+", "").replace("-", "")
                 or needle in str(row.get("user_id") or "")
             ]
         return shared[:limit]

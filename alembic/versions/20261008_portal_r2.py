@@ -29,9 +29,7 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_owner_portal_audit_created ON owner_portal_audit_events (created_at)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_owner_portal_audit_created ON owner_portal_audit_events (created_at)")
     op.execute(
         """
         CREATE TABLE IF NOT EXISTS owner_portal_flow_events (

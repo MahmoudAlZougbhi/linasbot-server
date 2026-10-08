@@ -205,9 +205,7 @@ def test_junk_filter_and_protected_tenants() -> None:
     assert is_junk_identity(tenant_id="linas", business_name="<script>", email="a@linas.ai") is False
     assert is_junk_identity(tenant_id="layla-salon", business_name="صالون ليلى", email="a@shop.com") is False
     assert (
-        classify_tenant(
-            {"tenant_id": "probe-clinic", "messages_used": 4, "business_name": "Probe", "email": "a@p.tld"}
-        )
+        classify_tenant({"tenant_id": "probe-clinic", "messages_used": 4, "business_name": "Probe", "email": "a@p.tld"})
         == "protected"
     )
     assert classify_tenant({"tenant_id": "apple-account", "email": "a@privaterelay.appleid.com"}) == (
