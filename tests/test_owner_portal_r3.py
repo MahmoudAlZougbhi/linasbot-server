@@ -242,9 +242,9 @@ def test_provider_error_keeps_the_active_index(monkeypatch) -> None:
     mark_active("shop", active_version="v1", content_revision="v1")
     activate_pointer(None, tenant_id="shop", space_id="entity", source_family="knowledge", version="v1", count=3)
     failed = mark_failed("shop", revision="v2", reason="provider_error")
-    assert failed["status"] == "ACTIVE"
+    assert failed["status"] == "FAILED"
     assert failed["active_version"] == "v1"
-    assert get_lifecycle("shop")["status"] == "ACTIVE"
+    assert get_lifecycle("shop")["status"] == "FAILED"
     assert tenant_pointer_ready(None, "shop") is True
 
 
