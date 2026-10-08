@@ -13,4 +13,23 @@ describe('ConfirmDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hide business' }));
     expect(onConfirm).toHaveBeenCalled();
   });
+
+  it('shows Deleting and stays disabled until the request finishes', async () => {
+    let finish = () => {};
+    const onConfirm = () => new Promise((resolve) => { finish = resolve; });
+    render(
+      <ConfirmDialog
+        title="Delete this answer?"
+        body="The Copilot will stop using it."
+        confirmLabel="Delete"
+        loadingLabel="Deleting…"
+        onClose={() => {}}
+        onConfirm={onConfirm}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(await screen.findByRole('button', { name: 'Deleting…' })).toBeDisabled();
+    finish();
+    expect(await screen.findByRole('button', { name: 'Delete' })).toBeEnabled();
+  });
 });

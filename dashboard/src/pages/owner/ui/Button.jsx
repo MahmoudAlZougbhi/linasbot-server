@@ -1,9 +1,10 @@
 // @ts-nocheck
-/** @param {{ variant?: 'primary'|'secondary'|'tertiary'|'danger', size?: 'sm'|'md', loading?: boolean, icon?: import('react').ReactNode, children?: import('react').ReactNode, className?: string, type?: 'button'|'submit', disabled?: boolean, onClick?: () => void, title?: string }} props */
+/** @param {{ variant?: 'primary'|'secondary'|'tertiary'|'danger', size?: 'sm'|'md', loading?: boolean, loadingLabel?: string, icon?: import('react').ReactNode, children?: import('react').ReactNode, className?: string, type?: 'button'|'submit', disabled?: boolean, onClick?: () => void, title?: string }} props */
 export default function Button({
   variant = 'primary',
   size = 'md',
   loading = false,
+  loadingLabel = 'Saving…',
   icon = null,
   children,
   className = '',
@@ -26,7 +27,7 @@ export default function Button({
       {...rest}
     >
       {icon}
-      {loading ? 'Saving…' : children}
+      {loading ? loadingLabel : children}
     </button>
   );
 }

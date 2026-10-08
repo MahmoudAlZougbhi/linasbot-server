@@ -57,7 +57,7 @@ export default function OwnerQa() {
           <div className="mt-4 flex gap-2"><Button type="submit">Save answer</Button><Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button></div>
         </form>
       ) : null}
-      {pending ? <ConfirmDialog title="Delete this answer?" body="The Copilot will stop using it. This can't be undone." confirmLabel="Delete" onClose={() => setPending(null)} onConfirm={async () => { await ownerApi.deleteQa(pending.id); setPending(null); setReload((value) => value + 1); }} /> : null}
+      {pending ? <ConfirmDialog title="Delete this answer?" body="The Copilot will stop using it. This can't be undone." confirmLabel="Delete" loadingLabel="Deleting…" onClose={() => setPending(null)} onConfirm={async () => { await ownerApi.deleteQa(pending.id); setPending(null); setReload((value) => value + 1); }} /> : null}
     </div>
   );
 }
