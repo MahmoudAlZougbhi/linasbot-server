@@ -341,6 +341,14 @@ def test_translations_keep_names_codes_and_the_label() -> None:
     assert "amber-falcon" in kept and "5293" in kept and kept.startswith("QA-LINAS-RETEST")
 
 
+def test_search_forms_keep_a_label_free_copy() -> None:
+    from services.owner_portal.owner_qa import search_forms
+
+    forms = search_forms("QA-LINAS-R2 what is the amber-falcon refund code?")
+    assert forms[0].startswith("QA-LINAS-R2")
+    assert forms[1] == "what is the amber-falcon refund code?"
+
+
 def test_embed_retries_a_rate_limit(monkeypatch) -> None:
     from services.owner_portal.owner_embed import embed_one
 
