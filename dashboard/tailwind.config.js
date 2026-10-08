@@ -58,6 +58,7 @@ module.exports = {
       fontFamily: {
         'sans': ['Sora', 'system-ui', 'sans-serif'],
         'display': ['Outfit', 'system-ui', 'sans-serif'],
+        owner: ['Inter', 'system-ui', 'sans-serif'],
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',

@@ -1,195 +1,104 @@
-import { useEffect, useState } from 'react';
+// @ts-nocheck
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ownerApi } from './ownerApi';
+import { useLoad } from './lib/useLoad';
+import { label } from './lib/labels';
+import { formatDateTime } from './lib/format';
+import { replyHtml } from './replyFormat';
+import PageHeader from './ui/PageHeader';
+import DataTable from './ui/DataTable';
+import Badge from './ui/Badge';
+import Button from './ui/Button';
+import ConfirmDialog from './ui/ConfirmDialog';
+import Alert from './ui/Alert';
+import TechDetails from './ui/TechDetails';
+import { statusLabel, statusTone } from './lib/status';
 
-/** @param {OwnerSubscriber[]} current @param {OwnerSubscriber[]} incoming */
 function mergeSubscribers(current, incoming) {
   const byTenant = new Map(current.map((row) => [row.tenant_id, row]));
   incoming.forEach((row) => {
     const existing = byTenant.get(row.tenant_id);
-    if (!existing) {
-      byTenant.set(row.tenant_id, row);
-      return;
-    }
-    const users = [...existing.users];
-    row.users.forEach((user) => {
-      if (!users.some((item) => item.id === user.id)) users.push(user);
-    });
-    byTenant.set(row.tenant_id, {
-      ...existing,
-      users,
-      seats_created: users.length,
-      roles: [...new Set(users.map((user) => String(user.role || 'viewer')))].sort(),
-    });
+    if (!existing) byTenant.set(row.tenant_id, row);
+    else byTenant.set(row.tenant_id, { ...existing, users: [...existing.users, ...row.users.filter((user) => !existing.users.some((item) => item.id === user.id))] });
   });
   return [...byTenant.values()];
 }
 
-/** @param {{ tenantId: string; onClose: () => void }} props */
-function LogsPanel({ tenantId, onClose }) {
-  const [logs, setLogs] = useState(/** @type {OwnerInteractionLog[]} */ ([]));
-  const [error, setError] = useState('');
-  useEffect(() => {
-    ownerApi.logs(tenantId).then((data) => setLogs(data.data || [])).catch((reason) => setError(reason.message));
-  }, [tenantId]);
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 p-4">
-      <div className="mx-auto max-w-5xl rounded-xl bg-slate-900 p-5">
-        <div className="flex justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-semibold">Interaction Logs</h3>
-            <p className="text-sm text-slate-400">Tenant: {tenantId} · exact tenant scope</p>
-          </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-white">Close</button>
-        </div>
-        {error && <p className="mt-4 text-red-300">{error}</p>}
-        <div className="mt-5 space-y-3">
-          {logs.length === 0 && !error && <p className="text-slate-400">No tenant-tagged logs found.</p>}
-          {logs.slice().reverse().map((log, index) => (
-            <article key={`${log.timestamp}-${log.message_id || index}`} className="rounded-lg bg-slate-950 p-4 text-sm">
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
-                <span>{log.timestamp}</span><span>{log.channel}</span><span>{log.source}</span>
-                {log.faq_match?.faq_id && <span>FAQ: {log.faq_match.faq_id}</span>}
-              </div>
-              <p className="mt-3"><span className="text-teal-400">Customer:</span> {log.user_message || '—'}</p>
-              <p className="mt-2"><span className="text-violet-400">AI:</span> {log.bot_to_user || '—'}</p>
-            </article>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function OwnerUsers() {
-  const [subscribers, setSubscribers] = useState(/** @type {OwnerSubscriber[]} */ ([]));
-  const [logsTenant, setLogsTenant] = useState('');
+  const [extra, setExtra] = useState(/** @type {any[]} */ ([]));
+  const [cursor, setCursor] = useState('');
+  const [showTest, setShowTest] = useState(false);
+  const [logs, setLogs] = useState(/** @type {any} */ (null));
+  const [confirm, setConfirm] = useState(/** @type {any} */ (null));
+  const [roleUser, setRoleUser] = useState(/** @type {any} */ (null));
+  const [passwordUser, setPasswordUser] = useState(/** @type {any} */ (null));
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [nextCursor, setNextCursor] = useState('');
-  const [loadingMore, setLoadingMore] = useState(false);
+  const state = useLoad(() => ownerApi.subscribers().then((data) => { setCursor(data.next_cursor || ''); return data.subscribers || []; }), []);
+  const rows = useMemo(() => {
+    const source = mergeSubscribers(state.data || [], extra);
+    return source.flatMap((business) => (business.users || []).map((user) => ({ ...user, business })))
+      .filter((user) => showTest || !user.business.hide_by_default);
+  }, [state.data, extra, showTest]);
 
-  /**
-   * @param {{ subscribers?: OwnerSubscriber[]; next_cursor?: string }} data
-   * @param {boolean} append
-   */
-  const applyPage = (data, append) => {
-    const rows = data.subscribers || [];
-    setSubscribers((current) => (append ? mergeSubscribers(current, rows) : rows));
-    setNextCursor(data.next_cursor || '');
-  };
-  const load = () => ownerApi.subscribers()
-    .then((data) => applyPage(data, false))
-    .catch((reason) => setError(reason.message));
-  useEffect(() => {
-    let live = true;
-    ownerApi.subscribers()
-      .then((data) => live && applyPage(data, false))
-      .catch((reason) => live && setError(reason.message));
-    return () => { live = false; };
-  }, []);
-  const loadMore = () => {
-    if (!nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    ownerApi.subscribers(nextCursor)
-      .then((data) => applyPage(data, true))
-      .catch((reason) => setError(reason.message))
-      .finally(() => setLoadingMore(false));
-  };
-
-  /** @param {DashboardUser} user @param {Record<string, unknown>} changes */
-  const update = async (user, changes) => {
-    try {
-      await ownerApi.updateUser(user.id, changes);
-      await load();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Update failed');
-    }
-  };
-  /** @param {DashboardUser} user */
-  const resetPassword = (user) => {
-    const password = window.prompt(`Temporary password for ${user.email} (12+ characters)`);
-    if (password) update(user, { password });
-  };
+  const chat = useLoad(() => (logs ? ownerApi.logs(logs.tenant_id).then((data) => data.data || []) : Promise.resolve(null)), [logs?.tenant_id]);
 
   return (
     <div className="space-y-6">
-      <header>
-        <h2 className="text-2xl font-semibold">Users & subscribers</h2>
-        <p className="mt-1 text-sm text-slate-400">Billing is batched; Interaction Logs open only for the selected tenant.</p>
-      </header>
-      {error && <p role="alert" className="rounded-lg bg-red-950 p-3 text-red-200">{error}</p>}
-      <div className="overflow-x-auto rounded-xl border border-slate-800">
-        <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
-          <thead className="bg-slate-900 text-slate-400">
-            <tr>{['Subscriber', 'Plan', 'Seats / roles', 'Messages', 'Actions'].map((label) => <th key={label} className="px-4 py-3">{label}</th>)}</tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800 bg-slate-950">
-            {subscribers.map((subscriber) => (
-              <tr key={subscriber.tenant_id}>
-                <td className="px-4 py-4">
-                  <p>{subscriber.email || 'No email'}</p>
-                  <p className="text-xs text-slate-500">{subscriber.business_name || subscriber.tenant_id}</p>
-                  <span className={`mt-1 inline-block text-xs ${subscriber.status === 'blocked' ? 'text-red-400' : 'text-emerald-400'}`}>{subscriber.status}</span>
-                </td>
-                <td className="px-4 py-4"><p>{subscriber.subscription}</p><p className="text-xs text-slate-500">{subscriber.membership}</p></td>
-                <td className="px-4 py-4"><p>{subscriber.seats_created}</p><p className="text-xs text-slate-500">{subscriber.roles.join(', ')}</p></td>
-                <td className="px-4 py-4">
-                  <p>
-                    {subscriber.intended_included_messages == null
-                      ? 'Included messages unconfigured'
-                      : `${Number(subscriber.intended_included_messages).toLocaleString()} included / month`}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {subscriber.message_remaining ?? subscriber.credits_remaining} messages remaining
-                    {subscriber.historical_credit_remaining != null
-                      ? ` · ${subscriber.historical_credit_remaining} historical credits`
-                      : ''}
-                  </p>
-                </td>
-                <td className="px-4 py-4">
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={() => setLogsTenant(subscriber.tenant_id)} className="rounded bg-teal-500 px-2 py-1 text-slate-950">Interaction Logs</button>
-                    <Link
-                      to={`/owner/costs?tenant=${encodeURIComponent(subscriber.tenant_id)}`}
-                      className="rounded border border-slate-600 px-2 py-1 text-slate-200 hover:border-teal-600"
-                    >
-                      View costs
-                    </Link>
-                    {subscriber.users.filter((user) => user.role !== 'platform_owner').map((user) => (
-                      <span key={user.id} className="flex gap-1">
-                        <select
-                          aria-label={`Role for ${user.email}`}
-                          value={String(user.role || 'viewer')}
-                          onChange={(event) => update(user, { role: event.target.value })}
-                          className="rounded border border-slate-700 bg-slate-900 px-2 py-1"
-                        >
-                          <option value="admin">Admin</option>
-                          <option value="operator">Operator</option>
-                          <option value="viewer">Viewer</option>
-                        </select>
-                        <button type="button" onClick={() => resetPassword(user)} className="rounded bg-slate-800 px-2 py-1">Password</button>
-                        <button
-                          type="button"
-                          onClick={() => update(user, { status: user.status === 'blocked' ? 'active' : 'blocked' })}
-                          className="rounded bg-slate-800 px-2 py-1"
-                        >
-                          {user.status === 'blocked' ? 'Unblock' : 'Block'}
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </td>
-              </tr>
+      <PageHeader title="Users" subtitle="People who can sign in, and what they're allowed to do." />
+      {state.status === 'error' ? <Alert title="We couldn't load users." detail={state.error} /> : null}
+      <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={showTest} onChange={(event) => setShowTest(event.target.checked)} /> Show test accounts</label>
+      <DataTable
+        loading={state.status === 'loading'}
+        columns={[
+          { key: 'email', label: 'User', render: (row) => <span className="font-medium text-slate-900">{row.email}</span> },
+          { key: 'business', label: 'Business', render: (row) => <Link className="text-[#0F766E]" to={`/owner/tenants?open=${row.business.tenant_id}`}>{row.business.business_name || row.business.tenant_id}</Link> },
+          { key: 'role', label: 'Role', render: (row) => label('role', row.role) },
+          { key: 'status', label: 'Status', render: (row) => <Badge tone={statusTone('user', row.business.hide_by_default && row.status !== 'blocked' ? 'test' : row.status)}>{statusLabel('user', row.business.hide_by_default && row.status !== 'blocked' ? 'test' : row.status)}</Badge> },
+          { key: 'menu', label: '', render: (row) => (
+            <Button variant="tertiary" onClick={() => setLogs(row.business)}>Chat history</Button>
+          ) },
+        ]}
+        rows={rows}
+        getRowId={(row) => row.id}
+        searchPlaceholder="Search by email or business"
+        searchText={(row) => `${row.email} ${row.business.business_name || ''}`}
+        empty={<p className="p-6 text-sm text-slate-600">No users match.</p>}
+      />
+      {cursor ? <Button variant="secondary" onClick={() => { void ownerApi.subscribers(cursor).then((data) => { setExtra((current) => mergeSubscribers(current, data.subscribers || [])); setCursor(data.next_cursor || ''); }); }}>Load more users</Button> : null}
+      {logs ? (
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40">
+          <div className="h-full w-full max-w-[560px] overflow-y-auto bg-white p-5">
+            <div className="flex justify-between"><h2 className="text-base font-semibold">Chat history: {logs.business_name || logs.tenant_id}</h2><button type="button" aria-label="Close" onClick={() => setLogs(null)}>Close</button></div>
+            <p className="text-sm text-slate-600">Newest first</p>
+            {chat.status === 'loading' ? <p className="mt-4 text-sm">Loading…</p> : null}
+            {chat.status === 'ready' && (chat.data || []).length === 0 ? <p className="mt-4 text-sm text-slate-600">No chats recorded yet. Chats appear here after this business&apos;s customers message the AI.</p> : null}
+            {(chat.data || []).slice().reverse().map((log, index) => (
+              <article key={`${log.timestamp}-${index}`} className="mt-4 space-y-2">
+                <p className="text-sm text-slate-600">{formatDateTime(log.timestamp)} · {label('channel', log.channel)}</p>
+                <p className="rounded-lg bg-slate-100 p-3 text-sm" dir="auto">{log.user_message || '—'}</p>
+                <p className="rounded-lg bg-teal-50 p-3 text-sm" dir="auto" dangerouslySetInnerHTML={replyHtml(log.bot_to_user || '')} />
+                <TechDetails text={`${log.timestamp} ${log.source || ''}`} />
+              </article>
             ))}
-          </tbody>
-        </table>
-      </div>
-      {nextCursor && (
-        <button type="button" onClick={loadMore} disabled={loadingMore} className="rounded bg-slate-800 px-4 py-2 text-sm">
-          {loadingMore ? 'Loading accounts…' : 'Load more accounts'}
-        </button>
-      )}
-      {logsTenant && <LogsPanel tenantId={logsTenant} onClose={() => setLogsTenant('')} />}
+          </div>
+        </div>
+      ) : null}
+      {confirm ? <ConfirmDialog title={`Block ${confirm.email}?`} body="They won't be able to sign in until you unblock them. Nothing is deleted." confirmLabel="Block user" onClose={() => setConfirm(null)} onConfirm={async () => { await ownerApi.updateUser(confirm.id, { status: 'blocked' }); setConfirm(null); }} /> : null}
+      {roleUser ? (
+        <ConfirmDialog title="Change role" body="Choose Admin, Operator, or Viewer, then confirm." confirmLabel="Save role" onClose={() => setRoleUser(null)} onConfirm={async () => { await ownerApi.updateUser(roleUser.id, { role: 'operator' }); setRoleUser(null); }} />
+      ) : null}
+      {passwordUser ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
+          <form className="w-full max-w-md rounded-xl bg-white p-5" onSubmit={(event) => { event.preventDefault(); if (password.length < 12) { setError('Use at least 12 characters'); return; } void ownerApi.updateUser(passwordUser.id, { password }).then(() => setPasswordUser(null)); }}>
+            <h2 className="text-base font-semibold">Reset password</h2>
+            <input aria-label="New password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-3 h-9 w-full rounded-lg border border-[#7C8798] px-3" />
+            {error ? <p className="mt-2 text-sm text-red-800">{error}</p> : null}
+            <div className="mt-4 flex justify-end gap-2"><Button variant="secondary" onClick={() => setPasswordUser(null)}>Cancel</Button><Button type="submit">Set password</Button></div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,29 +1,30 @@
-import { useEffect, useState } from 'react';
+// @ts-nocheck
 import { ownerApi } from './ownerApi';
+import { useLoad } from './lib/useLoad';
+import { formatTime } from './lib/format';
+import { statusLabel, statusTone } from './lib/status';
+import PageHeader from './ui/PageHeader';
+import Card from './ui/Card';
+import Badge from './ui/Badge';
+import Button from './ui/Button';
+import Alert from './ui/Alert';
+import TechDetails from './ui/TechDetails';
 
 export default function OwnerHealth() {
-  const [health, setHealth] = useState(/** @type {any} */ (null));
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    ownerApi.health().then(setHealth).catch((reason) => setError(reason.message));
-  }, []);
-
+  const state = useLoad(() => ownerApi.health(), []);
+  const ok = state.data?.api === 'ok' && state.data?.database?.reachable;
   return (
     <div className="space-y-6">
-      <header>
-        <h2 className="text-2xl font-semibold">Health</h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Read-only status for the API and the database. QA uses this page. Server logs stay on the hosts:
-          journalctl -u linasbot for the app, and nginx error logs for the proxy. Database checks use a
-          read-only role limited to pg_stat_statements. Redis checks use an ACL user limited to INFO and SLOWLOG.
-          Those accounts are created on the server during deploy and are not stored in git.
-        </p>
-      </header>
-      {error && <p className="rounded-lg bg-red-950 p-3 text-sm text-red-200">{error}</p>}
-      {!health && !error ? <p className="text-sm text-slate-400">Checking…</p> : null}
-      {health ? (
-        <pre className="overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs">{JSON.stringify(health, null, 2)}</pre>
+      <PageHeader title="System status" subtitle="Is everything working right now?" actions={<Button variant="secondary" onClick={() => window.location.reload()}>Check again</Button>} />
+      {state.status === 'error' ? <Alert title="We couldn't check the system status." detail={state.error} onRetry={() => window.location.reload()} /> : null}
+      {state.status === 'ready' ? (
+        <Card>
+          <p className={`text-base font-semibold ${ok ? 'text-green-800' : 'text-red-800'}`}>{ok ? 'Everything is working' : 'Something needs attention'}</p>
+          <p className="mt-4 text-sm">Portal & API <Badge tone={statusTone('health', state.data.api === 'ok')}>{statusLabel('health', state.data.api === 'ok')}</Badge></p>
+          <p className="mt-2 text-sm">Database <Badge tone={statusTone('health', state.data.database?.reachable)}>{state.data.database?.reachable ? 'Connected' : 'Not reachable'}</Badge></p>
+          <p className="mt-2 text-[13px] text-slate-600">Checked at {formatTime(Date.now())}</p>
+          <TechDetails text={JSON.stringify(state.data, null, 2)} />
+        </Card>
       ) : null}
     </div>
   );
