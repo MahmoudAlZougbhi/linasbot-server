@@ -305,7 +305,7 @@ def test_visibility_override_hides_and_unhides(tmp_path, monkeypatch) -> None:
 def test_message_flows_add_lab_rows_without_dropping_outbox(monkeypatch) -> None:
     import asyncio
 
-    monkeypatch.setattr("modules.api_security.require_platform_owner", lambda _request: object())
+    monkeypatch.setattr("modules.platform_message_api.require_platform_owner", lambda _request: object())
     monkeypatch.setattr(
         "services.brain.turn_inspector.list_message_flows",
         lambda **_kwargs: [{"operation_id": "out-1", "updated_at": "2020-01-01T00:00:00Z", "channel": "whatsapp"}],
