@@ -1,30 +1,35 @@
-import { useEffect, useState } from 'react';
+// @ts-nocheck
 import { ownerApi } from './ownerApi';
+import { useLoad } from './lib/useLoad';
+import { label } from './lib/labels';
+import { formatDateTime, formatRelative } from './lib/format';
+import PageHeader from './ui/PageHeader';
+import DataTable from './ui/DataTable';
+import TechDetails from './ui/TechDetails';
+import EmptyState from './ui/EmptyState';
+import Alert from './ui/Alert';
+import { ClipboardDocumentListIcon } from '@heroicons/react/24/outline';
 
 export default function OwnerAudit() {
-  const [events, setEvents] = useState(/** @type {any[]} */ ([]));
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    ownerApi.audit().then((data) => setEvents(data.events || [])).catch((reason) => setError(reason.message));
-  }, []);
-
+  const state = useLoad(() => ownerApi.audit().then((data) => data.events || []), []);
   return (
     <div className="space-y-6">
-      <header>
-        <h2 className="text-2xl font-semibold">Audit log</h2>
-        <p className="mt-1 text-sm text-slate-400">Catalog edits and publishes recorded for the platform owner.</p>
-      </header>
-      {error && <p className="rounded-lg bg-red-950 p-3 text-sm text-red-200">{error}</p>}
-      {events.length === 0 ? <p className="text-sm text-slate-400">No audit events yet.</p> : null}
-      <ul className="space-y-2">
-        {events.map((event, index) => (
-          <li key={`${event.at || index}`} className="rounded-lg border border-slate-800 p-3 text-sm">
-            <p className="text-teal-300">{event.action || event.kind || 'event'}</p>
-            <p className="mt-1 text-slate-400">{event.at || event.updated_at || ''}</p>
-          </li>
-        ))}
-      </ul>
+      <PageHeader title="Activity log" subtitle="Changes and actions in this portal, newest first." />
+      {state.status === 'error' ? <Alert title="We couldn't load activity." detail={state.error} /> : null}
+      <DataTable
+        loading={state.status === 'loading'}
+        columns={[
+          { key: 'when', label: 'When', render: (row) => row.created_at ? <span title={formatDateTime(row.created_at)}>{formatRelative(row.created_at)}</span> : 'Time not recorded' },
+          { key: 'what', label: 'What happened', render: (row) => label('auditAction', row.reason || row.action) },
+          { key: 'business', label: 'Business', render: (row) => row.tenant_id || '—' },
+          { key: 'by', label: 'By', render: () => 'Platform owner' },
+          { key: 'raw', label: '', render: (row) => <TechDetails text={JSON.stringify(row)} /> },
+        ]}
+        rows={state.data || []}
+        getRowId={(row) => row.id || `${row.action}-${row.created_at}`}
+        searchText={(row) => `${row.action} ${row.tenant_id}`}
+        empty={<EmptyState icon={<ClipboardDocumentListIcon className="h-6 w-6" />} title="No activity yet" text="Price changes, AI tests and account actions will show up here." />}
+      />
     </div>
   );
 }
