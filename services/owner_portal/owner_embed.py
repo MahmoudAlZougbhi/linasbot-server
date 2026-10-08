@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 import httpx
 
@@ -19,24 +20,30 @@ def embed_one(text: str, *, query: bool) -> list[float] | None:
     if not cleaned or not key:
         return None
     space = ENTITY_QUERY if query else ENTITY_DOCUMENT
-    try:
-        response = httpx.post(
-            f"{VOYAGE_BASE}/embeddings",
-            headers={"Authorization": f"Bearer {key}"},
-            json={
-                "model": space.model,
-                "input": [cleaned[:8000]],
-                "input_type": space.input_mode,
-                "output_dimension": space.dimensions,
-            },
-            timeout=12.0,
-        )
-        response.raise_for_status()
-        data = response.json().get("data") or []
-        vector = data[0].get("embedding") if data else None
-    except Exception:
-        logger.exception("owner embedding failed")
-        return None
+    vector = None
+    for attempt in range(3):
+        try:
+            response = httpx.post(
+                f"{VOYAGE_BASE}/embeddings",
+                headers={"Authorization": f"Bearer {key}"},
+                json={
+                    "model": space.model,
+                    "input": [cleaned[:8000]],
+                    "input_type": space.input_mode,
+                    "output_dimension": space.dimensions,
+                },
+                timeout=12.0,
+            )
+            if response.status_code == 429 and attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            response.raise_for_status()
+            data = response.json().get("data") or []
+            vector = data[0].get("embedding") if data else None
+            break
+        except Exception:
+            logger.exception("owner embedding failed")
+            return None
     if not isinstance(vector, list) or not vector:
         return None
     return [float(item) for item in vector]

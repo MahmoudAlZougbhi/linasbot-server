@@ -341,6 +341,44 @@ def test_translations_keep_names_codes_and_the_label() -> None:
     assert "amber-falcon" in kept and "5293" in kept and kept.startswith("QA-LINAS-RETEST")
 
 
+def test_embed_retries_a_rate_limit(monkeypatch) -> None:
+    from services.owner_portal.owner_embed import embed_one
+
+    calls = {"n": 0}
+
+    class _Response:
+        def __init__(self, code: int) -> None:
+            self.status_code = code
+
+        def raise_for_status(self) -> None:
+            if self.status_code >= 400:
+                raise RuntimeError("rate limited")
+
+        def json(self) -> dict:
+            return {"data": [{"embedding": [0.2, 0.4]}]}
+
+    def _post(*_args, **_kwargs):
+        calls["n"] += 1
+        return _Response(429 if calls["n"] == 1 else 200)
+
+    monkeypatch.setattr("services.owner_portal.owner_embed.httpx.post", _post)
+    monkeypatch.setattr("services.owner_portal.owner_embed.voyage_api_key", lambda: "test-key")
+    monkeypatch.setattr("services.owner_portal.owner_embed.time.sleep", lambda _seconds: None)
+    assert embed_one("amber-falcon refund", query=True) == [0.2, 0.4]
+    assert calls["n"] == 2
+
+
+def test_overview_totals_use_live_message_lots() -> None:
+    import inspect
+
+    from services.owner_portal.analytics_sql import load_overview
+
+    source = inspect.getsource(load_overview)
+    assert "SUM(l.remaining)" in source
+    assert "period_id" in source
+    assert "SUM(granted)" not in source
+
+
 def test_version_uses_git_sha_or_unknown(monkeypatch) -> None:
     monkeypatch.delenv("GIT_SHA", raising=False)
     monkeypatch.setenv("LINAS_RELEASE_SHA_FILE", "/tmp/does-not-exist-linas-sha")
