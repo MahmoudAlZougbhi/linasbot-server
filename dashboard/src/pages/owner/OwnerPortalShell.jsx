@@ -7,7 +7,6 @@ import {
   BeakerIcon,
   BookOpenIcon,
   BuildingStorefrontIcon,
-  CalculatorIcon,
   ChatBubbleLeftRightIcon,
   ChatBubbleOvalLeftEllipsisIcon,
   ClipboardDocumentListIcon,
@@ -15,7 +14,6 @@ import {
   QuestionMarkCircleIcon,
   SignalIcon,
   TagIcon,
-  UsersIcon,
   Bars3Icon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
@@ -43,10 +41,9 @@ const groups = [
   { title: 'Business', items: [
     { href: '/owner', label: 'Overview', icon: HomeIcon, end: true },
     { href: '/owner/tenants', label: 'Businesses', icon: BuildingStorefrontIcon },
-    { href: '/owner/users', label: 'Users', icon: UsersIcon },
   ] },
   { title: 'Messages', items: [
-    { href: '/owner/messages', label: 'Customer messages', icon: ChatBubbleLeftRightIcon, also: ['/owner/traces'] },
+    { href: '/owner/messages', label: 'Customer messages', icon: ChatBubbleLeftRightIcon },
     { href: '/owner/copilot', label: 'Copilot chats', icon: ChatBubbleOvalLeftEllipsisIcon },
   ] },
   { title: 'AI knowledge', items: [
@@ -55,8 +52,7 @@ const groups = [
     { href: '/owner/brains', label: 'Test the AI', icon: BeakerIcon },
   ] },
   { title: 'Plans & billing', items: [
-    { href: '/owner/catalog', label: 'Plans & prices', icon: TagIcon },
-    { href: '/owner/economy', label: 'Message pricing', icon: CalculatorIcon },
+    { href: '/owner/catalog', label: 'Plans & prices', icon: TagIcon, also: ['/owner/economy'] },
     { href: '/owner/costs', label: 'AI costs', icon: BanknotesIcon },
   ] },
   { title: 'System', items: [
@@ -69,6 +65,7 @@ export default function OwnerPortalShell() {
   const { user, loading, logout } = useAuth();
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const [advanced, setAdvanced] = useState(false);
   if (loading) return <div className="grid min-h-screen place-items-center font-owner text-slate-700">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'platform_owner') return <Navigate to="/app" replace />;
@@ -99,11 +96,21 @@ export default function OwnerPortalShell() {
           </div>
         </div>
       ))}
+      <div>
+        <button type="button" className="px-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400" aria-expanded={advanced} onClick={() => setAdvanced((value) => !value)}>Advanced</button>
+        {advanced ? (
+          <div className="mt-2">
+            <NavLink to="/owner/traces" onClick={() => setOpen(false)} aria-current={location.pathname.startsWith('/owner/traces') ? 'page' : undefined} className={`flex h-10 items-center gap-2 rounded-lg px-3 text-sm ${location.pathname.startsWith('/owner/traces') ? 'bg-[#134E4A] text-white' : 'text-slate-300 hover:bg-white/5'}`}>
+              <ClipboardDocumentListIcon className="h-5 w-5" /> AI traces
+            </NavLink>
+          </div>
+        ) : null}
+      </div>
     </nav>
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 font-owner text-slate-900 md:flex">
+    <div className="owner-scroll min-h-screen bg-slate-50 font-owner text-slate-900 md:flex">
       <aside className="sticky top-0 hidden h-screen w-[248px] flex-col bg-slate-900 md:flex">
         <div className="px-5 pt-5">
           <p className="text-base font-semibold text-white">Linas AI</p>
@@ -124,11 +131,13 @@ export default function OwnerPortalShell() {
         </div>
       ) : null}
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white px-4 lg:px-8">
-          <button type="button" className="grid h-11 w-11 place-items-center lg:hidden" aria-label="Open menu" onClick={() => setOpen(true)}>
-            {open ? <XMarkIcon className="h-5 w-5" /> : <Bars3Icon className="h-5 w-5" />}
-          </button>
-          <div id="owner-page-header" className="min-w-0 flex-1" />
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
+          <div className="mx-auto flex h-16 max-w-[1280px] items-center gap-3 px-6 lg:px-8">
+            <button type="button" className="grid h-11 w-11 place-items-center lg:hidden" aria-label="Open menu" onClick={() => setOpen(true)}>
+              {open ? <XMarkIcon className="h-5 w-5" /> : <Bars3Icon className="h-5 w-5" />}
+            </button>
+            <div id="owner-page-header" className="min-w-0 flex-1" />
+          </div>
         </header>
         <main className="mx-auto min-w-0 max-w-[1280px] overflow-x-clip px-6 py-6 lg:px-8">
           <Outlet />

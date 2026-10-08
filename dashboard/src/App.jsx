@@ -80,6 +80,7 @@ function App() {
           <Route path="/owner" element={<OwnerGate />}>
             <Route index element={<OwnerOverview />} />
             <Route path="users" element={<OwnerUsers />} />
+            <Route path="users/:userId" element={<OwnerUsers />} />
             <Route path="messages" element={<OwnerMessages />} />
             <Route path="catalog" element={<OwnerCatalog />} />
             <Route path="economy" element={<OwnerEconomy />} />

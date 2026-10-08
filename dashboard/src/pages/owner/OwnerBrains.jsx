@@ -88,20 +88,23 @@ export default function OwnerBrains() {
 
   const title = ai === 'customer' ? 'Customer AI' : 'Owner Copilot';
   return (
-    <div className="mx-auto max-w-[880px] space-y-4">
+    <div className="max-w-[880px] space-y-4">
       <PageHeader title="Test the AI" subtitle="Chat with a business's AI as a customer or as the owner. Tests don't use their messages." />
       <label className="block text-sm text-slate-700">Business
-        <select aria-label="Business" value={tenantId} onChange={(event) => chooseTenant(event.target.value)} className="mt-1 h-11 w-full rounded-lg border border-[#7C8798] px-3">
+        <select aria-label="Business" value={tenantId} onChange={(event) => chooseTenant(event.target.value)} className="mt-1 h-11 w-full rounded-lg border border-[#7C8798] bg-white px-3">
           {loadingTenants ? <option value="">Loading businesses…</option> : null}
           {subscribers.map((row) => <option key={row.tenant_id} value={row.tenant_id}>{row.business_name || row.email || row.tenant_id}</option>)}
         </select>
       </label>
       <div role="tablist" className="flex gap-2">
-        <button type="button" role="tab" aria-selected={ai === 'customer'} onClick={() => setParams({ tenant: tenantId, ai: 'customer' })}>Customer AI</button>
-        <button type="button" role="tab" aria-selected={ai === 'copilot'} onClick={() => setParams({ tenant: tenantId, ai: 'copilot' })}>Owner Copilot</button>
+        <button type="button" role="tab" aria-selected={ai === 'customer'} className={ai === 'customer' ? 'border-b-2 border-[#0F766E] bg-[#F0FDFA] px-3 py-2 text-sm text-[#0F766E]' : 'px-3 py-2 text-sm text-slate-700'} onClick={() => setParams({ tenant: tenantId, ai: 'customer' })}>Customer AI</button>
+        <button type="button" role="tab" aria-selected={ai === 'copilot'} className={ai === 'copilot' ? 'border-b-2 border-[#0F766E] bg-[#F0FDFA] px-3 py-2 text-sm text-[#0F766E]' : 'px-3 py-2 text-sm text-slate-700'} onClick={() => setParams({ tenant: tenantId, ai: 'copilot' })}>Owner Copilot</button>
       </div>
       {ai === 'customer' ? (
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draftMode} onChange={(event) => setDraftMode(event.target.checked)} /> Use unpublished changes</label>
+        <>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draftMode} onChange={(event) => setDraftMode(event.target.checked)} /> Use unpublished changes</label>
+          <p className="text-[13px] text-slate-600">Try your latest edits before customers see them.</p>
+        </>
       ) : null}
       {error ? <p role="alert" className="text-sm text-red-800">{error}</p> : null}
       <section className="rounded-xl border border-slate-200 bg-white p-4">
@@ -119,9 +122,9 @@ export default function OwnerBrains() {
         ))}
         <form className="mt-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); void send(); }}>
           <textarea aria-label={`Message ${title}`} value={draft} onChange={(event) => setDraft(event.target.value)} className="min-h-11 flex-1 rounded-lg border border-[#7C8798] px-3 py-2 text-sm" placeholder="Type a message…" />
-          <Button type="submit" aria-label={`Send to ${title}`} disabled={!tenantId || !!busy || !draft.trim()}>{busy ? 'Sending…' : 'Send'}</Button>
+          <Button type="submit" aria-label={`Send to ${title}`} quietDisabled className={(!tenantId || !!busy || !draft.trim()) ? 'bg-slate-200 text-slate-600' : ''} disabled={!tenantId || !!busy || !draft.trim()}>{busy ? 'Sending…' : 'Send'}</Button>
         </form>
-        {!tenantId ? <p className="mt-2 text-sm text-slate-600">Choose a business first</p> : null}
+        {!tenantId ? <p className="mt-2 text-sm text-slate-600">Choose a business first</p> : !draft.trim() ? <p className="mt-2 text-sm text-slate-600">Type a message to send</p> : null}
       </section>
     </div>
   );

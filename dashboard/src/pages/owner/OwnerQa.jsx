@@ -25,7 +25,7 @@ export default function OwnerQa() {
   const [shown, setShown] = useState(/** @type {Record<string, string>} */ ({}));
   return (
     <div className="space-y-6">
-      <PageHeader title="Copilot answers" subtitle="Ready answers the Copilot sends instantly when an owner asks a similar question." actions={<Button onClick={() => setOpen(true)}>Add answer</Button>} />
+      <PageHeader title="Copilot answers" subtitle="Ready answers the Copilot sends instantly when an owner asks a similar question." actions={state.status === 'ready' && state.data.length > 0 ? <Button onClick={() => setOpen(true)}>Add answer</Button> : null} />
       {state.status === 'loading' ? <SkeletonRows /> : null}
       {state.status === 'error' ? <Alert title="We couldn't load answers." detail={state.error} /> : null}
       {state.status === 'ready' && state.data.length === 0 ? <EmptyState icon={<QuestionMarkCircleIcon className="h-6 w-6" />} title="No ready answers yet" text="Save common questions here, or save one from Copilot chats." action={<Button onClick={() => setOpen(true)}>Add answer</Button>} /> : null}
