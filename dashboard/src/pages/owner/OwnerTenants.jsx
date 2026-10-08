@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ownerApi } from './ownerApi';
 import { useLoad } from './lib/useLoad';
-import { formatNumber } from './lib/format';
+import { businessDisplayName, formatNumber } from './lib/format';
 import { label } from './lib/labels';
 import { statusLabel, statusTone } from './lib/status';
 import PageHeader from './ui/PageHeader';
@@ -17,7 +17,6 @@ import { BuildingStorefrontIcon } from '@heroicons/react/24/outline';
 
 export default function OwnerTenants() {
   const [params, setParams] = useSearchParams();
-  const [query, setQuery] = useState('');
   const [sort, setSort] = useState('name');
   const [hideTest, setHideTest] = useState(true);
   const [pending, setPending] = useState(/** @type {any} */ (null));
@@ -25,9 +24,7 @@ export default function OwnerTenants() {
   const state = useLoad(() => ownerApi.subscribers().then((data) => data.subscribers || []), []);
   const openId = params.get('open') || '';
   const visible = useMemo(() => {
-    const rows = (state.data || []).filter((row) => !(hideTest && row.hide_by_default));
-    const needle = query.trim().toLowerCase();
-    const filtered = rows.filter((row) => `${row.business_name || ''} ${row.email || ''} ${row.tenant_id || ''}`.toLowerCase().includes(needle));
+    const filtered = (state.data || []).filter((row) => !(hideTest && row.hide_by_default));
     filtered.sort((left, right) => {
       if (sort === 'messages') return Number(right.messages_remaining || 0) - Number(left.messages_remaining || 0);
       const a = sort === 'tenant' ? left.tenant_id : (left.business_name || left.email || '');
@@ -35,7 +32,7 @@ export default function OwnerTenants() {
       return String(a).localeCompare(String(b));
     });
     return filtered;
-  }, [state.data, query, sort, hideTest]);
+  }, [state.data, sort, hideTest]);
   const selected = (state.data || []).find((row) => row.tenant_id === openId);
 
   const exportCsv = () => {
@@ -64,37 +61,40 @@ export default function OwnerTenants() {
       <PageHeader title="Businesses" subtitle="Every business using Linas AI. Click one to see details." actions={<Button variant="secondary" onClick={exportCsv}>Export CSV</Button>} />
       {notice ? <p className="text-sm text-green-800">{notice}</p> : null}
       {state.status === 'error' ? <Alert title="We couldn't load businesses." detail={state.error} /> : null}
-      <div className="flex flex-wrap gap-3">
-        <input aria-label="Search by name, email or ID" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, email or ID" className="h-9 rounded-lg border border-[#7C8798] px-3 text-sm" />
-        <select aria-label="Sort" value={sort} onChange={(event) => setSort(event.target.value)} className="h-9 rounded-lg border border-[#7C8798] px-3 text-sm">
-          <option value="name">Name A–Z</option>
-          <option value="tenant">ID A–Z</option>
-          <option value="messages">Most messages left</option>
-        </select>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!hideTest} onChange={(event) => setHideTest(!event.target.checked)} /> Show test & blocked accounts</label>
-      </div>
       <DataTable
         loading={state.status === 'loading'}
         columns={[
-          { key: 'name', label: 'Business', render: (row) => <span className="font-semibold">{row.business_name || row.email || row.tenant_id}</span> },
-          { key: 'plan', label: 'Plan', render: (row) => <Badge tone="neutral">{label('plan', row.subscription || 'none')}</Badge> },
-          { key: 'sub', label: 'Subscription', render: (row) => <Badge tone={statusTone('user', row.membership === 'active' ? 'active' : 'none')}>{label('membership', row.membership || 'none')}</Badge> },
+          { key: 'name', label: 'Business', render: (row) => <span className="font-semibold">{businessDisplayName(row)}</span> },
+          { key: 'plan', label: 'Plan', render: (row) => <span className="text-sm">{label('plan', row.subscription || 'none')} · {label('membership', row.membership || 'none')}</span> },
           { key: 'messages', label: 'Messages left', align: 'right', render: (row) => formatNumber(row.messages_remaining) },
           { key: 'status', label: 'Status', render: (row) => <Badge tone={statusTone('user', row.hide_by_default ? 'test' : 'active')}>{statusLabel('user', row.hide_by_default ? 'test' : 'active')}</Badge> },
-          { key: 'hide', label: '', render: (row) => <Button variant="tertiary" onClick={() => setPending(row)}>Hide business</Button> },
+          { key: 'hide', label: '', render: (row) => <Button variant="tertiary" onClick={(event) => { event.stopPropagation(); setPending(row); }}>Hide business</Button> },
         ]}
         rows={visible}
         getRowId={(row) => row.tenant_id}
+        searchPlaceholder="Search by business, email or ID"
+        toolbar={(
+          <>
+            <select aria-label="Sort" value={sort} onChange={(event) => setSort(event.target.value)} className="h-9 rounded-lg border border-[#7C8798] px-3 text-sm">
+              <option value="name">Name A–Z</option>
+              <option value="messages">Most messages left</option>
+            </select>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!hideTest} onChange={(event) => setHideTest(!event.target.checked)} /> Show test accounts</label>
+          </>
+        )}
         searchText={(row) => `${row.business_name} ${row.email} ${row.tenant_id}`}
         onRowClick={(row) => setParams({ open: row.tenant_id })}
-        empty={state.status === 'ready' ? <EmptyState icon={<BuildingStorefrontIcon className="h-6 w-6" />} title={query ? `No businesses match "${query}"` : 'No businesses yet'} text={query ? 'Try a different search.' : 'Businesses appear here when they sign up in the app.'} /> : null}
+        empty={state.status === 'ready' ? <EmptyState icon={<BuildingStorefrontIcon className="h-6 w-6" />} title="No businesses yet" text="Businesses appear here when they sign up in the app." /> : null}
       />
       {selected ? (
         <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/40">
           <aside className="h-full w-full max-w-[560px] overflow-y-auto bg-white p-5">
-            <h2 className="text-base font-semibold">{selected.business_name || selected.tenant_id}</h2>
-            <p className="text-sm text-slate-600">{selected.tenant_id}</p>
+            <h2 className="text-base font-semibold">{businessDisplayName(selected)}</h2>
+            <p className="mt-4 text-sm">{label('plan', selected.subscription || 'none')} · {label('membership', selected.membership || 'none')}</p>
+            <p className="text-sm">{selected.email}</p>
             <p className="mt-4 text-sm">{formatNumber(selected.messages_remaining)} messages left</p>
+            <h3 className="mt-4 text-sm font-semibold">People</h3>
+            {(selected.users || []).map((user) => <p key={user.id} className="text-sm">{user.email} · {label('role', user.role)}</p>)}
             <p className="text-sm">{formatNumber(selected.historical_credit_remaining)} old credits left</p>
             <div className="mt-4"><Button variant="tertiary" onClick={() => setPending(selected)}>Hide business</Button></div>
             <button type="button" className="mt-6 text-sm text-[#0F766E]" onClick={() => setParams({})}>Close</button>

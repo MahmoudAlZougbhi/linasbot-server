@@ -61,11 +61,9 @@ export default function OwnerOverview() {
             <Card title="Monthly recurring revenue (USD)">
               <p className="text-3xl font-semibold tabular-nums">{formatUsd(analytics.live_checkout_mrr_usd)}</p>
               <p className="text-sm text-slate-600">What subscribers pay today</p>
-              <p className="mt-2 text-sm text-slate-700">At new message-plan prices: {formatUsd(analytics.intended_message_mrr_usd)}</p>
             </Card>
-            <Card title="Old credits (before message plans)">
-              <p className="text-3xl font-semibold tabular-nums">{formatNumber(analytics.credits_remaining)} left</p>
-              <p className="text-sm text-slate-600">{formatNumber(analytics.credits_used)} used of {formatNumber(analytics.credits_total)}</p>
+            <Card title="Messages left (all businesses)">
+              <p className="text-3xl font-semibold tabular-nums">{formatNumber(analytics.messages_remaining ?? analytics.credits_remaining)}</p>
             </Card>
           </section>
           <Card title="Messages by channel" action={<span className="text-sm text-slate-600">{formatNumber(total)} messages</span>}>
@@ -78,7 +76,6 @@ export default function OwnerOverview() {
               </div>
             ))}
           </Card>
-          <TechDetails text={JSON.stringify(analytics?.coverage || {}, null, 2)} />
         </>
       ) : null}
       {open ? (

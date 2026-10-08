@@ -33,5 +33,7 @@ describe('DataTable', () => {
       />,
     );
     expect(screen.queryByText('No tenants match.')).not.toBeInTheDocument();
+    expect(screen.queryByText('0 rows')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
   });
 });

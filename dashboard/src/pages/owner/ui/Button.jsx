@@ -10,6 +10,7 @@ export default function Button({
   className = '',
   type = 'button',
   disabled = false,
+  quietDisabled = false,
   ...rest
 }) {
   const tones = {
@@ -23,7 +24,7 @@ export default function Button({
     <button
       type={type}
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F766E] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${height} ${tones[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F766E] focus-visible:ring-offset-2 disabled:cursor-not-allowed ${quietDisabled ? 'disabled:bg-slate-200 disabled:text-slate-600 disabled:opacity-100' : 'disabled:opacity-50'} ${height} ${tones[variant]} ${className}`}
       {...rest}
     >
       {icon}

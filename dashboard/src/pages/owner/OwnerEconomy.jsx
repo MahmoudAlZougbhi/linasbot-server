@@ -59,7 +59,7 @@ export function economyPayload(economy) {
 
 const ACTIONS = ['ai_dm_reply', 'ai_web_chat', 'ai_whatsapp', 'ai_tiktok', 'ai_public_comment', 'ai_comment_dm', 'followup_sent'];
 
-export default function OwnerEconomy() {
+export default function OwnerEconomy({ embedded = false }) {
   const [catalog, setCatalog] = useState(/** @type {any} */ (null));
   const [economy, setEconomy] = useState(emptyEconomy());
   const [error, setError] = useState('');
@@ -84,13 +84,14 @@ export default function OwnerEconomy() {
   }
   return (
     <div className="space-y-6">
-      <PageHeader title="Message pricing" subtitle="How many messages each AI action takes from a business's balance." />
+      {embedded ? null : <PageHeader title="Message pricing" subtitle="How many messages each AI action takes from a business's balance." />}
       {error ? <Alert title="We couldn't save pricing." detail={error} /> : null}
       <Card title="Messages charged per AI action">
         {ACTIONS.map((key) => (
-          <label key={key} className="mt-3 flex items-center justify-between gap-3 text-sm">
-            {label('actionCost', key)}
+          <label key={key} className="mt-3 flex max-w-xl items-center gap-3 text-sm">
+            <span>{label('actionCost', key)}</span>
             <input aria-label={label('actionCost', key)} className="h-9 w-24 rounded-lg border border-[#7C8798] px-3 text-right tabular-nums" value={economy.action_costs[key]} onChange={(event) => { setDirty(true); setEconomy((current) => ({ ...current, action_costs: { ...current.action_costs, [key]: event.target.value } })); }} />
+            <span>messages</span>
           </label>
         ))}
         <label className="mt-4 block text-sm">When the AI replies to a comment and also sends a DM

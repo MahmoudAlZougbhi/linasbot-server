@@ -73,10 +73,18 @@ export function formatRelative(value, now = Date.now()) {
   if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours} h ago`;
-  const days = Math.floor(hours / 24);
-  if (days === 1) return 'yesterday';
-  if (days < 7) return `${days} days ago`;
   return formatDateTime(date);
+}
+
+/** @param {{ business_name?: string, tenant_id?: string, email?: string } | null | undefined} row */
+export function businessDisplayName(row) {
+  const name = String(row?.business_name || '').trim();
+  if (name && !name.includes('@')) return name;
+  const id = String(row?.tenant_id || '').trim();
+  if (id) {
+    return id.split(/[-_]+/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+  }
+  return String(row?.email || '');
 }
 
 /** @param {unknown} ms */

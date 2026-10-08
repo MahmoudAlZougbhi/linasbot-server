@@ -15,6 +15,8 @@ export function humanize(key) {
   const words = String(key || '').replace(/[_-]+/g, ' ').trim().split(/\s+/).filter(Boolean);
   return words.map((word, index) => {
     const lower = word.toLowerCase();
+    if (lower === 'qa') return index === 0 ? 'Answer' : 'answer';
+    if (lower === 'kb') return index === 0 ? 'Knowledge' : 'knowledge';
     if (ACRONYMS.has(lower)) return lower.toUpperCase();
     if (BRANDS[lower]) return BRANDS[lower];
     if (index === 0) return lower.charAt(0).toUpperCase() + lower.slice(1);
@@ -52,7 +54,23 @@ export const MAPS = {
   traceStep: { receive: 'Received', faq_or_retrieve: 'Checked ready answers & knowledge', reply: 'Replied', lab: 'Test chat' },
   costCategory: { llm_generation: 'AI replies', embedding: 'Search indexing', rerank: 'Search ranking', visual: 'Image & video understanding', transcription: 'Voice notes' },
   provider: { openai: 'OpenAI', voyage: 'Voyage AI', anthropic: 'Anthropic', google: 'Google' },
-  auditAction: { brain_lab_customer: 'Tested Customer AI', brain_lab_copilot: 'Tested Owner Copilot', suspend: 'Suspended business', unsuspend: 'Restored business', user_update: 'Updated user', publish: 'Published plans & prices', portal_edit: 'Edited plans & prices', economy_edit: 'Edited message pricing' },
+  auditAction: {
+    brain_lab_customer: 'Tested Customer AI',
+    brain_lab_copilot: 'Tested Owner Copilot',
+    suspend: 'Suspended business',
+    unsuspend: 'Restored business',
+    reactivate: 'Restored business',
+    user_update: 'Updated user',
+    update_user: 'Updated user',
+    tenant_visibility: 'Changed business visibility',
+    publish: 'Published plans & prices',
+    portal_edit: 'Edited plans & prices',
+    economy_edit: 'Edited message pricing',
+    copilot_qa_save: 'Added Copilot answer',
+    copilot_qa_delete: 'Deleted Copilot answer',
+    copilot_kb_save: 'Added Copilot knowledge',
+    copilot_kb_delete: 'Deleted Copilot knowledge',
+  },
   freeField: { free_ai_message_allowance: 'Free messages per month', included_messages: 'Free messages per month', free_message_renewal: 'How free messages renew', knowledge_line_budget: 'Knowledge lines allowed', services_products_line_budget: 'Services & products lines allowed', content_line_definition: 'What counts as one line', message_topup_prices: 'Top-up prices', credit_to_message_conversion: 'Old credits → messages conversion' },
   actionCost: { ai_dm_reply: 'Instagram & Facebook DM reply', ai_web_chat: 'Website chat reply', ai_whatsapp: 'WhatsApp reply', ai_tiktok: 'TikTok reply', ai_public_comment: 'Public comment reply', ai_comment_dm: 'DM sent after a comment', followup_sent: 'Smart follow-up' },
   range: { last_day: 'Last 24 hours', last_7_days: 'Last 7 days', last_week: 'Since Monday last week', last_month: 'Last 30 days', last_6_months: 'Last 6 months', last_year: 'Last 12 months' },

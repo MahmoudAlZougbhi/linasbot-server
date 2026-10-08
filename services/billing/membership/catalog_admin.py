@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from copy import deepcopy
 from typing import Any
 
@@ -253,7 +254,15 @@ def update_draft(*, actor: str, changes: dict[str, Any], reason: str = "") -> di
         _refresh_unlocked()
         _DRAFT.update(allowed)
         _REVISION += 1
-        _AUDIT.append({"actor": actor, "reason": reason, "revision": _REVISION, "fields": sorted(allowed)})
+        _AUDIT.append(
+            {
+                "actor": actor,
+                "reason": reason,
+                "revision": _REVISION,
+                "fields": sorted(allowed),
+                "created_at": time.time(),
+            }
+        )
         _persist_unlocked()
         return _catalog_unlocked()
 
@@ -268,7 +277,7 @@ def publish(*, actor: str, reason: str = "") -> dict[str, Any]:
         global _PUBLISHED, _REVISION
         _PUBLISHED = True
         _REVISION += 1
-        _AUDIT.append({"actor": actor, "reason": reason or "publish", "revision": _REVISION})
+        _AUDIT.append({"actor": actor, "reason": reason or "publish", "revision": _REVISION, "created_at": time.time()})
         _persist_unlocked()
         return _catalog_unlocked()
 
