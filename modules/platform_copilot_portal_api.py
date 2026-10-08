@@ -38,6 +38,7 @@ async def _variants(body: QaBody) -> list[dict[str, str]]:
     variants = {source: {"language": source, "question": body.question.strip(), "answer": body.answer.strip()}}
     try:
         from services.brain.language_detection_service import language_detection_service
+        from services.owner_portal.franco import keep_verbatim
 
         for language in _langs():
             if language in {source, "franco"}:
@@ -50,8 +51,8 @@ async def _variants(body: QaBody) -> list[dict[str, str]]:
             )
             variants[language] = {
                 "language": language,
-                "question": question or body.question,
-                "answer": answer or body.answer,
+                "question": keep_verbatim(body.question, question or body.question),
+                "answer": keep_verbatim(body.answer, answer or body.answer),
             }
     except Exception:
         pass

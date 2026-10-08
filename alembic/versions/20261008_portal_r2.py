@@ -54,9 +54,19 @@ def upgrade() -> None:
         ON omnichannel_inbound_events (created_at)
         """
     )
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS owner_portal_tenant_visibility (
+            tenant_id TEXT PRIMARY KEY,
+            hidden INTEGER NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT ''
+        )
+        """
+    )
 
 
 def downgrade() -> None:
+    op.execute("DROP TABLE IF EXISTS owner_portal_tenant_visibility")
     op.execute("DROP INDEX IF EXISTS ix_omni_inbound_created")
     op.execute("DROP INDEX IF EXISTS ix_owner_portal_flow_tenant_created")
     op.execute("DROP TABLE IF EXISTS owner_portal_flow_events")

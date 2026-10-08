@@ -166,10 +166,14 @@ def _hide_tenant(
     credits_used: int = 0,
     historical_credit_remaining: int = 0,
 ) -> bool:
+    from services.owner_portal.tenant_visibility import hidden_override
     from services.team.tenant_identity import PROTECTED_TENANTS, is_junk_identity
 
     if tenant_id.strip().lower() in PROTECTED_TENANTS:
         return False
+    override = hidden_override(tenant_id)
+    if override is not None:
+        return override
     if status.strip().lower() == "blocked":
         return True
     if messages_used or credits_used or historical_credit_remaining:

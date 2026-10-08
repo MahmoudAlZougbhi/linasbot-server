@@ -155,8 +155,10 @@ class OwnerChatStore:
         return removed
 
     def list_conversations(self, *, tenant_id: str, user_id: str) -> list[dict[str, Any]]:
+        from services.owner_copilot.owner_chat_pg import import_local_conversations
         from services.owner_copilot.owner_chat_pg import list_conversations as shared_list
 
+        import_local_conversations(self._root)
         status, shared = shared_list(tenant_id=tenant_id, user_id=user_id)
         if status != "unavailable":
             visible = [
@@ -192,8 +194,9 @@ class OwnerChatStore:
         return found
 
     def get_conversation(self, *, tenant_id: str, user_id: str, conversation_id: str) -> OwnerConversation | None:
-        from services.owner_copilot.owner_chat_pg import load_conversation
+        from services.owner_copilot.owner_chat_pg import import_local_conversations, load_conversation
 
+        import_local_conversations(self._root)
         status, shared = load_conversation(tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id)
         if status == "ok" and isinstance(shared, dict):
             return self._from_payload(shared, tenant_id=tenant_id, user_id=user_id)

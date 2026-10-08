@@ -22,6 +22,10 @@ class PlatformUserUpdateBody(BaseModel):
     password: str | None = Field(default=None, min_length=12, max_length=128)
 
 
+class TenantVisibilityBody(BaseModel):
+    hidden: bool
+
+
 @app.get("/api/platform/analytics")
 async def platform_analytics(
     request: Request,
@@ -86,3 +90,22 @@ async def platform_update_user(user_id: str, body: PlatformUserUpdateBody, reque
         details={"user_id": user_id, "fields": sorted(k for k in updates if not k.startswith("_"))},
     )
     return {"success": True, "user": user}
+
+
+@app.patch("/api/platform/tenants/{tenant_id}/visibility")
+async def platform_tenant_visibility(tenant_id: str, body: TenantVisibilityBody, request: Request) -> Any:
+    session = require_platform_owner(request)
+    from services.owner_portal.tenant_visibility import set_hidden
+
+    result = set_hidden(tenant_id, body.hidden)
+    if result == "protected":
+        raise HTTPException(status_code=403, detail="protected_tenant")
+    if result != "ok":
+        raise HTTPException(status_code=503, detail="visibility_unavailable")
+    platform_owner_service.log_action(
+        actor_user_id=session.user_id,
+        action="tenant_visibility",
+        tenant_id=tenant_id.strip().lower(),
+        details={"hidden": body.hidden},
+    )
+    return {"success": True, "tenant_id": tenant_id.strip().lower(), "hidden": body.hidden}

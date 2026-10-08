@@ -150,12 +150,22 @@ def test_semantic_qa_uses_the_vector_store(monkeypatch) -> None:
             "language": "en",
             "question": "what is the amber-falcon refund code?",
             "answer": "The amber-falcon refund code is 5293.",
-        }
+        },
+        {
+            "language": "ar",
+            "question": "ما هو رمز الاسترداد الخاص بـ amber-falcon؟",
+            "answer": "QA-LINAS-RETEST The amber-falcon refund code is 5293.",
+        },
+        {
+            "language": "franco",
+            "question": "shu howe code el refund taba3 amber-falcon?",
+            "answer": "QA-LINAS-RETEST code el refund taba3 amber-falcon howe 5293.",
+        },
     ]
 
     def _embed(text: str, *, query: bool = False) -> list[float]:
         vector = [0.0] * 32
-        for token in re.findall(r"[a-z0-9]+", text.lower()):
+        for token in re.findall(r"\w+", text.lower()):
             if token in {"what", "is", "the", "for", "could", "you", "tell", "me", "please"}:
                 continue
             vector[hash(token) % 32] += 1.0
@@ -176,7 +186,10 @@ def test_semantic_qa_uses_the_vector_store(monkeypatch) -> None:
     monkeypatch.setattr("services.owner_portal.owner_qa._REINDEXED", True)
     _index("qa1", variants)
     assert match_owner_qa("what is the amber-falcon refund code please?", "en")["hit"] == "semantic"
+    assert match_owner_qa("what is the amber-falcon refund code?", "en")["hit"] == "exact"
     assert match_owner_qa("Could you tell me the refund code for amber falcon?", "en")["answer"].endswith("5293.")
+    assert match_owner_qa("ما هو رمز الاسترداد الخاص بـ amber-falcon؟ لو سمحت", "ar")["hit"] == "semantic"
+    assert match_owner_qa("shu howe code el refund taba3 amber-falcon?", "franco")["hit"] == "exact"
     assert match_owner_qa("What are the clinic opening hours on Friday?", "en") is None
     assert match_owner_qa("What is the purple-lantern support code?", "en") is None
 
@@ -212,6 +225,120 @@ def test_junk_filter_and_protected_tenants() -> None:
         "needs_owner_review"
     )
     assert classify_tenant({"tenant_id": "ok-clinic", "email": "a@p.tld"}) == "candidate"
+
+
+def test_write_trace_logs_a_database_error(monkeypatch, caplog) -> None:
+    import logging
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr("db.session.whatsapp_session", _boom)
+    with caplog.at_level(logging.ERROR):
+        assert write_trace({"tenant_id": "linas", "brain": "owner_copilot", "user_message": "hi"}) == ""
+    assert "owner message trace was not stored" in caplog.text
+
+
+def test_file_only_chat_is_imported_once(tmp_path, monkeypatch) -> None:
+    from services.owner_copilot.chat_store import OwnerChatStore
+    from services.owner_copilot.owner_chat_pg import reset_local_import
+
+    opener = _sqlite_session(tmp_path / "chat.sqlite")
+    with opener() as session:
+        session.execute(
+            text(
+                """
+                CREATE TABLE owner_copilot_conversations (
+                    id TEXT PRIMARY KEY, tenant_id TEXT, user_id TEXT, title TEXT,
+                    created_at DOUBLE PRECISION, updated_at DOUBLE PRECISION,
+                    archived INTEGER, deleted INTEGER, payload TEXT
+                )
+                """
+            )
+        )
+    monkeypatch.setattr("db.session.whatsapp_session", opener)
+    reset_local_import()
+    writer = OwnerChatStore(root=tmp_path / "node-a")
+    payload = {
+        "id": "file-only",
+        "tenant_id": "platform",
+        "user_id": "owner",
+        "title": "QA-LINAS-R2 file",
+        "created_at": 1,
+        "updated_at": 2,
+        "deleted": False,
+        "messages": [{"id": "m", "role": "user", "content": "hi", "created_at": 1}],
+    }
+    path = writer._tenant_dir("platform")
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "file-only.json").write_text(__import__("json").dumps(payload), encoding="utf-8")
+    reader = OwnerChatStore(root=tmp_path / "node-b")
+    assert writer.list_conversations(tenant_id="platform", user_id="owner")[0]["id"] == "file-only"
+    assert reader.get_conversation(tenant_id="platform", user_id="owner", conversation_id="file-only")
+    assert writer.soft_delete(tenant_id="platform", user_id="owner", conversation_id="file-only") is True
+    reset_local_import()
+    assert reader.get_conversation(tenant_id="platform", user_id="owner", conversation_id="file-only") is None
+
+
+def test_visibility_override_hides_and_unhides(tmp_path, monkeypatch) -> None:
+    from services.owner_portal.owner_portal_service import _hide_tenant
+    from services.owner_portal.tenant_visibility import set_hidden
+
+    opener = _sqlite_session(tmp_path / "vis.sqlite")
+    monkeypatch.setattr("db.session.whatsapp_session", opener)
+    assert (
+        _hide_tenant(
+            tenant_id="layla-salon",
+            business_name="Layla",
+            email="a@shop.com",
+            status="active",
+        )
+        is False
+    )
+    assert set_hidden("layla-salon", True) == "ok"
+    assert _hide_tenant(tenant_id="layla-salon", business_name="Layla", email="a@shop.com", status="active") is True
+    assert set_hidden("linas", True) == "protected"
+    assert set_hidden("probe-clinic", False) == "ok"
+    assert _hide_tenant(tenant_id="probe-clinic", business_name="Probe", email="a@p.tld", status="active") is False
+
+
+def test_message_flows_add_lab_rows_without_dropping_outbox(monkeypatch) -> None:
+    import asyncio
+
+    monkeypatch.setattr("modules.api_security.require_platform_owner", lambda _request: object())
+    monkeypatch.setattr(
+        "services.brain.turn_inspector.list_message_flows",
+        lambda **_kwargs: [{"operation_id": "out-1", "updated_at": "2020-01-01T00:00:00Z", "channel": "whatsapp"}],
+    )
+    monkeypatch.setattr(
+        "services.owner_portal.shared_events.list_flow_events",
+        lambda **_kwargs: [
+            {
+                "channel": "brains_test",
+                "message_id": "lab-1",
+                "timestamp": "2026-10-08T08:00:00Z",
+                "outcome": "replied",
+                "tenant_id": "linas",
+                "user_message": "QA-LINAS-R2",
+                "bot_to_user": "ok",
+            }
+        ],
+    )
+    from modules.platform_message_api import platform_message_flows
+
+    result = asyncio.run(platform_message_flows(request=None, tenant_id=None, limit=50))
+    assert result["messages"][0]["source"] == "lab"
+    assert result["messages"][0]["channel"] == "brains_test"
+    assert any(row.get("operation_id") == "out-1" for row in result["messages"])
+
+
+def test_translations_keep_names_codes_and_the_label() -> None:
+    from services.owner_portal.franco import keep_verbatim
+
+    source = "QA-LINAS-RETEST The amber-falcon refund code is 5293."
+    assert keep_verbatim(source, "Le code de remboursement est 5293.") == source
+    kept = keep_verbatim(source, "QA-LINAS-RETEST Le code amber-falcon est 5293.")
+    assert "amber-falcon" in kept and "5293" in kept and kept.startswith("QA-LINAS-RETEST")
 
 
 def test_version_uses_git_sha_or_unknown(monkeypatch) -> None:

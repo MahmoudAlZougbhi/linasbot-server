@@ -91,6 +91,60 @@ def save_conversation(payload: dict[str, Any]) -> None:
         return
 
 
+_IMPORTED = False
+
+
+def reset_local_import() -> None:
+    global _IMPORTED
+    _IMPORTED = False
+
+
+def import_local_conversations(root: Any) -> None:
+    """Copy file-only chats into Postgres once. An existing row, including a deletion, wins."""
+    global _IMPORTED
+    if _IMPORTED:
+        return
+    from pathlib import Path
+
+    from db.session import whatsapp_session
+
+    try:
+        with whatsapp_session(require=False) as session:
+            if session is None:
+                return
+            _IMPORTED = True
+            for path in Path(root).glob("*/*.json"):
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if not isinstance(payload, dict) or payload.get("deleted") or not payload.get("id"):
+                    continue
+                session.execute(
+                    text(
+                        """
+                        INSERT INTO owner_copilot_conversations
+                          (id, tenant_id, user_id, title, created_at, updated_at, archived, deleted, payload)
+                        VALUES
+                          (:id, :tenant, :user, :title, :created, :updated, :archived, 0, :payload)
+                        ON CONFLICT (id) DO NOTHING
+                        """
+                    ),
+                    {
+                        "id": payload["id"],
+                        "tenant": payload.get("tenant_id") or "",
+                        "user": payload.get("user_id") or "",
+                        "title": payload.get("title") or "",
+                        "created": float(payload.get("created_at") or 0),
+                        "updated": float(payload.get("updated_at") or 0),
+                        "archived": 1 if payload.get("archived") else 0,
+                        "payload": json.dumps(payload, default=str),
+                    },
+                )
+    except Exception:
+        return
+
+
 def _select(sql: str, params: dict[str, Any]) -> list[Any] | None:
     from db.session import whatsapp_session
 

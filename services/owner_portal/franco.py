@@ -57,6 +57,17 @@ def verbatim_tokens(text: str) -> list[str]:
     return re.findall(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+|\d{2,}", text or "")
 
 
+def keep_verbatim(source: str, translated: str) -> str:
+    """Keep the source when a translation drops a name, code, number, or label."""
+    cleaned = (translated or "").strip()
+    original = (source or "").strip()
+    if not cleaned:
+        return original
+    if any(token not in cleaned for token in verbatim_tokens(original)):
+        return original
+    return cleaned
+
+
 async def franco_pair(question: str, answer: str) -> tuple[str, str]:
     """Natural Latin Arabizi. Falls back to the letter map after one retry."""
     locked = verbatim_tokens(f"{question}\n{answer}")
