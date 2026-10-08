@@ -110,7 +110,7 @@ export default function OwnerMessages() {
               className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-left text-sm hover:border-teal-700"
             >
               <p className="font-medium text-slate-100">
-                {row.tenant_id} · {row.channel || 'channel?'} · {row.state}
+                {row.tenant_id} · {row.channel === 'brains_test' ? 'Brains test' : (row.channel || 'channel?')} · {row.state}
               </p>
               <p className="mt-1 text-xs text-slate-400">{row.inbound_preview || row.reply_preview || row.operation_id}</p>
               <p className="mt-1 text-xs text-slate-500">

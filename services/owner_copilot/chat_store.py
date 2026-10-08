@@ -157,15 +157,14 @@ class OwnerChatStore:
     def list_conversations(self, *, tenant_id: str, user_id: str) -> list[dict[str, Any]]:
         from services.owner_copilot.owner_chat_pg import list_conversations as shared_list
 
+        status, shared = shared_list(tenant_id=tenant_id, user_id=user_id)
+        if status != "unavailable":
+            items = [self._public_row(data) for data in shared if _visible_conversation(data)]
+            items = [item for item in items if item]
+            items.sort(key=lambda row: float(row.get("updated_at") or 0), reverse=True)
+            return items
         by_id: dict[str, dict[str, Any]] = {}
         for data in self._file_conversations(tenant_id, user_id):
-            row = self._public_row(data)
-            if row:
-                by_id[str(row["id"])] = row
-        shared = shared_list(tenant_id=tenant_id, user_id=user_id)
-        for data in shared or []:
-            if not _visible_conversation(data):
-                continue
             row = self._public_row(data)
             if row:
                 by_id[str(row["id"])] = row
@@ -190,9 +189,11 @@ class OwnerChatStore:
     def get_conversation(self, *, tenant_id: str, user_id: str, conversation_id: str) -> OwnerConversation | None:
         from services.owner_copilot.owner_chat_pg import load_conversation
 
-        shared = load_conversation(tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id)
-        if shared is not None:
+        status, shared = load_conversation(tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id)
+        if status == "ok" and isinstance(shared, dict):
             return self._from_payload(shared, tenant_id=tenant_id, user_id=user_id)
+        if status != "unavailable":
+            return None
         path = self._conv_path(tenant_id, conversation_id)
         with self._lock:
             if not path.is_file():

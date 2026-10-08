@@ -401,8 +401,11 @@ def log_interaction(
         # Never break interaction logging because of wallet accounting.
         print(f"[interaction_flow] token debit skipped: {type(exc).__name__}", flush=True)
 
-    _FLOW_BUFFER.append(entry)
-    _append_to_file(entry)
+    from services.owner_portal.shared_events import insert_flow_event
+
+    if not insert_flow_event(entry):
+        _FLOW_BUFFER.append(entry)
+        _append_to_file(entry)
 
     # Persist safe customer-response TRACE for owner self-diagnosis (no chain-of-thought).
     if resolved_tenant_id:
@@ -420,6 +423,20 @@ def get_recent_flows(
     tenant_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Get recent flow entries, optionally restricted to one exact tenant."""
+    from services.owner_portal.shared_events import list_flow_events
+
+    shared = list_flow_events(tenant_id=tenant_id, limit=max(limit * 3, limit))
+    if shared is not None:
+        if search_phone and search_phone.strip():
+            needle = search_phone.strip().replace(" ", "").replace("+", "").replace("-", "")
+            shared = [
+                row
+                for row in shared
+                if needle
+                in str(row.get("user_phone") or "").replace(" ", "").replace("+", "").replace("-", "")
+                or needle in str(row.get("user_id") or "")
+            ]
+        return shared[:limit]
     _load_from_file()
     entries = list(_FLOW_BUFFER)
     if tenant_id is not None:

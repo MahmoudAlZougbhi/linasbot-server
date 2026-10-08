@@ -187,6 +187,8 @@ def persist_from_interaction_entry(entry: dict[str, Any]) -> dict[str, Any] | No
         extra={"handler_path": entry.get("handler_path"), "outcome": entry.get("outcome")},
     )
     stored = customer_response_trace_store.persist(trace)
+    if str(entry.get("channel") or "") == "brains_test":
+        return stored
     try:
         from services.owner_portal.owner_traces import record_trace
 

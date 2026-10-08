@@ -9,27 +9,16 @@ import argparse
 import json
 from typing import Any
 
-from services.team.tenant_identity import PROTECTED_TENANTS, is_junk_identity
+from services.team.tenant_identity import classify_tenant, matched_junk_rule
 
 
 def candidate_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     chosen: list[dict[str, Any]] = []
     for row in rows:
+        kind = classify_tenant(row)
+        if kind != "candidate":
+            continue
         tenant_id = str(row.get("tenant_id") or "")
-        if tenant_id.strip().lower() in PROTECTED_TENANTS:
-            continue
-        if not is_junk_identity(
-            tenant_id=tenant_id,
-            business_name=str(row.get("business_name") or ""),
-            email=str(row.get("email") or ""),
-        ):
-            continue
-        if int(row.get("messages_remaining") or 0) or int(row.get("historical_credit_remaining") or 0):
-            continue
-        if int(row.get("messages_used") or 0) or int(row.get("credits_used") or 0):
-            continue
-        if row.get("published_brain"):
-            continue
         chosen.append(
             {
                 "tenant_id": tenant_id,
@@ -38,6 +27,12 @@ def candidate_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "created_at": row.get("created_at") or "",
                 "messages_remaining": int(row.get("messages_remaining") or 0),
                 "historical_credit_remaining": int(row.get("historical_credit_remaining") or 0),
+                "classification": kind,
+                "matched_rule": matched_junk_rule(
+                    tenant_id=tenant_id,
+                    business_name=str(row.get("business_name") or ""),
+                    email=str(row.get("email") or ""),
+                ),
             }
         )
     return chosen

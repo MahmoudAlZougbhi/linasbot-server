@@ -8920,6 +8920,8 @@ activate_impl() {
   write_activation_phase "$tx_dir" "$target_sha" "$previous_sha" target-installed "$generation"
   audit_untracked_runtime "$tx_dir" "pre-target-start" "$target_sha" || \
     die "untracked runtime source appeared before target service start"
+  install -d -o root -g root -m 0755 /var/lib/linasbot
+  printf '%s\n' "$target_sha" > /var/lib/linasbot/release_git_sha
   start_target_runtime "$tx_dir"
   test "$(current_head)" = "$target_sha" || die "activated target SHA mismatch"
   git -C "$REPO_DIR" diff --quiet "$target_sha" -- || die "activated tracked tree is dirty"

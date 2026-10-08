@@ -52,27 +52,22 @@ def load_overview(start: datetime, end: datetime) -> dict[str, Any] | None:
                     """
                 )
             ).scalar()
-            credits = session.execute(
-                text(
-                    """
-                    SELECT
-                      COALESCE(SUM(e.included_credits + e.extra_credits), 0),
-                      COALESCE(SUM(GREATEST(e.included_credits + e.extra_credits - b.available, 0)), 0),
-                      COALESCE(SUM(b.available), 0)
-                    FROM tenant_entitlements e
-                    LEFT JOIN credit_balances b ON b.tenant_id = e.tenant_id
-                    WHERE e.status IN ('active', 'trial', 'grace')
-                    """
-                )
-            ).one()
             messages = session.execute(
                 text(
                     """
+                    WITH active AS (
+                      SELECT tenant_id FROM tenant_entitlements
+                      WHERE status IN ('active', 'trial', 'grace')
+                    )
                     SELECT
-                      COALESCE(SUM(granted), 0),
-                      COALESCE(SUM(GREATEST(granted - remaining, 0)), 0),
-                      COALESCE(SUM(remaining), 0)
-                    FROM customer_ai_message_lots
+                      COALESCE((SELECT SUM(granted) FROM customer_ai_message_lots
+                                WHERE tenant_id IN (SELECT tenant_id FROM active)), 0),
+                      COALESCE((SELECT SUM(GREATEST(granted - remaining, 0)) FROM customer_ai_message_lots
+                                WHERE tenant_id IN (SELECT tenant_id FROM active)), 0),
+                      COALESCE((SELECT SUM(remaining) FROM customer_ai_message_lots
+                                WHERE tenant_id IN (SELECT tenant_id FROM active)), 0),
+                      COALESCE((SELECT SUM(available) FROM credit_balances
+                                WHERE tenant_id IN (SELECT tenant_id FROM active)), 0)
                     """
                 )
             ).one()
@@ -94,12 +89,13 @@ def load_overview(start: datetime, end: datetime) -> dict[str, Any] | None:
         "new_users": int(new_users or 0),
         "live_users": int(live_users or 0),
         "subscribers": int(subscribers or 0),
-        "credits_total": int(credits[0] or 0),
-        "credits_used": int(credits[1] or 0),
-        "credits_remaining": int(credits[2] or 0),
+        "credits_total": int(messages[0] or 0),
+        "credits_used": int(messages[1] or 0),
+        "credits_remaining": int(messages[2] or 0),
         "messages_total": int(messages[0] or 0),
         "messages_used": int(messages[1] or 0),
         "messages_remaining": int(messages[2] or 0),
+        "historical_credit_remaining": int(messages[3] or 0),
         "plan_ids": [str(plan or "") for plan in plans],
         "active_statuses": list(_ACTIVE),
     }

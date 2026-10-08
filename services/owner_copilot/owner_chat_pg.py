@@ -8,24 +8,29 @@ from typing import Any
 from sqlalchemy import text
 
 
-def load_conversation(*, tenant_id: str, user_id: str, conversation_id: str) -> dict[str, Any] | None:
+def load_conversation(*, tenant_id: str, user_id: str, conversation_id: str) -> tuple[str, dict[str, Any] | None]:
+    """Return (ok|missing|deleted|unavailable, payload). Postgres is authoritative when available."""
     rows = _select(
         """
-        SELECT payload FROM owner_copilot_conversations
-        WHERE id = :id AND tenant_id = :tenant AND user_id = :user AND deleted = 0
+        SELECT payload, deleted FROM owner_copilot_conversations
+        WHERE id = :id AND tenant_id = :tenant AND user_id = :user
         """,
         {"id": conversation_id, "tenant": tenant_id, "user": user_id},
     )
+    if rows is None:
+        return "unavailable", None
     if not rows:
-        return None
+        return "missing", None
+    if int(rows[0][1] or 0):
+        return "deleted", None
     try:
         payload = json.loads(rows[0][0] or "{}")
     except json.JSONDecodeError:
-        return None
-    return payload if isinstance(payload, dict) else None
+        return "missing", None
+    return ("ok", payload) if isinstance(payload, dict) else ("missing", None)
 
 
-def list_conversations(*, tenant_id: str, user_id: str) -> list[dict[str, Any]] | None:
+def list_conversations(*, tenant_id: str, user_id: str) -> tuple[str, list[dict[str, Any]]]:
     rows = _select(
         """
         SELECT payload FROM owner_copilot_conversations
@@ -35,7 +40,7 @@ def list_conversations(*, tenant_id: str, user_id: str) -> list[dict[str, Any]] 
         {"tenant": tenant_id, "user": user_id},
     )
     if rows is None:
-        return None
+        return "unavailable", []
     items: list[dict[str, Any]] = []
     for row in rows:
         try:
@@ -44,7 +49,7 @@ def list_conversations(*, tenant_id: str, user_id: str) -> list[dict[str, Any]] 
             continue
         if isinstance(payload, dict):
             items.append(payload)
-    return items
+    return "ok", items
 
 
 def save_conversation(payload: dict[str, Any]) -> None:

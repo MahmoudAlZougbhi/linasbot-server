@@ -53,6 +53,17 @@ export default function OwnerQa() {
             {(item.variants || []).map((/** @type {any} */ variant) => (
               <p key={variant.language} className="mt-2"><span className="text-teal-300">{variant.language}:</span> {variant.question}</p>
             ))}
+            <button
+              type="button"
+              className="mt-3 text-sm text-red-300"
+              onClick={() => {
+                if (window.confirm('Delete this Q&A?')) {
+                  void ownerApi.deleteQa(item.id).then(load).catch((reason) => setError(reason.message));
+                }
+              }}
+            >
+              Delete
+            </button>
           </li>
         ))}
       </ul>

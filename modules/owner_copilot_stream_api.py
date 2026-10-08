@@ -245,6 +245,16 @@ async def stream_owner_message(
 
             route = (done_payload or {}).get("route") if isinstance(done_payload, dict) else {}
             qa_hit = isinstance(route, dict) and str(route.get("reason") or "") == "qa_hit"
+            prompt_tokens = int((done_payload or {}).get("context_tokens") or 0)
+            completion_tokens = 0 if qa_hit or not final_text else max(1, len(final_text) // 4)
+            if qa_hit:
+                prompt_tokens = 0
+            model_name = "" if qa_hit else str((done_payload or {}).get("model") or "")
+            cost_usd = 0.0
+            if model_name and (prompt_tokens or completion_tokens):
+                from services.brain.model_pricing import compute_cost_from_usage
+
+                cost_usd = float(compute_cost_from_usage(model_name, prompt_tokens, completion_tokens)["cost_usd"])
             write_trace(
                 {
                     "tenant_id": session.tenant_id,
@@ -252,7 +262,7 @@ async def stream_owner_message(
                     "channel": "owner_copilot",
                     "user_message": content,
                     "reply": final_text,
-                    "prompt": "redacted-at-rest" if not qa_hit else "",
+                    "model": model_name,
                     "error": "incomplete" if incomplete else "",
                     "steps": [
                         {"name": "receive"},
@@ -260,8 +270,9 @@ async def stream_owner_message(
                         {"name": "reply"},
                     ],
                     "qa_hit": qa_hit,
-                    "tokens_in": 0 if qa_hit else None,
-                    "tokens_out": 0 if qa_hit else None,
+                    "tokens_in": prompt_tokens,
+                    "tokens_out": completion_tokens,
+                    "cost_usd": cost_usd,
                 }
             )
 

@@ -62,14 +62,10 @@ async def _variants(body: QaBody) -> list[dict[str, str]]:
             language,
             {"language": language, "question": body.question.strip(), "answer": body.answer.strip()},
         )
-    from services.owner_portal.franco import to_franco
+    from services.owner_portal.franco import franco_pair
 
-    arabic = variants.get("ar") or {"question": body.question.strip(), "answer": body.answer.strip()}
-    variants["franco"] = {
-        "language": "franco",
-        "question": to_franco(str(arabic.get("question") or "")),
-        "answer": to_franco(str(arabic.get("answer") or "")),
-    }
+    question, answer = await franco_pair(body.question.strip(), body.answer.strip())
+    variants["franco"] = {"language": "franco", "question": question, "answer": answer}
     return list(variants.values())
 
 
@@ -122,6 +118,23 @@ async def save_saved_qa(body: QaBody, request: Request) -> Any:
     return {"success": True, "id": qa_id}
 
 
+@app.delete("/api/platform/copilot/qa/{qa_id}")
+async def delete_saved_qa(qa_id: str, request: Request) -> Any:
+    session = require_platform_owner(request)
+    from services.owner_portal.owner_qa import delete_qa
+    from services.team.platform_owner_service import platform_owner_service
+
+    if not delete_qa(qa_id):
+        raise HTTPException(status_code=404, detail="qa_not_found")
+    platform_owner_service.log_action(
+        actor_user_id=session.user_id,
+        action="copilot_qa_delete",
+        tenant_id="platform",
+        details={"qa_id": qa_id},
+    )
+    return {"success": True}
+
+
 @app.get("/api/platform/copilot/traces")
 async def list_portal_traces(
     request: Request,
@@ -165,6 +178,14 @@ async def portal_audit(request: Request) -> Any:
     from services.owner_portal.audit_feed import merged_audit_events
 
     return {"success": True, "events": merged_audit_events()}
+
+
+@app.get("/api/platform/version")
+async def portal_version(request: Request) -> Any:
+    require_platform_owner(request)
+    from services.owner_portal.release_version import version_payload
+
+    return {"success": True, "version": version_payload()}
 
 
 @app.get("/api/platform/health")
