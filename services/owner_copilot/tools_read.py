@@ -87,7 +87,8 @@ async def tool_read_cm(
         if flag_enabled("copilot_counts") and isinstance(draft_out, dict):
             from services.owner_copilot.section_counts import count_records
 
-            rows = draft_out.get("items") if isinstance(draft_out.get("items"), list) else []
+            raw_rows = draft_out.get("items")
+            rows = raw_rows if isinstance(raw_rows, list) else []
             data["counts"] = count_records(rows)
         return ToolResult(ok=True, name="read_cm", data=data)
 
