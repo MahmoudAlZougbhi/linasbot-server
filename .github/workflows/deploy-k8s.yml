@@ -77,6 +77,8 @@ jobs:
             *) digest="sha256:$IMAGE_DIGEST" ;;
           esac
           sh deploy/k8s/bootstrap.sh
+          kubectl -n linas delete secret -l name=linas,owner=helm,status=pending-install --ignore-not-found
+          kubectl -n linas delete secret -l name=linas,owner=helm,status=pending-upgrade --ignore-not-found
           helm upgrade --install linas deploy/k8s/linas \
             --namespace linas --create-namespace \
             --atomic --wait --timeout 15m \
