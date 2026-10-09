@@ -27,6 +27,8 @@ spec:
               value: "1"
             - name: LINAS_FLAG_QUEUE_BACKEND
               value: pg
+            - name: LINAS_REQUIRE_SHARED_STORES
+              value: "1"
           readinessProbe:
             httpGet:
               path: /api/health/ready
