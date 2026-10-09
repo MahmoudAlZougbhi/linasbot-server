@@ -29,6 +29,7 @@ NODE01_SSH_HOST_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM21a0E0v4XBUVRgai2Z4
 ALL_WORKFLOWS = frozenset(
     {
         "cm-production-cutover.yml",
+        "container-image.yml",
         "customer-brain-env-apply-ha.yml",
         "bootstrap-meta-ha.yml",
         "dashboard-auth-secret-apply.yml",

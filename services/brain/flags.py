@@ -26,6 +26,8 @@ def emergency_legacy_reply_enabled() -> bool:
 def voyage_api_key() -> str:
     if "VOYAGE_API_KEY" in os.environ:
         return (os.environ.get("VOYAGE_API_KEY") or "").strip()
+    if (os.getenv("LINAS_CONFIG_SOURCE") or "").strip().lower() == "env":
+        return ""
     try:
         from dotenv import load_dotenv
 

@@ -44,6 +44,8 @@ import modules.cm_setup_api  # noqa: E402, F401
 
 # Dashboard
 import modules.dashboard_api  # noqa: E402, F401
+import modules.health_probes  # noqa: E402, F401
+import modules.platform_queue_dlq_api  # noqa: E402, F401
 import modules.mobile_dashboard_api  # noqa: E402, F401
 import modules.public_landing_stats_api  # noqa: E402, F401
 

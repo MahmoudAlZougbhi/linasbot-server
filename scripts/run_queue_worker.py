@@ -18,7 +18,18 @@ def main() -> int:
     parser.add_argument(
         "--queue",
         required=True,
-        choices=["high_priority", "interactive", "background", "expensive"],
+        choices=[
+            "high_priority",
+            "interactive",
+            "background",
+            "expensive",
+            "ai_reply",
+            "embeddings",
+            "outbound_send",
+            "webhook_process",
+            "owner_copilot",
+            "maintenance",
+        ],
     )
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
@@ -28,6 +39,13 @@ def main() -> int:
     from utils.host_timezone import log_if_host_timezone_is_not_utc
 
     log_if_host_timezone_is_not_utc()
+    from services.platform.feature_flags import flag_value
+
+    if flag_value("queue_backend") == "pg":
+        from services.platform.pg_worker import serve
+
+        serve(args.queue)
+        return 0
     from services.queues.worker_runtime import main as worker_main
 
     return worker_main()
