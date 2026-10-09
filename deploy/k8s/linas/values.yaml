@@ -1,6 +1,7 @@
 image:
   repository: ghcr.io/mahmoudalzoughbi/linasbot-server
   digest: ""
+envSecret: linas-env
 api:
   replicas: 2
   minReplicas: 2

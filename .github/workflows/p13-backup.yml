@@ -1,0 +1,198 @@
+name: P13 backup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: prod
+    steps:
+      - name: Install doctl
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/doctl.tar.gz https://github.com/digitalocean/doctl/releases/download/v1.104.0/doctl-1.104.0-linux-amd64.tar.gz
+          tar -C /usr/local/bin -xzf /tmp/doctl.tar.gz doctl
+      - name: Snapshots and restore database
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: |
+          set -euo pipefail
+          stamp="$(date -u +%Y%m%d%H%M)"
+          echo "BACKUP_STAMP=$stamp" >> "$GITHUB_ENV"
+          echo "RESTORE_DB=restorecheck_$stamp" >> "$GITHUB_ENV"
+          doctl compute droplet-action snapshot 510629908 --snapshot-name "linas-p13-node01-$stamp" --wait
+          doctl compute droplet-action snapshot 591901417 --snapshot-name "linas-p13-node02-$stamp" --wait
+          doctl databases list -o json > /tmp/dbs.json
+          python3 - << 'PY'
+          import json, os, subprocess
+          rows = json.load(open("/tmp/dbs.json"))
+          cluster = next(row["id"] for row in rows if row.get("name") == "linas-postgres-prod")
+          name = os.environ["RESTORE_DB"]
+          subprocess.run(["doctl", "databases", "db", "create", cluster, name], check=True)
+          open("/tmp/cluster-id.txt", "w").write(cluster)
+          PY
+          echo "DB_CLUSTER_ID=$(cat /tmp/cluster-id.txt)" >> "$GITHUB_ENV"
+      - name: Dump, encrypt, upload, restore-check
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+        env:
+          LINAS_SPACES_KEY: ${{ secrets.LINAS_SPACES_KEY }}
+          LINAS_SPACES_SECRET: ${{ secrets.LINAS_SPACES_SECRET }}
+          LINAS_SPACES_ENDPOINT: ${{ secrets.LINAS_SPACES_ENDPOINT }}
+          LINAS_BACKUP_BUCKET: ${{ secrets.LINAS_BACKUP_BUCKET }}
+          BACKUP_STAMP: ${{ env.BACKUP_STAMP }}
+          RESTORE_DB: ${{ env.RESTORE_DB }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 40m
+          script_stop: false
+          envs: LINAS_SPACES_KEY,LINAS_SPACES_SECRET,LINAS_SPACES_ENDPOINT,LINAS_BACKUP_BUCKET,BACKUP_STAMP,RESTORE_DB
+          script: |
+            set -euo pipefail
+            umask 077
+            python3 - << 'PY'
+            from pathlib import Path
+            url = ""
+            for line in Path("/opt/linasbot/.env").read_text(encoding="utf-8", errors="replace").splitlines():
+                if line.startswith("LINAS_WHATSAPP_DATABASE_URL="):
+                    url = line.split("=", 1)[1].strip().strip('"').strip("'")
+            if not url:
+                raise SystemExit("database url missing")
+            Path("/tmp/p13-db-url").write_text(url, encoding="utf-8")
+            PY
+            python3 - << 'PY'
+            import os, subprocess
+            from pathlib import Path
+            from urllib.parse import urlparse
+            parsed = urlparse(Path("/tmp/p13-db-url").read_text(encoding="utf-8").strip())
+            password = parsed.password or ""
+            pgpass = f"{parsed.hostname}:{parsed.port or 5432}:*:{parsed.username}:{password.replace('\\\\', '\\\\\\\\').replace(':', '\\\\:')}"
+            Path("/tmp/p13.pgpass").write_text(pgpass + "\n", encoding="utf-8")
+            os.chmod("/tmp/p13.pgpass", 0o600)
+            env = {**os.environ, "PGPASSFILE": "/tmp/p13.pgpass"}
+            cmd = ["pg_dump", "-Fc", "-h", parsed.hostname or "", "-p", str(parsed.port or 5432), "-U", parsed.username or "", "-d", parsed.path.lstrip("/"), "-f", "/tmp/p13.dump"]
+            proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
+            if proc.returncode != 0:
+                raise SystemExit(f"pg_dump_failed {proc.returncode}")
+            Path("/tmp/p13-conn.txt").write_text(f"{parsed.hostname}\n{parsed.port or 5432}\n{parsed.username}\n", encoding="utf-8")
+            PY
+            openssl rand -base64 32 > /tmp/p13.pass
+            openssl enc -aes-256-cbc -pbkdf2 -salt -in /tmp/p13.dump -out /tmp/p13.dump.enc -pass file:/tmp/p13.pass
+            tar -C / -cf - opt/linasbot_data | openssl enc -aes-256-cbc -pbkdf2 -salt -out /tmp/p13-node01.tar.enc -pass file:/tmp/p13.pass
+            sha256sum /tmp/p13.dump.enc /tmp/p13-node01.tar.enc | tee /tmp/p13.sha256
+            python3 -m pip install --quiet --target /tmp/p13aws awscli
+            PYTHONPATH=/tmp/p13aws python3 - << 'PY'
+            import os
+            from pathlib import Path
+            import boto3
+            from botocore.config import Config
+            client = boto3.client(
+                "s3",
+                aws_access_key_id=os.environ["LINAS_SPACES_KEY"],
+                aws_secret_access_key=os.environ["LINAS_SPACES_SECRET"],
+                endpoint_url=os.environ["LINAS_SPACES_ENDPOINT"],
+                config=Config(signature_version="s3v4"),
+            )
+            bucket = os.environ["LINAS_BACKUP_BUCKET"]
+            stamp = os.environ["BACKUP_STAMP"]
+            for name in ("p13.dump.enc", "p13-node01.tar.enc", "p13.pass", "p13.sha256"):
+                client.upload_file(f"/tmp/{name}", bucket, f"p13/{stamp}/{name}", ExtraArgs={"ServerSideEncryption": "AES256"})
+            print("uploaded", stamp)
+            PY
+            python3 - << 'PY'
+            import os, subprocess
+            from pathlib import Path
+            from urllib.parse import urlparse
+            parsed = urlparse(Path("/tmp/p13-db-url").read_text(encoding="utf-8").strip())
+            env = {**os.environ, "PGPASSFILE": "/tmp/p13.pgpass"}
+            base = ["psql", "-h", parsed.hostname or "", "-p", str(parsed.port or 5432), "-U", parsed.username or "", "-At"]
+            restore = [
+                "pg_restore", "--no-owner",
+                "-h", parsed.hostname or "", "-p", str(parsed.port or 5432), "-U", parsed.username or "",
+                "-d", os.environ["RESTORE_DB"], "/tmp/p13.dump",
+            ]
+            proc = subprocess.run(restore, env=env, capture_output=True, text=True)
+            if proc.returncode != 0:
+                raise SystemExit(f"pg_restore_failed {proc.returncode}")
+
+            def counts(database: str) -> dict[str, str]:
+                listed = subprocess.run(
+                    [*base, "-d", database, "-c", "SELECT relname FROM pg_stat_user_tables ORDER BY 1"],
+                    env=env, capture_output=True, text=True, check=True,
+                )
+                found = {}
+                for name in listed.stdout.splitlines():
+                    if not name.replace("_", "").isalnum():
+                        continue
+                    row = subprocess.run(
+                        [*base, "-d", database, "-c", f'SELECT count(*) FROM public."{name}"'],
+                        env=env, capture_output=True, text=True, check=True,
+                    )
+                    found[name] = row.stdout.strip()
+                return found
+
+            source = counts(parsed.path.lstrip("/"))
+            copied = counts(os.environ["RESTORE_DB"])
+            mismatched = [name for name in sorted(source) if source.get(name) != copied.get(name)]
+            print("tables", len(source), "mismatches", len(mismatched))
+            if mismatched:
+                print("mismatch_tables", ",".join(mismatched[:20]))
+                raise SystemExit(1)
+            PY
+            rm -f /tmp/p13.dump /tmp/p13-db-url /tmp/p13.pass /tmp/p13.pgpass /tmp/p13-conn.txt
+      - name: Node02 data archive
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+        env:
+          LINAS_SPACES_KEY: ${{ secrets.LINAS_SPACES_KEY }}
+          LINAS_SPACES_SECRET: ${{ secrets.LINAS_SPACES_SECRET }}
+          LINAS_SPACES_ENDPOINT: ${{ secrets.LINAS_SPACES_ENDPOINT }}
+          LINAS_BACKUP_BUCKET: ${{ secrets.LINAS_BACKUP_BUCKET }}
+          BACKUP_STAMP: ${{ env.BACKUP_STAMP }}
+        with:
+          host: 167.99.89.243
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 30m
+          script_stop: false
+          envs: LINAS_SPACES_KEY,LINAS_SPACES_SECRET,LINAS_SPACES_ENDPOINT,LINAS_BACKUP_BUCKET,BACKUP_STAMP
+          script: |
+            set -euo pipefail
+            umask 077
+            openssl rand -base64 32 > /tmp/p13-node02.pass
+            tar -C / -cf - opt/linasbot_data | openssl enc -aes-256-cbc -pbkdf2 -salt -out /tmp/p13-node02.tar.enc -pass file:/tmp/p13-node02.pass
+            sha256sum /tmp/p13-node02.tar.enc
+            python3 -m pip install --quiet --target /tmp/p13aws awscli
+            PYTHONPATH=/tmp/p13aws python3 - << 'PY'
+            import os, boto3
+            from botocore.config import Config
+            client = boto3.client(
+                "s3",
+                aws_access_key_id=os.environ["LINAS_SPACES_KEY"],
+                aws_secret_access_key=os.environ["LINAS_SPACES_SECRET"],
+                endpoint_url=os.environ["LINAS_SPACES_ENDPOINT"],
+                config=Config(signature_version="s3v4"),
+            )
+            stamp = os.environ["BACKUP_STAMP"]
+            bucket = os.environ["LINAS_BACKUP_BUCKET"]
+            for name in ("p13-node02.tar.enc", "p13-node02.pass"):
+                client.upload_file(f"/tmp/{name}", bucket, f"p13/{stamp}/{name}", ExtraArgs={"ServerSideEncryption": "AES256"})
+            print("node02_uploaded", stamp)
+            PY
+            rm -f /tmp/p13-node02.pass
+      - name: Drop restore database
+        if: always()
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DB_CLUSTER_ID:-}" ] && [ -n "${RESTORE_DB:-}" ]; then
+            doctl databases db delete "$DB_CLUSTER_ID" "$RESTORE_DB" --force
+          fi

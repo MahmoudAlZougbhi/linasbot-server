@@ -9,6 +9,8 @@ spec:
   maxReplicaCount: 6
   triggers:
     - type: postgresql
+      authenticationRef:
+        name: pg
       metadata:
         query: SELECT COUNT(*) FROM platform_jobs WHERE queue IN ('ai_reply','owner_copilot','outbound_send','webhook_process') AND status = 'queued'
         targetQueryValue: "20"
@@ -24,6 +26,8 @@ spec:
   maxReplicaCount: 3
   triggers:
     - type: postgresql
+      authenticationRef:
+        name: pg
       metadata:
         query: SELECT COUNT(*) FROM platform_jobs WHERE queue IN ('embeddings','maintenance') AND status = 'queued'
         targetQueryValue: "20"
