@@ -185,18 +185,14 @@ def warm_published_cm_peer_cache(
     tenant_id: str,
     pointer: PublishedPointer | dict[str, object],
 ) -> None:
-    """Copy published CM to the HA peer, or warm cache best-effort on Postgres SoT."""
-
-    from services.tenant_runtime.tenant_runtime_config_backend import tenant_runtime_config_postgres_required
+    """Copy published CM to the HA peer. A peer miss fails the publish."""
 
     try:
         replicate_published_cm_to_peer(tenant_id=tenant_id, pointer=pointer)
     except HaCmPeerReplicateError:
-        if tenant_runtime_config_postgres_required():
-            _runtime_logger.warning(
-                "[ha-cm] peer_cache_warm_failed tenant=%s",
-                str(tenant_id or "").strip(),
-                exc_info=True,
-            )
-            return
+        _runtime_logger.error(
+            "[ha-cm] ha_cm_peer_replicate_alert tenant=%s",
+            str(tenant_id or "").strip(),
+            exc_info=True,
+        )
         raise

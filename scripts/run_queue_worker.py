@@ -25,6 +25,9 @@ def main() -> int:
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
     os.environ["LINAS_WORKER_QUEUE"] = args.queue
+    from utils.host_timezone import log_if_host_timezone_is_not_utc
+
+    log_if_host_timezone_is_not_utc()
     from services.queues.worker_runtime import main as worker_main
 
     return worker_main()

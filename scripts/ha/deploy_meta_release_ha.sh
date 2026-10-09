@@ -7694,6 +7694,17 @@ expected_sibling_dir() {
   printf '/opt/.linasbot-ha-rollback-%s\n' "$(basename "$tx_dir")"
 }
 
+prune_old_ha_rollback_dirs() {
+  local protect="${1:-}"
+  local helper="$REPO_DIR/scripts/ops/prune_ha_rollback_dirs.py"
+  if [[ ! -f "$helper" ]]; then
+    return 0
+  fi
+  if ! /usr/bin/python3 "$helper" --apply --keep 3 --protect "$protect"; then
+    log "rollback directory prune failed; deploy continues"
+  fi
+}
+
 prepare_sibling_dir() {
   local tx_dir="$1"
   local sibling_dir
@@ -7707,6 +7718,7 @@ prepare_sibling_dir() {
     die "atomic rollback sibling is not on the /opt repository device"
   fsync_path_and_parents "$sibling_dir" /opt
   write_private_state "$tx_dir/sibling-path" "$sibling_dir"
+  prune_old_ha_rollback_dirs "$sibling_dir"
 }
 
 sibling_dir_for_tx() {
