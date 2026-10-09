@@ -38,8 +38,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker tag linasbot-server:ci "ghcr.io/mahmoudalzoughbi/linasbot-server:${{ github.sha }}"
-          docker push "ghcr.io/mahmoudalzoughbi/linasbot-server:${{ github.sha }}"
-          docker inspect --format '{{index .RepoDigests 0}}' "ghcr.io/mahmoudalzoughbi/linasbot-server:${{ github.sha }}"
+          docker tag linasbot-server:ci "ghcr.io/mahmoudalzougbhi/linasbot-server:${{ github.sha }}"
+          docker push "ghcr.io/mahmoudalzougbhi/linasbot-server:${{ github.sha }}"
+          docker inspect --format '{{index .RepoDigests 0}}' "ghcr.io/mahmoudalzougbhi/linasbot-server:${{ github.sha }}"
           gh api --method PATCH "/user/packages/container/linasbot-server" -f visibility=public || true
           echo "image_pull=public_ghcr"

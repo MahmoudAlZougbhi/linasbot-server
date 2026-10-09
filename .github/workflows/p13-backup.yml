@@ -52,7 +52,7 @@ jobs:
           LINAS_BACKUP_BUCKET: ${{ secrets.LINAS_BACKUP_BUCKET }}
           BACKUP_STAMP: ${{ env.BACKUP_STAMP }}
           RESTORE_DB: ${{ env.RESTORE_DB }}
-          SKIP_RESTORE: "1"
+          SKIP_RESTORE: "0"
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}

@@ -19,6 +19,15 @@ def test_staging_targets_are_gone() -> None:
         assert not path.exists(), path
 
 
+def test_image_uses_the_github_account_name() -> None:
+    values = (ROOT / "deploy" / "k8s" / "linas" / "values.yaml").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "container-image.yml").read_text(encoding="utf-8")
+    assert "ghcr.io/mahmoudalzougbhi/linasbot-server" in values
+    assert "ghcr.io/mahmoudalzougbhi/linasbot-server" in workflow
+    assert "mahmoudalzoughbi/linasbot-server" not in values
+    assert "mahmoudalzoughbi/linasbot-server" not in workflow
+
+
 def test_deploy_workflow_is_prod_only() -> None:
     text = (ROOT / ".github" / "workflows" / "deploy-k8s.yml").read_text(encoding="utf-8")
     assert "staging" not in text
