@@ -40,6 +40,12 @@ class DurableQueue(Protocol):
 
 def get_durable_queue() -> DurableQueue:
     """Return production queue adapter. Never returns an in-memory production fallback."""
+    from services.platform.feature_flags import flag_value
+
+    if flag_value("queue_backend") == "pg":
+        from services.platform.pg_jobs import PgDurableQueue
+
+        return PgDurableQueue()
     from services.queues.config import redis_required, redis_url
     from services.scale.redis_queue_adapter import RedisDurableQueue
 
