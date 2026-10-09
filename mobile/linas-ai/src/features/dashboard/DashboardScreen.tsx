@@ -13,6 +13,7 @@ import { ChannelActivityTable } from './sections/ChannelActivityTable';
 import { DashboardHeader } from './sections/DashboardHeader';
 import { DashboardRefreshButton } from './sections/DashboardRefreshButton';
 import { GrowthPlanCard } from './sections/GrowthPlanCard';
+import { MessageBalanceCards } from './sections/MessageBalanceCards';
 import { OwnerCopilotCard } from './sections/OwnerCopilotCard';
 import { TotalActivityGrid } from './sections/TotalActivityGrid';
 import { useTenantDashboard } from './useTenantDashboard';
@@ -94,6 +95,15 @@ export function DashboardScreen({ onNavigate, active = true }: Props) {
                 plan={state.data.plan_and_credits}
                 locale={language === 'ar' ? 'ar' : language === 'fr' ? 'fr' : 'en'}
                 onUpgrade={() => onNavigate('choose_plan')}
+              />
+              <MessageBalanceCards
+                planRemaining={state.data.plan_and_credits.included_remaining ?? null}
+                planUsed={state.data.plan_and_credits.used_messages ?? null}
+                planExpires={state.data.plan_and_credits.expires_at ?? state.data.plan_and_credits.current_period_end ?? null}
+                planExpired={state.data.plan_and_credits.plan_expired === true}
+                purchasedRemaining={state.data.plan_and_credits.purchased_remaining ?? state.data.plan_and_credits.purchased_messages ?? null}
+                purchasedUsed={state.data.plan_and_credits.purchased_used ?? null}
+                onBuyMore={() => onNavigate('choose_plan')}
               />
 
               <TotalActivityGrid
