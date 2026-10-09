@@ -1,0 +1,45 @@
+name: P12 access preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p12-access-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: P12 access preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: prod
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/doctl.tar.gz https://github.com/digitalocean/doctl/releases/download/v1.104.0/doctl-1.104.0-linux-amd64.tar.gz
+          tar -C /usr/local/bin -xzf /tmp/doctl.tar.gz doctl
+          curl -fsSL -o /tmp/kubectl https://dl.k8s.io/release/v1.31.1/bin/linux/amd64/kubectl
+          install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+          pip install --quiet awscli google-auth google-api-python-client PyJWT cryptography
+          npm install -g eas-cli@16.17.4
+      - name: Run checks
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          LINAS_SPACES_KEY: ${{ secrets.LINAS_SPACES_KEY }}
+          LINAS_SPACES_SECRET: ${{ secrets.LINAS_SPACES_SECRET }}
+          LINAS_SPACES_BUCKET: ${{ secrets.LINAS_SPACES_BUCKET }}
+          LINAS_SPACES_ENDPOINT: ${{ secrets.LINAS_SPACES_ENDPOINT }}
+          LINAS_BACKUP_BUCKET: ${{ secrets.LINAS_BACKUP_BUCKET }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          APPLE_IAP_ISSUER_ID: ${{ secrets.APPLE_IAP_ISSUER_ID }}
+          APPLE_IAP_KEY_ID: ${{ secrets.APPLE_IAP_KEY_ID }}
+          APPLE_IAP_PRIVATE_KEY: ${{ secrets.APPLE_IAP_PRIVATE_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+        run: python3 scripts/ops/preflight_p12.py
