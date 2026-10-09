@@ -18,6 +18,7 @@ export const aiSetupEn = {
   aiSetupPercentComplete: '{percent}% complete',
   aiSetupSectionsOf: '{complete} of {total} sections',
   aiSetupDailyEdits: 'AI Setup edits today: {used} / {limit}. Resets {reset}.',
+  aiSetupDeletesFree: 'Deleting is free.',
   aiSetupDailyEditLimit: "You've reached today's AI Setup update limit. Try again tomorrow.",
   aiSetupNeedAttention: '{count} sections need attention',
   aiSetupAllComplete: 'All sections complete',

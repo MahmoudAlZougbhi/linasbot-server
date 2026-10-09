@@ -380,6 +380,27 @@ async def cm_translate_existing_smart_answers(request: Request, body: dict[str, 
     return result
 
 
+@app.delete("/api/cm/faq/{qa_group_id}")
+async def cm_delete_faq(request: Request, qa_group_id: str) -> Any:
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
+    from services.billing.membership.daily_edits import DailyEditLimitError
+    from services.billing.membership.edit_http import guarded_edit, limit_response
+    from services.faq.cm_faq_delete import delete_cm_faq_group
+
+    try:
+        with guarded_edit(tenant_id=tenant_id, kind="faq:delete", payload={"id": qa_group_id}):
+            return delete_cm_faq_group(
+                qa_group_id=qa_group_id,
+                updated_by=_actor(session),
+                tenant_id=tenant_id,
+            )
+    except DailyEditLimitError as exc:
+        return limit_response(exc)
+    except FaqIntegrationError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.post("/api/cm/faq/{qa_group_id}/archive")
 async def cm_archive_faq(request: Request, qa_group_id: str) -> Any:
     session = require_permission(request, "contentManagers")

@@ -471,7 +471,7 @@ def reserve_cm_section(*, tenant_id: str, section: str, payload: object) -> str 
 
 
 def decision_payload(decision: DailyEditDecision) -> dict[str, Any]:
-    return {
+    body = {
         "code": LIMIT_CODE if not decision.allow else "ok",
         "limit": decision.limit,
         "used": decision.used,
@@ -483,3 +483,8 @@ def decision_payload(decision: DailyEditDecision) -> dict[str, Any]:
         "source": decision.source,
         "timezone": POLICY_TIMEZONE,
     }
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("free_deletes"):
+        body["deletes_are_free"] = True
+    return body

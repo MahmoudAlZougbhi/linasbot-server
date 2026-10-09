@@ -230,6 +230,7 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
             editsUsed={meta?.ai_setup_edits?.used}
             editsLimit={meta?.ai_setup_edits?.limit}
             editsReset={meta?.ai_setup_edits?.reset_at}
+            deletesFree={meta?.ai_setup_edits?.deletes_are_free === true}
           />
 
           <AiSetupFilterTabs

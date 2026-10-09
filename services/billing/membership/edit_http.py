@@ -56,6 +56,14 @@ def guarded_cm_write(*, tenant_id: str, section: str, current: object, payload: 
     if payloads_equivalent(current, payload):
         yield None
         return
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("free_deletes"):
+        from services.billing.membership.edit_classify import classify_section_change
+
+        if classify_section_change(section, current, payload) == "delete_only":
+            yield None
+            return
     op = reserve_cm_section(tenant_id=tenant_id, section=section, payload=payload)
     if not op:
         yield None
@@ -70,15 +78,47 @@ def guarded_cm_write(*, tenant_id: str, section: str, current: object, payload: 
             release_edit(tenant_id=tenant_id, operation_id=op)
 
 
+FREE_DELETE_KINDS = frozenset(
+    {
+        "product:delete",
+        "product:bulk-delete",
+        "product:media-delete",
+        "request-graph:delete",
+        "faq:delete",
+        "faq:language-delete",
+        "cm:item-delete",
+        "cm:media-delete",
+        "comment-rule:delete",
+        "dynamic-message:delete",
+    }
+)
+
+
 def is_safety_edit(kind: str, *, safety: bool = False) -> bool:
     text = str(kind or "").strip()
     return safety or text in SAFETY_EDIT_KINDS or text.startswith("safety:")
 
 
+def is_free_edit(kind: str, *, safety: bool = False) -> bool:
+    if is_safety_edit(kind, safety=safety):
+        return True
+    from services.platform.feature_flags import flag_enabled
+
+    if not flag_enabled("free_deletes"):
+        return False
+    text = str(kind or "").strip()
+    return text in FREE_DELETE_KINDS or text.endswith(":delete")
+
+
 @contextmanager
 def guarded_edit(*, tenant_id: str, kind: str, payload: object, safety: bool = False) -> Iterator[str]:
-    if is_safety_edit(kind, safety=safety):
-        yield f"safety:{kind}"
+    if is_free_edit(kind, safety=safety):
+        if not is_safety_edit(kind, safety=safety):
+            from services.billing.membership.delete_budget import reserve_delete
+
+            reserve_delete(tenant_id)
+        prefix = "safety" if is_safety_edit(kind, safety=safety) else "free"
+        yield f"{prefix}:{kind}"
         return
     op = operation_id(tenant_id=tenant_id, kind=kind, payload_hash=payload_hash(payload))
     reserve_edit(tenant_id=tenant_id, operation_id=op)

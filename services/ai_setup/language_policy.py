@@ -83,6 +83,21 @@ def resolve_customer_response_language(
     return detected
 
 
+def choose_reply_language(*, detected: str, session_language: str = "") -> str:
+    """Franco answers in Arabic. A known session language wins when detection is empty."""
+    detected_code = normalize_language_code(detected)
+    session_code = normalize_language_code(session_language)
+    if detected_code == "franco":
+        return "ar"
+    if detected_code in {"en", "ar", "fr"}:
+        return detected_code
+    if session_code == "franco":
+        return "ar"
+    if session_code in {"en", "ar", "fr"}:
+        return session_code
+    return detected_code or session_code or "en"
+
+
 def detect_and_resolve_customer_languages(
     *,
     tenant_id: str | None,

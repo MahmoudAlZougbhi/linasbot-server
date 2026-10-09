@@ -18,6 +18,7 @@ export const aiSetupAr = {
   aiSetupPercentComplete: '{percent}% مكتمل',
   aiSetupSectionsOf: '{complete} من {total} أقسام',
   aiSetupDailyEdits: 'تعديلات إعداد الذكاء اليوم: {used} / {limit}. يعاد الضبط {reset}.',
+  aiSetupDeletesFree: 'الحذف مجاني.',
   aiSetupDailyEditLimit: 'وصلت للحدّ اليومي لتعديلات إعداد الذكاء الاصطناعي. جرّب مجدداً بكرا.',
   aiSetupNeedAttention: '{count} أقسام تحتاج انتباهاً',
   aiSetupAllComplete: 'جميع الأقسام مكتملة',

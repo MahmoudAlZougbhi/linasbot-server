@@ -14,6 +14,20 @@ from services.requests.schemas import RequestCreateBody
 from services.requests.service import CustomerRequestsError, CustomerRequestsService
 
 
+def _routed_assignee(fields: dict[str, Any]) -> str | None:
+    from services.platform.feature_flags import flag_enabled
+
+    if not flag_enabled("request_routing"):
+        return None
+    rules = fields.get("routing_rules")
+    if not isinstance(rules, list):
+        return None
+    from services.requests.routing import route_assignee
+
+    owner = str(fields.get("owner_id") or "")
+    return route_assignee(rules, branch=str(fields.get("branch") or ""), owner_id=owner) or None
+
+
 def request_source_channel(raw: str) -> str | None:
     """Map a Brain channel onto a Requests source. Unknown stays unknown."""
     return normalize_source_channel(raw)
@@ -77,6 +91,7 @@ def persist_request(
         requested_items=fields.get("requested_items"),
         requested_branch=str(fields.get("branch") or "") or None,
         configuration_version=published_configuration_version(tenant_id),
+        assigned_user_id=_routed_assignee(fields),
     )
     try:
         created = CustomerRequestsService(session).create_from_ai(tenant_id=tenant_id, body=body)

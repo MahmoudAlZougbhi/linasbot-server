@@ -35,6 +35,16 @@ async def escalate_to_human(
             reason="handoff_persist_failed",
         )
     if result is None:
+        from services.platform.feature_flags import flag_enabled
+
+        if flag_enabled("handoff_fallback"):
+            return ActionReceipt(
+                action_id=f"handoff:{proposal.task_id}",
+                action_type="escalate_to_human",
+                state="success",
+                backend_id=conversation_id,
+                reason="owner_queue",
+            )
         return ActionReceipt(
             action_id=f"handoff:{proposal.task_id}",
             action_type="escalate_to_human",

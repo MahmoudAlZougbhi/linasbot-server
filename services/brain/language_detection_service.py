@@ -195,14 +195,9 @@ class LanguageDetectionService:
             "You are an expert translator for a business customer-service assistant.\n"
             "Translate the input question and answer into the requested target languages.\n"
             "Return strict JSON object only.\n"
-            "JSON shape:\n"
-            "{\n"
-            '  "ar": {"question": "...", "answer": "..."},\n'
-            '  "en": {"question": "...", "answer": "..."},\n'
-            '  "fr": {"question": "...", "answer": "..."},\n'
-            '  "franco": {"question": "...", "answer": "..."}\n'
-            "}\n"
-            "Rules:\n"
+            "JSON shape:\n{\n"
+            + ",\n".join(f'  "{lang}": {{"question": "...", "answer": "..."}}' for lang in normalized_targets)
+            + "\n}\nRules:\n"
             f"- Only include keys requested in target_languages: {target_languages_str}.\n"
             "- Keep meaning and details unchanged.\n"
             "- Keep service names, numbers, and facts intact.\n"
@@ -263,8 +258,11 @@ class LanguageDetectionService:
             }
 
         missing = [lang for lang in normalized_targets if lang not in translations]
+        from services.platform.feature_flags import flag_enabled
+
+        success = len(missing) == 0 or (flag_enabled("faq_skip_missing") and bool(translations))
         return {
-            "success": len(missing) == 0,
+            "success": success,
             "translations": translations,
             "missing_languages": missing,
             "source_language": normalized_source or "auto",

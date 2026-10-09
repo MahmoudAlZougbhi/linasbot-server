@@ -21,4 +21,10 @@ def log_customer_generation_failure(
     cls = str(payload.get("exception_class") or "None")
     blocker = str(payload.get("blocker") or "")[:200]
     print(f"customer_reply_v2 failed closed: {cls}: {blocker or stage}")
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("dm_failure_status"):
+        from services.live_chat.ai_failed import note_ai_failed
+
+        note_ai_failed(conversation_id=str(payload.get("conversation_id") or ""), stage=stage)
     return payload

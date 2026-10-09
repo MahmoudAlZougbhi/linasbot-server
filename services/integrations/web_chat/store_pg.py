@@ -204,6 +204,7 @@ class WebChatPgStore:
         widget: WebChatWidgetConfig,
         greeting: str,
         authority_hash: str = "",
+        language: str = "",
     ) -> WebChatVisitorSession:
         sid = self._validate_session_id(session_id)
         auth = (authority_hash or "").strip()
@@ -212,16 +213,20 @@ class WebChatPgStore:
         with with_ha_session() as db:
             existing = self._ha.get_session(db, sid)
             if existing is not None:
-                return _session_from_ha(existing)
-            created = self._ha.create_session(
-                db,
-                session_id=sid,
-                tenant_id=widget.tenant_id,
-                widget_key=widget.widget_key,
-                authority_hash=auth,
-                greeting=greeting,
-            )
-            return _session_from_ha(created)
+                session = _session_from_ha(existing)
+            else:
+                created = self._ha.create_session(
+                    db,
+                    session_id=sid,
+                    tenant_id=widget.tenant_id,
+                    widget_key=widget.widget_key,
+                    authority_hash=auth,
+                    greeting=greeting,
+                )
+                session = _session_from_ha(created)
+            if language and not session.language:
+                session.language = language.strip().lower()[:12]
+            return session
 
     def get_visitor(self, session_id: str) -> WebChatVisitorSession | None:
         try:

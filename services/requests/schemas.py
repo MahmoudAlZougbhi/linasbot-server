@@ -34,6 +34,7 @@ class RequestCreateBody(BaseModel):
     delivery_address: str | None = None
     customer_notes: str | None = None
     configuration_version: str | None = None
+    assigned_user_id: str | None = None
 
 
 class RequestAssignBody(BaseModel):

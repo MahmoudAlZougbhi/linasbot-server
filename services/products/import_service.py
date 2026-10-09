@@ -54,19 +54,45 @@ def import_csv_rows(svc: Any, *, tenant_id: str, csv_text: str) -> dict[str, Any
 
     valid_rows = [row for row in preview.get("preview") or [] if row.get("valid")]
     reject_oversized_import(len(valid_rows))
+    from services.platform.feature_flags import flag_enabled
+
+    receipt: dict[str, Any] | None = None
+    if flag_enabled("import_idempotent"):
+        from services.products.import_receipts import receipt_for
+
+        receipt = receipt_for(tenant_id, csv_text)
+        if receipt.get("done"):
+            return {
+                "created": int(receipt.get("created") or 0),
+                "errors": [],
+                "import_format": "csv_v1",
+                "replayed": True,
+            }
     created = 0
     errors = list(preview.get("errors") or [])
     with guarded_edit(
         tenant_id=tenant_id, kind="product:import", payload={"format": "csv", "count": len(valid_rows), "csv": csv_text}
     ):
+        seen = set(receipt.get("names") or []) if receipt else set()
         for row in valid_rows:
+            name = str(row.get("name") or "")
+            if name and name in seen:
+                continue
             try:
                 body = _body_from_preview(row)
                 svc.create_product(tenant_id=tenant_id, body=body, require_description=False, count_edit=False)
                 created += 1
+                if receipt is not None and name:
+                    names = list(receipt.get("names") or [])
+                    names.append(name)
+                    receipt["names"] = names
+                    seen.add(name)
             except Exception as exc:
                 code = getattr(exc, "code", None) or str(exc)
                 errors.append({"row": str(row.get("row")), "error": str(code)})
+    if receipt is not None:
+        receipt["created"] = int(receipt.get("created") or 0) + created
+        receipt["done"] = True
     return {"created": created, "errors": errors, "import_format": "csv_v1"}
 
 

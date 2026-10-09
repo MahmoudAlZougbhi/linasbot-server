@@ -93,6 +93,7 @@ class WebChatFileStore:
             created_at=float(raw.get("created_at") or time.time()),
             updated_at=float(raw.get("updated_at") or time.time()),
             authority_hash=str(raw.get("authority_hash") or ""),
+            language=str(raw.get("language") or ""),
             messages=_msgs("messages"),
             pending_assistant=_msgs("pending_assistant"),
         )
@@ -103,6 +104,7 @@ class WebChatFileStore:
             "tenant_id": session.tenant_id,
             "widget_key": session.widget_key,
             "authority_hash": session.authority_hash,
+            "language": session.language,
             "created_at": session.created_at,
             "updated_at": session.updated_at,
             "messages": [asdict(m) for m in session.messages],
@@ -240,6 +242,7 @@ class WebChatFileStore:
         widget: WebChatWidgetConfig,
         greeting: str,
         authority_hash: str = "",
+        language: str = "",
     ) -> WebChatVisitorSession:
         sid = self._validate_session_id(session_id)
         with self._lock:
@@ -254,6 +257,7 @@ class WebChatFileStore:
                 created_at=now,
                 updated_at=now,
                 authority_hash=(authority_hash or "").strip(),
+                language=(language or "").strip().lower()[:12],
                 messages=(
                     [
                         WebChatMessage(
