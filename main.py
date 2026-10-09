@@ -117,6 +117,7 @@ import modules.products_media_api  # noqa: E402, F401
 import modules.queue_api  # noqa: E402, F401
 import modules.resend_webhook_api  # noqa: E402, F401
 import modules.scale_api  # noqa: E402, F401
+import modules.sandbox_api  # noqa: E402, F401
 
 
 # Serve dashboard SPA (index.html for / and all non-API routes) - must be after API routes
