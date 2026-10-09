@@ -14,7 +14,8 @@ def test_pii_redaction_masks_email_and_phone() -> None:
 
 
 def test_load_scripts_refuse_production() -> None:
-    for name in ("owner_api.js", "webhook.js"):
+    names = ("owner_api.js", "sse.js", "webhook.js", "webchat.js", "ai_reply.js", "copilot.js")
+    for name in names:
         text = Path("loadtest/k6", name).read_text(encoding="utf-8")
         assert "linasaibot.com" in text
         assert "refusing" in text
