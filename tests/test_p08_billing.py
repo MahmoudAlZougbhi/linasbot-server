@@ -197,8 +197,11 @@ def test_empty_send_is_not_charged_when_the_flag_is_on(monkeypatch: pytest.Monke
     from services.billing.membership.message_ledger import reserve
 
     reserve(tenant_id="shop", operation_id="op-1", response_class="generated_ai", units=1)
-    _on(monkeypatch, "charge_on_delivery")
-    settle_after_send(tenant_id="shop", operation_id="op-1", accepted=True, channel="web_chat", provider_message_id="")
     from services.billing.membership.message_ledger import snapshot
 
-    assert snapshot("shop").remaining == 5
+    before = snapshot("shop").remaining
+    _on(monkeypatch, "charge_on_delivery")
+    settle_after_send(tenant_id="shop", operation_id="op-1", accepted=True, channel="web_chat", provider_message_id="")
+    after = snapshot("shop")
+    assert after.reserved == 0
+    assert after.remaining == before + 1
