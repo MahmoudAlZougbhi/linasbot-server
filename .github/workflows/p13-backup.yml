@@ -2,6 +2,12 @@ name: P13 backup
 
 on:
   workflow_dispatch:
+    inputs:
+      existing_restore_db:
+        description: Reuse this restore database and skip new snapshots
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -22,6 +28,25 @@ jobs:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
         run: |
           set -euo pipefail
+          case "${{ inputs.existing_restore_db }}" in
+            ""|restorecheck_[0-9]*) ;;
+            *) echo "restore database name rejected"; exit 2 ;;
+          esac
+          if [ -n "${{ inputs.existing_restore_db }}" ]; then
+            echo "BACKUP_STAMP=202610091956" >> "$GITHUB_ENV"
+            echo "RESTORE_DB=${{ inputs.existing_restore_db }}" >> "$GITHUB_ENV"
+            echo "SNAPSHOT_OK=yes" >> "$GITHUB_ENV"
+            doctl databases list -o json > /tmp/dbs.json
+            python3 - << 'PY'
+            import json
+            rows = json.load(open("/tmp/dbs.json"))
+            cluster = next(row["id"] for row in rows if row.get("name") == "linas-postgres-prod")
+            open("/tmp/cluster-id.txt", "w").write(cluster)
+            PY
+            echo "DB_CLUSTER_ID=$(cat /tmp/cluster-id.txt)" >> "$GITHUB_ENV"
+            echo "reuse_restore_db"
+            exit 0
+          fi
           stamp="$(date -u +%Y%m%d%H%M)"
           export BACKUP_STAMP="$stamp"
           export RESTORE_DB="restorecheck_$stamp"
@@ -64,6 +89,7 @@ jobs:
           script: |
             set -euo pipefail
             umask 077
+            rm -rf /tmp/p13aws /tmp/p13.dump /tmp/p13.dump.enc /tmp/p13-node01.tar.enc /tmp/p13.pass /tmp/p13.pgpass /tmp/p13-db-url /tmp/p13-conn.txt /tmp/p13.sha256
             if [ -z "${BACKUP_STAMP:-}" ]; then
               BACKUP_STAMP="$(date -u +%Y%m%d%H%M)"
               export BACKUP_STAMP
@@ -76,30 +102,30 @@ jobs:
                     url = line.split("=", 1)[1].strip().strip('"').strip("'")
             if not url:
                 raise SystemExit("database url missing")
-            Path("/tmp/p13-db-url").write_text(url, encoding="utf-8")
+            Path("/var/tmp/p13-db-url").write_text(url, encoding="utf-8")
             PY
             python3 - << 'PY'
             import os, subprocess
             from pathlib import Path
             from urllib.parse import urlparse
-            parsed = urlparse(Path("/tmp/p13-db-url").read_text(encoding="utf-8").strip())
+            parsed = urlparse(Path("/var/tmp/p13-db-url").read_text(encoding="utf-8").strip())
             password = parsed.password or ""
             pgpass = f"{parsed.hostname}:{parsed.port or 5432}:*:{parsed.username}:{password.replace('\\\\', '\\\\\\\\').replace(':', '\\\\:')}"
-            Path("/tmp/p13.pgpass").write_text(pgpass + "\n", encoding="utf-8")
-            os.chmod("/tmp/p13.pgpass", 0o600)
-            env = {**os.environ, "PGPASSFILE": "/tmp/p13.pgpass"}
-            cmd = ["pg_dump", "-Fc", "-h", parsed.hostname or "", "-p", str(parsed.port or 5432), "-U", parsed.username or "", "-d", parsed.path.lstrip("/"), "-f", "/tmp/p13.dump"]
+            Path("/var/tmp/p13.pgpass").write_text(pgpass + "\n", encoding="utf-8")
+            os.chmod("/var/tmp/p13.pgpass", 0o600)
+            env = {**os.environ, "PGPASSFILE": "/var/tmp/p13.pgpass"}
+            cmd = ["pg_dump", "-Fc", "-h", parsed.hostname or "", "-p", str(parsed.port or 5432), "-U", parsed.username or "", "-d", parsed.path.lstrip("/"), "-f", "/var/tmp/p13.dump"]
             proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
             if proc.returncode != 0:
                 raise SystemExit(f"pg_dump_failed {proc.returncode}")
-            Path("/tmp/p13-conn.txt").write_text(f"{parsed.hostname}\n{parsed.port or 5432}\n{parsed.username}\n", encoding="utf-8")
+            Path("/var/tmp/p13-conn.txt").write_text(f"{parsed.hostname}\n{parsed.port or 5432}\n{parsed.username}\n", encoding="utf-8")
             PY
-            openssl rand -base64 32 > /tmp/p13.pass
-            openssl enc -aes-256-cbc -pbkdf2 -salt -in /tmp/p13.dump -out /tmp/p13.dump.enc -pass file:/tmp/p13.pass
-            tar -C / -cf - opt/linasbot_data | openssl enc -aes-256-cbc -pbkdf2 -salt -out /tmp/p13-node01.tar.enc -pass file:/tmp/p13.pass
-            sha256sum /tmp/p13.dump.enc /tmp/p13-node01.tar.enc | tee /tmp/p13.sha256
-            python3 -m pip install --quiet --target /tmp/p13aws awscli
-            PYTHONPATH=/tmp/p13aws python3 - << 'PY'
+            openssl rand -base64 32 > /var/tmp/p13.pass
+            openssl enc -aes-256-cbc -pbkdf2 -salt -in /var/tmp/p13.dump -out /var/tmp/p13.dump.enc -pass file:/var/tmp/p13.pass
+            tar -C / -cf - opt/linasbot_data | openssl enc -aes-256-cbc -pbkdf2 -salt -out /var/tmp/p13-node01.tar.enc -pass file:/var/tmp/p13.pass
+            sha256sum /var/tmp/p13.dump.enc /var/tmp/p13-node01.tar.enc | tee /var/tmp/p13.sha256
+            python3 -m pip install --quiet --target /var/tmp/p13aws awscli
+            PYTHONPATH=/var/tmp/p13aws python3 - << 'PY'
             import os
             from pathlib import Path
             import boto3
@@ -124,13 +150,13 @@ jobs:
             if os.environ.get("SKIP_RESTORE") == "1":
                 print("restore_skipped")
                 raise SystemExit(0)
-            parsed = urlparse(Path("/tmp/p13-db-url").read_text(encoding="utf-8").strip())
-            env = {**os.environ, "PGPASSFILE": "/tmp/p13.pgpass"}
+            parsed = urlparse(Path("/var/tmp/p13-db-url").read_text(encoding="utf-8").strip())
+            env = {**os.environ, "PGPASSFILE": "/var/tmp/p13.pgpass"}
             base = ["psql", "-h", parsed.hostname or "", "-p", str(parsed.port or 5432), "-U", parsed.username or "", "-At"]
             restore = [
                 "pg_restore", "--no-owner",
                 "-h", parsed.hostname or "", "-p", str(parsed.port or 5432), "-U", parsed.username or "",
-                "-d", os.environ["RESTORE_DB"], "/tmp/p13.dump",
+                "-d", os.environ["RESTORE_DB"], "/var/tmp/p13.dump",
             ]
             proc = subprocess.run(restore, env=env, capture_output=True, text=True)
             if proc.returncode != 0:
@@ -160,7 +186,7 @@ jobs:
                 print("mismatch_tables", ",".join(mismatched[:20]))
                 raise SystemExit(1)
             PY
-            rm -f /tmp/p13.dump /tmp/p13-db-url /tmp/p13.pass /tmp/p13.pgpass /tmp/p13-conn.txt
+            rm -f /var/tmp/p13.dump /var/tmp/p13-db-url /var/tmp/p13.pass /var/tmp/p13.pgpass /var/tmp/p13-conn.txt
       - name: Node02 data archive
         if: always()
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
@@ -181,11 +207,11 @@ jobs:
           script: |
             set -euo pipefail
             umask 077
-            openssl rand -base64 32 > /tmp/p13-node02.pass
-            tar -C / -cf - opt/linasbot_data | openssl enc -aes-256-cbc -pbkdf2 -salt -out /tmp/p13-node02.tar.enc -pass file:/tmp/p13-node02.pass
-            sha256sum /tmp/p13-node02.tar.enc
-            python3 -m pip install --quiet --target /tmp/p13aws awscli
-            PYTHONPATH=/tmp/p13aws python3 - << 'PY'
+            openssl rand -base64 32 > /var/tmp/p13-node02.pass
+            tar -C / -cf - opt/linasbot_data | openssl enc -aes-256-cbc -pbkdf2 -salt -out /var/tmp/p13-node02.tar.enc -pass file:/var/tmp/p13-node02.pass
+            sha256sum /var/tmp/p13-node02.tar.enc
+            python3 -m pip install --quiet --target /var/tmp/p13aws awscli
+            PYTHONPATH=/var/tmp/p13aws python3 - << 'PY'
             import os, boto3
             from botocore.config import Config
             client = boto3.client(
@@ -201,7 +227,7 @@ jobs:
                 client.upload_file(f"/tmp/{name}", bucket, f"p13/{stamp}/{name}", ExtraArgs={"ServerSideEncryption": "AES256"})
             print("node02_uploaded", stamp)
             PY
-            rm -f /tmp/p13-node02.pass
+            rm -f /var/tmp/p13-node02.pass
       - name: Require droplet snapshots
         if: always()
         run: |
@@ -217,5 +243,5 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "${DB_CLUSTER_ID:-}" ] && [ -n "${RESTORE_DB:-}" ]; then
-            doctl databases db delete "$DB_CLUSTER_ID" "$RESTORE_DB" --force
+            doctl databases db delete "$DB_CLUSTER_ID" "$RESTORE_DB" --force || echo "owner_must_delete ${RESTORE_DB}"
           fi
