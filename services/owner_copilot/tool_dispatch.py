@@ -71,6 +71,30 @@ async def dispatch_v2_tool(
             error="meta_actions_disabled",
         )
 
+    if name == "read_products":
+        from services.platform.feature_flags import flag_enabled
+
+        if not flag_enabled("copilot_products"):
+            return ToolResult(ok=False, name=name, data={}, error="unknown_tool")
+        from services.owner_copilot.section_counts import count_records
+
+        items = list(a.get("items") or [])
+        return ToolResult(ok=True, name=name, data={"counts": count_records(items), "items": items})
+
+    if name == "cancel_proposal":
+        from services.platform.feature_flags import flag_enabled
+
+        if not flag_enabled("copilot_cancel"):
+            return ToolResult(ok=False, name=name, data={}, error="unknown_tool")
+        from services.owner_copilot.cm_approval import reject_cm_patch
+
+        proposal_id = str(a.get("proposal_id") or "")
+        try:
+            result = reject_cm_patch(tenant_id=tenant_id, user_id=user_id, proposal_id=proposal_id)
+        except Exception as exc:
+            return ToolResult(ok=False, name=name, data={}, error=str(exc))
+        return ToolResult(ok=True, name=name, data=result if isinstance(result, dict) else {"cancelled": True})
+
     if name == "diagnose_meta_health":
         from services.owner_copilot.diagnosis_health import tool_diagnose_meta_health
 

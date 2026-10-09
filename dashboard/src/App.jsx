@@ -20,6 +20,7 @@ import OwnerOverview from './pages/owner/OwnerOverview';
 import OwnerUsers from './pages/owner/OwnerUsers';
 import OwnerCatalog from './pages/owner/OwnerCatalog';
 import OwnerEconomy from './pages/owner/OwnerEconomy';
+import OwnerCopilotPricing from './pages/owner/OwnerCopilotPricing';
 import OwnerCosts from './pages/owner/OwnerCosts';
 import OwnerMessages from './pages/owner/OwnerMessages';
 import OwnerBrains from './pages/owner/OwnerBrains';
@@ -84,6 +85,7 @@ function App() {
             <Route path="messages" element={<OwnerMessages />} />
             <Route path="catalog" element={<OwnerCatalog />} />
             <Route path="economy" element={<OwnerEconomy />} />
+            <Route path="copilot-pricing" element={<OwnerCopilotPricing />} />
             <Route path="costs" element={<OwnerCosts />} />
             <Route path="brains" element={<OwnerBrains />} />
             <Route path="knowledge" element={<OwnerKnowledge />} />

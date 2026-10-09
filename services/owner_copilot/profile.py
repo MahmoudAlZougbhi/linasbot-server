@@ -129,6 +129,10 @@ def resolve_owner_reply_language(
     Never used to lock customer DM/comment language (CM Languages owns that).
     """
     fallback = coerce_language(reply_language_override) or normalize_language(preferred_language, fallback="en")
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("copilot_reply_language") and coerce_language(reply_language_override):
+        return coerce_language(reply_language_override) or fallback
     if treat_as_ui_prompt:
         return fallback
     detected = detect_owner_message_language(user_text)

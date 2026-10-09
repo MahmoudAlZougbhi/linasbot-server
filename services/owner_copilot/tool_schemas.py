@@ -198,5 +198,38 @@ OWNER_V2_TOOL_SCHEMAS: list[dict[str, Any]] = [
 ]
 
 
+def active_tool_schemas() -> list[dict[str, Any]]:
+    from services.platform.feature_flags import flag_enabled
+
+    rows = list(OWNER_V2_TOOL_SCHEMAS)
+    if flag_enabled("copilot_products"):
+        rows.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_products",
+                    "description": "Count and list AI Products. Counts come from the product records.",
+                    "parameters": {"type": "object", "properties": {"query": {"type": "string"}}},
+                },
+            }
+        )
+    if flag_enabled("copilot_cancel"):
+        rows.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "cancel_proposal",
+                    "description": "Cancel a pending AI Setup proposal. Nothing is changed.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"proposal_id": {"type": "string"}},
+                        "required": ["proposal_id"],
+                    },
+                },
+            }
+        )
+    return rows
+
+
 def tool_names() -> list[str]:
-    return [str(t["function"]["name"]) for t in OWNER_V2_TOOL_SCHEMAS]
+    return [str(item["function"]["name"]) for item in active_tool_schemas()]

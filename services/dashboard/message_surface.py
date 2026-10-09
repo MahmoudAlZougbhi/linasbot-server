@@ -38,6 +38,17 @@ def overlay_message_fields(tenant_id: str, plan_id: str) -> dict[str, Any]:
         reserved = int(snap.reserved)
         granted = included + purchased
         used = max(0, granted - remaining - reserved)
+        from services.platform.feature_flags import flag_enabled
+
+        if flag_enabled("period_balances"):
+            from services.billing.membership.balances import tenant_balances
+
+            balances = tenant_balances(list(snap.lots), reserved=reserved)
+            used = int(balances["used_messages"])
+            granted = int(balances["plan"]["granted"]) + int(balances["purchased"]["granted"])
+            included = int(balances["plan"]["remaining"])
+            purchased = int(balances["purchased"]["remaining"])
+            remaining = int(balances["total_remaining"])
     else:
         remaining = included = purchased = reserved = granted = used = 0
     ratio = None

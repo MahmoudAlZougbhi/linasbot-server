@@ -30,6 +30,9 @@ class CustomerAiMessageLotRow(Base):
     granted: Mapped[int] = mapped_column(Integer, nullable=False)
     remaining: Mapped[int] = mapped_column(Integer, nullable=False)
     expires: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     catalog_version: Mapped[str] = mapped_column(String(64), nullable=False, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 

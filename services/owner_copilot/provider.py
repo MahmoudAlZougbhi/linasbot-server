@@ -51,7 +51,6 @@ async def sol_chat_completion(
     policy: ModelPolicyDecision | None = None,
 ) -> Any:
     from services.brain.llm_core_service import build_chat_completion_kwargs, client
-    from services.owner_copilot.tool_schemas import OWNER_V2_TOOL_SCHEMAS
 
     decision = policy or resolve_owner_policy(surface="owner_copilot")
     model = decision.model or owner_model_name()
@@ -69,7 +68,9 @@ async def sol_chat_completion(
     kwargs["messages"] = messages
     kwargs["model"] = model
     if has_tools:
-        kwargs["tools"] = tools or OWNER_V2_TOOL_SCHEMAS
+        from services.owner_copilot.tool_schemas import active_tool_schemas
+
+        kwargs["tools"] = tools or active_tool_schemas()
         kwargs["tool_choice"] = "auto"
     if stream:
         kwargs["stream"] = True
@@ -167,11 +168,11 @@ async def iter_sol_tool_round(
     Yields ("delta", text) for live token streaming when the model answers in text.
     Ends with ("result", ToolRoundResult) carrying full content + assembled tool_calls.
     """
-    from services.owner_copilot.tool_schemas import OWNER_V2_TOOL_SCHEMAS
+    from services.owner_copilot.tool_schemas import active_tool_schemas
 
     stream = await sol_chat_completion(
         messages=messages,
-        tools=OWNER_V2_TOOL_SCHEMAS,
+        tools=active_tool_schemas(),
         stream=True,
         policy=policy,
     )

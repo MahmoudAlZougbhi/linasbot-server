@@ -89,6 +89,18 @@ def owner_turn_hold_begin(
     skip_credit: bool = False,
 ) -> OwnerTurnHold:
     tid = (tenant_id or "").strip().lower()
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("copilot_pricing_v2") and not confirm_billing:
+        from services.owner_copilot.cost_estimator import estimate_turn
+
+        estimate = estimate_turn(user_text=user_text)
+        if estimate["needs_approval"]:
+            return OwnerTurnHold(
+                tenant_id=tid,
+                confirm_required=True,
+                units=int(estimate["messages_high"]),
+            )
     if skip_credit or str(conversation_id or "").startswith("lab:platform:"):
         return OwnerTurnHold(tenant_id=tid, units=0, _finalized=True)
     units = estimate_copilot_units(estimated_usd)
@@ -137,11 +149,23 @@ def owner_turn_hold_begin(
         return OwnerTurnHold(tenant_id=tid, blocked=True, units=units)
 
 
-def owner_turn_hold_finalize(hold: OwnerTurnHold, *, actual_usd: float | None = None) -> None:
+def owner_turn_hold_finalize(
+    hold: OwnerTurnHold,
+    *,
+    actual_usd: float | None = None,
+    actual_tokens: int | None = None,
+) -> None:
     if hold._finalized or not hold.operation_id:
         return
     capture = hold.units
-    if actual_usd is not None:
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("copilot_pricing_v2") and actual_tokens is not None:
+        from services.billing.membership.copilot_pricing import messages_for_tokens
+        from services.billing.membership.pricing_store import active_policy
+
+        capture = messages_for_tokens(int(actual_tokens), active_policy())
+    elif actual_usd is not None:
         capture = min(hold.units, max(0, copilot_units_for_cost(actual_usd)))
     try:
         settle(
