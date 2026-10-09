@@ -56,6 +56,7 @@ ALL_WORKFLOWS = frozenset(
         "meta-webhook-nginx-setup.yml",
         "model-routing-policy-apply.yml",
         "openai-api-key-apply.yml",
+        "p12-access-preflight.yml",
         "prod-preflight-readonly.yml",
         "provision-python-runtime-ha.yml",
         "quality-gates.yml",
