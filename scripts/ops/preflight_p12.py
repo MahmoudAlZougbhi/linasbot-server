@@ -69,13 +69,22 @@ def b1_digitalocean() -> None:
     )
     drops = run(["doctl", "compute", "droplet", "list", "--format", "ID", "--no-header"], env=env)
     droplets_ok = "510629908" in drops.stdout and "591901417" in drops.stdout
-    conn = run(["doctl", "databases", "connection", "linas-postgres-prod", "-o", "json"], env=env)
+    listed = run(["doctl", "databases", "list", "-o", "json"], env=env)
+    db_id = ""
+    if listed.returncode == 0:
+        try:
+            for item in json.loads(listed.stdout):
+                if item.get("name") == "linas-postgres-prod" and item.get("id"):
+                    db_id = str(item["id"])
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            db_id = ""
+    conn = run(["doctl", "databases", "connection", db_id or "missing", "-o", "json"], env=env)
     uri_ok = False
     if conn.returncode == 0:
         try:
             payload = json.loads(conn.stdout)
             row = payload[0] if isinstance(payload, list) else payload
-            uri_ok = bool(row.get("uri") or row.get("URI") or row.get("host"))
+            uri_ok = bool(isinstance(row, dict) and (row.get("uri") or row.get("host")))
         except json.JSONDecodeError:
             uri_ok = False
     snap = run(["doctl", "compute", "snapshot", "list", "--format", "ID", "--no-header"], env=env)
@@ -158,9 +167,14 @@ def b5_expo() -> None:
         line("B5", "FAIL", "EXPO_TOKEN absent")
         return
     who = run(["eas", "whoami"], env={"EXPO_TOKEN": os.environ["EXPO_TOKEN"], "CI": "1"})
-    name = who.stdout.strip().splitlines()[-1].strip() if who.stdout.strip() else ""
-    ok = who.returncode == 0 and name == "linas-ci"
-    line("B5", "PASS" if ok else "FAIL", f"whoami_exit={who.returncode} robot_linas_ci={name == 'linas-ci'}")
+    accounts = []
+    for raw in (who.stdout or "").splitlines():
+        cleaned = "".join(ch for ch in raw if ch.isalnum() or ch in "._-").strip("._-")
+        if cleaned:
+            accounts.append(cleaned)
+    account = accounts[-1] if accounts else ""
+    ok = who.returncode == 0 and account == "linas-ci"
+    line("B5", "PASS" if ok else "FAIL", f"whoami_exit={who.returncode} account={account or 'empty'}")
 
 
 def b6_play() -> None:
