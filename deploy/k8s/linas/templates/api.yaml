@@ -30,6 +30,9 @@ spec:
         - name: api
           image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
           args: ["api"]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envSecret }}
           ports:
             - containerPort: 8003
           resources:

@@ -1,6 +1,6 @@
 # Secret rotation
 
-Do this at the P10 cutover, not on the live droplets now. Rotate one secret at a time, deploy the new value to staging first, then production, and keep the previous value only for the overlap the provider allows.
+Rotate one secret at a time on production. Turn the new value on for `qa-linas` first, then the rest of production, and keep the previous value only for the overlap the provider allows.
 
 | Secret | Overlap |
 |---|---|

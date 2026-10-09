@@ -3,38 +3,84 @@ name: Deploy Kubernetes
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: staging or prod
-        required: true
-        type: choice
-        options:
-          - staging
-          - prod
       image_digest:
-        description: Image digest to roll
+        description: Image digest, sha256 hex or sha256:hex
         required: true
         type: string
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    timeout-minutes: 40
+    environment: prod
     steps:
-      - uses: actions/checkout@v4
-      - name: Roll the image without taking the service down
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/doctl.tar.gz https://github.com/digitalocean/doctl/releases/download/v1.104.0/doctl-1.104.0-linux-amd64.tar.gz
+          tar -C /usr/local/bin -xzf /tmp/doctl.tar.gz doctl
+          curl -fsSL -o /tmp/kubectl https://dl.k8s.io/release/v1.31.1/bin/linux/amd64/kubectl
+          install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+          curl -fsSL -o /tmp/helm.tar.gz https://get.helm.sh/helm-v3.16.2-linux-amd64.tar.gz
+          tar -C /tmp -xzf /tmp/helm.tar.gz
+          install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+      - name: Kubeconfig and env secret
         env:
-          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          LINAS_SPACES_KEY: ${{ secrets.LINAS_SPACES_KEY }}
+          LINAS_SPACES_SECRET: ${{ secrets.LINAS_SPACES_SECRET }}
+          LINAS_SPACES_BUCKET: ${{ secrets.LINAS_SPACES_BUCKET }}
+          LINAS_SPACES_ENDPOINT: ${{ secrets.LINAS_SPACES_ENDPOINT }}
+          LINAS_BACKUP_BUCKET: ${{ secrets.LINAS_BACKUP_BUCKET }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+          DASHBOARD_AUTH_SECRET: ${{ secrets.DASHBOARD_AUTH_SECRET }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: |
+          set -euo pipefail
+          doctl kubernetes cluster kubeconfig save linas-prod-doks --expiry-seconds 900
+          doctl databases list -o json > "$RUNNER_TEMP/dbs.json"
+          python3 - << 'PY'
+          import json, os, subprocess
+          rows = json.load(open(os.environ["RUNNER_TEMP"] + "/dbs.json"))
+          wanted = {"linas-postgres-prod": "pg", "linas-redis-prod": "redis"}
+          for row in rows:
+              kind = wanted.get(row.get("name"))
+              if not kind:
+                  continue
+              subprocess.run(
+                  ["doctl", "databases", "connection", row["id"], "-o", "json"],
+                  check=True,
+                  stdout=open(os.environ["RUNNER_TEMP"] + f"/{kind}.json", "w"),
+              )
+          PY
+          python3 scripts/ops/render_cluster_env.py "$RUNNER_TEMP/pg.json" "$RUNNER_TEMP/redis.json" "$RUNNER_TEMP/linas.env"
+          kubectl create namespace linas --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic linas-env -n linas --from-env-file="$RUNNER_TEMP/linas.env" --dry-run=client -o yaml | kubectl apply -f - >/tmp/secret-apply.txt
+          python3 -c 'print("secret_apply", "ok" if "linas-env" in open("/tmp/secret-apply.txt").read() else "unexpected")'
+          rm -f "$RUNNER_TEMP/pg.json" "$RUNNER_TEMP/redis.json" "$RUNNER_TEMP/linas.env" /tmp/secret-apply.txt
+      - name: Add-ons and release
+        env:
           IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
-          set -eu
-          if [ -z "$KUBECONFIG_B64" ]; then
-            echo "kubeconfig is not configured"
-            exit 1
-          fi
-          echo "$KUBECONFIG_B64" | base64 -d > "$RUNNER_TEMP/kubeconfig"
-          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
-          kubectl set image deployment/api api="${IMAGE_DIGEST}"
-          if ! kubectl rollout status deployment/api --timeout=10m; then
-            kubectl rollout undo deployment/api
-            exit 1
-          fi
+          set -euo pipefail
+          case "$IMAGE_DIGEST" in
+            sha256:*) digest="$IMAGE_DIGEST" ;;
+            *) digest="sha256:$IMAGE_DIGEST" ;;
+          esac
+          sh deploy/k8s/bootstrap.sh
+          helm upgrade --install linas deploy/k8s/linas \
+            --namespace linas --create-namespace \
+            --atomic --wait --timeout 15m \
+            --set-string "image.digest=$digest"
+      - name: Health poll
+        run: |
+          set -euo pipefail
+          kubectl -n linas port-forward svc/api 18003:80 >/tmp/port-forward.log 2>&1 &
+          sleep 2
+          HEALTH_URL=http://127.0.0.1:18003/api/health/ready POLL_SECONDS=60 sh scripts/ops/health_poll.sh | tee /tmp/health-poll.txt
+          python3 -c 'import pathlib,sys; bad=[line for line in pathlib.Path("/tmp/health-poll.txt").read_text().splitlines() if not line.endswith(" 200") and " 200 " not in line]; sys.exit(1 if bad else 0)'

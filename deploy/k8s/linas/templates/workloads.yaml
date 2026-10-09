@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-interactive
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: linas-worker-interactive
+  template:
+    metadata:
+      labels:
+        app: linas-worker-interactive
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+          args: ["worker", "--queue", "interactive"]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envSecret }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-background
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: linas-worker-background
+  template:
+    metadata:
+      labels:
+        app: linas-worker-background
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+          args: ["worker", "--queue", "background"]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envSecret }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: linas-scheduler
+  template:
+    metadata:
+      labels:
+        app: linas-scheduler
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: scheduler
+          image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+          args: ["scheduler"]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envSecret }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: pg
+spec:
+  secretTargetRef:
+    - parameter: connection
+      name: {{ .Values.envSecret }}
+      key: LINAS_WHATSAPP_DATABASE_URL
