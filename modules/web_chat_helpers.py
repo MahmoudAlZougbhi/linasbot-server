@@ -27,9 +27,14 @@ def reject_if_web_chat_contained() -> None:
 
 def rate_limit_widget(request: Request, *, session_id: str, widget_key: str) -> None:
     ip = _client_ip(request)
+    from services.platform.feature_flags import flag_enabled
+
+    session_key = f"web-chat:sid:{session_id}"
+    if flag_enabled("widget_rate_scope"):
+        session_key = f"web-chat:sid:{widget_key}:{ip}:{session_id}"
     for key, limit, window in (
         (f"web-chat:ip:{ip}", 60, 300),
-        (f"web-chat:sid:{session_id}", 30, 300),
+        (session_key, 30, 300),
         (f"web-chat:key:{widget_key}", 120, 300),
     ):
         allowed, retry = rate_limit_service.hit(key, limit=limit, window_seconds=window)
@@ -110,5 +115,9 @@ def resolve_widget_or_404(widget_key: str) -> WebChatWidgetConfig:
 
 
 def assert_origin_allowed(widget: WebChatWidgetConfig, origin: str | None) -> None:
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("widget_disabled_first") and not widget.enabled:
+        raise HTTPException(status_code=403, detail={"error": "WIDGET_DISABLED"})
     if not web_chat_store.origin_allowed_for_widget(widget, origin):
         raise HTTPException(status_code=403, detail={"error": "ORIGIN_NOT_ALLOWED"})

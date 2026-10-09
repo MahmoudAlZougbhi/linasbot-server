@@ -266,6 +266,11 @@ class DashboardSessionService:
         if not data:
             return
         data["revoked"] = True
+        from services.platform.feature_flags import flag_enabled
+
+        if flag_enabled("revoke_rotated_access"):
+            with self._lock:
+                self._memory[session_id] = data
         tenant_id = str(data.get("tenant_id") or "").strip()
         if not tenant_id:
             return

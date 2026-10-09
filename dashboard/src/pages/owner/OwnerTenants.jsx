@@ -92,10 +92,15 @@ export default function OwnerTenants() {
             <h2 className="text-base font-semibold">{businessDisplayName(selected)}</h2>
             <p className="mt-4 text-sm">{label('plan', selected.subscription || 'none')} · {label('membership', selected.membership || 'none')}</p>
             <p className="text-sm">{selected.email}</p>
-            <p className="mt-4 text-sm">{formatNumber(selected.messages_remaining)} messages left</p>
+            <p className="mt-4 text-sm">{formatNumber(selected.plan_messages_remaining ?? selected.messages_remaining)} plan messages left</p>
+            <p className="text-sm">{formatNumber(selected.purchased_messages_remaining ?? 0)} purchased messages left. Purchased messages do not expire.</p>
             <h3 className="mt-4 text-sm font-semibold">People</h3>
-            {(selected.users || []).map((user) => <p key={user.id} className="text-sm">{user.email} · {label('role', user.role)}</p>)}
-            <p className="text-sm">{formatNumber(selected.historical_credit_remaining)} old credits left</p>
+            {(selected.users || []).map((user) => (
+              <p key={user.id} className="text-sm">
+                {user.email} · {label('role', user.role)}
+                <Button variant="tertiary" onClick={() => ownerApi.updateUser(user.id, { status: 'blocked' }).then(() => setNotice(`${user.email} is blocked.`))}>Block</Button>
+              </p>
+            ))}
             <div className="mt-4"><Button variant="tertiary" onClick={() => setPending(selected)}>Hide business</Button></div>
             <button type="button" className="mt-6 text-sm text-[#0F766E]" onClick={() => setParams({})}>Close</button>
           </aside>

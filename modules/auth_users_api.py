@@ -71,7 +71,17 @@ async def create_user(body: CreateUserRequest, request: Request) -> Any:
     except ValueError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
-        print(f"Create user error: {e}")
+        print(f"Create user error: {type(e).__name__}")
+        from services.platform.feature_flags import flag_enabled
+
+        if flag_enabled("staff_create_errors"):
+            return {
+                "success": False,
+                "error": "STAFF_CREATE_FAILED",
+                "message": "Could not create this person. Nothing was saved.",
+                "message_ar": "ما قدرنا ننشئ هذا الشخص. ما انحفظ شي.",
+                "message_fr": "Impossible de créer cette personne. Rien n'a été enregistré.",
+            }
         return {"success": False, "error": "Failed to create user"}
 
 

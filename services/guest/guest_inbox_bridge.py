@@ -71,14 +71,22 @@ def resolve_guest_widget(origin: str | None) -> Any | None:
     except Exception as exc:
         _log.info("guest widget lookup skipped: %s", type(exc).__name__)
         return None
+    return pick_guest_widget(widgets, origin)
+
+
+def pick_guest_widget(widgets: list[Any], origin: str | None) -> Any | None:
     if not widgets:
         return None
     host = _host(origin)
     if host:
         for widget in widgets:
-            site_host = _host(widget.site_url)
+            site_host = _host(getattr(widget, "site_url", ""))
             if site_host and site_host == host:
                 return widget
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("guest_explicit_tenant"):
+        return None
     if len(widgets) == 1:
         return widgets[0]
     return None

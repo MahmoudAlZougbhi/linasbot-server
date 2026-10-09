@@ -32,6 +32,9 @@ def graph_base_url_for_binding(binding: MetaAssetBinding) -> str:
 
 
 def graph_api_url(binding: MetaAssetBinding, *, graph_api_version: str, path: str) -> str:
+    from services.sandbox.guard import refuse_sandbox_target
+
+    refuse_sandbox_target(path)
     base = graph_base_url_for_binding(binding).rstrip("/")
     version = graph_api_version if graph_api_version.startswith("v") else f"v{graph_api_version}"
     normalized = path.lstrip("/")
