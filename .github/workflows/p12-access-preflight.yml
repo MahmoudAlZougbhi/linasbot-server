@@ -30,6 +30,14 @@ jobs:
         run: |
           set -euo pipefail
           doctl kubernetes cluster kubeconfig save linas-prod-doks --expiry-seconds 600
+          cid="$(doctl kubernetes cluster get linas-prod-doks --format ID --no-header | tr -d '[:space:]')"
+          doctl databases list -o json > /tmp/dbs.json
+          CLUSTER_ID="$cid" python3 -c 'import json,os,subprocess; rows=json.load(open("/tmp/dbs.json")); cid=os.environ["CLUSTER_ID"];
+names=("linas-postgres-prod","linas-redis-prod")
+for row in rows:
+    if row.get("name") in names:
+        proc=subprocess.run(["doctl","databases","firewalls","append",row["id"],"--rule",f"k8s:{cid}"], text=True, capture_output=True)
+        print(row["name"], "firewall", "ok" if proc.returncode==0 else "fail")'
           kubectl get pods -A
           kubectl -n linas get jobs,pods,events --sort-by=.lastTimestamp || true
           kubectl -n linas logs job/migrate --tail=100 > /tmp/migrate-logs.txt || true
