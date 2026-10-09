@@ -37,7 +37,7 @@ aiofiles==23.2.1
 jsonlines==4.0.0
 
 # Date & Time
-python-dateutil==2.8.2
+python-dateutil==2.9.0.post0
 
 # Task Scheduling
 apscheduler==3.10.4
