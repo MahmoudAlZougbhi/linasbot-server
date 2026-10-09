@@ -25,8 +25,11 @@ jobs:
           stamp="$(date -u +%Y%m%d%H%M)"
           echo "BACKUP_STAMP=$stamp" >> "$GITHUB_ENV"
           echo "RESTORE_DB=restorecheck_$stamp" >> "$GITHUB_ENV"
-          doctl compute droplet-action snapshot 510629908 --snapshot-name "linas-p13-node01-$stamp" --wait
-          doctl compute droplet-action snapshot 591901417 --snapshot-name "linas-p13-node02-$stamp" --wait
+          snapshot_ok=yes
+          doctl compute droplet-action snapshot 510629908 --snapshot-name "linas-p13-node01-$stamp" --wait || snapshot_ok=no
+          doctl compute droplet-action snapshot 591901417 --snapshot-name "linas-p13-node02-$stamp" --wait || snapshot_ok=no
+          echo "SNAPSHOT_OK=$snapshot_ok" >> "$GITHUB_ENV"
+          echo "snapshot_ok=$snapshot_ok"
           doctl databases list -o json > /tmp/dbs.json
           python3 - << 'PY'
           import json, os, subprocess
@@ -187,6 +190,14 @@ jobs:
             print("node02_uploaded", stamp)
             PY
             rm -f /tmp/p13-node02.pass
+      - name: Require droplet snapshots
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ "${SNAPSHOT_OK:-no}" != "yes" ]; then
+            echo "droplet snapshot needs DigitalOcean scope image:create"
+            exit 1
+          fi
       - name: Drop restore database
         if: always()
         env:
