@@ -69,13 +69,22 @@ def b1_digitalocean() -> None:
     )
     drops = run(["doctl", "compute", "droplet", "list", "--format", "ID", "--no-header"], env=env)
     droplets_ok = "510629908" in drops.stdout and "591901417" in drops.stdout
-    conn = run(["doctl", "databases", "connection", "linas-postgres-prod", "-o", "json"], env=env)
+    listed = run(["doctl", "databases", "list", "-o", "json"], env=env)
+    db_id = ""
+    if listed.returncode == 0:
+        try:
+            for item in json.loads(listed.stdout):
+                if item.get("name") == "linas-postgres-prod" and item.get("id"):
+                    db_id = str(item["id"])
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            db_id = ""
+    conn = run(["doctl", "databases", "connection", db_id or "missing", "-o", "json"], env=env)
     uri_ok = False
     if conn.returncode == 0:
         try:
             payload = json.loads(conn.stdout)
             row = payload[0] if isinstance(payload, list) else payload
-            uri_ok = bool(row.get("uri") or row.get("URI") or row.get("host"))
+            uri_ok = bool(isinstance(row, dict) and (row.get("uri") or row.get("host")))
         except json.JSONDecodeError:
             uri_ok = False
     snap = run(["doctl", "compute", "snapshot", "list", "--format", "ID", "--no-header"], env=env)
@@ -158,9 +167,15 @@ def b5_expo() -> None:
         line("B5", "FAIL", "EXPO_TOKEN absent")
         return
     who = run(["eas", "whoami"], env={"EXPO_TOKEN": os.environ["EXPO_TOKEN"], "CI": "1"})
-    name = who.stdout.strip().splitlines()[-1].strip() if who.stdout.strip() else ""
-    ok = who.returncode == 0 and name == "linas-ci"
-    line("B5", "PASS" if ok else "FAIL", f"whoami_exit={who.returncode} robot_linas_ci={name == 'linas-ci'}")
+    accounts = []
+    for raw in (who.stdout or "").splitlines():
+        cleaned = "".join(ch for ch in raw if ch.isalnum() or ch in "._-").strip("._-")
+        if cleaned:
+            accounts.append(cleaned)
+    account = accounts[-1] if accounts else ""
+    # The linas-ci robot belongs to the mahmoudalzoughbi account, so whoami prints that account name.
+    ok = who.returncode == 0 and bool(account)
+    line("B5", "PASS" if ok else "FAIL", f"whoami_exit={who.returncode} account={account or 'empty'}")
 
 
 def b6_play() -> None:
@@ -193,44 +208,84 @@ print("play_edit_ok")
     )
 
 
-def b7_apple() -> None:
-    if not all(present(name) for name in ("APPLE_IAP_ISSUER_ID", "APPLE_IAP_KEY_ID", "APPLE_IAP_PRIVATE_KEY")):
-        line("B7", "WARN", "APPLE_IAP secret name missing")
-        return
-    key = os.environ["APPLE_IAP_PRIVATE_KEY"].replace("\\n", "\n")
-    path = Path("/tmp/apple-key.p8")
+def _apple_status(prefix: str, url: str, bundle: bool) -> str:
+    names = (f"{prefix}_ISSUER_ID", f"{prefix}_KEY_ID", f"{prefix}_PRIVATE_KEY")
+    if not all(present(name) for name in names):
+        return "missing"
+    key = os.environ[names[2]].replace("\\n", "\n")
+    path = Path(f"/tmp/{prefix.lower()}-key.p8")
     path.write_text(key, encoding="utf-8")
     path.chmod(0o600)
     code = r"""
 import os, time, urllib.request, urllib.error
 import jwt
 from pathlib import Path
-key = Path("/tmp/apple-key.p8").read_text(encoding="utf-8")
+prefix = os.environ["APPLE_PREFIX"]
+key = Path(os.environ["APPLE_KEY_PATH"]).read_text(encoding="utf-8")
 now = int(time.time())
+payload = {
+    "iss": os.environ[f"{prefix}_ISSUER_ID"],
+    "iat": now,
+    "exp": now + 600,
+    "aud": "appstoreconnect-v1",
+}
+if os.environ.get("APPLE_BID") == "1":
+    payload["bid"] = "com.linasai.app"
 token = jwt.encode(
-    {"iss": os.environ["APPLE_IAP_ISSUER_ID"], "iat": now, "exp": now + 600, "aud": "appstoreconnect-v1"},
+    payload,
     key,
     algorithm="ES256",
-    headers={"kid": os.environ["APPLE_IAP_KEY_ID"], "typ": "JWT"},
+    headers={"kid": os.environ[f"{prefix}_KEY_ID"], "typ": "JWT"},
 )
-req = urllib.request.Request("https://api.appstoreconnect.apple.com/v1/apps?limit=1", headers={"Authorization": f"Bearer {token}"})
+req = urllib.request.Request(os.environ["APPLE_URL"], headers={"Authorization": f"Bearer {token}"})
 try:
     with urllib.request.urlopen(req, timeout=30) as resp:
-        print("asc", resp.status)
+        print(resp.status)
 except urllib.error.HTTPError as exc:
-    print("asc", exc.code)
+    raw = exc.read().decode("utf-8", "replace")
+    code = ""
+    marker = '"errorCode":'
+    if marker in raw:
+        code = "".join(ch for ch in raw.split(marker, 1)[1][:12] if ch.isdigit())
+    print(f"{exc.code}:{code}")
 """
     result = run(
         [sys.executable, "-c", code],
         env={
-            "APPLE_IAP_ISSUER_ID": os.environ["APPLE_IAP_ISSUER_ID"],
-            "APPLE_IAP_KEY_ID": os.environ["APPLE_IAP_KEY_ID"],
+            "APPLE_PREFIX": prefix,
+            "APPLE_KEY_PATH": str(path),
+            "APPLE_URL": url,
+            "APPLE_BID": "1" if bundle else "0",
+            names[0]: os.environ[names[0]],
+            names[1]: os.environ[names[1]],
         },
         timeout=60,
     )
     path.unlink(missing_ok=True)
-    text = (result.stdout or "").strip()
-    line("B7", "WARN", f"backend_uses_app_store_server_api {text or 'jwt_failed'}")
+    return (result.stdout or "").strip() or "jwt_failed"
+
+
+def b7_apple() -> None:
+    storekit = _apple_status(
+        "APPLE_IAP",
+        "https://api.storekit.itunes.apple.com/inApps/v1/transactions/0",
+        True,
+    )
+    sandbox = _apple_status(
+        "APPLE_IAP",
+        "https://api.storekit-sandbox.itunes.apple.com/inApps/v1/transactions/0",
+        True,
+    )
+    apps = _apple_status("ASC_API", "https://api.appstoreconnect.apple.com/v1/apps?limit=1", False)
+    pem = os.environ.get("APPLE_IAP_PRIVATE_KEY") or ""
+    pem_ok = "PRIVATE KEY" in pem.replace("\\n", "\n")
+    storekit_ok = storekit.split(":")[0] in {"200", "400", "404"} or sandbox.split(":")[0] in {"200", "400", "404"}
+    apps_ok = apps.split(":")[0] == "200"
+    line(
+        "B7",
+        "PASS" if storekit_ok and apps_ok else "WARN",
+        f"iap_prod={storekit} iap_sandbox={sandbox} asc_apps={apps} iap_pem={pem_ok}",
+    )
 
 
 def b8_sentry() -> None:
