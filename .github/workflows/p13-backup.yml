@@ -37,12 +37,7 @@ jobs:
             echo "RESTORE_DB=${{ inputs.existing_restore_db }}" >> "$GITHUB_ENV"
             echo "SNAPSHOT_OK=yes" >> "$GITHUB_ENV"
             doctl databases list -o json > /tmp/dbs.json
-            python3 - << 'PY'
-            import json
-            rows = json.load(open("/tmp/dbs.json"))
-            cluster = next(row["id"] for row in rows if row.get("name") == "linas-postgres-prod")
-            open("/tmp/cluster-id.txt", "w").write(cluster)
-            PY
+            python3 -c 'import json; rows=json.load(open("/tmp/dbs.json")); open("/tmp/cluster-id.txt","w").write(next(row["id"] for row in rows if row.get("name")=="linas-postgres-prod"))'
             echo "DB_CLUSTER_ID=$(cat /tmp/cluster-id.txt)" >> "$GITHUB_ENV"
             echo "reuse_restore_db"
             exit 0
@@ -58,14 +53,7 @@ jobs:
           echo "SNAPSHOT_OK=$snapshot_ok" >> "$GITHUB_ENV"
           echo "snapshot_ok=$snapshot_ok"
           doctl databases list -o json > /tmp/dbs.json
-          python3 - << 'PY'
-          import json, os, subprocess
-          rows = json.load(open("/tmp/dbs.json"))
-          cluster = next(row["id"] for row in rows if row.get("name") == "linas-postgres-prod")
-          name = os.environ["RESTORE_DB"]
-          subprocess.run(["doctl", "databases", "db", "create", cluster, name], check=True)
-          open("/tmp/cluster-id.txt", "w").write(cluster)
-          PY
+          python3 -c 'import json,os,subprocess; rows=json.load(open("/tmp/dbs.json")); cluster=next(row["id"] for row in rows if row.get("name")=="linas-postgres-prod"); subprocess.run(["doctl","databases","db","create",cluster,os.environ["RESTORE_DB"]], check=True); open("/tmp/cluster-id.txt","w").write(cluster)'
           echo "DB_CLUSTER_ID=$(cat /tmp/cluster-id.txt)" >> "$GITHUB_ENV"
       - name: Dump, encrypt, upload, restore-check
         if: always()
@@ -140,7 +128,7 @@ jobs:
             bucket = os.environ["LINAS_BACKUP_BUCKET"]
             stamp = os.environ["BACKUP_STAMP"]
             for name in ("p13.dump.enc", "p13-node01.tar.enc", "p13.pass", "p13.sha256"):
-                client.upload_file(f"/tmp/{name}", bucket, f"p13/{stamp}/{name}", ExtraArgs={"ServerSideEncryption": "AES256"})
+                client.upload_file(f"/var/tmp/{name}", bucket, f"p13/{stamp}/{name}", ExtraArgs={"ServerSideEncryption": "AES256"})
             print("uploaded", stamp)
             PY
             python3 - << 'PY'
@@ -224,7 +212,7 @@ jobs:
             stamp = os.environ["BACKUP_STAMP"]
             bucket = os.environ["LINAS_BACKUP_BUCKET"]
             for name in ("p13-node02.tar.enc", "p13-node02.pass"):
-                client.upload_file(f"/tmp/{name}", bucket, f"p13/{stamp}/{name}", ExtraArgs={"ServerSideEncryption": "AES256"})
+                client.upload_file(f"/var/tmp/{name}", bucket, f"p13/{stamp}/{name}", ExtraArgs={"ServerSideEncryption": "AES256"})
             print("node02_uploaded", stamp)
             PY
             rm -f /var/tmp/p13-node02.pass
