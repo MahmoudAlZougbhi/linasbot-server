@@ -16,7 +16,10 @@ export type IapModule = {
   }) => Promise<Array<{ id: string; displayPrice?: string; currency?: string }> | null | void>;
   requestPurchase: (args: {
     type: 'in-app' | 'subs';
-    request: { apple?: { sku: string; appAccountToken?: string } };
+    request: {
+      apple?: { sku: string; appAccountToken?: string };
+      google?: { skus: string[] };
+    };
   }) => Promise<unknown>;
   finishTransaction: (args: {
     purchase: unknown;
@@ -45,7 +48,7 @@ let cached: IapModule | null | undefined;
 
 export function loadIapModule(): IapModule | null {
   if (cached !== undefined) return cached;
-  if (Platform.OS !== 'ios') {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
     cached = null;
     return null;
   }

@@ -76,3 +76,16 @@ async def google_notifications(request: Request) -> Any:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"success": True, **result}
+
+
+@app.post("/api/entitlements/google/verify")
+async def google_verify(request: Request) -> Any:
+    """Verify a Play purchase. Refuses to grant anything until credentials exist."""
+    import os
+
+    body = await request.json()
+    if not isinstance(body, dict) or not str(body.get("purchase_token") or "").strip():
+        raise HTTPException(status_code=400, detail="purchase_token is required")
+    if not (os.getenv("GOOGLE_PLAY_CREDENTIALS_JSON") or "").strip():
+        raise HTTPException(status_code=503, detail="Google Play credentials not configured")
+    raise HTTPException(status_code=501, detail="Google Play verification is not completed")

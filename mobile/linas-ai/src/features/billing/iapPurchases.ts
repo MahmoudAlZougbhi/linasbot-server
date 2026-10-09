@@ -114,11 +114,40 @@ function waitForPurchase(
   });
 }
 
+async function purchaseAndroid(
+  productId: string,
+  type: 'subs' | 'in-app',
+  isConsumable: boolean,
+): Promise<IapPurchaseResult> {
+  const iap = loadIapModule();
+  if (!iap) return { ok: false, code: 'unavailable', message: 'native_iap_unavailable' };
+  try {
+    await ensureIapConnection();
+    const pending = waitForPurchase(iap, productId);
+    await iap.requestPurchase({ type, request: { google: { skus: [productId] } } });
+    const outcome = await pending;
+    if ('error' in outcome && outcome.error) return outcome.error;
+    const purchase = outcome.purchase;
+    const token = purchase?.purchaseToken;
+    if (!purchase || !token) return { ok: false, code: 'verify_failed', message: 'missing_purchase_token' };
+    await apiFetch('/api/entitlements/google/verify', {
+      method: 'POST',
+      body: JSON.stringify({ purchase_token: token, product_id: productId }),
+      schema: VerifySchema,
+    });
+    await iap.finishTransaction({ purchase, isConsumable });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, code: 'error', message: err instanceof Error ? err.message : 'purchase_failed' };
+  }
+}
+
 async function purchaseSku(
   productId: string,
   type: 'subs' | 'in-app',
   isConsumable: boolean,
 ): Promise<IapPurchaseResult> {
+  if (Platform.OS === 'android') return purchaseAndroid(productId, type, isConsumable);
   if (Platform.OS !== 'ios') {
     return { ok: false, code: 'unavailable', message: 'ios_only' };
   }
@@ -189,7 +218,7 @@ export async function purchaseCredits(credits: CreditPackId): Promise<IapPurchas
 }
 
 export async function restorePurchases(): Promise<IapPurchaseResult> {
-  if (Platform.OS !== 'ios') {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
     return { ok: false, code: 'unavailable', message: 'ios_only' };
   }
   const iap = loadIapModule();

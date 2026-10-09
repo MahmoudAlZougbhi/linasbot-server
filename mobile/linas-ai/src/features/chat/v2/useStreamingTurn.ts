@@ -147,10 +147,17 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
             void hooksRef.current.onTerminal();
           },
           onBillingConfirm: (payload) => {
-            const units = Number(payload.units || 1);
+            const units = Number(payload.units || payload.messages_high || 1);
+            const low = Number(payload.messages_low || units);
+            const high = Number(payload.messages_high || units);
+            const copy = payload.copy as { en?: string } | undefined;
+            const ranged =
+              payload.messages_low != null
+                ? `This request may cost between ${low} and ${high} messages, or more. You are charged the actual cost after it runs.`
+                : `This action will use ${units} messages.`;
             setBillingConfirm({
               units,
-              message: String(payload.message || `This action will use ${units} messages.`),
+              message: String(copy?.en || payload.message || ranged),
             });
             resetUi();
             void hooksRef.current.onTerminal();

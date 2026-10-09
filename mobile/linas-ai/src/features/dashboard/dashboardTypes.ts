@@ -93,6 +93,10 @@ export const TenantDashboardSchema = z.object({
       included_remaining: z.number().nullable().optional(),
       granted_messages: z.number().nullable().optional(),
       used_messages: z.number().nullable().optional(),
+      purchased_remaining: z.number().nullable().optional(),
+      purchased_used: z.number().nullable().optional(),
+      expires_at: z.string().nullable().optional(),
+      plan_expired: z.boolean().optional(),
       intended_included_messages: z.number().nullable().optional(),
       message_usage_note: z.string().optional(),
       ai_setup_edits: z
