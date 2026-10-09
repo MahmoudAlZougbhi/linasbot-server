@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 _DEFAULTS = {
-    "cm_store": "file",
-    "livechat_store": "legacy",
-    "media_store": "local",
+    "cm_store": "disk",
+    "livechat_store": "firestore",
+    "media_store": "disk",
     "queue_backend": "redis",
     "realtime_backend": "local",
     "webhook_ingest": "legacy",

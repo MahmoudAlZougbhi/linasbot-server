@@ -296,7 +296,11 @@ class ProductsService:
             )
         for img in images:
             media_id = str(getattr(img, "media_id", "") or "")
-            if not load_media_meta(tenant_id=tenant_id, media_id=media_id):
+            try:
+                meta = load_media_meta(tenant_id=tenant_id, media_id=media_id)
+            except Exception:
+                meta = None
+            if not meta:
                 raise ProductsError(
                     code="INVALID_MEDIA",
                     message="product_media_not_found",
