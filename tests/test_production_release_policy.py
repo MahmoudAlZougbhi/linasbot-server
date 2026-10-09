@@ -30,6 +30,7 @@ ALL_WORKFLOWS = frozenset(
     {
         "cm-production-cutover.yml",
         "container-image.yml",
+        "deploy-k8s.yml",
         "customer-brain-env-apply-ha.yml",
         "bootstrap-meta-ha.yml",
         "dashboard-auth-secret-apply.yml",
@@ -61,6 +62,7 @@ ALL_WORKFLOWS = frozenset(
         "resend-secrets-apply.yml",
         "security-checks.yml",
         "subscription-exempt-probe.yml",
+        "terraform-drift.yml",
         "wa-app-review-bind.yml",
         "wa-app-review-connection-source-migrate.yml",
         "wa-cloud-webhook-readonly-probe.yml",
