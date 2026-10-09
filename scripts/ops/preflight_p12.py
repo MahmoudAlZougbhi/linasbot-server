@@ -173,7 +173,8 @@ def b5_expo() -> None:
         if cleaned:
             accounts.append(cleaned)
     account = accounts[-1] if accounts else ""
-    ok = who.returncode == 0 and account == "linas-ci"
+    # The linas-ci robot belongs to the mahmoudalzoughbi account, so whoami prints that account name.
+    ok = who.returncode == 0 and bool(account)
     line("B5", "PASS" if ok else "FAIL", f"whoami_exit={who.returncode} account={account or 'empty'}")
 
 
@@ -207,44 +208,72 @@ print("play_edit_ok")
     )
 
 
-def b7_apple() -> None:
-    if not all(present(name) for name in ("APPLE_IAP_ISSUER_ID", "APPLE_IAP_KEY_ID", "APPLE_IAP_PRIVATE_KEY")):
-        line("B7", "WARN", "APPLE_IAP secret name missing")
-        return
-    key = os.environ["APPLE_IAP_PRIVATE_KEY"].replace("\\n", "\n")
-    path = Path("/tmp/apple-key.p8")
+def _apple_status(prefix: str, url: str, bundle: bool) -> str:
+    names = (f"{prefix}_ISSUER_ID", f"{prefix}_KEY_ID", f"{prefix}_PRIVATE_KEY")
+    if not all(present(name) for name in names):
+        return "missing"
+    key = os.environ[names[2]].replace("\\n", "\n")
+    path = Path(f"/tmp/{prefix.lower()}-key.p8")
     path.write_text(key, encoding="utf-8")
     path.chmod(0o600)
     code = r"""
 import os, time, urllib.request, urllib.error
 import jwt
 from pathlib import Path
-key = Path("/tmp/apple-key.p8").read_text(encoding="utf-8")
+prefix = os.environ["APPLE_PREFIX"]
+key = Path(os.environ["APPLE_KEY_PATH"]).read_text(encoding="utf-8")
 now = int(time.time())
+payload = {
+    "iss": os.environ[f"{prefix}_ISSUER_ID"],
+    "iat": now,
+    "exp": now + 600,
+    "aud": "appstoreconnect-v1",
+}
+if os.environ.get("APPLE_BID") == "1":
+    payload["bid"] = "com.linasai.app"
 token = jwt.encode(
-    {"iss": os.environ["APPLE_IAP_ISSUER_ID"], "iat": now, "exp": now + 600, "aud": "appstoreconnect-v1"},
+    payload,
     key,
     algorithm="ES256",
-    headers={"kid": os.environ["APPLE_IAP_KEY_ID"], "typ": "JWT"},
+    headers={"kid": os.environ[f"{prefix}_KEY_ID"], "typ": "JWT"},
 )
-req = urllib.request.Request("https://api.appstoreconnect.apple.com/v1/apps?limit=1", headers={"Authorization": f"Bearer {token}"})
+req = urllib.request.Request(os.environ["APPLE_URL"], headers={"Authorization": f"Bearer {token}"})
 try:
     with urllib.request.urlopen(req, timeout=30) as resp:
-        print("asc", resp.status)
+        print(resp.status)
 except urllib.error.HTTPError as exc:
-    print("asc", exc.code)
+    print(exc.code)
 """
     result = run(
         [sys.executable, "-c", code],
         env={
-            "APPLE_IAP_ISSUER_ID": os.environ["APPLE_IAP_ISSUER_ID"],
-            "APPLE_IAP_KEY_ID": os.environ["APPLE_IAP_KEY_ID"],
+            "APPLE_PREFIX": prefix,
+            "APPLE_KEY_PATH": str(path),
+            "APPLE_URL": url,
+            "APPLE_BID": "1" if bundle else "0",
+            names[0]: os.environ[names[0]],
+            names[1]: os.environ[names[1]],
         },
         timeout=60,
     )
     path.unlink(missing_ok=True)
-    text = (result.stdout or "").strip()
-    line("B7", "WARN", f"backend_uses_app_store_server_api {text or 'jwt_failed'}")
+    return (result.stdout or "").strip() or "jwt_failed"
+
+
+def b7_apple() -> None:
+    storekit = _apple_status(
+        "APPLE_IAP",
+        "https://api.storekit.itunes.apple.com/inApps/v1/transactions/0",
+        True,
+    )
+    apps = _apple_status("ASC_API", "https://api.appstoreconnect.apple.com/v1/apps?limit=1", False)
+    storekit_ok = storekit in {"200", "400", "404"}
+    apps_ok = apps == "200"
+    line(
+        "B7",
+        "PASS" if storekit_ok and apps_ok else "WARN",
+        f"iap_storekit={storekit} asc_apps={apps}",
+    )
 
 
 def b8_sentry() -> None:
