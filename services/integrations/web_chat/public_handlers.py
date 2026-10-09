@@ -39,6 +39,7 @@ async def bootstrap_visitor_session(
         widget=widget,
         greeting=greeting,
         authority_hash=bundle.authority_hash,
+        language=(language or "").strip().lower()[:12],
     )
     eligible, _blocker = evaluate_web_ai_eligibility(widget.tenant_id, widget)
     return {

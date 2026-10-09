@@ -15,10 +15,20 @@ MAX_ITEMS_PER_READ = 20
 MAX_EVIDENCE_CHARS = 12000
 
 
+def section_item_cap() -> int:
+    """Default stays 80. A higher LINAS_FLAG_RETRIEVAL_ITEM_CAP raises it for large tenants."""
+    from services.platform.feature_flags import flag_value
+
+    raw = flag_value("retrieval_item_cap").strip()
+    if raw.isdigit():
+        return max(MAX_ITEMS_PER_SECTION, int(raw))
+    return MAX_ITEMS_PER_SECTION
+
+
 def _rows_for_index(section_id: str, rows: list[Any]) -> list[Any]:
     if section_id in FULL_TITLE_SECTIONS:
         return rows
-    return rows[:MAX_ITEMS_PER_SECTION]
+    return rows[: section_item_cap()]
 
 
 def label_of(labels: Any) -> str:

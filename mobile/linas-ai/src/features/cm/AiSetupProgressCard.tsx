@@ -25,6 +25,7 @@ type Props = {
   editsUsed?: number;
   editsLimit?: number;
   editsReset?: string;
+  deletesFree?: boolean;
 };
 
 /** Setup progress card — hub section fill %, Live AI on/off control, Linas CTA. */
@@ -40,6 +41,7 @@ export function AiSetupProgressCard({
   editsUsed,
   editsLimit,
   editsReset,
+  deletesFree,
 }: Props) {
   const { tr } = useI18n();
   const pct = Math.min(100, Math.max(0, Math.round(percent)));
@@ -87,6 +89,7 @@ export function AiSetupProgressCard({
             .replace('{reset}', editsReset || '')}
         </Text>
       ) : null}
+      {deletesFree ? <Text style={styles.subLine}>{tr('aiSetupDeletesFree')}</Text> : null}
 
       <View style={[styles.track, { backgroundColor: AI_SETUP_PROGRESS_TRACK }]}>
         <View style={[styles.fill, { width: `${pct}%`, backgroundColor: AI_SETUP_TEAL }]} />

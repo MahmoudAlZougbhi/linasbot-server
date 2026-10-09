@@ -62,8 +62,28 @@ def attach_confirmation(turn: CustomerTurn, proposals: ActionProposalSet) -> Act
 
 
 async def try_confirm_pending(turn: CustomerTurn, message: str, channel: str) -> TurnResult | None:
-    """Retired. Inbound wording never confirms a request or skips Terra."""
-    _ = (turn, message, channel)
+    """Submit a staged draft only when request_confirm is on and the whole turn is a yes.
+
+    The default is still to return None, so Terra sees the message and decides.
+    """
+    _ = channel
+    from services.platform.feature_flags import flag_enabled
+
+    if not flag_enabled("request_confirm"):
+        return None
+    from services.requests.affirmative_turn import turn_is_affirmative
+
+    if not turn_is_affirmative(message):
+        return None
+    raw = load_conversation(turn.tenant_id, turn.conversation_id) or {}
+    pending = [
+        item for item in (raw.get("pending") or turn.extra.get("pending_actions") or []) if isinstance(item, dict)
+    ]
+    if not pending:
+        return None
+    result = await submit_pending_request(turn, {"customer_text": message, "task_id": "confirm"})
+    if not result.get("ok"):
+        return None
     return None
 
 

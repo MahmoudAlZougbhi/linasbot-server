@@ -164,6 +164,14 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
 
         found = [product_tool_payload(item, body_limit=500) for item in bundle.items]
         if bundle.outcome == "product_index_stale":
+            from services.brain.search.index_keep import index_reply_mode
+            from services.platform.feature_flags import flag_enabled
+
+            if (
+                flag_enabled("index_keep_previous")
+                and index_reply_mode(has_previous=bool(found), refresh_failed=True) == "previous"
+            ):
+                return {"ok": True, "data": found, "stale": True}
             return {"ok": False, "data": None, "error": "product_index_stale"}
         return {"ok": True, "data": found}
 
@@ -217,6 +225,21 @@ async def run_read(name: str, args: dict[str, Any], turn: CustomerTurn) -> dict[
                         "aliases": list((cat or {}).get("aliases") or []),
                     }
                 )
+            from services.platform.feature_flags import flag_enabled as price_flag
+
+            if price_flag("exact_price") and query:
+                from services.brain.reply.price_grounding import grounded_price
+
+                matched_entries = [
+                    row
+                    for row in matched_entries
+                    if grounded_price(
+                        asked=query,
+                        title=str(row.get("title") or ""),
+                        price=str(row.get("price") or ""),
+                        placeholder=bool(row.get("placeholder")),
+                    )
+                ]
             if matched_entries:
                 from services.brain.tools.price_match import rank_price_rows
 

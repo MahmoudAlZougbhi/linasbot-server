@@ -32,6 +32,11 @@ def flag_uses_postgres(key: str, *, tenant_id: str = "") -> bool:
     return flag_value(key, tenant_id=tenant_id) in {"pg", "postgres", "pgvector"}
 
 
+def flag_enabled(key: str, *, tenant_id: str = "") -> bool:
+    """New behavior is off until LINAS_FLAG_<KEY> is on. Missing flags stay on the old path."""
+    return flag_value(key, tenant_id=tenant_id).strip().lower() in {"1", "on", "true", "yes"}
+
+
 def config_source() -> str:
     return (os.getenv("LINAS_CONFIG_SOURCE") or "dotenv").strip().lower()
 

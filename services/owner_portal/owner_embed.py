@@ -37,6 +37,17 @@ def embed_batch(texts: list[str], *, query: bool, feature: str = "owner_embed") 
     indexes = [index for index, item in enumerate(cleaned) if item]
     if not indexes:
         return output
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("voyage_cache"):
+        from services.owner_portal.embed_cache import take_cached
+
+        space_name = "query" if query else "document"
+        hit = take_cached(space_name, [cleaned[index] for index in indexes], query=query)
+        if hit is not None:
+            for index, vector in zip(indexes, hit, strict=True):
+                output[index] = vector
+            return output
     space = ENTITY_QUERY if query else ENTITY_DOCUMENT
     payload = {
         "model": space.model,
@@ -70,12 +81,28 @@ def embed_batch(texts: list[str], *, query: bool, feature: str = "owner_embed") 
             break
         except Exception:
             logger.exception("owner embedding failed")
+            if flag_enabled("voyage_retry"):
+                from services.owner_portal.embed_queue import enqueue_failed
+
+                enqueue_failed(feature, [cleaned[index] for index in indexes])
             return output
     if not rows or len(rows) != len(indexes):
         return output
     for index, vector in zip(indexes, rows, strict=True):
         if vector:
             output[index] = [float(item) for item in vector]
+    if flag_enabled("voyage_cache"):
+        from services.owner_portal.embed_cache import store_vector
+
+        space_name = "query" if query else "document"
+        for index in indexes:
+            stored = output[index]
+            if stored:
+                store_vector(space_name, cleaned[index], stored, query=query)
+    if flag_enabled("voyage_retry") and any(output[index] is None for index in indexes):
+        from services.owner_portal.embed_queue import enqueue_failed
+
+        enqueue_failed(feature, [cleaned[index] for index in indexes if output[index] is None])
     return output
 
 

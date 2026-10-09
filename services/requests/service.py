@@ -122,6 +122,7 @@ class CustomerRequestsService:
             row_version=1,
             notification_status="none",
             submitted_at=now,
+            assigned_user_id=body.assigned_user_id,
         )
         self.repo.add_event(
             tenant_id=tenant_id,
@@ -222,6 +223,13 @@ class CustomerRequestsService:
         row_version: int,
     ) -> dict[str, Any]:
         row = self._lock_version(tenant_id, request_id, row_version)
+        if assigned_user_id:
+            from services.platform.feature_flags import flag_enabled
+
+            if flag_enabled("assignee_check"):
+                from services.requests.assignees import assert_assignee
+
+                assert_assignee(tenant_id, assigned_user_id)
         row.assigned_user_id = assigned_user_id
         row.row_version += 1
         row.updated_at = _now()

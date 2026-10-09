@@ -34,6 +34,7 @@ export const CmMetaSchema = z
         used: z.number(),
         remaining: z.number().optional(),
         reset_at: z.string().optional(),
+        deletes_are_free: z.boolean().optional(),
       })
       .optional(),
   })

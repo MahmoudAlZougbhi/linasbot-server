@@ -81,6 +81,21 @@ class RequestGraphRepository:
         payload: dict[str, Any],
         links: list[dict[str, str]],
     ) -> RequestDefinitionGraph:
+        from services.platform.feature_flags import flag_enabled
+
+        if flag_enabled("graph_reuse"):
+            existing = self._source_revision(tenant_id=tenant_id, source_item_id=source_item_id, revision=revision)
+            if existing is not None and existing.status == "deleted":
+                existing.definition_id = definition_id
+                existing.source_text_hash = str(payload["source_text_hash"])
+                existing.title = str(payload["title"])
+                existing.status = str(payload.get("status") or "draft")
+                existing.destination = str(payload["destination"])
+                existing.graph_json = dict(payload.get("graph_json") or {})
+                existing.confirmation_required = bool(payload.get("confirmation_required", True))
+                existing.needs_owner_clarification = bool(payload.get("needs_owner_clarification"))
+                self.session.flush()
+                return existing
         row = RequestDefinitionGraph(
             id=_uuid(),
             tenant_id=tenant_id,
@@ -110,6 +125,14 @@ class RequestGraphRepository:
             )
         self.session.flush()
         return row
+
+    def _source_revision(self, *, tenant_id: str, source_item_id: str, revision: int) -> RequestDefinitionGraph | None:
+        stmt = select(RequestDefinitionGraph).where(
+            RequestDefinitionGraph.tenant_id == tenant_id,
+            RequestDefinitionGraph.source_item_id == source_item_id,
+            RequestDefinitionGraph.revision == revision,
+        )
+        return self.session.execute(stmt).scalars().first()
 
     def deactivate_source(self, *, tenant_id: str, source_item_id: str) -> None:
         stmt = (

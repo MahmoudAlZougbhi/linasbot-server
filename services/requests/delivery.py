@@ -314,4 +314,12 @@ async def deliver_on_source_channel(
             provider_message_id=result.provider_message_id,
             channel_used=ch,
         )
+    if ch == "web_chat":
+        from services.platform.feature_flags import flag_enabled
+
+        if flag_enabled("webchat_notify"):
+            from services.requests.webchat_notify import record_notice
+
+            record_notice(tenant_id=tenant_id, conversation_id=conversation_id, text=text)
+            return DeliveryResult(status="sent", provider_message_id="web_chat", channel_used=ch)
     return DeliveryResult(status="failed", error_redacted=f"unsupported_channel:{ch}", channel_used=ch)

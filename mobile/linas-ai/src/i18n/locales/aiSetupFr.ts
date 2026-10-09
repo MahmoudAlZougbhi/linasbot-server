@@ -19,6 +19,7 @@ export const aiSetupFr = {
   aiSetupPercentComplete: '{percent} % terminé',
   aiSetupSectionsOf: '{complete} sur {total} sections',
   aiSetupDailyEdits: 'Modifications IA aujourd’hui : {used} / {limit}. Réinit. {reset}.',
+  aiSetupDeletesFree: 'La suppression est gratuite.',
   aiSetupDailyEditLimit: 'Vous avez atteint la limite de modifications IA aujourd’hui. Réessayez demain.',
   aiSetupNeedAttention: '{count} sections à compléter',
   aiSetupAllComplete: 'Toutes les sections sont complètes',

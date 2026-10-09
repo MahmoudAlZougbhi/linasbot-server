@@ -127,7 +127,18 @@ class ProductsService:
         row = self.repo.get_product(tenant_id=tenant_id, product_id=product_id)
         if row is None:
             raise ProductsError(code="NOT_FOUND", message="product_not_found", http_status=404)
-        edit_op = self._begin_daily_edit(tenant_id, "product:delete", {"id": product_id})
+        from services.platform.feature_flags import flag_enabled
+
+        if flag_enabled("free_deletes"):
+            from services.billing.membership.delete_budget import DeleteBudgetError, reserve_delete
+
+            try:
+                reserve_delete(tenant_id)
+            except DeleteBudgetError as exc:
+                raise ProductsError(code=exc.code, message=exc.code, http_status=429) from exc
+            edit_op = ""
+        else:
+            edit_op = self._begin_daily_edit(tenant_id, "product:delete", {"id": product_id})
         try:
             media_ids = self.repo.delete_product(row)
             remove_product_from_index(self.session, tenant_id=tenant_id, product_id=product_id)
@@ -139,6 +150,21 @@ class ProductsService:
         except Exception:
             self._finish_daily_edit(tenant_id, edit_op, commit=False)
             raise
+
+    def bulk_delete(self, *, tenant_id: str, ids: list[str]) -> list[dict[str, Any]]:
+        if len(ids) > 200:
+            raise ProductsError(code="TOO_MANY_IDS", message="At most 200 products at once.", http_status=400)
+        results: list[dict[str, Any]] = []
+        for product_id in ids:
+            try:
+                self.delete_product(tenant_id=tenant_id, product_id=product_id)
+            except ProductsError as exc:
+                if exc.code == "NOT_FOUND":
+                    results.append({"id": product_id, "deleted": False, "error": "NOT_FOUND"})
+                    continue
+                raise
+            results.append({"id": product_id, "deleted": True})
+        return results
 
     def preview_csv(self, *, csv_text: str) -> dict[str, Any]:
         from services.products.import_service import ProductsImportError, preview_csv_rows

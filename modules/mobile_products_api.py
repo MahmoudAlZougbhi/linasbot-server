@@ -96,6 +96,22 @@ async def mobile_update_product(
     return {"success": True, "product": product}
 
 
+@app.post("/api/mobile/products/bulk-delete")
+async def mobile_bulk_delete_products(request: Request, body: dict[str, Any]) -> Any:
+    session = require_session(request)
+    tenant_id = _session_tenant(session)
+    ids = body.get("ids")
+    if not isinstance(ids, list):
+        raise HTTPException(status_code=400, detail={"code": "IDS_REQUIRED", "message": "ids is required"})
+    with _db_session() as db:
+        svc = ProductsService(db)
+        try:
+            results = svc.bulk_delete(tenant_id=tenant_id, ids=[str(item) for item in ids])
+        except ProductsError as exc:
+            raise _http(exc) from exc
+    return {"success": True, "results": results}
+
+
 @app.delete("/api/mobile/products/{product_id}")
 async def mobile_delete_product(product_id: str, request: Request) -> Any:
     session = require_session(request)

@@ -56,6 +56,18 @@ async def generate_web_chat_reply_text(
             message=text,
             conversation_id=conversation_id,
         )
+        from services.platform.feature_flags import flag_enabled
+
+        if flag_enabled("reply_language"):
+            from services.ai_setup.language_policy import choose_reply_language
+            from services.integrations.web_chat.store import web_chat_store
+
+            visitor = web_chat_store.get_visitor(visitor_id)
+            session_language = str(getattr(visitor, "language", "") or "")
+            _lang["response_language"] = choose_reply_language(
+                detected=_lang["detected_language"],
+                session_language=session_language,
+            )
         outcome = await run_customer_reply_v2_dm(
             tenant_id=tid,
             message=text,

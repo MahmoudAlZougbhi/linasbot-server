@@ -21,5 +21,6 @@ class WebChatVisitorSession:
     created_at: float
     updated_at: float
     authority_hash: str = ""
+    language: str = ""
     messages: list[WebChatMessage] = field(default_factory=list)
     pending_assistant: list[WebChatMessage] = field(default_factory=list)
