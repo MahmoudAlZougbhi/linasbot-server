@@ -235,7 +235,9 @@ def is_keep_tenant_api_path(path: str) -> bool:
             return True
     from services.platform.feature_flags import flag_enabled
 
-    if flag_enabled("owner_notifications_api") and (p == "/api/owner-notifications" or p.startswith("/api/owner-notifications/")):
+    if flag_enabled("owner_notifications_api") and (
+        p == "/api/owner-notifications" or p.startswith("/api/owner-notifications/")
+    ):
         return True
     return False
 
