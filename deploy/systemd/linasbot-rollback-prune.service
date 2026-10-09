@@ -1,0 +1,9 @@
+[Unit]
+Description=Prune old Linas HA rollback and deploy backup directories
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/prune_ha_rollback_dirs.py --apply --keep 3
+Nice=10
+IOSchedulingClass=idle

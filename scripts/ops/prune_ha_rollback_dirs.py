@@ -14,6 +14,7 @@ from pathlib import Path
 
 PREFIX = ".linasbot-ha-rollback-"
 _NAME_RE = re.compile(r"\.linasbot-ha-rollback-[A-Za-z0-9._-]+")
+_BACKUP_RE = re.compile(r"^[0-9a-f]{40}-[0-9]{14}-[0-9]+$")
 _JOURNAL_FILES = (
     "deploy.active",
     "deploy-node.active",
@@ -29,6 +30,18 @@ def rollback_dirs(root: Path) -> list[Path]:
         if path.is_symlink() or not path.is_dir():
             continue
         if path.name.startswith(PREFIX):
+            found.append(path)
+    return found
+
+
+def backup_dirs(root: Path) -> list[Path]:
+    found: list[Path] = []
+    if not root.is_dir():
+        return found
+    for path in root.iterdir():
+        if path.is_symlink() or not path.is_dir():
+            continue
+        if _BACKUP_RE.match(path.name):
             found.append(path)
     return found
 
@@ -67,7 +80,7 @@ def select_dirs(
 def _safe_target(root: Path, path: Path) -> bool:
     if path.is_symlink() or not path.is_dir():
         return False
-    if not path.name.startswith(PREFIX):
+    if not (path.name.startswith(PREFIX) or _BACKUP_RE.match(path.name)):
         return False
     try:
         resolved = path.resolve()
@@ -90,6 +103,7 @@ def apply_removals(root: Path, removed: list[Path]) -> list[Path]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Prune old /opt HA rollback directories")
     parser.add_argument("--root", type=Path, default=Path("/opt"))
+    parser.add_argument("--backup-root", type=Path, default=Path("/var/backups/linasbot-ha"))
     parser.add_argument("--state-root", type=Path, default=Path("/var/lib/linasbot/meta-ha"))
     parser.add_argument("--keep", type=int, default=3)
     parser.add_argument("--protect", action="append", default=[])
@@ -102,12 +116,13 @@ def main(argv: list[str] | None = None) -> int:
         if name.startswith(PREFIX):
             protected.add(name)
     kept, removed = select_dirs(rollback_dirs(args.root), keep=args.keep, protected_names=protected)
-    for path in kept:
+    backup_kept, backup_removed = select_dirs(backup_dirs(args.backup_root), keep=args.keep, protected_names=set())
+    for path in kept + backup_kept:
         print(f"keep {path}")
-    for path in removed:
+    for path in removed + backup_removed:
         print(f"remove {path}")
     if args.apply:
-        for path in apply_removals(args.root, removed):
+        for path in apply_removals(args.root, removed) + apply_removals(args.backup_root, backup_removed):
             print(f"deleted {path}")
     return 0
 

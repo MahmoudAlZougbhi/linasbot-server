@@ -44,6 +44,17 @@ def test_journal_names_reads_only_rollback_tokens(tmp_path: Path) -> None:
     assert names == {".linasbot-ha-rollback-abc-20260101120000-9"}
 
 
+def test_backup_dirs_ignore_untracked_names(tmp_path: Path) -> None:
+    from scripts.ops.prune_ha_rollback_dirs import backup_dirs
+
+    root = tmp_path / "linasbot-ha"
+    root.mkdir()
+    (root / "untracked-quarantine").mkdir()
+    (root / "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-20261008191855-1").mkdir()
+    names = {path.name for path in backup_dirs(root)}
+    assert names == {"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-20261008191855-1"}
+
+
 def test_select_dirs_orders_newest_first(tmp_path: Path) -> None:
     root = tmp_path
     older = root / ".linasbot-ha-rollback-old"

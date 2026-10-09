@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly prune of old Linas HA rollback directories
+
+[Timer]
+OnCalendar=*-*-* 03:10:00 UTC
+Persistent=true
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target
