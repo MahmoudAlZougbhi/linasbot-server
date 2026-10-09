@@ -11,6 +11,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  migrate-logs:
+    name: Migrate logs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: prod
+    steps:
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/doctl.tar.gz https://github.com/digitalocean/doctl/releases/download/v1.104.0/doctl-1.104.0-linux-amd64.tar.gz
+          tar -C /usr/local/bin -xzf /tmp/doctl.tar.gz doctl
+          curl -fsSL -o /tmp/kubectl https://dl.k8s.io/release/v1.31.1/bin/linux/amd64/kubectl
+          install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+      - name: Read migrate failure
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: |
+          set -euo pipefail
+          doctl kubernetes cluster kubeconfig save linas-prod-doks --expiry-seconds 600
+          kubectl get pods -A
+          kubectl -n linas get jobs,pods,events --sort-by=.lastTimestamp || true
+          kubectl -n linas logs job/migrate --tail=100 > /tmp/migrate-logs.txt || true
+          python3 -c 'import re,pathlib; t=pathlib.Path("/tmp/migrate-logs.txt").read_text(errors="replace"); t=re.sub(r"[a-z]+://[^\\s]+","[redacted-url]",t); print(t[-4000:])'
   preflight:
     name: P12 access preflight
     runs-on: ubuntu-latest
