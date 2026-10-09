@@ -104,7 +104,9 @@ def summary(rows: list[dict[str, object]]) -> dict[str, object]:
     for row in rows:
         category = str(row["category"])
         counts[category] = counts.get(category, 0) + 1
-        bytes_by[category] = bytes_by.get(category, 0) + int(row["size"])
+        size = row["size"]
+        if isinstance(size, int):
+            bytes_by[category] = bytes_by.get(category, 0) + size
     unmapped = sorted(key for key in counts if key not in CATEGORY_ROWS)
     return {"files": len(rows), "counts": counts, "bytes": bytes_by, "unmapped": unmapped}
 
