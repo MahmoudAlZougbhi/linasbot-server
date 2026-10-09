@@ -36,7 +36,7 @@ def choose_newer(left: dict[str, Any], right: dict[str, Any]) -> str:
 
 
 def plan(left_root: Path, right_root: Path) -> list[dict[str, Any]]:
-    tenants = set()
+    tenants: set[str] = set()
     for root in (left_root, right_root):
         base = root / "tenants"
         if not base.is_dir():
