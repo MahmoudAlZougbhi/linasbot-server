@@ -23,8 +23,10 @@ jobs:
         run: |
           set -euo pipefail
           stamp="$(date -u +%Y%m%d%H%M)"
+          export BACKUP_STAMP="$stamp"
+          export RESTORE_DB="restorecheck_$stamp"
           echo "BACKUP_STAMP=$stamp" >> "$GITHUB_ENV"
-          echo "RESTORE_DB=restorecheck_$stamp" >> "$GITHUB_ENV"
+          echo "RESTORE_DB=$RESTORE_DB" >> "$GITHUB_ENV"
           snapshot_ok=yes
           doctl compute droplet-action snapshot 510629908 --snapshot-name "linas-p13-node01-$stamp" --wait || snapshot_ok=no
           doctl compute droplet-action snapshot 591901417 --snapshot-name "linas-p13-node02-$stamp" --wait || snapshot_ok=no
