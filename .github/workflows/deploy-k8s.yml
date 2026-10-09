@@ -42,7 +42,7 @@ jobs:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           set -euo pipefail
-          doctl kubernetes cluster kubeconfig save linas-prod-doks --expiry-seconds 900
+          doctl kubernetes cluster kubeconfig save linas-prod-doks --expiry-seconds 14400
           cid="$(doctl kubernetes cluster get linas-prod-doks --format ID --no-header | tr -d '[:space:]')"
           doctl databases list -o json > "$RUNNER_TEMP/dbs.json"
           CLUSTER_ID="$cid" python3 -c 'import json,os,subprocess; rows=json.load(open(os.environ["RUNNER_TEMP"]+"/dbs.json")); cid=os.environ["CLUSTER_ID"];
