@@ -18,6 +18,21 @@ from services.live_chat.contracts import utc_now
 logger = logging.getLogger(__name__)
 
 _PUBSUB_CHANNEL = (os.getenv("LINAS_LIVE_CHAT_SSE_CHANNEL") or "linas:live_chat:sse").strip()
+_PUBSUB_BACKOFF_START = 2.0
+_PUBSUB_BACKOFF_CAP = 60.0
+_PUBSUB_LOG_INTERVAL = 60.0
+
+
+def next_pubsub_backoff(
+    current: float, *, start: float = _PUBSUB_BACKOFF_START, cap: float = _PUBSUB_BACKOFF_CAP
+) -> float:
+    if current < start:
+        return start
+    return min(cap, current * 2)
+
+
+def pubsub_log_due(last: float, now: float, *, interval: float = _PUBSUB_LOG_INTERVAL) -> bool:
+    return (now - last) >= interval
 
 
 def _json_serializer(obj: Any) -> Any:
@@ -92,16 +107,46 @@ class LiveChatSSEBroadcaster:
         thread = threading.Thread(target=self._pubsub_loop, name="live-chat-sse-pubsub", daemon=True)
         thread.start()
 
+    def _redis_listen_client(self) -> Any | None:
+        """Blocking subscriber. A short socket timeout makes idle listen look like a failure."""
+        try:
+            from services.queues.config import redis_url
+
+            url = redis_url()
+            if not url:
+                return None
+            import redis
+
+            client = redis.Redis.from_url(
+                url,
+                decode_responses=True,
+                socket_connect_timeout=1.5,
+                socket_timeout=None,
+            )
+            client.ping()
+            return client
+        except Exception:
+            return None
+
     def _pubsub_loop(self) -> None:
+        import time
+
+        delay = 0.0
+        last_log = -_PUBSUB_LOG_INTERVAL
         while True:
-            client = self._redis_client()
+            client = self._redis_listen_client()
             if client is None:
-                time_sleep = __import__("time").sleep
-                time_sleep(2.0)
+                now = time.monotonic()
+                if pubsub_log_due(last_log, now):
+                    logger.warning("live chat SSE pubsub reconnect: redis unavailable")
+                    last_log = now
+                delay = next_pubsub_backoff(delay)
+                time.sleep(delay)
                 continue
             try:
                 pubsub = client.pubsub(ignore_subscribe_messages=True)
                 pubsub.subscribe(_PUBSUB_CHANNEL)
+                delay = 0.0
                 for message in pubsub.listen():
                     if not message or message.get("type") != "message":
                         continue
@@ -122,8 +167,12 @@ class LiveChatSSEBroadcaster:
                         continue
                     asyncio.run_coroutine_threadsafe(self._deliver_local(event), loop)
             except Exception as exc:
-                logger.warning("live chat SSE pubsub reconnect: %s", type(exc).__name__)
-                __import__("time").sleep(1.0)
+                now = time.monotonic()
+                if pubsub_log_due(last_log, now):
+                    logger.warning("live chat SSE pubsub reconnect: %s", type(exc).__name__)
+                    last_log = now
+                delay = next_pubsub_backoff(delay)
+                time.sleep(delay)
 
     async def _deliver_local(self, event: dict[str, Any]) -> None:
         clients = await self._snapshot_clients()

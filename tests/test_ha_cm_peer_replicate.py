@@ -108,8 +108,9 @@ def test_remote_pointer_checksum_uses_string_path_not_posixpath_repr(
     assert 'separators=(",",":")' in remote_cmd
 
 
-def test_warm_published_cm_peer_cache_swallows_peer_error_on_postgres_backend(
+def test_warm_published_cm_peer_cache_fails_visibly_on_postgres_backend(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     monkeypatch.setenv("LINAS_TENANT_RUNTIME_CONFIG_BACKEND", "postgres")
     pointer = PublishedPointer(
@@ -127,7 +128,10 @@ def test_warm_published_cm_peer_cache_swallows_peer_error_on_postgres_backend(
         "services.scale.ha_cm_peer_replicate.replicate_published_cm_to_peer",
         side_effect=HaCmPeerReplicateError("HA CM peer replicate pointer verify failed"),
     ):
-        warm_published_cm_peer_cache(tenant_id="linas", pointer=pointer)
+        with caplog.at_level("ERROR"):
+            with pytest.raises(HaCmPeerReplicateError):
+                warm_published_cm_peer_cache(tenant_id="linas", pointer=pointer)
+    assert "ha_cm_peer_replicate_alert" in caplog.text
 
 
 def test_warm_published_cm_peer_cache_reraises_peer_error_on_file_backend(

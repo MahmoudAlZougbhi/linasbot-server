@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 from modules.core import app
+from utils.host_timezone import log_if_host_timezone_is_not_utc
 
 # Must import before config/modules.core so legacy data is migrated first.
 from storage.migrate_bootstrap import MIGRATED as _DATA_MIGRATED
@@ -23,6 +24,8 @@ from utils.utils import initialize_document_db
 
 if not _DATA_MIGRATED:
     raise RuntimeError("storage migrate bootstrap did not run")
+
+log_if_host_timezone_is_not_utc()
 
 # Serve dashboard static files and SPA
 DASHBOARD_BUILD_PATH = os.path.join(os.path.dirname(__file__), "dashboard", "build")
