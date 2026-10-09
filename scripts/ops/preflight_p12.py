@@ -242,7 +242,12 @@ try:
     with urllib.request.urlopen(req, timeout=30) as resp:
         print(resp.status)
 except urllib.error.HTTPError as exc:
-    print(exc.code)
+    raw = exc.read().decode("utf-8", "replace")
+    code = ""
+    marker = '"errorCode":'
+    if marker in raw:
+        code = "".join(ch for ch in raw.split(marker, 1)[1][:12] if ch.isdigit())
+    print(f"{exc.code}:{code}")
 """
     result = run(
         [sys.executable, "-c", code],
@@ -266,13 +271,20 @@ def b7_apple() -> None:
         "https://api.storekit.itunes.apple.com/inApps/v1/transactions/0",
         True,
     )
+    sandbox = _apple_status(
+        "APPLE_IAP",
+        "https://api.storekit-sandbox.itunes.apple.com/inApps/v1/transactions/0",
+        True,
+    )
     apps = _apple_status("ASC_API", "https://api.appstoreconnect.apple.com/v1/apps?limit=1", False)
-    storekit_ok = storekit in {"200", "400", "404"}
-    apps_ok = apps == "200"
+    pem = os.environ.get("APPLE_IAP_PRIVATE_KEY") or ""
+    pem_ok = "PRIVATE KEY" in pem.replace("\\n", "\n")
+    storekit_ok = storekit.split(":")[0] in {"200", "400", "404"} or sandbox.split(":")[0] in {"200", "400", "404"}
+    apps_ok = apps.split(":")[0] == "200"
     line(
         "B7",
         "PASS" if storekit_ok and apps_ok else "WARN",
-        f"iap_storekit={storekit} asc_apps={apps}",
+        f"iap_prod={storekit} iap_sandbox={sandbox} asc_apps={apps} iap_pem={pem_ok}",
     )
 
 
