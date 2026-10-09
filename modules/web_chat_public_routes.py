@@ -153,7 +153,8 @@ async def web_chat_bootstrap_session(
     reject_if_web_chat_contained()
     widget = resolve_widget_or_404(body.widget_key)
     assert_origin_allowed(widget, origin)
-    rate_limit_widget(request, session_id="bootstrap", widget_key=body.widget_key)
+    client = request.client.host if request.client else "unknown"
+    rate_limit_widget(request, session_id=f"bootstrap:{client}", widget_key=body.widget_key)
     return await bootstrap_visitor_session(widget=widget, language=body.language)
 
 

@@ -1,0 +1,20 @@
+groups:
+  - name: linas
+    rules:
+      - alert: ApiErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.01
+        for: 5m
+      - alert: ApiLatency
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[10m])) by (le)) > 1
+        for: 10m
+      - alert: QueueOldestJob
+        expr: max(linas_queue_oldest_job_seconds) > 60
+        for: 5m
+      - alert: DeadLetters
+        expr: increase(linas_queue_dlq_total[10m]) > 0
+      - alert: PostgresCpu
+        expr: avg(digitalocean_database_cpu_percent) > 80
+        for: 15m
+      - alert: ValkeyMemory
+        expr: avg(digitalocean_database_memory_percent{engine="valkey"}) > 80
+        for: 15m

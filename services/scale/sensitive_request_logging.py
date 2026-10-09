@@ -19,10 +19,21 @@ _SENSITIVE_QUERY_VALUE = re.compile(
 )
 
 
+_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_PHONE = re.compile(r"\+\d{8,15}")
+
+
 def redact_sensitive_query_text(value: str) -> str:
     """Return log-safe text with sensitive query values removed."""
 
     return _SENSITIVE_QUERY_VALUE.sub(r"\g<prefix>\g<key>=[REDACTED]", value)
+
+
+def redact_pii(value: str) -> str:
+    """Mask emails and phone numbers after query secrets are removed."""
+    cleaned = redact_sensitive_query_text(value)
+    cleaned = _EMAIL.sub("[REDACTED_EMAIL]", cleaned)
+    return _PHONE.sub("[REDACTED_PHONE]", cleaned)
 
 
 def _redact_value(value: Any) -> Any:
