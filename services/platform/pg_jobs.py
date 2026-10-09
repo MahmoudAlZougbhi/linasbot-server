@@ -26,7 +26,7 @@ PG_QUEUES = (
 
 _ENGINE: Engine | None = None
 _SCHEMA_LOCK = threading.Lock()
-_SCHEMA_READY: set[int] = set()
+_SCHEMA_READY: set[str] = set()
 
 
 def set_engine_for_tests(engine: Engine | None) -> None:
@@ -46,7 +46,7 @@ def _engine() -> Engine:
 
 
 def ensure_schema(engine: Engine) -> None:
-    key = id(engine)
+    key = str(engine.url)
     if key in _SCHEMA_READY:
         return
     with _SCHEMA_LOCK:
