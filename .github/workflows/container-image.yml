@@ -15,9 +15,4 @@ jobs:
       - name: Read-only root starts
         run: docker run --rm --read-only --tmpfs /tmp linasbot-server:ci python scripts/container_boot_check.py
       - name: Scan
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: linasbot-server:ci
-          severity: CRITICAL
-          exit-code: "1"
-          ignore-unfixed: true
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1 image --severity CRITICAL --exit-code 1 --ignore-unfixed linasbot-server:ci
