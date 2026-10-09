@@ -46,10 +46,7 @@ jobs:
           cid="$(doctl kubernetes cluster get linas-prod-doks --format ID --no-header | tr -d '[:space:]')"
           doctl databases list -o json > "$RUNNER_TEMP/dbs.json"
           CLUSTER_ID="$cid" python3 -c 'import json,os,subprocess; rows=json.load(open(os.environ["RUNNER_TEMP"]+"/dbs.json")); cid=os.environ["CLUSTER_ID"];
-for row in rows:
-    if row.get("name") in ("linas-postgres-prod","linas-redis-prod"):
-        proc=subprocess.run(["doctl","databases","firewalls","append",row["id"],"--rule",f"k8s:{cid}"], text=True, capture_output=True)
-        print(row["name"], "firewall", "ok" if proc.returncode==0 else "fail")'
+          [print(row["name"], "firewall", "ok" if subprocess.run(["doctl","databases","firewalls","append",row["id"],"--rule","k8s:"+cid], text=True, capture_output=True).returncode==0 else "fail") for row in rows if row.get("name") in ("linas-postgres-prod","linas-redis-prod")]'
           doctl databases list -o json > "$RUNNER_TEMP/dbs.json"
           python3 - << 'PY'
           import json, os, subprocess
