@@ -272,6 +272,13 @@ def settle_after_send(
     candidates = _candidate_ops(operation_id, extra_ids)
     if not tenant_id or not candidates:
         return
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("charge_on_delivery") and (
+        not accepted or channel in {"lab", "sandbox"} or not provider_message_id
+    ):
+        accepted = False
+        units = 0
     charge = None if units is None else max(0, int(units))
     settled_op = ""
     try:

@@ -23,6 +23,14 @@ def ensure_included_grant(tenant_id: str) -> None:
     plan_id = str(getattr(ent, "plan_id", "") or "").strip().lower()
     if not plan_id or plan_id in {"none", "free"}:
         return
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("period_balances"):
+        from services.billing.membership.balances import membership_can_grant
+
+        if not membership_can_grant(ent):
+            expire_included_before(tid, "__ended__")
+            return
     status = str(getattr(ent, "status", "") or "").strip().lower()
     if status not in {"active", "trial", "grace"}:
         expire_included_before(tid, "__none__")

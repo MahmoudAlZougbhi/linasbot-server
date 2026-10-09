@@ -50,7 +50,17 @@ async def translate_kept(text: str, *, target: str, translate: Translate) -> tup
         attempts = attempt
         last = (await translate(masked, attempt)).strip()
         if _placeholders_kept(last, tokens):
-            return restore_tokens(last, tokens).strip(), attempts
+            restored = restore_tokens(last, tokens).strip()
+            from services.platform.feature_flags import flag_enabled
+
+            if flag_enabled("qa_translation_guard"):
+                from services.owner_portal.translation_guard import translation_is_clean
+
+                if not translation_is_clean(original, restored):
+                    if attempt == 1:
+                        continue
+                    return "", attempts
+            return restored, attempts
         if _tokens_kept(last, tokens) and "⟦T" not in last:
             return last, attempts
     missing = [token for token in tokens if token not in restore_tokens(last, tokens)]

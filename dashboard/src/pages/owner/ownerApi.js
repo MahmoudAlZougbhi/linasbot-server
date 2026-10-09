@@ -121,4 +121,9 @@ export const ownerApi = {
   getTrace: (id) => request(`/api/platform/copilot/traces/${encodeURIComponent(id)}`),
   audit: () => request('/api/platform/audit'),
   health: () => request('/api/platform/health'),
+  copilotPricing: () => request('/api/platform/economy/copilot-pricing'),
+  /** @param {Record<string, unknown>} body */
+  saveCopilotPricing: (body) =>
+    request('/api/platform/economy/copilot-pricing', { method: 'PUT', body: JSON.stringify(body) }),
+  copilotPricingHistory: () => request('/api/platform/economy/copilot-pricing/history'),
 };

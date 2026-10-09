@@ -11,6 +11,12 @@ def current_period_id() -> str:
 
 
 def lot_is_live(lot: Any, *, period_id: str | None = None) -> bool:
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("period_balances"):
+        from services.billing.membership.balances import lot_is_live_now
+
+        return lot_is_live_now(lot)
     if not getattr(lot, "expires", True):
         return True
     return str(getattr(lot, "period_id", "") or "") == (period_id or current_period_id())

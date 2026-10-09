@@ -256,3 +256,45 @@ async def platform_message_flow_detail(tenant_id: str, operation_id: str, reques
     if detail is None:
         raise HTTPException(status_code=404, detail="message_flow_not_found")
     return {"success": True, "message": detail}
+
+
+class CopilotPricingBody(BaseModel):
+    token_bands: list[dict[str, Any]]
+    min_messages_per_request: int = 1
+    max_messages_per_request: int = 10
+    approval_threshold_messages: int = 1
+    note: str = ""
+
+
+@app.get("/api/platform/economy/copilot-pricing")
+async def copilot_pricing_get(request: Request) -> Any:
+    require_platform_owner(request)
+    from services.billing.membership.copilot_pricing import messages_for_tokens
+    from services.billing.membership.pricing_store import active_policy
+
+    policy = active_policy()
+    return {"success": True, "policy": policy, "preview_messages": messages_for_tokens(25000, policy)}
+
+
+@app.put("/api/platform/economy/copilot-pricing")
+async def copilot_pricing_put(body: CopilotPricingBody, request: Request) -> Any:
+    session = require_platform_owner(request)
+    from services.billing.membership.pricing_store import save_policy
+
+    try:
+        saved = save_policy(
+            body=body.model_dump(),
+            created_by=str(getattr(session, "user_id", "") or "platform_owner"),
+            note=body.note,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True, "message": "Pricing live now", "version": saved["version"]}
+
+
+@app.get("/api/platform/economy/copilot-pricing/history")
+async def copilot_pricing_history(request: Request) -> Any:
+    require_platform_owner(request)
+    from services.billing.membership.pricing_store import history
+
+    return {"success": True, "history": history()}

@@ -215,6 +215,15 @@ def _index(qa_id: str, rows: list[dict[str, str]], *, enqueue: bool = True) -> b
 
 
 def _answer_for(qa_id: str, language: str) -> str:
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("qa_match"):
+        from services.owner_portal.qa_match import pick_variant
+
+        for group in list_qa():
+            if group["id"] == qa_id:
+                return pick_variant(list(group.get("variants") or []), language)
+        return ""
     wanted = language if language in _LANGS else "en"
     fallback = ""
     for group in list_qa():

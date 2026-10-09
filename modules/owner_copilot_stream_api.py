@@ -17,6 +17,44 @@ from services.owner_copilot.conversation_title import maybe_assign_sol_title, ss
 from services.owner_copilot.stream_protocol import encode_sse, encode_sse_done
 
 
+class EstimateDecisionBody(BaseModel):
+    actual_tokens: int = 0
+
+
+@app.post("/api/owner-copilot/estimates/{estimate_id}/decline")
+async def decline_copilot_estimate(estimate_id: str, request: Request) -> Any:
+    require_session(request)
+    from services.owner_copilot.estimates import EstimateError, decline
+
+    try:
+        row = decline(estimate_id)
+    except EstimateError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+    return {"success": True, "charged_messages": 0, "status": row["status"]}
+
+
+@app.post("/api/owner-copilot/estimates/{estimate_id}/approve")
+async def approve_copilot_estimate(estimate_id: str, body: EstimateDecisionBody, request: Request) -> Any:
+    session = require_session(request)
+    from services.owner_copilot.estimates import EstimateError, approve
+
+    try:
+        row = approve(
+            estimate_id,
+            actual_tokens=body.actual_tokens,
+            tenant_id=str(getattr(session, "tenant_id", "") or ""),
+            user_id=str(getattr(session, "user_id", "") or ""),
+        )
+    except EstimateError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+    return {
+        "success": True,
+        "charged_messages": row["charged"],
+        "actual_tokens": row.get("actual_tokens"),
+        "status": row["status"],
+    }
+
+
 class StreamMessageBody(BaseModel):
     content: str = Field(default="", max_length=16000)
     confirm_tool: str | None = None

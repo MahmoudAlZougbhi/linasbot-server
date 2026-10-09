@@ -20,7 +20,15 @@ def assert_whatsapp_plan_allowed(tenant_id: str) -> None:
     if is_subscription_exempt_tenant(tenant_id):
         return
     ent = entitlements_store.get(tenant_id)
-    if ent.status not in {"active", "trial", "grace"} or ent.plan_id in {"", "none"}:
-        raise WhatsAppPlanDenied(f"WhatsApp requires an active paid plan (plan={ent.plan_id}, status={ent.status}).")
-    if not whatsapp_allowed_for_plan(ent.plan_id):
-        raise WhatsAppPlanDenied(f"WhatsApp is not included on plan={ent.plan_id}. Upgrade required.")
+    plan_id = (ent.plan_id or "").strip().lower()
+    status_ok = ent.status in {"active", "trial", "grace"} and plan_id not in {"", "none"}
+    if status_ok and whatsapp_allowed_for_plan(plan_id):
+        return
+    from services.platform.feature_flags import flag_enabled
+
+    if flag_enabled("period_balances"):
+        from services.billing.membership.balances import purchased_remaining
+
+        if purchased_remaining(tenant_id) > 0:
+            return
+    raise WhatsAppPlanDenied(f"WhatsApp requires an active paid plan (plan={ent.plan_id}, status={ent.status}).")

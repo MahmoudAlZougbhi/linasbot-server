@@ -81,11 +81,16 @@ async def tool_read_cm(
             }
         else:
             draft_out = payload
-        return ToolResult(
-            ok=True,
-            name="read_cm",
-            data={"section": section, "draft": draft_out, "published": published},
-        )
+        data = {"section": section, "draft": draft_out, "published": published}
+        from services.platform.feature_flags import flag_enabled
+
+        if flag_enabled("copilot_counts") and isinstance(draft_out, dict):
+            from services.owner_copilot.section_counts import count_records
+
+            raw_rows = draft_out.get("items")
+            rows = raw_rows if isinstance(raw_rows, list) else []
+            data["counts"] = count_records(rows)
+        return ToolResult(ok=True, name="read_cm", data=data)
 
     listed = {str(item.get("section")): item for item in list_sections(tenant_id=tenant_id)}
     overview: dict[str, Any] = {}

@@ -52,7 +52,8 @@ const groups = [
     { href: '/owner/brains', label: 'Test the AI', icon: BeakerIcon },
   ] },
   { title: 'Plans & billing', items: [
-    { href: '/owner/catalog', label: 'Plans & prices', icon: TagIcon, also: ['/owner/economy'] },
+    { href: '/owner/catalog', label: 'Plans & prices', icon: TagIcon, also: ['/owner/economy', '/owner/copilot-pricing'] },
+    { href: '/owner/copilot-pricing', label: 'Copilot pricing', icon: BanknotesIcon },
     { href: '/owner/costs', label: 'AI costs', icon: BanknotesIcon },
   ] },
   { title: 'System', items: [
