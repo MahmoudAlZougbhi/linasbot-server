@@ -1,0 +1,25 @@
+name: Terraform drift
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * *"
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Plan prod and fail when the live resources differ
+        working-directory: infra/terraform/envs/prod
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+        run: |
+          set -eu
+          if [ -z "$DIGITALOCEAN_TOKEN" ]; then
+            echo "token is not configured"
+            exit 0
+          fi
+          terraform init -input=false
+          terraform plan -input=false -detailed-exitcode

@@ -1,0 +1,39 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker-interactive
+spec:
+  scaleTargetRef:
+    name: worker-interactive
+  minReplicaCount: 1
+  maxReplicaCount: 6
+  triggers:
+    - type: postgresql
+      metadata:
+        query: SELECT COUNT(*) FROM platform_jobs WHERE queue IN ('ai_reply','owner_copilot','outbound_send','webhook_process') AND status = 'queued'
+        targetQueryValue: "20"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker-background
+spec:
+  scaleTargetRef:
+    name: worker-background
+  minReplicaCount: 1
+  maxReplicaCount: 3
+  triggers:
+    - type: postgresql
+      metadata:
+        query: SELECT COUNT(*) FROM platform_jobs WHERE queue IN ('embeddings','maintenance') AND status = 'queued'
+        targetQueryValue: "20"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: worker-interactive
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: linas-worker-interactive

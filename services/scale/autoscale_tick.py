@@ -49,6 +49,8 @@ async def run_autoscale_tick(stopping: Callable[[], bool]) -> None:
 
 
 def _tick_once() -> None:
+    if (os.getenv("LINAS_DROPLET_SCALER") or "on").strip().lower() in {"0", "off", "false", "no"}:
+        return
     from services.scale.leader_lock import acquire_leader
     from services.scale.replica_controller import apply_enabled, tick
 

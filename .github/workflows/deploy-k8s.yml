@@ -1,0 +1,40 @@
+name: Deploy Kubernetes
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: staging or prod
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+      image_digest:
+        description: Image digest to roll
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Roll the image without taking the service down
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          set -eu
+          if [ -z "$KUBECONFIG_B64" ]; then
+            echo "kubeconfig is not configured"
+            exit 1
+          fi
+          echo "$KUBECONFIG_B64" | base64 -d > "$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          kubectl set image deployment/api api="${IMAGE_DIGEST}"
+          if ! kubectl rollout status deployment/api --timeout=10m; then
+            kubectl rollout undo deployment/api
+            exit 1
+          fi
