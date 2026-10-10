@@ -46,7 +46,9 @@ jobs:
           '
           kubectl get pods -A
           kubectl -n linas get jobs,pods,events --sort-by=.lastTimestamp || true
-          kubectl -n linas logs -l app=linas-api --tail=80 --prefix > /tmp/migrate-logs.txt || true
+          pod="$(kubectl -n linas get pods -l app=linas-api --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}')"
+          echo "newest_api_pod $pod"
+          kubectl -n linas logs "$pod" --tail=60 --previous > /tmp/migrate-logs.txt || kubectl -n linas logs "$pod" --tail=60 > /tmp/migrate-logs.txt || true
           python3 -c 'import re,pathlib; t=pathlib.Path("/tmp/migrate-logs.txt").read_text(errors="replace"); t=re.sub(r"[a-z]+://[^\\s]+","[redacted-url]",t); print(t[-4000:])'
   preflight:
     name: P12 access preflight
