@@ -32,8 +32,18 @@ jobs:
           doctl kubernetes cluster kubeconfig save linas-prod-doks --expiry-seconds 600
           cid="$(doctl kubernetes cluster get linas-prod-doks --format ID --no-header | tr -d '[:space:]')"
           doctl databases list -o json > /tmp/dbs.json
-          CLUSTER_ID="$cid" python3 -c 'import json,os,subprocess; rows=json.load(open("/tmp/dbs.json")); cid=os.environ["CLUSTER_ID"];
-          [print(row["name"], "firewall", "ok" if subprocess.run(["doctl","databases","firewalls","append",row["id"],"--rule","k8s:"+cid], text=True, capture_output=True).returncode==0 else "fail") for row in rows if row.get("name") in ("linas-postgres-prod","linas-redis-prod")]'
+          CLUSTER_ID="$cid" python3 -c 'import json,os,subprocess; rows=json.load(open("/tmp/dbs.json")); cid=os.environ["CLUSTER_ID"]; droplets=("510629908","591901417"); exec("\n".join(["ok"]))
+          names=("linas-postgres-prod","linas-redis-prod")
+          for row in rows:
+            if row.get("name") not in names: continue
+            for rule in ["k8s:"+cid]+["droplet:"+d for d in droplets]:
+              proc=subprocess.run(["doctl","databases","firewalls","append",row["id"],"--rule",rule], text=True, capture_output=True)
+              print(row["name"], rule.split(":")[0], "ok" if proc.returncode==0 else "fail")
+            raw=subprocess.run(["doctl","databases","get",row["id"],"-o","json"], text=True, capture_output=True)
+            data=json.loads(raw.stdout or "[]")
+            item=data[0] if isinstance(data, list) and data else data
+            print(row["name"], "status", item.get("status") if isinstance(item, dict) else "unknown", "db_vpc", item.get("private_network_uuid") if isinstance(item, dict) else "unknown")
+          '
           kubectl get pods -A
           kubectl -n linas get jobs,pods,events --sort-by=.lastTimestamp || true
           kubectl -n linas logs job/migrate --tail=100 > /tmp/migrate-logs.txt || true
