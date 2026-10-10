@@ -92,6 +92,9 @@ def user_has_permission(session: SessionRecord, permission: str) -> bool:
 # Exact public API paths (method, path)
 _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("GET", "/api/health"),
+    ("GET", "/api/health/live"),
+    ("GET", "/api/health/startup"),
+    ("GET", "/api/health/ready"),
     ("GET", "/api/ready"),
     ("GET", "/api/channel-health"),
     ("POST", "/api/auth/login"),
