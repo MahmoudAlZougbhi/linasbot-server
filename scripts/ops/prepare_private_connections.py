@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -83,7 +84,8 @@ def _attach(database_id: str, vpc: str) -> str:
             "--wait",
         ]
     )
-    return " ".join(attempts) + f" migrate={result.returncode}"
+    detail = re.sub(r"\S+://\S+", "[url]", (result.stderr or "").splitlines()[0] if result.stderr else "")
+    return " ".join(attempts) + f" migrate={result.returncode} {detail[:160]}"
 
 
 def _connect(database_id: str, dest: Path) -> bool:

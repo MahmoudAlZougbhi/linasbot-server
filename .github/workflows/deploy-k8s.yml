@@ -21,7 +21,7 @@ jobs:
       - name: Install tools
         run: |
           set -euo pipefail
-          curl -fsSL -o /tmp/doctl.tar.gz https://github.com/digitalocean/doctl/releases/download/v1.104.0/doctl-1.104.0-linux-amd64.tar.gz
+          curl -fsSL -o /tmp/doctl.tar.gz https://github.com/digitalocean/doctl/releases/download/v1.161.0/doctl-1.161.0-linux-amd64.tar.gz
           tar -C /usr/local/bin -xzf /tmp/doctl.tar.gz doctl
           curl -fsSL -o /tmp/kubectl https://dl.k8s.io/release/v1.31.1/bin/linux/amd64/kubectl
           install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
