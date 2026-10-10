@@ -48,6 +48,14 @@ jobs:
           kubectl -n linas get jobs,pods,events --sort-by=.lastTimestamp || true
           pod="$(kubectl -n linas get pods -l app=linas-api --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}')"
           echo "newest_api_pod $pod"
+          kubectl -n linas exec "$pod" -- python -c 'import urllib.request,urllib.error
+          try:
+            r=urllib.request.urlopen("http://127.0.0.1:8003/api/health/ready", timeout=8)
+            print("ready", r.status, r.read()[:600].decode())
+          except urllib.error.HTTPError as exc:
+            print("ready", exc.code, exc.read()[:600].decode())
+          except Exception as exc:
+            print("ready_error", type(exc).__name__)' || true
           kubectl -n linas logs "$pod" --tail=60 --previous > /tmp/migrate-logs.txt || kubectl -n linas logs "$pod" --tail=60 > /tmp/migrate-logs.txt || true
           python3 -c 'import re,pathlib; t=pathlib.Path("/tmp/migrate-logs.txt").read_text(errors="replace"); t=re.sub(r"[a-z]+://[^\\s]+","[redacted-url]",t); print(t[-4000:])'
   preflight:
