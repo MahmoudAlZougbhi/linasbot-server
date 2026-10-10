@@ -72,6 +72,10 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: data
+              mountPath: /app/linasbot_data
       volumes:
         - name: tmp
+          emptyDir: {}
+        - name: data
           emptyDir: {}
