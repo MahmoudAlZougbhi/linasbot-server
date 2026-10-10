@@ -63,7 +63,7 @@ spec:
               exec:
                 command: ["sh", "-c", "sleep 10"]
           securityContext:
-            readOnlyRootFilesystem: true
+            readOnlyRootFilesystem: false
             runAsNonRoot: true
             runAsUser: 10001
             allowPrivilegeEscalation: false
