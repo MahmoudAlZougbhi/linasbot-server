@@ -72,8 +72,13 @@ jobs:
           kubectl -n linas delete secret -l name=linas,owner=helm,status=pending-upgrade --ignore-not-found
           helm upgrade --install linas deploy/k8s/linas \
             --namespace linas --create-namespace \
-            --atomic --wait --timeout 15m \
+            --wait --timeout 25m \
             --set-string "image.digest=$digest"
+      - name: Pod status
+        if: always()
+        run: |
+          set -euo pipefail
+          kubectl -n linas get pods -o wide || true
       - name: Health poll
         run: |
           set -euo pipefail
