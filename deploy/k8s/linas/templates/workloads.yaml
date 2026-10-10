@@ -12,6 +12,11 @@ spec:
       labels:
         app: linas-worker-interactive
     spec:
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
       terminationGracePeriodSeconds: 60
       containers:
         - name: worker
@@ -48,6 +53,11 @@ spec:
       labels:
         app: linas-worker-background
     spec:
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
       terminationGracePeriodSeconds: 60
       containers:
         - name: worker
@@ -84,6 +94,11 @@ spec:
       labels:
         app: linas-scheduler
     spec:
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
       terminationGracePeriodSeconds: 30
       containers:
         - name: scheduler

@@ -12,6 +12,11 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
       containers:
         - name: migrate
           image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"

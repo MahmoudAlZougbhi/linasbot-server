@@ -37,6 +37,18 @@ def test_deploy_workflow_is_prod_only() -> None:
     assert "--atomic" in text
 
 
+def test_default_network_policy_does_not_block_dns() -> None:
+    text = (ROOT / "deploy" / "k8s" / "linas" / "templates" / "networkpolicy.yaml").read_text(encoding="utf-8")
+    first = text.split("---", 1)[0]
+    assert "name: default-deny" in first
+    assert "Egress" not in first
+
+
+def test_deploy_uses_private_database_connections() -> None:
+    text = (ROOT / ".github" / "workflows" / "deploy-k8s.yml").read_text(encoding="utf-8")
+    assert "prepare_private_connections.py" in text
+
+
 def test_chart_has_service_workers_and_migration() -> None:
     templates = ROOT / "deploy" / "k8s" / "linas" / "templates"
     names = {path.name: path.read_text(encoding="utf-8") for path in templates.glob("*.yaml")}

@@ -43,25 +43,9 @@ jobs:
         run: |
           set -euo pipefail
           doctl kubernetes cluster kubeconfig save linas-prod-doks --expiry-seconds 14400
-          cid="$(doctl kubernetes cluster get linas-prod-doks --format ID --no-header | tr -d '[:space:]')"
+          doctl kubernetes cluster get linas-prod-doks -o json > "$RUNNER_TEMP/cluster.json"
           doctl databases list -o json > "$RUNNER_TEMP/dbs.json"
-          CLUSTER_ID="$cid" python3 -c 'import json,os,subprocess; rows=json.load(open(os.environ["RUNNER_TEMP"]+"/dbs.json")); cid=os.environ["CLUSTER_ID"];
-          [print(row["name"], "firewall", "ok" if subprocess.run(["doctl","databases","firewalls","append",row["id"],"--rule","k8s:"+cid], text=True, capture_output=True).returncode==0 else "fail") for row in rows if row.get("name") in ("linas-postgres-prod","linas-redis-prod")]'
-          doctl databases list -o json > "$RUNNER_TEMP/dbs.json"
-          python3 - << 'PY'
-          import json, os, subprocess
-          rows = json.load(open(os.environ["RUNNER_TEMP"] + "/dbs.json"))
-          wanted = {"linas-postgres-prod": "pg", "linas-redis-prod": "redis"}
-          for row in rows:
-              kind = wanted.get(row.get("name"))
-              if not kind:
-                  continue
-              subprocess.run(
-                  ["doctl", "databases", "connection", row["id"], "-o", "json"],
-                  check=True,
-                  stdout=open(os.environ["RUNNER_TEMP"] + f"/{kind}.json", "w"),
-              )
-          PY
+          python3 scripts/ops/prepare_private_connections.py "$RUNNER_TEMP/dbs.json" "$RUNNER_TEMP/cluster.json" "$RUNNER_TEMP"
           python3 scripts/ops/render_cluster_env.py "$RUNNER_TEMP/pg.json" "$RUNNER_TEMP/redis.json" "$RUNNER_TEMP/linas.env"
           kubectl create namespace linas --dry-run=client -o yaml | kubectl apply -f -
           kubectl create secret generic linas-env -n linas --from-env-file="$RUNNER_TEMP/linas.env" --dry-run=client -o yaml | kubectl apply -f - >/tmp/secret-apply.txt
@@ -77,6 +61,13 @@ jobs:
             *) digest="sha256:$IMAGE_DIGEST" ;;
           esac
           sh deploy/k8s/bootstrap.sh
+          kubectl -n linas delete networkpolicy --all --ignore-not-found
+          kubectl -n linas delete job migrate --ignore-not-found
+          kubectl -n kube-system get pods -l k8s-app=kube-dns --no-headers
+          kubectl -n linas delete pod dnscheck --ignore-not-found
+          kubectl -n linas run dnscheck --restart=Never --image=busybox:1.36 --command -- nslookup kubernetes.default.svc.cluster.local
+          kubectl -n linas wait --for=jsonpath='{.status.phase}'=Succeeded pod/dnscheck --timeout=90s
+          kubectl -n linas logs dnscheck
           kubectl -n linas delete secret -l name=linas,owner=helm,status=pending-install --ignore-not-found
           kubectl -n linas delete secret -l name=linas,owner=helm,status=pending-upgrade --ignore-not-found
           helm upgrade --install linas deploy/k8s/linas \

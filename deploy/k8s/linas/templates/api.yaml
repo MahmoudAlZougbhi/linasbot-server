@@ -18,6 +18,11 @@ spec:
       labels:
         app: linas-api
     spec:
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
       terminationGracePeriodSeconds: 60
       topologySpreadConstraints:
         - maxSkew: 1
