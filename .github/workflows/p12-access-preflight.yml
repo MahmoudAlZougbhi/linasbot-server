@@ -32,7 +32,7 @@ jobs:
           doctl kubernetes cluster kubeconfig save linas-prod-doks --expiry-seconds 600
           cid="$(doctl kubernetes cluster get linas-prod-doks --format ID --no-header | tr -d '[:space:]')"
           doctl databases list -o json > /tmp/dbs.json
-          CLUSTER_ID="$cid" python3 -c 'import json,os,subprocess; rows=json.load(open("/tmp/dbs.json")); cid=os.environ["CLUSTER_ID"]; droplets=("510629908","591901417"); exec("\n".join(["ok"]))
+          CLUSTER_ID="$cid" python3 -c 'import json,os,subprocess; rows=json.load(open("/tmp/dbs.json")); cid=os.environ["CLUSTER_ID"]; droplets=("510629908","591901417");
           names=("linas-postgres-prod","linas-redis-prod")
           for row in rows:
             if row.get("name") not in names: continue
