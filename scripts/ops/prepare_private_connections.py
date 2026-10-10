@@ -59,11 +59,31 @@ def _private_host(path: Path) -> str:
 
 
 def _attach(database_id: str, vpc: str) -> str:
-    status = _api("PUT", f"/databases/{database_id}/vpc", {"vpc_uuid": vpc})
-    if status in {200, 202, 204}:
-        return f"vpc_put={status}"
-    status = _api("PUT", f"/databases/{database_id}", {"private_network_uuid": vpc})
-    return f"cluster_put={status}"
+    attempts: list[str] = []
+    calls = (
+        ("PUT", f"/databases/{database_id}/vpc", {"vpc_uuid": vpc}),
+        ("PATCH", f"/databases/{database_id}", {"private_network_uuid": vpc}),
+        ("PUT", f"/databases/{database_id}", {"private_network_uuid": vpc}),
+    )
+    for method, path, body in calls:
+        status = _api(method, path, body)
+        attempts.append(f"{method}_{status}")
+        if status in {200, 202, 204}:
+            return " ".join(attempts)
+    result = _run(
+        [
+            "doctl",
+            "databases",
+            "migrate",
+            database_id,
+            "--region",
+            "lon1",
+            "--private-network-uuid",
+            vpc,
+            "--wait",
+        ]
+    )
+    return " ".join(attempts) + f" migrate={result.returncode}"
 
 
 def _connect(database_id: str, dest: Path) -> bool:
@@ -100,7 +120,7 @@ def main() -> int:
         detail_path = outdir / f"{kind}-detail.json"
         _run(["doctl", "databases", "get", database_id, "-o", "json"], detail_path)
         current = str(_load(detail_path).get("private_network_uuid") or "")
-        print(kind, "vpc_match", current == vpc, "private_network_set", bool(current))
+        print(kind, "vpc_match", current == vpc, "db_vpc", current or "none")
         if current != vpc:
             print(kind, _attach(database_id, vpc))
         connected = _connect(database_id, outdir / f"{kind}.json")
