@@ -1,6 +1,7 @@
 name: Container image
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches: [main]
@@ -32,7 +33,7 @@ jobs:
           name: sbom
           path: sbom.spdx.json
       - name: Push by digest
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

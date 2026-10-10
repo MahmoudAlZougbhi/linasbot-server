@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-_READY_BUDGET_SECONDS = 0.2
+_READY_BUDGET_SECONDS = 2.0
 
 
 def live_payload() -> dict[str, Any]:
