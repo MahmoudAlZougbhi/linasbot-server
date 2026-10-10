@@ -74,8 +74,12 @@ spec:
               mountPath: /tmp
             - name: data
               mountPath: /app/linasbot_data
+            - name: appdata
+              mountPath: /app/data
       volumes:
         - name: tmp
           emptyDir: {}
         - name: data
+          emptyDir: {}
+        - name: appdata
           emptyDir: {}
